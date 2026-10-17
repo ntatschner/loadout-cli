@@ -112,6 +112,43 @@ body.ambient-open { overflow: hidden; }
 .compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: var(--space-3); }
 .compare label { display: grid; gap: var(--space-1); }
 
+/* ---------- commands ---------- */
+
+.find input, .cmdform input, .cmdform select, .cmdform textarea {
+  width: 100%; box-sizing: border-box; min-height: var(--control-sm); padding: 6px var(--space-3);
+  border: 0; border-radius: var(--radius-chip); background: none; color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--control-edge); font-family: var(--font-mono); font-size: 13px;
+}
+.cmdform select { background: var(--surface); }
+.cmdform textarea { resize: vertical; line-height: 1.5; }
+.find input:focus-visible, .cmdform input:focus-visible, .cmdform select:focus-visible, .cmdform textarea:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.cmdform { display: grid; gap: var(--space-4); }
+.cmdform .fld { display: grid; gap: var(--space-1); }
+.cmdform .lab { font-size: 13.5px; color: var(--ink-soft); }
+.cmdform .chk { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: var(--space-2); align-items: start; font-size: 13.5px; color: var(--ink); }
+.cmdform .chk input { width: 20px; height: 20px; min-height: 0; margin: 2px 0 0; padding: 0; box-shadow: none; accent-color: var(--accent); }
+.cmdform .more { display: grid; gap: var(--space-3); }
+.cmdform .more summary { cursor: pointer; font-size: 13.5px; color: var(--ink-soft); min-height: 24px; }
+.cmdform .more summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.cmdform .more[open] summary { margin-bottom: var(--space-3); }
+.fold summary { cursor: pointer; list-style: none; min-height: 24px; }
+.fold summary::-webkit-details-marker { display: none; }
+.fold summary h2 { display: inline; }
+/* Alt text left empty: the disclosure already says whether it is open. */
+.fold summary h2::before { content: "▸ " / ""; color: var(--subtle); }
+.fold[open] summary h2::before { content: "▾ " / ""; }
+.fold summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.fold .count { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0; color: var(--subtle); }
+.effect { font-family: var(--font-mono); font-size: 11.5px; color: var(--subtle); }
+.jobhead { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); align-items: center; }
+.output {
+  margin: 0; max-height: 60vh; overflow: auto; padding: var(--space-3);
+  border-radius: var(--radius-chip); background: var(--surface-2); color: var(--ink);
+  font-family: var(--font-mono); font-size: 12.5px; line-height: 1.5; white-space: pre;
+}
+.output.err { color: var(--bad-text); }
+.output:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
 /* ---------- signed out ---------- */
 
 .signedout { max-width: 640px; display: grid; gap: var(--space-4); align-content: start; padding-top: 12vh; }

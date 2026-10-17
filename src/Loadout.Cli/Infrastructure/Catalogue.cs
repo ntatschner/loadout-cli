@@ -52,6 +52,17 @@ internal static class Catalogue
     private static readonly List<CatalogueEntry> Entries = [];
 
     /// <summary>
+    /// The command type behind each path that runs something, which a pure
+    /// branch such as <c>backup</c> does not.
+    /// </summary>
+    /// <remarks>
+    /// Kept apart from the entries because a branch with a default command is
+    /// recorded twice, once as the branch and once as its command, and the
+    /// entry keeps the first while the type comes with the second.
+    /// </remarks>
+    private static readonly Dictionary<string, Type> Types = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// Guards the list. Recording is check-then-add, and anything building a
     /// parser on another thread races it: both callers see the path missing,
     /// both add it, and the palette then shows the command twice. Adding to a
@@ -71,6 +82,15 @@ internal static class Catalogue
                 // another thread appends.
                 return [.. Entries];
             }
+        }
+    }
+
+    /// <summary>The command type behind a path, or null for a branch that only groups others.</summary>
+    internal static Type? TypeOf(string path)
+    {
+        lock (Gate)
+        {
+            return Types.GetValueOrDefault(path);
         }
     }
 
@@ -156,6 +176,8 @@ internal static class Catalogue
 
         lock (Gate)
         {
+            Types.TryAdd(path, command);
+
             // Registration happens once per process, but a test may build the
             // parser more than once and duplicates would double every menu.
             if (Entries.Any(e => string.Equals(e.Path, path, StringComparison.Ordinal)))

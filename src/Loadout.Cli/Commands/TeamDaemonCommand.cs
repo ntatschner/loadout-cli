@@ -443,6 +443,14 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             // And the New session sheet, from the same source as the
             // terminal launcher's, and Studio's own settings, read per
             // request and changed through 'config set' like any other.
+            // And every other command, run from Studio's forms as a child of
+            // this launcher, so the page does what typing it would.
+            server.Jobs = new CommandJobs(
+                new DashboardCommands(_launcher),
+                _time,
+                path => output.WriteLine(
+                    $"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] from Studio: loadout {Markup.Escape(path)}"));
+
             server.Launch = new DashboardLaunch(_projects, _workspace, _agents, _configuration, _sheet, _time);
             server.StudioPreferences = async token => StudioPreferences.Read(
                 (await _configuration.LoadConfigAsync(token).ConfigureAwait(false)).Value?.Studio);

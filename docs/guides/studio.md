@@ -45,7 +45,7 @@ The classic page is still at `/classic` either way.
 ### 2. Find your way round
 
 Down the left is the rail: Home, Sessions, Ideas, Teams, Memory, Context,
-Spend, Projects and Settings, each with a live count. Hover or tab onto it and
+Spend, Projects, Commands and Settings, each with a live count. Hover or tab onto it and
 it widens over the page without pushing it. Below 600px wide it becomes a
 **Pages** tab.
 
@@ -147,7 +147,26 @@ The two things kept in the browser are the single-letter shortcuts (**A** for
 Ambient, **N** for a new session) and whether Ambient fills the screen. They're
 about the keyboard and screen in front of you, not about how you read.
 
-### 8. Ambient
+### 8. Run anything else from Commands
+
+**Commands** lists every command Loadout has, folded by area. Choose one and
+Studio builds a form from the command's own options, so it can't offer one the
+command doesn't take, and shows the line it'll run as you fill it in. **Run**
+runs exactly that line on the daemon; **Preview** adds `--dry-run` for a command
+that changes something. What it printed comes back on the page, with any secret
+taken out, and a toast says when it's finished.
+
+It's how you reach the parts of Loadout that don't have a page of their own yet.
+Each command runs from your home folder, so a command that picks its project
+from the folder you're in needs `--project`. It's never asked a question: a
+command that would ask one is refused instead, and says so.
+
+A few commands only ever show their line, with why: setting a secret (it asks
+for the value at a masked prompt), the attach passphrase, trusting a tool or a
+remedy, `update`, and the commands that are themselves a server or a status
+line. Starting a session sends you to **Sessions**, where Studio hosts it.
+
+### 9. Ambient
 
 On Home, **A** or **Ambient** turns Studio into something for a spare screen:
 the key numbers, the halo on whatever most needs you, and everything else
@@ -162,7 +181,8 @@ loadout dashboard --watch-only
 Studio still shows everything, but changes nothing. A banner says so, and every
 action shows the command to type in a terminal instead. Launching, typing into a
 session, ending one and changing a setting are all refused by the server as
-well as the page.
+well as the page. On **Commands**, only commands that just read run, and
+**Preview** still works for the rest.
 
 ## What it won't do
 

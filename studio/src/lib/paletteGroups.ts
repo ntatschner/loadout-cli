@@ -14,6 +14,7 @@ const PAGES: [string, string][] = [
   ['context', 'Context'],
   ['spend', 'Spend'],
   ['projects', 'Projects'],
+  ['commands', 'Commands'],
   ['settings', 'Settings'],
 ];
 

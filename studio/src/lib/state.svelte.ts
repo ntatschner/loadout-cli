@@ -44,6 +44,8 @@ export class Studio {
   ideas = $state<api.Idea[]>([]);
   busy = $state<string[]>([]);
   tasks = $state<api.TaskList[]>([]);
+  /** The commands run from Studio while this daemon has been running, newest first. */
+  jobs = $state<api.Job[]>([]);
   signedOut = $state(false);
   /** Why the daemon could not be read, while it cannot. */
   offline = $state<string | null>(null);
@@ -73,7 +75,7 @@ export class Studio {
 
       this.about = await api.about();
       await this.loadPrefs();
-      await Promise.all([this.loadRuns(), this.loadSessions(), this.loadIdeas(), this.loadTasks()]);
+      await Promise.all([this.loadRuns(), this.loadSessions(), this.loadIdeas(), this.loadTasks(), this.loadJobs()]);
     });
 
     this.loaded = true;
@@ -90,6 +92,10 @@ export class Studio {
 
       if (what.includes('runs')) {
         void this.#guard(() => this.loadRuns());
+      }
+
+      if (what.includes('jobs')) {
+        void this.#guard(() => this.loadJobs());
       }
     });
 
@@ -236,6 +242,27 @@ export class Studio {
 
   async loadTasks(): Promise<void> {
     this.tasks = (await api.tasks.list()).lists;
+  }
+
+  /** Reads the jobs, and says when one that was running here has ended. */
+  async loadJobs(): Promise<void> {
+    if (!this.about?.isDaemon) {
+      return;
+    }
+
+    const was = new Map(this.jobs.map((job) => [job.id, job.state]));
+
+    this.jobs = await api.commands.jobs();
+
+    for (const job of this.jobs) {
+      if (was.get(job.id) === 'running' && job.state !== 'running') {
+        toasts.add({
+          level: job.state === 'done' ? 'done' : job.state === 'failed' ? 'problem' : 'info',
+          text: job.state === 'done' ? `Finished: ${job.path}` : job.state === 'failed' ? `Failed: ${job.path}` : `Cancelled: ${job.path}`,
+          cmd: `$ ${job.line}`,
+        });
+      }
+    }
   }
 
   /* ---------- settings ---------- */
