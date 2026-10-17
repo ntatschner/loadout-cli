@@ -105,8 +105,39 @@ terminal's launch sheet and `--dry-run`. The command at the bottom is the
 launch, and **Launch** runs it. **Quick session** starts one with no task and
 the defaults.
 
-You should see the session open with a live terminal. Type into it as you would
-any terminal.
+You should see the session open with a live terminal filling the page. Type
+into it as you would any terminal: Tab and the arrow keys go to the agent too.
+To get the keyboard back out, press **Ctrl ]**, which moves to the **Details**
+button. The bar above the screen says so while the terminal has the keyboard.
+
+The bar also has **A−** and **A+** for the text size, and **Fit**, which
+shrinks 80 columns to the width of the window. On a phone Fit starts on, and
+zooming in scrolls inside the terminal rather than the page. **Details** folds
+away the panel beside the terminal; below 960 pixels wide it sits underneath,
+folded.
+
+The bar under the screen says what the session needs, in words:
+
+- **Waiting for you**: it has finished and wants your next message.
+- **Needs approval**: it's asking to be allowed to do something. The choices
+  are in the terminal, and you answer them there.
+- **Ended**, **exited with an error** or **lost**, with the
+  `loadout resume` command that carries the conversation on in a terminal.
+
+Waiting and approval come only from Claude Code's own hooks, which Loadout
+adds to a session Studio starts. Claude Code says it's waiting about a minute
+after it finishes, and asks for approval a few seconds after the prompt
+appears, so neither shows the instant it happens. Studio never guesses a
+question from what's on the screen, and never puts an agent's choices on
+buttons: it's told that a question is waiting, not what the choices are.
+A Codex session shows only working, idle or unknown, because its own
+notifications haven't been checked against OpenAI's documentation yet. The
+question clears as soon as you type into the session. Clicking into the
+terminal or scrolling back through it doesn't count as an answer.
+
+With the mouse over the terminal, the wheel scrolls the terminal and never the
+page. If the agent tracks the mouse, as Claude Code does, the wheel goes to
+the agent, which scrolls its own view.
 
 ### 6. Leave and come back
 
@@ -118,11 +149,16 @@ Two things do end it: **End the session**, which asks first, and stopping or
 restarting the daemon, which ends every session it hosts. `loadout daemon stop`
 warns you when there are any.
 
-To carry a conversation on in a terminal instead:
+To carry a conversation on in a terminal instead, use the command the session
+page shows. Once Claude Code has finished its first reply, that names the
+conversation itself and its project; before then it's:
 
 ```sh
-loadout resume --last
+loadout resume --last --project <project>
 ```
+
+A session that was running when the daemon stopped shows as **lost**, with the
+same command, for a week afterwards.
 
 ### 7. Make it yours
 

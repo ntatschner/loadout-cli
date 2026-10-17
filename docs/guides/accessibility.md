@@ -151,9 +151,12 @@ covers the rest.
 
 ### 8. Studio, if you use it
 
-Studio, the preview front end at `/studio/`, doesn't read your accessibility
-profile yet. It has its own appearance settings instead, kept in Loadout's
-config so every browser shows it the same way:
+Studio, the preview front end at `/studio/`, reads one thing from your
+accessibility profile: with the `screen-reader` preset, a session's terminal
+switches on its own screen-reader mode. A web page can't ask your system
+whether a screen reader is running, so the preset is how it knows. Everything
+else has its own appearance settings, kept in Loadout's config so every
+browser shows it the same way:
 
 ```sh
 loadout config set studio-theme hc-dark
@@ -165,6 +168,12 @@ With no theme set, it follows your system's colour scheme and its contrast
 setting. Your system's reduced motion always wins over `studio-motion`. Every
 state on it is a word and a glyph as well as a colour, and every action can be
 reached from the keyboard, through the palette on **Ctrl K**.
+
+A session's terminal takes Tab and the arrow keys for the agent, so **Ctrl ]**
+gives the keyboard back to the page. The terminal's sixteen colours meet 4.5:1
+in every theme and 7:1 in the high-contrast ones, and an agent's own colours
+are lifted to the same floor. What the session needs is said in words under the
+screen, and announced once. The cursor blinks only with motion at full.
 [Using Studio](studio.md) covers the rest.
 
 ### 9. Turn on speech, only if you want it
@@ -208,6 +217,8 @@ can't check it.
 | Studio: a question answered from the keyboard alone, through the palette | Done in a browser |
 | Studio: its components' keyboard behaviour (tabs, radios, pickers, dialogs, the palette, the rail) | Tested, in jsdom |
 | Studio: axe-core, and text contrast in its four themes | **Not run** |
+| Studio's terminal: Ctrl ] leaving it, the contrast floor per theme, the screen-reader mode under the preset | Tested, in jsdom, with xterm.js stubbed |
+| Studio's terminal with a screen reader reading it | **Not tested** |
 | Any screen reader, used with any of this | **Not tested** |
 | A keyboard-only pass by a person | **Not recorded** |
 
