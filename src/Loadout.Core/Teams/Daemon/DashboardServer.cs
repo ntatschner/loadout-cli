@@ -1212,6 +1212,13 @@ public sealed class DashboardServer : IDisposable
 
                 // Whether one is set, for Settings to say; never what it is.
                 attachPassphrase = Attach is not null && await Attach.IsSetAsync(ct).ConfigureAwait(false),
+
+                // Whether the person's accessibility profile says they use a
+                // screen reader. A page cannot ask the operating system, and
+                // the terminal's own screen-reader mode is wanted only then.
+                screenReader = Configuration is not null
+                    && await Configuration.LoadConfigAsync(ct).ConfigureAwait(false) is { Succeeded: true, Value: { } config }
+                    && string.Equals(config.Accessibility.Preset, Loadout.Models.Configuration.AccessibilityPresets.ScreenReader, StringComparison.OrdinalIgnoreCase),
             }, Json)).ConfigureAwait(false);
 
             return;
@@ -1416,9 +1423,13 @@ public sealed class DashboardServer : IDisposable
         {
             while (!ct.IsCancellationRequested)
             {
+                // What each session needs is part of it, so a hook saying an
+                // agent is waiting, and somebody typing the answer, both reach
+                // every open page without it asking.
                 var sessionsNow = Sessions is null
                     ? string.Empty
-                    : string.Join(';', Sessions.All.Select(one => one.Id + (one.HasEnded ? "!" : string.Empty)));
+                    : string.Join(';', Sessions.All.Select(one =>
+                        one.Id + (one.HasEnded ? "!" : string.Empty) + "?" + Sessions.SignalOf(one).Needs));
                 var runsNow = string.Join(';', _journal.List(40).Select(run => run + "=" + RunStamp(run)));
                 var said = new List<string>();
 

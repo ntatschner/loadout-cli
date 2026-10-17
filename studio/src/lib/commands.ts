@@ -37,7 +37,8 @@ export const command = {
   refine: (id: string) => `$ loadout idea refine ${id}`,
 
   /** Ending a hosted session: DELETE /api/v1/sessions/{id}. */
-  endSession: () => 'ends the session here · changes nothing else',
+  // No loadout command ends a session, so say what it does instead.
+  endSession: () => 'stops the agent in this terminal',
 
   /** Carrying a conversation on in a terminal. */
   resumeLast: () => '$ loadout resume --last',

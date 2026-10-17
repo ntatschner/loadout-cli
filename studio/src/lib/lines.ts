@@ -16,6 +16,8 @@ export interface Work extends TubeLine {
   ask?: string;
   /** Minutes since the epoch at which it asked, for ranking. */
   askedAt?: number;
+  /** A session whose agent is asking to be allowed something, rather than waiting for a message. */
+  approval?: boolean;
   /** A failure that wants acknowledging, which ranks above a question. */
   problem?: boolean;
   mins?: number;
@@ -98,6 +100,13 @@ export function fromSession(session: Session, now: number): Work {
     title: session.task || session.taskId || session.title,
     where: session.project ?? '',
     stage: session.ended ? 4 : 2,
+    // From the agent's own hooks, so a session asking for you rises with
+    // everything else that does.
+    waiting: !session.ended && !!session.needs,
+    ask: session.needs === 'approval'
+      ? 'It is asking for approval. The choices are in its terminal; answer them there.'
+      : session.needs === 'waiting' ? 'It has finished and is waiting for your next message.' : undefined,
+    approval: !session.ended && session.needs === 'approval',
     quiet,
     note: [session.mode, session.agent].filter(Boolean).join(' · '),
     mins: minutesOf(session.startedAt, now),

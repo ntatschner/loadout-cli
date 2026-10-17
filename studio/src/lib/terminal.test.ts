@@ -1,0 +1,105 @@
+// The terminal's states, as the Terminal README lists them: which one a
+// session is in, and what it lets you do. A question comes only from the
+// agent's own hooks (needs), never from what is on the screen.
+import { describe, expect, it } from 'vitest';
+import type { Session } from './api';
+import { TERMINAL_STATES, fitFontSize, resumeCommand, terminalState, type TerminalFacts } from './terminal';
+
+const session: Session = {
+  id: 'a1b2c3d4',
+  title: 'starstats',
+  startedAt: '2026-10-17T10:00:00Z',
+  ended: false,
+  exitCode: null,
+  viewers: 1,
+  columns: 80,
+  rows: 24,
+  terminal: '/api/v1/sessions/a1b2c3d4/terminal',
+  memory: null,
+  project: 'starstats',
+  agent: 'claude',
+  mode: null,
+  task: null,
+  taskId: null,
+  command: null,
+  lastOutputAt: '2026-10-17T10:01:00Z',
+};
+
+const facts = (over: Partial<TerminalFacts> = {}): TerminalFacts => ({
+  session,
+  connected: true,
+  dropped: false,
+  exited: undefined,
+  lost: false,
+  watchOnly: false,
+  quiet: 0,
+  idleAfter: 10,
+  ...over,
+});
+
+describe('terminalState', () => {
+  it('is working while it writes, and idle once quiet for studio-idle-after', () => {
+    expect(terminalState(facts())).toBe('working');
+    expect(terminalState(facts({ quiet: 10 }))).toBe('idle');
+  });
+
+  it('is unknown before the session has written anything', () => {
+    expect(terminalState(facts({ quiet: Infinity }))).toBe('unknown');
+  });
+
+  it("says waiting or needs approval only when the agent's hooks did", () => {
+    expect(terminalState(facts({ session: { ...session, needs: 'waiting' } }))).toBe('waiting');
+    expect(terminalState(facts({ session: { ...session, needs: 'approval' } }))).toBe('approval');
+    expect(terminalState(facts({ session: { ...session, needs: null } }))).toBe('working');
+  });
+
+  it('tells a clean end from an error by the exit code', () => {
+    expect(terminalState(facts({ exited: 0 }))).toBe('ended');
+    expect(terminalState(facts({ exited: null }))).toBe('ended');
+    expect(terminalState(facts({ exited: 2 }))).toBe('error');
+    expect(terminalState(facts({ session: { ...session, ended: true, exitCode: 1 }, connected: false }))).toBe('error');
+  });
+
+  it('puts an ending before a dropped connection, and a drop before watching', () => {
+    expect(terminalState(facts({ exited: 0, dropped: true }))).toBe('ended');
+    expect(terminalState(facts({ dropped: true, connected: false, watchOnly: true }))).toBe('reconnecting');
+    expect(terminalState(facts({ watchOnly: true, session: { ...session, needs: 'approval' } }))).toBe('watch');
+  });
+
+  it('is connecting until the socket opens, and lost when an earlier daemon had it', () => {
+    expect(terminalState(facts({ connected: false }))).toBe('connecting');
+    expect(terminalState(facts({ session: undefined }))).toBe('connecting');
+    expect(terminalState(facts({ session: undefined, lost: true }))).toBe('lost');
+  });
+});
+
+describe('TERMINAL_STATES', () => {
+  it('lets you type only in a live session', () => {
+    const typing = Object.entries(TERMINAL_STATES).filter(([, one]) => one.typing).map(([name]) => name);
+
+    expect(typing.sort()).toEqual(['approval', 'idle', 'unknown', 'waiting', 'working']);
+  });
+
+  it('offers resume wherever the session has stopped, and puts no choice on a button', () => {
+    expect(['ended', 'error', 'lost'].every((name) => TERMINAL_STATES[name as keyof typeof TERMINAL_STATES].ask?.resume)).toBe(true);
+    expect(TERMINAL_STATES.approval.ask?.button).toBe('Go to the question');
+    expect(TERMINAL_STATES.approval.ask?.text).toContain('answer them there');
+  });
+});
+
+describe('resumeCommand', () => {
+  it('names the conversation where the agent gave its id, and the project it belongs to', () => {
+    expect(resumeCommand('5f0c1e2a-9d3b', 'starstats')).toBe('$ loadout resume 5f0c1e2a-9d3b --project starstats');
+    expect(resumeCommand(null, 'starstats')).toBe('$ loadout resume --last --project starstats');
+    expect(resumeCommand('5f0c1e2a-9d3b', null)).toBe('$ loadout resume 5f0c1e2a-9d3b --all');
+  });
+});
+
+describe('fitFontSize', () => {
+  it('scales 80 columns to the width, within the text sizes the bar allows', () => {
+    expect(fitFontSize(1000)).toBeCloseTo(20.2, 1);
+    expect(fitFontSize(320)).toBe(6);
+    expect(fitFontSize(100)).toBe(5);
+    expect(fitFontSize(4000)).toBe(22);
+  });
+});

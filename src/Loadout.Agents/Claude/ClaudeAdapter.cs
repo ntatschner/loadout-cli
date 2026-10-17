@@ -333,7 +333,11 @@ public sealed class ClaudeAdapter : AgentAdapterBase
             settingsPath = null;
         }
 
-        if (settingsPath is null && reading.Count == 0)
+        // A person's session hosted for Studio, whose agent reports through
+        // its own hooks when it is waiting for them.
+        var hosted = context.StudioSession is { Length: > 0 } && context.Headless is null;
+
+        if (settingsPath is null && reading.Count == 0 && !hosted)
         {
             return;
         }
@@ -436,7 +440,12 @@ public sealed class ClaudeAdapter : AgentAdapterBase
             screened.Document[key] = value;
         }
 
-        if (screened.Changed || disableHooks || reading.Count > 0 || path is null)
+        if (hosted)
+        {
+            AddStudioHooks(screened.Document, launcher);
+        }
+
+        if (screened.Changed || disableHooks || reading.Count > 0 || hosted || path is null)
         {
             path = Path.Combine(context.RuntimeDirectory, "settings.json");
 
@@ -457,6 +466,58 @@ public sealed class ClaudeAdapter : AgentAdapterBase
 
         arguments.Add("--settings");
         arguments.Add(path!);
+    }
+
+    /// <summary>
+    /// The hooks that tell Studio a hosted session is waiting: Claude's own
+    /// <c>idle_prompt</c> notification (it finished about a minute ago and
+    /// nobody has typed since) and <c>permission_prompt</c> (it has been
+    /// asking for approval for a few seconds), and <c>Stop</c>, which only
+    /// records the conversation's id for 'loadout resume'.
+    /// </summary>
+    /// <remarks>
+    /// Added after screening, being the launcher's own, and beside whatever
+    /// hooks the file already has: Claude merges hook lists rather than
+    /// replacing them. Each runs 'loadout dashboard signal', which writes a
+    /// file and prints nothing, so none of them decides anything for Claude.
+    /// Nothing reads the screen: a hook says that a question is waiting and
+    /// never what its choices are.
+    /// </remarks>
+    internal static void AddStudioHooks(System.Text.Json.Nodes.JsonObject document, string launcher)
+    {
+        if (document["hooks"] is not System.Text.Json.Nodes.JsonObject hooks)
+        {
+            hooks = [];
+            document["hooks"] = hooks;
+        }
+
+        Add("Notification", "idle_prompt", "waiting");
+        Add("Notification", "permission_prompt", "approval");
+        Add("Stop", null, "turn");
+
+        void Add(string hookEvent, string? matcher, string state)
+        {
+            if (hooks[hookEvent] is not System.Text.Json.Nodes.JsonArray list)
+            {
+                list = [];
+                hooks[hookEvent] = list;
+            }
+
+            var entry = new System.Text.Json.Nodes.JsonObject();
+
+            if (matcher is not null)
+            {
+                entry["matcher"] = matcher;
+            }
+
+            entry["hooks"] = new System.Text.Json.Nodes.JsonArray(new System.Text.Json.Nodes.JsonObject
+            {
+                ["type"] = "command",
+                ["command"] = $"{launcher} dashboard signal {state}",
+            });
+
+            list.Add(entry);
+        }
     }
 
     /// <summary>

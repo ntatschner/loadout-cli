@@ -138,7 +138,11 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             Loadout.Platform.PlatformServices.CreatePseudoTerminal,
             Loadout.Core.Agents.LauncherInvocation.Parts,
             lifetime,
-            Loadout.Platform.PlatformServices.CreateProcessTree(launcher));
+            Loadout.Platform.PlatformServices.CreateProcessTree(launcher),
+            // Read here only to name the directory; a daemon built without
+            // paths, as the tests that drive its work build one, hosts
+            // sessions whose hooks have nowhere to report.
+            SignalsOf(paths));
         _ideas = ideas;
         _dumps = dumps;
         _launcher = launcher;
@@ -427,6 +431,11 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             // so the note says how many are running for 'daemon stop' to warn.
             server.Sessions = _sessions;
             server.PseudoTerminal = Loadout.Platform.PlatformServices.PseudoTerminalName;
+
+            // What earlier daemons' sessions left: kept a week, so a page
+            // opened after a restart can still offer to resume one.
+            Loadout.Core.Sessions.Hosting.SessionSignals.Prune(
+                Loadout.Core.Sessions.Hosting.SessionSignals.Directory(_paths.Paths.State), _time.GetUtcNow());
             _sessions.Changed += HostedChanged;
 
             // Which page the address opens, read each time so setting it is
@@ -567,6 +576,10 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     }
 
     private readonly Loadout.Core.Sessions.Hosting.HostedSessions _sessions;
+
+    /// <summary>Where hosted sessions' hooks report, or null for a daemon built without paths.</summary>
+    private static string? SignalsOf(IPlatformPaths? paths) =>
+        paths?.Paths is { } where ? Loadout.Core.Sessions.Hosting.SessionSignals.Directory(where.State) : null;
     private readonly Loadout.Core.Instructions.IMemoryService _memory;
     private readonly Loadout.Core.Sessions.LaunchSheet _sheet;
     private readonly Loadout.Core.Instructions.IMemoryImporter _importer;

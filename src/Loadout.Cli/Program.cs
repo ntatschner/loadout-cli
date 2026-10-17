@@ -1151,6 +1151,7 @@ public static class Program
             CommandCategory.Start,
             "dashboard web page browser watch runs live team");
         dashboard.AddCommand<DashboardSignOutCommand>("sign-out");
+        dashboard.AddCommand<DashboardSignalCommand>("signal");
     }
 
     private static void Daemon(Branch daemon)

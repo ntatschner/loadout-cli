@@ -21,7 +21,7 @@ namespace Loadout.Core.Teams.Daemon;
 /// <list type="table">
 /// <item><term>GET /api/v1/sessions</term><description>Every session, oldest first.</description></item>
 /// <item><term>POST /api/v1/sessions</term><description>Starts one from the launch sheet's fields; 201 with the session.</description></item>
-/// <item><term>GET /api/v1/sessions/{id}</term><description>One session.</description></item>
+/// <item><term>GET /api/v1/sessions/{id}</term><description>One session; 410 with the agent's conversation id for one an earlier daemon hosted.</description></item>
 /// <item><term>DELETE /api/v1/sessions/{id}</term><description>Ends it if it is running, and forgets it; 204.</description></item>
 /// <item><term>GET /api/v1/sessions/{id}/terminal</term><description>A WebSocket carrying the terminal; see <see cref="TerminalSocket"/>.</description></item>
 /// </list>
@@ -76,6 +76,17 @@ internal static class SessionsApi
             case []:
                 await PlainAsync(context, 405, "Sessions are listed with GET and started with POST.").ConfigureAwait(false);
                 return;
+        }
+
+        // A session an earlier daemon hosted ended with it. Said as gone
+        // rather than not found, with the conversation's id where its agent
+        // left one, so the page can offer to carry it on in a terminal.
+        if (parts is [var gone] && method == "GET" && sessions.Find(gone) is null
+            && sessions.LostAgentSession(gone) is { } lost)
+        {
+            await JsonAsync(context, 410, new { id = gone, lost = true, agentSession = lost }).ConfigureAwait(false);
+
+            return;
         }
 
         if (parts.Length > 2 || sessions.Find(parts[0]) is not { } session)
@@ -205,6 +216,7 @@ internal static class SessionsApi
     internal static object Shown(HostedSessions sessions, HostedSession session, long? memory)
     {
         var launch = sessions.LaunchOf(session.Id);
+        var (needs, agentSession) = sessions.SignalOf(session);
 
         return new
         {
@@ -228,6 +240,13 @@ internal static class SessionsApi
             task = launch?.Task,
             taskId = launch?.TaskId,
             command = launch is null ? null : HostedSessions.CommandLine(launch).Value,
+            lastInputAt = session.LastInputAt,
+
+            // From the agent's own hooks, never from the screen: 'waiting' or
+            // 'approval' until somebody types, and the conversation's id for
+            // 'loadout resume'. Both null for an agent whose hooks say nothing.
+            needs,
+            agentSession,
         };
     }
 

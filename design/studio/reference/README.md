@@ -39,10 +39,10 @@ Loadout Studio is the design system for Studio: the app Loadout serves on this m
 | Family | Token | States | Motion (full) |
 |---|---|---|---|
 | Moving | `moving` | working, running, doing, round running | breathe; spin for a round |
-| Needs | `needs`, `needs-text`, `needs-wash` | needs a decision, waiting for you | pulse, then a glow that stays |
-| Bad | `bad`, `bad-text`, `bad-wash` | failed, last round failed, blocked, limited | none: a hard edge |
-| Good | `good` | done, met, accepted | one settle flash, then still |
-| Rest | `rest` | idle, open, captured, shaping, held, stopped, not attempted, unknown, dropped | dim (Dark only), dashed or struck through; never a loop |
+| Needs | `needs`, `needs-text`, `needs-wash` | needs a decision, waiting for you, needs approval | pulse, then a glow that stays |
+| Bad | `bad`, `bad-text`, `bad-wash` | failed, last round failed, blocked, limited, exited with an error, lost | none: a hard edge |
+| Good | `good` | done, met, accepted, ended | one settle flash, then still |
+| Rest | `rest` | idle, open, captured, shaping, held, stopped, not attempted, unknown, dropped, connecting, reconnecting, only watching | dim (Dark only), dashed or struck through; never a loop |
 
 - `good` and `bad` are close in lightness, so they are always told apart by glyph and word (a check against a cross), never by colour alone. `moving` sits near the Cyan accent for the same reason: a Moving thing always shows its play glyph and its word.
 - Fill washes (`needs-wash`, `bad-wash`) only ever sit under their text colour and a 3px edge in the family colour.
@@ -50,6 +50,12 @@ Loadout Studio is the design system for Studio: the app Loadout serves on this m
 - Put text on a solid signal fill in `on-signal`.
 - `shaping` colours the Lens halo's Shaping ring only. As a state, shaping belongs to the Rest family.
 - The Map gives each piece of work a line colour, `line-1` to `line-8`, for its whole life. Line colours are identity, never state, and its number on a train or badge is `on-line`. They appear only inside the Map parts (TubeMap, LineStrip, NetworkStatus).
+
+### The terminal
+
+- The live terminal has its own sixteen ANSI colours per theme, `term-black` to `term-bright-white`, on `term-bg`, with `term-fg` text, a `term-cursor` that follows the accent, and `term-selection`. Their hues are Studio's: red is `bad`, green `good`, yellow `needs`, blue `moving`, magenta `shaping`. `term-cyan` stays cyan whatever the accent, because agents use it as a colour.
+- Every terminal text colour is 4.5:1 or better on `term-bg` and `term-selection` (7:1 in high contrast). Build the terminal on xterm.js with `minimumContrastRatio` 4.5 (7 in high contrast), so an agent's own 24-bit colours are lifted to the same floor.
+- Studio never types into a session for you, and never puts an agent's choices on buttons. It is told that a session is waiting (from the agent's own hooks), not what the choices are, so the question is answered in the terminal.
 
 ### Light and glow
 

@@ -64,6 +64,7 @@ public sealed class HostedSession : IAsyncDisposable
     private TerminalAttachment? _holder;
     private Task _pump = Task.CompletedTask;
     private DateTimeOffset? _lastOutput;
+    private DateTimeOffset? _lastInput;
     private bool _ended;
     private int? _exitCode;
     private int _columns;
@@ -98,6 +99,16 @@ public sealed class HostedSession : IAsyncDisposable
     public DateTimeOffset? LastOutputAt
     {
         get { lock (_gate) { return _lastOutput; } }
+    }
+
+    /// <summary>
+    /// When a window last typed into the session, or null before anybody
+    /// has. An agent's report that it is waiting stops counting from here
+    /// (<see cref="SessionSignals.Needs"/>).
+    /// </summary>
+    public DateTimeOffset? LastInputAt
+    {
+        get { lock (_gate) { return _lastInput; } }
     }
 
     /// <summary>Whether the child has ended.</summary>
@@ -240,6 +251,12 @@ public sealed class HostedSession : IAsyncDisposable
             if (!ReferenceEquals(_holder, attachment))
             {
                 return OperationResult.Fail("Another window holds the input. Take over to type here.");
+            }
+
+            // The terminal answering the agent is not somebody answering it.
+            if (!TerminalReports.IsOnlyReports(data.Span))
+            {
+                _lastInput = DateTimeOffset.UtcNow;
             }
         }
 

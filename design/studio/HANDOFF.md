@@ -14,7 +14,7 @@ Everything you need is in this folder, `design/studio/`:
 | `tokens.css` | The same tokens compiled to CSS custom properties, with the `@font-face` rules. Import this; don't rewrite it. |
 | `fonts/` | Saira and JetBrains Mono, variable woff2 (Latin), with their OFL-1.1 licences. |
 | `reference/README.md` | The design system's brand book: principles, wording, colour, signals, type, density, motion, focus. **Read it first.** |
-| `reference/components/<Name>/` | The README (what it is, what you provide, do and don't, accessibility) and a live `preview.html` for each of the 19 components. |
+| `reference/components/<Name>/` | The README (what it is, what you provide, do and don't, accessibility) and a live `preview.html` for each of the 21 components. |
 | `reference/components/bundle.css`, `bundle.js`, `index.d.ts` | The reference implementation in plain CSS and JavaScript. Port it to Svelte; don't ship it as is. |
 | `reference/design-system.tokens.json` | The tokens as the design system artifact stores them. For reference only. |
 | `reference/prototype/index.html` | A clickable prototype of Home and Sessions built on the reference implementation. Open it in a browser. It is the behaviour to match. |
@@ -47,7 +47,7 @@ Don't reopen these. Ask me only if one turns out to be impossible.
   - When something needs you, it rises and everything else recedes. Receding fades only in Dark; in the other themes nothing fades.
 - **Every action that changes something shows the exact `loadout` command it runs**, beside or under the control.
   - Two things never get a button, only the command to run in a terminal: reading a secret back, and agreements that must be made in a terminal (for example `loadout tools verify <draft> --agree`).
-  - Answers typed into a running session say "typed into the session".
+  - Studio never types into a session for you, and never puts an agent's choices on buttons. A question in a session is answered in its terminal.
 - **Navigation:** the side rail, with live counts. It widens over the page with a dim on hover or focus, and never pushes the page sideways.
   - Below 600px it becomes a Pages tab with a slide-in list.
   - The page never scrolls sideways at 320px.
@@ -79,7 +79,22 @@ Don't reopen these. Ask me only if one turns out to be impossible.
 - The list shows what is running and waiting, with Recent below.
 - The New session sheet follows the TUI launch sheet in `docs/launcher.md`: project; the task, picked from recorded tasks (No task, then doing, open and blocked, then Other…); agent; mode; profile and worktree when there is more than one; the three options `--offline`, `--no-sync` and `--handoff`; and "This session would load" with its token cost against the 12,000 instruction budget.
 - Launch, Quick session and Cancel.
-- The session view has the live terminal you type into, its facts, and `loadout resume` for carrying on in a terminal.
+- The session page is SessionView (see `reference/components/SessionView/README.md`):
+  - A slim header, then the Terminal filling the page.
+  - A 300px details panel (facts, what loaded, the last events, actions) that folds away. Below 960px it sits under the terminal, folded.
+
+**The live terminal** (`reference/components/Terminal/README.md`)
+
+- **Its look:** Studio's own sixteen ANSI colours per theme (`term-*` tokens) on the theme's ground, all 4.5:1 or better (7:1 in high contrast).
+- **Its bar:** the session's Signal, project, agent, size, A− and A+, and Fit.
+- **Typing:**
+  - Keys go straight to the agent, Tab and arrows included.
+  - **Ctrl+]** leaves the terminal for the details toggle, never for an action such as End the session. While the terminal has focus, the bar says so.
+- **The state bar** under the screen says, in words, what the session needs or why it stopped. Use exactly the states in the Terminal README: connecting, working, idle, unknown, waiting, approval, ended, error, reconnecting, watch and lost.
+  - **Waiting and approval** say so, and take you to the question. The answer is typed in the terminal.
+  - **Ended, exited with an error, and lost after a daemon restart** offer `loadout resume <session-id>`.
+- **On a phone:** the terminal keeps 80 columns, with Fit on, and scrolls inside its own box when zoomed. The page never scrolls sideways.
+- **Ending a session** says "stops the agent in this terminal", because no `loadout` command does it.
 
 **Signing in** stays as the dashboard does it:
 
@@ -155,7 +170,12 @@ A session started in Studio must be the same session a typed one is.
 - If it doesn't, fall back to server-sent events for output and POST for input, and tell me which you used.
 - Output goes to the browser with a scrollback buffer, so reopening the page replays it.
 - Input, resize and close go back.
-- Use a terminal emulator in the browser that is small, maintained and MIT- or BSD-licensed. Name it in THIRD-PARTY-NOTICES.md.
+- Use **xterm.js** (MIT) in the browser, and name it in THIRD-PARTY-NOTICES.md. Theme it from the tokens:
+  - `background` term-bg, `foreground` term-fg, `cursor` term-cursor, `cursorAccent` term-bg and `selectionBackground` term-selection;
+  - the sixteen ANSI colours, `term-black` to `term-bright-white`;
+  - JetBrains Mono at 13px, line height 1.4, ligatures off.
+- Set `minimumContrastRatio` to 4.5, or 7 in the high-contrast themes, so an agent's own 24-bit colours are lifted to the same floor.
+- Turn on screen-reader mode when one is in use.
 
 **Lifetime**
 
@@ -173,6 +193,15 @@ This is a browser starting processes, so be strict:
 - Never print a secret: not in the UI, logs, errors or `--json`.
 - Don't write terminal output to the daemon's log.
 - Never show a secret back, and never offer the terminal-only agreements as buttons.
+
+**Knowing a session is waiting**
+
+- Today Loadout knows only working, idle or unknown, from when the transcript was last written (`SessionMonitor`). Keep that for every session.
+- **Waiting and approval come only from the agent's own hooks,** which Loadout installs with the launch, as it installs the statusline.
+  - Claude Code's `Notification` hook reports both: `idle_prompt` is "waiting for you" and `permission_prompt` is "needs approval". Verify those matchers against the Claude Code hooks documentation before relying on them.
+  - Codex shows only working, idle or unknown until its `notify` events are verified against OpenAI's own documentation or source. Then add them, and tell me.
+- Never infer a question from the text on screen.
+- The hook says *that* a session is waiting, not *what* the choices are. That is why Studio never puts the choices on buttons.
 
 ## Config keys
 
@@ -220,6 +249,7 @@ Run the build and the full test suite until they pass. Then open Studio in a bro
 
 - all four themes, four accents, three densities and three motion levels;
 - Home (Lens, Map, Ambient), Sessions, the launch sheet, a real session launched and typed into, the palette, toasts, Settings → Appearance and sign-out;
+- every terminal state, including a Claude Code session reporting approval through its hook, Ctrl+] leaving the terminal, and a session that outlives a reload but not a daemon restart;
 - a waiting question answered with the keyboard only;
 - 200% zoom and a 320px window with no sideways scroll;
 - watch-only;

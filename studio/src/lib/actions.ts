@@ -60,7 +60,9 @@ function all(studio: Studio, line: Work, go: (...parts: string[]) => void): Chan
   }
 
   if (line.kind === 'session') {
-    return [{ label: 'Open the session', cmd: 'opens here · changes nothing', changes: false, onpress: () => go('session', line.ref) }];
+    // Its question is answered in its terminal: the agent says that it is
+    // waiting, never what the choices are, so none of them is a button.
+    return [{ label: line.waiting ? 'Go to the question' : 'Open the session', cmd: 'opens here · changes nothing', changes: false, onpress: () => go('session', line.ref) }];
   }
 
   return [];

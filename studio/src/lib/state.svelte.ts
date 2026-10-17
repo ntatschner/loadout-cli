@@ -173,7 +173,7 @@ export class Studio {
 
     for (const line of this.lines) {
       if (line.kind === 'team run' || line.kind === 'session') {
-        states.set(line.id, line.waiting ? `asks:${line.gate?.id}` : line.stage === 4 || line.failed ? 'ended' : 'going');
+        states.set(line.id, line.waiting ? `asks:${line.gate?.id ?? (line.approval ? 'approval' : 'waiting')}` : line.stage === 4 || line.failed ? 'ended' : 'going');
       }
     }
 
@@ -211,6 +211,18 @@ export class Studio {
   /** A Needs you toast for a question, answerable from the toast itself. */
   #ask(line: Work): void {
     const gate = line.gate;
+
+    // A session's agent says only that it is waiting, never what the
+    // choices are, so the toast takes you to its terminal to answer there.
+    if (line.kind === 'session') {
+      toasts.add({
+        level: 'needs',
+        text: `${line.title} ${line.approval ? 'needs approval' : 'is waiting for you'}`,
+        actions: [{ label: 'Go to the question', cmd: 'opens its terminal · changes nothing', onpress: () => void (location.hash = `#session/${encodeURIComponent(line.ref)}`) }],
+      });
+
+      return;
+    }
 
     if (!gate) {
       return;

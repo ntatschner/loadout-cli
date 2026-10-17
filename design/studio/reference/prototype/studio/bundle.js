@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format": 4, "namespace": "LoadoutStudio", "components": [{"name": "HaloButton"}, {"name": "StartRail"}, {"name": "Command"}, {"name": "Switch"}, {"name": "Tabs"}, {"name": "ModePicker"}, {"name": "Signal"}, {"name": "EventMark"}, {"name": "Urgency"}, {"name": "Meter"}, {"name": "Toasts"}, {"name": "SideRail"}, {"name": "Dialog"}, {"name": "Picker"}, {"name": "CommandPalette"}, {"name": "Halo"}, {"name": "TubeMap"}, {"name": "LineStrip"}, {"name": "NetworkStatus"}]} */
+/* @ds-bundle: {"format": 4, "namespace": "LoadoutStudio", "components": [{"name": "HaloButton"}, {"name": "StartRail"}, {"name": "Command"}, {"name": "Switch"}, {"name": "Tabs"}, {"name": "ModePicker"}, {"name": "Signal"}, {"name": "EventMark"}, {"name": "Urgency"}, {"name": "Meter"}, {"name": "Toasts"}, {"name": "SideRail"}, {"name": "Dialog"}, {"name": "Picker"}, {"name": "CommandPalette"}, {"name": "Halo"}, {"name": "TubeMap"}, {"name": "LineStrip"}, {"name": "NetworkStatus"}, {"name": "Terminal"}, {"name": "SessionView"}]} */
 /* Loadout Studio — plain JavaScript, no framework, no imports, no network.
    Components are CSS classes plus small helpers, written to port line for line to Svelte. */
 (function () {
@@ -45,7 +45,7 @@
   "use strict";
   var NS = window.LoadoutStudio = window.LoadoutStudio || {};
   var GLYPHS = {"play": "M7 5 L15 10 L7 15 Z", "round": "M15.5 7 A6 6 0 1 0 16 11.5 M15.5 3 V7 H11.5", "needs": "M10 4 V11.5 M10 15 V15.2", "failed": "M6 6 L14 14 M14 6 L6 14", "blocked": "M4 10a6 6 0 1 0 12 0a6 6 0 1 0-12 0 M6.5 10 H13.5", "limited": "M4 14 A6 6 0 0 1 16 14 M10 14 L6.8 10.6", "done": "M5 10.5 L8.5 14 L15 6.5", "idle": "M5 10 H15", "open": "M5 10a5 5 0 1 0 10 0a5 5 0 1 0-10 0", "held": "M7.5 5.5 V14.5 M12.5 5.5 V14.5", "stopped": "M6 6 H14 V14 H6 Z", "unknown": "M7.5 7.5 A2.5 2.5 0 1 1 10 10 V11.5 M10 14.8 V15", "dropped": "M5 15 L15 5", "shaping": "M10 3 L16 10 L10 17 L4 10 Z"};
-  var STATES = {"working": ["moving", "play", "breathe"], "running": ["moving", "play", "breathe"], "doing": ["moving", "play", "breathe"], "round running": ["moving", "round", "spin"], "needs a decision": ["needs", "needs", "pulse"], "waiting for you": ["needs", "needs", "pulse"], "failed": ["bad", "failed", "hard"], "last round failed": ["bad", "failed", "hard"], "blocked": ["bad", "blocked", "hard"], "limited": ["bad", "limited", "hard"], "done": ["good", "done", "settle"], "met": ["good", "done", "settle"], "accepted": ["good", "done", "settle"], "idle": ["rest", "idle", "dim"], "open": ["rest", "open", "still"], "captured": ["rest", "open", "still"], "shaping": ["rest", "shaping", "still"], "held": ["rest", "held", "still"], "held after this round": ["rest", "held", "still"], "stopped": ["rest", "stopped", "still"], "not attempted": ["rest", "open", "dashed"], "unknown": ["rest", "unknown", "flicker"], "dropped": ["rest", "dropped", "strike"]};
+  var STATES = {"working": ["moving", "play", "breathe"], "running": ["moving", "play", "breathe"], "doing": ["moving", "play", "breathe"], "round running": ["moving", "round", "spin"], "needs a decision": ["needs", "needs", "pulse"], "waiting for you": ["needs", "needs", "pulse"], "failed": ["bad", "failed", "hard"], "last round failed": ["bad", "failed", "hard"], "blocked": ["bad", "blocked", "hard"], "limited": ["bad", "limited", "hard"], "done": ["good", "done", "settle"], "met": ["good", "done", "settle"], "accepted": ["good", "done", "settle"], "idle": ["rest", "idle", "dim"], "open": ["rest", "open", "still"], "captured": ["rest", "open", "still"], "shaping": ["rest", "shaping", "still"], "held": ["rest", "held", "still"], "held after this round": ["rest", "held", "still"], "stopped": ["rest", "stopped", "still"], "not attempted": ["rest", "open", "dashed"], "unknown": ["rest", "unknown", "flicker"], "dropped": ["rest", "dropped", "strike"], "needs approval": ["needs", "needs", "pulse"], "connecting": ["rest", "open", "dashed"], "reconnecting": ["rest", "round", "dashed"], "ended": ["good", "done", "settle"], "exited with an error": ["bad", "failed", "hard"], "only watching": ["rest", "held", "still"], "lost": ["bad", "blocked", "hard"]};
   var SVGNS = "http://www.w3.org/2000/svg";
 
   function h(tag, attrs, kids) {
@@ -698,4 +698,118 @@
   }
 
   Object.assign(NS, { NAV_ICONS: ICONS, SideRail: SideRail, Dialog: Dialog, Picker: Picker, CommandPalette: CommandPalette, Halo: Halo, TubeMap: TubeMap, LineStrip: LineStrip, NetworkStatus: NetworkStatus, STAGE_NAMES: STAGE_NAMES });
+})();
+
+(function () {
+  "use strict";
+  var NS = window.LoadoutStudio = window.LoadoutStudio || {};
+  function h(tag, attrs, kids) {
+    var el = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) {
+      var v = attrs[k];
+      if (v === null || v === undefined || v === false) { return; }
+      if (k === "text") { el.textContent = v; } else if (k === "class") { el.className = v; } else if (k.slice(0, 2) === "on") { el.addEventListener(k.slice(2), v); } else { el.setAttribute(k, v === true ? "" : v); }
+    });
+    (kids || []).forEach(function (c) { if (c) { el.appendChild(typeof c === "string" ? document.createTextNode(c) : c); } });
+    return el;
+  }
+  function focusables(root) { return Array.prototype.filter.call(root.querySelectorAll("button, [href], input, [tabindex='0']"), function (e) { return !e.disabled && e.offsetParent !== null; }); }
+
+  /* What each terminal state says, and whether you can type. */
+  var STATES = {
+    connecting: { word: "connecting", typing: false },
+    working: { word: "working", typing: true },
+    idle: { word: "idle", typing: true },
+    unknown: { word: "unknown", typing: true },
+    waiting: { word: "waiting for you", typing: true, ask: ["needs", "It has finished and is waiting for your next message.", "Type a reply"] },
+    approval: { word: "needs approval", typing: true, ask: ["needs", "It is asking for approval. The choices are in the terminal; answer them there.", "Go to the question"] },
+    ended: { word: "ended", typing: false, ask: ["good", "Ended. Its transcript is kept.", null, "resume"] },
+    error: { word: "exited with an error", typing: false, ask: ["bad", "Exited with an error (exit code {code}). Its transcript is kept.", null, "resume"] },
+    reconnecting: { word: "reconnecting", typing: false, ask: ["rest", "Lost touch with the daemon. Reconnecting; the output so far is kept.", "Try now"] },
+    watch: { word: "only watching", typing: false, ask: ["rest", "Only watching: typing is off. Start Studio without --watch-only to type into a session."] },
+    lost: { word: "lost", typing: false, ask: ["bad", "This session ended when the daemon restarted. Its transcript is kept.", null, "resume"] }
+  };
+
+  /* Terminal: the agent's own screen, in Studio's palette. The real one is xterm.js themed from the term-* tokens; this is its reference look. */
+  function Terminal(o) {
+    o = o || {};
+    var state = o.state || "working", cols = (o.size || [80, 24])[0], rows = (o.size || [80, 24])[1], size = 13, fit = !!o.fit, typed = "";
+    var screen = h("pre", { "class": "screen", tabindex: "0", role: "log", "aria-label": "Terminal: " + (o.title || "session"), "aria-roledescription": "terminal" });
+    var cursorLine = h("span"), cur = h("span", { "class": "cur", text: " " });
+    var sig = h("span"), sizeEl = h("span", { "class": "size", text: cols + " × " + rows });
+    var fitBtn = h("button", { type: "button", "class": "tbtn", "aria-pressed": fit ? "true" : "false", text: "Fit", title: "Fit 80 columns to the width", onclick: function () { setFit(!fit); } });
+    var smaller = h("button", { type: "button", "class": "tbtn", "aria-label": "Smaller text", text: "A−", onclick: function () { zoom(-1); } });
+    var larger = h("button", { type: "button", "class": "tbtn", "aria-label": "Larger text", text: "A+", onclick: function () { zoom(1); } });
+    var bar = h("div", { "class": "tbar" }, [sig, h("span", { text: (o.project || "") + (o.agent ? " · " + o.agent : "") }), sizeEl, h("span", { "class": "keyhint", text: "Ctrl+] leaves the terminal" }), h("span", { "class": "grow" }), smaller, larger, fitBtn]);
+    var askText = h("p"), askBtnWrap = h("span"), askCmd = h("span");
+    var ask = h("div", { "class": "ask", role: "status" }, [askText, askBtnWrap, askCmd]);
+    var el = h("section", { "class": "ls-term" + (fit ? " fit" : ""), "aria-label": o.label || "Live terminal" }, [bar, screen, ask]);
+    screen.appendChild(cursorLine); cursorLine.appendChild(cur);
+
+    function zoom(d) { size = Math.max(9, Math.min(22, size + d)); el.style.setProperty("--term-size", size + "px"); setFit(false); }
+    function setFit(v) { fit = v; el.classList.toggle("fit", fit); fitBtn.setAttribute("aria-pressed", fit ? "true" : "false"); }
+    function atBottom() { return screen.scrollHeight - screen.scrollTop - screen.clientHeight < 24; }
+    /* write: one line, as runs of [text, classes]: fg-red, fg-bright-black, bold, ul, bg-black. */
+    function write(runs) {
+      var stick = atBottom(), line = h("span");
+      (typeof runs === "string" ? [[runs, ""]] : runs).forEach(function (r) { line.appendChild(h("span", { "class": r[1] || null, text: r[0] })); });
+      line.appendChild(document.createTextNode("\n"));
+      screen.insertBefore(line, cursorLine);
+      if (stick) { screen.scrollTop = screen.scrollHeight; }
+    }
+    function paintPrompt() { cursorLine.textContent = ""; if (STATES[state].typing && o.prompt !== false) { cursorLine.appendChild(h("span", { "class": "fg-cyan", text: "› " })); cursorLine.appendChild(document.createTextNode(typed)); cursorLine.appendChild(cur); } }
+    function setState(s, info) {
+      state = STATES[s] ? s : "unknown"; info = info || {};
+      var st = STATES[state];
+      sig.textContent = ""; if (NS.Signal) { sig.appendChild(NS.Signal(st.word)); }
+      el.classList.toggle("off", !st.typing);
+      screen.setAttribute("aria-readonly", st.typing ? "false" : "true");
+      if (st.ask) {
+        ask.hidden = false; ask.className = "ask " + st.ask[0];
+        askText.textContent = st.ask[1].replace("{code}", info.code === undefined ? "1" : info.code);
+        askBtnWrap.textContent = "";
+        if (st.ask[2] && NS.HaloButton) { askBtnWrap.appendChild(NS.HaloButton({ label: st.ask[2], size: "small", kind: st.ask[0] === "needs" ? "needs" : "", onPress: function () { if (s === "reconnecting") { if (o.onRetry) { o.onRetry(); } } else { screen.focus(); screen.scrollTop = screen.scrollHeight; } } })); }
+        askCmd.textContent = "";
+        if (st.ask[3] === "resume") { askCmd.appendChild(h("code", { "class": "ls-cmd", text: "Carry it on in a terminal: $ loadout resume " + (o.sessionId || "<session-id>") })); }
+      } else { ask.hidden = true; }
+      paintPrompt();
+    }
+    screen.addEventListener("keydown", function (e) {
+      if (e.ctrlKey && e.key === "]") { e.preventDefault(); var list = focusables(document.body), i = list.indexOf(screen); var next = o.leaveTo || list[i + 1] || list[0]; if (next) { next.focus(); } return; }
+      if (!STATES[state].typing) { return; }
+      if (e.key === "Tab") { e.preventDefault(); return; }
+      if (e.key === "Enter") { e.preventDefault(); var t = typed; typed = ""; write([["› ", "fg-cyan"], [t, ""]]); paintPrompt(); if (o.onInput) { o.onInput(t); } return; }
+      if (e.key === "Backspace") { e.preventDefault(); typed = typed.slice(0, -1); paintPrompt(); return; }
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) { e.preventDefault(); typed += e.key; paintPrompt(); screen.scrollTop = screen.scrollHeight; }
+    });
+    (o.lines || []).forEach(write);
+    setState(state, o.info);
+    return { el: el, write: write, setState: setState, focus: function () { screen.focus(); }, get state() { return state; } };
+  }
+
+  /* SessionView: the session page. A slim header, the terminal filling the page, and a side panel that folds away. */
+  function SessionView(o) {
+    o = o || {};
+    var l = o.line || {};
+    var termOpts = Object.assign({ title: l.title, project: l.where, agent: l.agent }, o.terminal || {});
+    var term = Terminal(termOpts);
+    var side = h("aside", { "class": "sside", id: "ls-sside-" + Math.random().toString(36).slice(2, 7), "aria-label": "About this session" });
+    function block(title, node) { return node ? h("section", {}, [h("h2", { text: title }), node]) : null; }
+    var facts = (o.facts || []).length ? h("dl", {}, [].concat.apply([], o.facts.map(function (f) { return [h("dt", { text: f[0] }), h("dd", { text: f[1] })]; }))) : null;
+    var loaded = (o.loaded || []).length ? h("dl", {}, [].concat.apply([], o.loaded.map(function (f) { return [h("dt", { text: f[0] }), h("dd", { text: f[1] })]; }))) : null;
+    var events = (o.events || []).length ? h("ul", {}, o.events.map(function (e) { return h("li", {}, [h("b", { text: e[0] }), e[1]]); })) : null;
+    var acts = (o.actions || []).length && NS.HaloButton ? h("div", { "class": "ls-answers", style: "margin: 0" }, o.actions.map(function (a) { return NS.HaloButton(Object.assign({ size: "small" }, a)); })) : null;
+    [block("Facts", facts), block("This session loaded", loaded), block("Last events", events), block("Actions", acts)].forEach(function (b) { if (b) { side.appendChild(b); } });
+    var open = o.details !== false && !(window.matchMedia && window.matchMedia("(max-width: 959px)").matches);
+    var toggle = h("button", { type: "button", "class": "ls-halo small", "aria-expanded": open ? "true" : "false", "aria-controls": side.id, onclick: function () { open = !open; side.hidden = !open; toggle.setAttribute("aria-expanded", open ? "true" : "false"); toggle.lastChild.textContent = open ? "Hide details" : "Details"; } },
+      [h("span", { "class": "ring", "aria-hidden": "true" }), open ? "Hide details" : "Details"]);
+    side.hidden = !open;
+    /* Ctrl+] leaves the terminal for the details toggle, never for the next action, which may be End the session. */
+    if (!termOpts.leaveTo) { termOpts.leaveTo = toggle; }
+    var head = h("div", { "class": "shead" }, [h("div", { "class": "who" }, [h("h1", { text: l.title || "" }), h("span", { "class": "facts1", text: [l.where, l.agent, l.mode, l.time].filter(Boolean).join(" · ") })]), toggle]);
+    var root = h("div", { "class": "ls-session" }, [head, term.el, side]);
+    return { el: root, terminal: term };
+  }
+
+  Object.assign(NS, { Terminal: Terminal, SessionView: SessionView, TERMINAL_STATES: Object.keys(STATES) });
 })();

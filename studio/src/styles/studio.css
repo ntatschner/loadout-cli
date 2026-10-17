@@ -70,14 +70,6 @@ body.ambient-open { overflow: hidden; }
 
 /* ---------- a session ---------- */
 
-.sesstitle { font-size: 26px !important; line-height: 30px !important; }
-.sessmain { display: grid; gap: var(--space-4); min-width: 0; }
-.sessaside { display: grid; gap: var(--space-5); align-content: start; min-width: 0; }
-.term .bar .grow { flex: 1 1 auto; }
-.term .bar .state { color: var(--muted); }
-.term .screen { min-height: 420px; padding: var(--space-2); background: var(--ground); }
-.term .takeover { margin-left: var(--space-2); min-height: 32px; padding: 0 12px; border: 0; border-radius: var(--radius-chip); background: none; color: var(--accent-text); box-shadow: inset 0 0 0 1px var(--accent); font: inherit; cursor: pointer; }
-.term .takeover:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* ---------- the launch sheet ---------- */
 
@@ -243,3 +235,20 @@ body.ambient-open { overflow: hidden; }
 
 /* Below the page head, so a notification never sits on its controls. */
 .ls-toasts { top: max(88px, env(safe-area-inset-top, 0px)); }
+/* A session's page is exactly the window's height, and the session takes whatever the back link and any banner leave, so the wheel scrolls the terminal over the terminal and nothing elsewhere. Worked out by the layout rather than by subtracting heights, which drifted from what the page drew. Below 960px the details sit under the terminal and the page scrolls as any page does, with the terminal a fixed share of the window. */
+main.page:has(> .ls-session:not(.lost)) { display: flex; flex-direction: column; height: 100dvh; box-sizing: border-box; padding-bottom: 18px; overflow: hidden; }
+main.page:has(> .ls-session:not(.lost)) > .ls-session { flex: 1 1 auto; min-height: 480px; }
+.ls-session .ls-term { height: auto; min-height: 0; }
+@media (max-width: 959px) {
+  main.page:has(> .ls-session:not(.lost)) { display: block; height: auto; padding-bottom: 56px; overflow: visible; }
+  .ls-session .ls-term { height: clamp(320px, 70dvh, 720px); }
+}
+/* xterm fills the screen box. Its own viewport scrolls the history; at the top or bottom of it the wheel stops there rather than carrying on to the page. At Fit's smallest size the 80 columns scroll inside the box, never the page. */
+.ls-term .screen { padding: 8px 10px; min-height: 0; white-space: normal; overscroll-behavior: contain; }
+.ls-term .screen .xterm { height: 100%; }
+.ls-term .xterm-viewport { overscroll-behavior: contain; }
+.ls-term .ask .ls-sig, .ls-term .tbar .ls-sig { flex: none; }
+/* A lost session has no terminal to fill the window with. */
+.ls-session.lost { grid-template-columns: minmax(0, 1fr); }
+.lostcard { display: grid; gap: var(--space-3); padding: var(--space-4); background: var(--bad-wash); box-shadow: inset 3px 0 0 var(--bad); color: var(--bad-text); }
+.lostcard p { margin: 0; }

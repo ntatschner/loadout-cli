@@ -65,7 +65,12 @@ A *session* is one conversation with an AI coding agent.
 3. Choose what you're about to do, or *No task*.
 4. Choose **Launch**.
 
-A box like a terminal opens. Type to the agent there.
+A box like a terminal opens. Type to the agent there. To move out of the box
+with the keyboard, press **Ctrl** and **]** together.
+
+Under the box, Studio says in words when the agent is waiting for you, or
+asking you to allow something. You answer it by typing in the box. Studio
+never answers for you.
 
 You can close the browser. The session keeps running, because the daemon is
 running it. Come back to *Sessions* to find it again.

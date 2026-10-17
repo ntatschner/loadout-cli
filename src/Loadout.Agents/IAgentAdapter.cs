@@ -77,6 +77,11 @@ namespace Loadout.Agents;
 /// the first of these: its nodes are briefed with the path and told to keep
 /// what the team learns there, and without it the agent refuses every write.
 /// </param>
+/// <param name="StudioSession">
+/// The daemon's id for the Studio session this launch runs in, or null for a
+/// launch typed at a terminal. An adapter whose agent has hooks for it has
+/// the agent report there when it is waiting (see SessionSignals).
+/// </param>
 public sealed record AgentLaunchContext(
     ProjectResolution Project,
     string WorkingDirectory,
@@ -95,7 +100,8 @@ public sealed record AgentLaunchContext(
     HeadlessOptions? Headless = null,
     Models.Configuration.AccessibilitySettings? Accessibility = null,
     IReadOnlyList<string>? ReachableDirectories = null,
-    string? OpeningPrompt = null);
+    string? OpeningPrompt = null,
+    string? StudioSession = null);
 
 /// <summary>A fully resolved launch, ready to be handed to the process layer.</summary>
 /// <param name="Executable">Absolute path to the agent binary.</param>

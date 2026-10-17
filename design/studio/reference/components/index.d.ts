@@ -166,3 +166,28 @@ export declare function TubeMap(o: { lines: TubeLine[]; picked?: string; onPick?
 export declare function LineStrip(o: { line: TubeLine; facts?: { k: string; v: string }[]; checks?: [string, string][]; events?: TubeLine["events"]; actions?: HaloButtonOptions[]; stations?: string[] }): HTMLElement;
 /** The Map's status band: counts per station, the oldest question, tokens today, disruptions. */
 export declare function NetworkStatus(o: { lines: TubeLine[]; clock?: string; oldest?: string; tokens?: string; label?: string }): HTMLElement;
+
+/* ---------- Addendum: the terminal and the session page ---------- */
+
+export type TerminalState = "connecting" | "working" | "idle" | "unknown" | "waiting" | "approval" | "ended" | "error" | "reconnecting" | "watch" | "lost";
+/** One line of output as runs of [text, classes]: fg-<ansi>, fg-bright-<ansi>, bg-black, bold, ul. */
+export type TerminalRun = [string, string?];
+export interface TerminalOptions {
+  title?: string; project?: string; agent?: string; label?: string; sessionId?: string;
+  state?: TerminalState; size?: [number, number]; fit?: boolean; prompt?: boolean;
+  lines?: (TerminalRun[] | string)[];
+  /** Where Ctrl+] sends focus; by default the next control on the page. */
+  leaveTo?: HTMLElement;
+  onInput?: (text: string) => void; onRetry?: () => void; info?: { code?: number };
+}
+/** The live terminal's reference look: bar, screen and the bar that says what the session needs. Build the real one on xterm.js themed from the term-* tokens. */
+export declare function Terminal(o: TerminalOptions): { el: HTMLElement; write: (runs: TerminalRun[] | string) => void; setState: (s: TerminalState, info?: { code?: number }) => void; focus: () => void; readonly state: TerminalState };
+export declare const TERMINAL_STATES: TerminalState[];
+
+/** The session page: header, the terminal filling the page, and a side panel that folds away. */
+export declare function SessionView(o: {
+  line: { title: string; where?: string; agent?: string; mode?: string; time?: string };
+  terminal?: TerminalOptions;
+  facts?: [string, string][]; loaded?: [string, string][]; events?: [string, string][];
+  actions?: HaloButtonOptions[]; details?: boolean;
+}): { el: HTMLElement; terminal: ReturnType<typeof Terminal> };
