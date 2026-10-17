@@ -10,9 +10,11 @@
 // The daemon also passes --non-interactive, which only says nobody is at a
 // terminal to answer; the commands here are what a person would type.
 
-/** One argument as a shell would need it: quoted when it has a space. */
+/** One argument as a shell would need it: quoted when it holds a space, a quote, $, ` or a backslash, or nothing at all. */
 export function quoted(value: string): string {
-  return /[\s"]/.test(value) ? `"${value.replace(/"/g, '\\"')}"` : value;
+  // Also quoted and escaped: $, ` and \, which a shell would otherwise read,
+  // so a line copied out of the page runs as shown. An empty value is "".
+  return value === '' || /[\s"'$`\\]/.test(value) ? `"${value.replace(/(["\\$`])/g, '\\$1')}"` : value;
 }
 
 export const command = {
