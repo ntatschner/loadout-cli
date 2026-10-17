@@ -7,10 +7,10 @@ Signal shows a state as four things at once: a word, a glyph in a ring, the fami
 | Family | States | Motion (full) | Under reduced or none |
 |---|---|---|---|
 | Moving | working, running, doing, round running | the ring breathes; a round spins | still |
-| Needs | needs a decision, waiting for you | the ring pulses | still |
-| Bad | failed, last round failed, blocked, limited | none: a square, heavier ring | the same |
-| Good | done, met, accepted | one settle flash | still |
-| Rest | idle, open, captured, shaping, held, stopped, not attempted, unknown, dropped | idle dims (in Dark); not attempted is dashed; unknown flickers once, then dashed; dropped is struck through | the same, without the flicker |
+| Needs | needs a decision, waiting for you, needs approval | the ring pulses | still |
+| Bad | failed, last round failed, blocked, limited, exited with an error, lost | none: a square, heavier ring | the same |
+| Good | done, met, accepted, ended | one settle flash | still |
+| Rest | idle, open, captured, shaping, held, stopped, not attempted, unknown, dropped, connecting, reconnecting, only watching | idle dims (in Dark); not attempted is dashed; unknown flickers once, then dashed; dropped is struck through | the same, without the flicker |
 
 ## What you provide
 
