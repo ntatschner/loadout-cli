@@ -21,6 +21,7 @@
   import Ideas from './pages/Ideas.svelte';
   import Teams from './pages/Teams.svelte';
   import Context from './pages/Context.svelte';
+  import Spend from './pages/Spend.svelte';
   import Elsewhere from './pages/Elsewhere.svelte';
   import SignedOut from './pages/SignedOut.svelte';
   import { studio } from './lib/state.svelte';
@@ -153,6 +154,8 @@
       <Settings />
     {:else if router.route.page === 'memory'}
       <Memory slug={router.route.rest[0] ?? null} scope={router.route.rest[1] ?? null} name={router.route.rest[2] ?? null} />
+    {:else if router.route.page === 'spend'}
+      <Spend />
     {:else if router.route.page === 'context'}
       <Context rest={router.route.rest} />
     {:else if router.route.page === 'teams'}

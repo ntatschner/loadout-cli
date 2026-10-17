@@ -7,7 +7,6 @@
   let { page }: { page: string } = $props();
 
   const PAGES: Record<string, [string, string, string, boolean]> = {
-    spend: ['Spend', '$ loadout usage', 'Tokens used, by day, project and model.', false],
   };
 
   const shown = $derived(PAGES[page] ?? ['Not found', '$ loadout --help', "There's no page here.", false]);

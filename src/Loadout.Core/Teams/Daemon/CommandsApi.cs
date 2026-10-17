@@ -302,7 +302,11 @@ public sealed class CommandJobs
     }
 
     /// <summary>How long a page's read may take.</summary>
-    internal static readonly TimeSpan ReadFor = TimeSpan.FromMinutes(1);
+    /// <remarks>
+    /// Two minutes because 'usage' reads every transcript in the period, which
+    /// took twenty seconds for thirty days on a machine with months of them.
+    /// </remarks>
+    internal static readonly TimeSpan ReadFor = TimeSpan.FromMinutes(2);
 
     private readonly SemaphoreSlim _reading = new(Running, Running);
 
