@@ -77,7 +77,7 @@
   });
 </script>
 
-<div bind:this={frame} class="ls-focus" class:from={grows} class:fade={!grows && motion !== 'none'} role="region" aria-label={title} use:css={place}>
+<div bind:this={frame} class="ls-focus" class:from={grows} class:fade={!grows && motion !== 'none'} role="region" aria-label={title} use:css={place} onleaveterminal={() => close?.focus()}>
   <div class="fhead">
     <div class="who">
       <h1>{title}</h1>

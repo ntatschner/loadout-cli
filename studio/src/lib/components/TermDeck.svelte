@@ -127,7 +127,7 @@
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<section bind:this={host} class="ls-deck" aria-label="Terminals" onkeydowncapture={keys}>
+<section bind:this={host} class="ls-deck" aria-label="Terminals" onkeydowncapture={keys} onleaveterminal={() => host?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')?.focus()}>
   <div class="dtop">
     <SessionTabs {sessions} current={on} controls={panesId} onpick={(id) => pick(id, false)} onmaximise={(id) => { pick(id); setLayout(1); }} {onnew} />
     <div class="lay" role="radiogroup" aria-label="Panes">

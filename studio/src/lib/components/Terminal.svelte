@@ -243,7 +243,14 @@
       if (event.ctrlKey && !event.altKey && !event.metaKey && (event.key === ']' || event.code === 'BracketRight')) {
         if (event.type === 'keydown') {
           event.preventDefault();
-          leaveTo?.focus();
+
+          // Where nothing was named, the page around says where the keyboard
+          // goes: the list in Pure Focus, the tab in a deck, Back in a frame.
+          if (leaveTo) {
+            leaveTo.focus();
+          } else {
+            box.dispatchEvent(new CustomEvent('leaveterminal', { bubbles: true }));
+          }
         }
 
         return false;

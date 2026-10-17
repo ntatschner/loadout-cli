@@ -185,7 +185,14 @@
 
   /** Again, after a drop: the session may have gone with the daemon, which a fresh list says. */
   async function reconnect() {
-    await studio.loadSessions();
+    try {
+      await studio.loadSessions();
+    } catch {
+      // The daemon is not answering yet, as while it restarts: try again later.
+      retry = setTimeout(() => void reconnect(), Math.min(10_000, 1000 * 2 ** tries++));
+
+      return;
+    }
 
     if (session && !session.ended) {
       // A reconnect replays the scrollback, so the screen starts clean.
