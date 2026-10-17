@@ -245,8 +245,13 @@ what every session gets, put right the drift that can be put right, relocate it,
 link it, or stop knowing it. Each shows the command it runs, and what's shown is
 read again once it finishes.
 
+A project's **Tasks** list what is being worked on, each moved on with one press
+(start it, mark it done, say it's blocked, drop it), and new tasks are recorded
+below them. Done and dropped ones are left out.
+
 **More** has the rest: adding a repository you have, making a new project,
-finding repositories and stray memory, and the workspace, where you can bring in
+finding repositories and stray memory, tasks that belong to no project yet, and
+the workspace, where you can bring in
 what other machines saved and save and push what changed here.
 
 ### 14. Run anything else from Commands

@@ -6,7 +6,9 @@
   import { untrack } from 'svelte';
   import Command from '../lib/components/Command.svelte';
   import CommandAction from '../lib/components/CommandAction.svelte';
-  import { readJson, SignedOut } from '../lib/api';
+  import HaloButton from '../lib/components/HaloButton.svelte';
+  import { commands, readJson, SignedOut } from '../lib/api';
+  import { lineFor } from '../lib/commandLine';
   import { router } from '../lib/router.svelte';
   import { studio } from '../lib/state.svelte';
 
@@ -64,6 +66,19 @@
   let health = $state<Finding[] | null>(null);
   let repository = $state<Repository | null>(null);
   let workspace = $state<Workspace | null>(null);
+
+  interface Task {
+    id: string;
+    title: string;
+    state: string;
+    kind: string;
+    declaredBy: string;
+    declared: string;
+    note: string | null;
+  }
+
+  let tasks = $state<Task[] | null>(null);
+  let globalTasks = $state<Task[] | null>(null);
   let problem = $state<string | null>(null);
 
   const slug = $derived(rest[0] && !rest[0].startsWith('+') ? rest[0] : null);
@@ -123,6 +138,31 @@
   });
 
   $effect(() => {
+    if (place === 'tasks') {
+      readJson<{ tasks: Task[] }>('task list', ['--global']).then((read) => (globalTasks = read.tasks), fail);
+    }
+  });
+
+  /** Says where a task stands, as 'loadout task declare' does. */
+  async function declare(task: Task, state: string, where: string[]) {
+    try {
+      await commands.run('task declare', [task.id, state, ...where]);
+      await studio.loadJobs();
+    } catch (error) {
+      fail(error);
+    }
+  }
+
+  const NEXT: Record<string, string[]> = {
+    open: ['doing', 'blocked', 'dropped'],
+    doing: ['done', 'blocked', 'open'],
+    blocked: ['doing', 'dropped'],
+    done: ['open'],
+    dropped: ['open'],
+  };
+  const WORD: Record<string, string> = { doing: 'Start it', done: 'Mark it done', blocked: 'It is blocked', dropped: 'Drop it', open: 'Reopen it' };
+
+  $effect(() => {
     if (place === 'workspace') {
       readJson<Workspace>('workspace status').then((read) => (workspace = read), fail);
     }
@@ -141,15 +181,35 @@
     readJson<{ worktrees: typeof worktrees }>('project worktrees', [name]).then((read) => (worktrees = read.worktrees), () => (worktrees = []));
     readJson<{ project: string; findings: Finding[] }[]>('drift', [name]).then((read) => (health = read[0]?.findings ?? []), () => (health = null));
     readJson<{ repositories: Repository[] }>('repo check', [name]).then((read) => (repository = read.repositories[0] ?? null), () => (repository = null));
+    readJson<{ tasks: Task[] }>('task list', ['--project', name]).then((read) => (tasks = read.tasks), () => (tasks = null));
   }
 
   const PLACES = [
     { key: 'add', label: 'Add a repository you have' },
     { key: 'new', label: 'Make a new project' },
     { key: 'find', label: 'Find repositories and stray memory' },
+    { key: 'tasks', label: 'Tasks for no project yet' },
     { key: 'workspace', label: 'The workspace' },
   ];
 </script>
+
+{#snippet taskList(list: Task[], where: string[])}
+  <ul class="tasks">
+    {#each list as task (task.id)}
+      <li class={`task ${task.state}`}>
+        <p class="t"><span class="qid">{task.id}</span> {task.title} <span class="calm small">· {task.state} · {task.declaredBy}, {new Date(task.declared).toLocaleDateString()}</span></p>
+        {#if task.note}<p class="calm small">{task.note}</p>{/if}
+        <div class="ls-answers flush">
+          {#each NEXT[task.state] ?? [] as state (state)}
+            <HaloButton label={WORD[state]} size="small" cmd={lineFor('task declare', [task.id, state, ...where])} disabledReason={studio.watchOnly ? studio.watchOnlyReason : undefined} onpress={() => void declare(task, state, where)} />
+          {/each}
+        </div>
+      </li>
+    {:else}
+      <li class="calm">Nothing recorded.</li>
+    {/each}
+  </ul>
+{/snippet}
 
 <div class="head"><div><h1>Projects</h1><span class="fact">{projects ? `${projects.length} on this machine` : 'the projects Loadout knows'}</span></div></div>
 
@@ -207,6 +267,19 @@
         </ul>
       {/if}
 
+
+      <h3 class="ls-zone">Tasks</h3>
+      {#if tasks}
+        {@render taskList(tasks.filter((task) => task.state !== 'done' && task.state !== 'dropped'), ['--project', shown.id])}
+        <p class="calm small">What is being worked on, as <code class="ls-cmd">loadout task list --project {shown.id}</code> says; done and dropped ones are left out here.</p>
+      {:else}
+        <p class="calm" role="status">Reading…</p>
+      {/if}
+      <div class="acts">
+        <CommandAction path="task declare" title="Record a task, or say where one stands" preset={{ '--project': shown.id }} fixed={['--project', '--global']} label="Record it" />
+        <CommandAction path="task remove" title="Forget a task entirely" preset={{ '--project': shown.id }} fixed={['--project', '--global']} label="Forget it" />
+      </div>
+
       <h3 class="ls-zone">Health</h3>
       {#if health === null}
         <p class="calm" role="status">Checking…</p>
@@ -257,6 +330,16 @@
       <CommandAction path="project survey" title="Agent memory no project accounts for" />
       <CommandAction path="drift" title="Where every project has drifted from what was recorded" />
       <CommandAction path="repo check" title="AI tooling files tracked in a repository" />
+    {:else if place === 'tasks'}
+      <h2 class="topicname">Tasks for no project yet</h2>
+      <p class="calm">The workspace-wide list, for work that does not belong to a project yet.</p>
+      {#if globalTasks}
+        {@render taskList(globalTasks.filter((task) => task.state !== 'done' && task.state !== 'dropped'), ['--global'])}
+        <p class="calm small">From <code class="ls-cmd">loadout task list --global</code>.</p>
+      {/if}
+      <div class="acts">
+        <CommandAction path="task declare" title="Record one" preset={{ '--global': true }} fixed={['--project', '--global']} label="Record it" />
+      </div>
     {:else if place === 'workspace'}
       <h2 class="topicname">The workspace</h2>
       <p class="calm">Where projects, memory, specialists and tasks are kept, and synced between your machines.</p>
