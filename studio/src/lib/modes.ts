@@ -6,7 +6,7 @@
 
 import type { GateShown } from './teams';
 
-export type StudioMode = 'default' | 'terminals' | 'teams' | 'minimal';
+export type StudioMode = 'default' | 'terminals' | 'teams' | 'minimal' | 'pure';
 
 export interface ModeInfo {
   key: StudioMode;
@@ -20,6 +20,7 @@ export const MODES: ModeInfo[] = [
   { key: 'terminals', name: 'Terminals', desc: 'Terminal Focus: sessions as tabs and panes, the terminal as big as it goes', icon: 'M3 4.5h14v11H3z M6 8.2l2.4 1.8L6 11.8 M10.5 12.2h3.5' },
   { key: 'teams', name: 'Teams', desc: 'Team Focus: every live run as a line on one board, each team a click away', icon: 'M2.5 6.5h15 M7 6.5v7h4.5 M13 6.5v3.5h4.5' },
   { key: 'minimal', name: 'Minimal', desc: 'One quiet column of what is live; open one and it is all there is', icon: 'M5 10h7.5 M15.5 10h.01' },
+  { key: 'pure', name: 'Pure', desc: 'Pure Focus: list, view and actions in three panes, every key shown, effects off', icon: 'M3 4h14v12H3z M8 4v12 M13 4v12' },
 ];
 
 export const isMode = (value: string | null | undefined): value is StudioMode => MODES.some((mode) => mode.key === value);

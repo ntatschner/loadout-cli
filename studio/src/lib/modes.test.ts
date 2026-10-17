@@ -8,11 +8,12 @@ import { Studio } from './state.svelte';
 const key = (over: Partial<KeyboardEvent>) => ({ ctrlKey: false, shiftKey: false, altKey: false, metaKey: false, key: '', code: '', ...over });
 
 describe('the modes', () => {
-  it('cycle Default, Terminals, Teams, Minimal and round again', () => {
+  it('cycle Default, Terminals, Teams, Minimal, Pure and round again', () => {
     expect(nextMode('default')).toBe('terminals');
     expect(nextMode('terminals')).toBe('teams');
     expect(nextMode('teams')).toBe('minimal');
-    expect(nextMode('minimal')).toBe('default');
+    expect(nextMode('minimal')).toBe('pure');
+    expect(nextMode('pure')).toBe('default');
   });
 
   it('cycle on Ctrl+Shift+M and on nothing short of it', () => {
@@ -136,7 +137,7 @@ describe('the mode in this browser', () => {
     document.documentElement.setAttribute('data-motion', 'none');
     const studio = new Studio();
 
-    studio.setMode('minimal');
+    studio.setMode('pure');
     studio.cycleMode();
 
     expect(studio.mode).toBe('default');

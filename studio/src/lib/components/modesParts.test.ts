@@ -29,7 +29,7 @@ describe('ModeSwitcher', () => {
     await fireEvent.keyDown(teams, { key: 'Home' });
     expect(onchange).toHaveBeenLastCalledWith('default');
     await fireEvent.keyDown(teams, { key: 'End' });
-    expect(onchange).toHaveBeenLastCalledWith('minimal');
+    expect(onchange).toHaveBeenLastCalledWith('pure');
   });
 
   it('does not change to the mode it is already in', async () => {

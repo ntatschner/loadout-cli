@@ -314,3 +314,15 @@ main.page:has(> .ls-session:not(.lost)) > .ls-session { flex: 1 1 auto; min-heig
 @media (prefers-reduced-motion: reduce) { .tfocus .bpanel { animation: none !important; } }
 @media (max-width: 1099px) { .tfocus.open { grid-template-columns: minmax(0, 1fr); } .tfocus.open .bcol { display: none; } .tfocus .bpanel { position: static; max-height: none; } }
 .qrun { display: grid; gap: 22px; max-width: 980px; margin: 0 auto; }
+
+/* ---------- Pure Focus: the desk takes the page's height ---------- */
+[data-mode="pure"] .page { padding-right: 14px; padding-left: calc(var(--rail-width) + 14px); padding-bottom: 14px; }
+@media (max-width: 599px) { [data-mode="pure"] .page { padding-left: 48px; padding-right: 10px; } }
+[data-mode="pure"] #modebar { backdrop-filter: none; background: var(--ground); }
+[data-mode="pure"] .ls-toasts { top: auto; bottom: 64px; }
+.deskwrap { height: calc(100vh - 92px); min-height: 480px; }
+.ls-desk .apwrap { display: grid; min-height: 0; }
+.pview { display: grid; gap: 18px; align-content: start; }
+.pview .facts { margin: 0; }
+.pview .event { margin: 6px 0 0; font-size: 13px; }
+.pview .event .mono { margin-right: 10px; }
