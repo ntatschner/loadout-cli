@@ -361,6 +361,20 @@ export class Studio {
     }
   }
 
+  /**
+   * Runs one action from a page, says how it went in a toast with the command
+   * it ran, and reads the runs again. Returns whether it worked.
+   */
+  perform(work: () => Promise<unknown>, done: string, cmd: string, then: () => Promise<unknown> = () => this.loadRuns()): Promise<boolean> {
+    if (this.watchOnly) {
+      toasts.add({ level: 'info', text: 'Studio is only watching, so nothing was changed.', cmd });
+
+      return Promise.resolve(false);
+    }
+
+    return this.#act(work, done, cmd, then);
+  }
+
   answerGate(line: Work, answer: string): Promise<boolean> {
     const run = line.ref;
     const gate = line.gate?.id ?? null;

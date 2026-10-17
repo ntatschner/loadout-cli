@@ -252,3 +252,35 @@ main.page:has(> .ls-session:not(.lost)) > .ls-session { flex: 1 1 auto; min-heig
 .ls-session.lost { grid-template-columns: minmax(0, 1fr); }
 .lostcard { display: grid; gap: var(--space-3); padding: var(--space-4); background: var(--bad-wash); box-shadow: inset 3px 0 0 var(--bad); color: var(--bad-text); }
 .lostcard p { margin: 0; }
+/* Teams: what the reference sets from script, as rules (Studio's policy allows no style attributes). */
+.ls-gate .figure { max-width: 260px; }
+.ls-depths .ls-say { margin-top: 12px; }
+.ls-depths .ls-patch + .ls-patch { margin-top: 22px; }
+.ls-depths .ls-xch { margin-top: 16px; }
+.ls-needs .ls-answers { margin: 0; }
+.ls-roles .body { padding-top: 6px; }
+.ls-roles .roles-table { container-type: inline-size; }
+.prform { display: grid; gap: 14px; }
+.ls-bin > .ls-note, .ls-bin > .ls-answers, .ls-bin li .ls-note, .ls-remedy > .ls-answers { margin: 0; }
+.binlist { margin: 0 0 4px; padding-left: 18px; font-family: var(--font-mono); font-size: 12.5px; }
+.ls-csv caption { text-align: left; margin: 0 0 6px; }
+.ls-outbox .tree-empty { padding: 8px 12px; margin: 0; }
+/* Teams: the overview, a run's page and a team's page (from the design's prototype). */
+.subnav { display: flex; flex-wrap: wrap; gap: 4px 22px; margin: calc(-1 * var(--space-3) * var(--density)) 0 calc(var(--space-6) * var(--density)); }
+.subnav a { padding: 6px 0; font-size: 12.5px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); text-decoration: none; }
+.subnav a:hover { color: var(--ink-strong); }
+.subnav a[aria-current="page"] { color: var(--ink-strong); box-shadow: inset 0 -2px 0 var(--accent); }
+.subnav a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+main.page section:has(> .runs), main.page section:has(> .teamcards), .ls-needs, .trun > .ls-gate { margin-bottom: calc(var(--space-7) * var(--density)); }
+.runs, .remedies { display: grid; gap: 14px; max-width: 980px; }
+.teamcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 14px; }
+.remteam { max-width: 420px; margin-bottom: var(--space-5); }
+.trun { display: grid; gap: calc(var(--space-5) * var(--density)); }
+.trhead { display: grid; gap: 4px; }
+.trhead h1 { overflow-wrap: anywhere; }
+.trcols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 340px); gap: 28px 36px; align-items: start; }
+.trmain, .trside { display: grid; gap: calc(var(--space-6) * var(--density)); min-width: 0; align-content: start; }
+.trside section { display: grid; gap: 10px; justify-items: start; }
+.ls-answers.col { flex-direction: column; align-items: flex-start; }
+@media (max-width: 1023px) { .trcols { grid-template-columns: minmax(0, 1fr); } }
+.trmain .src { margin: 6px 0 0; font-size: 12.5px; color: var(--muted); }

@@ -77,8 +77,18 @@ export function sheetValues(preset: Partial<SheetValues> = {}): SheetValues {
 
 const lines = (text: string) => text.split('\n').map((one) => one.trim()).filter(Boolean);
 
+/** The command each sheet runs, as typed after `$ `. */
+export const SHEET_COMMANDS: Record<SheetKind, string> = {
+  run: 'loadout team run',
+  make: 'loadout team new',
+  schedule: 'loadout team schedule add',
+};
+
+/** The command's path, as Studio's jobs name it: 'team new'. */
+export const sheetPath = (kind: SheetKind) => SHEET_COMMANDS[kind].slice('loadout '.length);
+
 /**
- * The words after `loadout`, as a job or the page's start route runs them.
+ * The words after the command's path, as a job or the page's start route runs them.
  *
  * A run drops each of the project's criteria it leaves out by name, even all
  * of them: the start route takes them one by one, and naming each says the
@@ -86,19 +96,19 @@ const lines = (text: string) => text.split('\n').map((one) => one.trim()).filter
  */
 export function sheetWords(kind: SheetKind, v: SheetValues): string[] {
   if (kind === 'make') {
-    return ['team', 'new', v.name || '<name>', ...(v.from ? ['--from', v.from] : []), ...(v.forProject ? ['--for-this-project', '--project', v.project] : [])];
+    return [v.name || '<name>', ...(v.from ? ['--from', v.from] : []), ...(v.forProject ? ['--for-this-project', '--project', v.project] : [])];
   }
 
   if (kind === 'schedule') {
     return [
-      'team', 'schedule', 'add', v.name || '<name>', v.team || '<team>', v.goal.trim() || '…', '--project', v.project,
+      v.name || '<name>', v.team || '<team>', v.goal.trim() || '…', '--project', v.project,
       ...(v.when === 'at' ? ['--at', v.at] : v.when === 'on' ? ['--on', 'commit'] : ['--every', v.every.trim() || '24h']),
       ...(v.autonomy ? ['--autonomy', v.autonomy] : []),
       ...(v.usd ? ['--usd', v.usd] : []),
     ];
   }
 
-  const words = ['team', 'run', v.team || '<team>', v.goal.trim() || '…', '--project', v.project];
+  const words = [v.team || '<team>', v.goal.trim() || '…', '--project', v.project];
 
   if (v.autonomy) {
     words.push('--autonomy', v.autonomy);
@@ -133,7 +143,7 @@ export function sheetWords(kind: SheetKind, v: SheetValues): string[] {
 
 /** The line the sheet shows under its form, as a person would type it. */
 export function sheetCommand(kind: SheetKind, v: SheetValues): string {
-  return `$ loadout ${sheetWords(kind, v).map(quoted).join(' ')}`;
+  return `$ ${SHEET_COMMANDS[kind]} ${sheetWords(kind, v).map(quoted).join(' ')}`;
 }
 
 /** Why the sheet cannot go yet, or null when it can. */
