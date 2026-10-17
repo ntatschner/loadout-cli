@@ -56,6 +56,29 @@ The icons down the left side are the pages:
 
 Press **Ctrl** and **K** together to search for anything.
 
+## Change how Studio is laid out
+
+Along the top are five buttons called *modes*. Each one lays out the whole of
+Studio for a different job. Press **Ctrl**, **Shift** and **M** together to move
+to the next one. Your browser remembers which you picked.
+
+- *Default* is Studio as this page describes it.
+- *Terminals* shows your sessions as tabs, with up to four on the screen at
+  once, so you can watch and type into several.
+- *Teams* shows every team's run as one line on a board. You can answer a
+  question in its line.
+- *Minimal* shows one quiet list of what's happening. Pick one and it fills the
+  screen. Press **Esc** to go back.
+- *Pure* puts a list, the thing you picked, and its buttons side by side. Every
+  button has a number, and pressing the number does the same as clicking it.
+  Press **?** to see every key.
+
+Whichever you pick, the top right of the screen says how many things are
+waiting for you. Press it to go to the oldest.
+
+In Pure, a button that can't be undone, like stopping a run, asks you to press
+its number twice. Press **Esc** if you change your mind.
+
 ## Start a session
 
 A *session* is one conversation with an AI coding agent.

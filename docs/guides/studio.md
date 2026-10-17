@@ -54,6 +54,10 @@ it widens over the page without pushing it. Below 600px wide it becomes a
 the exact `loadout` command it runs, so you can always do the same thing from a
 terminal instead.
 
+Along the top is the mode bar: the five modes, search, and whatever is waiting
+on you. Everything here describes Default; [step 16](#16-change-the-whole-layout-with-a-mode)
+covers the others.
+
 ### 3. Read Home
 
 Home shows everything in flight: team runs, the sessions the daemon is hosting,
@@ -179,9 +183,11 @@ loadout config set studio-halo gyroscope
 loadout config set studio-idle-after 20
 ```
 
-The two things kept in the browser are the single-letter shortcuts (**A** for
-Ambient, **N** for a new session) and whether Ambient fills the screen. They're
-about the keyboard and screen in front of you, not about how you read.
+The things kept in the browser are the single-letter shortcuts (**A** for
+Ambient, **N** for a new session), whether Ambient fills the screen, and the
+mode with what each mode remembers. They're about the keyboard and screen in
+front of you, not about how you read, so a phone can stay in Minimal while a
+desktop stays in Terminals.
 
 **Settings** has more than Studio's own. **Loadout's settings** lists every
 setting `loadout config` knows, in the same groups the terminal's Settings
@@ -372,6 +378,98 @@ line. Starting a session sends you to **Sessions**, where Studio hosts it.
 On Home, **A** or **Ambient** turns Studio into something for a spare screen:
 the key numbers, the halo on whatever most needs you, and everything else
 circling it. **Escape** or **Leave ambient** leaves it.
+
+### 16. Change the whole layout with a mode
+
+The mode bar at the top of every page has five modes, and **Ctrl Shift M**
+moves to the next from anywhere, a terminal included. The palette lists each
+one as *Mode: Terminals* and so on. The mode is kept in this browser, not in
+Loadout's config.
+
+- **Default** is Studio as the rest of this guide describes it.
+- **Terminals** turns Home, Sessions and a session's page into one deck: every
+  hosted session a tab, over one, two or four live panes. **Ctrl Alt 1** to
+  **9** picks a session by its tab, and **Ctrl Alt** with the arrows moves
+  between the panes shown. A dot on a tab means output since you looked. **Go
+  to the one waiting** appears when a session needs you, and *Find in this
+  terminal* searches the one you're in, highlighting matches in the needs
+  colour. Below 900px it's one pane and the tabs. The layout and the last
+  session you picked are remembered.
+- **Teams** turns Home and the Teams page into a board: each run one row with
+  its goal, a small line of its rounds and nodes, its state and its spend, the
+  one that needs you first, with its question answered in the row. The teams
+  run along the top. Picking a run or a team opens its page beside the board;
+  below 1100px it replaces the board, and **Close** goes back. Remedies, the
+  bin, shared tools and the webhook stay on the Teams page in Default.
+- **Minimal** is one quiet column of what's live, sessions and runs together,
+  what needs you first with its question under it. Opening one gives it the
+  screen: a session as just its terminal, a run as just its question, its shape
+  and its done-when. **Escape** or **Back** gives the column back. The rail
+  slides away; the mode bar stays.
+- **Pure** is [step 17](#17-pure-focus).
+
+Whatever the mode, the count on the right of the mode bar is everything waiting
+on you, sessions and runs together, and pressing it goes to the oldest question
+wherever that mode shows it. No mode hides a question.
+
+Changing mode is one animated step where your browser can do it, a short fade
+under reduced motion, and simply happens under none.
+
+Each pane in Terminals is its own connection to the session. A pane you stop
+showing closes its connection; show it again and the daemon replays what the
+session has written, so nothing is missed. Typing goes only to the pane that
+has the keyboard, and **Ctrl ]** gives the keyboard back to its tab.
+
+### 17. Pure Focus
+
+Pure Focus is for acting fast, with the keyboard or the mouse. It's flat: no
+glow, nothing that breathes or pulses, 1px edges, in your own theme and accent.
+The only movement is a brief flash on what you ran.
+
+Home, Sessions, a session, Teams and a run all become one desk of three panes
+over a command bar:
+
+- **List**, on the left: what needs you, then sessions, team runs, ideas and
+  tasks.
+- **View**, in the middle: the thing you picked. A session is its terminal; a
+  run is its question, its shape, its done-when and its crew; an idea or a task
+  is its facts and latest events.
+- **Actions**, on the right: up to nine, numbered, each with the command it
+  runs. They're the same actions, with the same commands, as anywhere else.
+
+Every key is printed beside what it does, and **?** lists them all:
+
+| Key | Does |
+|---|---|
+| **J**, **K**, or the arrows on the list | move the selection |
+| **Home**, **End** | first, last |
+| **Enter** | open what's picked in the view |
+| **Escape** | back to the list; keeps an armed action |
+| **1** to **9** | run that action |
+| **/** | filter the list |
+| **:** | open the command bar |
+| **G** then **H**, **S**, **T**, **I**, **K** or **N** | the list: everything, sessions, team runs, ideas, tasks, what needs you |
+| **F6**, **Shift F6** | the next or previous pane |
+| **?** | every key |
+
+Single keys work only when you're not typing. In a terminal every key goes to
+the agent, and **Ctrl ]** brings you back to the list. With single-letter
+shortcuts off, only **Escape** and the list's own arrows, **Home**, **End** and
+**Enter** work; **F6**, the buttons and the command bar still do.
+
+An action that can't be undone, such as **Stop after this round** or **End the
+session**, asks for its number twice. The first press says *Press 5 again to
+stop after this round* for three seconds, and **Escape** keeps it. There's no
+dialog, which is deliberate: a dialog would take the keyboard away from the
+desk.
+
+The command bar finds the picked thing's actions, places and things, and every
+command in Studio's catalogue, each showing what it runs before you press
+**Enter**. A command opens its form on the Commands page, in Default.
+
+The scope and the last thing you picked are remembered. A team's page, the
+remedies and the bin aren't part of the desk; they open as pages, in the flat
+look.
 
 ## Watching only
 
