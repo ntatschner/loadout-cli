@@ -134,6 +134,8 @@ export interface Session {
   taskId: string | null;
   command: string | null;
   lastOutputAt: string | null;
+  /** 'command' for a command that asks as it goes, 'launch' for an agent session. */
+  kind?: 'launch' | 'command';
 }
 
 export interface Launch {
@@ -149,6 +151,9 @@ export interface Launch {
   handoff?: boolean;
   columns?: number;
   rows?: number;
+  /** A command that asks as it goes, run in the terminal instead of a launch. */
+  command?: string;
+  words?: string[];
 }
 
 export const sessions = {

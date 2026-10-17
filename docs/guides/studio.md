@@ -202,7 +202,7 @@ handoff for the next session.
 **Your writing voice** shows the voice learned from your own writing and the
 rules in force, checks a message or a file against it, and renders it into the
 style specialist your sessions load. Learning a voice asks you about each rule
-as it goes, so it runs in a terminal: `loadout voice learn`.
+as it goes, so it opens in a terminal here.
 
 ### 11. Steer a team run
 
@@ -273,6 +273,11 @@ It's how you reach the parts of Loadout that don't have a page of their own yet.
 Each command runs from your home folder, so a command that picks its project
 from the folder you're in needs `--project`. It's never asked a question: a
 command that would ask one is refused instead, and says so.
+
+A command that asks as it goes, such as `setup`, `voice learn`, `memory review`
+or `resume`, can't be run that way, because nobody could answer it. Its form has
+**Open it in a terminal** instead, which runs it in a terminal the daemon hosts
+and takes you there, where you answer it as you would in your own.
 
 A few commands only ever show their line, with why: setting a secret (it asks
 for the value at a masked prompt), the attach passphrase, trusting a tool or a

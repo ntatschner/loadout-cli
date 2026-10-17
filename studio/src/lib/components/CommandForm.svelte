@@ -9,7 +9,8 @@
   import Command from './Command.svelte';
   import HaloButton from './HaloButton.svelte';
   import JobResult from './JobResult.svelte';
-  import { commands, SignedOut, type Job, type StudioCommand, type StudioOption } from '../api';
+  import { commands, sessions, SignedOut, type Job, type StudioCommand, type StudioOption } from '../api';
+  import { router } from '../router.svelte';
   import { lineFor, problemWith, readsWith, wordsFor } from '../commandLine';
   import { studio } from '../state.svelte';
 
@@ -72,6 +73,29 @@
   const previewable = $derived(!reads && command.options.some((one) => one.name === '--dry-run'));
   const runReason = $derived(notYet ?? (studio.watchOnly && !reads ? 'Studio is only watching: preview it, or type the command in a terminal' : undefined));
 
+  // A command that asks as it goes is not a job, since nobody could answer
+  // it: it opens in a terminal the daemon hosts, and the page goes to it.
+  const asks = $derived(command.reach.effect === 'session');
+
+  async function openTerminal() {
+    starting = true;
+    problem = null;
+
+    try {
+      const opened = await sessions.start({ project: '', command: command.path, words, columns: 120, rows: 32 });
+
+      router.go('session', opened.id);
+    } catch (error) {
+      if (error instanceof SignedOut) {
+        studio.signedOut = true;
+      } else {
+        problem = (error as Error).message;
+      }
+    } finally {
+      starting = false;
+    }
+  }
+
   async function run(preview: boolean) {
     starting = true;
     problem = null;
@@ -108,7 +132,7 @@
 
 {#if command.reach.effect === 'terminalOnly'}
   <Command why={`Studio does not run this: it ${command.reach.reason}.`} command={`$ loadout ${command.path}`} />
-{:else if command.reach.effect === 'session'}
+{:else if command.reach.effect === 'session' && command.path === 'launch'}
   <p class="calm">This starts an agent session. Studio hosts sessions from Sessions, where you can type into them.</p>
   {#if onlaunch}
     <div class="ls-answers flush">
@@ -119,7 +143,10 @@
 {:else if !command.runnable}
   <p class="calm">This groups the commands under it. Choose one of them.</p>
 {:else}
-  <form class="cmdform" onsubmit={(event) => { event.preventDefault(); if (!runReason) void run(false); }}>
+  {#if asks}
+    <p class="calm">It asks as it goes, so it opens in a terminal Studio hosts, where you answer it. Closing the page leaves it running.</p>
+  {/if}
+  <form class="cmdform" onsubmit={(event) => { event.preventDefault(); if (asks) { if (!notYet && !studio.watchOnly) void openTerminal(); } else if (!runReason) void run(false); }}>
     {#each shownArguments as argument (argument.name)}
       <label class="fld" for={id(argument.name)}>
         <span class="lab">{argument.name.toLowerCase()}{argument.required ? '' : ' (optional)'}</span>
@@ -171,10 +198,14 @@
     <Command why="It runs:" command={lineFor(command.path, words)} />
 
     <div class="ls-answers flush">
-      {#if previewable}
-        <HaloButton label="Preview" size="small" cmd="adds --dry-run · changes nothing" disabledReason={notYet ?? undefined} onpress={() => void run(true)} />
+      {#if asks}
+        <HaloButton label={starting ? 'Opening…' : 'Open it in a terminal'} solid size="small" cmd="opens a terminal here, hosted by the daemon" disabledReason={notYet ?? (studio.watchOnly ? studio.watchOnlyReason : undefined)} onpress={() => void openTerminal()} />
+      {:else}
+        {#if previewable}
+          <HaloButton label="Preview" size="small" cmd="adds --dry-run · changes nothing" disabledReason={notYet ?? undefined} onpress={() => void run(true)} />
+        {/if}
+        <HaloButton label={starting ? 'Starting…' : label} solid={reads} kind={reads ? '' : 'needs'} size="small" cmd={reads ? 'reads only' : 'changes something'} disabledReason={runReason} onpress={() => void run(false)} />
       {/if}
-      <HaloButton label={starting ? 'Starting…' : label} solid={reads} kind={reads ? '' : 'needs'} size="small" cmd={reads ? 'reads only' : 'changes something'} disabledReason={runReason} onpress={() => void run(false)} />
     </div>
   </form>
 

@@ -9,7 +9,10 @@ public enum StudioEffect
     /// <summary>Changes something, opens something on this machine, or spends on an agent.</summary>
     Changes,
 
-    /// <summary>Starts an agent session, which Studio hosts from its Sessions page rather than as a job.</summary>
+    /// <summary>
+    /// Asks as it goes, or starts an agent session, so Studio runs it in a
+    /// terminal it hosts rather than as a job that nobody can answer.
+    /// </summary>
     Session,
 
     /// <summary>Is never run from Studio; the page shows the command and why.</summary>
@@ -88,8 +91,8 @@ public static class StudioCoverage
     /// <summary>Every command path, and how Studio reaches it.</summary>
     public static IReadOnlyDictionary<string, StudioReach> Reach { get; } = new Dictionary<string, StudioReach>(StringComparer.Ordinal)
     {
-        ["setup"] = new("commands", StudioEffect.Changes),
-        ["start"] = new("commands", StudioEffect.Session),
+        ["setup"] = new("settings", StudioEffect.Session),
+        ["start"] = new("projects", StudioEffect.Session),
         ["doctor"] = new("settings", StudioEffect.Changes, ChangesOnlyWith: ["--fix"]),
         ["status"] = new("spend", StudioEffect.Reads),
         ["launch"] = new("sessions", StudioEffect.Session),
@@ -201,7 +204,7 @@ public static class StudioCoverage
         ["checkpoint remove"] = new("settings", StudioEffect.Changes),
         ["memory list"] = new("memory", StudioEffect.Reads),
         ["memory find"] = new("memory", StudioEffect.Reads),
-        ["memory review"] = new("commands", StudioEffect.Changes),
+        ["memory review"] = new("memory", StudioEffect.Session),
         ["memory write"] = new("memory", StudioEffect.Changes),
         ["memory show"] = new("memory", StudioEffect.Reads),
         ["memory replace"] = new("memory", StudioEffect.Changes),
@@ -227,7 +230,7 @@ public static class StudioCoverage
         ["commands"] = new("settings", StudioEffect.Reads),
         ["sessions"] = new("spend", StudioEffect.Reads),
         ["running"] = new("spend", StudioEffect.Reads),
-        ["resume"] = new("commands", StudioEffect.Session),
+        ["resume"] = new("spend", StudioEffect.Session),
         ["usage"] = new("spend", StudioEffect.Reads),
         ["launches"] = new("spend", StudioEffect.Reads),
         ["instructions list"] = new("context", StudioEffect.Reads),
@@ -245,12 +248,12 @@ public static class StudioCoverage
         ["voice show"] = new("context", StudioEffect.Reads),
         ["voice check"] = new("context", StudioEffect.Reads),
         ["voice mark"] = new("context", StudioEffect.Changes),
-        ["voice learn"] = new("commands", StudioEffect.Changes),
+        ["voice learn"] = new("context", StudioEffect.Session),
         ["voice runs"] = new("context", StudioEffect.Reads),
         ["voice render"] = new("context", StudioEffect.Changes),
         ["voice guide list"] = new("context", StudioEffect.Reads),
         ["voice guide show"] = new("context", StudioEffect.Reads),
-        ["voice guide draft"] = new("commands", StudioEffect.Changes),
+        ["voice guide draft"] = new("context", StudioEffect.Session),
         ["docs audit"] = new("context", StudioEffect.Reads),
         ["docs export"] = new("context", StudioEffect.Changes),
         ["docs find"] = new("context", StudioEffect.Reads),
@@ -278,7 +281,7 @@ public static class StudioCoverage
         ["project survey"] = new("projects", StudioEffect.Changes, ChangesOnlyWith: ["--apply"]),
         ["project link"] = new("projects", StudioEffect.Changes),
         ["project context"] = new("projects", StudioEffect.Changes),
-        ["project onboard"] = new("commands", StudioEffect.Session),
+        ["project onboard"] = new("projects", StudioEffect.Session),
         ["project proposal"] = new("projects", StudioEffect.Changes, ChangesOnlyWith: ["--apply", "--discard"]),
         ["workspace status"] = new("projects", StudioEffect.Reads),
         ["workspace sync"] = new("projects", StudioEffect.Changes),

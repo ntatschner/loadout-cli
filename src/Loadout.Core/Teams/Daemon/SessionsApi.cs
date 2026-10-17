@@ -135,6 +135,16 @@ internal static class SessionsApi
             asked = null;
         }
 
+        if (asked is { Command: { Length: > 0 } command })
+        {
+            return new HostedLaunch(
+                string.Empty,
+                Columns: asked.Columns ?? HostedSessions.DefaultColumns,
+                Rows: asked.Rows ?? HostedSessions.DefaultRows,
+                Command: command,
+                Words: asked.Words ?? []);
+        }
+
         return asked is { Project: { Length: > 0 } project }
             ? new HostedLaunch(
                 project,
@@ -156,7 +166,19 @@ internal static class SessionsApi
     {
         if (await ReadLaunchAsync(context, ct).ConfigureAwait(false) is not { } launch)
         {
-            await PlainAsync(context, 400, "The body should be JSON naming a 'project'.").ConfigureAwait(false);
+            await PlainAsync(context, 400, "The body should be JSON naming a 'project', or a 'command'.").ConfigureAwait(false);
+
+            return;
+        }
+
+        // Only the commands that ask as they go are run this way: everything
+        // else is a job, where what it says is kept and a watch-only page can
+        // read it. The coverage list is what says which those are.
+        if (launch.Command is { Length: > 0 } command
+            && (!StudioCoverage.Reach.TryGetValue(command, out var reach) || reach.Effect != StudioEffect.Session || command == "launch"))
+        {
+            await PlainAsync(context, 400,
+                $"Studio does not open 'loadout {command}' in a terminal. Run it from its form, where what it says is kept.").ConfigureAwait(false);
 
             return;
         }
@@ -197,7 +219,10 @@ internal static class SessionsApi
             columns = session.Size.Columns,
             rows = session.Size.Rows,
             terminal = Address(session) + "/terminal",
-            project = launch?.Project,
+            // 'command' for one of the commands that ask as they go, which has no
+            // agent, mode or conversation to carry on; 'launch' for an agent.
+            kind = launch?.Command is { Length: > 0 } ? "command" : "launch",
+            project = launch?.Command is { Length: > 0 } ? null : launch?.Project,
             agent = launch?.Agent,
             mode = launch?.Mode,
             task = launch?.Task,
@@ -224,5 +249,7 @@ internal static class SessionsApi
         string? Worktree,
         bool Offline,
         bool NoSync,
-        bool Handoff);
+        bool Handoff,
+        string? Command = null,
+        List<string>? Words = null);
 }

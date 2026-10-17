@@ -272,6 +272,7 @@
         <CommandAction path="memory import" title="Bring in what the agent recorded outside the workspace" preset={{ project: slug }} fixed={['project']} label="Import" />
         <CommandAction path="memory compress" title="Move durable facts out of always-loaded instructions" preset={{ PROJECT: slug }} fixed={['PROJECT']} label="Compress" />
         <CommandAction path="memory reindex" title="Rebuild the index from the topics that exist" preset={{ project: slug }} fixed={['project']} label="Rebuild it" />
+        <CommandAction path="memory review" title="Walk the topics nobody has revisited, keeping or expiring each" preset={{ project: slug }} fixed={['project']} />
       </div>
       <p class="calm small">Clean, import and compress only report what they would do until you tick <code class="ls-cmd">--apply</code>.</p>
     {:else}

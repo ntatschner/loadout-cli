@@ -70,7 +70,9 @@ public sealed class StudioCommandsTests
     [Fact]
     public void A_command_that_starts_a_session_is_sent_to_Sessions()
     {
-        CommandJobs.Refusal(Named("launch"), ["storefront"], watchOnly: false).Should().Contain("Sessions");
+        // Not run as a job, which nobody could answer: it opens in a hosted terminal.
+        CommandJobs.Refusal(Named("launch"), ["storefront"], watchOnly: false).Should().Contain("terminal of its own");
+        CommandJobs.Refusal(Named("voice learn"), [], watchOnly: false).Should().Contain("terminal of its own");
     }
 
     [Fact]

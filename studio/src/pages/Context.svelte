@@ -382,8 +382,10 @@
         <CommandAction path="voice render" title="Render it into the style specialist sessions load" preset={{ '--project': slug }} fixed={['--project']} label="Render it" />
         <CommandAction path="voice runs" title="Past learn runs, with what each cost" preset={{ '--project': slug }} fixed={['--project']} label="Show" />
         <CommandAction path="voice guide show" title="A guide's sources, checks and thresholds" label="Show" />
+        <CommandAction path="voice learn" title="Learn it from your own writing, rule by rule" preset={{ '--project': slug }} fixed={['--project']} />
+        <CommandAction path="voice guide draft" title="Draft a new guide with an agent" />
       </div>
-      <p class="calm small">Learning a voice and drafting a guide ask you about each rule as they go, so they run in a terminal: <code class="ls-cmd">loadout voice learn</code> and <code class="ls-cmd">loadout voice guide draft</code>.</p>
+      <p class="calm small">Learning a voice and drafting a guide ask you about each rule as they go, so they open in a terminal here.</p>
     {:else if section === 'handoff'}
       <h2 class="topicname">Handing over</h2>
       <p class="calm">A handoff is a note the next session reads first: what this one worked out, so it does not have to again.</p>
