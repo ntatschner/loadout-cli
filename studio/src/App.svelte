@@ -119,6 +119,11 @@
   // Home in Minimal. Everything else is the page it always was.
   const page = $derived(router.route.page);
   const deck = $derived(studio.mode === 'terminals' && (page === 'home' || page === 'sessions' || page === 'session'));
+  // Pure Focus: Home, Sessions, a session, Teams and a run are the desk;
+  // a team's page, the remedies and the bin stay pages, in the flat look.
+  const pure = $derived(
+    studio.mode === 'pure' && (page === 'home' || page === 'sessions' || page === 'session' || (page === 'teams' && !router.route.rest[0]?.startsWith('+'))),
+  );
   const board = $derived(studio.mode === 'teams' && page === 'home');
   const quiet = $derived(studio.mode === 'minimal' && page === 'home');
 
@@ -133,7 +138,8 @@
     const target = event.target as HTMLElement | null;
     const typing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable || target.closest('.xterm'));
 
-    if (typing || event.ctrlKey || event.metaKey || event.altKey || !studio.keys || document.querySelector('.ls-dialog')) {
+    // Pure Focus has its own single keys, every one shown, and these are not among them.
+    if (typing || pure || event.ctrlKey || event.metaKey || event.altKey || !studio.keys || document.querySelector('.ls-dialog')) {
       return;
     }
 
@@ -194,6 +200,14 @@
 
     {#if !studio.loaded}
       <p class="calm" role="status">Reading what the daemon knows…</p>
+    {:else if pure}
+      <!-- One desk for every route it covers, so moving between them keeps
+           the list, the view and its terminal. -->
+      {#await import('./pages/PureFocus.svelte')}
+        <p class="calm" role="status">Opening Pure Focus…</p>
+      {:then view}
+        <view.default page={page} named={page === 'session' || page === 'teams' ? (router.route.rest[0] ?? null) : null} onlaunch={() => openLaunch()} />
+      {/await}
     {:else if deck}
       <!-- One deck for Home, Sessions and a session's page, so moving
            between them keeps its panes and their connections. -->
