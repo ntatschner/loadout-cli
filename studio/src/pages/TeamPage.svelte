@@ -139,18 +139,18 @@
   </div>
   {#if where}<p class="ls-said" role="status">✓ <code class="ls-cmd">{where}</code></p>{/if}
 
-  <section aria-labelledby="tp-nodes">
+  <section class="tblock" aria-labelledby="tp-nodes">
     <h2 class="ls-zone" id="tp-nodes">Its nodes</h2>
     <TeamNodes nodes={team.nodes.map((node) => ({ name: node.name, role: node.role, mode: node.mode, deliverable: node.deliverable, delegates: node.delegates, instances: node.parallel, worktree: node.worktree }))} />
   </section>
 
-  <section aria-labelledby="tp-rules">
+  <section class="tblock" aria-labelledby="tp-rules">
     <h2 class="ls-zone" id="tp-rules">What a run of it follows</h2>
     <TeamRules {rows} />
     <CommandAction path="team capabilities" title="What a team’s declarations can ask for" label="Show" />
   </section>
 
-  <section aria-labelledby="tp-runs">
+  <section class="tblock" aria-labelledby="tp-runs">
     <h2 class="ls-zone" id="tp-runs">Its runs here</h2>
     {#if runs.length}
       <div class="runs">

@@ -23,6 +23,8 @@
     kind?: string;
     bytes?: number | null;
     note?: string | null;
+    /** A reported file's path from the repository, for showing. */
+    shown?: string;
   }
 
   interface Props {
@@ -41,9 +43,18 @@
 
   let { run, repository, files, loose = [], missing = [], by = 'node', picked = null, read, ondownload = undefined, ondownloadall = undefined, downloadAllReason = undefined }: Props = $props();
 
+  /** A reported file's path as the reader knows it: from the repository, where it is inside it. */
+  function shownPath(path: string): string {
+    const root = (repository ?? '').replace(/\\/g, '/').replace(/\/$/, '').toLowerCase();
+    const plain = path.replace(/\\/g, '/');
+
+    return root && plain.toLowerCase().startsWith(`${root}/`) ? plain.slice(root.length + 1) : path;
+  }
+
   const all = $derived<Entry[]>([
     ...files.map((file) => ({ ...file, key: `${file.commit}:${file.path}`, loose: false })),
-    ...loose.map((file) => ({ ...file, key: `loose:${file.path}`, loose: true, bytes: file.bytes ?? null })),
+    // Keyed by the path the run reported, which is what the file route is asked for.
+    ...loose.map((file) => ({ ...file, key: `loose:${file.path}`, loose: true, bytes: file.bytes ?? null, shown: shownPath(file.path) })),
   ]);
   const commits = $derived([...new Set(files.map((file) => file.commit))]);
 
@@ -98,7 +109,7 @@
 
   const items = $derived.by((): Item[] => {
     if (grouping === 'folder') {
-      return folders(shown.map((entry) => ({ ...entry, rel: entry.path.replace(/\\/g, '/').replace(/^[A-Za-z]:\//, '') })), 0, '');
+      return folders(shown.map((entry) => ({ ...entry, rel: (entry.shown ?? entry.path).replace(/\\/g, '/').replace(/^[A-Za-z]:\//, '') })), 0, '');
     }
 
     const nodes = [...new Set(shown.map((entry) => entry.node))];
@@ -119,7 +130,7 @@
           label: commit,
           sub: commit === 'not committed' ? 'on disk' : null,
           level: 1,
-          children: mine.filter((entry) => (entry.loose ? 'not committed' : entry.commit) === commit).map((entry): Item => ({ group: false, key: entry.key, entry, label: entry.path, level: 2 })),
+          children: mine.filter((entry) => (entry.loose ? 'not committed' : entry.commit) === commit).map((entry): Item => ({ group: false, key: entry.key, entry, label: entry.shown ?? entry.path, level: 2 })),
         })),
       };
     });
@@ -384,7 +395,7 @@
       <div class="view">
         <div class="vhead">
           <button type="button" class="ls-halo small back" onclick={back}><span class="ring" aria-hidden="true"></span>The files</button>
-          <div class="path">{#if current}<b>{current.path}</b><span>{facts}</span>{/if}</div>
+          <div class="path">{#if current}<b>{current.shown ?? current.path}</b><span>{facts}</span>{/if}</div>
           <div class="vbar" role="group" aria-label="How to show it">
             {#if current && !current.loose && current.change !== 'removed'}
               <button type="button" aria-pressed={mode === 'file' ? 'true' : 'false'} onclick={() => (mode = 'file')}>The file</button>

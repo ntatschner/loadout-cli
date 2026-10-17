@@ -184,6 +184,16 @@ export class Studio {
       return;
     }
 
+    // A question answered anywhere, here, on its page or in a terminal, takes
+    // its Needs you toast with it rather than leaving it to be answered twice.
+    for (const [id, toast] of this.#asked) {
+      if (states.get(id)?.startsWith('asks:') !== true || states.get(id) !== this.#askedAs.get(id)) {
+        toasts.settle(toast, 'Answered.');
+        this.#asked.delete(id);
+        this.#askedAs.delete(id);
+      }
+    }
+
     for (const line of this.lines) {
       const was = before.get(line.id);
       const is = states.get(line.id);
@@ -193,6 +203,7 @@ export class Studio {
       }
 
       if (is.startsWith('asks:')) {
+        this.#askedAs.set(line.id, is);
         this.#log(`${line.where} asks: ${line.ask ?? 'a question'}`, 'needs', '?');
         this.#ask(line);
       } else if (is === 'ended' && was) {
@@ -203,6 +214,10 @@ export class Studio {
       }
     }
   }
+
+  /** Each line's open Needs you toast, and the question it was raised for. */
+  #asked = new Map<string, number>();
+  #askedAs = new Map<string, string>();
 
   #log(text: string, family: SignalFamily, glyph: string): void {
     this.feed = [{ t: clockOf(new Date().toISOString()) ?? '', text, family, glyph }, ...this.feed].slice(0, 8);
@@ -215,11 +230,11 @@ export class Studio {
     // A session's agent says only that it is waiting, never what the
     // choices are, so the toast takes you to its terminal to answer there.
     if (line.kind === 'session') {
-      toasts.add({
+      this.#asked.set(line.id, toasts.add({
         level: 'needs',
         text: `${line.title} ${line.approval ? 'needs approval' : 'is waiting for you'}`,
         actions: [{ label: 'Go to the question', cmd: 'opens its terminal · changes nothing', onpress: () => void (location.hash = `#session/${encodeURIComponent(line.ref)}`) }],
-      });
+      }));
 
       return;
     }
@@ -228,9 +243,21 @@ export class Studio {
       return;
     }
 
+    // A brief, the proposed done-when, readings and a budget are answered
+    // with a box or a figure, which a toast has no room for: it goes to them.
+    if (['brief', 'done-when', 'readings', 'budget'].includes(gate.kind)) {
+      this.#asked.set(line.id, toasts.add({
+        level: 'needs',
+        text: `${line.where} asks: ${gate.question}`,
+        actions: [{ label: 'Go to the question', cmd: 'opens the run · changes nothing', onpress: () => void (location.hash = `#teams/${encodeURIComponent(line.ref)}`) }],
+      }));
+
+      return;
+    }
+
     const answers = gate.options.length ? gate.options : ['yes', 'no'];
 
-    toasts.add({
+    this.#asked.set(line.id, toasts.add({
       level: 'needs',
       text: `${line.where} asks: ${gate.question}`,
       cmd: line.project ?? '',
@@ -246,7 +273,7 @@ export class Studio {
               return worked ? `You answered: ${answer}` : 'The answer was not taken';
             },
           })),
-    });
+    }));
   }
 
   async loadIdeas(): Promise<void> {

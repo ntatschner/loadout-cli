@@ -175,6 +175,12 @@ describe('Outbox', () => {
     expect(screen.getByText('In a terminal: $ git -C /repo show e4f5a6b~1:src/App.cs')).toBeTruthy();
   });
 
+  it('names a reported file from the repository, though the run reported its whole path', () => {
+    const { container } = render(Outbox, { run: 'r1', repository: 'C:/repo', files: [], loose: [{ path: 'C:/repo/docs/PLAN.md', kind: 'plan', bytes: 12, node: 'planner' }], read });
+
+    expect(container.querySelector('[data-item="loose:C:/repo/docs/PLAN.md"] .nm')?.textContent).toBe('docs/PLAN.md');
+  });
+
   it('filters the tree as you type', async () => {
     render(Outbox, { run: 'r1', repository: '/repo', files, loose, read });
 

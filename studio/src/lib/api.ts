@@ -56,11 +56,22 @@ async function send(method: string, path: string, body?: unknown): Promise<Respo
   return response;
 }
 
+/** A refusal in words: the reason where the body is JSON carrying one, as several of the daemon's routes answer, otherwise the body. */
+function reasonOf(body: string): string {
+  try {
+    const read = JSON.parse(body) as { error?: unknown };
+
+    return typeof read?.error === 'string' && read.error ? read.error : body;
+  } catch {
+    return body;
+  }
+}
+
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const response = await send(method, path, body);
 
   if (!response.ok) {
-    throw new Refused((await response.text()) || `${method} ${path} answered ${response.status}.`, response.status);
+    throw new Refused(reasonOf(await response.text()) || `${method} ${path} answered ${response.status}.`, response.status);
   }
 
   if (response.status === 204) {

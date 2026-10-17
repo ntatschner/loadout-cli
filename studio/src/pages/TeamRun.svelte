@@ -194,23 +194,34 @@
     }
   });
 
+  /** A paper's words: the brief's task, a report's summary, or the text itself where it is not JSON. */
+  function paperOf(text: string): { node?: string; role?: string; words: string } {
+    try {
+      const read = JSON.parse(text) as { node?: string; role?: string; task?: string; summary?: string; status?: string };
+
+      return { node: read.node, role: read.role, words: read.task ?? (read.summary ? `${read.status ? `${read.status}: ` : ''}${read.summary}` : text) };
+    } catch {
+      return { words: text };
+    }
+  }
+
   async function loadPapers() {
     try {
       const { documents } = await teamApi.documents(id);
-      const roles = new Map(run?.nodes.map((one) => [one.node, one.role]) ?? []);
       const briefs = documents.filter((one) => one.kind === 'brief');
       const pairs = [];
 
       for (const brief of briefs) {
+        // brief-implementer-1-1.json answers to report-implementer-1-1.json.
         const report = documents.find((one) => one.kind === 'report' && one.name.replace(/^report-/, '') === brief.name.replace(/^brief-/, ''));
-        const [briefText, reportText] = await Promise.all([teamApi.document(id, brief.name), report ? teamApi.document(id, report.name) : Promise.resolve(null)]);
-        const who = brief.subject || brief.name.replace(/^brief-/, '').replace(/\.json$/, '');
+        const [told, said] = await Promise.all([teamApi.document(id, brief.name), report ? teamApi.document(id, report.name) : Promise.resolve(null)]);
+        const paper = paperOf(told.text);
 
-        pairs.push({ node: who, role: roles.get(who), brief: briefText.text, report: reportText?.text });
+        pairs.push({ node: paper.node ?? brief.subject, role: paper.role, brief: paper.words, report: said ? paperOf(said.text).words : undefined });
       }
 
       const final = documents.find((one) => one.kind === 'final report');
-      summaryText = final ? (await teamApi.document(id, final.name)).text : null;
+      summaryText = final ? paperOf((await teamApi.document(id, final.name)).text).words : null;
       papers = pairs;
     } catch (error) {
       problem = (error as Error).message;

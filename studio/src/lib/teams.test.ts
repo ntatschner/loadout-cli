@@ -6,6 +6,7 @@ import { quoted } from './commands';
 import { codeTokens, diffLines, fileKind, inline, markdown, parseCsv } from './files';
 import { sheetCommand, sheetProblem, sheetValues, type SheetTeam } from './teamSheet';
 import { depthKey, gateButtons, gateKind, pruneCommand, pruneSentence, type GateAsk } from './teams';
+import { nodeWord } from './teamsData';
 
 const ask = (over: Partial<GateAsk>): GateAsk => ({ kind: 'question', run: '20261017-1402-ab3f', gate: 'g1', question: 'Which way?', ...over });
 const cmds = (asked: GateAsk, typed?: string, figure?: string, reason?: string) => gateButtons(asked, typed, figure, reason).map((one) => one.cmd);
@@ -202,5 +203,13 @@ describe('reading delivered files', () => {
     expect(parseCsv('a,b\n"x, y",2\n', ',')).toEqual([['a', 'b'], ['x, y', '2']]);
     expect(codeTokens('const x = "hi"; // note', 'ts').map((token) => token.cls)).toEqual(['k', '', 's', '', 'c']);
     expect(diffLines('diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-old\n+new\n same')).toEqual([['@', '@@ -1 +1 @@'], ['-', 'old'], ['+', 'new'], [' ', 'same']]);
+  });
+});
+
+describe('nodeWord', () => {
+  it('says a node blocked on your answer is waiting for you, and one blocked otherwise is blocked', () => {
+    expect(nodeWord('blocked', 'between turns', true)).toBe('waiting for you');
+    expect(nodeWord('blocked', 'between turns', false)).toBe('blocked');
+    expect(nodeWord('working', 'working')).toBe('working');
   });
 });

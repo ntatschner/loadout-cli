@@ -139,9 +139,13 @@ export function needsOf(run: Run, href: string, gateFor: (run: Run, gate: RunGat
   return items;
 }
 
-/** A node's state, as one of Studio's words. */
-export function nodeWord(state: string, activity: string): string {
-  if (activity === 'waiting for you') {
+/**
+ * A node's state, as one of Studio's words. A node that reported itself
+ * blocked while its run waits on you is waiting on that answer, not stuck,
+ * so it says so rather than showing as a failure.
+ */
+export function nodeWord(state: string, activity: string, runWaiting = false): string {
+  if (activity === 'waiting for you' || (runWaiting && state === 'blocked')) {
     return 'waiting for you';
   }
 
@@ -165,7 +169,7 @@ export function nodeWord(state: string, activity: string): string {
 
 /** The rounds along the lead's line, with the nodes each round's turns belonged to. */
 export function shapeOf(run: Run): { rounds: { word: string; lead?: string; nodes?: [string, string][] }[]; next: string | null; end: { word: string; text?: string } | null } {
-  const words = new Map(run.nodes.map((node) => [node.node, nodeWord(node.state, node.activity)]));
+  const words = new Map(run.nodes.map((node) => [node.node, nodeWord(node.state, node.activity, run.waitingForYou)]));
   const roles = new Map(run.nodes.map((node) => [node.node, node.role]));
   const turns = run.turns ?? [];
   const count = Math.max(run.rounds, ...turns.map((turn) => turn.round), 0);
@@ -196,7 +200,7 @@ export function crewOf(run: Run, quietFor: (node: string) => string | null = () 
     node: node.node,
     role: node.role,
     model: node.model ?? null,
-    word: nodeWord(node.state, node.activity),
+    word: nodeWord(node.state, node.activity, run.waitingForYou),
     doing: node.doing,
     quiet: quietFor(node.node),
     turns: node.turns ?? 0,
