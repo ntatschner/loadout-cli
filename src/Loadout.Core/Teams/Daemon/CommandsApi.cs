@@ -396,12 +396,14 @@ public sealed class CommandJobs
         {
             var word = words[i];
 
-            if (word.Length == 0 || word.Contains('\0', StringComparison.Ordinal))
+            // An empty word is how a setting is cleared, as config set <key> "" does,
+            // so it is passed on; a NUL is never meant and cannot be.
+            if (word.Contains('\0', StringComparison.Ordinal))
             {
-                return "One of the words is empty.";
+                return "One of the words has a NUL in it.";
             }
 
-            if (word[0] != '-')
+            if (word.Length == 0 || word[0] != '-')
             {
                 continue;
             }

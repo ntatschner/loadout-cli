@@ -151,7 +151,7 @@
         <view.default id={router.route.rest[0]} />
       {/await}
     {:else if router.route.page === 'settings'}
-      <Settings />
+      <Settings rest={router.route.rest} />
     {:else if router.route.page === 'memory'}
       <Memory slug={router.route.rest[0] ?? null} scope={router.route.rest[1] ?? null} name={router.route.rest[2] ?? null} />
     {:else if router.route.page === 'spend'}

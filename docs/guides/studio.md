@@ -147,6 +147,16 @@ The two things kept in the browser are the single-letter shortcuts (**A** for
 Ambient, **N** for a new session) and whether Ambient fills the screen. They're
 about the keyboard and screen in front of you, not about how you read.
 
+**Settings** has more than Studio's own. **Loadout's settings** lists every
+setting `loadout config` knows, in the same groups the terminal's Settings
+screen uses, and each is changed where it's shown: edit it and **Set it** runs
+`loadout config set`. Empty clears it back to its default. **Agents and packs**
+covers the MCP servers every project loads, secrets (checked and removed here;
+stored only in a terminal, at a masked prompt) and specialist packs. **Backups
+and safety** covers backups, checkpoints and keeping AI files out of
+repositories. **The daemon** holds and restarts the daemon and says whether it
+starts when you log in, and **This machine** shows what `loadout doctor` finds.
+
 ### 8. Keep what a project remembers
 
 **Memory** lists what each project remembers, by store: this project's, yours

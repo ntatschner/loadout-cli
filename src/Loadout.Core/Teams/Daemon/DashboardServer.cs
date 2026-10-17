@@ -150,6 +150,9 @@ public sealed class DashboardServer : IDisposable
     /// <summary>The commands Studio can run and the ones it has, or null where this server runs none.</summary>
     public CommandJobs? Jobs { get; set; }
 
+    /// <summary>Where Studio's Settings page reads Loadout's settings from, or null where nothing gave this server one.</summary>
+    public Loadout.Core.Configuration.IConfigurationService? Configuration { get; set; }
+
     /// <summary>Changing one, by running the command somebody would have typed.</summary>
     public Func<SettingsChange, CancellationToken, Task<OperationResult>>? Settle { get; set; }
 
@@ -1247,6 +1250,17 @@ public sealed class DashboardServer : IDisposable
             }
 
             await MemoryApi.HandleAsync(context, Memory, path, ct).ConfigureAwait(false);
+
+            return;
+        }
+
+        if (path == StudioConfig.Root && request.HttpMethod == "GET" && Configuration is not null)
+        {
+            var read = await StudioConfig.ReadAsync(Configuration, ct).ConfigureAwait(false);
+
+            await (read.Failed
+                ? WriteAsync(context, 500, "text/plain; charset=utf-8", read.Error!)
+                : WriteAsync(context, 200, "application/json; charset=utf-8", JsonSerializer.Serialize(read.Value, Json))).ConfigureAwait(false);
 
             return;
         }

@@ -443,6 +443,10 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             // And the New session sheet, from the same source as the
             // terminal launcher's, and Studio's own settings, read per
             // request and changed through 'config set' like any other.
+            // And every setting, for Studio's Settings page to show; changing
+            // one runs 'config set' like any other job.
+            server.Configuration = _configuration;
+
             // And every other command, run from Studio's forms as a child of
             // this launcher, so the page does what typing it would.
             server.Jobs = new CommandJobs(
