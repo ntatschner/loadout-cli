@@ -16,6 +16,7 @@
   import Settings from './pages/Settings.svelte';
   import Appearance from './pages/Appearance.svelte';
   import Memory from './pages/Memory.svelte';
+  import Commands from './pages/Commands.svelte';
   import Elsewhere from './pages/Elsewhere.svelte';
   import SignedOut from './pages/SignedOut.svelte';
   import { studio } from './lib/state.svelte';
@@ -52,6 +53,7 @@
     { key: 'context', name: 'Context', fact: 'what a session reads' },
     { key: 'spend', name: 'Spend', fact: 'tokens and cost' },
     { key: 'projects', name: 'Projects', fact: '' },
+    { key: 'commands', name: 'Commands', fact: studio.jobs.some((job) => job.state === 'running') ? `${studio.jobs.filter((job) => job.state === 'running').length} running` : 'everything else' },
     { key: 'settings', name: 'Settings', fact: '' },
   ]);
 
@@ -147,6 +149,8 @@
       <Settings />
     {:else if router.route.page === 'memory'}
       <Memory slug={router.route.rest[0] ?? null} scope={router.route.rest[1] ?? null} name={router.route.rest[2] ?? null} />
+    {:else if router.route.page === 'commands'}
+      <Commands rest={router.route.rest} onlaunch={() => { router.go('sessions'); openLaunch(); }} />
     {:else}
       <Elsewhere page={router.route.page} />
     {/if}

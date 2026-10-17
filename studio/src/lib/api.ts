@@ -326,6 +326,65 @@ export const memory = {
   },
 };
 
+/* ---------- every command ---------- */
+
+export type Effect = 'reads' | 'changes' | 'session' | 'terminalOnly';
+
+export interface StudioArgument {
+  name: string;
+  position: number;
+  required: boolean;
+  many: boolean;
+  description: string;
+}
+
+export interface StudioOption {
+  name: string;
+  short: string | null;
+  kind: 'flag' | 'value' | 'values' | 'optional';
+  valueName: string | null;
+  description: string;
+  required: boolean;
+  global: boolean;
+  choices: string[];
+}
+
+export interface StudioCommand {
+  path: string;
+  description: string;
+  category: string;
+  example: string;
+  runnable: boolean;
+  reach: { page: string; effect: Effect; reason: string | null };
+  arguments: StudioArgument[];
+  options: StudioOption[];
+}
+
+export type JobState = 'running' | 'done' | 'failed' | 'cancelled';
+
+export interface Job {
+  id: string;
+  path: string;
+  line: string;
+  state: JobState;
+  exitCode: number | null;
+  startedAt: string;
+  endedAt: string | null;
+  truncated: boolean;
+  /** Only when one job is read on its own. */
+  output: string | null;
+  error: string | null;
+}
+
+/** The command line, run from the page as a child of the daemon's launcher. */
+export const commands = {
+  catalogue: () => call<StudioCommand[]>('GET', '/api/v1/commands'),
+  jobs: () => call<Job[]>('GET', '/api/v1/jobs'),
+  job: (id: string) => call<Job>('GET', `/api/v1/jobs/${encodeURIComponent(id)}`),
+  run: (path: string, words: string[]) => call<Job>('POST', '/api/v1/jobs', { path, words }),
+  cancel: (id: string) => call<void>('DELETE', `/api/v1/jobs/${encodeURIComponent(id)}`),
+};
+
 /* ---------- live ---------- */
 
 /** Calls back with what changed, as the daemon says it. Returns a function that stops listening. */

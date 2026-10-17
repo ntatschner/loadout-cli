@@ -147,6 +147,9 @@ public sealed class DashboardServer : IDisposable
     /// <summary>What Studio's memory page reads and saves, or null where nothing gave this server one.</summary>
     public IStudioMemory? Memory { get; set; }
 
+    /// <summary>The commands Studio can run and the ones it has, or null where this server runs none.</summary>
+    public CommandJobs? Jobs { get; set; }
+
     /// <summary>Changing one, by running the command somebody would have typed.</summary>
     public Func<SettingsChange, CancellationToken, Task<OperationResult>>? Settle { get; set; }
 
@@ -1248,6 +1251,21 @@ public sealed class DashboardServer : IDisposable
             return;
         }
 
+        if (Under(path, CommandsApi.CommandsRoot) || Under(path, CommandsApi.JobsRoot))
+        {
+            if (Jobs is null)
+            {
+                await WriteAsync(context, 404, "text/plain; charset=utf-8",
+                    "This dashboard runs no commands. The daemon's does: loadout daemon").ConfigureAwait(false);
+
+                return;
+            }
+
+            await CommandsApi.HandleAsync(context, Jobs, path, WatchOnly, ct).ConfigureAwait(false);
+
+            return;
+        }
+
         await WriteAsync(context, 404, "text/plain; charset=utf-8", "There is nothing here.").ConfigureAwait(false);
     }
 
@@ -1377,6 +1395,7 @@ public sealed class DashboardServer : IDisposable
         response.SendChunked = true;
 
         string? sessions = null, runs = null;
+        int? jobs = null;
         var quiet = DateTimeOffset.UtcNow;
 
         try
@@ -1399,6 +1418,12 @@ public sealed class DashboardServer : IDisposable
                 {
                     said.Add("runs");
                     runs = runsNow;
+                }
+
+                if (Jobs is not null && Jobs.Stamp != jobs)
+                {
+                    said.Add("jobs");
+                    jobs = Jobs.Stamp;
                 }
 
                 if (said.Count > 0)
