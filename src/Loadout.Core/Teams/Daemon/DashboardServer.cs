@@ -68,7 +68,8 @@ public sealed class DashboardServer : IDisposable
     /// </remarks>
     public const int DefaultPort = 47611;
 
-    private static readonly string[] Reads = ["events", "documents", "diff", "stream", "spent", "outcomes"];
+    private static readonly string[] Reads =
+        ["events", "documents", "diff", "stream", "spent", "outcomes", "file", "outbox.zip"];
 
     private static readonly JsonSerializerOptions Json = new()
     {
@@ -2246,6 +2247,22 @@ public sealed class DashboardServer : IDisposable
                 return;
             }
 
+            // What the run delivered, one file at a time or all at once. The
+            // query says which file, because a path is full of slashes.
+            if (rest.EndsWith("/file", StringComparison.Ordinal))
+            {
+                await DeliveredFileAsync(context, rest[..^"/file".Length], ct).ConfigureAwait(false);
+
+                return;
+            }
+
+            if (rest.EndsWith("/outbox.zip", StringComparison.Ordinal))
+            {
+                await DeliveredZipAsync(context, rest[..^"/outbox.zip".Length], ct).ConfigureAwait(false);
+
+                return;
+            }
+
             if (rest.EndsWith("/documents", StringComparison.Ordinal))
             {
                 await PapersAsync(context, rest[..^"/documents".Length]).ConfigureAwait(false);
@@ -3747,6 +3764,196 @@ public sealed class DashboardServer : IDisposable
 
         await WriteAsync(context, 200, "application/json; charset=utf-8",
             JsonSerializer.Serialize(diff.Value, Json)).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Where a run's outbox comes from: what <c>team outbox</c> reads, or
+    /// whatever a test puts in its place.
+    /// </summary>
+    /// <remarks>
+    /// Null means the one this server can make for itself, which needs git;
+    /// a server without git has no outbox to read from.
+    /// </remarks>
+    public IRunOutbox? OutboxSource { get; set; }
+
+    /// <summary>The run's outbox, or the status and words for why not.</summary>
+    private async Task<(Outbox? Outbox, int Status, string? Error)> OutboxOfAsync(string runId, CancellationToken ct)
+    {
+        if ((OutboxSource ?? (_git is null ? null : new RunOutbox(_journal, _git))) is not { } source || _git is null)
+        {
+            return (null, 501, "This dashboard was started without anything that can run git.");
+        }
+
+        var read = await source.ForAsync(runId, ct).ConfigureAwait(false);
+
+        return read.Succeeded ? (read.Value!, 200, null) : (null, 404, read.Error);
+    }
+
+    /// <summary>The status a refusal to read one delivered file is answered with.</summary>
+    private static int StatusOf(ExitCode code) => code switch
+    {
+        ExitCode.InvalidArguments => 400,
+        ExitCode.PolicyViolation => 403,
+        ExitCode.ProjectNotFound => 404,
+        _ => 409,
+    };
+
+    /// <summary>
+    /// One file a run delivered: <c>?commit=&amp;path=</c> for a committed one,
+    /// <c>?loose=</c> for one a node reported, and <c>download=1</c> for the
+    /// file itself rather than a view of it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The bytes, with what a page needs to say about them in headers, rather
+    /// than JSON: an image goes straight into an <c>img</c>, and text arrives
+    /// as text. Text is always served as plain text whatever it is - an HTML
+    /// file a node wrote, served as HTML from this origin, would be a page
+    /// running with the dashboard's token.
+    /// </para>
+    /// <para>
+    /// A download is the file exactly, unredacted, as the run made it; see
+    /// <see cref="RunOutboxFiles"/> for why.
+    /// </para>
+    /// </remarks>
+    private async Task DeliveredFileAsync(HttpListenerContext context, string runId, CancellationToken ct)
+    {
+        var query = context.Request.QueryString;
+        var (commit, path, loose) = (query["commit"], query["path"], query["loose"]);
+
+        if ((loose is { Length: > 0 }) == (commit is { Length: > 0 } || path is { Length: > 0 }))
+        {
+            await WriteAsync(context, 400, "text/plain; charset=utf-8",
+                "Ask for one file: ?commit= and ?path= for a committed one, or ?loose= for one a node reported.")
+                .ConfigureAwait(false);
+
+            return;
+        }
+
+        var (outbox, status, error) = await OutboxOfAsync(runId, ct).ConfigureAwait(false);
+
+        if (outbox is null)
+        {
+            await WriteAsync(context, status, "text/plain; charset=utf-8", error ?? "No such run.").ConfigureAwait(false);
+
+            return;
+        }
+
+        var read = loose is { Length: > 0 }
+            ? RunOutboxFiles.Loose(outbox, loose)
+            : await RunOutboxFiles.CommittedAsync(_git!, outbox, commit, path, ct).ConfigureAwait(false);
+
+        if (read.Failed)
+        {
+            await WriteAsync(context, StatusOf(read.ExitCode), "text/plain; charset=utf-8", read.Error!)
+                .ConfigureAwait(false);
+
+            return;
+        }
+
+        var file = read.Value!;
+        var response = context.Response;
+
+        Untrusted(response);
+
+        if (file.FromCommit is { } from)
+        {
+            response.Headers["X-Loadout-From-Commit"] = from;
+        }
+
+        if (query["download"] is "1" or "true")
+        {
+            await SendBytesAsync(response, 200, "application/octet-stream", file.Bytes, Attachment(file.Name))
+                .ConfigureAwait(false);
+
+            return;
+        }
+
+        var view = RunOutboxFiles.View(file);
+
+        if (view.Status != 200)
+        {
+            await SendBytesAsync(response, view.Status, "text/plain; charset=utf-8", Encoding.UTF8.GetBytes(view.Error ?? string.Empty), null)
+                .ConfigureAwait(false);
+
+            return;
+        }
+
+        if (view.Text)
+        {
+            response.Headers["X-Loadout-Redacted-Lines"] = view.RedactedLines.ToString(CultureInfo.InvariantCulture);
+            response.Headers["X-Loadout-Truncated"] = view.Truncated ? "true" : "false";
+            response.Headers["X-Loadout-Lines"] = view.Lines.ToString(CultureInfo.InvariantCulture);
+        }
+
+        await SendBytesAsync(response, 200, view.ContentType, view.Body, null).ConfigureAwait(false);
+    }
+
+    /// <summary>Everything a run delivered, as <c>&lt;run&gt;-outbox.zip</c>.</summary>
+    private async Task DeliveredZipAsync(HttpListenerContext context, string runId, CancellationToken ct)
+    {
+        var (outbox, status, error) = await OutboxOfAsync(runId, ct).ConfigureAwait(false);
+
+        if (outbox is null)
+        {
+            await WriteAsync(context, status, "text/plain; charset=utf-8", error ?? "No such run.").ConfigureAwait(false);
+
+            return;
+        }
+
+        var zip = await RunOutboxFiles.ZipAsync(_git!, outbox, ct).ConfigureAwait(false);
+        var response = context.Response;
+
+        Untrusted(response);
+
+        // Said, so a page can tell somebody before they open it that it is short.
+        response.Headers["X-Loadout-Left-Out"] = zip.LeftOut.Count.ToString(CultureInfo.InvariantCulture);
+
+        await SendBytesAsync(response, 200, "application/zip", zip.Bytes, Attachment(Uri.UnescapeDataString(runId) + "-outbox.zip"))
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The headers for bytes this server did not write: a run's files, which
+    /// a model chose the contents of.
+    /// </summary>
+    /// <remarks>
+    /// The sandbox is the one that matters for an SVG opened on its own rather
+    /// than in an <c>img</c>: there it is a document, and without it any script
+    /// in it would run on this origin. It is on every one of these because
+    /// none of them is a page.
+    /// </remarks>
+    private static void Untrusted(HttpListenerResponse response)
+    {
+        response.Headers["X-Content-Type-Options"] = "nosniff";
+        response.Headers["Referrer-Policy"] = "no-referrer";
+        response.Headers["Cache-Control"] = "no-store";
+        response.Headers["Content-Security-Policy"] = "sandbox; default-src 'none'; style-src 'unsafe-inline'";
+    }
+
+    /// <summary>A file's name as a download, plainly and for browsers that read the encoded form.</summary>
+    private static string Attachment(string name)
+    {
+        var plain = string.Concat(name.Select(one => one is < ' ' or > '~' or '"' or '\\' or ';' ? '_' : one));
+
+        return $"attachment; filename=\"{plain}\"; filename*=UTF-8''{Uri.EscapeDataString(name)}";
+    }
+
+    private static async Task SendBytesAsync(
+        HttpListenerResponse response, int status, string type, byte[] bytes, string? disposition)
+    {
+        response.StatusCode = status;
+        response.ContentType = type;
+        response.ContentLength64 = bytes.Length;
+
+        if (disposition is not null)
+        {
+            response.Headers["Content-Disposition"] = disposition;
+        }
+
+        await response.OutputStream.WriteAsync(bytes).ConfigureAwait(false);
+
+        response.Close();
     }
 
     /// <summary>What a run wrote down beside its journal, listed.</summary>

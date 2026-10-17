@@ -231,6 +231,30 @@ public interface IGitManager
         string commit,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// One file's bytes as a commit left it.
+    /// </summary>
+    /// <param name="repositoryPath">Any working tree of the repository.</param>
+    /// <param name="revision">The commit, or a name for one such as its parent.</param>
+    /// <param name="path">The file, relative to the repository, exactly as git lists it.</param>
+    /// <param name="ct">Cancellation.</param>
+    /// <remarks>
+    /// <para>
+    /// Bytes rather than text, because what a run delivers includes images,
+    /// and the way this runs git hands back its output as a string - which is
+    /// a PNG decoded as UTF-8 and never the same file again.
+    /// </para>
+    /// <para>
+    /// The path is taken literally, so a name git would otherwise read as a
+    /// pattern or as pathspec magic - one starting with a colon - is that file.
+    /// </para>
+    /// </remarks>
+    Task<OperationResult<byte[]>> ReadFileAtAsync(
+        string repositoryPath,
+        string revision,
+        string path,
+        CancellationToken ct = default);
+
     /// <summary>Pushes the current branch to its upstream.</summary>
     Task<OperationResult> PushAsync(string repositoryPath, CancellationToken ct = default);
 

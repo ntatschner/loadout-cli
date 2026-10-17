@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http;
+using System.Text;
 using System.Text.Json;
 using FluentAssertions;
 using Loadout.Core.Teams;
@@ -3139,6 +3140,209 @@ public sealed class DashboardServerTests : IAsyncLifetime
 
         first.Should().Contain(line => line.StartsWith("event: line", StringComparison.Ordinal));
         first.Should().Contain(line => line.Contains("started iterating-project", StringComparison.Ordinal));
+    }
+
+    // ------------------------------------------------ what a run delivered
+
+    private const string Delivering = "3333333333333333333333333333333333333333";
+
+    /// <summary>Gives the server an outbox of three committed files, and returns where its repository is.</summary>
+    private string Outboxed()
+    {
+        var repository = Path.Combine(Path.GetTempPath(), "loadout-dash-outbox-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(repository);
+        File.WriteAllText(Path.Combine(repository, "PLAN.md"), "the plan\n");
+
+        _git.Blobs[$"{Delivering}:docs/usage.md"] =
+            Encoding.UTF8.GetBytes("# Usage\nGITHUB_TOKEN=abcdefghij0123456789\n");
+        _git.Blobs[$"{Delivering}:art/mark.svg"] = "<svg xmlns='http://www.w3.org/2000/svg'/>\n"u8.ToArray();
+        _git.Blobs[$"{Delivering}^:old.txt"] = "what was removed\n"u8.ToArray();
+        _git.Commits[$"{Delivering}^"] = "4444444444444444444444444444444444444444";
+
+        _server.OutboxSource = new FixedOutbox(new Outbox(
+            repository,
+            [
+                new OutboxFile("docs/usage.md", "added", Delivering, "writer"),
+                new OutboxFile("art/mark.svg", "added", Delivering, "writer"),
+                new OutboxFile("old.txt", "removed", Delivering, "writer"),
+            ],
+            [new OutboxAsset(Path.Combine(repository, "PLAN.md"), "plan", 9, "planner", null)],
+            []));
+
+        return repository;
+    }
+
+    private static string FileAt(string path) =>
+        $"/api/runs/20260916-1200-aaaa/file?commit={Delivering}&path={Uri.EscapeDataString(path)}";
+
+    [Fact]
+    public async Task A_delivered_file_is_shown_as_text_with_what_was_taken_out_said()
+    {
+        Outboxed();
+
+        var answer = await GetAsync(FileAt("docs/usage.md"));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.OK);
+        answer.Content.Headers.ContentType!.MediaType.Should().Be("text/plain");
+        answer.Headers.GetValues("X-Loadout-Redacted-Lines").Should().Equal("1");
+        answer.Headers.GetValues("X-Loadout-Truncated").Should().Equal("false");
+        answer.Headers.GetValues("X-Loadout-Lines").Should().Equal("2");
+        answer.Headers.GetValues("X-Content-Type-Options").Should().Equal("nosniff");
+        answer.Headers.GetValues("Content-Security-Policy").Single().Should().StartWith("sandbox");
+        answer.Content.Headers.ContentDisposition.Should().BeNull();
+
+        (await answer.Content.ReadAsStringAsync()).Should().Contain("# Usage").And.NotContain("abcdefghij0123456789");
+    }
+
+    /// <remarks>
+    /// The file as the run made it. Shown, it is redacted; downloaded, a
+    /// redacted copy would be a different file from the one in the repository.
+    /// </remarks>
+    [Fact]
+    public async Task A_download_is_the_file_exactly_as_an_attachment()
+    {
+        Outboxed();
+
+        var answer = await GetAsync(FileAt("docs/usage.md") + "&download=1");
+
+        answer.StatusCode.Should().Be(HttpStatusCode.OK);
+        answer.Content.Headers.ContentType!.MediaType.Should().Be("application/octet-stream");
+        answer.Content.Headers.ContentDisposition!.DispositionType.Should().Be("attachment");
+        answer.Content.Headers.ContentDisposition.FileName!.Trim('"').Should().Be("usage.md");
+
+        (await answer.Content.ReadAsByteArrayAsync()).Should().Equal(_git.Blobs[$"{Delivering}:docs/usage.md"]);
+    }
+
+    [Fact]
+    public async Task An_svg_is_served_as_an_image_that_cannot_run_anything()
+    {
+        Outboxed();
+
+        var answer = await GetAsync(FileAt("art/mark.svg"));
+
+        answer.Content.Headers.ContentType!.MediaType.Should().Be("image/svg+xml");
+        answer.Headers.GetValues("X-Content-Type-Options").Should().Equal("nosniff");
+        answer.Headers.GetValues("Content-Security-Policy").Single().Should().Contain("sandbox");
+    }
+
+    [Fact]
+    public async Task A_removed_file_says_which_commit_it_was_read_from()
+    {
+        Outboxed();
+
+        var answer = await GetAsync(FileAt("old.txt"));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.OK);
+        answer.Headers.GetValues("X-Loadout-From-Commit").Should().Equal("4444444444444444444444444444444444444444");
+        (await answer.Content.ReadAsStringAsync()).Should().Be("what was removed\n");
+    }
+
+    [Fact]
+    public async Task A_reported_file_is_read_from_disk()
+    {
+        var repository = Outboxed();
+
+        var answer = await GetAsync(
+            "/api/runs/20260916-1200-aaaa/file?loose=" + Uri.EscapeDataString(Path.Combine(repository, "PLAN.md")));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await answer.Content.ReadAsStringAsync()).Should().Be("the plan\n");
+    }
+
+    [Theory]
+    [InlineData("README.md")]
+    [InlineData("../../settings.json")]
+    [InlineData("docs/../../../settings.json")]
+    public async Task A_file_the_outbox_does_not_list_is_refused(string path)
+    {
+        Outboxed();
+
+        _git.Blobs[$"{Delivering}:{path}"] = "never to be read"u8.ToArray();
+
+        var answer = await GetAsync(FileAt(path));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await answer.Content.ReadAsStringAsync()).Should().NotContain("never to be read");
+    }
+
+    [Fact]
+    public async Task A_reported_file_the_outbox_does_not_list_is_refused()
+    {
+        var repository = Outboxed();
+        File.WriteAllText(Path.Combine(repository, "other.md"), "never to be read");
+
+        var answer = await GetAsync(
+            "/api/runs/20260916-1200-aaaa/file?loose=" + Uri.EscapeDataString(Path.Combine(repository, "other.md")));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task Asking_for_no_file_or_two_at_once_is_a_bad_request()
+    {
+        Outboxed();
+
+        (await GetAsync("/api/runs/20260916-1200-aaaa/file")).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await GetAsync(FileAt("docs/usage.md") + "&loose=PLAN.md")).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Everything_delivered_comes_as_one_zip_named_for_the_run()
+    {
+        Outboxed();
+
+        var answer = await GetAsync("/api/runs/20260916-1200-aaaa/outbox.zip");
+
+        answer.StatusCode.Should().Be(HttpStatusCode.OK);
+        answer.Content.Headers.ContentType!.MediaType.Should().Be("application/zip");
+        answer.Content.Headers.ContentDisposition!.DispositionType.Should().Be("attachment");
+        answer.Content.Headers.ContentDisposition.FileName!.Trim('"').Should().Be("20260916-1200-aaaa-outbox.zip");
+
+        using var archive = new System.IO.Compression.ZipArchive(
+            new MemoryStream(await answer.Content.ReadAsByteArrayAsync()));
+
+        archive.Entries.Select(one => one.FullName)
+            .Should().BeEquivalentTo("docs/usage.md", "art/mark.svg", "PLAN.md");
+    }
+
+    /// <remarks>
+    /// Reads, so the token they need is the one every read needs, and never
+    /// routed as something a run is told to do: a GET under a run that is not
+    /// listed as a read is handed to the actions and answered 405.
+    /// </remarks>
+    [Theory]
+    [InlineData("/api/runs/20260916-1200-aaaa/file?loose=x")]
+    [InlineData("/api/runs/20260916-1200-aaaa/outbox.zip")]
+    public async Task The_outbox_routes_are_reads(string path)
+    {
+        Outboxed();
+
+        var acted = false;
+
+        _server.Act = (_, _) =>
+        {
+            acted = true;
+
+            return Task.FromResult(OperationResult.Ok());
+        };
+
+        (await GetAsync(path, withToken: false)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await GetAsync(path)).StatusCode.Should().NotBe(HttpStatusCode.MethodNotAllowed);
+
+        var posted = await _client.PostAsync(
+            new Uri(_root.TrimEnd('/') + path + (path.Contains('?', StringComparison.Ordinal) ? "&" : "?") + "token=" + _server.Token),
+            new StringContent(string.Empty));
+
+        posted.StatusCode.Should().Be(HttpStatusCode.MethodNotAllowed);
+        acted.Should().BeFalse();
+    }
+
+    private sealed class FixedOutbox(Outbox outbox) : IRunOutbox
+    {
+        public Task<OperationResult<Outbox>> ForAsync(string runId, CancellationToken ct = default) =>
+            Task.FromResult(runId == "20260916-1200-aaaa"
+                ? OperationResult<Outbox>.Ok(outbox)
+                : OperationResult<Outbox>.Fail($"No run named '{runId}'."));
     }
 
     /// <summary>One run, written as a real one writes itself.</summary>
