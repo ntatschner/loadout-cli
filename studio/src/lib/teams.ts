@@ -108,6 +108,7 @@ export function gateButtons(ask: GateAsk, typed = '', figure = '', reason = ''):
         kind: '',
         solid: false,
         glyph: '↻',
+        // The same line as command.thinkAgain, which StudioBuildTests checks against the daemon.
         cmd: line('--think-again') + why,
         said: ask.kind === 'readings'
           ? 'Sent back. No worker is briefed this round; the lead restates its readings and asks again.'

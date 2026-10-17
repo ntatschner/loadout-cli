@@ -12,6 +12,7 @@ describe('commands', () => {
   it('match what the daemon runs for the same verbs', () => {
     expect(command.gate('20261016-0840-3f1a', 'gate-5e1d9a20', 'Approve')).toBe('$ loadout team gate 20261016-0840-3f1a --gate gate-5e1d9a20 --answer Approve --by dashboard');
     expect(command.gate('r1', null, 'no')).toBe('$ loadout team gate r1 --answer no --by dashboard');
+    expect(command.thinkAgain('20261016-0840-3f1a', 'gate-5e1d9a20')).toBe('$ loadout team gate 20261016-0840-3f1a --gate gate-5e1d9a20 --think-again --by dashboard');
     expect(command.pause('20261016-0840-3f1a')).toBe('$ loadout team halt 20261016-0840-3f1a --pause');
     expect(command.resume('20261016-0840-3f1a')).toBe('$ loadout team halt 20261016-0840-3f1a --resume');
     expect(command.stop('20261016-0840-3f1a')).toBe('$ loadout team halt 20261016-0840-3f1a');

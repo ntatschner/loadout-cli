@@ -271,7 +271,7 @@ main.page:has(> .ls-session:not(.lost)) > .ls-session { flex: 1 1 auto; min-heig
 .subnav a:hover { color: var(--ink-strong); }
 .subnav a[aria-current="page"] { color: var(--ink-strong); box-shadow: inset 0 -2px 0 var(--accent); }
 .subnav a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-main.page section:has(> .runs), main.page section:has(> .teamcards), .ls-needs, .trun > .ls-gate { margin-bottom: calc(var(--space-7) * var(--density)); }
+.tblock, .ls-needs { margin-bottom: calc(var(--space-7) * var(--density)); }
 .runs, .remedies { display: grid; gap: 14px; max-width: 980px; }
 .teamcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 14px; }
 .remteam { max-width: 420px; margin-bottom: var(--space-5); }

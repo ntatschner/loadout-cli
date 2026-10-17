@@ -91,6 +91,16 @@ public sealed partial class StudioBuildTests
         Pinned().Should().Contain("$ " + shown);
     }
 
+    [Fact]
+    public void Think_again_shows_the_command_the_daemon_runs()
+    {
+        var (command, arguments) = DashboardActions.Maps(new Loadout.Core.Teams.Daemon.RunAction("20261016-0840-3f1a", "gate", Gate: "gate-5e1d9a20", ThinkAgain: true));
+        const string shown = "loadout team gate 20261016-0840-3f1a --gate gate-5e1d9a20 --think-again --by dashboard";
+
+        Typed(command, arguments).Should().Be(shown);
+        Pinned().Should().Contain("$ " + shown);
+    }
+
     [Theory]
     [InlineData("starstats", "loadout task declare upload-retries doing --project starstats")]
     [InlineData(null, "loadout task declare chores done --global")]

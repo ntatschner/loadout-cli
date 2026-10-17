@@ -353,7 +353,7 @@
   {#if !place}
     <NeedsYou items={needs} />
 
-    <section aria-labelledby="tm-running">
+    <section class="tblock" aria-labelledby="tm-running">
       <h2 class="ls-zone" id="tm-running">Running</h2>
       {#if running.length}
         <div class="runs">
@@ -365,7 +365,7 @@
     </section>
 
     {#if ended.length}
-      <section aria-labelledby="tm-ended">
+      <section class="tblock" aria-labelledby="tm-ended">
         <h2 class="ls-zone" id="tm-ended">Ended</h2>
         <div class="runs">
           {#each ended as run (run.id)}<RunCard run={summaryOf(run)} href={href(run)} actions={endedActs(run)} />{/each}
@@ -373,7 +373,7 @@
       </section>
     {/if}
 
-    <section aria-labelledby="tm-teams">
+    <section class="tblock" aria-labelledby="tm-teams">
       <h2 class="ls-zone" id="tm-teams">Teams you can run</h2>
       {#if teams}
         <div class="teamcards">
@@ -400,7 +400,7 @@
       {/if}
     </section>
 
-    <section aria-labelledby="tm-sched">
+    <section class="tblock" aria-labelledby="tm-sched">
       <h2 class="ls-zone" id="tm-sched">On a schedule</h2>
       {#if schedules && daemon}
         <Schedules

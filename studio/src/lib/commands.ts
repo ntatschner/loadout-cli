@@ -22,6 +22,9 @@ export const command = {
   gate: (run: string, gate: string | null, answer: string) =>
     `$ loadout team gate ${run}${gate ? ` --gate ${gate}` : ''} --answer ${quoted(answer)} --by dashboard`,
 
+  /** Sending a question back to the lead: POST /api/runs/{run}/gate with thinkAgain. */
+  thinkAgain: (run: string, gate: string | null) => `$ loadout team gate ${run}${gate ? ` --gate ${gate}` : ''} --think-again --by dashboard`,
+
   /** Holding a run after its round: POST /api/runs/{run}/pause. */
   pause: (run: string) => `$ loadout team halt ${run} --pause`,
 

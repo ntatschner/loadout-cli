@@ -540,6 +540,18 @@ export interface Outcome {
   unfound: string[];
 }
 
+/** A route that answers a refusal as JSON with its reason: the body is read whatever the status. */
+async function answered<T extends { error: string | null }>(method: string, path: string, body: unknown): Promise<T> {
+  const response = await send(method, path, body);
+  const text = await response.text();
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Refused(text || `${method} ${path} answered ${response.status}.`, response.status);
+  }
+}
+
 const runPath = (run: string, rest = '') => `/api/runs/${encodeURIComponent(run)}${rest}`;
 const query = (pairs: Record<string, string>) => new URLSearchParams({ ...pairs, ...(printed ? { token: printed } : {}) }).toString();
 
@@ -549,8 +561,8 @@ export const teamApi = {
   bin: () => call<{ days: number; entries: { kind: 'run' | 'team'; name: string; team: string; binned: string; goes: string | null; unmerged: string[]; bytes: number }[] }>('GET', '/api/bin'),
   roles: () => call<{ roles: { role: string; model: string | null; runs: number; turns: number; cost: number; each: number; accepted: number; rejected: number; accepting: number | null; denials: number; refusals: number; seconds: number }[] }>('GET', '/api/roles'),
   /** Starts a run in the background: the command a sheet shows, watched for a few seconds so an early refusal comes back. */
-  start: (body: Record<string, unknown>) => call<{ started: boolean; error: string | null }>('POST', '/api/start', body),
-  prune: (body: Record<string, unknown>) => call<{ cleared: boolean; error: string | null }>('POST', '/api/prune', body),
+  start: (body: Record<string, unknown>) => answered<{ started: boolean; error: string | null }>('POST', '/api/start', body),
+  prune: (body: Record<string, unknown>) => answered<{ cleared: boolean; error: string | null }>('POST', '/api/prune', body),
   stream: (run: string, node: string, after = 0) => call<{ node: string; total: number; steps: StreamStep[] }>('GET', runPath(run, `/stream/${encodeURIComponent(node)}?after=${after}`)),
   spent: (run: string) => call<{ nodes: { node: string; role: string; thinking: number; tools: number; writing: number; idle: number }[] }>('GET', runPath(run, '/spent')),
   documents: (run: string) => call<{ documents: RunDocument[] }>('GET', runPath(run, '/documents')),
