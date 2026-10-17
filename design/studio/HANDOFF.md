@@ -14,7 +14,7 @@ Everything you need is in this folder, `design/studio/`:
 | `tokens.css` | The same tokens compiled to CSS custom properties, with the `@font-face` rules. Import this; don't rewrite it. |
 | `fonts/` | Saira and JetBrains Mono, variable woff2 (Latin), with their OFL-1.1 licences. |
 | `reference/README.md` | The design system's brand book: principles, wording, colour, signals, type, density, motion, focus. **Read it first.** |
-| `reference/components/<Name>/` | The README (what it is, what you provide, do and don't, accessibility) and a live `preview.html` for each of the 21 components. The 19 Teams components belong to `TEAMS.md`, the 7 mode components to `MODES.md`, and the 4 Pure Focus components to `PURE-FOCUS.md`: separate pieces of work. |
+| `reference/components/<Name>/` | The README (what it is, what you provide, do and don't, accessibility) and a live `preview.html` for each of the 21 components. The Teams, mode and Pure Focus components beside them belong to `NEXT.md`, the next piece of work. |
 | `reference/components/bundle.css`, `bundle.js`, `index.d.ts` | The reference implementation in plain CSS and JavaScript. Port it to Svelte; don't ship it as is. |
 | `reference/design-system.tokens.json` | The tokens as the design system artifact stores them. For reference only. |
 | `reference/prototype/index.html` | A clickable prototype of Home and Sessions built on the reference implementation. Open it in a browser. It is the behaviour to match. |
