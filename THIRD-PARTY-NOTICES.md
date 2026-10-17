@@ -23,7 +23,7 @@ outside the allowlist. CI runs it on every change.
 | [Atkinson Hyperlegible Next](https://github.com/googlefonts/atkinson-hyperlegible-next) | OFL-1.1 |
 | [Atkinson Hyperlegible Mono](https://github.com/googlefonts/atkinson-hyperlegible-next-mono) | OFL-1.1 |
 | [Svelte](https://svelte.dev/) 5.57.1, compiled into Studio's page | MIT |
-| [xterm.js](https://xtermjs.org/) 5.5.0, with @xterm/addon-fit 0.10.0 and @xterm/addon-webgl 0.18.0, bundled into Studio's page as its terminal | MIT |
+| [xterm.js](https://xtermjs.org/) 5.5.0, with @xterm/addon-fit 0.10.0, @xterm/addon-webgl 0.18.0 and @xterm/addon-search 0.15.0, bundled into Studio's page as its terminal | MIT |
 | [Saira](https://github.com/Omnibus-Type/Saira) | OFL-1.1 |
 | [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) | OFL-1.1 |
 
@@ -173,7 +173,8 @@ Studio's terminal is xterm.js, MIT licensed, drawn with its WebGL renderer. It
 was chosen for being small, permissively licensed and the terminal most
 browser-based tools already use, and the WebGL renderer for a stricter reason:
 xterm's default renderer writes style elements and style attributes, which
-Studio's content security policy refuses.
+Studio's content security policy refuses. Find in a terminal is its search
+add-on, the version made for xterm.js 5.5.0, under the same licence.
 
 Its licence, which travels with the bundle in the binary:
 

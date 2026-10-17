@@ -8,6 +8,7 @@
   import { Terminal } from '@xterm/xterm';
   import { FitAddon } from '@xterm/addon-fit';
   import { WebglAddon } from '@xterm/addon-webgl';
+  import { SearchAddon } from '@xterm/addon-search';
   import '@xterm/xterm/css/xterm.css';
   import Command from './Command.svelte';
   import HaloButton from './HaloButton.svelte';
@@ -63,10 +64,36 @@
   // Reactive, so the effects below apply once it exists as well as on every change after.
   let terminal = $state.raw<Terminal | null>(null);
   let fitter: FitAddon | null = null;
+  let searcher: SearchAddon | null = null;
 
   /** Writes what the session printed. */
   export function write(data: Uint8Array | string) {
     terminal?.write(data);
+  }
+
+  /** Matches drawn in the needs colour, so a find reads as Studio's own highlight. */
+  function findColours() {
+    const needs = token('--needs') || '#f0b429';
+
+    return { matchBackground: needs, matchOverviewRuler: needs, activeMatchBackground: needs, activeMatchColorOverviewRuler: needs };
+  }
+
+  /** Finds the next match of what is typed, from where the last one was; false where there is none. */
+  export function find(term: string, backwards = false): boolean {
+    if (!searcher || !term) {
+      searcher?.clearDecorations();
+
+      return false;
+    }
+
+    const options = { caseSensitive: false, decorations: findColours() };
+
+    return backwards ? searcher.findPrevious(term, options) : searcher.findNext(term, options);
+  }
+
+  export function clearFind() {
+    searcher?.clearDecorations();
+    terminal?.clearSelection();
   }
 
   /** Puts the keyboard in the terminal, as "Type a reply" and "Go to the question" do. */
@@ -189,10 +216,13 @@
       // sixteen meet: 4.5:1, and 7:1 in the high-contrast themes.
       minimumContrastRatio: highContrast() ? 7 : 4.5,
       screenReaderMode: screenReader,
-      allowProposedApi: false,
+      // Find's highlights are decorations, which xterm still calls a proposed API.
+      allowProposedApi: true,
     });
     fitter = new FitAddon();
     terminal.loadAddon(fitter);
+    searcher = new SearchAddon();
+    terminal.loadAddon(searcher);
 
     // Before open(), so the DOM renderer is never made: it writes <style>
     // elements and style attributes, which Studio's content security policy

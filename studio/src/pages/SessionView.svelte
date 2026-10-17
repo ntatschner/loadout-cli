@@ -1,196 +1,44 @@
 <script lang="ts">
   // One hosted session: a slim header, its live terminal filling the page,
-  // and a panel of details that folds away. The terminal streams over a
-  // WebSocket from the daemon; closing this page ends nothing, and a
-  // connection that drops is tried again while the session is still there.
-  import { onMount, tick } from 'svelte';
+  // and a panel of details that folds away. The terminal and its connection
+  // are SessionPane's, the same one Terminal Focus shows in its panes;
+  // closing this page ends nothing.
+  import { tick } from 'svelte';
   import Command from '../lib/components/Command.svelte';
   import Dialog from '../lib/components/Dialog.svelte';
   import HaloButton from '../lib/components/HaloButton.svelte';
-  import Terminal from '../lib/components/Terminal.svelte';
-  import { sessions as sessionsApi, terminalAddress, type Session } from '../lib/api';
+  import SessionPane from '../lib/components/SessionPane.svelte';
+  import { sessions as sessionsApi, type Session } from '../lib/api';
   import { command } from '../lib/commands';
   import { router } from '../lib/router.svelte';
   import { studio } from '../lib/state.svelte';
-  import { resumeCommand, terminalState } from '../lib/terminal';
+  import { resumeCommand, type TerminalState } from '../lib/terminal';
 
   let { id }: { id: string } = $props();
 
   const line = $derived(studio.lines.find((one) => one.kind === 'session' && one.ref === id));
   const session: Session | undefined = $derived(line?.session);
 
-  let screen = $state<ReturnType<typeof Terminal> | undefined>();
+  let pane = $state<ReturnType<typeof SessionPane> | undefined>();
   let toggle = $state<HTMLButtonElement | undefined>();
+  let status = $state<TerminalState>('connecting');
   let holds = $state(true);
-  let connected = $state(false);
-  let dropped = $state(false);
-  let exited = $state<number | null | undefined>(undefined);
+  let renderer = $state('');
+  let agentSession = $state<string | null>(null);
   let lost = $state(false);
   let lostSession = $state<string | null>(null);
   let ending = $state(false);
-  let renderer = $state('');
-  // When this page last saw output arrive, which is newer than the list's
-  // lastOutputAt: the list is read again only when a session starts, ends or
-  // is said to be waiting, not on every line an agent writes.
-  let heard = $state<number | null>(null);
   let details = $state(typeof window === 'undefined' || !window.matchMedia('(max-width: 959px)').matches);
-  let socket: WebSocket | null = null;
-  let retry: ReturnType<typeof setTimeout> | null = null;
-  let tries = 0;
-  let leaving = false;
-  let opened = false;
 
-  const status = $derived(
-    terminalState({
-      session,
-      connected,
-      dropped,
-      exited,
-      lost,
-      watchOnly: studio.watchOnly,
-      quiet: quietFor(),
-      idleAfter: studio.idleAfter,
-    }),
-  );
-
-  /** Minutes since the session last wrote, by whichever of the list and this page heard it later; Infinity before either has. */
-  function quietFor() {
-    const listed = session?.lastOutputAt ? Date.parse(session.lastOutputAt) : null;
-    const latest = Math.max(listed ?? 0, heard ?? 0);
-
-    return latest ? Math.max(0, Math.floor((studio.now - latest) / 60000)) : Infinity;
-  }
-
-  const agentSession = $derived(session?.agentSession ?? lostSession);
-  const encoder = new TextEncoder();
-
-  function send(message: object) {
-    if (socket?.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify(message));
-    }
-  }
-
-  function type(data: string) {
-    if (holds && !studio.watchOnly && socket?.readyState === WebSocket.OPEN) {
-      socket.send(encoder.encode(data));
-    }
-  }
-
-  let size = { columns: 80, rows: 24 };
-
-  function resized(columns: number, rows: number) {
-    size = { columns, rows };
-    // Only the window holding the input may resize the session; the daemon
-    // ignores the others, so sending is harmless either way.
-    send({ type: 'resize', columns, rows });
-  }
-
-  function connect(shown: Session) {
-    if (retry) {
-      clearTimeout(retry);
-      retry = null;
-    }
-
-    socket?.close();
-    const opening = new WebSocket(terminalAddress(shown));
-    opening.binaryType = 'arraybuffer';
-    socket = opening;
-
-    opening.addEventListener('open', () => {
-      if (socket !== opening) {
-        return;
-      }
-
-      connected = true;
-      dropped = false;
-      tries = 0;
-      send({ type: 'resize', ...size });
-    });
-
-    opening.addEventListener('close', () => {
-      if (socket !== opening) {
-        return;
-      }
-
-      connected = false;
-
-      if (leaving || exited !== undefined) {
-        return;
-      }
-
-      // The output so far stays on the screen, and reopening replays the
-      // scrollback, so trying again loses nothing.
-      dropped = true;
-      retry = setTimeout(() => void reconnect(), Math.min(10_000, 1000 * 2 ** tries++));
-    });
-
-    opening.addEventListener('message', (event) => {
-      if (typeof event.data !== 'string') {
-        screen?.write(new Uint8Array(event.data as ArrayBuffer));
-
-        // Kept coarse, so a busy agent does not redraw the page per line.
-        const now = Date.now();
-
-        if (!heard || now - heard > 5000) {
-          heard = now;
-        }
-
-        return;
-      }
-
-      const message = JSON.parse(event.data) as { type: string; holds?: boolean; code?: number | null };
-
-      if (message.type === 'lease') {
-        holds = !!message.holds;
-      } else if (message.type === 'exit') {
-        exited = message.code ?? null;
-        void studio.loadSessions();
-      }
-    });
-  }
-
-  /** Again, after a drop: the session may have gone with the daemon, which a fresh list says. */
-  async function reconnect() {
-    await studio.loadSessions();
-
-    if (session && !session.ended) {
-      // A reconnect replays the scrollback, so the screen starts clean.
-      screen?.write('\x1bc');
-      connect(session);
-    } else if (!session) {
-      await checkLost();
-    }
-  }
-
-  async function checkLost() {
-    const gone = await sessionsApi.gone(id).catch(() => ({ lost: false, agentSession: null }));
-
-    lost = gone.lost;
-    lostSession = gone.agentSession;
-  }
-
-  $effect(() => {
-    // Connect once the session is known and the terminal is on the page.
-    if (!opened && screen && session) {
-      opened = true;
-      connect(session);
-    }
-  });
+  const ended = $derived(status === 'ended' || status === 'error' || status === 'lost');
 
   $effect(() => {
     if (studio.loaded && !line && !lost) {
-      void checkLost();
+      sessionsApi.gone(id).then((gone) => {
+        lost = gone.lost;
+        lostSession = gone.agentSession;
+      }, () => undefined);
     }
-  });
-
-  onMount(() => () => {
-    leaving = true;
-
-    if (retry) {
-      clearTimeout(retry);
-    }
-
-    socket?.close();
   });
 
   async function fold() {
@@ -226,8 +74,8 @@
           <span class="facts1">{[session.project, session.agent ?? 'agent', session.mode ?? 'mode by the task', `${line.mins ?? 0} min`].filter(Boolean).join(' · ')}</span>
         {/if}
       </div>
-      {#if !holds && !studio.watchOnly && connected}
-        <HaloButton label="Type here instead" size="small" cmd="another window holds the input · takes it over" onpress={() => send({ type: 'takeover' })} />
+      {#if !holds && !studio.watchOnly && !ended && status !== 'connecting' && status !== 'reconnecting'}
+        <HaloButton label="Type here instead" size="small" cmd="another window holds the input · takes it over" onpress={() => pane?.send({ type: 'takeover' })} />
       {/if}
       <button
         bind:this={toggle}
@@ -239,21 +87,16 @@
       ><span class="ring" aria-hidden="true"></span>{details ? 'Hide details' : 'Details'}</button>
     </div>
 
-    <Terminal
-      bind:this={screen}
-      title={line.title}
-      project={session.project}
-      agent={session.kind === 'command' ? 'loadout' : session.agent}
-      {status}
-      code={exited ?? session.exitCode}
-      {agentSession}
-      {holds}
-      screenReader={studio.about?.screenReader ?? false}
+    <SessionPane
+      bind:this={pane}
+      {id}
       leaveTo={toggle}
-      oninput={type}
-      onresize={resized}
-      onretry={() => void reconnect()}
-      ondrawn={(drawn) => (renderer = drawn)}
+      onstatus={(now, facts) => {
+        status = now;
+        holds = facts.holds;
+        renderer = facts.renderer;
+        agentSession = facts.agentSession;
+      }}
     />
 
     <aside class="sside" id="session-details" aria-label="About this session" hidden={!details}>
@@ -290,7 +133,7 @@
           <Command why="Carry this conversation on in a terminal instead:" command={resumeCommand(agentSession, session.project)} />
         {/if}
         <p class="calm small">Sessions survive a reload of this page, not a restart of the daemon.</p>
-        {#if !session.ended && exited === undefined}
+        {#if !session.ended && !ended}
           <HaloButton
             label="End the session"
             kind="danger"
