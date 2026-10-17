@@ -156,6 +156,29 @@ body.ambient-open { overflow: hidden; }
 .act summary .t { color: var(--ink-strong); }
 .act summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .jobresult { display: grid; gap: var(--space-3); }
+.questions { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-5); }
+.question { display: grid; gap: var(--space-2); padding: var(--space-3) var(--space-4); box-shadow: inset 3px 0 0 var(--needs); }
+.question .q { margin: 0; font-size: 17px; font-weight: 400; color: var(--ink-strong); }
+.qid { font-family: var(--font-mono); font-size: 11.5px; color: var(--subtle); }
+.answered { margin: 0; color: var(--good); }
+.choices { display: grid; gap: var(--space-2); margin: 0; padding: 0; border: 0; }
+.choices .chk, .question .chk { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: var(--space-2); align-items: start; font-size: 14px; }
+.choices .chk input { width: 18px; height: 18px; margin: 3px 0 0; accent-color: var(--accent); }
+.question .fld { display: grid; gap: var(--space-1); }
+.question .lab { font-size: 13px; color: var(--ink-soft); }
+.question textarea {
+  width: 100%; box-sizing: border-box; padding: 6px var(--space-3); border: 0; border-radius: var(--radius-chip); background: none;
+  color: var(--ink); box-shadow: inset 0 0 0 1px var(--control-edge); font: inherit; font-size: 14px; resize: vertical;
+}
+.question textarea:focus-visible, .choices input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.layer { display: grid; gap: var(--space-3); padding: var(--space-3) 0; border-top: 1px solid var(--rule); }
+.layer h4 { margin: 0; font-size: 16px; font-weight: 400; color: var(--ink-strong); }
+.options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: var(--space-3); }
+.option { display: grid; gap: var(--space-2); align-content: start; padding: var(--space-3); box-shadow: inset 0 0 0 1px var(--rule); }
+.option.chosen { background: var(--tint-picked-c); box-shadow: inset 3px 0 0 var(--accent), inset 0 0 0 1px var(--rule); }
+.option .t { margin: 0; color: var(--ink-strong); }
+.option p { margin: 0; }
+.pros, .cons { margin: 0; padding-left: var(--space-4); font-size: 13px; color: var(--ink); }
 .effect { font-family: var(--font-mono); font-size: 11.5px; color: var(--subtle); }
 .jobhead { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); align-items: center; }
 .output {

@@ -56,23 +56,6 @@ public sealed partial class StudioCoverageTests
         "docs refresh",
         "doctor",
         "handoff",
-        "idea accept",
-        "idea add",
-        "idea answer",
-        "idea choose",
-        "idea dismiss",
-        "idea drop",
-        "idea dump add",
-        "idea dump apply",
-        "idea dump list",
-        "idea dump show",
-        "idea dump split",
-        "idea improve",
-        "idea keep",
-        "idea list",
-        "idea refine",
-        "idea remove",
-        "idea show",
         "instructions audit",
         "instructions explain",
         "instructions export",
@@ -271,11 +254,12 @@ public sealed partial class StudioCoverageTests
         foreach (var (path, reach) in StudioCoverage.Reach.Where(one => one.Value.Page != StudioCoverage.CommandsPage))
         {
             // Shown as its line, or named as the command a form or a read runs:
-            // <CommandAction path="..."> and readJson('...') both show the line.
+            // <CommandAction path="...">, readJson('...'), and lineFor('...') or
+            // act('...') beside a button, all put the line on the page.
             var escaped = Regex.Escape(path);
             var shown = Regex.IsMatch(sources, "loadout " + escaped + "(?![a-z-])")
                 || Regex.IsMatch(sources, "path=\"" + escaped + "\"")
-                || Regex.IsMatch(sources, "readJson(<[^>]*>)?\\('" + escaped + "'");
+                || Regex.IsMatch(sources, "(readJson|lineFor|act)(<[^>]*>)?\\('" + escaped + "'");
 
             shown.Should().BeTrue(
                 $"'{path}' is placed on the {reach.Page} page, so Studio has to show 'loadout {path}' somewhere");
