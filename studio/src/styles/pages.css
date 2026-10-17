@@ -13,7 +13,7 @@ body { background: var(--ground); color: var(--ink); }
 #nav .ls-pagestab { position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); }
 .page { min-height: 100%; padding-block: 18px 56px; padding-left: max(calc(var(--rail-width) + 28px), env(safe-area-inset-left, 0px)); padding-right: max(28px, env(safe-area-inset-right, 0px)); }
 @media (max-width: 599px) { .page { padding-left: max(52px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); } }
-.ls-appearance { margin-top: auto; }
+.ls-report { margin-top: auto; }
 /* page head */
 .head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 26px; margin-bottom: calc(var(--space-6) * var(--density)); }
 .head h1 { margin: 0; font-size: 30px; line-height: 34px; font-weight: 200; color: var(--ink-strong); }

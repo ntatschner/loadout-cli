@@ -28,6 +28,7 @@
   import { router } from './lib/router.svelte';
   import { paletteGroups } from './lib/paletteGroups';
   import { THEME_NAMES, type Theme } from './lib/studio';
+  import { reportLink } from './lib/report';
   import type { RailPage } from './lib/types';
 
   let palette = $state(false);
@@ -118,6 +119,10 @@
   <a class="skip" href="#main" onclick={(event) => { event.preventDefault(); document.getElementById('main')?.focus(); }}>Skip to the page</a>
   <SideRail {pages} {current} onsearch={() => (palette = true)}>
     {#snippet foot()}
+      <a class="ls-rl ls-report" href={reportLink(studio.about)} target="_blank" rel="noopener noreferrer">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 17.5 V3 M5 3.5 H15 L12.5 7 L15 10.5 H5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
+        <span class="n">Report a problem</span><span class="f">Studio is a preview · opens GitHub</span>
+      </a>
       <button type="button" class="ls-rl ls-appearance" onclick={() => (appearance = true)}>
         <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3a7 7 0 1 0 0 14a3.5 3.5 0 0 1 0-7a3.5 3.5 0 0 0 0-7z M10 3a7 7 0 0 1 0 14" fill="none" stroke="currentColor" stroke-width="1.6" /></svg>
         <span class="n">Appearance</span><span class="f">{theme ? THEME_NAMES[theme] : 'Follows the system'} · {studio.prefs?.accent ?? 'cyan'}</span>

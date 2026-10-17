@@ -111,6 +111,51 @@ A test that fails only in the full suite is worth two minutes of thought before
 you re-run it. It is usually a disturbed binary. It is sometimes a race, and
 those look identical from the outside.
 
+## Releasing
+
+A release is cut by pushing an annotated tag, `vX.Y.Z`, on a commit whose
+`Directory.Build.props` already carries that version. Pushing the tag is what
+publishes. Running the Release workflow by hand from the Actions page builds
+everything, goes green, and publishes nothing, which is easy to mistake for a
+release.
+
+- **Minor** when the commits since the last tag add something you can do.
+  **Patch** when they only repair. Read the range (`git log vLAST..HEAD`)
+  rather than deciding from memory.
+- The notes go in the tag's **body**. GitHub drops the first line of the
+  message, so start with a title line, then the notes. Git also drops any line
+  starting with `#`, so a line of pull request links starts with a word:
+  "Pull requests: #181 #182".
+- Before pushing, check the tag points at the bumped version:
+  `git show vX.Y.Z:Directory.Build.props | grep '<Version>'`.
+
+### Before Studio becomes the default
+
+Studio ships as a preview, behind `loadout config set dashboard studio`, while
+the classic dashboard stays the default. It becomes the default once it has
+spent two minor releases as a preview with no open Studio bug labelled
+`blocking`. Coverage, the other half, is already checked by
+`StudioCoverageTests`. This part is checked by hand, once, when the switching
+release is cut:
+
+1. Review every open issue **without** the `studio` label and add it to any
+   that is about Studio. Studio's "Report a problem" opens the Studio bug
+   form, which labels itself, but a report through the general form or a blank
+   issue arrives without it:
+
+   ```sh
+   gh issue list --state open --search "-label:studio" --limit 200
+   ```
+
+2. Then the gate. Studio becomes the default only if this lists nothing:
+
+   ```sh
+   gh issue list --state open --label studio --label blocking
+   ```
+
+This section, the Studio bug form and its link in Studio's rail all go once the
+switch has shipped.
+
 ## Commits
 
 Write the message for somebody reading it in a year with no memory of the

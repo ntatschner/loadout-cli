@@ -105,6 +105,25 @@ public sealed partial class StudioBuildTests
     }
 
     /// <summary>
+    /// Studio's "Report a problem" against the form it opens. A link naming a
+    /// template or a field that is not there opens an empty form, and the
+    /// default switch counts reports by the labels the template applies.
+    /// </summary>
+    [Fact]
+    public void The_report_link_names_the_studio_bug_form_and_its_fields()
+    {
+        var root = RepositoryRoot();
+        var report = File.ReadAllText(Path.Combine(root, "studio", "src", "lib", "report.ts"));
+        var template = File.ReadAllText(Path.Combine(root, ".github", "ISSUE_TEMPLATE", "studio_bug.yml"));
+
+        report.Should().Contain("issues/new?template=studio_bug.yml");
+        report.Should().Contain("{ version: about.version, platform: about.platform }");
+        template.Should().MatchRegex(@"(?m)^labels: \[bug, studio\]\r?$");
+        template.Should().MatchRegex(@"(?m)^\s+id: version\r?$");
+        template.Should().MatchRegex(@"(?m)^\s+id: platform\r?$");
+    }
+
+    /// <summary>
     /// The line as a person would type it. The daemon adds --non-interactive,
     /// which only says nobody is at a terminal to answer, so it is left out of
     /// what the page shows.

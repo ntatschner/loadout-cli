@@ -1,0 +1,68 @@
+name: Studio bug
+description: Something in Loadout Studio, the preview app, behaves differently from how it reads
+labels: [bug, studio]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Studio opens this form from its rail with the version and platform
+        already filled in. The `studio` label is what the release that makes
+        Studio the default counts, so please file Studio problems here rather
+        than through the general bug report.
+
+        If this is a security problem, please do not file it here. Use
+        [private reporting](https://github.com/ntatschner/loadout-cli/security/advisories/new)
+        on the Security tab instead.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: The page you were on, what you expected, and what you got instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce it
+      description: What you clicked or typed, in order. A screenshot helps if the problem is how something looks.
+    validations:
+      required: true
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `loadout doctor`
+      description: |
+        Studio does not send this for you, because a page should not post
+        details of your machine to GitHub on its own. Run it in a terminal and
+        paste it if you can. It does not print secret values; redact anything
+        you would rather not share.
+      render: shell
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Filled in by Studio, or the output of `loadout --version`.
+    validations:
+      required: true
+
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      description: Filled in by Studio, or your operating system and architecture.
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser
+      description: The browser Studio was open in, and whether it was installed as an app.
+    validations:
+      required: false
