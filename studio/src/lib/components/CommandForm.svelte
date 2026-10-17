@@ -5,6 +5,7 @@
   // already knows, such as the project, and can fix them so they are not
   // asked for again. A command left to the terminal shows its line and why,
   // and one that starts a session sends you to Sessions.
+  import { untrack } from 'svelte';
   import Command from './Command.svelte';
   import HaloButton from './HaloButton.svelte';
   import JobResult from './JobResult.svelte';
@@ -37,12 +38,22 @@
   let starting = $state(false);
   let started = $state<string | null>(null);
 
-  // A new command, or new values from the page, start the form again.
+  // A new command, or new values from the page, start the form again. By
+  // what the preset says rather than which object it is: a page reading its
+  // data again builds a new one with the same values, and resetting then
+  // would clear the result of what was just run.
+  const presetKey = $derived(JSON.stringify(preset));
+  const commandPath = $derived(command.path);
+
   $effect(() => {
-    void command.path;
-    values = { ...preset };
-    problem = null;
-    started = null;
+    void commandPath;
+    void presetKey;
+
+    untrack(() => {
+      values = { ...preset };
+      problem = null;
+      started = null;
+    });
   });
 
   const EFFECT: Record<string, string> = {
