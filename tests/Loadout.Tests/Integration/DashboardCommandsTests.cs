@@ -193,6 +193,39 @@ public sealed class DashboardCommandsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Settings_are_read_by_group_named_in_words_the_redactor_leaves_and_with_their_values_redacted()
+    {
+        var config = new Loadout.Models.Configuration.LauncherConfig();
+        config.Workspace.Remote = $"https://{GitHubTokenShape}@github.com/example/workspace.git";
+        config.Workspace.Branch = "trunk";
+        _server.Configuration = new StubConfig(config);
+
+        var (status, text) = await SendAsync(HttpMethod.Get, "/api/v1/config");
+
+        status.Should().Be(HttpStatusCode.OK, text);
+
+        var groups = JsonDocument.Parse(text).RootElement;
+        var workspace = groups.EnumerateArray().Single(group => group.GetProperty("group").GetString() == "Workspace");
+        var settings = workspace.GetProperty("settings").EnumerateArray().ToList();
+
+        settings.Select(one => one.GetProperty("name").GetString()).Should().Contain(["workspace-remote", "workspace-branch"],
+            "a setting's name must survive the page's redaction, which 'config list --json' naming it 'key' did not");
+        settings.Single(one => one.GetProperty("name").GetString() == "workspace-branch").GetProperty("value").GetString().Should().Be("trunk");
+        text.Should().NotContain(GitHubTokenShape, "a credential in a setting is never shown back");
+    }
+
+    [Fact]
+    public async Task An_empty_word_is_passed_on_so_a_setting_can_be_cleared()
+    {
+        _commands.Next = new StubProcessLauncher.StubPipedProcess(string.Empty, exitCode: 0);
+
+        var (status, text) = await SendAsync(HttpMethod.Post, "/api/v1/jobs", "{\"path\":\"memory find\",\"words\":[\"\"]}");
+
+        status.Should().Be(HttpStatusCode.Accepted, text);
+        _commands.Started.Should().ContainSingle().Which.Should().Equal("memory", "find", "", "--non-interactive");
+    }
+
+    [Fact]
     public async Task A_page_from_elsewhere_cannot_start_a_job()
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, _root + "/api/v1/jobs")
@@ -277,6 +310,29 @@ public sealed class DashboardCommandsTests : IAsyncLifetime
 
             return Task.FromResult(OperationResult<IPipedProcess>.Ok(Next));
         }
+    }
+
+    private sealed class StubConfig(Loadout.Models.Configuration.LauncherConfig config) : Loadout.Core.Configuration.IConfigurationService
+    {
+        public Task<OperationResult<Loadout.Models.Configuration.LauncherConfig>> LoadConfigAsync(CancellationToken ct = default) =>
+            Task.FromResult(OperationResult<Loadout.Models.Configuration.LauncherConfig>.Ok(config));
+
+        public Task<OperationResult> SaveConfigAsync(Loadout.Models.Configuration.LauncherConfig changed, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
+        public Task<OperationResult<Loadout.Models.Configuration.MachineConfig>> LoadMachineAsync(CancellationToken ct = default) =>
+            Task.FromResult(OperationResult<Loadout.Models.Configuration.MachineConfig>.Ok(new Loadout.Models.Configuration.MachineConfig()));
+
+        public Task<OperationResult> SaveMachineAsync(Loadout.Models.Configuration.MachineConfig machine, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
+        public Task<OperationResult<Loadout.Models.Configuration.LauncherConfig>> UpdateConfigAsync(
+            Action<Loadout.Models.Configuration.LauncherConfig> change, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
+        public Task<OperationResult<Loadout.Models.Configuration.MachineConfig>> UpdateMachineAsync(
+            Action<Loadout.Models.Configuration.MachineConfig> change, CancellationToken ct = default) =>
+            throw new NotSupportedException();
     }
 
     private sealed class NoRuns : IRunJournal

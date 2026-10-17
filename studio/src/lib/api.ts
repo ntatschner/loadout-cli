@@ -401,6 +401,25 @@ export async function readJson<T>(path: string, words: string[] = []): Promise<T
   return JSON.parse(read.output ?? 'null') as T;
 }
 
+/* ---------- Loadout's own settings ---------- */
+
+export interface ConfigSetting {
+  name: string;
+  value: string;
+  description: string;
+  machineLocal: boolean;
+  flag: boolean;
+  whenUnset: string | null;
+}
+
+export interface ConfigGroup {
+  group: string;
+  settings: ConfigSetting[];
+}
+
+/** Every setting 'loadout config' knows, grouped as the terminal's Settings screen groups them. */
+export const configuration = () => call<ConfigGroup[]>('GET', '/api/v1/config');
+
 /* ---------- live ---------- */
 
 /** Calls back with what changed, as the daemon says it. Returns a function that stops listening. */

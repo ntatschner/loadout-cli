@@ -75,6 +75,7 @@
   let rules = $state<{ list: { path?: string; name?: string; bytes?: number; globs?: string[] }[]; budget: { alwaysLoadedBytes: number; scopedBytes: number; overBudget: boolean }; audit: { verdict: string; findings: { message?: string; detail?: string }[] } } | null>(null);
   let styles = $state<{ name: string; inForce?: boolean; description?: string }[] | null>(null);
   let profiles = $state<{ name: string; description: string }[] | null>(null);
+  let candidates = $state<{ path?: string; file?: string; reason?: string }[] | null>(null);
   let docs = $state<{ documents: number; findings: { path?: string; line?: number; message?: string; detail?: string }[] } | null>(null);
   let health = $state<{ audit: { checks: number; applicable: number; findings: { message?: string; detail?: string }[] }; validate: { specialists: number; errors: number; warnings: number; findings: { id?: string; message?: string }[] } } | null>(null);
   let problem = $state<string | null>(null);
@@ -135,6 +136,10 @@
         rules = { list: list.rules, budget, audit };
         styles = style.styles;
         profiles = profile.profiles;
+        readJson<{ candidates?: { path?: string; file?: string; reason?: string }[] } | { path?: string; file?: string; reason?: string }[]>('share candidates', ['--project', project]).then(
+          (read) => (candidates = Array.isArray(read) ? read : (read.candidates ?? [])),
+          () => (candidates = null),
+        );
       } else if (where === 'docs') {
         docs = await readJson('docs audit', [project]);
       } else if (where === 'health') {
@@ -290,7 +295,15 @@
         <ul class="plain">{#each profiles as one (one.name)}<li><span class="n">{one.name}</span> · {one.description}</li>{/each}</ul>
         <p class="calm small">From <code class="ls-cmd">loadout profile list {slug}</code>.</p>
       {/if}
+      <h3 class="ls-zone">Guidance for everybody</h3>
+      {#if candidates?.length}
+        <ul class="plain">{#each candidates as one, index (index)}<li><code class="ls-cmd">{one.path ?? one.file}</code>{one.reason ? ` · ${one.reason}` : ''}</li>{/each}</ul>
+      {:else if candidates}
+        <p class="calm">Nothing here looks like it belongs to every project.</p>
+      {/if}
+      <p class="calm small">Guidance that never mentions this project, from <code class="ls-cmd">loadout share candidates --project {slug}</code>.</p>
       <div class="acts">
+        <CommandAction path="share promote" title="Move guidance into the workspace's global layer" label="Move it" />
         <CommandAction path="rules split" title="Split an oversized instruction file into scoped rules" preset={{ project: slug }} fixed={['project']} />
         <CommandAction path="style show" title="Read a coding style" preset={{ '--project': slug }} fixed={['--project']} label="Show" />
         <CommandAction path="style use" title="Choose the style this project uses" preset={{ '--project': slug }} fixed={['--project']} label="Use it" />
