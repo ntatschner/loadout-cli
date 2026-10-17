@@ -61,6 +61,7 @@
     { key: 'rules', label: 'Rules and coding styles' },
     { key: 'docs', label: 'Documents' },
     { key: 'health', label: 'Health' },
+    { key: 'voice', label: 'Your writing voice' },
     { key: 'handoff', label: 'Handing over' },
   ];
   const MODES = ['implement', 'advise', 'investigate', 'review'];
@@ -78,6 +79,9 @@
   let candidates = $state<{ path?: string; file?: string; reason?: string }[] | null>(null);
   let docs = $state<{ documents: number; findings: { path?: string; line?: number; message?: string; detail?: string }[] } | null>(null);
   let health = $state<{ audit: { checks: number; applicable: number; findings: { message?: string; detail?: string }[] }; validate: { specialists: number; errors: number; warnings: number; findings: { id?: string; message?: string }[] } } | null>(null);
+  let voice = $state<{ guide: { id: string; version: number; summary: string; reference: string }; layers: { layer: string; name: string; exists: boolean; rules: number }[]; rules: Record<string, unknown>[] } | null>(null);
+  let runs = $state<Record<string, unknown>[] | null>(null);
+  let guides = $state<{ reference: string; id: string; version: number; summary: string; ships: boolean }[] | null>(null);
   let problem = $state<string | null>(null);
 
   // #context/<project>/<section>, and #context/<project>/specialist/<id>.
@@ -142,6 +146,15 @@
         );
       } else if (where === 'docs') {
         docs = await readJson('docs audit', [project]);
+      } else if (where === 'voice') {
+        const [shown, ran, listed] = await Promise.all([
+          readJson<NonNullable<typeof voice>>('voice show', ['--project', project]),
+          readJson<{ runs: Record<string, unknown>[] }>('voice runs', ['--project', project]),
+          readJson<{ guides: NonNullable<typeof guides> }>('voice guide list'),
+        ]);
+        voice = shown;
+        runs = ran.runs;
+        guides = listed.guides;
       } else if (where === 'health') {
         const [audit, validate] = await Promise.all([
           readJson<{ checks: number; applicable: number; findings: { message?: string; detail?: string }[] }>('instructions audit', ['--project', project]),
@@ -338,6 +351,39 @@
         <CommandAction path="instructions stats" title="Which specialists launches actually reached" preset={{ '--project': slug }} fixed={['--project']} label="Show" />
         <CommandAction path="instructions probe" title="How often sessions did what a specialist asks" />
       </div>
+    {:else if section === 'voice'}
+      <h2 class="topicname">Your writing voice</h2>
+      <p class="calm">How you write, learned from your own writing and checked against it. The rules in force are rendered into the style specialist your sessions load.</p>
+      {#if voice}
+        <dl class="facts">
+          <dt>Guide</dt><dd>{voice.guide.reference} · {voice.guide.summary}</dd>
+          <dt>Layers</dt><dd>{voice.layers.map((one) => `${one.name}: ${one.exists ? `${one.rules} rule${one.rules === 1 ? '' : 's'}` : 'not learned yet'}`).join(' · ')}</dd>
+        </dl>
+        {#if voice.rules.length}
+          <ul class="plain">
+            {#each voice.rules as rule, index (index)}
+              <li>{Object.values(rule).filter((value) => typeof value === 'string').slice(0, 3).join(' · ')}</li>
+            {/each}
+          </ul>
+        {/if}
+        <p class="calm small">From <code class="ls-cmd">loadout voice show --project {slug}</code>.</p>
+        {#if runs?.length}
+          <p class="calm">{runs.length} learn run{runs.length === 1 ? '' : 's'} so far, as <code class="ls-cmd">loadout voice runs</code> lists them.</p>
+        {/if}
+        {#if guides}
+          <p class="calm small">Guides here: {guides.map((one) => `${one.reference}${one.ships ? '' : ' (yours)'}`).join(', ')}, from <code class="ls-cmd">loadout voice guide list</code>.</p>
+        {/if}
+      {:else}
+        <p class="calm" role="status">Reading…</p>
+      {/if}
+      <div class="acts">
+        <CommandAction path="voice check" title="Check a message or a file against it" preset={{ '--project': slug }} fixed={['--project']} label="Check it" open />
+        <CommandAction path="voice mark" title="Mark writing as yours, so learning counts it" preset={{ '--project': slug }} fixed={['--project']} label="Mark it" />
+        <CommandAction path="voice render" title="Render it into the style specialist sessions load" preset={{ '--project': slug }} fixed={['--project']} label="Render it" />
+        <CommandAction path="voice runs" title="Past learn runs, with what each cost" preset={{ '--project': slug }} fixed={['--project']} label="Show" />
+        <CommandAction path="voice guide show" title="A guide's sources, checks and thresholds" label="Show" />
+      </div>
+      <p class="calm small">Learning a voice and drafting a guide ask you about each rule as they go, so they run in a terminal: <code class="ls-cmd">loadout voice learn</code> and <code class="ls-cmd">loadout voice guide draft</code>.</p>
     {:else if section === 'handoff'}
       <h2 class="topicname">Handing over</h2>
       <p class="calm">A handoff is a note the next session reads first: what this one worked out, so it does not have to again.</p>

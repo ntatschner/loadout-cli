@@ -57,6 +57,8 @@
   let schedules = $state<{ name: string; team: string; goal: string; next?: string; every?: string }[] | null>(null);
   let bin = $state<{ keptDays: number; entries: { name: string; kind: string; removed: string; left?: string }[] } | null>(null);
   let wiring = $state<{ notify: { enabled: boolean; where: string; chat: string }; webhook: { enabled: boolean; teams: string[]; listen: string }; attach: { set: boolean; minutes: number } } | null>(null);
+  let tools = $state<{ name: string; kind: string; summary: string; lifecycle: string; active?: string; capabilities: string[] }[] | null>(null);
+  let toolHealth = $state<{ name?: string; tool?: string; [key: string]: unknown }[] | null>(null);
   let remedyTeam = $state('');
   let remedies = $state<{ name: string; summary?: string; trusted?: boolean }[] | null>(null);
   let problem = $state<string | null>(null);
@@ -94,6 +96,9 @@
         team = await readJson<Shown>('team show', [name]);
       } else if (where === 'schedules') {
         schedules = (await readJson<{ schedules: typeof schedules & object }>('team schedule list')).schedules;
+      } else if (where === 'tools') {
+        tools = (await readJson<{ tools: NonNullable<typeof tools> }>('tools search', ['--all'])).tools;
+        readJson<{ tools: NonNullable<typeof toolHealth> }>('tools health').then((read) => (toolHealth = read.tools), () => (toolHealth = null));
       } else if (where === 'bin') {
         bin = await readJson('team bin');
       } else if (where === 'wiring') {
@@ -184,6 +189,7 @@
     { key: 'start', label: 'Start a run' },
     { key: 'schedules', label: 'Runs on a schedule' },
     { key: 'remedies', label: 'Remedies' },
+    { key: 'tools', label: 'Shared tools' },
     { key: 'bin', label: 'The bin' },
     { key: 'wiring', label: 'Calls for help and the webhook' },
   ];
@@ -374,6 +380,36 @@
         <CommandAction path="team remedy show" title="Read one" label="Show" />
         <CommandAction path="team remedy trust" title="Trust one" />
       </div>
+    {:else if place === 'tools'}
+      <h2 class="topicname">Shared tools</h2>
+      <p class="calm">Scripts every team on this machine can use, each with a manifest, versions and a record of how it has gone. Letting a remediator run one unattended is agreed in a terminal.</p>
+      {#if tools}
+        {#if tools.length}
+          <ul class="plain">
+            {#each tools as one (one.name)}
+              <li><span class="n">{one.name}</span> · {one.kind} · {one.lifecycle}{one.active ? ` ${one.active}` : ''} · {one.summary}</li>
+            {/each}
+          </ul>
+        {:else}
+          <p class="calm">No shared tools yet.</p>
+        {/if}
+        <p class="calm small">From <code class="ls-cmd">loadout tools search --all</code>{toolHealth ? ' and loadout tools health' : ''}.</p>
+      {:else}
+        <p class="calm" role="status">Reading…</p>
+      {/if}
+      <div class="acts">
+        <CommandAction path="tools show" title="One tool: its manifest, versions, usage and trust" label="Show" />
+        <CommandAction path="tools health" title="How the active ones are doing" label="Show" />
+        <CommandAction path="tools audit" title="The catalogue's log" label="Show" />
+        <CommandAction path="tools submit" title="Submit a tool, an idea, a bug or a lesson" label="Submit" />
+        <CommandAction path="tools used" title="Record a use of one" label="Record it" />
+        <CommandAction path="tools verify" title="Verify a draft against its known-good cases" label="Verify" />
+        <CommandAction path="tools promote" title="Promote a verified draft" label="Promote" />
+        <CommandAction path="tools deprecate" title="Deprecate one" label="Deprecate" />
+        <CommandAction path="tools retire" title="Retire one nobody uses" label="Retire" />
+        <CommandAction path="tools trust" title="Let a remediator run one" />
+      </div>
+      <p class="calm small">Agreeing to a draft's tests, <code class="ls-cmd">--agree</code>, is refused from here and made in a terminal.</p>
     {:else if place === 'bin'}
       <h2 class="topicname">The bin</h2>
       {#if bin}

@@ -199,6 +199,11 @@ splitting an oversized instruction file into rules, choosing a coding style,
 drafting or copying a specialist, finding where a type is declared, and writing a
 handoff for the next session.
 
+**Your writing voice** shows the voice learned from your own writing and the
+rules in force, checks a message or a file against it, and renders it into the
+style specialist your sessions load. Learning a voice asks you about each rule
+as it goes, so it runs in a terminal: `loadout voice learn`.
+
 ### 11. Steer a team run
 
 **Teams** lists the team runs on this machine, running ones first. Choose one to
@@ -211,7 +216,8 @@ it up again, open a pull request for what a node made, see the files it
 delivered, or forget it.
 
 **More** has the teams you can run, starting a run, runs on a schedule,
-remedies, the bin, and where a run's call for help goes. Trusting a remedy and
+remedies, the shared tools every team can use, the bin, and where a run's call
+for help goes. Trusting a remedy and
 setting the attach passphrase show their commands only, since both are made in a
 terminal.
 
