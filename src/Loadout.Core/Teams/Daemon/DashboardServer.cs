@@ -694,6 +694,12 @@ public sealed class DashboardServer : IDisposable
                 ? value.GetString()
                 : null;
 
+    /// <summary>One true-or-false out of a request body: true only when it says true.</summary>
+    private static bool Flag(JsonElement? body, string name) =>
+        body is { ValueKind: JsonValueKind.Object } given
+            && given.TryGetProperty(name, out var value)
+            && value.ValueKind == JsonValueKind.True;
+
     /// <summary>
     /// Splits <c>/api/runs/{id}/{verb}</c>, or says there is no verb.
     /// </summary>
@@ -782,7 +788,12 @@ public sealed class DashboardServer : IDisposable
             Text(asked, "room"),
             Text(asked, "node"),
             Text(asked, "instead"),
-            Text(asked, "budget"));
+            Text(asked, "budget"),
+
+            // A flag rather than an answer, because "Think again" is not one
+            // of the lead's options and the page should not have to know the
+            // words the runner listens for.
+            Flag(asked, "thinkAgain"));
 
         var done = await Act(action, ct).ConfigureAwait(false);
 

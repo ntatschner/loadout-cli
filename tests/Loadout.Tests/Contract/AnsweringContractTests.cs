@@ -44,7 +44,7 @@ public sealed class AnsweringContractTests
     /// Writes a run that is waiting on a lead's question, and optionally one
     /// that gave up waiting and finished.
     /// </summary>
-    private static async Task<string> RunAsync(LoadoutProcess loadout, bool finished)
+    private static async Task<string> RunAsync(LoadoutProcess loadout, bool finished, string kind = "question")
     {
         var directory = Path.Combine(await StateAsync(loadout), "teams", "runs", Run);
 
@@ -62,7 +62,7 @@ public sealed class AnsweringContractTests
                 Tool = "",
                 Target = (string?)null,
                 At = asked,
-                Kind = "question",
+                Kind = kind,
                 Asked = "When a member's retention gift expires, what happens to their events?",
                 Options = new[] { "Ratchet", "Permanent", "Full revert", "Stop the run" },
                 Until = asked.AddHours(1),
@@ -155,6 +155,66 @@ public sealed class AnsweringContractTests
             await File.ReadAllTextAsync(Path.Combine(directory, "answer-gate-b4302e02.json"))).RootElement;
 
         answer.GetProperty("Chosen").GetString().Should().Be("Think again");
+    }
+
+    /// <summary>
+    /// The readings are the lead's too, and go back the same way now they are
+    /// asked as their own kind.
+    /// </summary>
+    [BuiltCliFact]
+    public async Task Readings_can_be_sent_back_to_the_lead_to_think_again()
+    {
+        using var loadout = new LoadoutProcess();
+
+        var directory = await RunAsync(loadout, finished: false, kind: "readings");
+
+        var run = await loadout.RunAsync("team", "gate", Run, "--gate", "gate-b4302e02", "--think-again");
+
+        run.ExitCode.Should().Be(0, run.StandardOutput + run.StandardError);
+
+        var answer = JsonDocument.Parse(
+            await File.ReadAllTextAsync(Path.Combine(directory, "answer-gate-b4302e02.json"))).RootElement;
+
+        answer.GetProperty("Chosen").GetString().Should().Be("Think again");
+    }
+
+    /// <summary>
+    /// The budget is the run's question and not the lead's: there is nobody
+    /// to send it back to.
+    /// </summary>
+    [BuiltCliFact]
+    public async Task The_budget_cannot_be_sent_back_to_think_again()
+    {
+        using var loadout = new LoadoutProcess();
+
+        var directory = await RunAsync(loadout, finished: false, kind: "budget");
+
+        var run = await loadout.RunAsync("team", "gate", Run, "--gate", "gate-b4302e02", "--think-again");
+
+        run.ExitCode.Should().NotBe(0);
+        File.Exists(Path.Combine(directory, "answer-gate-b4302e02.json")).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// A figure of somebody's own is an answer to the budget, as any words
+    /// are to a question, and not a refusal for failing to be "yes".
+    /// </summary>
+    [BuiltCliFact]
+    public async Task A_figure_for_the_budget_is_an_answer_rather_than_a_refusal()
+    {
+        using var loadout = new LoadoutProcess();
+
+        var directory = await RunAsync(loadout, finished: false, kind: "budget");
+
+        var run = await loadout.RunAsync("team", "gate", Run, "--gate", "gate-b4302e02", "--answer", "60");
+
+        run.ExitCode.Should().Be(0, run.StandardOutput + run.StandardError);
+
+        var answer = JsonDocument.Parse(
+            await File.ReadAllTextAsync(Path.Combine(directory, "answer-gate-b4302e02.json"))).RootElement;
+
+        answer.GetProperty("Allowed").GetBoolean().Should().BeTrue();
+        answer.GetProperty("Chosen").GetString().Should().Be("60");
     }
 
     [BuiltCliFact]

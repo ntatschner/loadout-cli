@@ -1591,6 +1591,68 @@ public sealed class DashboardServerTests : IAsyncLifetime
         asked.Gate.Should().Be("g1");
         asked.Answer.Should().Be("yes");
         asked.Reason.Should().Be("it needs the suite");
+        asked.ThinkAgain.Should().BeFalse("nobody asked for it");
+    }
+
+    /// <remarks>
+    /// A field the page sends and the server never reads arrives as nothing,
+    /// and the page reports success: sending a question back must reach the
+    /// command as sending it back, not as an answer of "no".
+    /// </remarks>
+    [Fact]
+    public async Task Think_again_from_the_page_reaches_the_command_as_think_again()
+    {
+        RunAction? asked = null;
+
+        _server.Act = (action, _) =>
+        {
+            asked = action;
+
+            return Task.FromResult(OperationResult.Ok());
+        };
+
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/runs/20260917-1116-ed59/gate?token=" + _server.Token),
+            new StringContent("{\"gate\":\"gate-5e1d9a20\",\"thinkAgain\":true}", System.Text.Encoding.UTF8, "application/json"));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.Accepted);
+        asked!.ThinkAgain.Should().BeTrue();
+
+        var (command, arguments) = Loadout.Cli.Commands.DashboardActions.Maps(asked);
+
+        string.Join(' ', new[] { command }.Concat(arguments)).Should().Be(
+            "team gate 20260917-1116-ed59 --gate gate-5e1d9a20 --think-again --by dashboard");
+    }
+
+    /// <remarks>
+    /// Every kind a run writes reaches the list the page reads, as written,
+    /// because the page draws a different Gate for each.
+    /// </remarks>
+    [Fact]
+    public async Task Every_kind_of_stop_reaches_the_page_as_its_own_kind()
+    {
+        var root = Papers();
+        var run = Path.Combine(root, "20260916-1200-aaaa");
+        var kinds = new[]
+        {
+            GateKind.Question, GateKind.Readings, GateKind.Budget, GateKind.Brief, GateKind.DoneWhen,
+            GateKind.Confirm, GateKind.Merge, GateKind.Permission, GateKind.Remedy,
+        };
+
+        var at = DateTimeOffset.UtcNow;
+
+        foreach (var (kind, index) in kinds.Select((kind, index) => (kind, index)))
+        {
+            (await NodePermissions.PutAsync(run, new PendingAsk(
+                $"gate-{index}", "lead", "the lead", string.Empty, null, at.AddSeconds(index), kind, "Asked?")))
+                .Should().BeTrue();
+        }
+
+        var json = JsonDocument.Parse(await (await GetAsync("/api/runs")).Content.ReadAsStringAsync());
+
+        json.RootElement.GetProperty("runs")[0].GetProperty("gates").EnumerateArray()
+            .Select(gate => gate.GetProperty("kind").GetString())
+            .Should().Equal(kinds);
     }
 
     [Fact]
@@ -3105,7 +3167,7 @@ public sealed class DashboardServerTests : IAsyncLifetime
 
             return read.Failed
                 ? OperationResult<RunSummary>.Fail(read.Error!)
-                : OperationResult<RunSummary>.Ok(RunJournal.Fold(runId, "C:/runs/" + runId, read.Value!));
+                : OperationResult<RunSummary>.Ok(RunJournal.Fold(runId, DirectoryOf(runId), read.Value!));
         }
 
         /// <summary>Where the run's papers are, when a test has written some.</summary>

@@ -21,10 +21,19 @@ internal sealed class DecideStep
     /// Every question's answer, saying who gave it; or null where one went
     /// unanswered and the run stops there.
     /// </summary>
+    public Task<IReadOnlyList<(string Question, string Answer, string By)>?> RunAsync(
+        RunContext run,
+        JournalWriter journal,
+        IReadOnlyList<ReportQuestion> questions,
+        CancellationToken ct) =>
+        RunAsync(run, journal, questions, GateKind.Question, ct);
+
+    /// <summary>The same, for questions of another kind: the runner's own readings question.</summary>
     public async Task<IReadOnlyList<(string Question, string Answer, string By)>?> RunAsync(
         RunContext run,
         JournalWriter journal,
         IReadOnlyList<ReportQuestion> questions,
+        string kind,
         CancellationToken ct)
     {
         var (autonomy, console, directory, takeRecommendationAfter) =
@@ -57,7 +66,7 @@ internal sealed class DecideStep
                 var sendBack = TeamTimeout.SendsBack(run.OnTimeout, run.SentBackByTimer.Contains(key));
 
                 (answer, timed) = await DecideOrTakeAsync(
-                    console, question, directory, wait, sendBack ? TeamRunner.ThinkAgain : question.Recommendation, ct).ConfigureAwait(false);
+                    console, question, kind, directory, wait, sendBack ? TeamRunner.ThinkAgain : question.Recommendation, ct).ConfigureAwait(false);
 
                 if (timed && sendBack)
                 {
@@ -76,7 +85,7 @@ internal sealed class DecideStep
             }
             else
             {
-                answer = await console.DecideAsync(question, ct).ConfigureAwait(false);
+                answer = await console.DecideAsync(question, kind, null, ct).ConfigureAwait(false);
             }
 
             var rethink = string.Equals(answer, TeamRunner.ThinkAgain, StringComparison.Ordinal);
@@ -150,6 +159,7 @@ internal sealed class DecideStep
     private async Task<(string? Answer, bool Timed)> DecideOrTakeAsync(
         ITeamConsole console,
         ReportQuestion question,
+        string kind,
         string directory,
         TimeSpan wait,
         string chosen,
@@ -163,6 +173,7 @@ internal sealed class DecideStep
         // than to the run giving up, which is later and not what will happen.
         var asking = console.DecideAsync(
             question,
+            kind,
             new QuestionTimer(
                 _time.GetUtcNow() + wait,
                 sentBack ? QuestionTimer.SendsBack : QuestionTimer.TakesRecommendation),
@@ -185,7 +196,10 @@ internal sealed class DecideStep
         while (!asking.IsCompleted)
         {
             var pending = NodePermissions.Pending(directory).FirstOrDefault(one =>
-                one.Kind == "question" && string.Equals(one.Asked, question.Question, StringComparison.Ordinal));
+                // The kind it went out as: the readings are timed like the
+                // lead's own, and looking for "question" alone would never
+                // find them, leaving the run waiting on a person.
+                one.Kind == kind && string.Equals(one.Asked, question.Question, StringComparison.Ordinal));
 
             if (pending is not null)
             {

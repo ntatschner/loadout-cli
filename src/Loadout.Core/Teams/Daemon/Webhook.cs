@@ -268,6 +268,10 @@ public sealed record ChoosableDoneWhen(string Text, IReadOnlyList<string> Teams)
 /// <param name="Node">Whose work, for anything about one node.</param>
 /// <param name="Instead">For a brief offered for changing: the one to send.</param>
 /// <param name="Budget">What the run may spend in all, in USD, for a budget change.</param>
+/// <param name="ThinkAgain">
+/// For a lead's question or its readings: choose none of it and send it back
+/// to the lead, which is <c>team gate --think-again</c>.
+/// </param>
 /// <remarks>
 /// One shape for all five because they all end the same way: the daemon runs
 /// the command somebody would have typed. Nothing here decides what any of
@@ -283,7 +287,8 @@ public sealed record RunAction(
     string? Room = null,
     string? Node = null,
     string? Instead = null,
-    string? Budget = null);
+    string? Budget = null,
+    bool ThinkAgain = false);
 
 /// <summary>
 /// Letting something outside this machine start a run.

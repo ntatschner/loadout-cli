@@ -86,7 +86,7 @@ internal sealed class BriefRequestsStep
 
         if (!run.ReadingsAccepted && run.Asking && requests.Count > 0 && run.LastReadings is { Count: > 0 })
         {
-            var decided = await _decide.RunAsync(run, journal, [TeamRunner.ReadingsQuestion(run.LastReadings)], ct)
+            var decided = await _decide.RunAsync(run, journal, [TeamRunner.ReadingsQuestion(run.LastReadings)], GateKind.Readings, ct)
                 .ConfigureAwait(false);
 
             if (decided is null)
@@ -173,7 +173,7 @@ internal sealed class BriefRequestsStep
             if (autonomy == "manual")
             {
                 var revised = await console
-                    .ReviseAsync($"Brief {ask.Node} ({node.Role})", task, ct)
+                    .ReviseAsync($"Brief {ask.Node} ({node.Role})", task, GateKind.Brief, ct)
                     .ConfigureAwait(false);
 
                 if (revised is null)

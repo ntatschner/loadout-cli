@@ -121,6 +121,78 @@ public sealed record RemedyStanding(
     }
 }
 
+/// <summary>
+/// The kinds of stop a run writes down, each a word in <see cref="PendingAsk.Kind"/>.
+/// </summary>
+/// <remarks>
+/// <para>
+/// One word per thing a page draws differently. Readings, the budget, the
+/// proposed done-when and a merge used to share a word with something else -
+/// the first two were "question", the third "brief" and the last "confirm" -
+/// so a page could only tell them apart by reading the sentence, which
+/// changes whenever somebody rewords it. Whoever asks says which, through the
+/// console, rather than leaving it to be guessed from the words.
+/// </para>
+/// <para>
+/// Anything that does not know a word still has the options the stop
+/// carries, or yes and no where it carries none, which is what every page
+/// did before there were more than three.
+/// </para>
+/// </remarks>
+public static class GateKind
+{
+    /// <summary>A decision the lead may not make, with its options.</summary>
+    public const string Question = "question";
+
+    /// <summary>Whether the lead has understood the done-when, before any worker starts.</summary>
+    public const string Readings = "readings";
+
+    /// <summary>Whether a run that has spent its budget may have more, and how much.</summary>
+    public const string Budget = "budget";
+
+    /// <summary>A worker's brief, offered for changing before it goes.</summary>
+    public const string Brief = "brief";
+
+    /// <summary>The criteria the lead proposed the run be judged on, offered for changing.</summary>
+    public const string DoneWhen = "done-when";
+
+    /// <summary>A step a manual run holds, answered yes or no.</summary>
+    public const string Confirm = "confirm";
+
+    /// <summary>
+    /// Whether a node's branch may be merged, answered yes or no. Unlike a
+    /// confirm, a no leaves the branch where it is and the run carries on.
+    /// </summary>
+    public const string Merge = "merge";
+
+    /// <summary>A node asking to make a call its role does not cover.</summary>
+    public const string Permission = "permission";
+
+    /// <summary>A node asking to run one of its team's remedies.</summary>
+    public const string Remedy = "remedy";
+
+    /// <summary>
+    /// Whether whatever is said is the answer, rather than a yes or a no.
+    /// </summary>
+    /// <remarks>
+    /// The three a person chooses from, or answers in their own words: a
+    /// figure for the budget is a real answer, and reading it as a refusal
+    /// because it is not "yes" would end the run somebody meant to carry on.
+    /// </remarks>
+    public static bool Chooses(string? kind) => kind is Question or Readings or Budget;
+
+    /// <summary>
+    /// Whether the stop can be sent back to the lead to think again.
+    /// </summary>
+    /// <remarks>
+    /// Only the lead's own question and its readings: they are what the lead
+    /// wrote and can write again. The budget is the run's question, not the
+    /// lead's, and a permission or a confirm is yes or no - "think again"
+    /// there would read as a yes to a question nobody answered.
+    /// </remarks>
+    public static bool ThinksAgain(string? kind) => kind is Question or Readings;
+}
+
 /// <summary>When a run will answer one of its questions itself, and how.</summary>
 /// <param name="At">The moment it answers, if nobody has first.</param>
 /// <param name="Does">
@@ -146,8 +218,10 @@ public sealed record QuestionTimer(DateTimeOffset At, string Does)
 /// <param name="Target">The one thing the call is pointed at, where there is one.</param>
 /// <param name="At">When it asked.</param>
 /// <param name="Kind">
+/// What sort of stop this is, as <see cref="GateKind"/> lists them:
 /// <c>permission</c> for a call no rule covers, <c>confirm</c> for a step a
-/// manual run holds, <c>question</c> for a decision a lead may not make.
+/// manual run holds, <c>question</c> for a decision a lead may not make, and
+/// the rest for the run's own questions a page draws differently.
 /// </param>
 /// <param name="Asked">
 /// The question in the run's own words, for the kinds that have one. A
