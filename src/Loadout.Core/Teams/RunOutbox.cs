@@ -229,7 +229,7 @@ public sealed class RunOutbox : IRunOutbox
 
     /// <summary>
     /// Where the run was working, from the first node launched without a
-    /// worktree of its own.
+    /// worktree of its own, or else the path the run said it started on.
     /// </summary>
     private static string? Repository(IReadOnlyList<RunEvent> events)
     {
@@ -254,6 +254,12 @@ public sealed class RunOutbox : IRunOutbox
             }
         }
 
-        return null;
+        // A run now records the path it works on when it starts, which a
+        // lead launched with no directory of its own does not say: a manual
+        // run whose implementer and reviewer each had a worktree named the
+        // repository nowhere else, and its outbox listed nothing.
+        return events.FirstOrDefault(one => string.Equals(one.Kind, "run.started", StringComparison.Ordinal))?.Text("path") is { Length: > 0 } path
+            ? path
+            : null;
     }
 }
