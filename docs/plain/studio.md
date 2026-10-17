@@ -83,6 +83,25 @@ Sometimes a team of agents stops to ask you a question. You'll see it under
 Each answer has a button. Under each button is the command it runs, in case
 you'd rather type it.
 
+On the *Teams* page, **Needs you** lists every reason a team wants you. Each one
+goes away by itself once it's dealt with.
+
+Some questions have a box. If a team is about to give an agent its
+instructions, you can change them in the box before they're sent.
+
+## A team's run
+
+Choose a run on the *Teams* page to see it. Press **1** to **5** to see:
+
+1. what it said
+2. what it cost
+3. the instructions each agent was given, and what it said back
+4. what it changed in the code
+5. the files it made, which you can read and download
+
+Nothing on that page can be changed by accident: anything that changes
+something asks you first, or shows you the command it runs.
+
 ## Make it easier to read
 
 Go to **Settings**, then **Appearance**. You can choose:

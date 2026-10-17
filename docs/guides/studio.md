@@ -242,20 +242,67 @@ as it goes, so it opens in a terminal here.
 
 ### 11. Steer a team run
 
-**Teams** lists the team runs on this machine, running ones first. Choose one to
-see where it stands: what it's waiting on, answered there with the command each
-answer runs; what it's met of its *done when*; who is on it, with their turns and
-what they've cost; and the last lines of its journal. While it runs you can say
-something to the lead or to one node, change what it may spend, hold it, let it
-carry on or stop it, or answer it in your own words. Once it's ended you can pick
-it up again, open a pull request for what a node made, see the files it
-delivered, or forget it.
+**Teams** opens on everything a run wants of you, under **Needs you**. A run
+lands there when it asks something, when its lead takes a round without asking
+for anything, when a node goes quiet for three times its usual turn, or when its
+budget is spent or projected to be. Each reason clears itself: nothing is
+dismissed by hand. A question is answered where it's shown, and each kind has
+its own answers:
 
-**More** has the teams you can run, starting a run, runs on a schedule,
-remedies, the shared tools every team can use, the bin, and where a run's call
-for help goes. Trusting a remedy and
-setting the attach passphrase show their commands only, since both are made in a
-terminal.
+- **The lead's question**: its options, the one it recommends drawn solid, and
+  **Think again**, which sends it back to the lead.
+- **Its readings** of your done-when, before any worker starts: accept them, or
+  send them back.
+- **A brief**, in a manual run: in a box you can change before it goes. Change
+  it and the button says **Send your brief**, and the command gains
+  `--instead`.
+- **The proposed done-when**: one criterion per line, in a box.
+- **A confirmation or a permission**: yes or no.
+- **Its budget**: raise it, take the cap off, or type a figure.
+
+Under each answer is the `loadout team gate` command it runs.
+
+Below that are the runs going, each with **Hold after this round**, **Let it
+carry on** and **Stop after this round**, and the ones that ended, with **Run it
+again** (which opens Start a run filled in, and starts nothing), **Pick it up
+where it stopped** and **Forget it**. Then the teams you can run, and the runs on
+a schedule, with whether the daemon will fire them.
+
+**Start a run**, **Make a team** and **Run one on a schedule** open a sheet that
+writes its command under the form as you fill it in. Start a run asks once more,
+naming the team and the goal, because it spends money and edits a project. A
+schedule can't be manual, and can't repeat faster than every five minutes.
+
+Choose a run to open its page: its shape (the lead's line, with the nodes each
+round briefed hanging from it), what it will be judged on, who is on it, its
+spend, a box to say something to the lead, and what you can do to it. Below
+are five depths, on keys **1** to **5**:
+
+1. **What it said**: the journal as it's written, or one node's stream.
+   Typing at a live node needs the attach passphrase as well as your sign-in;
+   it's swapped for a grant that lasts 30 minutes and lives only in the page.
+2. **What it cost**: what it's costing, where that's projected to end, where
+   the time went and what went wrong.
+3. **The papers**: each brief beside the report it got back.
+4. **What it changed**: each node's patch, with **Open a pull request**. That
+   asks first, and offers **Say what it would do**, which runs it with
+   `--dry-run`.
+5. **What it delivered**: the run's files in a tree, by node and commit or by
+   folder, beside a viewer that shows Markdown rendered, code with line
+   numbers, a CSV as a table and an image as itself. **The change** shows the
+   file's part of its node's patch. **Download**, **Download all** and **Copy
+   path** read only, so they show no command; each file shows the terminal line
+   that reads it instead. Lines that look like credentials are taken out before
+   a file is shown, and you're told how many.
+
+A team's page has its nodes, what a run of it follows, its runs here, and how
+its roles have been doing, read only when you open it. **The bin** puts runs and
+teams back, empties for good after naming what goes, and clears out old runs,
+saying which as a sentence first. **Remedies** answers a remedy's requests;
+trusting a remedy is a standing agreement, so the page shows the command for a
+terminal instead. So does setting or clearing the attach passphrase, since the
+page can't set the passphrase that guards it. Naming a run's room stays on the
+classic dashboard, which is the one that draws the office.
 
 ### 12. Shape an idea
 

@@ -174,6 +174,13 @@ gives the keyboard back to the page. The terminal's sixteen colours meet 4.5:1
 in every theme and 7:1 in the high-contrast ones, and an agent's own colours
 are lifted to the same floor. What the session needs is said in words under the
 screen, and announced once. The cursor blinks only with motion at full.
+
+On the Teams page, a run's five depths are tabs on keys **1** to **5**; those
+keys do nothing while you're typing, in a dialog or in a terminal, or when
+single-letter shortcuts are off. The files a run delivered are a tree: the
+arrow keys move and fold, **Home** and **End** jump, and **Enter** opens a file.
+Spend past a budget is said in words with an edge beside it, never in colour
+alone.
 [Using Studio](studio.md) covers the rest.
 
 ### 9. Turn on speech, only if you want it
