@@ -322,3 +322,7 @@ well as the page. On **Commands**, only commands that just read run, and
   address instead.
 - **A session has gone** — the daemon restarted. Sessions don't survive that;
   `loadout resume --last` carries the conversation on in a terminal.
+- **Anything else** — **Report a problem**, at the foot of the rail, opens
+  Studio's bug form on GitHub with the version and platform filled in. It sends
+  nothing on its own; paste `loadout doctor` into the form if you can. Studio is
+  a preview, and these reports decide when it becomes the default.
