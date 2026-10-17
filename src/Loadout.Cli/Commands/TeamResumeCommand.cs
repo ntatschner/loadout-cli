@@ -160,7 +160,8 @@ public sealed class TeamResumeCommand : AsyncCommand<TeamResumeCommand.Settings>
 
         var autonomy = (settings.Autonomy ?? summary.Autonomy).Trim().ToLowerInvariant();
 
-        if (autonomy == "manual" && !settings.AllowsPrompting && !settings.DryRun)
+        // As for a new run: with a daemon serving the dashboard, the page holds the gates.
+        if (autonomy == "manual" && !settings.AllowsPrompting && !settings.DryRun && !TeamRunCommand.Serving(_paths, _processes))
         {
             return output.Fail(
                 "Manual mode asks a person at every step, and nobody can answer here. "
