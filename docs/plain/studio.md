@@ -37,7 +37,9 @@ If Studio ever says *This browser isn't signed in*, do step 2 again.
 ## Find your way round
 
 The icons down the left side are the pages. *Home* shows everything that's
-happening. *Sessions* shows your AI sessions. *Ideas* is where you answer an AI's questions about
+happening. *Sessions* shows your AI sessions. *Teams* shows groups of AI agents working
+together, and lets you answer when they stop to ask you something. *Ideas* is
+where you answer an AI's questions about
 something you want to build, and pick from its plan. *Projects* shows the
 folders of code Loadout knows about, and whether anything about them needs fixing. *Commands* lets you run anything
 Loadout can do: pick it, fill in the boxes, and press **Run**. It shows you the
