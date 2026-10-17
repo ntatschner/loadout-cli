@@ -147,7 +147,23 @@ The two things kept in the browser are the single-letter shortcuts (**A** for
 Ambient, **N** for a new session) and whether Ambient fills the screen. They're
 about the keyboard and screen in front of you, not about how you read.
 
-### 8. Shape an idea
+### 8. Steer a team run
+
+**Teams** lists the team runs on this machine, running ones first. Choose one to
+see where it stands: what it's waiting on, answered there with the command each
+answer runs; what it's met of its *done when*; who is on it, with their turns and
+what they've cost; and the last lines of its journal. While it runs you can say
+something to the lead or to one node, change what it may spend, hold it, let it
+carry on or stop it, or answer it in your own words. Once it's ended you can pick
+it up again, open a pull request for what a node made, see the files it
+delivered, or forget it.
+
+**More** has the teams you can run, starting a run, runs on a schedule,
+remedies, the bin, and where a run's call for help goes. Trusting a remedy and
+setting the attach passphrase show their commands only, since both are made in a
+terminal.
+
+### 9. Shape an idea
 
 **Ideas** lists every idea being shaped, by project, and marks the ones with
 questions waiting for you. Choose one and answer its questions in the page:
@@ -166,7 +182,7 @@ project.
 agent split them into ideas and tasks. Nothing is recorded until you apply the
 pieces.
 
-### 9. Look after your projects
+### 10. Look after your projects
 
 **Projects** lists the projects this machine knows. Choose one to see where it
 is, its branch, its agent and how often it's been launched, its working trees,
@@ -181,7 +197,7 @@ read again once it finishes.
 finding repositories and stray memory, and the workspace, where you can bring in
 what other machines saved and save and push what changed here.
 
-### 10. Run anything else from Commands
+### 11. Run anything else from Commands
 
 **Commands** lists every command Loadout has, folded by area. Choose one and
 Studio builds a form from the command's own options, so it can't offer one the
@@ -200,7 +216,7 @@ for the value at a masked prompt), the attach passphrase, trusting a tool or a
 remedy, `update`, and the commands that are themselves a server or a status
 line. Starting a session sends you to **Sessions**, where Studio hosts it.
 
-### 11. Ambient
+### 12. Ambient
 
 On Home, **A** or **Ambient** turns Studio into something for a spare screen:
 the key numbers, the halo on whatever most needs you, and everything else

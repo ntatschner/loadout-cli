@@ -7,7 +7,6 @@
   let { page }: { page: string } = $props();
 
   const PAGES: Record<string, [string, string, string, boolean]> = {
-    teams: ['Teams', '$ loadout team runs', 'Teams and their runs, with the office.', true],
     context: ['Context', '$ loadout instructions explain', 'What a session reads before it starts, and what it costs in tokens.', false],
     spend: ['Spend', '$ loadout usage', 'Tokens used, by day, project and model.', false],
   };
