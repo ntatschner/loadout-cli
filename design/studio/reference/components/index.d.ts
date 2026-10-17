@@ -305,3 +305,30 @@ export declare function CodeView(text: string, lang?: string, limit?: number): H
 /** A CSV or TSV as a table, numbers right-aligned. */
 export declare function CsvTable(text: string, sep?: string): HTMLElement;
 export declare function fileKind(path: string): "markdown" | "csv" | "json" | "image" | "text" | "code" | "binary";
+
+/* ---------- Modes ---------- */
+
+export type StudioMode = "default" | "terminals" | "teams" | "minimal";
+export declare const MODES: { key: StudioMode; name: string; desc: string; icon: string }[];
+/** Run a change of layout as one animated step: a view transition where there is one, a rise-in otherwise, a fade under reduced motion, nothing under none. */
+export declare function morph(apply: () => void, o?: { noVT?: boolean; target?: HTMLElement }): ViewTransition | null;
+/** Four modes as radios, with a light that travels to the one picked. Arrow keys move; Ctrl+Shift+M (bound by the app) cycles. */
+export declare function ModeSwitcher(o: { mode: StudioMode; onChange?: (m: StudioMode) => void; compact?: boolean; vertical?: boolean; label?: string }): { el: HTMLElement; set: (m: StudioMode) => void; readonly mode: StudioMode };
+/** The bar at the top of every mode: the switcher, search, and whatever is waiting on you. */
+export declare function ModeBar(o: { mode: StudioMode; onMode?: (m: StudioMode) => void; compact?: boolean; onSearch?: () => void; waiting?: { label: string; [k: string]: unknown }[]; onWaiting?: (w: unknown) => void }): { el: HTMLElement; switcher: ReturnType<typeof ModeSwitcher> };
+
+export interface DeckSession { id: string; title: string; word: string; where?: string; agent?: string; unread?: boolean }
+/** Every session as a tab with its state, Ctrl+Alt+n on the first nine, and a new-output dot. */
+export declare function SessionTabs(o: { sessions: DeckSession[]; current?: string; controls?: string; onPick?: (id: string) => void; onMaximise?: (id: string) => void; onNew?: () => void; label?: string }): HTMLElement;
+/** Terminal Focus: tabs over one, two or four panes of Terminal, a find bar, and the keys. The deck makes no terminals itself: terminal(id) does. */
+export declare function TermDeck(o: { sessions: DeckSession[]; current?: string; layout?: 1 | 2 | 4; terminal: (id: string) => ReturnType<typeof Terminal>; onPick?: (id: string) => void; onLayout?: (n: number) => void; onNew?: () => void; onShown?: (ids: string[], terms: Record<string, ReturnType<typeof Terminal>>) => void }): { el: HTMLElement; pick: (id: string, focus?: boolean) => void; setLayout: (n: 1 | 2 | 4) => void; terminal: (id: string) => ReturnType<typeof Terminal> | undefined; update: (sessions: DeckSession[]) => void; readonly current: string; readonly layout: number };
+
+export interface BoardRun { id: string; goal: string; team: string; project?: string; word: string; round: number; rounds: { word: string; nodes?: [string, string][] }[]; spent?: number; cap?: number | null; projected?: number; gate?: GateOptions }
+/** A run's rounds as a small line, for a board row. Decoration: the row's words say the same. */
+export declare function MiniLine(rounds: BoardRun["rounds"], ended: boolean, running: boolean): HTMLElement;
+/** Team Focus: every run as a line, the one that needs you first, teams along the top. */
+export declare function RunBoard(o: { runs: BoardRun[]; teams?: { name: string; word?: string; fact?: string }[]; team?: string; picked?: string; onPick?: (id: string) => void; onTeam?: (name: string) => void; label?: string }): HTMLElement;
+/** Minimal: one column of what is live, what needs you first with its question. */
+export declare function QuietList(o: { items: { id: string; kind?: string; title: string; word: string; where?: string; ask?: string }[]; onOpen?: (item: unknown, from: DOMRect) => void; label?: string }): HTMLElement;
+/** One thing, the whole screen, grown from the line it was opened from. Escape or Back gives the page back. */
+export declare function FocusFrame(o: { title: string; sub?: string; word?: string; content: Node; from?: DOMRect; closeLabel?: string; initialFocus?: string; host?: HTMLElement; onClose?: () => void }): { el: HTMLElement; close: () => void };

@@ -899,3 +899,205 @@ textarea.ls-text { min-height: 88px; resize: vertical; font-family: var(--font-m
   .ls-outbox:not(.reading) .view { display: none; }
   .ls-outbox .back { display: inline-flex; }
 }
+
+/* ---------- Modes: shared ---------- */
+.ls-modes, .ls-modebar, .ls-stabs, .ls-deck, .ls-board, .ls-quiet, .ls-focus {
+  --cg: color-mix(in srgb, var(--c, var(--accent)) calc(var(--glow-on) * var(--glow-strength)), transparent);
+  --cgf: color-mix(in srgb, var(--c, var(--accent)) calc(var(--glow-on) * 100%), transparent);
+  min-width: 0;
+}
+.ls-vh { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Switching mode: the page sinks and the new one rises; the rail and the mode bar travel on their own. */
+@keyframes lsModeOut { to { opacity: 0; transform: translateY(-8px) scale(.985); filter: blur(3px); } }
+@keyframes lsModeIn { from { opacity: 0; transform: translateY(12px) scale(1.012); filter: blur(4px); } }
+@keyframes lsFade { from { opacity: 0; } }
+::view-transition-old(root) { animation: lsModeOut .28s var(--ease-out) both; }
+::view-transition-new(root) { animation: lsModeIn .5s .06s var(--ease-out) both; }
+::view-transition-group(ls-rail), ::view-transition-group(ls-modebar), ::view-transition-group(ls-focus) { animation-duration: .55s; animation-timing-function: var(--ease-travel); }
+html[data-vt="fade"]::view-transition-old(root), html[data-vt="fade"]::view-transition-new(root) { animation: lsFade var(--dur-instant) both; filter: none; transform: none; }
+html[data-vt="fade"]::view-transition-old(root) { animation-direction: reverse; }
+html[data-vt="fade"]::view-transition-group(*) { animation-duration: 0s; }
+.ls-enter { animation: lsModeIn .5s var(--ease-out) both; }
+.ls-enter-fade { animation: lsFade var(--dur-instant) both; }
+[data-motion="none"] .ls-enter, [data-motion="none"] .ls-enter-fade { animation: none; }
+@media (prefers-reduced-motion: reduce) { .ls-enter { animation: lsFade var(--dur-instant) both; } ::view-transition-old(root), ::view-transition-new(root) { animation: lsFade var(--dur-instant) both; filter: none; transform: none; } }
+
+/* ---------- ModeSwitcher: four modes, a light that travels to the one you pick ---------- */
+.ls-modes { --c: var(--accent); position: relative; display: inline-flex; gap: 2px; padding: 3px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--control-edge); }
+.ls-modes .light { position: absolute; left: 0; top: 3px; bottom: 3px; width: 0; pointer-events: none; background: var(--tint-picked-c); box-shadow: inset 0 -2px 0 var(--accent), 0 0 18px -4px var(--cgf); transition: transform var(--dur-travel) var(--ease-travel), width var(--dur-travel) var(--ease-travel); }
+.ls-modes .light::after { content: ""; position: absolute; left: 50%; bottom: -1px; width: 22px; height: 6px; margin-left: -11px; border-radius: 50%; background: var(--accent); filter: blur(4px); opacity: calc(var(--glow-on) * .9); }
+.ls-modes.moved .light { animation: lsLightLand .7s var(--ease-out); }
+@keyframes lsLightLand { 0% { filter: brightness(1); } 55% { filter: brightness(1.8); } 100% { filter: brightness(1); } }
+.ls-modes button { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 14px; border: 0; background: none; color: var(--muted); font: inherit; font-family: var(--font-sans); font-size: 12px; font-weight: 500; letter-spacing: .18em; text-transform: uppercase; white-space: nowrap; cursor: pointer; transition: color var(--dur-quick); }
+.ls-modes button svg { width: 18px; height: 18px; flex: none; transition: transform var(--dur-base) var(--ease-out); }
+.ls-modes button:hover { color: var(--ink-strong); }
+.ls-modes button:hover svg { transform: scale(1.12); }
+.ls-modes button[aria-checked="true"] { color: var(--ink-strong); text-shadow: 0 0 12px var(--cgf); }
+.ls-modes button[aria-checked="true"] svg { color: var(--accent); filter: drop-shadow(0 0 4px var(--cgf)); }
+.ls-modes button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ls-modes.compact button { padding: 0 10px; }
+.ls-modes.compact button .n { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.ls-modes.vertical { flex-direction: column; }
+.ls-modes.vertical .light { top: 0; left: 3px; right: 3px; bottom: auto; width: auto; height: 0; transition: transform var(--dur-travel) var(--ease-travel), height var(--dur-travel) var(--ease-travel); }
+[data-motion="reduced"] .ls-modes .light, [data-motion="none"] .ls-modes .light { transition: none; }
+[data-motion="reduced"] .ls-modes.moved .light, [data-motion="none"] .ls-modes.moved .light { animation: none; }
+@media (prefers-reduced-motion: reduce) { .ls-modes .light { transition: none !important; } .ls-modes.moved .light { animation: none !important; } }
+[data-theme="hc-dark"] .ls-modes button[aria-checked="true"], [data-theme="hc-light"] .ls-modes button[aria-checked="true"] { text-decoration: underline; text-underline-offset: 6px; }
+@media (max-width: 599px) { .ls-modes button { padding: 0 9px; } .ls-modes button .n { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } }
+
+/* ---------- ModeBar: the mode, and anything waiting on you, at the top of every mode ---------- */
+.ls-modebar { --c: var(--accent); display: flex; align-items: center; gap: 10px 18px; min-height: 52px; padding: 6px 0; view-transition-name: ls-modebar; }
+.ls-modebar .grow { flex: 1 1 auto; }
+.ls-modebar .waiting { position: relative; display: inline-flex; align-items: center; gap: 10px; min-height: 38px; padding: 0 14px 0 8px; border: 0; background: var(--surface); color: var(--needs-text); font: inherit; font-family: var(--font-sans); font-size: 13px; cursor: pointer; box-shadow: inset 3px 0 0 var(--needs), inset 0 0 0 1px var(--rule); }
+.ls-modebar .waiting:hover { background: var(--needs-wash); }
+.ls-modebar .waiting:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ls-modebar .waiting b { font-weight: 500; }
+.ls-modebar .waiting .ls-sig b { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.ls-modebar .calmword { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.ls-modebar .tool { display: inline-grid; place-items: center; min-width: 38px; min-height: 38px; border: 0; background: none; color: var(--ink-soft); cursor: pointer; box-shadow: inset 0 0 0 1px var(--control-edge); }
+.ls-modebar .tool:hover { color: var(--ink-strong); background: var(--tint-hover-c); }
+.ls-modebar .tool:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ls-modebar .tool svg { width: 18px; height: 18px; }
+.ls-modebar > .ls-modes, .ls-modebar > .waiting, .ls-modebar > .tool { flex: none; }
+@media (max-width: 599px) { .ls-modebar { gap: 8px; } .ls-modebar .ls-modes button { padding: 0 8px; } .ls-modebar .ls-modes button .n { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } .ls-modebar .waiting { padding: 0 10px 0 6px; } .ls-modebar .waiting .wl, .ls-modebar .waiting .wn, .ls-modebar .calmword { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } }
+@media (max-width: 419px) { .ls-modebar .tool { display: none; } }
+
+/* ---------- SessionTabs: every session as a tab, its state on it ---------- */
+.ls-stabs { --c: var(--accent); display: flex; align-items: stretch; min-width: 0; box-shadow: inset 0 -1px 0 var(--rule); }
+.ls-stabs [role="tablist"] { display: flex; align-items: stretch; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
+.ls-stabs [role="tab"] { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-rows: auto auto; gap: 0 9px; align-items: center; min-width: 150px; max-width: 240px; min-height: 48px; padding: 6px 14px 6px 10px; border: 0; background: none; color: var(--muted); font: inherit; font-family: var(--font-sans); text-align: left; cursor: pointer; box-shadow: inset -1px 0 0 var(--rule); transition: background-color var(--dur-quick), color var(--dur-quick); }
+.ls-stabs [role="tab"]:hover { background: var(--tint-hover-c); color: var(--ink); }
+.ls-stabs [role="tab"][aria-selected="true"] { background: var(--surface); color: var(--ink-strong); }
+.ls-stabs [role="tab"][aria-selected="true"]::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--accent); box-shadow: 0 0 10px var(--cgf); animation: lsTabLine var(--dur-base) var(--ease-out); }
+@keyframes lsTabLine { from { transform: scaleX(.2); opacity: 0; } }
+.ls-stabs [role="tab"]:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.ls-stabs [role="tab"] .ls-sig { grid-row: 1 / span 2; }
+.ls-stabs [role="tab"] .ls-sig b { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.ls-stabs [role="tab"] .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; }
+.ls-stabs [role="tab"] .x { grid-column: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.ls-stabs [role="tab"] .k { grid-row: 1 / span 2; grid-column: 3; font-family: var(--font-mono); font-size: 10.5px; color: var(--subtle); }
+.ls-stabs [role="tab"] .new { position: absolute; right: 6px; top: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--moving); box-shadow: 0 0 6px var(--moving); }
+.ls-stabs [role="tab"].needs { color: var(--needs-text); box-shadow: inset -1px 0 0 var(--rule), inset 0 -3px 0 var(--needs); }
+.ls-stabs .add { flex: none; display: inline-grid; place-items: center; min-width: 48px; border: 0; background: none; color: var(--accent-text); font-size: 22px; font-weight: 200; cursor: pointer; }
+.ls-stabs .add:hover { background: var(--tint-hover-c); }
+.ls-stabs .add:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+
+/* ---------- TermDeck: Terminal Focus's workspace ---------- */
+.ls-deck { --c: var(--accent); display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: 10px; height: 100%; min-height: 0; }
+.ls-deck > * { min-width: 0; }
+.ls-deck .dtop { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.ls-deck .dtop .ls-stabs { flex: 1 1 420px; }
+.ls-deck .lay { display: inline-flex; gap: 2px; padding: 3px; box-shadow: inset 0 0 0 1px var(--control-edge); }
+.ls-deck .lay button { display: inline-grid; place-items: center; width: 40px; height: 36px; border: 0; background: none; color: var(--muted); cursor: pointer; }
+.ls-deck .lay button svg { width: 20px; height: 16px; }
+.ls-deck .lay button:hover { color: var(--ink-strong); background: var(--tint-hover-c); }
+.ls-deck .lay button[aria-checked="true"] { color: var(--accent); background: var(--tint-picked-c); box-shadow: inset 0 -2px 0 var(--accent); }
+.ls-deck .lay button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ls-deck .find { display: flex; align-items: center; gap: 8px; }
+.ls-deck .find input { min-height: 36px; }
+.ls-deck .find span { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+.ls-deck .keys { font-family: var(--font-mono); font-size: 11px; color: var(--subtle); }
+.ls-deck .panes { display: grid; gap: 10px; min-height: 0; }
+.ls-deck .panes.l1 { grid-template-columns: minmax(0, 1fr); }
+.ls-deck .panes.l2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ls-deck .panes.l4 { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); }
+.ls-deck .pane { position: relative; display: grid; min-height: 0; min-width: 0; transition: box-shadow var(--dur-quick); animation: lsPaneIn .45s var(--ease-out) both; }
+.ls-deck .pane:nth-child(2) { animation-delay: .06s; } .ls-deck .pane:nth-child(3) { animation-delay: .12s; } .ls-deck .pane:nth-child(4) { animation-delay: .18s; }
+@keyframes lsPaneIn { from { opacity: 0; transform: scale(.97); } }
+.ls-deck .pane > * { min-width: 0; }
+.ls-deck .pane .ls-term { height: 100%; min-height: 0; }
+.ls-deck .find { flex: 1 1 220px; min-width: 0; } .ls-deck .find input { flex: 1 1 auto; width: auto; min-width: 0; max-width: 260px; }
+.ls-deck .pane.on { box-shadow: 0 0 0 2px var(--accent), 0 0 24px -6px var(--cgf); }
+.ls-deck .pane mark { background: var(--needs); color: var(--on-signal); }
+[data-motion="reduced"] .ls-deck .pane, [data-motion="none"] .ls-deck .pane { animation: none; }
+@media (prefers-reduced-motion: reduce) { .ls-deck .pane { animation: none !important; } }
+@media (max-width: 899px) { .ls-deck .panes.l2, .ls-deck .panes.l4 { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; } .ls-deck .panes.l2 .pane:nth-child(n+2), .ls-deck .panes.l4 .pane:nth-child(n+2) { display: none; } .ls-deck .lay { display: none; } .ls-deck .keys { display: none; } }
+
+/* ---------- RunBoard: Team Focus's departures board of live lines ---------- */
+.ls-board { --c: var(--accent); display: grid; gap: 14px; }
+.ls-board > * { min-width: 0; }
+.ls-board .teams { position: relative; display: flex; flex-wrap: wrap; gap: 6px; }
+.ls-board .teams button { position: relative; display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 12px 0 8px; border: 0; background: var(--surface); color: var(--ink-soft); font: inherit; font-family: var(--font-mono); font-size: 12px; cursor: pointer; box-shadow: inset 0 0 0 1px var(--rule); }
+.ls-board .teams button:hover { color: var(--ink-strong); background: var(--tint-hover-c); }
+.ls-board .teams button[aria-pressed="true"] { color: var(--ink-strong); box-shadow: inset 0 0 0 1px var(--accent), inset 0 -2px 0 var(--accent); }
+.ls-board .teams button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ls-board .teams button .ls-sig b { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.ls-board .teams button em { font-style: normal; color: var(--muted); }
+.ls-board ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; perspective: 900px; }
+.ls-board .brow { display: grid; grid-template-columns: minmax(200px, 1.3fr) minmax(220px, 1.6fr) minmax(110px, auto) minmax(110px, auto); gap: 6px 18px; align-items: center; padding: 10px 14px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule); transform-origin: 50% 0; animation: lsFlap .55s var(--ease-out) both; animation-delay: calc(var(--i, 0) * 55ms); }
+@keyframes lsFlap { from { opacity: 0; transform: rotateX(-70deg); } }
+.ls-board .brow.needs { box-shadow: inset 3px 0 0 var(--needs), inset 0 0 0 1px var(--rule), 0 0 26px -12px color-mix(in srgb, var(--needs) calc(var(--glow-on) * 100%), transparent); }
+.ls-board .brow.bad { box-shadow: inset 3px 0 0 var(--bad), inset 0 0 0 1px var(--rule); }
+.ls-board .brow.picked { background: linear-gradient(90deg, var(--tint-picked-c), var(--surface) 70%); box-shadow: inset 3px 0 0 var(--accent), inset 0 0 0 1px var(--rule); }
+.ls-board .brow .go { display: grid; gap: 2px; min-width: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; font-family: var(--font-sans); text-align: left; cursor: pointer; }
+.ls-board .brow .go .t { font-size: 16px; font-weight: 300; color: var(--ink-strong); overflow-wrap: anywhere; }
+.ls-board .brow .go .x { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+.ls-board .brow .go:hover .t { color: var(--accent-text); }
+.ls-board .brow .go:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+.ls-board .brow .spend { font-family: var(--font-mono); font-size: 12px; color: var(--muted); text-align: right; white-space: nowrap; }
+.ls-board .brow .spend b { font-weight: 500; color: var(--ink-strong); }
+.ls-board .brow .spend em { display: block; font-style: normal; color: var(--needs-text); }
+.ls-board .brow .ls-gate { grid-column: 1 / -1; }
+/* The mini line: stations for rounds, a dot for each node briefed, a light travelling into the round that runs. */
+.ls-mini { position: relative; display: flex; align-items: flex-start; min-width: 0; padding: 4px 0 2px; }
+.ls-mini .st { position: relative; flex: 0 0 auto; display: grid; justify-items: center; gap: 5px; }
+.ls-mini .st i { display: block; width: 14px; height: 14px; border-radius: 50%; background: var(--ground); box-shadow: 0 0 0 2.5px var(--accent); }
+.ls-mini .st.cur i { box-shadow: 0 0 0 2.5px var(--moving), 0 0 10px var(--cgf); animation: lsBreathe var(--dur-breathe) ease-in-out infinite; }
+.ls-mini .st.wait i { box-shadow: 0 0 0 2.5px var(--needs), 0 0 0 6px var(--needs-wash); }
+.ls-mini .st.bad i { border-radius: var(--radius-chip); box-shadow: 0 0 0 2.5px var(--bad); }
+.ls-mini .st.next i { box-shadow: 0 0 0 1.5px var(--rest); }
+.ls-mini .st.end i { box-shadow: 0 0 0 2.5px var(--good); }
+.ls-mini .st .nd { display: flex; gap: 3px; }
+.ls-mini .st .nd u { display: block; width: 6px; height: 6px; border-radius: 50%; background: var(--c2, var(--rest)); }
+.ls-mini .st .nd u.moving { --c2: var(--moving); } .ls-mini .st .nd u.needs { --c2: var(--needs); } .ls-mini .st .nd u.bad { --c2: var(--bad); border-radius: 1px; } .ls-mini .st .nd u.good { --c2: var(--good); }
+.ls-mini .seg { position: relative; flex: 1 1 18px; min-width: 10px; max-width: 54px; height: 3px; margin-top: 5.5px; background: var(--accent); overflow: hidden; }
+.ls-mini .seg.dash { background: repeating-linear-gradient(90deg, var(--rest) 0 4px, transparent 4px 8px); }
+.ls-mini .seg.into::after { content: ""; position: absolute; top: -2px; bottom: -2px; width: 14px; left: -14px; background: linear-gradient(90deg, transparent, var(--ink-strong), transparent); opacity: calc(.4 + var(--glow-on) * .5); animation: lsTrain 1.8s var(--ease-travel) infinite; }
+@keyframes lsTrain { to { left: 100%; } }
+[data-motion="reduced"] .ls-mini .seg.into::after, [data-motion="none"] .ls-mini .seg.into::after { display: none; }
+[data-motion="reduced"] .ls-board .brow, [data-motion="none"] .ls-board .brow { animation: none; }
+[data-motion="reduced"] .ls-mini .st.cur i, [data-motion="none"] .ls-mini .st.cur i { animation: none; }
+@media (prefers-reduced-motion: reduce) { .ls-board .brow, .ls-mini .st.cur i { animation: none !important; } .ls-mini .seg.into::after { display: none; } }
+@media (max-width: 599px) { .ls-board .teams { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; } .ls-board .teams button { flex: none; } }
+@media (max-width: 899px) { .ls-board .brow { grid-template-columns: minmax(0, 1fr) auto; } .ls-board .brow .ls-mini { grid-column: 1 / -1; grid-row: 2; } .ls-board .brow .spend { grid-column: 1 / -1; text-align: left; } }
+
+/* ---------- QuietList: Minimal's one column ---------- */
+.ls-quiet { --c: var(--accent); margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; max-width: 720px; }
+.ls-quiet li { position: relative; animation: lsQuietIn .6s var(--ease-out) both; animation-delay: calc(var(--i, 0) * 60ms); }
+@keyframes lsQuietIn { from { opacity: 0; transform: translateX(-10px); } }
+.ls-quiet li::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: linear-gradient(90deg, var(--line-c), transparent); transform-origin: 0 0; animation: lsQuietLine .9s var(--ease-out) both; animation-delay: calc(var(--i, 0) * 60ms + .1s); }
+@keyframes lsQuietLine { from { transform: scaleX(0); } }
+.ls-quiet button { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 16px; align-items: center; width: 100%; min-height: 54px; padding: 10px 6px; border: 0; background: none; color: inherit; font: inherit; font-family: var(--font-sans); text-align: left; cursor: pointer; transition: padding var(--dur-base) var(--ease-out); }
+.ls-quiet button:hover { padding-left: 14px; }
+.ls-quiet button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ls-quiet .t { font-size: 18px; font-weight: 200; color: var(--ink-strong); overflow-wrap: anywhere; }
+.ls-quiet .x { grid-column: 1; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.ls-quiet .ls-sig { grid-row: 1 / span 2; grid-column: 2; }
+.ls-quiet li.calm { opacity: var(--recede-now); transition: opacity var(--dur-base); }
+.ls-quiet li.calm:hover, .ls-quiet li.calm:focus-within { opacity: 1; }
+.ls-quiet li.needs .t { font-weight: 300; }
+.ls-quiet li.needs button { box-shadow: inset 3px 0 0 var(--needs); padding-left: 16px; }
+.ls-quiet li.needs .ask { margin: -2px 0 10px 16px; font-size: 14.5px; color: var(--needs-text); }
+.ls-quiet .zone { margin: 22px 0 6px; font-size: 11.5px; font-weight: 500; letter-spacing: .24em; text-transform: uppercase; color: var(--ink-soft); animation: none; }
+.ls-quiet .zone::before { display: none; }
+@media (max-width: 599px) { .ls-quiet button { grid-template-columns: minmax(0, 1fr); } .ls-quiet .ls-sig { grid-row: auto; grid-column: 1; margin-top: 4px; } }
+[data-motion="reduced"] .ls-quiet li, [data-motion="none"] .ls-quiet li, [data-motion="reduced"] .ls-quiet li::before, [data-motion="none"] .ls-quiet li::before { animation: none; }
+@media (prefers-reduced-motion: reduce) { .ls-quiet li, .ls-quiet li::before { animation: none !important; } }
+
+/* ---------- FocusFrame: one thing, the whole screen ---------- */
+.ls-focus { --c: var(--accent); position: fixed; inset: var(--ls-focus-top, 0px) 0 0 0; z-index: 30; display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--ground); view-transition-name: ls-focus; }
+.ls-focus.from { animation: lsFocusGrow .55s var(--ease-travel) both; }
+@keyframes lsFocusGrow { from { clip-path: inset(var(--ft, 40%) var(--fr, 10%) var(--fb, 40%) var(--fl, 10%)); opacity: .4; } to { clip-path: inset(0); opacity: 1; } }
+.ls-focus .fhead { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; min-height: 56px; padding: 8px max(20px, env(safe-area-inset-right, 0px)) 8px max(20px, env(safe-area-inset-left, 0px)); box-shadow: inset 0 -1px 0 var(--rule); }
+.ls-focus .fhead .who { flex: 1 1 260px; min-width: 0; display: grid; gap: 1px; }
+.ls-focus .fhead h1 { margin: 0; font-size: 19px; font-weight: 300; color: var(--ink-strong); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ls-focus .fhead span { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+.ls-focus .fhead .close { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px; border: 0; background: none; color: var(--ink-soft); font: inherit; font-family: var(--font-sans); font-size: 12px; font-weight: 500; letter-spacing: .18em; text-transform: uppercase; cursor: pointer; box-shadow: inset 0 0 0 1px var(--control-edge); }
+.ls-focus .fhead .close:hover { color: var(--ink-strong); background: var(--tint-hover-c); }
+.ls-focus .fhead .close:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ls-focus .fbody { min-height: 0; overflow: auto; padding: 16px max(20px, env(safe-area-inset-right, 0px)) 20px max(20px, env(safe-area-inset-left, 0px)); }
+.ls-focus .fbody > .ls-term { height: 100%; min-height: 300px; }
+.ls-focus.fade { animation: lsFade var(--dur-instant) both; }
+[data-motion="none"] .ls-focus.from, [data-motion="none"] .ls-focus.fade { animation: none; }
+@media (prefers-reduced-motion: reduce) { .ls-focus.from { animation: lsFade var(--dur-instant) both !important; } }

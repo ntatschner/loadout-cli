@@ -168,10 +168,37 @@ body { background: var(--ground); color: var(--ink); }
 .runpage .rmain, .runpage .rside { display: grid; gap: calc(var(--space-6) * var(--density)); min-width: 0; align-content: start; }
 #run-said { margin: -10px 0 16px; }
 @media (max-width: 1023px) { .runpage { grid-template-columns: minmax(0, 1fr); } }
+/* Modes */
+:root { --ls-focus-top: 57px; }
+#modebar { position: fixed; top: 0; left: var(--rail-width); right: 0; z-index: 35; padding: 0 max(28px, env(safe-area-inset-right, 0px)) 0 28px; background: color-mix(in srgb, var(--ground) 90%, transparent); backdrop-filter: blur(8px); box-shadow: inset 0 -1px 0 var(--rule); transition: left var(--dur-travel) var(--ease-travel); }
+.page { padding-top: 76px; }
+#nav .ls-railnav { view-transition-name: ls-rail; transition: transform var(--dur-travel) var(--ease-travel), width var(--dur-base) var(--ease-out), box-shadow var(--dur-base); }
+@media (max-width: 599px) { #modebar { left: 0; padding-left: 52px; padding-right: 12px; } [data-mode="minimal"] #modebar { padding-left: 12px; } [data-mode="minimal"] .page { padding-left: 16px; padding-right: 16px; } }
+.ls-toasts { top: 66px; }
+[data-mode="minimal"] #nav .ls-railnav, [data-mode="minimal"] #nav .ls-pagestab { transform: translateX(-120%); visibility: hidden; transition: transform var(--dur-travel) var(--ease-travel), visibility 0s var(--dur-travel); }
+[data-mode="minimal"] #modebar { left: 0; padding-left: max(28px, env(safe-area-inset-left, 0px)); background: transparent; backdrop-filter: none; box-shadow: none; }
+[data-mode="minimal"] .page { padding-left: max(28px, env(safe-area-inset-left, 0px)); }
+[data-mode="minimal"] .quietwrap { max-width: 760px; margin: 6vh auto 0; }
+[data-mode="terminals"] .page { padding-right: 14px; padding-left: calc(var(--rail-width) + 14px); padding-bottom: 14px; }
+@media (max-width: 599px) { [data-mode="terminals"] .page { padding-left: 12px; padding-right: 12px; } }
+[data-mode="terminals"] .page > .sample { display: none; }
+.deckwrap { height: calc(100vh - 92px); min-height: 460px; }
+.tfocus { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-items: start; }
+.tfocus.open { grid-template-columns: minmax(0, 1fr) minmax(420px, 48%); }
+.tfocus .bcol { min-width: 0; }
+.tfocus .bpanel { position: sticky; top: 70px; max-height: calc(100vh - 86px); overflow: auto; padding: 4px 18px 24px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule), var(--shadow-float); animation: lsPanelIn .5s var(--ease-travel) both; }
+.tfocus .bpanel .runpage { grid-template-columns: minmax(0, 1fr); }
+.tfocus .bpanel .pclose { position: sticky; top: 0; z-index: 2; display: flex; justify-content: flex-end; padding: 8px 0; background: var(--surface); }
+@keyframes lsPanelIn { from { opacity: 0; transform: translateX(40px); } }
+[data-motion="reduced"] .tfocus .bpanel, [data-motion="none"] .tfocus .bpanel { animation: none; }
+@media (prefers-reduced-motion: reduce) { .tfocus .bpanel { animation: none !important; } }
+@media (max-width: 1099px) { .tfocus.open { grid-template-columns: minmax(0, 1fr); } .tfocus.open .bcol { display: none; } .tfocus .bpanel { position: static; max-height: none; } }
+.qrun { display: grid; gap: 22px; max-width: 980px; margin: 0 auto; }
 </style>
 
 <a class="skip" href="#main">Skip to the page</a>
 <div id="nav"></div>
+<div id="modebar"></div>
 <main id="main" class="page" tabindex="-1"></main>
 <div id="toasts"></div>
 <div id="amb" class="amb" hidden></div>
@@ -186,11 +213,12 @@ body { background: var(--ground); color: var(--ink); }
   var PREF_KEY = "studio-prototype-appearance";
   function loadPrefs() { try { return JSON.parse(localStorage.getItem(PREF_KEY) || "null") || {}; } catch (e) { return {}; } }
   function savePrefs() { try { localStorage.setItem(PREF_KEY, JSON.stringify(P)); } catch (e) { /* storage blocked: the choice lasts this visit */ } }
-  var P = Object.assign({ theme: null, accent: "cyan", density: "comfortable", motion: "full", halo: "orbit", keys: true }, loadPrefs());
+  var P = Object.assign({ theme: null, accent: "cyan", density: "comfortable", motion: "full", halo: "orbit", keys: true, mode: "default", deckLayout: 2 }, loadPrefs());
   var hostTheme = root.getAttribute("data-theme");
   function applyPrefs() {
     var t = P.theme || (hostTheme === "light" || hostTheme === "dark" ? hostTheme : S.preferredTheme());
     S.setTheme(t); S.setAccent(P.accent); S.setDensity(P.density); S.setMotion(P.motion);
+    root.setAttribute("data-mode", P.mode || "default");
   }
   applyPrefs();
   new MutationObserver(function () {
@@ -317,7 +345,7 @@ body { background: var(--ground); color: var(--ink); }
     context: ["Context", "$ loadout instructions explain", "What a session reads before it starts, and what it costs in tokens."], spend: ["Spend", "$ loadout usage", "Tokens used, by day, project and model."], projects: ["Projects", "$ loadout project list", "The projects Loadout knows on this machine."] };
   function route() { var h = (location.hash || "#home").slice(1); return h || "home"; }
   function go(r) { if (location.hash.slice(1) === r) { render(); } else { location.hash = r; } }
-  window.addEventListener("hashchange", function () { render(); var m = document.getElementById("main"); if (m) { m.focus({ preventScroll: true }); } window.scrollTo(0, 0); });
+  window.addEventListener("hashchange", function () { if (FOCUS) { FOCUS.close(); FOCUS = null; } render(); var m = document.getElementById("main"); if (m) { m.focus({ preventScroll: true }); } window.scrollTo(0, 0); });
 
   /* ---------- the rail ---------- */
   function renderNav() {
@@ -331,6 +359,7 @@ body { background: var(--ground); color: var(--ink); }
     var foot = el("button", { type: "button", "class": "ls-rl ls-appearance", onclick: openAppearance, "data-k": "appearance" }, [svgIcon("M10 3a7 7 0 1 0 0 14a3.5 3.5 0 0 1 0-7a3.5 3.5 0 0 0 0-7z M10 3a7 7 0 0 1 0 14"), el("span", { "class": "n", text: "Appearance" }), el("span", { "class": "f", text: themeName() })]);
     rail.querySelector(".ls-railnav").appendChild(foot);
     nav.appendChild(rail);
+    renderModebar();
   }
   function svgIcon(d) { var ns = "http://www.w3.org/2000/svg", v = document.createElementNS(ns, "svg"), p = document.createElementNS(ns, "path"); v.setAttribute("viewBox", "0 0 20 20"); v.setAttribute("aria-hidden", "true"); p.setAttribute("d", d); p.setAttribute("fill", "none"); p.setAttribute("stroke", "currentColor"); p.setAttribute("stroke-width", "1.6"); v.appendChild(p); return v; }
   function themeName() { return { dark: "Dark", light: "Light", "hc-dark": "High contrast dark", "hc-light": "High contrast light" }[root.getAttribute("data-theme")] + " · " + P.accent; }
@@ -459,6 +488,8 @@ body { background: var(--ground); color: var(--ink); }
   function term(id, cls, text) {
     (ST.term[id] = ST.term[id] || []).push([cls, text]);
     if (LIVE && LIVE.id === id) { LIVE.t.write(runsOf([cls, text])); }
+    var dt = DECK && DECK.deck.terminal(id); if (dt) { dt.write(runsOf([cls, text])); }
+    if (DECK && DECK.deck.current !== id) { ST.unread = ST.unread || {}; if (!ST.unread[id]) { ST.unread[id] = true; DECK.deck.update(deckSessions()); } }
   }
   function termState(l) { if (l.stage === 4) { return "ended"; } if (l.waiting) { return l.approval ? "approval" : "waiting"; } if (l.agent === "codex") { return (l.quiet || 0) >= 10 ? "idle" : "working"; } return (l.quiet || 0) >= 10 ? "idle" : "working"; }
   function renderSession(main, id) {
@@ -555,6 +586,10 @@ body { background: var(--ground); color: var(--ink); }
     var go1 = PAGES.map(function (p) { return { glyph: "→", label: p[1], sub: "page", kind: "page", run: function () { go(p[0]); } }; });
     var flight = ST.lines.map(function (l) { return { glyph: l.waiting ? "!" : "▶", label: l.title, sub: l.where + " · " + wordOf(l), need: !!l.waiting, kind: "focus", run: function () { ST.focus = l.id; ST.view = "lens"; go("home"); } }; });
     var acts = [{ glyph: "+", label: "Start a session…", sub: "opens New session · $ loadout <project> --task \"…\"", kind: "action", run: function () { go("sessions"); setTimeout(openLaunch, 60); } },
+      { glyph: "◐", label: "Mode: Default", sub: "Studio as it is · Ctrl Shift M cycles", kind: "action", run: function () { setMode("default"); } },
+      { glyph: "◐", label: "Mode: Terminals", sub: "Terminal Focus: sessions as tabs and panes", kind: "action", run: function () { setMode("terminals"); } },
+      { glyph: "◐", label: "Mode: Teams", sub: "Team Focus: every live run on one board", kind: "action", run: function () { setMode("teams"); } },
+      { glyph: "◐", label: "Mode: Minimal", sub: "one quiet column of what is live", kind: "action", run: function () { setMode("minimal"); } },
       { glyph: "▶", label: "Start a team run…", sub: "opens Start a run · $ loadout team run <team> \"…\"", kind: "action", run: function () { go("teams"); setTimeout(function () { openSheet("run"); }, 60); } }];
     var t = line("t1");
     if (t.waiting) { acts.push({ glyph: "✓", label: "Yes: push the tag v0.66.0", sub: "$ loadout team gate 20261017-1314-9c0d --gate g3 --answer yes --by dashboard", need: true, kind: "action", run: function () { answerGate(true); TV++; render(); } }, { glyph: "✕", label: "No: don't push the tag v0.66.0", sub: "$ loadout team gate 20261017-1314-9c0d --gate g3 --answer no --by dashboard", kind: "action", run: function () { answerGate(false); TV++; render(); } }); }
@@ -839,6 +874,125 @@ body { background: var(--ground); color: var(--ink); }
     main.appendChild(el("div", { style: "max-width: 900px" }, [S.Bin({ keptDays: 30, entries: TS.bin, onRestore: function (e) { TS.bin = TS.bin.filter(function (x) { return x !== e; }); TV++; }, onEmpty: function () { TS.bin = []; TV++; } })]));
   }
 
+  /* ---------- Modes: Default, Terminal Focus, Team Focus and Minimal, kept in this browser ---------- */
+  var MB = null, MBSIG = "", DECK = null, FOCUS = null;
+  function applyMode() { root.setAttribute("data-mode", P.mode || "default"); }
+  function setMode(m, fromSwitch) {
+    if (m === P.mode) { return; }
+    if (FOCUS) { FOCUS.close(); FOCUS = null; }
+    if (!fromSwitch && MB) { MB.switcher.set(m); }
+    S.morph(function () { P.mode = m; savePrefs(); applyMode(); DECK = null; lastTeams = ""; render(); });
+    toasts.add({ level: "info", text: "Mode: " + S.MODES.filter(function (x) { return x.key === m; })[0].name, cmd: "kept in this browser · Ctrl Shift M cycles" });
+  }
+  function cycleMode() { var ks = S.MODES.map(function (x) { return x.key; }); setMode(ks[(ks.indexOf(P.mode) + 1) % ks.length]); }
+  function waitingNow() {
+    var out = [];
+    ST.lines.filter(function (l) { return l.kind === "session" && l.waiting; }).forEach(function (l) { out.push({ kind: "session", id: l.id, at: l.askedAt || 0, label: l.title + " needs approval" }); });
+    TR.filter(function (r) { return runWord(r) === "waiting for you"; }).forEach(function (r) { var g = runGate(r); out.push({ kind: "run", id: r.id, at: r.line ? (tline(r).askedAt || 0) : -1, label: g ? g.question : r.goal }); });
+    return out.sort(function (a, b) { return a.at - b.at; });
+  }
+  function goWaiting(w) {
+    if (P.mode === "minimal") { openQuiet(w.kind === "session" ? { id: w.id, kind: "session" } : { id: w.id, kind: "team run" }); return; }
+    if (w.kind === "session") { if (P.mode === "terminals") { if (route() !== "home" && route() !== "sessions") { go("home"); } setTimeout(function () { if (DECK) { DECK.deck.pick(w.id); } }, 80); } else { go("session-" + w.id); } return; }
+    go("run-" + w.id);
+  }
+  function renderModebar() {
+    var w = waitingNow(), compact = window.innerWidth < 600, sig = w.map(function (x) { return x.label; }).join("|") + "|" + compact;
+    if (MB && sig === MBSIG) { if (MB.switcher.mode !== (P.mode || "default")) { MB.switcher.set(P.mode); } return; }
+    MBSIG = sig;
+    var host = document.getElementById("modebar"); host.textContent = "";
+    MB = S.ModeBar({ mode: P.mode || "default", compact: compact, onMode: function (m) { setMode(m, true); }, onSearch: openPalette, waiting: w, onWaiting: goWaiting });
+    host.appendChild(MB.el);
+  }
+
+  /* Terminal Focus */
+  function sessionInput(l, v) {
+    (ST.term[l.id] = ST.term[l.id] || []).push(["me", "› " + v]);
+    if (l.waiting && l.approval && /^(1|y|yes)$/i.test(v)) { answerSession(l.id, true); return; }
+    if (l.waiting && l.approval && /^(2|n|no)$/i.test(v)) { answerSession(l.id, false); return; }
+    term(l.id, "dim", "  sent to the session");
+  }
+  function makeTerm(id) {
+    var l = line(id);
+    return S.Terminal({ title: l.title, project: l.where, agent: l.agent, sessionId: l.id === "s2" ? "3f9c2a1e" : "7b21d0c4", state: termState(l), fit: window.innerWidth < 600, lines: (ST.term[l.id] || []).map(runsOf), onInput: function (v) { sessionInput(l, v); } });
+  }
+  function deckSessions() {
+    return ST.lines.filter(function (l) { return l.kind === "session"; }).map(function (l) { return { id: l.id, title: l.title, word: l.stage === 4 ? "ended" : wordOf(l), where: l.where, agent: l.agent === "codex" ? "codex" : "claude", unread: !!(ST.unread && ST.unread[l.id]) }; });
+  }
+  function renderDeck(main, focusId) {
+    ST.unread = ST.unread || {};
+    var sess = deckSessions(), first = focusId || P.deckCurrent || (sess[0] || {}).id;
+    if (!sess.some(function (s) { return s.id === first; })) { first = (sess[0] || {}).id; }
+    var wrap = el("div", { "class": "deckwrap" });
+    var d = S.TermDeck({ sessions: sess, current: first, layout: P.deckLayout || 2, terminal: makeTerm,
+      onPick: function (id) { P.deckCurrent = id; savePrefs(); if (ST.unread[id]) { ST.unread[id] = false; d.update(deckSessions()); } },
+      onLayout: function (n) { P.deckLayout = n; savePrefs(); },
+      onNew: function () { openLaunch(); } });
+    wrap.appendChild(d.el); main.appendChild(wrap);
+    DECK = { route: route(), deck: d, states: {} };
+    sess.forEach(function (s) { var l = line(s.id); DECK.states[s.id] = termState(l); });
+  }
+  function refreshDeck() {
+    DECK.deck.update(deckSessions());
+    ST.lines.filter(function (l) { return l.kind === "session"; }).forEach(function (l) { var st = termState(l), t = DECK.deck.terminal(l.id); if (t && DECK.states[l.id] !== st) { t.setState(st); } DECK.states[l.id] = st; });
+  }
+
+  /* Team Focus */
+  function boardRuns() {
+    return TR.map(function (r) { var g = runGate(r); return { id: r.id, goal: r.goal, team: r.team, project: r.project, word: runWord(r), round: r.round, rounds: r.shape, spent: r.spent, cap: r.cap, projected: r.ended ? null : r.projected, gate: g }; });
+  }
+  function boardTeams() {
+    return TEAMLIB.filter(function (t) { return !t.template; }).map(function (t) {
+      var mine = TR.filter(function (r) { return r.team === t.name; }), live = mine.filter(function (r) { var w = runWord(r); return w !== "done" && w !== "stopped" && w !== "failed"; });
+      var word = live.some(function (r) { return runWord(r) === "waiting for you"; }) ? "waiting for you" : live.length ? "running" : "idle";
+      return { name: t.name, word: word, fact: live.length ? live.length + (live.length === 1 ? " live" : " live") : "none live" };
+    });
+  }
+  function renderBoard(main, r) {
+    var run = r.indexOf("run-") === 0 ? r.slice(4) : null, team = r.indexOf("team-") === 0 ? r.slice(5) : null;
+    var w = teamsWaiting(), live = TR.filter(function (x) { var y = runWord(x); return y !== "done" && y !== "stopped" && y !== "failed"; }).length;
+    var grid = el("div", { "class": "tfocus" + (run || team ? " open" : "") });
+    var left = el("div", { "class": "bcol" }, [el("div", { "class": "head", style: "margin-bottom: 14px" }, [el("div", {}, [el("h1", { text: "Teams" }), el("span", { "class": "fact" + (w ? " need" : ""), text: live + " live · " + (w ? w + " waiting on you" : "none waiting on you") })]), el("span", { "class": "grow" }),
+      halo({ label: "Start a run", solid: true, size: "small", glyph: "▶", cmd: "opens the sheet · starts nothing yet", onPress: function () { openSheet("run"); } }, "tf-start")]),
+      S.RunBoard({ runs: boardRuns(), teams: boardTeams(), picked: run, team: team, onPick: function (id) { go("run-" + id); }, onTeam: function (n) { go("team-" + n); } })]);
+    grid.appendChild(left);
+    if (run || team) {
+      var panel = el("aside", { "class": "bpanel", "aria-label": run ? "The run" : "The team" });
+      panel.appendChild(el("div", { "class": "pclose" }, [halo({ label: "Close", size: "small", onPress: function () { go("teams"); } }, "tf-close")]));
+      if (run) { renderRun(panel, run); } else { renderTeam(panel, team); }
+      grid.appendChild(panel);
+    }
+    main.appendChild(grid);
+  }
+
+  /* Minimal */
+  function quietItems() {
+    var out = [];
+    ST.lines.filter(function (l) { return l.kind === "session" && l.stage !== 4; }).forEach(function (l) { out.push({ id: l.id, kind: "session", title: l.title, word: wordOf(l), where: l.where, ask: l.waiting ? "Asks for approval. Answer it in the terminal." : "" }); });
+    TR.filter(function (r) { var w = runWord(r); return w !== "done" && w !== "stopped" && w !== "failed"; }).forEach(function (r) { var g = runGate(r); out.push({ id: r.id, kind: "team run", title: r.goal, word: runWord(r), where: r.team, ask: g ? g.question : "" }); });
+    return out;
+  }
+  function renderQuiet(main) {
+    main.appendChild(el("div", { "class": "quietwrap" }, [S.QuietList({ items: quietItems(), onOpen: function (x, from) { openQuiet(x, from); } })]));
+  }
+  function openQuiet(x, from) {
+    if (FOCUS) { FOCUS.close(); FOCUS = null; }
+    if (x.kind === "session") {
+      var l = line(x.id), t = makeTerm(x.id);
+      LIVE = { id: x.id, t: t };
+      FOCUS = S.FocusFrame({ title: l.title, sub: l.where + " · " + (l.agent === "codex" ? "Codex" : "Claude Code"), word: wordOf(l), content: t.el, from: from, onClose: function () { LIVE = null; FOCUS = null; } });
+      setTimeout(function () { t.focus(); }, 560);
+      return;
+    }
+    var r = TR.filter(function (y) { return y.id === x.id; })[0]; if (!r) { return; }
+    var g = runGate(r), box = el("div", { "class": "qrun" });
+    if (g) { box.appendChild(S.Gate(Object.assign({ run: r.id }, g, { onAnswer: function (a, ex) { g.onAnswer(a, ex); setTimeout(function () { if (FOCUS) { FOCUS.close(); } }, 1200); } }))); }
+    box.appendChild(S.RunShape({ rounds: r.shape, next: r.ended ? null : "the next round", end: r.end || null }));
+    box.appendChild(S.DoneWhen(r.done));
+    box.appendChild(el("p", { "class": "calm", style: "font-size: 13px" }, ["Everything else about it is on its page: ", el("a", { href: "#run-" + r.id, text: "open it in full" }), "."]));
+    FOCUS = S.FocusFrame({ title: r.goal, sub: r.team + " · " + r.project + " · round " + r.round, word: runWord(r), content: box, from: from, onClose: function () { FOCUS = null; } });
+  }
+
   /* ---------- placeholder pages ---------- */
   function renderElsewhere(main, r) {
     if (r === "settings") { main.appendChild(el("div", { "class": "head" }, [el("h1", { text: "Settings" })])); main.appendChild(el("section", { "class": "placeholder", "aria-labelledby": "z-app" }, [zone("", "Appearance", "z-app"), appearanceForm()])); return; }
@@ -852,14 +1006,21 @@ body { background: var(--ground); color: var(--ink); }
   function teamsRoute(r) { return r === "teams" || r.indexOf("teams-") === 0 || r.indexOf("run-") === 0 || r.indexOf("team-") === 0; }
   function render() {
     var rr = route(), t1 = line("t1"), sig = rr + "|" + TV + "|" + (t1 ? [t1.waiting, t1.stage, t1.held].join(",") : "");
-    if (teamsRoute(rr) && sig === lastTeams && document.getElementById("main").childNodes.length) { renderNav(); renderAmbient(); return; }
-    lastTeams = teamsRoute(rr) ? sig : "";
+    var deckRoute = P.mode === "terminals" && (rr === "home" || rr === "sessions" || rr.indexOf("session-") === 0);
+    if (deckRoute && DECK && DECK.route === rr && document.getElementById("main").childNodes.length) { refreshDeck(); renderNav(); renderAmbient(); return; }
+    if (!deckRoute) { DECK = null; }
+    var steady = teamsRoute(rr) || (P.mode === "teams" && rr === "home") || (P.mode === "minimal" && rr === "home" && FOCUS);
+    if (steady && sig === lastTeams && document.getElementById("main").childNodes.length) { renderNav(); renderAmbient(); return; }
+    lastTeams = steady ? sig : "";
     if (!teamsRoute(rr) && DEPTHS) { DEPTHS.unbind(); DEPTHS = null; }
     var a = document.activeElement, k = a && a.getAttribute && a.getAttribute("data-k"), caret = a && a.selectionStart;
     if (!k && a && a.id === "home-task") { k = "home-task"; }
     renderNav();
     var main = document.getElementById("main"), r = route(); main.textContent = "";
-    if (r === "home") { homeHead(main); if (ST.view === "map") { renderMap(main); } else { renderLens(main); } }
+    if (P.mode === "terminals" && (r === "home" || r === "sessions" || r.indexOf("session-") === 0)) { renderDeck(main, r.indexOf("session-") === 0 ? r.slice(8) : null); }
+    else if (P.mode === "teams" && (r === "home" || r === "teams" || r.indexOf("run-") === 0 || r.indexOf("team-") === 0)) { renderBoard(main, r); }
+    else if (P.mode === "minimal" && r === "home") { renderQuiet(main); }
+    else if (r === "home") { homeHead(main); if (ST.view === "map") { renderMap(main); } else { renderLens(main); } }
     else if (r === "sessions") { renderSessions(main); }
     else if (r.indexOf("session-") === 0) { renderSession(main, r.slice(8)); }
     else if (r === "teams") { renderTeams(main); }
@@ -903,6 +1064,7 @@ body { background: var(--ground); color: var(--ink); }
   /* ---------- keys ---------- */
   window.addEventListener("keydown", function (e) {
     if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) { e.preventDefault(); openPalette(); return; }
+    if (e.ctrlKey && e.shiftKey && (e.key === "m" || e.key === "M")) { e.preventDefault(); cycleMode(); return; }
     if (e.key === "Escape" && ST.ambient) { setAmbient(false); return; }
     var t = e.target && e.target.tagName, typing = t === "INPUT" || t === "TEXTAREA" || (e.target && e.target.isContentEditable);
     if (typing || e.ctrlKey || e.metaKey || e.altKey || !P.keys || document.querySelector(".ls-dialog")) { return; }

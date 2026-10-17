@@ -66,6 +66,16 @@ Loadout Studio is the design system for Studio: the app Loadout serves on this m
 - Saying something to the lead (`team message`) needs only Studio's sign-in. Typing at a live node (`team say`) needs a second credential: the passphrase, swapped for a 30-minute grant held only by the page. Setting or clearing that passphrase, and trusting a remedy, happen in a terminal.
 - Projected spend past a budget is said in words with a Needs edge, never in colour alone. Stopping is "after this round": nothing is killed mid-turn.
 
+### Modes
+
+- One switch re-lays out the whole of Studio around what you are doing. It is `data-mode` on `<html>`, kept in this browser, and cycled with Ctrl+Shift+M:
+  - **Default**: Studio as it is.
+  - **Terminals** (Terminal Focus): sessions as tabs over one, two or four big terminals.
+  - **Teams** (Team Focus): every live run as a line on one board, each run or team opening beside it.
+  - **Minimal**: one quiet column of what is live; open one and it is the whole screen.
+- The ModeBar is at the top of every mode, with whatever is waiting on you, so a focus mode never hides a question.
+- Changing mode is one animated step (`morph()`): the page sinks, the new layout rises, and the rail and the mode bar travel on their own. Under reduced motion it fades; under none it just changes.
+
 ### Light and glow
 
 - Glow is light from the accent or a signal colour: `0 0 var(--glow-md) -2px var(--glow)` round a ring, `var(--glow-sm)` on a dot, `var(--glow-lg)` on hover and focus.

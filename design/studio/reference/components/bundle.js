@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format": 4, "namespace": "LoadoutStudio", "components": [{"name": "HaloButton"}, {"name": "StartRail"}, {"name": "Command"}, {"name": "Switch"}, {"name": "Tabs"}, {"name": "ModePicker"}, {"name": "Signal"}, {"name": "EventMark"}, {"name": "Urgency"}, {"name": "Meter"}, {"name": "Toasts"}, {"name": "SideRail"}, {"name": "Dialog"}, {"name": "Picker"}, {"name": "CommandPalette"}, {"name": "Halo"}, {"name": "TubeMap"}, {"name": "LineStrip"}, {"name": "NetworkStatus"}, {"name": "Terminal"}, {"name": "SessionView"}, {"name": "Gate"}, {"name": "RunCard"}, {"name": "NeedsYou"}, {"name": "RunShape"}, {"name": "Crew"}, {"name": "DoneWhen"}, {"name": "RunNumbers"}, {"name": "RunDepths"}, {"name": "Patch"}, {"name": "SayToNode"}, {"name": "TeamCard"}, {"name": "TeamNodes"}, {"name": "TeamRules"}, {"name": "RoleRecord"}, {"name": "TeamSheet"}, {"name": "Schedules"}, {"name": "Remedy"}, {"name": "Bin"}, {"name": "Outbox"}]} */
+/* @ds-bundle: {"format": 4, "namespace": "LoadoutStudio", "components": [{"name": "HaloButton"}, {"name": "StartRail"}, {"name": "Command"}, {"name": "Switch"}, {"name": "Tabs"}, {"name": "ModePicker"}, {"name": "Signal"}, {"name": "EventMark"}, {"name": "Urgency"}, {"name": "Meter"}, {"name": "Toasts"}, {"name": "SideRail"}, {"name": "Dialog"}, {"name": "Picker"}, {"name": "CommandPalette"}, {"name": "Halo"}, {"name": "TubeMap"}, {"name": "LineStrip"}, {"name": "NetworkStatus"}, {"name": "Terminal"}, {"name": "SessionView"}, {"name": "Gate"}, {"name": "RunCard"}, {"name": "NeedsYou"}, {"name": "RunShape"}, {"name": "Crew"}, {"name": "DoneWhen"}, {"name": "RunNumbers"}, {"name": "RunDepths"}, {"name": "Patch"}, {"name": "SayToNode"}, {"name": "TeamCard"}, {"name": "TeamNodes"}, {"name": "TeamRules"}, {"name": "RoleRecord"}, {"name": "TeamSheet"}, {"name": "Schedules"}, {"name": "Remedy"}, {"name": "Bin"}, {"name": "Outbox"}, {"name": "ModeSwitcher"}, {"name": "ModeBar"}, {"name": "SessionTabs"}, {"name": "TermDeck"}, {"name": "RunBoard"}, {"name": "QuietList"}, {"name": "FocusFrame"}]} */
 /* Loadout Studio — plain JavaScript, no framework, no imports, no network.
    Components are CSS classes plus small helpers, written to port line for line to Svelte. */
 (function () {
@@ -1676,4 +1676,253 @@
   }
 
   Object.assign(NS, { Outbox: Outbox, Markdown: Markdown, CodeView: Code, CsvTable: Table, fileKind: kindOf });
+})();
+
+(function () {
+  "use strict";
+  var NS = window.LoadoutStudio = window.LoadoutStudio || {};
+  function h(tag, attrs, kids) {
+    var el = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) {
+      var v = attrs[k];
+      if (v === null || v === undefined || v === false) { return; }
+      if (k === "text") { el.textContent = v; } else if (k === "class") { el.className = v; } else if (k.slice(0, 2) === "on") { el.addEventListener(k.slice(2), v); } else { el.setAttribute(k, v === true ? "" : v); }
+    });
+    (kids || []).forEach(function (c) { if (c) { el.appendChild(typeof c === "string" ? document.createTextNode(c) : c); } });
+    return el;
+  }
+  var SVGNS = "http://www.w3.org/2000/svg";
+  function icon(d, vb) { var s = document.createElementNS(SVGNS, "svg"); s.setAttribute("viewBox", vb || "0 0 20 20"); s.setAttribute("aria-hidden", "true"); var p = document.createElementNS(SVGNS, "path"); p.setAttribute("d", d); p.setAttribute("fill", "none"); p.setAttribute("stroke", "currentColor"); p.setAttribute("stroke-width", "1.6"); p.setAttribute("stroke-linecap", "round"); p.setAttribute("stroke-linejoin", "round"); s.appendChild(p); return s; }
+  function motion() { return NS.motion ? NS.motion() : "full"; }
+
+  var MODES = [
+    { key: "default", name: "Default", desc: "Studio as it is: Home, Sessions, Teams and the rest", icon: "M4 10a6 6 0 1 0 12 0a6 6 0 1 0-12 0 M9 10a1 1 0 1 0 2 0a1 1 0 1 0-2 0" },
+    { key: "terminals", name: "Terminals", desc: "Terminal Focus: sessions as tabs and panes, the terminal as big as it goes", icon: "M3 4.5h14v11H3z M6 8.2l2.4 1.8L6 11.8 M10.5 12.2h3.5" },
+    { key: "teams", name: "Teams", desc: "Team Focus: every live run as a line on one board, each team a click away", icon: "M2.5 6.5h15 M7 6.5v7h4.5 M13 6.5v3.5h4.5" },
+    { key: "minimal", name: "Minimal", desc: "One quiet column of what is live; open one and it is all there is", icon: "M5 10h7.5 M15.5 10h.01" }
+  ];
+
+  /* morph: run a change of layout as one animated step. A view transition where the browser has one; a rise-in where it doesn't; nothing under no motion. */
+  function morph(apply, o) {
+    o = o || {};
+    var m = motion(), root = document.documentElement;
+    if (m === "none") { apply(); return null; }
+    if (document.startViewTransition && !o.noVT) {
+      if (m !== "full") { root.setAttribute("data-vt", "fade"); }
+      var t = document.startViewTransition(function () { apply(); });
+      var done = function () { root.removeAttribute("data-vt"); };
+      t.finished.then(done, done);
+      return t;
+    }
+    apply();
+    var target = o.target || document.getElementById("main");
+    if (target) { target.classList.remove("ls-enter", "ls-enter-fade"); void target.offsetWidth; target.classList.add(m === "full" ? "ls-enter" : "ls-enter-fade"); }
+    return null;
+  }
+
+  /* ModeSwitcher: four modes as radios; the light travels to the one picked. */
+  function ModeSwitcher(o) {
+    o = o || {};
+    var cur = o.mode || "default", light = h("span", { "class": "light", "aria-hidden": "true" });
+    var btns = MODES.map(function (m) {
+      return h("button", { type: "button", role: "radio", "data-mode": m.key, title: m.desc, "aria-keyshortcuts": "Control+Shift+M", onclick: function () { pick(m.key, true); } }, [icon(m.icon), h("span", { "class": "n", text: m.name })]);
+    });
+    var el = h("div", { "class": "ls-modes" + (o.compact ? " compact" : "") + (o.vertical ? " vertical" : ""), role: "radiogroup", "aria-label": o.label || "Mode" }, [light].concat(btns));
+    var placed = false;
+    function place() {
+      var b = btns.filter(function (x) { return x.getAttribute("data-mode") === cur; })[0]; if (!b || !b.offsetWidth) { return; }
+      /* The first placement lands without travelling, so a new switcher never slides in from the edge. */
+      if (!placed) { light.style.transition = "none"; requestAnimationFrame(function () { light.style.transition = ""; }); placed = true; }
+      if (o.vertical) { light.style.transform = "translateY(" + b.offsetTop + "px)"; light.style.height = b.offsetHeight + "px"; }
+      else { light.style.transform = "translateX(" + b.offsetLeft + "px)"; light.style.width = b.offsetWidth + "px"; }
+    }
+    function set(k, moved) {
+      cur = k;
+      btns.forEach(function (b) { var on = b.getAttribute("data-mode") === k; b.setAttribute("aria-checked", on ? "true" : "false"); b.tabIndex = on ? 0 : -1; });
+      place();
+      if (moved) { el.classList.remove("moved"); void el.offsetWidth; el.classList.add("moved"); }
+    }
+    function pick(k, focus) { if (k === cur) { return; } set(k, true); if (o.onChange) { o.onChange(k); } if (focus) { var b = el.querySelector('[data-mode="' + k + '"]'); if (b) { b.focus(); } } }
+    btns.forEach(function (b, i) {
+      b.addEventListener("keydown", function (e) {
+        var d = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key]; if (e.key === "Home") { d = -i; } if (e.key === "End") { d = btns.length - 1 - i; }
+        if (d === undefined) { return; } e.preventDefault(); pick(MODES[(i + d + MODES.length) % MODES.length].key, true);
+      });
+    });
+    set(cur, false);
+    requestAnimationFrame(place);
+    if (window.ResizeObserver) { new ResizeObserver(place).observe(el); }
+    return { el: el, set: function (k) { set(k, true); }, get mode() { return cur; } };
+  }
+
+  /* ModeBar: the switcher, and whatever is waiting on you, so no focus mode ever hides a question. */
+  function ModeBar(o) {
+    o = o || {};
+    var sw = ModeSwitcher({ mode: o.mode, onChange: o.onMode, compact: o.compact });
+    var kids = [sw.el, h("span", { "class": "grow" })];
+    if (o.onSearch) { kids.push(h("button", { type: "button", "class": "tool", "aria-label": "Search: go to or do", "aria-keyshortcuts": "Control+K Meta+K", title: "Ctrl K", onclick: o.onSearch }, [icon("M8.5 3.5a5 5 0 1 0 0 10a5 5 0 1 0 0-10 M12.2 12.2L16.5 16.5")])); }
+    var w = o.waiting || [];
+    if (w.length) {
+      kids.push(h("button", { type: "button", "class": "waiting", onclick: function () { if (o.onWaiting) { o.onWaiting(w[0]); } } }, [NS.Signal("waiting for you"), h("b", {}, [String(w.length), h("span", { "class": "wn", text: w.length === 1 ? " needs you" : " need you" })]), h("span", { "class": "wl", text: "· " + w[0].label })]));
+    } else { kids.push(h("span", { "class": "calmword", text: "nothing waiting on you" })); }
+    return { el: h("div", { "class": "ls-modebar", role: "region", "aria-label": "Mode" }, kids), switcher: sw };
+  }
+
+  /* SessionTabs: every session as a tab, with its state and whether it has written since you looked. */
+  function SessionTabs(o) {
+    o = o || {};
+    var list = h("div", { role: "tablist", "aria-label": o.label || "Sessions" });
+    var tabs = (o.sessions || []).map(function (s, i) {
+      var f = NS.signalOf(s.word).family;
+      var t = h("button", { type: "button", role: "tab", "class": f === "needs" ? "needs" : null, "aria-selected": s.id === o.current ? "true" : "false", tabindex: s.id === o.current ? "0" : "-1", "aria-controls": o.controls || null, "aria-keyshortcuts": i < 9 ? "Control+Alt+" + (i + 1) : null, "data-id": s.id,
+        onclick: function () { if (o.onPick) { o.onPick(s.id); } }, ondblclick: function () { if (o.onMaximise) { o.onMaximise(s.id); } } },
+        [NS.Signal(s.word), h("span", { "class": "t", text: s.title }), h("span", { "class": "x", text: [s.where, s.agent].filter(Boolean).join(" · ") }), i < 9 ? h("span", { "class": "k", "aria-hidden": "true", text: "⌃⌥" + (i + 1) }) : null, s.unread ? h("span", { "class": "new", title: "New output since you looked" }, [h("span", { "class": "ls-vh", text: "new output" })]) : null]);
+      return t;
+    });
+    tabs.forEach(function (t) { list.appendChild(t); });
+    if (NS.roving) { NS.roving(tabs, function (i) { if (o.onPick) { o.onPick(o.sessions[i].id); } }); }
+    var add = o.onNew ? h("button", { type: "button", "class": "add", "aria-label": "New session", title: "New session", onclick: o.onNew, text: "+" }) : null;
+    return h("div", { "class": "ls-stabs" }, [list, add]);
+  }
+
+  /* TermDeck: Terminal Focus. Tabs over one, two or four panes; Ctrl+Alt+1-9 picks a session, Ctrl+Alt+arrows moves between panes. */
+  var LAYOUTS = [[1, "One", "M2 2h16v12H2z"], [2, "Two side by side", "M2 2h16v12H2z M10 2v12"], [4, "Four", "M2 2h16v12H2z M10 2v12 M2 8h16"]];
+  function TermDeck(o) {
+    o = o || {};
+    var layout = o.layout || 1, current = o.current || ((o.sessions || [])[0] || {}).id, terms = {}, panesEl = h("div", { "class": "panes l" + layout, id: "ls-deck-" + Math.random().toString(36).slice(2, 7) });
+    var top = h("div", { "class": "dtop" }), bar2 = h("div", { "class": "dtop" }), el = h("section", { "class": "ls-deck", "aria-label": "Terminals" }, [top, bar2, panesEl]);
+    var findIn = h("input", { "class": "ls-text", type: "search", placeholder: "Find in this terminal", "aria-label": "Find in the focused terminal", autocomplete: "off" }), findOut = h("span", { role: "status" });
+    function order() { return (o.sessions || []).map(function (s) { return s.id; }); }
+    function shown() { var ids = order(), out = [current]; ids.forEach(function (id) { if (out.length < layout && out.indexOf(id) < 0) { out.push(id); } }); return out.filter(Boolean); }
+    function paintTop() {
+      top.textContent = "";
+      top.appendChild(SessionTabs({ sessions: o.sessions, current: current, controls: panesEl.id, onPick: function (id) { pick(id); }, onMaximise: function (id) { current = id; setLayout(1); }, onNew: o.onNew }));
+      var lay = h("div", { "class": "lay", role: "radiogroup", "aria-label": "Panes" }, LAYOUTS.map(function (L) { return h("button", { type: "button", role: "radio", "aria-checked": L[0] === layout ? "true" : "false", "aria-label": L[1], title: L[1], onclick: function () { setLayout(L[0]); } }, [icon(L[2], "0 0 20 16")]); }));
+      top.appendChild(lay);
+    }
+    function paintBar2() {
+      bar2.textContent = "";
+      var waiting = (o.sessions || []).filter(function (s) { return NS.signalOf(s.word).family === "needs"; });
+      if (waiting.length && NS.HaloButton) { bar2.appendChild(NS.HaloButton({ label: "Go to the one waiting", kind: "needs", size: "small", onPress: function () { pick(waiting[0].id, true); } })); }
+      bar2.appendChild(h("div", { "class": "find" }, [findIn, findOut]));
+      bar2.appendChild(h("span", { "class": "grow", style: "flex: 1 1 auto" }));
+      bar2.appendChild(h("span", { "class": "keys", text: "Ctrl Alt 1–9 picks · Ctrl Alt arrows move · Ctrl ] leaves a terminal" }));
+    }
+    function paintPanes() {
+      var ids = shown();
+      panesEl.className = "panes l" + layout; panesEl.textContent = "";
+      ids.forEach(function (id) {
+        if (!terms[id]) { terms[id] = o.terminal(id); }
+        var pane = h("div", { "class": "pane" + (id === current ? " on" : ""), "data-id": id }, [terms[id].el]);
+        pane.addEventListener("focusin", function () { if (current !== id) { current = id; mark(); paintTop(); } });
+        panesEl.appendChild(pane);
+      });
+      if (o.onShown) { o.onShown(ids, terms); }
+    }
+    function mark() { Array.prototype.forEach.call(panesEl.children, function (p) { p.classList.toggle("on", p.getAttribute("data-id") === current); }); }
+    function pick(id, focus) {
+      var visible = shown().indexOf(id) >= 0; current = id;
+      paintTop();
+      if (!visible) { paintPanes(); } else { mark(); }
+      if (o.onPick) { o.onPick(id); }
+      if (focus !== false && terms[id]) { terms[id].focus(); }
+    }
+    function setLayout(n) { layout = n; NS.morph ? NS.morph(function () { paintTop(); paintPanes(); }, { noVT: true, target: panesEl }) : (paintTop(), paintPanes()); if (o.onLayout) { o.onLayout(n); } }
+    el.addEventListener("keydown", function (e) {
+      if (!(e.ctrlKey && e.altKey)) { return; }
+      var n = parseInt(e.key, 10), ids = order();
+      if (n >= 1 && n <= 9 && ids[n - 1]) { e.preventDefault(); pick(ids[n - 1]); return; }
+      var d = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+      if (d) { e.preventDefault(); var s = shown(), i = s.indexOf(current); pick(s[(i + d + s.length) % s.length]); }
+    });
+    findIn.addEventListener("input", function () {
+      var q = findIn.value.trim().toLowerCase(), pane = panesEl.querySelector('.pane[data-id="' + current + '"]'), scr = pane && pane.querySelector(".screen");
+      if (!scr) { return; }
+      Array.prototype.forEach.call(scr.querySelectorAll("mark"), function (m) { m.replaceWith(document.createTextNode(m.textContent)); }); scr.normalize();
+      if (!q) { findOut.textContent = ""; return; }
+      var hits = 0, first = null, walker = document.createTreeWalker(scr, NodeFilter.SHOW_TEXT), nodes = [];
+      while (walker.nextNode()) { nodes.push(walker.currentNode); }
+      nodes.forEach(function (t) { var i = t.nodeValue.toLowerCase().indexOf(q); if (i < 0) { return; } var r = t.splitText(i); r.splitText(q.length); var m = h("mark", { text: r.nodeValue }); r.replaceWith(m); hits++; if (!first) { first = m; } });
+      findOut.textContent = hits ? hits + (hits === 1 ? " match" : " matches") : "no match";
+      if (first && first.scrollIntoView) { first.scrollIntoView({ block: "center" }); }
+    });
+    paintTop(); paintBar2(); paintPanes();
+    return { el: el, pick: pick, setLayout: setLayout, terminal: function (id) { return terms[id]; }, update: function (sessions) { o.sessions = sessions; paintTop(); paintBar2(); }, get current() { return current; }, get layout() { return layout; } };
+  }
+
+  /* RunBoard: Team Focus. Every live run as a line, the one that needs you first, the teams along the top. */
+  function MiniLine(rounds, end, running) {
+    var el = h("div", { "class": "ls-mini", "aria-hidden": "true" });
+    rounds.forEach(function (r, i) {
+      var f = NS.signalOf(r.word || "done").family, cls = r.word === "running" || r.word === "round running" ? "cur" : f === "needs" ? "wait" : f === "bad" ? "bad" : "";
+      if (i) { el.appendChild(h("span", { "class": "seg" + (cls === "cur" ? " into" : "") })); }
+      el.appendChild(h("span", { "class": "st " + cls }, [h("i"), h("span", { "class": "nd" }, (r.nodes || []).map(function (n) { return h("u", { "class": NS.signalOf(n[1]).family, title: n[0] + " · " + n[1] }); }))]));
+    });
+    if (running) { el.appendChild(h("span", { "class": "seg dash" })); el.appendChild(h("span", { "class": "st next" }, [h("i")])); }
+    else if (end) { el.appendChild(h("span", { "class": "seg" })); el.appendChild(h("span", { "class": "st end" }, [h("i")])); }
+    return el;
+  }
+  function RunBoard(o) {
+    o = o || {};
+    var el = h("section", { "class": "ls-board", "aria-label": o.label || "Live team runs" });
+    if ((o.teams || []).length) {
+      el.appendChild(h("div", { "class": "teams", role: "group", "aria-label": "Teams" }, o.teams.map(function (t) {
+        return h("button", { type: "button", "aria-pressed": o.team === t.name ? "true" : "false", onclick: function () { if (o.onTeam) { o.onTeam(t.name); } } }, [NS.Signal(t.word || "idle"), t.name, h("em", { text: t.fact || "" })]);
+      })));
+    }
+    var runs = (o.runs || []).slice().sort(function (a, b) { var r = function (x) { var f = NS.signalOf(x.word).family; return f === "needs" ? 0 : f === "bad" ? 1 : f === "moving" ? 2 : 3; }; return r(a) - r(b); });
+    var ol = h("ol", { "aria-label": "Runs, the one that needs you first" });
+    runs.forEach(function (r, i) {
+      var f = NS.signalOf(r.word).family, live = f === "moving" || f === "needs" || r.word === "held after this round";
+      var over = r.cap && r.projected > r.cap;
+      var row = h("li", { "class": "brow " + f + (o.picked === r.id ? " picked" : ""), style: "--i:" + i }, [
+        h("button", { type: "button", "class": "go", "aria-pressed": o.picked === r.id ? "true" : "false", onclick: function () { if (o.onPick) { o.onPick(r.id); } } }, [h("span", { "class": "t", text: r.goal }), h("span", { "class": "x", text: [r.team, r.project, "round " + r.round, (r.rounds || []).filter(function (x) { return x.word === "running"; }).length ? null : null].filter(Boolean).join(" · ") })]),
+        MiniLine(r.rounds || [], !live, live),
+        NS.Signal(r.word),
+        h("span", { "class": "spend" }, [h("b", { text: "$" + Number(r.spent || 0).toFixed(2) }), r.cap ? " of $" + Number(r.cap).toFixed(0) : " no cap", over ? h("em", { text: "projected over" }) : null])
+      ]);
+      if (r.gate && NS.Gate) { row.appendChild(NS.Gate(Object.assign({ compact: true, run: r.id }, r.gate))); }
+      ol.appendChild(row);
+    });
+    if (!runs.length) { ol.appendChild(h("li", { "class": "brow" }, [h("span", { "class": "x", text: "No team runs here." })])); }
+    el.appendChild(ol);
+    return el;
+  }
+
+  /* QuietList: Minimal. One column: what needs you first, with its question; the rest quietly. */
+  function QuietList(o) {
+    o = o || {};
+    var items = (o.items || []).slice(), needs = items.filter(function (x) { return NS.signalOf(x.word).family === "needs"; }), rest = items.filter(function (x) { return needs.indexOf(x) < 0; });
+    var ol = h("ol", { "class": "ls-quiet", "aria-label": o.label || "Everything live" }), i = 0;
+    function zone(t) { ol.appendChild(h("li", { "class": "zone", "aria-hidden": "true", text: t })); }
+    function row(x, calm) {
+      var b = h("button", { type: "button", onclick: function (e) { if (o.onOpen) { o.onOpen(x, b.getBoundingClientRect()); } } }, [h("span", { "class": "t", text: x.title }), h("span", { "class": "x", text: [x.kind, x.where].filter(Boolean).join(" · ") }), NS.Signal(x.word)]);
+      ol.appendChild(h("li", { "class": calm ? "calm" : "needs", style: "--i:" + (i++) }, [b, !calm && x.ask ? h("p", { "class": "ask", text: x.ask }) : null]));
+    }
+    if (needs.length) { zone("Needs you"); needs.forEach(function (x) { row(x, false); }); }
+    if (rest.length) { zone(needs.length ? "The rest" : "Live"); rest.forEach(function (x) { row(x, true); }); }
+    if (!items.length) { ol.appendChild(h("li", { "class": "calm" }, [h("p", { "class": "ask", style: "color: var(--muted)", text: "Nothing is live." })])); }
+    return ol;
+  }
+
+  /* FocusFrame: one session or one run, the whole screen. It grows out of the line you opened; Escape gives the page back. */
+  function FocusFrame(o) {
+    o = o || {};
+    var back = document.activeElement, m = motion();
+    var close = h("button", { type: "button", "class": "close", "aria-keyshortcuts": "Escape", onclick: function () { done(); } }, [h("span", { "aria-hidden": "true", text: "×" }), o.closeLabel || "Back"]);
+    var el = h("div", { "class": "ls-focus", role: "region", "aria-label": o.title || "Focus" }, [h("div", { "class": "fhead" }, [h("div", { "class": "who" }, [h("h1", { text: o.title || "" }), o.sub ? h("span", { text: o.sub }) : null]), o.word ? NS.Signal(o.word) : null, close]), h("div", { "class": "fbody" }, [o.content || null])]);
+    if (o.from && m === "full") {
+      var r = o.from, W = window.innerWidth, H = window.innerHeight;
+      el.style.setProperty("--ft", Math.max(0, r.top) + "px"); el.style.setProperty("--fl", Math.max(0, r.left) + "px"); el.style.setProperty("--fr", Math.max(0, W - r.right) + "px"); el.style.setProperty("--fb", Math.max(0, H - r.bottom) + "px");
+      el.classList.add("from");
+    } else if (m !== "none") { el.classList.add("fade"); }
+    function onKey(e) { if (e.key === "Escape" && !e.defaultPrevented && !(e.target && e.target.closest && e.target.closest(".ls-dialog"))) { e.preventDefault(); done(); } }
+    function done() { document.removeEventListener("keydown", onKey); el.remove(); if (back && back.focus && document.contains(back)) { back.focus(); } if (o.onClose) { o.onClose(); } }
+    document.addEventListener("keydown", onKey);
+    (o.host || document.body).appendChild(el);
+    setTimeout(function () { var f = o.initialFocus ? el.querySelector(o.initialFocus) : close; if (f) { f.focus(); } }, 40);
+    return { el: el, close: done };
+  }
+
+  Object.assign(NS, { MODES: MODES, morph: morph, ModeSwitcher: ModeSwitcher, ModeBar: ModeBar, SessionTabs: SessionTabs, TermDeck: TermDeck, MiniLine: MiniLine, RunBoard: RunBoard, QuietList: QuietList, FocusFrame: FocusFrame });
 })();
