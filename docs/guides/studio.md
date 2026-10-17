@@ -147,7 +147,26 @@ The two things kept in the browser are the single-letter shortcuts (**A** for
 Ambient, **N** for a new session) and whether Ambient fills the screen. They're
 about the keyboard and screen in front of you, not about how you read.
 
-### 8. Look after your projects
+### 8. Shape an idea
+
+**Ideas** lists every idea being shaped, by project, and marks the ones with
+questions waiting for you. Choose one and answer its questions in the page:
+pick one of the agent's options or say it in your own words, then **Send answers
+and refine** to have an agent take it one round further, or **Only save the
+answers** to come back to it. A round runs on the daemon, so you can leave the
+page; a toast says when it's finished.
+
+Once there's a plan, each layer shows its options with what's for and against
+them. **Choose this**, **Keep it** and **Drop it** each run the command shown
+under them, and a layer, an addition or the whole plan can be sent back with a
+request. **Accept the plan** writes it out and turns the idea into a task on its
+project.
+
+**Notes kept elsewhere** takes notes you've pasted from somewhere else and has an
+agent split them into ideas and tasks. Nothing is recorded until you apply the
+pieces.
+
+### 9. Look after your projects
 
 **Projects** lists the projects this machine knows. Choose one to see where it
 is, its branch, its agent and how often it's been launched, its working trees,
@@ -162,7 +181,7 @@ read again once it finishes.
 finding repositories and stray memory, and the workspace, where you can bring in
 what other machines saved and save and push what changed here.
 
-### 9. Run anything else from Commands
+### 10. Run anything else from Commands
 
 **Commands** lists every command Loadout has, folded by area. Choose one and
 Studio builds a form from the command's own options, so it can't offer one the
@@ -181,7 +200,7 @@ for the value at a masked prompt), the attach passphrase, trusting a tool or a
 remedy, `update`, and the commands that are themselves a server or a status
 line. Starting a session sends you to **Sessions**, where Studio hosts it.
 
-### 10. Ambient
+### 11. Ambient
 
 On Home, **A** or **Ambient** turns Studio into something for a spare screen:
 the key numbers, the halo on whatever most needs you, and everything else
