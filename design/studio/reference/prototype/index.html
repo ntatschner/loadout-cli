@@ -338,6 +338,23 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
 .spgrid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 32px; align-items: start; max-width: 1100px; }
 .spgrid .pblock.wide { min-width: 0; }
 @media (max-width: 960px) { .spgrid { grid-template-columns: minmax(0, 1fr); gap: 0; } }
+/* the six pages in every mode */
+@container page (max-width: 900px) {
+  .bench, .memgrid, .dgrid, .setwrap, .spgrid { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .shelf, .setidx, .memgrid > .ls-stores { position: static; max-height: none; }
+  .setidx ul { grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 1fr)); }
+  .setidx .x { display: none; }
+  .memside { grid-column: auto; }
+  .head h1 { font-size: 24px; line-height: 28px; }
+  .tasknew { grid-template-columns: minmax(0, 1fr); }
+}
+.ls-beside .sample { display: none; }
+.qfocus { max-width: 1100px; margin: 0 auto; }
+.qfocus > .work, .qfocus > .ctx, .qfocus > .setpane, .qfocus > .memmid, .qfocus > .memside { max-width: none; }
+.qall .head { margin-top: 4px; }
+[data-mode="minimal"] .qall .bench, [data-mode="minimal"] .qall .memgrid, [data-mode="minimal"] .qall .setwrap, [data-mode="minimal"] .qall .dgrid, [data-mode="minimal"] .qall .spgrid { grid-template-columns: minmax(0, 1fr); }
+[data-mode="minimal"] .qall .shelf, [data-mode="minimal"] .qall .setidx, [data-mode="minimal"] .qall .memgrid > .ls-stores { position: static; max-height: none; }
+[data-mode="minimal"] .qall .memside { grid-column: auto; }
 </style>
 
 <a class="skip" href="#main">Skip to the page</a>
@@ -1197,7 +1214,8 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
   function pureCommands(q, picked) {
     var rows = [];
     if (picked) { pureActions(picked).forEach(function (a, i) { rows.push({ kind: "action", label: (i + 1) + "  " + a.label, cmd: a.disabledReason || a.cmd, run: function () { if (PURE) { setTimeout(function () { PURE.desk.select(picked.id, true); }, 0); } if (!a.disabledReason && a.run) { var said = a.run(); toasts.add({ level: "info", text: said || a.label, cmd: a.cmd || "" }); } } }); }); }
-    [["Everything", "all"], ["Needs you", "needs"], ["Sessions", "sessions"], ["Team runs", "runs"], ["Ideas", "ideas"], ["Tasks", "tasks"]].forEach(function (s) { rows.push({ kind: "go", label: s[0], cmd: "the list, scoped", run: function () { pureScope(s[1]); } }); });
+    [["Everything", "all"], ["Needs you", "needs"], ["Sessions", "sessions"], ["Team runs", "runs"], ["Ideas, in this list", "ideas"], ["Tasks", "tasks"]].forEach(function (s) { rows.push({ kind: "go", label: s[0], cmd: "the list, scoped", run: function () { P.pureScope = s[1]; savePrefs(); if (PURE && PURE.page) { go("home"); } else { pureScope(s[1]); } } }); });
+    Object.keys(PAGE_NAMES).forEach(function (k) { rows.push({ kind: "go", label: PAGE_NAMES[k], cmd: "its desk \u00b7 G then " + Object.keys(GOKEYS).filter(function (x) { return GOKEYS[x] === k; })[0].toUpperCase(), run: function () { go(k); } }); });
     pureGroups("all").forEach(function (g) { g.items.forEach(function (x) { rows.push({ kind: "go", label: x.title, cmd: x.kind + " · " + x.word, run: function () { if (PURE) { PURE.desk.select(x.id); } } }); }); });
     if (picked && picked.kind === "team run") { rows.push({ kind: "go", label: "Open its full page", cmd: "the five depths", run: function () { setMode("default"); setTimeout(function () { go("run-" + picked.id); }, 60); } }); }
     [["Start a session", "$ loadout <project> --task \"…\"", function () { openLaunch(); }], ["Start a team run", "$ loadout team run <team> \"<goal>\" --project <slug>", function () { openSheet("run"); }], ["Make a team", "$ loadout team new <name>", function () { openSheet("make"); }], ["Run one on a schedule", "$ loadout team schedule add <name> <team> \"<goal>\"", function () { openSheet("schedule"); }],
@@ -1213,8 +1231,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     var scope = r === "sessions" ? "sessions" : (r === "teams" ? "runs" : (P.pureScope || "all"));
     var wrap = el("div", { "class": "deskwrap" });
     var d = S.WorkDesk({ groups: pureGroups(scope), selected: sel || P.pureSelected, view: pureView, actions: pureActions, commands: pureCommands, keys: P.keys,
-      goKeys: { h: "all", s: "sessions", t: "runs", i: "ideas", k: "tasks", n: "needs" }, onGo: function (where) { pureScope(where); toasts.add({ level: "info", text: "The list: " + { all: "everything", sessions: "sessions", runs: "team runs", ideas: "ideas", tasks: "tasks", needs: "what needs you" }[where], cmd: "G then a letter" }); },
-      onSelect: function (id) { P.pureSelected = id; savePrefs(); } });
+      goKeys: GOKEYS, onGo: pureGo, onSelect: function (id) { P.pureSelected = id; savePrefs(); } });
     wrap.appendChild(d.el); main.appendChild(wrap);
     PURE = { route: r, desk: d, sig: pureSig() };
   }
@@ -1474,9 +1491,9 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
       { path: "project link", title: "Record in the repository which project it is", fields: [{ name: "project", value: p.id, fixed: true }] },
       { path: "repo check", title: "Check the repository for AI tooling files", effect: "reads", fields: [{ name: "project", value: p.id, fixed: true }] }] });
     groups[1].items.push({ path: "task remove", title: "Forget a task entirely", label: "Forget it", danger: true, why: "To say a task is done or dropped, move it on the board instead.", fields: [{ name: "id", label: "Task", kind: "choice", options: tasks.map(function (t) { return t.id; }) }, { name: "--project", value: p.id, fixed: true }] });
-    groups.push({ name: "Stop knowing it", items: [{ path: "project remove", title: "Stop knowing this project", label: "Remove", danger: true, why: "Removing a project forgets its registration. Its code is never deleted.", fields: [{ name: "project", value: p.id, fixed: true }] }] });
     groups.forEach(function (g) { g.items.forEach(function (i) { i.onRun = i.onRun || ran(i.title.toLowerCase()); }); });
     d.appendChild(block("z-ddo", "Do", [S.ActionDrawers(groups)]));
+    d.appendChild(block("z-dfg", "Forget project", [el("p", { "class": "lead", text: "Forget it on this machine only, or from the Loadout workspace for every machine, and choose what goes with it. Its repository and code are never touched." }), halo({ label: "Forget project\u2026", kind: "danger", size: "small", cmd: "opens the dialog \u00b7 changes nothing yet", onPress: function () { openForget(p); } }, "p-forget")]));
     main.appendChild(d);
   }
 
@@ -1780,6 +1797,240 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
       S.ActionDrawers([{ items: [{ path: "usage", title: "Usage your own way: by model, a project, or as a table", label: "Show", effect: "reads", fields: [{ name: "--by", label: "By", kind: "choice", options: ["project", "day", "model", "agent"] }, { name: "--days", label: "Days", value: "30" }, { name: "--project", label: "Project", kind: "choice", options: ["", "loadout-cli", "starstats"] }, { name: "--format", label: "Format", placeholder: "table" }], onRun: ran("usage") }, { path: "spend refresh", title: "Work out where spending stands for the status line", label: "Refresh it", onRun: ran("refreshed") }] }])]));
   }
 
+
+  /* ---------- the six pages in every mode: beside in Terminals and Teams, a quiet column in Minimal, a desk in Pure ---------- */
+  var BESIDE = null, PAGE_NAMES = { ideas: "Ideas", projects: "Projects", context: "Context", settings: "Settings", memory: "Memory", spend: "Spend" };
+  function pageBase(r) { return r.split("/")[0]; }
+  function pageRender(box, r) {
+    var b = pageBase(r);
+    if (b === "ideas") { renderIdeas(box, r); } else if (b === "projects") { renderProjects(box, r); } else if (b === "context") { renderContext(box, r); }
+    else if (b === "settings") { renderSettings(box, r); } else if (b === "memory") { renderMemory(box, r); } else if (b === "spend") { renderSpend(box); }
+    return box;
+  }
+  function pagePart(r, sel) { var d = pageRender(el("div", {}), r), n = d.querySelector(sel); return n || d; }
+  function keepFocus(fn) {
+    var a = document.activeElement, k = a && a.getAttribute && a.getAttribute("data-k"), caret = a && a.selectionStart;
+    fn();
+    if (k) { var n = document.querySelector('[data-k="' + CSS.escape(k) + '"]'); if (n) { n.focus({ preventScroll: true }); try { if (caret !== null && caret !== undefined && n.setSelectionRange) { n.setSelectionRange(caret, caret); } } catch (e) { /* not a text field */ } } }
+  }
+  function closeBeside() { go(P.lastFocus && !pagesRoute(P.lastFocus) ? P.lastFocus : "home"); }
+
+  /* Terminal Focus and Team Focus: the page opens beside what you are watching. */
+  function renderBeside(main, r, kind) {
+    var focus = el("div", {});
+    if (kind === "terminals") { renderDeck(focus, null); DECK.route = r; } else { renderBoard(focus, "teams"); }
+    if (BESIDE) { BESIDE.destroy(); }
+    BESIDE = S.PageBeside({ page: PAGE_NAMES[pageBase(r)], beside: kind === "terminals" ? "your terminals" : "the runs board", onClose: closeBeside });
+    BESIDE.set(pageRender(el("div", {}), r)); BESIDE.r = r; BESIDE.pv = PV;
+    main.appendChild(S.BesideGrid(focus, BESIDE));
+  }
+  function refreshBeside() { if (!BESIDE || BESIDE.pv === PV) { return; } keepFocus(function () { BESIDE.set(pageRender(el("div", {}), BESIDE.r)); }); BESIDE.pv = PV; }
+
+  /* Minimal: each page is one quiet column. */
+  function ideaWorkFor(x) { return pagePart("ideas/" + x.list + "/" + x.id, ".work"); }
+  function quietFor(r) {
+    var b = pageBase(r), items = [], sentence = el("p", {}), open = {};
+    function B(t) { return el("b", { text: t }); }
+    if (b === "ideas") {
+      var live = IDEAS.filter(function (x) { return !x.accepted; }), wait = live.filter(function (x) { return ideaWord(x) === "waiting for you"; });
+      live.forEach(function (x) { var u = x.questions.filter(function (q) { return !q.answer; }), w = ideaWord(x); items.push({ id: x.id, kind: "idea", title: x.title, word: w, where: x.list === "~" ? "workspace-wide" : x.list, ask: w === "last round failed" ? "The last round failed. Try it again or clear the marker." : u.length ? u[0].question + (u.length > 1 ? " (and " + (u.length - 1) + " more)" : "") : "" }); open[x.id] = function () { return { title: x.title, sub: x.id + " · " + x.list, word: w, content: ideaWorkFor(x) }; }; });
+      sentence.append(B(live.length + " ideas"), " being shaped", wait.length ? "; " : ".", wait.length ? B(wait.length + " waits for your answers") : "", wait.length ? "." : "");
+    }
+    if (b === "projects") {
+      var blocked = 0, fix = 0;
+      PROJ.forEach(function (p) {
+        (TASKS[p.id] || []).filter(function (t) { return t.state === "blocked"; }).forEach(function (t) { blocked++; items.push({ id: "t-" + t.id, kind: "task", title: t.title, word: "blocked", where: p.id, ask: t.note || "" }); open["t-" + t.id] = function () { return { title: t.title, sub: "task · " + p.id, word: "blocked", content: S.TaskBoard({ tasks: [t], where: ["--project", p.id], onDeclare: function (tt, n) { said(tt.title + ": " + S.TASK_MOVE[n].toLowerCase(), "$ loadout task declare " + tt.id + " " + n + " --project " + p.id); PV++; } }).el }; }; });
+        (HEALTH[p.id] || []).filter(function (f) { return f.fixable; }).forEach(function (f, i) { fix++; var id = "h-" + p.id + i; items.push({ id: id, kind: "health", title: f.name + " \u00b7 " + f.detail, word: "to put right", where: p.id }); open[id] = function () { return { title: p.name + ": its health", sub: "loadout drift " + p.id, word: "to put right", content: pagePart("projects/" + p.id, '[aria-labelledby="z-dh"]') }; }; });
+      });
+      sentence.append(PROJ.length + " projects, " + PROJ.filter(function (p) { return p.available; }).length + " on this machine. ");
+      if (blocked || fix) { sentence.append(B(blocked + " task" + (blocked === 1 ? " is" : "s are") + " blocked"), " and ", B(fix + " thing" + (fix === 1 ? "" : "s") + " can be put right"), "."); }
+    }
+    if (b === "context") {
+      var slug = r.split("/")[1] || "loadout-cli", e = explain(slug), used = e.selected.reduce(function (s, x) { return s + x.estimatedTokens; }, 0);
+      sentence.append("A session on " + slug + " starts with ", B(used.toLocaleString("en-GB") + " tokens"), used > e.budget ? ", over its budget of " + e.budget.toLocaleString("en-GB") + "." : ", within its budget of " + e.budget.toLocaleString("en-GB") + ".");
+      [["docs", "2 places where the documents have come adrift", "README.md links a renamed page; a guide names --by week, which usage does not have"], ["health", "1 place where the project departs from a specialist", "practice.testing: three behaviours in one test"]].forEach(function (x) { items.push({ id: x[0], kind: "context", title: x[1], word: "to put right", where: slug, ask: x[2] }); open[x[0]] = function () { return { title: x[1], sub: "context · " + slug, word: "to put right", content: pagePart("context/" + slug + "/" + x[0], ".ctx") }; }; });
+    }
+    if (b === "settings") {
+      items.push({ id: "machine", kind: "this machine", title: "The zsh completion is out of date", word: "to put right", where: "doctor", ask: "loadout doctor --fix puts it right." });
+      open.machine = function () { return { title: "This machine", sub: "loadout doctor", word: "to put right", content: pagePart("settings/machine", ".setpane") }; };
+      items.push({ id: "agents", kind: "pack", title: "The pack infra is not approved here", word: "not approved", where: "agents and packs" });
+      open.agents = function () { return { title: "Agents and packs", sub: "loadout pack list", word: "not approved", content: pagePart("settings/agents", ".setpane") }; };
+      if (DAEMON.held) { items.push({ id: "daemon", kind: "daemon", title: "The daemon's schedules are held", word: "held", where: "the daemon" }); open.daemon = function () { return { title: "The daemon", sub: "loadout daemon", word: "held", content: pagePart("settings/daemon", ".setpane") }; }; }
+      sentence.append("The daemon is ", B(DAEMON.held ? "running, its schedules held" : "running"), DAEMON.autostart ? " and starts when you log in. " : ". ", B("1 thing"), " on this machine can be put right.");
+    }
+    if (b === "memory") {
+      var n = Object.keys(MEM).reduce(function (s, k) { return s + MEM[k].project.length + MEM[k].user.length + MEM[k].machine.length; }, 0);
+      items.push({ id: "test-layout", kind: "topic", title: "test-layout differs from what the agent recorded", word: "needs a decision", where: "loadout-cli", ask: "Keep the workspace's copy, or bring the agent's in." });
+      open["test-layout"] = function () { return { title: "test-layout", sub: "memory · loadout-cli", word: "needs a decision", content: pagePart("memory/loadout-cli/project/test-layout", ".memmid") }; };
+      items.push({ id: "import", kind: "memory", title: "2 topics the agent recorded outside the workspace", word: "needs a decision", where: "loadout-cli", ask: "build-quirks and ci-secrets would come in with loadout memory import." });
+      open["import"] = function () { return { title: "Recorded outside the workspace", sub: "memory · loadout-cli", word: "needs a decision", content: pagePart("memory/loadout-cli", ".memside") }; };
+      sentence.append(B(n + " topics"), " across " + Object.keys(MEM).length + " projects. The audit of loadout-cli says ", B("needs a look"), ".");
+    }
+    if (b === "spend") {
+      var u = usageFor("project", "30");
+      sentence.append(B(S.tokens(u.totals.billedInputEquivalent) + " tokens"), " billed as input in the last 30 days; the cache saved ", B("74%"), ".");
+      ST.lines.filter(function (l) { return l.kind === "session" && l.stage === 2; }).forEach(function (l) { items.push({ id: l.id, kind: "session", title: l.title, word: wordOf(l), where: l.where }); });
+    }
+    return { items: items, sentence: sentence, open: open };
+  }
+  function renderQuietPage(main, r) {
+    var q = quietFor(r), b = pageBase(r);
+    var qp = S.QuietPage({ title: PAGE_NAMES[b], sentence: q.sentence, items: q.items, open: r.indexOf("/") > 0, calmText: "Nothing on " + PAGE_NAMES[b] + " needs you.",
+      onOpen: function (x, from) {
+        if (x.kind === "session") { openQuiet(x, from); return; }
+        var f = q.open[x.id] && q.open[x.id](); if (!f) { return; }
+        if (FOCUS) { FOCUS.close(); FOCUS = null; }
+        FOCUS = S.FocusFrame({ title: f.title, sub: f.sub, word: f.word, content: el("div", { "class": "qfocus" }, [f.content]), from: from, onClose: function () { FOCUS = null; } });
+      },
+      everything: function () { return pageRender(el("div", { "class": "qall" }), r); } });
+    main.appendChild(qp.el);
+  }
+
+  /* Pure Focus: each page is a WorkDesk, reached with G and its letter. */
+  var GOKEYS = { h: "all", s: "sessions", t: "runs", k: "tasks", n: "needs", i: "ideas", p: "projects", c: "context", m: "memory", u: "spend", o: "settings" };
+  function pureGo(where) {
+    if (PAGE_NAMES[where]) { go(where); toasts.add({ level: "info", text: PAGE_NAMES[where] + ", as a desk", cmd: "G then " + Object.keys(GOKEYS).filter(function (k) { return GOKEYS[k] === where; })[0].toUpperCase() }); return; }
+    P.pureScope = where; savePrefs();
+    if (PURE && PURE.page) { go("home"); } else { pureScope(where); }
+    toasts.add({ level: "info", text: "The list: " + { all: "everything", sessions: "sessions", runs: "team runs", tasks: "tasks", needs: "what needs you" }[where], cmd: "G then a letter" });
+  }
+  function act(label, cmd, fn, kind, why) { return { label: label, cmd: cmd, kind: kind || "", disabledReason: why, run: function () { var r = fn ? fn() : null; if (cmd && cmd.indexOf("$ ") === 0) { said(typeof r === "string" ? r : label, cmd); } return typeof r === "string" ? r : label; } }; }
+  function openForgetById(id) { var p = proj(id); if (p) { openForget(p); } return "Opened Forget " + (p ? p.name : id); }
+  var DESKS = {
+    ideas: function () {
+      var groups = [], wait = IDEAS.filter(function (x) { return ideaWord(x) === "waiting for you" || ideaWord(x) === "last round failed"; });
+      function item(x) { var u = x.questions.filter(function (q) { return !q.answer; }).length; return { id: x.id, kind: "idea", title: x.title, meta: (x.list === "~" ? "workspace-wide" : x.list) + " · " + (u ? u + " question" + (u === 1 ? "" : "s") + " for you" : x.stage.toLowerCase()), word: ideaWord(x) }; }
+      if (wait.length) { groups.push({ key: "needs", name: "Needs you", items: wait.map(item) }); }
+      var lists = {}; IDEAS.filter(function (x) { return wait.indexOf(x) < 0; }).forEach(function (x) { (lists[x.list] = lists[x.list] || []).push(x); });
+      Object.keys(lists).forEach(function (k) { groups.push({ key: k, name: k === "~" ? "Workspace-wide" : k, items: lists[k].map(item) }); });
+      function find(id) { return IDEAS.filter(function (x) { return x.id === id; })[0]; }
+      return { groups: groups, view: function (it) { var x = find(it.id); return { el: x ? ideaWorkFor(x) : el("p", { text: "Gone." }) }; },
+        actions: function (it) {
+          var x = find(it.id); if (!x) { return []; }
+          var w = ideaWhere(x).join(" "), out = [], i1 = x.id === "browser-launcher" ? line("i1") : null;
+          if (i1 && i1.failed) { out.push(act("Try the round again", "$ loadout idea refine " + x.id + " " + w, function () { refine(); bump(); }, "needs")); out.push(act("Clear the marker", "$ loadout idea dismiss " + x.id + " " + w, function () { i1.failed = ""; bump(); })); }
+          else if (!x.accepted) { out.push(act("Take it one round further", "$ loadout idea refine " + x.id + " " + w, function () { if (i1) { refine(); } bump(); return "A round is running on the daemon"; })); }
+          if (x.plan && !x.accepted && x.plan.placement) { var to = x.plan.placement.slug; out.push(act("Accept it onto " + to, "$ loadout idea accept " + x.id + " " + w + " --to " + to, function () { x.accepted = { project: to, plan: "docs/plans/" + x.id + ".md", by: "you", when: "17 Oct" }; x.stage = "Accepted"; bump(); return "Accepted onto " + to; })); }
+          if (!x.accepted) { out.push(act("Forget this idea", "$ loadout idea remove " + x.id + " " + w, function () { IDEAS = IDEAS.filter(function (y) { return y !== x; }); bump(); return "Forgot " + x.title; }, "danger")); }
+          out.push(act("Drop a new idea in", "opens the box · records nothing yet", function () { setMode("default"); setTimeout(function () { go("ideas/+add"); }, 60); }));
+          return out;
+        } };
+    },
+    projects: function () {
+      function item(p) { var b = (TASKS[p.id] || []).filter(function (t) { return t.state === "blocked"; }).length, f = (HEALTH[p.id] || []).filter(function (x) { return x.fixable; }).length; return { id: p.id, kind: "project", title: p.name, meta: p.id + (p.available ? " · " + p.branch + (b ? " · " + b + " blocked" : "") : " · elsewhere only"), word: !p.available ? "not on this machine" : f ? "to put right" : b ? "blocked" : "" }; }
+      return { groups: [{ key: "here", name: "On this machine", items: PROJ.filter(function (p) { return p.available; }).map(item) }, { key: "away", name: "Not on this machine", items: PROJ.filter(function (p) { return !p.available; }).map(item) }].filter(function (g) { return g.items.length; }),
+        view: function (it) { return { el: pagePart("projects/" + it.id, ".dossier") }; },
+        actions: function (it) {
+          var p = proj(it.id); if (!p) { return []; }
+          var out = [], fx = (HEALTH[p.id] || []).filter(function (f) { return f.fixable; }).length;
+          if (p.available) { out.push(act("Open it in the editor", "$ loadout code " + p.id)); out.push(act("Open its folder", "$ loadout project open " + p.id)); }
+          else { out.push(act("Clone it onto this machine", "$ loadout project clone " + p.id, function () { p.available = true; p.path = "~/code/" + p.id; bump(); return "Cloned " + p.id; })); }
+          if (fx) { out.push(act("Put " + fx + " right", "$ loadout drift " + p.id + " --fix --yes", function () { HEALTH[p.id] = HEALTH[p.id].filter(function (f) { return !f.fixable; }); bump(); return "Put " + fx + " right"; })); }
+          out.push(act("Onboard it with an agent", "opens a terminal here, hosted by the daemon", function () { return "In Studio, a terminal opens with loadout project onboard " + p.id; }));
+          out.push(act("Forget project…", "opens the dialog · changes nothing yet", function () { return openForgetById(p.id); }));
+          return out;
+        } };
+    },
+    context: function (r) {
+      var slug = r.split("/")[1] || "loadout-cli";
+      var secs = CSECT.map(function (c) { return { id: "sec-" + c[0], kind: "section", title: c[1], meta: "context · " + slug, word: c[0] === "docs" || c[0] === "health" ? "to put right" : "" }; });
+      var specs = Object.keys(SPECS).map(function (id) { var s = SPECS[id]; return { id: "spec-" + id, kind: "specialist", title: s.title, meta: id + " · " + s.tokens.toLocaleString("en-GB") + " tokens" + (s.always ? " · always" : ""), word: "" }; });
+      return { groups: [{ key: "secs", name: "Context of " + slug, items: secs }, { key: "specs", name: "Specialists", items: specs }],
+        view: function (it) { var r2 = it.id.indexOf("sec-") === 0 ? "context/" + slug + "/" + it.id.slice(4) : "context/" + slug + "/specialist/" + it.id.slice(5); var d = pageRender(el("div", {}), r2), c = d.querySelector(".ctx"); return { el: c || d }; },
+        actions: function (it) {
+          var out = [], sec = it.id.slice(4);
+          if (it.id === "sec-load") { ["implement", "advise", "investigate", "review"].forEach(function (m) { out.push(act("Explain it in " + m + " mode", "$ loadout instructions explain --project " + slug + " --mode " + m + " · reads only", function () { CX.mode = m; bump(); return "Explained, " + m + " mode"; })); }); }
+          if (it.id.indexOf("spec-") === 0) { var sid = it.id.slice(5); out.push(act("Copy it into the workspace to edit", "$ loadout instructions export " + sid + " --project " + slug)); out.push(act("Measure how often sessions did what it asks", "$ loadout instructions probe " + sid)); }
+          if (sec === "docs") { out.push(act("Bring the symbol index up to date", "$ loadout docs refresh --project " + slug)); }
+          if (sec === "health") { out.push(act("Which specialists launches reached", "$ loadout instructions stats --project " + slug + " · reads only")); }
+          if (sec === "voice") { out.push(act("Render it into the style specialist", "$ loadout voice render --project " + slug)); out.push(act("Learn it from your writing", "opens a terminal here, hosted by the daemon", function () { return "In Studio, a terminal opens with loadout voice learn --project " + slug; })); }
+          if (sec === "handoff") { out.push(act("Write or read a handoff", "$ loadout handoff " + slug)); }
+          PROJ.filter(function (p) { return p.available && p.id !== slug; }).forEach(function (p) { out.push(act("The same for " + p.id, "the context of another project", function () { go("context/" + p.id); })); });
+          return out;
+        } };
+    },
+    settings: function () {
+      var words = { studio: "", loadout: "", agents: "not approved", safety: "", daemon: DAEMON.held ? "held" : "running", machine: "to put right" };
+      return { groups: [{ key: "sections", name: "Settings", items: SSECT.map(function (s) { return { id: s[0], kind: "section", title: s[1], meta: s[2], word: words[s[0]] }; }) }],
+        view: function (it) { return { el: pagePart("settings/" + it.id, ".setpane") }; },
+        actions: function (it) {
+          var out = [];
+          if (it.id === "studio") { out.push(act("Reset the Lens", "$ loadout config set studio-layout-lens \"\"")); out.push(act("Reset the Map", "$ loadout config set studio-layout-map \"\"")); out.push(act("Sign out every browser", "$ loadout dashboard sign-out", function () { return "This prototype stays signed in"; }, "danger")); }
+          if (it.id === "agents") { out.push(act("Approve infra's pinned commit here", "$ loadout pack approve infra")); }
+          if (it.id === "daemon") {
+            out.push(DAEMON.held ? act("Let the schedules fire", "$ loadout daemon resume", function () { DAEMON.held = false; bump(); }) : act("Hold the schedules", "$ loadout daemon pause", function () { DAEMON.held = true; bump(); }));
+            out.push(act("Restart it", "$ loadout daemon restart", function () { return "In Studio, this page reconnects when it is back"; }, "danger"));
+            out.push(act("Stop it", "$ loadout daemon stop", function () { return "In Studio, this page waits for it"; }, "danger"));
+            out.push(DAEMON.autostart ? act("Stop it starting at log-in", "$ loadout daemon autostart disable", function () { DAEMON.autostart = false; bump(); }) : act("Start it at log-in", "$ loadout daemon autostart enable", function () { DAEMON.autostart = true; bump(); }));
+          }
+          if (it.id === "machine") { out.push(act("Put right what can be put right", "$ loadout doctor --fix --yes")); out.push(act("Set the launcher up again", "opens a terminal here, hosted by the daemon", function () { return "In Studio, a terminal opens with loadout setup"; })); }
+          if (!out.length) { out.push(act("Change things in the view", "Enter opens the view; its forms show their commands", null, "", "this section's changes are in its forms")); }
+          return out;
+        } };
+    },
+    memory: function (r) {
+      var slug = r.split("/")[1] || "loadout-cli", m = MEM[slug] || { project: [], user: [], machine: [] };
+      var groups = STORES.map(function (s) { return { key: s[0], name: s[1], items: (m[s[0]] || []).map(function (t) { return { id: s[0] + "/" + t.name, kind: "topic", title: t.name, meta: t.description, word: t.name === "test-layout" ? "needs a decision" : "" }; }) }; }).filter(function (g) { return g.items.length; });
+      return { groups: groups, view: function (it) { return { el: pagePart("memory/" + slug + "/" + it.id, ".memmid") }; },
+        actions: function (it) {
+          var st = it.id.split("/")[0], nm = it.id.split("/")[1], out = [];
+          if (st === "project") { out.push(act("Delete this topic", "$ loadout memory delete " + nm + " " + slug + " --yes", function () { m.project = m.project.filter(function (t) { return t.name !== nm; }); bump(); return "Deleted " + nm + ". A backup was taken first."; }, "danger")); }
+          out.push(act("Rebuild the index", "$ loadout memory reindex " + slug));
+          out.push(act("Clean up what the audit found", "$ loadout memory audit " + slug + " --clean --apply"));
+          out.push(act("Walk the topics nobody has revisited", "opens a terminal here, hosted by the daemon", function () { return "In Studio, a terminal opens with loadout memory review " + slug; }));
+          Object.keys(MEM).filter(function (k) { return k !== slug; }).forEach(function (k) { out.push(act("The memory of " + k, "another project's topics", function () { go("memory/" + k); })); });
+          return out;
+        } };
+    },
+    spend: function () {
+      var parts = [["z-pt", "Tokens", "billed as input, and what the cache saved"], ["z-pb", "Where it went", "by " + SPEND.by], ["z-pr", "Running now", "loadout running"], ["z-pl", "Launched this week", "loadout launches --days 7"], ["z-ps", "Recent sessions", "loadout sessions --limit 12"], ["z-pa", "What agents reported", "loadout telemetry status"], ["z-pm", "This machine", "loadout status"]];
+      return { groups: [{ key: "spend", name: "Spend · the last " + ({ "1": "day", "7": "week", "30": "30 days", "90": "90 days" }[SPEND.days]), items: parts.map(function (x) { return { id: x[0], kind: "spend", title: x[1], meta: x[2], word: x[0] === "z-pr" ? "running" : "" }; }) }],
+        view: function (it) { var d = el("div", {}); renderSpend(d); var n = d.querySelector('[aria-labelledby="' + it.id + '"]'); return { el: n || d }; },
+        actions: function () {
+          var out = [];
+          [["1", "day"], ["7", "week"], ["30", "30 days"], ["90", "90 days"]].forEach(function (x) { out.push(act("Over the last " + x[1], "$ loadout usage --by " + SPEND.by + " --days " + x[0] + " · reads only", function () { SPEND.days = x[0]; bump(); return "Over the last " + x[1]; }, "", SPEND.days === x[0] ? "shown now" : null)); });
+          ["project", "day", "model", "agent"].forEach(function (b) { out.push(act("By " + b, "$ loadout usage --by " + b + " --days " + SPEND.days + " · reads only", function () { SPEND.by = b; bump(); return "By " + b; }, "", SPEND.by === b ? "shown now" : null)); });
+          out.push(act("Work out where spending stands", "$ loadout spend refresh"));
+          return out;
+        } };
+    }
+  };
+  function renderPurePage(main, r) {
+    var b = pageBase(r), cfg = DESKS[b](r), sub = r.split("/").slice(1).join("/");
+    if (PURE) { PURE.desk.destroy(); PURE = null; }
+    P.pureSel = P.pureSel || {};
+    var all = []; cfg.groups.forEach(function (g) { all = all.concat(g.items); });
+    var want = b === "memory" && r.split("/").length > 3 ? r.split("/").slice(2).join("/") : b === "ideas" && r.split("/").length > 2 ? r.split("/")[2] : b === "projects" && r.split("/")[1] ? r.split("/")[1] : b === "settings" && r.split("/")[1] ? r.split("/")[1] : null;
+    var sel = want && all.some(function (x) { return x.id === want; }) ? want : (P.pureSel[b] && all.some(function (x) { return x.id === P.pureSel[b]; }) ? P.pureSel[b] : (all[0] || {}).id);
+    var wrap = el("div", { "class": "deskwrap" });
+    var d = S.WorkDesk({ groups: cfg.groups, selected: sel, label: PAGE_NAMES[b], view: cfg.view, actions: function (x) { return cfg.actions(x).map(function (a) { var run = a.run; return Object.assign({}, a, { run: function () { var s = run ? run() : a.label; setTimeout(function () { if (PURE && PURE.page) { PURE.desk.repaintActions(); } }, 40); return s; } }); }); }, commands: pureCommands, keys: P.keys, goKeys: GOKEYS, onGo: pureGo,
+      onSelect: function (id) { P.pureSel[b] = id; savePrefs(); } });
+    wrap.appendChild(d.el); main.appendChild(wrap);
+    PURE = { route: r, desk: d, page: b, pv: PV, sub: sub };
+  }
+
+  /* Forget project: here or everywhere, with what goes with it. */
+  function openForget(p) {
+    var dlg = null;
+    var f = S.ForgetProject({ project: p, counts: { tasks: (TASKS[p.id] || []).map(function (t) { return t.id; }), ideas: IDEAS.filter(function (x) { return x.list === p.id && !x.accepted; }).map(function (x) { return x.id; }), topics: ((MEM[p.id] || {}).project || []).map(function (t) { return t.name; }) },
+      definition: { path: "~/.loadout/workspace/projects/" + p.id, files: 14 },
+      onRun: function (plan) {
+        if (plan.preview) { said("Previewed " + plan.lines.length + " commands. Nothing changed.", plan.lines.join(" · ")); return "Previewed " + plan.lines.length + " commands. Nothing changed."; }
+        if (plan.scope === "here") { p.available = false; p.path = ""; p.branch = null; }
+        else {
+          PROJ = PROJ.filter(function (x) { return x !== p; });
+          if (plan.picked.tasks) { delete TASKS[p.id]; }
+          if (plan.picked.ideas) { IDEAS = IDEAS.filter(function (x) { return x.list !== p.id || x.accepted; }); }
+          if (plan.picked.topics && MEM[p.id]) { delete MEM[p.id]; }
+        }
+        said(plan.scope === "here" ? "Forgot where " + p.name + " is on this machine. The repository was not touched." : p.name + " is forgotten on every machine. The repository was not touched.", plan.lines.join(" · "), "done");
+        setTimeout(function () { if (dlg) { dlg.close(); } go("projects"); bump(); }, 900);
+        return plan.scope === "here" ? "Forgotten on this machine." : "Forgotten on every machine.";
+      } });
+    dlg = S.Dialog({ title: "Forget " + p.name, content: f.el, cancelLabel: "Close", danger: true });
+    dlg.open();
+  }
+
   /* ---------- placeholder pages ---------- */
   function renderElsewhere(main, r) {
     if (r === "settings") { main.appendChild(el("div", { "class": "head" }, [el("h1", { text: "Settings" })])); main.appendChild(el("section", { "class": "placeholder", "aria-labelledby": "z-app" }, [zone("", "Appearance", "z-app"), appearanceForm()])); return; }
@@ -1794,11 +2045,14 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
   function teamsRoute(r) { return r === "teams" || r.indexOf("teams-") === 0 || r.indexOf("run-") === 0 || r.indexOf("team-") === 0; }
   function render() {
     var rr = route(), t1 = line("t1"), i1 = line("i1"), sig = rr + "|" + TV + "|" + PV + "|" + (t1 ? [t1.waiting, t1.stage, t1.held].join(",") : "") + "|" + (i1 && rr.indexOf("ideas") === 0 ? [i1.stage, i1.failed].join(",") : "");
-    var pureRoute = P.mode === "pure" && (rr === "home" || rr === "sessions" || rr === "teams" || rr.indexOf("session-") === 0 || rr.indexOf("run-") === 0);
-    if (pureRoute && PURE && PURE.route === rr && document.getElementById("main").childNodes.length) { refreshPure(); renderNav(); renderAmbient(); return; }
+    var pureRoute = P.mode === "pure" && (rr === "home" || rr === "sessions" || rr === "teams" || rr.indexOf("session-") === 0 || rr.indexOf("run-") === 0 || (pagesRoute(rr) && rr.indexOf("+") < 0));
+    if (pureRoute && PURE && PURE.route === rr && document.getElementById("main").childNodes.length) {
+      if (!PURE.page) { refreshPure(); renderNav(); renderAmbient(); return; }
+      if (PURE.pv === PV) { renderNav(); renderAmbient(); return; }
+    }
     if (!pureRoute && PURE) { PURE.desk.destroy(); PURE = null; LIVE = null; }
-    var deckRoute = P.mode === "terminals" && (rr === "home" || rr === "sessions" || rr.indexOf("session-") === 0);
-    if (deckRoute && DECK && DECK.route === rr && document.getElementById("main").childNodes.length) { refreshDeck(); renderNav(); renderAmbient(); return; }
+    var deckRoute = P.mode === "terminals" && (rr === "home" || rr === "sessions" || rr.indexOf("session-") === 0 || pagesRoute(rr));
+    if (deckRoute && DECK && DECK.route === rr && document.getElementById("main").childNodes.length) { refreshDeck(); if (pagesRoute(rr)) { refreshBeside(); } renderNav(); renderAmbient(); return; }
     if (!deckRoute) { DECK = null; }
     var steady = teamsRoute(rr) || pagesRoute(rr) || (P.mode === "teams" && rr === "home") || (P.mode === "minimal" && rr === "home" && FOCUS);
     if (steady && sig === lastTeams && document.getElementById("main").childNodes.length) { renderNav(); renderAmbient(); return; }
@@ -1808,7 +2062,13 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     if (!k && a && a.id === "home-task") { k = "home-task"; }
     renderNav();
     var main = document.getElementById("main"), r = route(); main.textContent = "";
-    if (P.mode === "pure" && (r === "home" || r === "sessions" || r === "teams" || r.indexOf("session-") === 0 || r.indexOf("run-") === 0)) { renderPure(main, r); }
+    if (PURE) { PURE.desk.destroy(); PURE = null; }
+    if (BESIDE) { BESIDE.destroy(); BESIDE = null; }
+    if (!pagesRoute(r)) { P.lastFocus = r; }
+    if (P.mode === "pure" && pagesRoute(r) && r.indexOf("+") < 0) { renderPurePage(main, r); }
+    else if ((P.mode === "terminals" || P.mode === "teams") && pagesRoute(r)) { renderBeside(main, r, P.mode); }
+    else if (P.mode === "minimal" && pagesRoute(r)) { renderQuietPage(main, r); }
+    else if (P.mode === "pure" && (r === "home" || r === "sessions" || r === "teams" || r.indexOf("session-") === 0 || r.indexOf("run-") === 0)) { renderPure(main, r); }
     else if (P.mode === "terminals" && (r === "home" || r === "sessions" || r.indexOf("session-") === 0)) { renderDeck(main, r.indexOf("session-") === 0 ? r.slice(8) : null); }
     else if (P.mode === "teams" && (r === "home" || r === "teams" || r.indexOf("run-") === 0 || r.indexOf("team-") === 0)) { renderBoard(main, r); }
     else if (P.mode === "minimal" && r === "home") { renderQuiet(main); }

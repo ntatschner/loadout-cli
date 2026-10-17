@@ -13,4 +13,4 @@ Each card offers only the moves that state allows, each running `loadout task de
 
 - The command under each move shows when the move is hovered or focused, so the cards stay calm.
 - Each column heading carries its state's Signal and count.
-- Below 860px the columns stack.
+- When the board itself is narrower than 640px (a phone, a panel beside the terminals, a Pure Focus view) the columns stack.

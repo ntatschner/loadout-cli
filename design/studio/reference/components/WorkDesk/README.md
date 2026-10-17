@@ -22,7 +22,8 @@ WorkDesk is **Pure Focus**, the fifth mode: a flat, sharp work view for acting f
 | 1 to 9 | run that action |
 | / | filter the list |
 | : | the command bar |
-| G then H, S, T, I, K, N | go: home (everything), sessions, team runs, ideas, tasks, what needs you |
+| G then H, S, T, K, N | go: home (everything), sessions, team runs, tasks, what needs you |
+| G then I, P, C, M, U, O | go to a page, as its own desk: Ideas, Projects, Context, Memory, Spend (usage), Settings (options) |
 | F6, Shift+F6 | next, previous pane |
 | ? | every key (KeyHelp) |
 

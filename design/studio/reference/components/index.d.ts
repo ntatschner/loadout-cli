@@ -335,7 +335,7 @@ export declare function FocusFrame(o: { title: string; sub?: string; word?: stri
 
 /* ---------- Pure Focus ---------- */
 
-export interface DeskItem { id: string; kind?: string; title: string; meta?: string; word: string }
+export interface DeskItem { id: string; kind?: string; title: string; meta?: string; /** Its state word; leave it empty for an item with no state, such as a section of Settings. */ word: string }
 export interface DeskAction { label: string; cmd?: string; kind?: "" | "needs" | "danger"; disabledReason?: string; run?: () => string | void }
 export interface BarRow { kind: "action" | "go" | "command" | string; label: string; cmd?: string; run?: () => void }
 /** The picked thing's actions, numbered 1 to 9 with their commands. A danger action asks for its key twice. */
@@ -435,3 +435,27 @@ export interface UsageTotals { input: number; output: number; thinking: number; 
 export declare function TokenSplit(o: { totals: UsageTotals; since?: string; complete?: boolean; from?: string }): HTMLElement;
 /** Tokens by project, model or agent as bars (the twenty largest); by day as columns read with the arrow keys. */
 export declare function SpendBars(o: { groups: { name: string; value: number; registered?: boolean }[]; by: "project" | "day" | "model" | "agent"; limit?: number; label?: string; unit?: string; format?: (n: number) => string }): HTMLElement;
+
+/* ---------- The six pages in every mode (stage 9) ---------- */
+
+/** A page opened beside the terminals (Terminal Focus) or the runs board (Team Focus), which stay live. Escape or Close closes it, unless focus is in a field, a terminal or a dialog. */
+export declare function PageBeside(o: { page: string; beside?: string; content?: Node; closeLabel?: string; onClose?: () => void }): { el: HTMLElement; body: HTMLElement; set: (content: Node | null) => void; close: () => void; destroy: () => void };
+/** What you are watching and the page beside it. Below 1100px the page takes the width. */
+export declare function BesideGrid(focus: Node, beside: ReturnType<typeof PageBeside> | HTMLElement): HTMLElement;
+/** A page in Minimal: one sentence, what needs you or matters now (a QuietList), and Show everything for the rest. */
+export declare function QuietPage(o: {
+  title: string; sentence?: string | Node;
+  items: { id: string; kind?: string; title: string; word: string; where?: string; ask?: string }[];
+  onOpen?: (item: unknown, from: DOMRect) => void;
+  /** Built the first time Show everything is pressed. */
+  everything?: () => Node;
+  calmText?: string; moreLabel?: string; lessLabel?: string; label?: string; open?: boolean; onToggle?: (open: boolean) => void;
+}): { el: HTMLElement; showAll: () => void };
+/** Forget a project on this machine only (`project remove <p>`) or from the Loadout workspace for every machine (`--from-workspace`, pressed twice), with optional cleanup that runs first: Git protections, its tasks, ideas and memory topics. The repository is never touched. Put it in a Dialog. */
+export declare function ForgetProject(o: {
+  project: { id: string; name?: string; available?: boolean };
+  counts?: { tasks?: string[]; ideas?: string[]; topics?: string[] };
+  definition?: { path: string; files: number };
+  disabledReason?: string;
+  onRun?: (plan: { scope: "here" | "everywhere"; lines: string[]; preview: boolean; picked: Record<string, boolean> }) => string | void;
+}): { el: HTMLElement; readonly scope: "here" | "everywhere"; steps: () => string[] };

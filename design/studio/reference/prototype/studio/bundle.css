@@ -1396,7 +1396,7 @@ a.ls-ptile:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px;
 .ls-pwall { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 8px; }
 
 /* ---------- TaskBoard: what is being worked on, by where it stands ---------- */
-.ls-tboard { display: grid; gap: 10px; }
+.ls-tboard { display: grid; gap: 10px; container-type: inline-size; }
 .ls-tboard .cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .ls-tboard .col { display: grid; align-content: start; gap: 6px; min-width: 0; padding: 10px; background: color-mix(in srgb, var(--surface) 55%, transparent); box-shadow: inset 0 0 0 1px var(--rule); }
 .ls-tboard .col > h4 { display: flex; align-items: center; gap: 8px; margin: 0 0 2px; font-size: 11.5px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
@@ -1420,7 +1420,7 @@ a.ls-ptile:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px;
 .ls-tboard details.closed { padding: 8px 10px; box-shadow: inset 0 0 0 1px var(--rule); }
 .ls-tboard details.closed summary { cursor: pointer; font-size: 13px; color: var(--ink-soft); }
 .ls-tboard details.closed .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 6px; margin-top: 8px; }
-@media (max-width: 860px) { .ls-tboard .cols { grid-template-columns: minmax(0, 1fr); } }
+@container (max-width: 640px) { .ls-tboard .cols { grid-template-columns: minmax(0, 1fr); } }
 
 /* ---------- LoadStack: what a session starts with, as one bar against the budget ---------- */
 .ls-load { --c: var(--accent); display: grid; gap: 12px; }
@@ -1594,3 +1594,69 @@ a.ls-ptile:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px;
 .ls-bars .readout b { font-family: var(--font-mono); font-weight: 400; color: var(--ink-strong); }
 .ls-bars .keys { font-size: 12px; color: var(--muted); }
 @media (max-width: 520px) { .ls-bars ol.rows li { grid-template-columns: minmax(0, 1fr) 60px; } .ls-bars ol.rows .track { grid-column: 1 / -1; grid-row: 2; } }
+
+/* ---------- PageBeside: a page opened next to what you are watching, which stays live ---------- */
+.ls-besidegrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(460px, 52%); gap: 18px; align-items: start; min-width: 0; }
+.ls-besidegrid > .focusarea { min-width: 0; overflow-x: clip; }
+/* A page in a WorkDesk view lays out by the pane's width too. */
+[data-mode="pure"] .ls-desk .vbody:not(.term) { container-type: inline-size; container-name: page; }
+.ls-beside { --c: var(--accent); position: sticky; top: 70px; display: grid; grid-template-rows: auto minmax(0, 1fr); max-height: calc(100vh - 86px); min-width: 0; background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule), var(--shadow-float); animation: lsBesideIn .45s var(--ease-travel) both; }
+@keyframes lsBesideIn { from { opacity: 0; transform: translateX(28px); } }
+[data-motion="reduced"] .ls-beside { animation: lsBesideFade .2s linear both; }
+@keyframes lsBesideFade { from { opacity: 0; } }
+[data-motion="none"] .ls-beside { animation: none; }
+@media (prefers-reduced-motion: reduce) { .ls-beside { animation: lsBesideFade .2s linear both; } }
+[data-mode="pure"] .ls-beside { animation: none; }
+.ls-beside > .bh { display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 0 8px 0 16px; box-shadow: inset 0 -1px 0 var(--rule); }
+.ls-beside > .bh .t { font-size: 11.5px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+.ls-beside > .bh .t b { font-weight: 500; color: var(--ink-strong); }
+.ls-beside > .bh .grow { flex: 1 1 auto; }
+.ls-beside > .bh .x { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 10px; border: 0; background: none; color: var(--ink-soft); font: inherit; font-size: 13px; cursor: pointer; }
+.ls-beside > .bh .x:hover { color: var(--ink-strong); background: var(--tint-hover-c); }
+.ls-beside > .bh .x:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.ls-beside > .bh .x kbd { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.ls-beside > .body { min-height: 0; overflow: auto; padding: 14px 18px 28px; container-type: inline-size; container-name: page; }
+@media (max-width: 1099px) {
+  .ls-besidegrid { grid-template-columns: minmax(0, 1fr); }
+  .ls-besidegrid > .focusarea { display: none; }
+  .ls-beside { position: static; max-height: none; box-shadow: inset 0 0 0 1px var(--rule); }
+  .ls-beside > .body { overflow: visible; }
+}
+
+/* ---------- QuietPage: one calm column, what matters now first, everything else behind one button ---------- */
+.ls-qpage { display: grid; gap: 18px; max-width: 760px; margin: 5vh auto 0; min-width: 0; }
+.ls-qpage > .qh { display: grid; gap: 6px; }
+.ls-qpage > .qh h1 { margin: 0; font-size: 22px; font-weight: 300; letter-spacing: .02em; color: var(--ink-strong); }
+.ls-qpage > .qh p { margin: 0; font-size: 17px; line-height: 1.45; font-weight: 300; color: var(--ink); }
+.ls-qpage > .qh p b { font-weight: 400; color: var(--ink-strong); }
+.ls-qpage > .calmnote { margin: 0; font-size: 14px; color: var(--good); }
+.ls-qpage > .more { justify-self: start; display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 2px; border: 0; background: none; color: var(--ink-soft); font: inherit; font-size: 13px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; cursor: pointer; }
+.ls-qpage > .more::before { content: ""; width: 7px; height: 7px; border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor; transform: rotate(-45deg); transition: transform var(--dur-base) var(--ease-out); }
+.ls-qpage > .more[aria-expanded="true"]::before { transform: rotate(45deg); }
+.ls-qpage > .more:hover { color: var(--ink-strong); }
+.ls-qpage > .more:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ls-qpage > .all { min-width: 0; padding-top: 18px; box-shadow: inset 0 1px 0 var(--rule); }
+.ls-qpage > .all[hidden] { display: none; }
+
+/* ---------- ForgetProject: forget it here or everywhere, and choose what goes with it ---------- */
+.ls-forget { --c: var(--bad); display: grid; gap: 14px; min-width: 0; }
+.ls-forget .lead { margin: 0; font-size: 14.5px; color: var(--ink); }
+.ls-forget fieldset { display: grid; gap: 6px; margin: 0; padding: 0; border: 0; min-width: 0; }
+.ls-forget legend { padding: 0; margin-bottom: 6px; font-size: 11.5px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-soft); }
+.ls-forget .where label { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 2px 10px; padding: 10px 12px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--control-edge); cursor: pointer; }
+.ls-forget .where label:has(input:checked) { background: var(--tint-picked-c); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.ls-forget .where label.wide:has(input:checked) { background: var(--bad-wash); box-shadow: inset 0 0 0 1.5px var(--bad); }
+.ls-forget .where label:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ls-forget .where input, .ls-forget .clean input { width: 16px; height: 16px; margin: 3px 0 0; accent-color: var(--accent); }
+.ls-forget .where b, .ls-forget .clean b { font-size: 14.5px; font-weight: 500; color: var(--ink-strong); }
+.ls-forget .where span, .ls-forget .clean span { grid-column: 2; font-size: 13px; color: var(--ink-soft); }
+.ls-forget .clean label { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 2px 10px; padding: 8px 4px; cursor: pointer; }
+.ls-forget .clean label.off { cursor: default; }
+.ls-forget .clean label.off b { color: var(--muted); }
+.ls-forget .clean code { grid-column: 2; font-family: var(--font-mono); font-size: 11.5px; color: var(--subtle); overflow-wrap: anywhere; }
+.ls-forget .kept { margin: 0; padding: 10px 12px; font-size: 13px; color: var(--ink-soft); box-shadow: inset 2px 0 0 var(--rule); }
+.ls-forget .kept code { font-family: var(--font-mono); font-size: 12px; color: var(--ink); overflow-wrap: anywhere; }
+.ls-forget ol.plan { margin: 0; padding: 10px 14px 10px 34px; display: grid; gap: 3px; background: var(--surface-2); font-family: var(--font-mono); font-size: 12px; color: var(--ink-strong); overflow-wrap: anywhere; }
+.ls-forget ol.plan li::marker { color: var(--muted); }
+.ls-forget .armed { margin: 0; padding: 8px 12px; font-size: 13.5px; color: var(--bad-text); background: var(--bad-wash); }
+.ls-forget .armed:empty { display: none; }

@@ -88,6 +88,11 @@ Loadout Studio is the design system for Studio: the app Loadout serves on this m
   - **Spend** is one number (TokenSplit), where it went (SpendBars), and what is running and was launched.
 - A page's main actions are in place. The rest of its commands are ActionDrawers: closed, one line each with the effect (reads only, changes something, starts a session, terminal only), and opened into the command's form, its exact line and its button.
 - What is only ever done in a terminal (secrets, agreements, the attach passphrase, a server that runs until Ctrl+C) is a TerminalOnly block: the command, why, and Copy. Never a button that does it.
+- **In every mode.** The six pages follow the mode you are in:
+  - **Terminals** and **Teams**: the page opens beside your terminals or the runs board (PageBeside), which stay live. Escape closes it.
+  - **Minimal**: the page is one quiet column (QuietPage): one sentence, what needs you or has gone wrong, and Show everything for the rest.
+  - **Pure**: the page is a WorkDesk, reached with G and a letter: I Ideas, P Projects, C Context, M Memory, U Spend (usage), O Settings (options).
+- **Forgetting a project** (ForgetProject) is on this machine only, or from the Loadout workspace for every machine, with optional cleanup that runs first and is shown command by command. The repository is never touched.
 
 ### Light and glow
 

@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format": 4, "namespace": "LoadoutStudio", "components": [{"name": "HaloButton"}, {"name": "StartRail"}, {"name": "Command"}, {"name": "Switch"}, {"name": "Tabs"}, {"name": "ModePicker"}, {"name": "Signal"}, {"name": "EventMark"}, {"name": "Urgency"}, {"name": "Meter"}, {"name": "Toasts"}, {"name": "SideRail"}, {"name": "Dialog"}, {"name": "Picker"}, {"name": "CommandPalette"}, {"name": "Halo"}, {"name": "TubeMap"}, {"name": "LineStrip"}, {"name": "NetworkStatus"}, {"name": "Terminal"}, {"name": "SessionView"}, {"name": "Gate"}, {"name": "RunCard"}, {"name": "NeedsYou"}, {"name": "RunShape"}, {"name": "Crew"}, {"name": "DoneWhen"}, {"name": "RunNumbers"}, {"name": "RunDepths"}, {"name": "Patch"}, {"name": "SayToNode"}, {"name": "TeamCard"}, {"name": "TeamNodes"}, {"name": "TeamRules"}, {"name": "RoleRecord"}, {"name": "TeamSheet"}, {"name": "Schedules"}, {"name": "Remedy"}, {"name": "Bin"}, {"name": "Outbox"}, {"name": "ModeSwitcher"}, {"name": "ModeBar"}, {"name": "SessionTabs"}, {"name": "TermDeck"}, {"name": "RunBoard"}, {"name": "QuietList"}, {"name": "FocusFrame"}, {"name": "WorkDesk"}, {"name": "ActionPane"}, {"name": "CommandBar"}, {"name": "KeyHelp"}, {"name": "ActionDrawer"}, {"name": "TerminalOnly"}, {"name": "HealthList"}, {"name": "IdeaStages"}, {"name": "QuestionSet"}, {"name": "PlanLayer"}, {"name": "NoteDump"}, {"name": "ProjectTile"}, {"name": "TaskBoard"}, {"name": "LoadStack"}, {"name": "ConfigList"}, {"name": "StoreList"}, {"name": "TopicEditor"}, {"name": "TokenSplit"}, {"name": "SpendBars"}]} */
+/* @ds-bundle: {"format": 4, "namespace": "LoadoutStudio", "components": [{"name": "HaloButton"}, {"name": "StartRail"}, {"name": "Command"}, {"name": "Switch"}, {"name": "Tabs"}, {"name": "ModePicker"}, {"name": "Signal"}, {"name": "EventMark"}, {"name": "Urgency"}, {"name": "Meter"}, {"name": "Toasts"}, {"name": "SideRail"}, {"name": "Dialog"}, {"name": "Picker"}, {"name": "CommandPalette"}, {"name": "Halo"}, {"name": "TubeMap"}, {"name": "LineStrip"}, {"name": "NetworkStatus"}, {"name": "Terminal"}, {"name": "SessionView"}, {"name": "Gate"}, {"name": "RunCard"}, {"name": "NeedsYou"}, {"name": "RunShape"}, {"name": "Crew"}, {"name": "DoneWhen"}, {"name": "RunNumbers"}, {"name": "RunDepths"}, {"name": "Patch"}, {"name": "SayToNode"}, {"name": "TeamCard"}, {"name": "TeamNodes"}, {"name": "TeamRules"}, {"name": "RoleRecord"}, {"name": "TeamSheet"}, {"name": "Schedules"}, {"name": "Remedy"}, {"name": "Bin"}, {"name": "Outbox"}, {"name": "ModeSwitcher"}, {"name": "ModeBar"}, {"name": "SessionTabs"}, {"name": "TermDeck"}, {"name": "RunBoard"}, {"name": "QuietList"}, {"name": "FocusFrame"}, {"name": "WorkDesk"}, {"name": "ActionPane"}, {"name": "CommandBar"}, {"name": "KeyHelp"}, {"name": "ActionDrawer"}, {"name": "TerminalOnly"}, {"name": "HealthList"}, {"name": "IdeaStages"}, {"name": "QuestionSet"}, {"name": "PlanLayer"}, {"name": "NoteDump"}, {"name": "ProjectTile"}, {"name": "TaskBoard"}, {"name": "LoadStack"}, {"name": "ConfigList"}, {"name": "StoreList"}, {"name": "TopicEditor"}, {"name": "TokenSplit"}, {"name": "SpendBars"}, {"name": "PageBeside"}, {"name": "QuietPage"}, {"name": "ForgetProject"}]} */
 /* Loadout Studio — plain JavaScript, no framework, no imports, no network.
    Components are CSS classes plus small helpers, written to port line for line to Svelte. */
 (function () {
@@ -45,7 +45,7 @@
   "use strict";
   var NS = window.LoadoutStudio = window.LoadoutStudio || {};
   var GLYPHS = {"play": "M7 5 L15 10 L7 15 Z", "round": "M15.5 7 A6 6 0 1 0 16 11.5 M15.5 3 V7 H11.5", "needs": "M10 4 V11.5 M10 15 V15.2", "failed": "M6 6 L14 14 M14 6 L6 14", "blocked": "M4 10a6 6 0 1 0 12 0a6 6 0 1 0-12 0 M6.5 10 H13.5", "limited": "M4 14 A6 6 0 0 1 16 14 M10 14 L6.8 10.6", "done": "M5 10.5 L8.5 14 L15 6.5", "idle": "M5 10 H15", "open": "M5 10a5 5 0 1 0 10 0a5 5 0 1 0-10 0", "held": "M7.5 5.5 V14.5 M12.5 5.5 V14.5", "stopped": "M6 6 H14 V14 H6 Z", "unknown": "M7.5 7.5 A2.5 2.5 0 1 1 10 10 V11.5 M10 14.8 V15", "dropped": "M5 15 L15 5", "shaping": "M10 3 L16 10 L10 17 L4 10 Z"};
-  var STATES = {"working": ["moving", "play", "breathe"], "running": ["moving", "play", "breathe"], "doing": ["moving", "play", "breathe"], "round running": ["moving", "round", "spin"], "needs a decision": ["needs", "needs", "pulse"], "waiting for you": ["needs", "needs", "pulse"], "failed": ["bad", "failed", "hard"], "last round failed": ["bad", "failed", "hard"], "blocked": ["bad", "blocked", "hard"], "limited": ["bad", "limited", "hard"], "done": ["good", "done", "settle"], "met": ["good", "done", "settle"], "accepted": ["good", "done", "settle"], "idle": ["rest", "idle", "dim"], "open": ["rest", "open", "still"], "captured": ["rest", "open", "still"], "shaping": ["rest", "shaping", "still"], "held": ["rest", "held", "still"], "held after this round": ["rest", "held", "still"], "stopped": ["rest", "stopped", "still"], "not attempted": ["rest", "open", "dashed"], "unknown": ["rest", "unknown", "flicker"], "dropped": ["rest", "dropped", "strike"], "needs approval": ["needs", "needs", "pulse"], "connecting": ["rest", "open", "dashed"], "reconnecting": ["rest", "round", "dashed"], "ended": ["good", "done", "settle"], "exited with an error": ["bad", "failed", "hard"], "only watching": ["rest", "held", "still"], "lost": ["bad", "blocked", "hard"], "unmet": ["bad", "failed", "hard"], "no verdict": ["rest", "unknown", "still"], "quiet": ["needs", "needs", "pulse"], "projected over": ["needs", "limited", "pulse"], "trusted": ["good", "done", "settle"], "not trusted": ["rest", "open", "still"], "changed since trusted": ["needs", "needs", "pulse"], "scheduled": ["rest", "held", "still"]};
+  var STATES = {"working": ["moving", "play", "breathe"], "running": ["moving", "play", "breathe"], "doing": ["moving", "play", "breathe"], "round running": ["moving", "round", "spin"], "needs a decision": ["needs", "needs", "pulse"], "waiting for you": ["needs", "needs", "pulse"], "failed": ["bad", "failed", "hard"], "last round failed": ["bad", "failed", "hard"], "blocked": ["bad", "blocked", "hard"], "limited": ["bad", "limited", "hard"], "done": ["good", "done", "settle"], "met": ["good", "done", "settle"], "accepted": ["good", "done", "settle"], "idle": ["rest", "idle", "dim"], "open": ["rest", "open", "still"], "captured": ["rest", "open", "still"], "shaping": ["rest", "shaping", "still"], "held": ["rest", "held", "still"], "held after this round": ["rest", "held", "still"], "stopped": ["rest", "stopped", "still"], "not attempted": ["rest", "open", "dashed"], "unknown": ["rest", "unknown", "flicker"], "dropped": ["rest", "dropped", "strike"], "needs approval": ["needs", "needs", "pulse"], "connecting": ["rest", "open", "dashed"], "reconnecting": ["rest", "round", "dashed"], "ended": ["good", "done", "settle"], "exited with an error": ["bad", "failed", "hard"], "only watching": ["rest", "held", "still"], "lost": ["bad", "blocked", "hard"], "unmet": ["bad", "failed", "hard"], "no verdict": ["rest", "unknown", "still"], "quiet": ["needs", "needs", "pulse"], "projected over": ["needs", "limited", "pulse"], "trusted": ["good", "done", "settle"], "not trusted": ["rest", "open", "still"], "changed since trusted": ["needs", "needs", "pulse"], "to put right": ["needs", "needs", "pulse"], "not approved": ["rest", "open", "still"], "not on this machine": ["rest", "open", "dashed"], "scheduled": ["rest", "held", "still"]};
   var SVGNS = "http://www.w3.org/2000/svg";
 
   function h(tag, attrs, kids) {
@@ -1892,7 +1892,7 @@
   /* QuietList: Minimal. One column: what needs you first, with its question; the rest quietly. */
   function QuietList(o) {
     o = o || {};
-    var items = (o.items || []).slice(), needs = items.filter(function (x) { return NS.signalOf(x.word).family === "needs"; }), rest = items.filter(function (x) { return needs.indexOf(x) < 0; });
+    var items = (o.items || []).slice(), needs = items.filter(function (x) { var f = NS.signalOf(x.word).family; return f === "needs" || f === "bad"; }), rest = items.filter(function (x) { return needs.indexOf(x) < 0; });
     var ol = h("ol", { "class": "ls-quiet", "aria-label": o.label || "Everything live" }), i = 0;
     function zone(t) { ol.appendChild(h("li", { "class": "zone", "aria-hidden": "true", text: t })); }
     function row(x, calm) {
@@ -2019,7 +2019,7 @@
   var KEYS = [
     ["Move", [[["J", "↓"], "next in the list"], [["K", "↑"], "previous"], [["Home"], "first"], [["End"], "last"], [["/"], "filter the list"]]],
     ["Open and act", [[["Enter"], "open the picked one in the view"], [["Esc"], "back to the list"], [["1"], "to 9: run that action"], [["Ctrl", "]"], "leave a terminal"]]],
-    ["Go", [[["G", "H"], "Home: everything"], [["G", "S"], "sessions"], [["G", "T"], "team runs"], [["G", "I"], "ideas"], [["G", "K"], "tasks"], [["G", "N"], "what needs you"]]],
+    ["Go", [[["G", "H"], "Home: everything"], [["G", "S"], "sessions"], [["G", "T"], "team runs"], [["G", "K"], "tasks"], [["G", "N"], "what needs you"], [["G", "I"], "Ideas"], [["G", "P"], "Projects"], [["G", "C"], "Context"], [["G", "M"], "Memory"], [["G", "U"], "Spend (usage)"], [["G", "O"], "Settings (options)"]]],
     ["Everywhere", [[[":"], "the command bar"], [["F6"], "the next pane"], [["?"], "this list"], [["Ctrl", "Shift", "M"], "change mode"], [["Ctrl", "K"], "the palette"]]]
   ];
   function KeyHelp(o) {
@@ -2059,7 +2059,7 @@
         xs.forEach(function (x) {
           var oid = lid + "-" + g.key + "-" + x.id, fam = NS.signalOf(x.word).family;
           lb.appendChild(h("li", { role: "option", id: oid, "data-id": x.id, "class": fam, "aria-selected": x.id === selected && !seen[x.id] ? "true" : "false", onclick: function () { select(x.id); }, ondblclick: function () { select(x.id); openView(); } },
-            [NS.Signal(x.word), h("span", { "class": "t", text: x.title }), h("span", { "class": "x", text: x.meta || "" }), h("span", { "class": "w", text: x.word })]));
+            [x.word ? NS.Signal(x.word) : h("span", { "aria-hidden": "true" }), h("span", { "class": "t", text: x.title }), h("span", { "class": "x", text: x.meta || "" }), h("span", { "class": "w", text: x.word || "" })]));
           if (x.id === selected) { seen[x.id] = true; }
         });
       });
@@ -2074,7 +2074,7 @@
       if (!x) { vhead.appendChild(h("span", { text: "View" })); vbody.appendChild(h("p", { "class": "none", text: "Pick something in the list." })); return; }
       vhead.appendChild(back);
       vhead.appendChild(h("span", { "class": "vtitle" }, [h("b", { text: x.title }), h("span", { text: x.meta || "" })]));
-      vhead.appendChild(NS.Signal(x.word));
+      if (x.word) { vhead.appendChild(NS.Signal(x.word)); }
       vhead.appendChild(h("span", { "class": "hint", "aria-hidden": "true" }, kbd("Esc").concat(["list"])));
       var v = o.view ? o.view(x) : null;
       if (v && v.el) { if (v.el.classList && v.el.classList.contains("ls-term")) { vbody.className = "vbody term"; } vbody.appendChild(v.el); }
@@ -2700,4 +2700,123 @@
   }
 
   Object.assign(NS, { ConfigList: ConfigList, StoreList: StoreList, TopicEditor: TopicEditor, TokenSplit: TokenSplit, SpendBars: SpendBars });
+})();
+
+(function () {
+  "use strict";
+  var NS = window.LoadoutStudio = window.LoadoutStudio || {};
+  function h(tag, attrs, kids) {
+    var el = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) {
+      var v = attrs[k];
+      if (v === null || v === undefined || v === false) { return; }
+      if (k === "text") { el.textContent = v; } else if (k === "class") { el.className = v; } else if (k.slice(0, 2) === "on") { el.addEventListener(k.slice(2), v); } else { el.setAttribute(k, v === true ? "" : v); }
+    });
+    (kids || []).forEach(function (c) { if (c) { el.appendChild(typeof c === "string" ? document.createTextNode(c) : c); } });
+    return el;
+  }
+  function typingIn(t) { return t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable); }
+
+  /* PageBeside: one of the pages opened next to the terminals or the runs board, which stay live beside it. Escape closes it, unless you are typing or inside a terminal. */
+  function PageBeside(o) {
+    o = o || {};
+    var close = h("button", { type: "button", "class": "x", "aria-keyshortcuts": "Escape", onclick: function () { done(); } }, [o.closeLabel || "Close", h("kbd", { "aria-hidden": "true", text: "Esc" })]);
+    var body = h("div", { "class": "body" }, [o.content || null]);
+    var el = h("aside", { "class": "ls-beside", "aria-label": (o.page || "Page") + ", beside " + (o.beside || "your work") }, [h("div", { "class": "bh" }, [h("span", { "class": "t" }, [h("b", { text: o.page || "" }), " · beside " + (o.beside || "your work")]), h("span", { "class": "grow" }), close]), body]);
+    function onKey(e) {
+      if (e.key !== "Escape" || e.defaultPrevented || typingIn(e.target)) { return; }
+      if (e.target && e.target.closest && e.target.closest(".ls-term, .ls-dialog")) { return; }
+      if (document.querySelector(".ls-dialog")) { return; }
+      e.preventDefault(); done();
+    }
+    function done() { document.removeEventListener("keydown", onKey); if (o.onClose) { o.onClose(); } }
+    document.addEventListener("keydown", onKey);
+    return { el: el, body: body, set: function (n) { body.textContent = ""; if (n) { body.appendChild(n); } }, close: done, destroy: function () { document.removeEventListener("keydown", onKey); } };
+  }
+  /* The two side by side: what you are watching on the left, the page on the right. Below 1100px the page takes the width. */
+  function BesideGrid(focus, beside) { return h("div", { "class": "ls-besidegrid" }, [h("div", { "class": "focusarea" }, [focus]), beside.el || beside]); }
+
+  /* QuietPage: a page in Minimal. One sentence, what needs you or matters now as a QuietList, and everything else behind one button. */
+  function QuietPage(o) {
+    o = o || {};
+    var all = h("div", { "class": "all", hidden: true, id: "ls-qp-" + Math.random().toString(36).slice(2, 7) }), filled = false;
+    var more = h("button", { type: "button", "class": "more", "aria-expanded": "false", "aria-controls": all.id, text: o.moreLabel || "Show everything", onclick: function () {
+      var open = more.getAttribute("aria-expanded") !== "true";
+      if (open && !filled && o.everything) { all.appendChild(o.everything()); filled = true; }
+      all.hidden = !open; more.setAttribute("aria-expanded", open ? "true" : "false"); more.textContent = open ? (o.lessLabel || "Show less") : (o.moreLabel || "Show everything");
+      if (o.onToggle) { o.onToggle(open); }
+    } });
+    var items = o.items || [];
+    var kids = [h("div", { "class": "qh" }, [h("h1", { text: o.title || "" }), o.sentence ? (typeof o.sentence === "string" ? h("p", { text: o.sentence }) : o.sentence) : null])];
+    if (items.length) { kids.push(NS.QuietList({ items: items, label: o.label || ("What matters on " + (o.title || "this page")), onOpen: o.onOpen })); }
+    else { kids.push(h("p", { "class": "calmnote", text: "✓ " + (o.calmText || "Nothing here needs you.") })); }
+    kids.push(more, all);
+    var el = h("div", { "class": "ls-qpage" }, kids);
+    if (o.open) { setTimeout(function () { more.click(); }, 0); }
+    return { el: el, showAll: function () { if (more.getAttribute("aria-expanded") !== "true") { more.click(); } } };
+  }
+
+  /* ForgetProject: forget a project on this machine only, or from the Loadout workspace for every machine, with what should go with it. Cleanup runs first, while the project is still known; the repository is never touched. */
+  function q(v) { v = String(v); return /^<[^<>\s]+>$/.test(v) ? v : (v === "" || /[\s"'$`\\|&;<>()*?!#~]/.test(v) ? "\"" + v.replace(/(["\\$`])/g, "\\$1") + "\"" : v); }
+  function ForgetProject(o) {
+    o = o || {};
+    var p = o.project || {}, slug = p.id || "<project>", c = o.counts || {}, scope = "here", picked = { protect: false, tasks: false, ideas: false, topics: false }, armed = false, armT = null;
+    var el = h("div", { "class": "ls-forget" });
+    el.appendChild(h("p", { "class": "lead", text: "Loadout forgets " + (p.name || slug) + ". Its repository and code are never touched." }));
+    var name = "ls-fg-" + Math.random().toString(36).slice(2, 7);
+    function radio(v, title, sub, cls) { var r = h("input", { type: "radio", name: name, value: v, checked: scope === v ? true : null, onchange: function () { scope = v; disarm(); paint(); } }); return h("label", { "class": cls || "" }, [r, h("b", { text: title }), h("span", { text: sub })]); }
+    el.appendChild(h("fieldset", { "class": "where" }, [h("legend", { text: "Forget it" }),
+      radio("here", "On this machine only", "Loadout forgets where it is here. It stays in the workspace, listed as not on this machine, and your other machines keep it."),
+      radio("everywhere", "From the Loadout workspace", "Every machine forgets it, and it leaves the list. Its tasks, ideas and memory can go with it.", "wide")]));
+    var clean = h("fieldset", { "class": "clean" }), kept = h("p", { "class": "kept" }), plan = h("ol", { "class": "plan", "aria-label": "What will run, in order" }), armedEl = h("p", { "class": "armed", role: "status" });
+    var acts = h("div", { "class": "ls-answers" }), said = h("p", { "class": "ls-said", role: "status" });
+    el.appendChild(clean); el.appendChild(kept); el.appendChild(h("div", {}, [h("p", { "class": "lab", style: "margin: 0 0 6px; font-size: 11.5px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-soft)", text: "What will run, in order" }), plan])); el.appendChild(armedEl); el.appendChild(acts); el.appendChild(said);
+    function line(path, words) { return "$ loadout " + [path].concat(words.map(q)).join(" "); }
+    function cleanups() {
+      var out = [];
+      if (picked.protect && p.available !== false) { out.push(line("protect", [slug, "--remove"])); }
+      if (scope === "everywhere") {
+        if (picked.tasks) { (c.tasks || []).forEach(function (t) { out.push(line("task remove", [t, "--project", slug])); }); }
+        if (picked.ideas) { (c.ideas || []).forEach(function (t) { out.push(line("idea remove", [t, "--project", slug])); }); }
+        if (picked.topics) { (c.topics || []).forEach(function (t) { out.push(line("memory delete", [t, slug, "--yes"])); }); }
+      }
+      return out;
+    }
+    function steps() { return cleanups().concat([line("project remove", [slug].concat(scope === "everywhere" ? ["--from-workspace"] : []))]); }
+    function box(key, title, sub, cmd, off) {
+      var cb = h("input", { type: "checkbox", disabled: off ? true : null, onchange: function () { picked[key] = cb.checked; disarm(); paint(); } }); cb.checked = !off && picked[key];
+      return h("label", { "class": off ? "off" : "" }, [cb, h("b", { text: title }), h("span", { text: off || sub }), cmd ? h("code", { text: cmd }) : null]);
+    }
+    function n(list, one, many) { var k = (list || []).length; return k + " " + (k === 1 ? one : many); }
+    function paint() {
+      clean.textContent = ""; clean.appendChild(h("legend", { text: "Also clean up" }));
+      var away = p.available === false, local = scope === "here" ? "Only when forgetting it from the workspace: on this machine only, the workspace keeps them for your other machines." : null;
+      clean.appendChild(box("protect", "Take the Git protections out of its repository", "The hooks and ignore rules Loadout installed to keep AI files out of commits.", line("protect", [slug, "--remove"]), away ? "It is not on this machine, so there is no repository here to change." : null));
+      clean.appendChild(box("tasks", "Its " + n(c.tasks, "task", "tasks"), "Every task recorded for it, open or not.", (c.tasks || []).length ? line("task remove", ["<id>", "--project", slug]) + "  \u00d7 " + c.tasks.length : null, local || (!(c.tasks || []).length ? "It has none." : null)));
+      clean.appendChild(box("ideas", "Its " + n(c.ideas, "idea", "ideas"), "Ideas being shaped for it. Accepted plans stay where they were written.", (c.ideas || []).length ? line("idea remove", ["<id>", "--project", slug]) + "  \u00d7 " + c.ideas.length : null, local || (!(c.ideas || []).length ? "It has none." : null)));
+      clean.appendChild(box("topics", "Its " + n(c.topics, "memory topic", "memory topics"), "What agents remembered about it. A backup of each is taken first.", (c.topics || []).length ? line("memory delete", ["<topic>", slug, "--yes"]) + "  \u00d7 " + c.topics.length : null, local || (!(c.topics || []).length ? "It has none." : null)));
+      kept.textContent = "";
+      if (scope === "everywhere" && o.definition) { kept.appendChild(document.createTextNode("Kept in the workspace whatever you tick: its instructions, rules and memory folder, " + o.definition.files + " files under ")); kept.appendChild(h("code", { text: o.definition.path })); kept.appendChild(document.createTextNode(". Loadout never deletes it; delete it yourself if you meant to lose it.")); kept.hidden = false; }
+      else { kept.hidden = true; }
+      plan.textContent = ""; steps().forEach(function (s) { plan.appendChild(h("li", { text: s })); });
+      acts.textContent = "";
+      var dis = o.disabledReason || null;
+      acts.appendChild(NS.HaloButton({ label: "Preview", size: "small", cmd: dis ? null : "adds --dry-run to each \u00b7 changes nothing", disabledReason: dis, onPress: function () { run(true); } }));
+      acts.appendChild(NS.HaloButton({ label: armed ? "Press again to forget it everywhere" : (scope === "everywhere" ? "Forget it on every machine" : "Forget it here"), kind: "danger", size: "small", solid: armed && !dis, cmd: dis ? null : steps().length + " command" + (steps().length === 1 ? "" : "s") + ", in order; stops at the first that fails", disabledReason: dis, onPress: function () {
+        if (scope === "everywhere" && !armed) { armed = true; armedEl.textContent = "Every machine that uses the workspace forgets " + slug + ". Press the button again within five seconds to go ahead."; clearTimeout(armT); armT = setTimeout(function () { disarm(); paint(); }, 5000); paint(); var b = acts.querySelectorAll("button")[1]; if (b) { b.focus(); } return; }
+        disarm(); run(false);
+      } }));
+    }
+    function disarm() { armed = false; clearTimeout(armT); armedEl.textContent = ""; }
+    function run(preview) {
+      var lines = steps().map(function (s) { return preview ? s + " --dry-run" : s; });
+      var r = o.onRun ? o.onRun({ scope: scope, lines: lines, preview: preview, picked: Object.assign({}, picked) }) : null;
+      said.textContent = "\u2713 " + (typeof r === "string" ? r : preview ? "Previewed. Nothing changed." : "Forgotten.");
+      paint();
+    }
+    paint();
+    return { el: el, get scope() { return scope; }, steps: steps };
+  }
+
+  Object.assign(NS, { PageBeside: PageBeside, BesideGrid: BesideGrid, QuietPage: QuietPage, ForgetProject: ForgetProject });
 })();
