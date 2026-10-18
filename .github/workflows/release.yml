@@ -1,9 +1,9 @@
 name: Release
 
 # The run's title says which of two things it is. A run from the Actions page
-# builds every package and publishes none of them — the publish, verify,
-# Homebrew and winget jobs are all gated on the ref being a tag — and it came
-# out green, titled "Release", with four jobs skipped. Somebody who had just
+# builds every package and publishes none of them — the publish, verify and
+# Homebrew jobs are all gated on the ref being a tag — and it came out green,
+# titled "Release", with four jobs skipped. Somebody who had just
 # pressed the button read that as a release. Now the list says what happened.
 run-name: >-
   ${{ github.event_name == 'workflow_dispatch'
@@ -101,8 +101,8 @@ jobs:
             echo "## Build only — nothing is published"
             echo
             echo "This run was started from the Actions page. It builds every package so the"
-            echo "packaging can be checked, and then stops: the publish, verify, Homebrew and"
-            echo "winget jobs only run for a tag."
+            echo "packaging can be checked, and then stops: the publish, verify and Homebrew"
+            echo "jobs only run for a tag."
             echo
             echo "To release ${{ inputs.version }}: bump the version, commit, then push an annotated tag —"
             echo '`git tag -a v${{ inputs.version }} -F notes && git push origin main v${{ inputs.version }}`'
@@ -571,19 +571,9 @@ jobs:
     secrets:
       HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
 
-  # Independent of the other two, and allowed to fail without them. This one
-  # opens a pull request into somebody else's repository and waits on a
-  # validation pipeline and a person, so it is the one channel whose outcome
-  # is not known by the time the release is done.
-  winget:
-    name: winget
-    needs: release
-    if: github.ref_type == 'tag'
-    uses: ./.github/workflows/winget.yml
-    with:
-      tag: ${{ github.ref_name }}
-    secrets:
-      WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+  # winget is not submitted from here. Each submission is a pull request a
+  # moderator reviews by hand, so winget.yml sends the newest release once a
+  # day instead of one per release, and closes the ones it supersedes.
 
   # Off the publish path on purpose, and this is the change that matters.
   #
