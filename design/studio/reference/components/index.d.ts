@@ -487,3 +487,12 @@ export declare function RedAlert(o: { enabled?: boolean; host?: HTMLElement; onG
 export declare function TaskPicker(o: { tasks: { id: string; title: string; state: string; declaredBy?: string; declared?: string; note?: string | null }[]; selected?: string | null; label?: string; otherLabel?: string; otherSub?: string; onPick?: (task: { id: string; title: string; note?: string | null } | null) => void }): HTMLElement;
 /** What Loadout did, counted, never estimated. A figure that is not recorded yet (value null) says so. */
 export declare function ValueReport(o: { head?: string | Node; groups: { name: string; figures: { label: string; value: number | string | null; detail?: string; from?: string; waits?: string }[] }[]; how?: string }): HTMLElement;
+
+/* ---------- The field map (stage 11) ---------- */
+
+export type Background = "plain" | "map" | "map-animated";
+/** Set data-background on <html>: the plain ground, the field map still (the default), or the field map with its scan. */
+export declare function setBackground(value: Background, el?: Element): void;
+export declare const BACKGROUNDS: Background[];
+/** The embossed survey map behind every page: contour lines (every fifth heavier), grid squares and map references, the same map on every visit. Still unless data-background is map-animated and motion is full and the mode isn't Pure; hidden for plain and both high-contrast themes. Mount once. */
+export declare function FieldMap(o?: { seed?: number; scale?: number; levels?: number; cell?: number; square?: number; host?: HTMLElement; width?: number; height?: number }): { el: HTMLElement; redraw: () => void; destroy: () => void };
