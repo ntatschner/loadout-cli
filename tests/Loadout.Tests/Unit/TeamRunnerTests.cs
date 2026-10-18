@@ -3792,6 +3792,9 @@ public sealed partial class TeamRunnerTests : IDisposable
         public Task<OperationResult<TaskItem>> MoveAsync(
             string? fromSlug, string? toSlug, string id, CancellationToken ct = default) =>
             throw new NotSupportedException("a team run moves no task");
+
+        public Task<OperationResult<IReadOnlyList<Loadout.Core.Tasks.TaskMoved>>> MovedAsync(CancellationToken ct = default) =>
+            Task.FromResult(OperationResult<IReadOnlyList<Loadout.Core.Tasks.TaskMoved>>.Ok([]));
     }
 
     private sealed class FakeConsole : ITeamConsole

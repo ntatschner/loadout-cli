@@ -35,6 +35,7 @@ internal sealed record IdeaEntry(IdeaSummary Summary, IdeaRecord? Record);
 internal sealed class IdeasWindow : Window
 {
     private readonly IReadOnlyList<IdeaEntry> _ideas;
+    private readonly IReadOnlyList<IdeaMovedOn> _movedOn;
     private readonly IReadOnlyList<string> _projects;
     private readonly string? _here;
     private readonly IIdeaPrompts _prompts;
@@ -51,13 +52,19 @@ internal sealed class IdeasWindow : Window
     /// <param name="select">The idea to start on, or null for the first.</param>
     /// <param name="prompts">How each step asks what it needs.</param>
     /// <param name="application">The running toolkit.</param>
+    /// <param name="movedOn">
+    /// Ideas that are tasks on another list now. Listed after the ideas, with
+    /// no key that does anything to them: they are not ideas any more, and are
+    /// here only so one accepted elsewhere is not simply gone.
+    /// </param>
     internal IdeasWindow(
         IReadOnlyList<IdeaEntry> ideas,
         IReadOnlyList<string> projects,
         string? here,
         string? select,
         IIdeaPrompts prompts,
-        IApplication application)
+        IApplication application,
+        IReadOnlyList<IdeaMovedOn>? movedOn = null)
     {
         ArgumentNullException.ThrowIfNull(ideas);
         ArgumentNullException.ThrowIfNull(projects);
@@ -65,6 +72,7 @@ internal sealed class IdeasWindow : Window
         ArgumentNullException.ThrowIfNull(application);
 
         _ideas = ideas;
+        _movedOn = movedOn ?? [];
         _projects = projects;
         _here = here;
         _prompts = prompts;
@@ -79,12 +87,12 @@ internal sealed class IdeasWindow : Window
             Y = 0,
             Width = Dim.Fill(),
             Height = Dim.Percent(35),
-            Title = ideas.Count == 0 ? "No ideas yet" : "Ideas",
+            Title = ideas.Count == 0 && _movedOn.Count == 0 ? "No ideas yet" : "Ideas",
             BorderStyle = LauncherTheme.Inner,
         };
 
         _rows = new KeyedListView { Id = "ideas-list", X = 0, Y = 0, Width = Dim.Fill(), Height = Dim.Fill() };
-        _rows.SetSource(new ObservableCollection<string>(Rows(ideas)));
+        _rows.SetSource(new ObservableCollection<string>(Rows(ideas, _movedOn)));
         _rows.ValueChanged += (_, _) => ShowDetail();
         listFrame.Add(_rows);
 
@@ -245,18 +253,29 @@ internal sealed class IdeasWindow : Window
         var width = _detail.Viewport.Width > 20 ? _detail.Viewport.Width - 1 : 100;
 
         var lines = Selected is { } idea
-            ? IdeaSteps.Detail(idea.Summary.Place, idea.Record, width)
-            : ["Drop an idea in with n, or from the Ideas menu dump notes kept elsewhere."];
+            ? IdeaSteps.Detail(idea.Summary.Place, idea.Record, width, idea.Summary.Moved)
+            : MovedOnSelected is { } gone
+                ? IdeaSteps.MovedOn(gone, width)
+                : ["Drop an idea in with n, or from the Ideas menu dump notes kept elsewhere."];
 
         _detail.SetSource(new ObservableCollection<string>(lines));
     }
 
-    private static IEnumerable<string> Rows(IReadOnlyList<IdeaEntry> ideas) =>
-        ideas.Count == 0
+    /// <summary>The idea now work elsewhere that the cursor is on, or null.</summary>
+    internal IdeaMovedOn? MovedOnSelected =>
+        _rows.SelectedItem is int at && at >= _ideas.Count && at - _ideas.Count < _movedOn.Count
+            ? _movedOn[at - _ideas.Count]
+            : null;
+
+    private static IEnumerable<string> Rows(IReadOnlyList<IdeaEntry> ideas, IReadOnlyList<IdeaMovedOn> movedOn) =>
+        ideas.Count == 0 && movedOn.Count == 0
             ? ["Nothing here yet. Press n to drop an idea in."]
             : ideas.Select(idea =>
                 $"{Shorten(idea.Summary.Place.Id, 28),-28} {Shorten(IdeaSteps.Stage(idea.Summary), 17),-17} "
-                + $"{Shorten(idea.Summary.Place.Project ?? "workspace-wide", 16),-16} {idea.Summary.Title}");
+                + $"{Shorten(idea.Summary.Place.Project ?? "workspace-wide", 16),-16} {idea.Summary.Title}")
+            .Concat(movedOn.Select(gone =>
+                $"{Shorten(gone.Id, 28),-28} {"now a task",-17} "
+                + $"{Shorten(gone.Where ?? "workspace-wide", 16),-16} {gone.Title}"));
 
     /// <summary>Three dots rather than the one character, for profiles that ask for ASCII only.</summary>
     private static string Shorten(string text, int width) =>

@@ -288,6 +288,30 @@ public sealed class DashboardTasksTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task A_list_says_what_moved_off_it_apart_from_its_tasks_and_the_list_it_went_to_says_where_from()
+    {
+        await _space.ProjectAsync("website");
+        await _space.Tasks.DeclareAsync("website", "fix-login", TaskState.Open, "me", "Fix the login");
+        (await _space.Ideas.MoveAsync("website", null, "fix-login")).Succeeded.Should().BeTrue();
+
+        var read = JsonSerializer.SerializeToElement(await Tasks(new Typed()).ReadAsync(default));
+        var lists = read.GetProperty("lists").EnumerateArray().ToList();
+
+        var website = lists.Single(list => list.GetProperty("project").GetString() == "website");
+        website.GetProperty("tasks").GetArrayLength().Should().Be(0, "a trace is never one of the list's tasks");
+
+        var away = website.GetProperty("away").EnumerateArray().Single();
+        away.GetProperty("id").GetString().Should().Be("fix-login");
+        away.GetProperty("to").ValueKind.Should().Be(JsonValueKind.Null, "it went to the workspace-wide list");
+        away.GetProperty("state").GetString().Should().Be("open");
+
+        var global = lists.Single(list => list.GetProperty("project").ValueKind == JsonValueKind.Null);
+        global.GetProperty("away").GetArrayLength().Should().Be(0);
+        global.GetProperty("tasks").EnumerateArray().Single()
+            .GetProperty("moved").GetProperty("from").GetString().Should().Be("website");
+    }
+
+    [Fact]
     public async Task Everything_the_page_puts_in_the_body_reaches_whatever_types_the_command()
     {
         TaskAction? asked = null;

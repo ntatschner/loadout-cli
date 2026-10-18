@@ -72,23 +72,44 @@ internal sealed class DashboardTasks
         var lists = new List<object>();
         var projects = await _projects.ListAsync(ct).ConfigureAwait(false);
 
+        // Read once for every list: what moved is spread across all of them.
+        var moved = await _tasks.MovedAsync(ct).ConfigureAwait(false);
+        var traced = moved.Succeeded ? moved.Value! : [];
+
         foreach (var slug in (projects.Succeeded ? projects.Value! : []).Select(one => one.Entry.Slug))
         {
-            lists.Add(await ListAsync(slug, ct).ConfigureAwait(false));
+            lists.Add(await ListAsync(slug, traced, ct).ConfigureAwait(false));
         }
 
-        lists.Add(await ListAsync(null, ct).ConfigureAwait(false));
+        lists.Add(await ListAsync(null, traced, ct).ConfigureAwait(false));
 
         return new { lists, team = await TeamAsync(ct).ConfigureAwait(false) };
     }
 
-    private async Task<object> ListAsync(string? slug, CancellationToken ct)
+    /// <remarks>
+    /// What moved away is its own field, never one of the tasks, so the page's
+    /// count of what is not finished, and every button, only ever meet this
+    /// list's own work.
+    /// </remarks>
+    private async Task<object> ListAsync(string? slug, IReadOnlyList<TaskMoved> traced, CancellationToken ct)
     {
         var listed = await _tasks.ListAsync(slug, ct).ConfigureAwait(false);
 
         return new
         {
             project = slug,
+            away = traced
+                .Where(one => one.Task.Kind == TaskKind.Task && one.Left(slug))
+                .OrderByDescending(one => one.Task.Moved!.Utc)
+                .Select(one => new
+                {
+                    id = one.Task.Id,
+                    title = one.Task.Title,
+                    state = one.Task.State.ToString().ToLowerInvariant(),
+                    to = one.Where,
+                    at = one.Task.Moved!.Utc,
+                })
+                .ToList(),
             tasks = listed.Succeeded
                 ? listed.Value!
                     .Where(one => one.Kind == TaskKind.Task)
@@ -100,6 +121,7 @@ internal sealed class DashboardTasks
                         note = one.Note,
                         by = one.DeclaredBy,
                         declared = one.DeclaredUtc,
+                        moved = TaskTrace.Json(one.Moved),
                     })
                     .ToList<object>()
                 : [],

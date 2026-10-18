@@ -372,6 +372,11 @@ chosen.
 
 ![An idea's plan in Studio: each layer's options side by side with what is for and against them, the chosen one marked, and under each option and layer the command that Choose this, Keep it and Drop it run.](../images/studio-ideas-plan.png)
 
+An idea moved from another list says where from. One that became a task on
+another project, by accepting it or moving it later, is listed under **Became
+tasks elsewhere** with a link to it, so an accepted idea doesn't just vanish
+from the shelf.
+
 **Notes kept elsewhere** takes notes you've pasted from somewhere else and has an
 agent split them into ideas and tasks. Nothing is recorded until you apply the
 pieces.
@@ -388,7 +393,10 @@ are tracked in the repository.
 **What is being worked on** is a board of its tasks in three columns, open,
 doing and blocked, with done and dropped folded away rather than left out. Each
 task is moved on with one press (start it, say it's blocked, mark it done,
-reopen it, drop it), and a new one is recorded under the board. Below that is
+reopen it, drop it), and a new one is recorded under the board. A task moved
+here says where it came from, and one moved away is listed under **Moved
+away** with a link to where it is now, apart from the columns and counted in
+none of them. Below that is
 everything else you can do to it, each folded until you open it: open it in the
 editor or its folder, onboard it, change what every session gets, relocate it,
 link it. Each shows the command it runs, and what's shown is read again once it

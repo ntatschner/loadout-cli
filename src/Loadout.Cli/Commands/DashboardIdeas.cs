@@ -78,16 +78,24 @@ internal sealed class DashboardIdeas
                 {
                     title = idea.Title,
                     detail = IdeaView.Of(idea.Place, read.Value!),
+                    moved = TaskTrace.Json(idea.Moved),
                 });
             }
         }
 
         var dumps = await _dumps.ListAsync(ct).ConfigureAwait(false);
         var projects = await _projects.ListAsync(ct).ConfigureAwait(false);
+        var movedOn = await _ideas.MovedOnAsync(ct).ConfigureAwait(false);
 
         return new
         {
             ideas,
+            movedOn = movedOn.Succeeded
+                ? movedOn.Value!
+                    .OrderByDescending(one => one.Utc)
+                    .Select(one => new { id = one.Id, title = one.Title, from = one.From, to = one.Where, at = one.Utc })
+                    .ToList<object>()
+                : [],
             dumps = dumps.Succeeded
                 ? dumps.Value!
                     .Where(d => d.Dump.Items.Count == 0 || d.Dump.Items.Any(i => i.Recorded.Length == 0))

@@ -6,7 +6,7 @@
   import HaloButton from './HaloButton.svelte';
   import Signal from './Signal.svelte';
   import { lineFor } from '../commandLine';
-  import { declareWords, TASK_MOVE, TASK_NEXT, type Task } from '../tasks';
+  import { declareWords, listHref, movedSaid, TASK_MOVE, TASK_NEXT, whereSaid, type MovedAway, type Task } from '../tasks';
 
   interface Props {
     tasks: Task[];
@@ -15,9 +15,14 @@
     from?: string;
     disabledReason?: string;
     ondeclare?: (task: Task, state: string) => void;
+    /**
+     * What left this list. Never one of its tasks: not in a column, not
+     * counted, and with nothing to press but the way to where it is now.
+     */
+    away?: MovedAway[];
   }
 
-  let { tasks, where, from = undefined, disabledReason = undefined, ondeclare = undefined }: Props = $props();
+  let { tasks, where, from = undefined, disabledReason = undefined, ondeclare = undefined, away = [] }: Props = $props();
 
   // A move shows at once; the next read of the list replaces it.
   let moved = $state<Record<string, string>>({});
@@ -48,6 +53,7 @@
   <article class={`task ${task.state}`} aria-label={`${task.title}, ${task.state}`}>
     <span class="tt">{task.title}</span>
     <span class="tx">{[task.id, task.kind, task.declaredBy, when(task.declared)].filter(Boolean).join(' · ')}</span>
+    {#if task.moved}<span class="came">Moved here {movedSaid(task.moved)}</span>{/if}
     {#if task.note}<p class="note">{task.note}</p>{/if}
     <div class="moves">
       {#each TASK_NEXT[task.state] ?? [] as state (state)}
@@ -72,6 +78,16 @@
       <summary>{done} done, {closed.length - done} dropped</summary>
       <div class="grid">{#each closed as task (task.id)}{@render card(task)}{/each}</div>
     </details>
+  {/if}
+  {#if away.length}
+    <section class="away" aria-labelledby={`${name}-away`}>
+      <h4 id={`${name}-away`}>Moved away</h4>
+      <ul>
+        {#each away as gone (gone.id)}
+          <li>{gone.title || gone.id} moved to {whereSaid(gone.to)}, {when(gone.at)}. <a href={listHref(gone.to)}>Show it</a></li>
+        {/each}
+      </ul>
+    </section>
   {/if}
   {#if from}<p class="ls-from">The same as <code>{from}</code>.</p>{/if}
 </div>

@@ -11,6 +11,33 @@ export interface Task {
   declaredBy?: string;
   declared?: string;
   note?: string | null;
+  /** Where it was moved from, when it was: a project's slug, or null for the workspace-wide list. */
+  moved?: { from: string | null; at: string } | null;
+}
+
+/** A task that left a list, as that list shows it. It is not one of the list's tasks. */
+export interface MovedAway {
+  id: string;
+  title: string;
+  kind?: string;
+  /** The project it is on now, or null for the workspace-wide list. */
+  to: string | null;
+  at: string;
+}
+
+/** A list as a person names it. */
+export function whereSaid(project: string | null | undefined): string {
+  return project || 'the workspace-wide list';
+}
+
+/** Where Studio shows a list's tasks. */
+export function listHref(project: string | null | undefined): string {
+  return project ? `#projects/${encodeURIComponent(project)}` : '#projects/+tasks';
+}
+
+/** Where a moved task came from, in words. */
+export function movedSaid(moved: { from: string | null; at: string }): string {
+  return `from ${whereSaid(moved.from)}, ${new Date(moved.at).toLocaleDateString([], { day: 'numeric', month: 'short' })}`;
 }
 
 export const TASK_NEXT: Record<string, TaskState[]> = {

@@ -167,13 +167,14 @@ public sealed class IdeasWindowTests
     private static (IdeasWindow Window, IApplication App) Open(
         IIdeaPrompts prompts,
         string? select = null,
-        IReadOnlyList<IdeaEntry>? ideas = null)
+        IReadOnlyList<IdeaEntry>? ideas = null,
+        IReadOnlyList<IdeaMovedOn>? movedOn = null)
     {
         var app = Application.Create();
         app.Init(DriverRegistry.Names.ANSI);
         app.Screen = new Rectangle(0, 0, 140, 40);
 
-        var window = new IdeasWindow(ideas ?? Three(), ["homelab", "website"], "website", select, prompts, app);
+        var window = new IdeasWindow(ideas ?? Three(), ["homelab", "website"], "website", select, prompts, app, movedOn);
 
         app.Begin(window);
         app.LayoutAndDraw();
@@ -186,6 +187,53 @@ public sealed class IdeasWindowTests
 
     private static ListView Detail(IdeasWindow window) =>
         window.SubViews.SelectMany(v => v.SubViews).OfType<ListView>().Single(v => v.Id == "ideas-detail");
+
+    private static string Text(ListView list) =>
+        string.Join('\n', list.Source!.ToList().Cast<object?>().Select(line => line?.ToString()));
+
+    [Fact]
+    public void An_idea_that_became_work_elsewhere_is_listed_after_the_ideas_and_nothing_acts_on_it()
+    {
+        var prompts = new Scripted { Yes = true, Home = new IdeaHome("homelab"), Answered = ("Q1", "x") };
+        var gone = new IdeaMovedOn("status-page", "Status page", "website", "homelab", Now);
+        var (window, app) = Open(prompts, movedOn: [gone]);
+
+        using (app)
+        using (window)
+        {
+            Text(Rows(window)).Should().Contain("status-page").And.Contain("now a task");
+
+            Rows(window).SelectedItem = Three().Count;
+            app.LayoutAndDraw();
+
+            window.MovedOnSelected.Should().Be(gone);
+            window.Selected.Should().BeNull("it is not an idea any more");
+            Text(Detail(window)).Should().Contain("a task on homelab").And.Contain("loadout task list --project homelab");
+
+            foreach (var key in new[] { Key.Delete, Key.M, Key.A, Key.R, Key.Y })
+            {
+                Press(window, key).Should().BeNull($"{key} has no idea to act on");
+            }
+
+            prompts.Asked.Should().BeEmpty();
+        }
+    }
+
+    [Fact]
+    public void A_moved_idea_says_where_it_came_from()
+    {
+        var moved = Entry("asking", "website", Questions()) is var entry
+            ? entry with { Summary = entry.Summary with { Moved = new TaskMove { From = "homelab", Utc = Now } } }
+            : null!;
+
+        var (window, app) = Open(new Scripted(), select: "asking", ideas: [moved]);
+
+        using (app)
+        using (window)
+        {
+            Text(Detail(window)).Should().Contain("Moved here from homelab on 2026-09-26.");
+        }
+    }
 
     private static IdeaStep? Press(IdeasWindow window, Key key, ListView? on = null)
     {
