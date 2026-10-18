@@ -288,7 +288,7 @@ These records are claims with a name and a date, and the list this session was g
 
    | Id | Design note |
    |---|---|
-   | `completely-seperate-dashboard-keeping-th` | Studio's designs and handoffs are in `design/studio/`. `HANDOFF.md` and `NEXT.md` are built (0.68.0). `PAGES.md` rebuilds the six generic pages and gives them a version in every mode. `ROUND4.md` covers run progress, Red Alert, tasks in Start a run, and What it did. The default switch itself is the check in CONTRIBUTING.md, "Before Studio becomes the default". |
+   | `completely-seperate-dashboard-keeping-th` | Studio's designs and handoffs are in `design/studio/`. `HANDOFF.md` and `NEXT.md` are built (0.68.0). `PAGES.md` rebuilds the six generic pages and gives them a version in every mode. `ROUND4.md` covers run progress, Red Alert, tasks in Start a run, and What it did. `BACKGROUND.md` covers the field map background and the nav's edge. The default switch itself is the check in CONTRIBUTING.md, "Before Studio becomes the default". |
    | `team-run-visibility-and-reliability` | Designed in `design/studio/ROUND4.md`, Part 1, which lists the server changes. It covers: progress line, criteria by round, a stall holds the run after three rounds with no criterion moving and asks you, a pick-up sheet asking for what it ran out of, and what it was refused and decided. Prototype: `#run-20261017-1105-e41a`. |
    | `visual-full-page-red-alert` | Designed in `design/studio/ROUND4.md`, Part 2: an edge glow and one line, off by default (`studio-red-alert`). Sound, notifications and a tab badge are out of scope. |
    | `add-task-drop-down-in` | Studio's launch sheet and the TUI already pick a task (#159). `design/studio/ROUND4.md`, Part 3, adds the picker to Start a run (`--task`), and Start a session on it and Run a team on it to task rows. The TUI's team-run form is not designed. |
@@ -305,16 +305,18 @@ These records are claims with a name and a date, and the list this session was g
 4. **Record the next design round as an idea:**
 
    ```
-   loadout idea add --id studio-embossed-background --text="A military-style embossed background for Studio, animated with a static variant, and the same treatment for the nav, in keeping with Studio's theme. Next design round after design/studio/ROUND4.md; nothing designed yet." --project loadout-cli --by "studio design"
+   loadout idea add --id studio-embossed-background --text="A military-style embossed background for Studio, animated with a static variant, and the same treatment for the nav, in keeping with Studio's theme. Designed in design/studio/BACKGROUND.md: a field map, plain / map / map-animated as studio-background. Not built yet." --project loadout-cli --by "studio design"
    ```
 
-   Skip it if an idea with that id exists.
+   Skip it if an idea with that id exists. `BACKGROUND.md`'s own last step appends to it.
 
 5. **One memory fact**, so every session on this project knows where the designs are:
 
    ```
-   loadout memory write studio-design --description "Where Studio's designs and handoffs live" --fact "Studio's design system, prototype and handoffs are in design/studio/: HANDOFF.md (built), NEXT.md (built, 0.68.0), PAGES.md (six pages and their modes), ROUND4.md (run progress, Red Alert, tasks in Start a run, What it did). Each brief names what is decided; don't reopen those decisions." --project loadout-cli
+   loadout memory write studio-design --description "Where Studio's designs and handoffs live" --fact "Studio's design system, prototype and handoffs are in design/studio/: HANDOFF.md (built), NEXT.md (built, 0.68.0), PAGES.md (six pages and their modes), ROUND4.md (run progress, Red Alert, tasks in Start a run, What it did), BACKGROUND.md (the field map background and the nav's edge). Each brief names what is decided; don't reopen those decisions." --project loadout-cli
    ```
+
+   `memory write` replaces a topic's facts. If `studio-design` already exists, or the write refuses because a similar topic exists, add the fact to that topic instead: `loadout memory show <topic> --project loadout-cli`, edit the text, then `loadout memory replace <topic> --project loadout-cli --file <the edited text> --expect <the version show printed>`. Tell me which topic.
 
 6. **Save the workspace:** `loadout workspace save`, so your other machines have it.
 

@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format": 4, "namespace": "LoadoutStudio", "components": [{"name": "HaloButton"}, {"name": "StartRail"}, {"name": "Command"}, {"name": "Switch"}, {"name": "Tabs"}, {"name": "ModePicker"}, {"name": "Signal"}, {"name": "EventMark"}, {"name": "Urgency"}, {"name": "Meter"}, {"name": "Toasts"}, {"name": "SideRail"}, {"name": "Dialog"}, {"name": "Picker"}, {"name": "CommandPalette"}, {"name": "Halo"}, {"name": "TubeMap"}, {"name": "LineStrip"}, {"name": "NetworkStatus"}, {"name": "Terminal"}, {"name": "SessionView"}, {"name": "Gate"}, {"name": "RunCard"}, {"name": "NeedsYou"}, {"name": "RunShape"}, {"name": "Crew"}, {"name": "DoneWhen"}, {"name": "RunNumbers"}, {"name": "RunDepths"}, {"name": "Patch"}, {"name": "SayToNode"}, {"name": "TeamCard"}, {"name": "TeamNodes"}, {"name": "TeamRules"}, {"name": "RoleRecord"}, {"name": "TeamSheet"}, {"name": "Schedules"}, {"name": "Remedy"}, {"name": "Bin"}, {"name": "Outbox"}, {"name": "ModeSwitcher"}, {"name": "ModeBar"}, {"name": "SessionTabs"}, {"name": "TermDeck"}, {"name": "RunBoard"}, {"name": "QuietList"}, {"name": "FocusFrame"}, {"name": "WorkDesk"}, {"name": "ActionPane"}, {"name": "CommandBar"}, {"name": "KeyHelp"}, {"name": "ActionDrawer"}, {"name": "TerminalOnly"}, {"name": "HealthList"}, {"name": "IdeaStages"}, {"name": "QuestionSet"}, {"name": "PlanLayer"}, {"name": "NoteDump"}, {"name": "ProjectTile"}, {"name": "TaskBoard"}, {"name": "LoadStack"}, {"name": "ConfigList"}, {"name": "StoreList"}, {"name": "TopicEditor"}, {"name": "TokenSplit"}, {"name": "SpendBars"}, {"name": "PageBeside"}, {"name": "QuietPage"}, {"name": "ForgetProject"}, {"name": "ProgressLine"}, {"name": "CriteriaGrid"}, {"name": "PickUpSheet"}, {"name": "RefusalsList"}, {"name": "RedAlert"}, {"name": "TaskPicker"}, {"name": "ValueReport"}]} */
+/* @ds-bundle: {"format": 4, "namespace": "LoadoutStudio", "components": [{"name": "HaloButton"}, {"name": "StartRail"}, {"name": "Command"}, {"name": "Switch"}, {"name": "Tabs"}, {"name": "ModePicker"}, {"name": "Signal"}, {"name": "EventMark"}, {"name": "Urgency"}, {"name": "Meter"}, {"name": "Toasts"}, {"name": "SideRail"}, {"name": "Dialog"}, {"name": "Picker"}, {"name": "CommandPalette"}, {"name": "Halo"}, {"name": "TubeMap"}, {"name": "LineStrip"}, {"name": "NetworkStatus"}, {"name": "Terminal"}, {"name": "SessionView"}, {"name": "Gate"}, {"name": "RunCard"}, {"name": "NeedsYou"}, {"name": "RunShape"}, {"name": "Crew"}, {"name": "DoneWhen"}, {"name": "RunNumbers"}, {"name": "RunDepths"}, {"name": "Patch"}, {"name": "SayToNode"}, {"name": "TeamCard"}, {"name": "TeamNodes"}, {"name": "TeamRules"}, {"name": "RoleRecord"}, {"name": "TeamSheet"}, {"name": "Schedules"}, {"name": "Remedy"}, {"name": "Bin"}, {"name": "Outbox"}, {"name": "ModeSwitcher"}, {"name": "ModeBar"}, {"name": "SessionTabs"}, {"name": "TermDeck"}, {"name": "RunBoard"}, {"name": "QuietList"}, {"name": "FocusFrame"}, {"name": "WorkDesk"}, {"name": "ActionPane"}, {"name": "CommandBar"}, {"name": "KeyHelp"}, {"name": "ActionDrawer"}, {"name": "TerminalOnly"}, {"name": "HealthList"}, {"name": "IdeaStages"}, {"name": "QuestionSet"}, {"name": "PlanLayer"}, {"name": "NoteDump"}, {"name": "ProjectTile"}, {"name": "TaskBoard"}, {"name": "LoadStack"}, {"name": "ConfigList"}, {"name": "StoreList"}, {"name": "TopicEditor"}, {"name": "TokenSplit"}, {"name": "SpendBars"}, {"name": "PageBeside"}, {"name": "QuietPage"}, {"name": "ForgetProject"}, {"name": "ProgressLine"}, {"name": "CriteriaGrid"}, {"name": "PickUpSheet"}, {"name": "RefusalsList"}, {"name": "RedAlert"}, {"name": "TaskPicker"}, {"name": "ValueReport"}, {"name": "FieldMap"}]} */
 /* Loadout Studio — plain JavaScript, no framework, no imports, no network.
    Components are CSS classes plus small helpers, written to port line for line to Svelte. */
 (function () {
@@ -3030,4 +3030,84 @@
   }
 
   Object.assign(NS, { ProgressLine: ProgressLine, CriteriaGrid: CriteriaGrid, PickUpSheet: PickUpSheet, RefusalsList: RefusalsList, RedAlert: RedAlert, TaskPicker: TaskPicker, ValueReport: ValueReport });
+})();
+
+(function () {
+  "use strict";
+  var NS = window.LoadoutStudio = window.LoadoutStudio || {};
+  var SVGNS = "http://www.w3.org/2000/svg";
+  function s(tag, attrs, kids) { var e = document.createElementNS(SVGNS, tag); Object.keys(attrs || {}).forEach(function (k) { if (attrs[k] !== null && attrs[k] !== undefined) { e.setAttribute(k, attrs[k]); } }); (kids || []).forEach(function (c) { if (c) { e.appendChild(c); } }); return e; }
+  var BACKGROUNDS = ["plain", "map", "map-animated"];
+  /** Plain ground, the field map still (the default), or the field map with its scan. */
+  function setBackground(v, el) { (el || document.documentElement).setAttribute("data-background", BACKGROUNDS.indexOf(v) >= 0 ? v : "map"); }
+
+  /* A small deterministic value noise, so the map is the same on every visit. */
+  function rng(seed) { var x = seed >>> 0 || 1; return function () { x ^= x << 13; x >>>= 0; x ^= x >>> 17; x ^= x << 5; x >>>= 0; return x / 4294967296; }; }
+  function noise(seed) {
+    var r = rng(seed), N = 256, perm = [], val = [];
+    for (var i = 0; i < N; i++) { perm[i] = i; val[i] = r(); }
+    for (var j = N - 1; j > 0; j--) { var k = Math.floor(r() * (j + 1)), t = perm[j]; perm[j] = perm[k]; perm[k] = t; }
+    function at(x, y) { return val[perm[(perm[x & 255] + y) & 255]]; }
+    function sm(t) { return t * t * (3 - 2 * t); }
+    function v(x, y) { var x0 = Math.floor(x), y0 = Math.floor(y), fx = sm(x - x0), fy = sm(y - y0); var a = at(x0, y0), b = at(x0 + 1, y0), c = at(x0, y0 + 1), d = at(x0 + 1, y0 + 1); return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy; }
+    return function (x, y) { return v(x, y) * 0.58 + v(x * 2.1 + 17, y * 2.1 + 9) * 0.28 + v(x * 4.3 + 41, y * 4.3 + 3) * 0.14; };
+  }
+
+  /* Contour lines by marching squares over the noise, one path for the ordinary lines and one for every fifth (the index contours). */
+  function contours(W, H, o) {
+    var cell = o.cell || 12, scale = o.scale || 260, n = noise(o.seed || 1789), cols = Math.ceil(W / cell) + 1, rows = Math.ceil(H / cell) + 1, z = [];
+    for (var y = 0; y < rows; y++) { z[y] = []; for (var x = 0; x < cols; x++) { z[y][x] = n(x * cell / scale, y * cell / scale); } }
+    var levels = o.levels || 22, lo = 0.12, hi = 0.88, minor = [], index = [];
+    for (var L = 1; L < levels; L++) {
+      var t = lo + (hi - lo) * L / levels, d = (L % 5 === 0) ? index : minor;
+      for (var yy = 0; yy < rows - 1; yy++) {
+        for (var xx = 0; xx < cols - 1; xx++) {
+          var a = z[yy][xx], b = z[yy][xx + 1], c = z[yy + 1][xx + 1], e = z[yy + 1][xx];
+          var code = (a > t ? 8 : 0) | (b > t ? 4 : 0) | (c > t ? 2 : 0) | (e > t ? 1 : 0);
+          if (code === 0 || code === 15) { continue; }
+          var X = xx * cell, Y = yy * cell;
+          function lerp(p, q) { return (t - p) / (q - p); }
+          var top = [X + cell * lerp(a, b), Y], right = [X + cell, Y + cell * lerp(b, c)], bot = [X + cell * lerp(e, c), Y + cell], left = [X, Y + cell * lerp(a, e)];
+          var segs = { 1: [[left, bot]], 2: [[bot, right]], 3: [[left, right]], 4: [[top, right]], 5: [[left, top], [bot, right]], 6: [[top, bot]], 7: [[left, top]], 8: [[left, top]], 9: [[top, bot]], 10: [[left, bot], [top, right]], 11: [[top, right]], 12: [[left, right]], 13: [[bot, right]], 14: [[left, bot]] }[code];
+          segs.forEach(function (sg) { d.push("M" + sg[0][0].toFixed(1) + " " + sg[0][1].toFixed(1) + "L" + sg[1][0].toFixed(1) + " " + sg[1][1].toFixed(1)); });
+        }
+      }
+    }
+    return { minor: minor.join(""), index: index.join("") };
+  }
+
+  /* FieldMap: the embossed survey map. Each contour is drawn three times: a light edge, a dark edge, and the line itself. */
+  var fmCount = 0;
+  function FieldMap(o) {
+    o = o || {};
+    var el = document.createElement("div"); el.className = "ls-fieldmap"; el.setAttribute("aria-hidden", "true");
+    var host = o.host || document.body, timer = null;
+    function draw() {
+      var W = o.width || window.innerWidth, H = o.height || window.innerHeight, c = contours(W, H, o), sq = o.square || 200;
+      var svg = s("svg", { viewBox: "0 0 " + W + " " + H, preserveAspectRatio: "none", focusable: "false" });
+      /* Each set of lines is drawn once, in defs, and reused four times (dark edge, light edge, line, scan), so the page holds its path data once. */
+      var id = "ls-fm" + (++fmCount), MINOR = id + "-minor", INDEX = id + "-index";
+      svg.appendChild(s("defs", {}, [s("path", { id: MINOR, d: c.minor }), s("path", { id: INDEX, d: c.index })]));
+      function lines(ref, cls, w, dx, dy) { return s("use", { href: "#" + ref, "class": cls, fill: "none", "stroke-width": w, "stroke-linecap": "round", transform: dx || dy ? "translate(" + dx + " " + dy + ")" : null }); }
+      var grid = s("g", {});
+      for (var x = sq; x < W; x += sq) { grid.appendChild(s("line", { "class": "grid", x1: x, y1: 0, x2: x, y2: H, "stroke-width": 1 })); }
+      for (var y = sq; y < H; y += sq) { grid.appendChild(s("line", { "class": "grid", x1: 0, y1: y, x2: W, y2: y, "stroke-width": 1 })); }
+      var refs = s("g", {}), L = "ABCDEFGHJKLMNOPQRSTUVWXYZ";
+      for (var i = 0; i * sq < W; i++) { var tx = s("text", { "class": "ref", x: i * sq + sq / 2, y: H - 14, "text-anchor": "middle" }); tx.textContent = L[i % L.length]; refs.appendChild(tx); }
+      for (var j = 0; j * sq < H; j++) { var ty = s("text", { "class": "ref", x: 12, y: j * sq + sq / 2 + 4, "text-anchor": "start" }); ty.textContent = (j < 9 ? "0" : "") + (j + 1); refs.appendChild(ty); }
+      svg.appendChild(grid);
+      svg.appendChild(s("g", {}, [lines(MINOR, "lo", 1.1, 0.7, 0.7), lines(MINOR, "hi", 1, -0.6, -0.6), lines(MINOR, "ln", 0.9)]));
+      svg.appendChild(s("g", { "class": "ixg" }, [lines(INDEX, "lo", 1.8, 0.9, 0.9), lines(INDEX, "hi", 1.5, -0.8, -0.8), lines(INDEX, "ix", 1.3)]));
+      svg.appendChild(refs);
+      var scan = s("svg", { viewBox: "0 0 " + W + " " + H, preserveAspectRatio: "none", "class": "scan", focusable: "false" }, [lines(MINOR, "ln", 1.1), lines(INDEX, "ix", 1.6)]);
+      el.textContent = ""; el.appendChild(svg); el.appendChild(scan);
+    }
+    draw();
+    host.insertBefore(el, host.firstChild);
+    function onResize() { clearTimeout(timer); timer = setTimeout(draw, 250); }
+    if (!o.width) { window.addEventListener("resize", onResize); }
+    return { el: el, redraw: draw, destroy: function () { window.removeEventListener("resize", onResize); el.remove(); } };
+  }
+
+  Object.assign(NS, { FieldMap: FieldMap, setBackground: setBackground, BACKGROUNDS: BACKGROUNDS });
 })();
