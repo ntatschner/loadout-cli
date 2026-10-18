@@ -566,7 +566,8 @@ textarea.ls-text { min-height: 88px; resize: vertical; font-family: var(--font-m
 .ls-needs .calm { margin: 0; font-size: 14px; color: var(--muted); }
 
 /* ---------- RunShape: rounds as a line, each round's nodes as branches ---------- */
-.ls-shape { --c: var(--accent); container-type: inline-size; }
+.ls-shape { --c: var(--accent); container-type: inline-size; position: relative; overflow-x: auto; overflow-y: hidden; padding-bottom: 4px; }
+/* A long run (more rounds than fit) scrolls sideways inside itself, never the page. */
 .ls-shape ol { margin: 0; padding: 0; list-style: none; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(150px, 1fr); }
 .ls-shape .rd { position: relative; display: grid; grid-template-rows: 26px auto auto 1fr; gap: 6px; padding: 0 12px 0 0; min-width: 0; }
 .ls-shape .rd::before { content: ""; position: absolute; left: 0; right: 0; top: 12px; height: 3px; background: var(--accent); box-shadow: 0 0 10px -2px var(--cgf); }
@@ -1415,6 +1416,9 @@ a.ls-ptile:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px;
 .ls-tboard .task .moves .ls-action { gap: 0; }
 .ls-tboard .task .moves .ls-cmd { display: none; }
 .ls-tboard .task .moves .ls-action:focus-within .ls-cmd, .ls-tboard .task .moves .ls-action:hover .ls-cmd { display: block; }
+.ls-tboard .task .go { display: flex; flex-wrap: wrap; gap: 2px 16px; padding-top: 6px; box-shadow: inset 0 1px 0 var(--rule); }
+.ls-tboard .task .go .ls-cmd { display: none; }
+.ls-tboard .task .go .ls-action:focus-within .ls-cmd, .ls-tboard .task .go .ls-action:hover .ls-cmd { display: block; }
 .ls-tboard .task .said { margin: 0; font-size: 12.5px; color: var(--good); }
 .ls-tboard .task .said:empty { display: none; }
 .ls-tboard details.closed { padding: 8px 10px; box-shadow: inset 0 0 0 1px var(--rule); }
@@ -1660,3 +1664,131 @@ a.ls-ptile:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px;
 .ls-forget ol.plan li::marker { color: var(--muted); }
 .ls-forget .armed { margin: 0; padding: 8px 12px; font-size: 13.5px; color: var(--bad-text); background: var(--bad-wash); }
 .ls-forget .armed:empty { display: none; }
+
+/* Long answers wrap beside their ring on a phone instead of pushing the page sideways. */
+.ls-needs .ls-halo, .ls-run .ls-halo, .ls-gate .ls-halo, .ls-pickup .ls-halo { white-space: normal; text-align: left; }
+.ls-needs .ls-halo .ring, .ls-run .ls-halo .ring, .ls-gate .ls-halo .ring, .ls-pickup .ls-halo .ring { flex: none; }
+.ls-needs li, .ls-needs .ls-answers { min-width: 0; }
+.ls-prog, .ls-cgrid, .ls-pickup, .ls-refused, .ls-alert, .ls-taskpick, .ls-value {
+  --cg: color-mix(in srgb, var(--c, var(--accent)) calc(var(--glow-on) * var(--glow-strength)), transparent);
+  min-width: 0;
+}
+
+/* ---------- ProgressLine: N of M met, when it last moved, and a small line of it ---------- */
+.ls-prog { --c: var(--accent); display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 13.5px; color: var(--ink-soft); }
+.ls-prog b { font-weight: 500; color: var(--ink-strong); font-variant-numeric: tabular-nums; }
+.ls-prog .up { color: var(--good); }
+.ls-prog.stalled .moved { color: var(--needs-text); }
+.ls-prog svg { width: 84px; height: 22px; flex: none; overflow: visible; }
+.ls-prog svg .ln { fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+.ls-prog svg .ar { fill: color-mix(in srgb, var(--accent) 16%, transparent); stroke: none; }
+.ls-prog svg .top { stroke: var(--rule); stroke-width: 1; stroke-dasharray: 2 3; }
+.ls-prog svg .dot { fill: var(--accent); }
+.ls-prog.stalled svg .ln { stroke: var(--needs); }
+.ls-prog.stalled svg .dot { fill: var(--needs); }
+.ls-prog.compact { font-size: 12.5px; }
+.ls-board .brow > .bprog { grid-column: 1 / -1; }
+.ls-prog.compact svg { width: 64px; height: 18px; }
+
+/* ---------- CriteriaGrid: each done-when a row, each round a column ---------- */
+.ls-cgrid { display: grid; gap: 8px; }
+.ls-cgrid .sum { margin: 0; font-size: 15px; color: var(--ink); }
+.ls-cgrid .sum b { font-weight: 500; color: var(--ink-strong); }
+.ls-cgrid .sum .up { color: var(--good); }
+.ls-cgrid { position: relative; }
+.ls-cgrid .scroll { position: relative; overflow-x: auto; min-width: 0; outline: none; }
+.ls-cgrid .scroll:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ls-cgrid table { border-collapse: collapse; min-width: 100%; font-size: 13.5px; }
+.ls-cgrid caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.ls-cgrid th, .ls-cgrid td { padding: 6px 8px; box-shadow: inset 0 -1px 0 var(--rule); text-align: center; vertical-align: middle; }
+.ls-cgrid thead th { font-family: var(--font-mono); font-size: 11px; font-weight: 400; color: var(--muted); white-space: nowrap; }
+.ls-cgrid thead th.now { color: var(--ink-strong); box-shadow: inset 0 -2px 0 var(--accent); }
+.ls-cgrid th[scope="row"] { text-align: left; font-weight: 400; color: var(--ink-strong); min-width: 200px; max-width: 360px; }
+.ls-cgrid th[scope="row"] .mv { display: block; margin-top: 2px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.ls-cgrid th[scope="row"] .mv.stuck { color: var(--needs-text); }
+.ls-cgrid td i { display: inline-grid; place-items: center; width: 22px; height: 22px; font-style: normal; font-family: var(--font-mono); font-size: 12px; font-weight: 600; }
+.ls-cgrid td.met i { color: var(--good); box-shadow: inset 0 0 0 1.5px var(--good); border-radius: 50%; }
+.ls-cgrid td.unmet i { color: var(--bad-text); box-shadow: inset 0 0 0 1.5px var(--bad); border-radius: 50%; }
+.ls-cgrid td.na i { color: var(--muted); box-shadow: inset 0 0 0 1px var(--rule); border-radius: 50%; }
+.ls-cgrid td.none i { color: var(--subtle); }
+.ls-cgrid td.moved { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.ls-cgrid .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0; font-size: 12px; color: var(--muted); }
+.ls-cgrid .legend span { display: inline-flex; align-items: center; gap: 6px; }
+.ls-cgrid .legend i { font-style: normal; font-family: var(--font-mono); font-weight: 600; }
+
+/* ---------- PickUpSheet: what a finished run needs to carry on ---------- */
+.ls-pickup { display: grid; gap: 12px; }
+.ls-pickup .why { margin: 0; padding: 10px 12px; font-size: 14px; color: var(--ink); background: var(--surface-2); box-shadow: inset 3px 0 0 var(--ink-soft); }
+.ls-pickup .why b { font-weight: 500; color: var(--ink-strong); }
+.ls-pickup .ls-field { display: grid; gap: 4px; }
+.ls-pickup .lab { margin: 0; font-size: 11.5px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft); }
+.ls-pickup .hint { font-size: 12.5px; color: var(--muted); }
+.ls-pickup .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 12px 16px; }
+
+/* ---------- RefusalsList: what a run was refused, and what was decided ---------- */
+.ls-refused { display: grid; gap: 8px; }
+.ls-refused .filters { display: flex; flex-wrap: wrap; gap: 4px; }
+.ls-refused .filters button { min-height: 32px; padding: 0 12px; border: 0; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--control-edge); color: var(--ink-soft); font: inherit; font-size: 12.5px; cursor: pointer; }
+.ls-refused .filters button[aria-pressed="true"] { color: var(--ink-strong); background: var(--tint-picked-c); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.ls-refused .filters button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ls-refused ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
+.ls-refused li { display: grid; grid-template-columns: 52px 22px minmax(0, 1fr); gap: 1px 10px; align-items: start; padding: 8px 10px; background: var(--surface); box-shadow: inset 2px 0 0 var(--rule); }
+.ls-refused li .t { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); padding-top: 2px; }
+.ls-refused li .g { width: 18px; height: 18px; margin-top: 1px; color: var(--muted); }
+.ls-refused li .w { font-size: 14px; color: var(--ink-strong); overflow-wrap: anywhere; }
+.ls-refused li .w span { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; margin-right: 8px; }
+.ls-refused li .d { grid-column: 3; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.ls-refused li.refused { box-shadow: inset 2px 0 0 var(--bad); }
+.ls-refused li.refused .g, .ls-refused li.refused .w span { color: var(--bad-text); }
+.ls-refused li.allowed .g, .ls-refused li.allowed .w span, .ls-refused li.merged .g, .ls-refused li.merged .w span { color: var(--good); }
+.ls-refused li.answered .w span { color: var(--ink-soft); }
+.ls-refused .none { margin: 0; font-size: 14px; color: var(--muted); }
+
+/* ---------- RedAlert: the page's edge lights when something needs you ---------- */
+.ls-alert { --c: var(--needs); position: fixed; inset: 0; z-index: 70; pointer-events: none; }
+.ls-alert[hidden] { display: none; }
+.ls-alert.problem { --c: var(--bad); }
+.ls-alert .edge { position: absolute; inset: 0; box-shadow: inset 0 0 0 3px var(--c), inset 0 0 calc(140px * var(--glow-on, 1) + 40px) -10px color-mix(in srgb, var(--c) 55%, transparent); animation: lsAlertBreathe 2.4s ease-in-out infinite; }
+@keyframes lsAlertBreathe { 50% { opacity: .55; } }
+.ls-alert .bar { position: absolute; top: 0; left: 50%; transform: translateX(-50%); display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; max-width: min(760px, calc(100% - 32px)); padding: 8px 10px 8px 14px; pointer-events: auto; background: color-mix(in srgb, var(--c) 92%, var(--ground)); color: var(--ground); box-shadow: 0 8px 30px -10px color-mix(in srgb, var(--c) 70%, transparent); }
+.ls-alert .bar b { font-size: 15px; font-weight: 600; letter-spacing: .02em; }
+.ls-alert .bar span.r { flex: 1 1 220px; min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
+.ls-alert .bar button { min-height: 34px; padding: 0 12px; border: 0; background: var(--ground); color: var(--ink-strong); font: inherit; font-size: 12.5px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; cursor: pointer; }
+.ls-alert .bar button.q { background: transparent; color: var(--ground); box-shadow: inset 0 0 0 1.5px var(--ground); }
+.ls-alert .bar button:focus-visible { outline: 2px solid var(--ground); outline-offset: 2px; }
+[data-motion="reduced"] .ls-alert .edge, [data-motion="none"] .ls-alert .edge, [data-mode="pure"] .ls-alert .edge { animation: none; }
+[data-motion="none"] .ls-alert .edge, [data-mode="pure"] .ls-alert .edge { box-shadow: inset 0 0 0 4px var(--c); }
+@media (prefers-reduced-motion: reduce) { .ls-alert .edge { animation: none; } }
+[data-theme="hc-dark"] .ls-alert .edge, [data-theme="hc-light"] .ls-alert .edge { box-shadow: inset 0 0 0 6px var(--c); }
+/* A dialog is answered first: the line steps aside while one is open, and the edge stays. */
+body:has(.ls-dialog) .ls-alert .bar { display: none; }
+@media (max-width: 599px) { .ls-alert .bar { left: 8px; right: 8px; transform: none; max-width: none; } }
+
+/* ---------- TaskPicker: which recorded task this is for ---------- */
+.ls-taskpick { display: grid; gap: 6px; margin: 0; padding: 0; border: 0; min-width: 0; }
+.ls-taskpick legend { padding: 0; margin-bottom: 4px; font-size: 11.5px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft); }
+.ls-taskpick .opts { display: grid; gap: 2px; max-height: 240px; overflow: auto; }
+.ls-taskpick label { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 1px 10px; align-items: center; padding: 8px 10px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--control-edge); cursor: pointer; }
+.ls-taskpick label:has(input:checked) { background: var(--tint-picked-c); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.ls-taskpick label:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ls-taskpick input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); grid-row: 1 / span 2; }
+.ls-taskpick .t { font-size: 14px; color: var(--ink-strong); overflow-wrap: anywhere; }
+.ls-taskpick .x { grid-column: 2; font-family: var(--font-mono); font-size: 11px; color: var(--muted); overflow-wrap: anywhere; }
+.ls-taskpick .ls-sig { grid-row: 1 / span 2; grid-column: 3; }
+.ls-taskpick label.other .t { color: var(--ink-soft); }
+
+/* ---------- ValueReport: what Loadout did, counted, never estimated ---------- */
+.ls-value { display: grid; gap: 18px; }
+.ls-value .vhead { margin: 0; font-size: 18px; line-height: 1.45; font-weight: 300; color: var(--ink-strong); max-width: 70ch; }
+.ls-value .vhead b { font-weight: 500; }
+.ls-value .grp h3 { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+.ls-value .figs { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr)); gap: 8px; }
+.ls-value .fig { display: grid; align-content: start; gap: 3px; padding: 12px 14px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule); }
+.ls-value .fig .n { font-size: 30px; line-height: 1.1; font-weight: 200; color: var(--ink-strong); font-variant-numeric: tabular-nums; }
+.ls-value .fig .l { font-size: 14px; color: var(--ink); }
+.ls-value .fig .d { font-size: 12.5px; color: var(--muted); }
+.ls-value .fig code { font-family: var(--font-mono); font-size: 11px; color: var(--subtle); overflow-wrap: anywhere; }
+.ls-value .fig.waits { background: transparent; box-shadow: inset 0 0 0 1px var(--rule); }
+.ls-value .fig.waits .n { font-size: 22px; color: var(--subtle); }
+.ls-value .fig.waits .w { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.ls-value .how { margin: 0; padding: 10px 12px; font-size: 13px; color: var(--ink-soft); box-shadow: inset 2px 0 0 var(--rule); max-width: 80ch; }

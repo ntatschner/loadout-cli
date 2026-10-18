@@ -201,7 +201,8 @@ body { background: var(--ground); color: var(--ink); }
 .psel { display: inline-flex; align-items: center; gap: 10px; max-width: 100%; min-width: 0; }
 .psel label { font-size: 12px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
 .psel select { width: auto; min-width: 0; max-width: min(320px, calc(100vw - 150px)); }
-.pblock .ls-halo, .work .ls-halo, .head .ls-halo { white-space: normal; text-align: left; }
+.pblock .ls-halo, .work .ls-halo, .head .ls-halo, .rside .ls-halo, .bcol .ls-halo { white-space: normal; text-align: left; }
+.rside .ls-halo .ring, .bcol .ls-halo .ring { flex: none; }
 .pblock .ls-halo .ring, .work .ls-halo .ring { flex: none; }
 .psel.inline { margin-bottom: 12px; }
 .plain { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; font-size: 14px; color: var(--ink-soft); }
@@ -478,8 +479,9 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     if (l.waiting && l.kind === "team run") { return gateActs(); }
     if (l.waiting && l.kind === "session") { return sessionAnswers(l); }
     if (l.failed) { return [{ label: "Try the round again", cmd: "$ loadout idea refine " + l.ref, onPress: refine }]; }
-    if (l.kind === "task" && l.blocked) { return [{ label: "Mark it doing", cmd: "$ loadout task declare " + l.ref + " doing --project " + l.where, onPress: function () { l.blocked = ""; l.note = "doing"; addEvent(l, "started", "You unblocked the task"); render(); } }]; }
-    if (l.kind === "task" && l.stage === 0) { return [{ label: "Mark it doing", cmd: "$ loadout task declare " + l.ref + " doing --project " + l.where, onPress: function () { l.stage = 2; l.note = "doing"; addEvent(l, "started", "You started the task"); render(); } }]; }
+    if (l.kind === "task" && (l.blocked || l.stage === 0)) { var tk = (TASKS[l.where] || []).filter(function (t) { return t.id === l.ref; })[0] || { id: l.ref, title: l.title, note: null }; var goTask = [{ label: "Start a session on it", cmd: "opens the launch sheet with this task \u00b7 --task-id=" + l.ref, onPress: function () { sessionOnTask(l.where, tk); } }, { label: "Run a team on it", cmd: "opens Start a run with this task \u00b7 --task " + l.ref, onPress: function () { runOnTask(l.where, tk); } }]; }
+    if (l.kind === "task" && l.blocked) { return [{ label: "Mark it doing", cmd: "$ loadout task declare " + l.ref + " doing --project " + l.where, onPress: function () { l.blocked = ""; l.note = "doing"; addEvent(l, "started", "You unblocked the task"); render(); } }].concat(goTask); }
+    if (l.kind === "task" && l.stage === 0) { return [{ label: "Mark it doing", cmd: "$ loadout task declare " + l.ref + " doing --project " + l.where, onPress: function () { l.stage = 2; l.note = "doing"; addEvent(l, "started", "You started the task"); render(); } }].concat(goTask); }
     if (l.kind === "team run" && l.stage === 2) {
       return l.held ? [{ label: "Let it carry on", cmd: "$ loadout team halt --resume", onPress: function () { l.held = false; addEvent(l, "started", "release-crew carries on"); render(); } }]
         : [{ label: "Hold after this round", cmd: "$ loadout team halt --pause", onPress: function () { l.held = true; addEvent(l, "blocked", "You held release-crew after this round"); render(); } }];
@@ -676,11 +678,12 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
   }
 
   /* ---------- the launch sheet ---------- */
-  function openLaunch() {
-    var L = { project: "loadout-cli", task: null, other: "", agent: "claude", mode: "", worktree: "main", offline: false, nosync: false, handoff: false };
+  function openLaunch(pre) {
+    var L = { project: pre && pre.project && PROJECTS[pre.project] ? pre.project : "loadout-cli", task: null, other: "", agent: "claude", mode: "", worktree: "main", offline: false, nosync: false, handoff: false };
+    if (typeof TASKS !== "undefined") { Object.keys(PROJECTS).forEach(function (k) { if (TASKS[k]) { PROJECTS[k].tasks = TASKS[k].filter(function (t) { return t.state === "doing" || t.state === "open" || t.state === "blocked"; }).map(function (t) { return [t.id, t.state, t.title]; }); } }); }
     var proj = function () { return PROJECTS[L.project]; };
     var firstDoing = function () { var d = proj().tasks.filter(function (t) { return t[1] === "doing"; })[0]; return d ? d[0] : null; };
-    L.task = firstDoing();
+    L.task = pre && pre.task ? pre.task : firstDoing();
     var body = el("div", { "class": "sheet" }), cmdLine = el("code", { "class": "ls-cmdline" }), loads = el("div", { "class": "loads" }), tasksBox = el("div"), wtBox = el("div");
     function command() {
       var p = ["$ loadout " + L.project];
@@ -840,7 +843,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
   function runWord(r) {
     var l = tline(r);
     if (l) { if (l.waiting) { return "waiting for you"; } if (l.stage === 4) { return "done"; } return l.held ? "held after this round" : "running"; }
-    if (r.ended) { return r.ended; } if (r.waiting) { return "waiting for you"; } return r.held ? "held after this round" : "running";
+    if (r.ended) { return r.ended; } if (r.waiting) { return "waiting for you"; } if (r.held && r.stalled) { return "stalled"; } return r.held ? "held after this round" : "running";
   }
   function runGate(r) {
     var l = tline(r);
@@ -866,15 +869,16 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     var out = [];
     if (r.quietNode && !r.ended) { out.push({ reason: "quiet", node: r.quietNode, quiet: r.quietFor }); }
     if (!r.ended && r.cap && r.projected > r.cap) { out.push({ reason: "budget", detail: money(r.projected) + " of " + money(r.cap) }); }
+    if (!r.ended && r.held && r.stalled) { out.push({ reason: "stalled", detail: r.stalled + " rounds", actions: stallActs(r) }); }
     return out;
   }
   function money(n) { return "$" + Number(n).toFixed(2); }
   function runSummary(r) { return { id: r.id, goal: r.goal, team: r.team, project: r.project, posture: r.posture, word: runWord(r), round: r.round, elapsed: r.elapsed, spent: r.spent, cap: r.cap, projected: r.ended ? null : r.projected, rate: r.ended ? null : r.rate }; }
   function runActs(r) {
     var w = runWord(r);
-    if (w === "done" || w === "stopped" || w === "failed") {
+    if (w === "done" || w === "stopped" || w === "failed" || w === "limited") {
       return [{ label: "Run it again", cmd: "fills Start a run from it · starts nothing", onPress: function () { openSheet("run", { team: r.team, goal: r.goal, project: r.project, autonomy: r.posture === "supervised" ? "" : r.posture }); } },
-        { label: "Pick it up where it stopped", cmd: "$ loadout team resume " + r.id, onPress: function () { r.ended = null; r.round += 1; r.shape.push({ word: "running", lead: "picked up where it stopped", nodes: [] }); delete r.end; TV++; toasts.add({ level: "info", text: r.goal + ": picked up again", cmd: "$ loadout team resume " + r.id }); render(); } },
+        { label: "Pick it up where it stopped", cmd: r.endedOn === "budget" ? "asks for a new budget \u00b7 $ loadout team resume " + r.id + " --usd \u2026" : r.endedOn === "rounds" ? "asks for more rounds \u00b7 $ loadout team resume " + r.id + " --rounds \u2026" : "$ loadout team resume " + r.id, onPress: function () { openPickUp(r); } },
         { label: "Forget it", cmd: "$ loadout team runs remove " + r.id, onPress: function () { S.Dialog({ title: "Forget \u201c" + r.goal + "\u201d?", why: "It goes to the bin for 30 days. Its branches are not touched.", actions: [{ label: "Forget it", kind: "needs", cmd: "$ loadout team runs remove " + r.id, onPress: function () { TR = TR.filter(function (x) { return x !== r; }); TS.bin.unshift({ kind: "run", name: r.id, what: r.team + " \u00b7 " + r.goal, removed: "today", left: 30 }); TV++; go("teams"); } }] }).open(); } }];
     }
     var l = tline(r), held = l ? l.held : r.held;
@@ -883,7 +887,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
       { label: "Stop after this round", kind: "danger", cmd: "$ loadout team halt " + r.id, onPress: function () { S.Dialog({ danger: true, title: "Stop \u201c" + r.goal + "\u201d after this round?", why: "It stops when the turn it is in comes back. Nothing is killed mid-turn, and you can pick it up again later.", actions: [{ label: "Stop it", kind: "danger", cmd: "$ loadout team halt " + r.id, onPress: function () { r.ended = "stopped"; r.waiting = false; r.end = { word: "stopped", text: "Stopped by you" }; TV++; render(); } }] }).open(); } }];
   }
   function openSheet(kind, preset) {
-    S.TeamSheet({ kind: kind, teams: TEAMLIB, projects: TPROJ, projectDoneWhen: THELD, daemon: true, preset: preset || {}, onSubmit: function (c, v) {
+    S.TeamSheet({ kind: kind, teams: TEAMLIB, projects: TPROJ, projectDoneWhen: THELD, daemon: true, tasks: allTasks(), preset: preset || {}, onSubmit: function (c, v) {
       if (kind === "run") { var id = "20261017-" + (1600 + TR.length) + "-n" + TR.length + "ew"; TR.unshift({ id: id, goal: v.goal.trim(), team: v.team, project: v.project, posture: v.autonomy || "supervised", round: 1, elapsed: "just now", spent: 0, cap: v.usd && v.usd !== "none" ? +v.usd : 25, projected: 0, rate: "$0.00 a minute", shape: [{ word: "running", lead: "reading the goal", nodes: [] }], crew: [{ node: "lead", role: "role.lead", model: "opus", word: "running", doing: "reading the goal", turns: 0, cost: 0 }], done: { by: "set by you", criteria: v.done.split("\n").filter(function (s) { return s.trim(); }).map(function (s) { return { text: s.trim(), verdict: null }; }) } }); TV++; toasts.add({ level: "info", text: v.team + " started: " + v.goal.trim(), cmd: c }); setTimeout(function () { go("run-" + id); }, 60); }
       if (kind === "make") { TEAMLIB.splice(TEAMLIB.length - 1, 0, { name: v.name, description: "Your team, written from " + (v.from || "an empty file") + ". Its nodes are in its file.", nodes: v.from ? (TEAMLIB.filter(function (t) { return t.name === v.from; })[0] || {}).nodes : 0, lead: "lead", posture: "supervised", origin: v.forProject ? "yours · " + v.project : "yours" }); TV++; toasts.add({ level: "info", text: "Wrote " + v.name, cmd: c }); setTimeout(function () { go("team-" + v.name); }, 60); }
       if (kind === "schedule") { TS.scheds.push({ name: v.name, team: v.team, goal: v.goal.trim(), when: v.when === "at" ? "at " + v.at : v.when === "on" ? "on commit" : "every " + v.every, autonomy: v.autonomy || "supervised", usd: v.usd }); TV++; toasts.add({ level: "info", text: "Scheduled " + v.name, cmd: c }); render(); }
@@ -904,17 +908,17 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     TR.forEach(function (r) {
       var g = runGate(r), base = { run: r.id, team: r.team, goal: r.goal, href: "#run-" + r.id };
       if (g) { needs.push(Object.assign({ reason: "asked", gate: g }, base)); }
-      runReasons(r).forEach(function (x) { needs.push(Object.assign({}, base, x, { actions: x.reason === "quiet" ? [{ label: "Look at what it is doing", cmd: "opens its stream · changes nothing", onPress: function () { TS.depth = 0; TS.node = r.quietNode; go("run-" + r.id); } }] : [{ label: "Change what it may spend", cmd: "$ loadout team budget " + r.id + " --usd <figure or none>", onPress: function () { budgetDialog(r); } }] })); });
+      runReasons(r).forEach(function (x) { needs.push(Object.assign({}, base, x, { actions: x.actions ? x.actions : x.reason === "quiet" ? [{ label: "Look at what it is doing", cmd: "opens its stream · changes nothing", onPress: function () { TS.depth = 0; TS.node = r.quietNode; go("run-" + r.id); } }] : [{ label: "Change what it may spend", cmd: "$ loadout team budget " + r.id + " --usd <figure or none>", onPress: function () { budgetDialog(r); } }] })); });
     });
     main.appendChild(el("div", { "class": "tblock" }, [S.NeedsYou({ items: needs })]));
     var rz = el("section", { "class": "tblock", "aria-labelledby": "z-running" }, [zone("", "Running", "z-running")]), rl = el("div", { "class": "tcards" });
-    running.filter(function (r) { return runWord(r) !== "waiting for you"; }).forEach(function (r) { rl.appendChild(S.RunCard({ href: "#run-" + r.id, run: runSummary(r), actions: runActs(r) })); });
+    running.filter(function (r) { return runWord(r) !== "waiting for you"; }).forEach(function (r) { rl.appendChild(S.RunCard({ href: "#run-" + r.id, run: runSummary(r), progress: progressOf(r), actions: runActs(r) })); });
     running.filter(function (r) { return runWord(r) === "waiting for you"; }).forEach(function (r) { rl.appendChild(S.RunCard({ href: "#run-" + r.id, run: runSummary(r), reasons: [{ text: "It is waiting for you: the question is under Needs you.", clears: "you answer it" }] })); });
     if (!rl.childNodes.length) { rl.appendChild(el("p", { "class": "calm", text: "Nothing is running." })); }
     rz.appendChild(rl); main.appendChild(rz);
     var ended = TR.filter(function (r) { var x = runWord(r); return x === "done" || x === "stopped" || x === "failed"; });
     var ez = el("section", { "class": "tblock", "aria-labelledby": "z-ended" }, [zone("", "Ended", "z-ended")]), el2 = el("div", { "class": "tcards" });
-    ended.forEach(function (r) { el2.appendChild(S.RunCard({ href: "#run-" + r.id, run: runSummary(r), actions: runActs(r) })); });
+    ended.forEach(function (r) { el2.appendChild(S.RunCard({ href: "#run-" + r.id, run: runSummary(r), progress: progressOf(r), actions: runActs(r) })); });
     ez.appendChild(el2); ez.appendChild(el("p", { "class": "calm small", style: "margin-top: 10px; font-size: 12.5px" }, ["The same as ", el("code", { "class": "ls-cmd", text: "$ loadout team runs" }), ". Clearing out old runs is in ", el("a", { href: "#teams-bin", text: "the bin" }), "."]));
     main.appendChild(ez);
     var tz = el("section", { "class": "tblock", "aria-labelledby": "z-lib" }, [zone("", "Teams you can run", "z-lib")]), tg = el("div", { "class": "tgrid" });
@@ -978,7 +982,10 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     var grid = el("div", { "class": "runpage" });
     var left = el("div", { "class": "rmain" }), right = el("aside", { "class": "rside", "aria-label": "Spend and what you can do" });
     left.appendChild(el("section", { "aria-labelledby": "z-shape" }, [zone("", "Its shape", "z-shape"), S.RunShape({ rounds: r.shape, next: r.ended ? null : (w === "waiting for you" ? "starts when you answer" : "starts when this round's nodes report"), end: r.end || (r.ended ? { word: r.ended, text: r.ended === "done" ? "The lead said done" : "Stopped" } : null), picked: TS.node, onPick: function (n) { TS.node = n; TS.depth = 0; if (DEPTHS) { DEPTHS.showNode(n); var d = document.getElementById("z-depths"); if (d && d.scrollIntoView) { d.scrollIntoView({ block: "start" }); } } } })]));
+    var pg = progressOf(r);
+    if (pg.total) { left.appendChild(el("section", { "aria-labelledby": "z-closer" }, [zone("", "Getting closer?", "z-closer"), S.CriteriaGrid({ rounds: (histOf(r)[0] || { verdicts: [] }).verdicts.length, current: r.round, criteria: histOf(r), stalledFor: r.held && r.stalled ? r.stalled : 0, from: "report.checked, round by round" })])); }
     left.appendChild(el("section", { "aria-labelledby": "z-done" }, [zone("", "Done when", "z-done"), S.DoneWhen(r.done)]));
+    left.appendChild(el("section", { "aria-labelledby": "z-refused" }, [zone("", "What it was refused and decided", "z-refused"), S.RefusalsList({ items: refusalsOf(r), from: "loadout team log " + r.id + " --events" })]));
     left.appendChild(el("section", { "aria-labelledby": "z-crew" }, [zone("", "Who is on it", "z-crew"), S.Crew({ nodes: r.crew, picked: TS.node, onPick: function (n) { TS.node = n; if (DEPTHS) { DEPTHS.showNode(n); } } })]));
     right.appendChild(el("section", { "aria-labelledby": "z-spend" }, [zone("", "Spend", "z-spend"), S.Spend(runSummary(r)), w !== "done" && w !== "stopped" ? halo({ label: "Change what it may spend", size: "small", cmd: "$ loadout team budget " + r.id + " --usd <figure or none>", onPress: function () { budgetDialog(r); } }, "r-budget") : null]));
     if (w !== "done" && w !== "stopped" && w !== "failed") { right.appendChild(S.SayToNode({ run: r.id, lead: true, onSend: function (m) { toasts.add({ level: "info", text: "Sent to the lead of " + r.goal, cmd: "$ loadout team message " + r.id + " --message " + S.shellQuote(m) }); } })); }
@@ -1051,6 +1058,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     var out = [];
     ST.lines.filter(function (l) { return l.kind === "session" && l.waiting; }).forEach(function (l) { out.push({ kind: "session", id: l.id, at: l.askedAt || 0, label: l.title + " needs approval" }); });
     TR.filter(function (r) { return runWord(r) === "waiting for you"; }).forEach(function (r) { var g = runGate(r); out.push({ kind: "run", id: r.id, at: r.line ? (tline(r).askedAt || 0) : -1, label: g ? g.question : r.goal }); });
+    TR.filter(function (r) { return runWord(r) === "stalled"; }).forEach(function (r) { out.push({ kind: "run", id: r.id, at: -2, stalled: true, label: r.goal + " has stalled: no done-when moved for " + r.stalled + " rounds" }); });
     return out.sort(function (a, b) { return a.at - b.at; });
   }
   function goWaiting(w) {
@@ -1101,7 +1109,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
 
   /* Team Focus */
   function boardRuns() {
-    return TR.map(function (r) { var g = runGate(r); return { id: r.id, goal: r.goal, team: r.team, project: r.project, word: runWord(r), round: r.round, rounds: r.shape, spent: r.spent, cap: r.cap, projected: r.ended ? null : r.projected, gate: g }; });
+    return TR.map(function (r) { var g = runGate(r); return { id: r.id, goal: r.goal, team: r.team, project: r.project, word: runWord(r), round: r.round, rounds: r.shape, spent: r.spent, cap: r.cap, projected: r.ended ? null : r.projected, gate: g, progress: progressOf(r) }; });
   }
   function boardTeams() {
     return TEAMLIB.filter(function (t) { return !t.template; }).map(function (t) {
@@ -1476,7 +1484,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     d.appendChild(from("$ loadout project show " + p.id + " and loadout project worktrees " + p.id));
     var grid = el("div", { "class": "dgrid" });
     var tasks = TASKS[p.id] || [];
-    grid.appendChild(block("z-dt", "What is being worked on", [S.TaskBoard({ tasks: tasks, where: ["--project", p.id], from: "$ loadout task list --project " + p.id + " --all", onDeclare: function (t, n) { said(t.title + ": " + S.TASK_MOVE[n].toLowerCase(), "$ loadout task declare " + t.id + " " + n + " --project " + p.id); PV++; } }).el, taskNew(p.id)], "wide"));
+    grid.appendChild(block("z-dt", "What is being worked on", [S.TaskBoard({ tasks: tasks, where: ["--project", p.id], from: "$ loadout task list --project " + p.id + " --all", onSession: p.available ? function (t) { sessionOnTask(p.id, t); } : null, onRun: p.available ? function (t) { runOnTask(p.id, t); } : null, onDeclare: function (t, n) { said(t.title + ": " + S.TASK_MOVE[n].toLowerCase(), "$ loadout task declare " + t.id + " " + n + " --project " + p.id); PV++; } }).el, taskNew(p.id)], "wide"));
     var hs = HEALTH[p.id] || [], fx = hs.filter(function (f) { return f.fixable; }).length;
     var hb = block("z-dh", "Health", p.available ? [S.HealthList({ findings: hs, from: "$ loadout drift " + p.id + " and loadout repo check " + p.id, noneText: "Nothing has drifted." })] : [el("p", { "class": "calm", text: "Not on this machine, so there is nothing here to check. Clone it to see its health." })]);
     if (fx) { hb.appendChild(S.ActionDrawers([{ items: [{ path: "drift", title: "Put right what can be put right", label: "Put it right", changesOnlyWith: ["--fix"], open: false, fields: [{ name: "PROJECT", label: "Project", value: p.id, fixed: true }, { name: "--fix", label: "Fix, not only report", kind: "flag", value: true }, { name: "--yes", label: "Without asking each time", kind: "flag", value: true }], onRun: function (v, info) { if (info.reads) { said("Read the drift. Nothing changed.", info.line); return "Read."; } HEALTH[p.id] = hs.filter(function (f) { return !f.fixable; }); said("Put " + fx + " right", info.line, "done"); bump(); return "Put right."; } }] }])); }
@@ -1637,7 +1645,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
       pane.appendChild(block("z-sa", "Appearance", [appearanceForm()]));
       pane.appendChild(block("z-sl", "Layouts", [el("p", { "class": "lead", text: "Home's Lens and Map are edited in place, from Edit layout on Home. These put them back as they came." }), el("div", { "class": "ls-answers" }, [halo({ label: "Reset the Lens", size: "small", cmd: "$ loadout config set studio-layout-lens \"\"", onPress: function () { said("The Lens is back as it came", "$ loadout config set studio-layout-lens \"\""); } }), halo({ label: "Reset the Map", size: "small", cmd: "$ loadout config set studio-layout-map \"\"", onPress: function () { said("The Map is back as it came", "$ loadout config set studio-layout-map \"\""); } })])]));
       var idle = el("input", { "class": "ls-text", type: "number", id: "s-idle", min: "1", max: "1440", value: "10", style: "max-width: 120px", "data-k": "s-idle", oninput: function () { il.textContent = "$ loadout config set studio-idle-after " + (idle.value || "10"); } }), il = el("code", { "class": "ls-cmd", text: "$ loadout config set studio-idle-after 10" });
-      pane.appendChild(block("z-sk", "Ambient and keys", [S.Switch({ label: "Single-letter shortcuts", sub: "A for Ambient, N for a new session · kept in this browser", checked: P.keys, onChange: function (v) { P.keys = v; savePrefs(); } }), S.Switch({ label: "Ambient fills the screen", sub: "kept in this browser", checked: !!P.ambFull, onChange: function (v) { P.ambFull = v; savePrefs(); } }), el("div", { "class": "ls-field", style: "margin-top: 10px" }, [el("label", { "class": "lab", "for": "s-idle", text: "A quiet session reads idle after, in minutes" }), idle, il])]));
+      pane.appendChild(block("z-sk", "Ambient, keys and alerts", [S.Switch({ label: "Red Alert", sub: "light the page\u2019s edge when something needs you \u00b7 $ loadout config set studio-red-alert " + (P.redAlert ? "off" : "on"), checked: !!P.redAlert, onChange: function (v) { P.redAlert = v; savePrefs(); refreshAlert(); said(v ? "Red Alert is on: the page\u2019s edge lights when something needs you" : "Red Alert is off", "$ loadout config set studio-red-alert " + (v ? "on" : "off")); } }), S.Switch({ label: "Single-letter shortcuts", sub: "A for Ambient, N for a new session · kept in this browser", checked: P.keys, onChange: function (v) { P.keys = v; savePrefs(); } }), S.Switch({ label: "Ambient fills the screen", sub: "kept in this browser", checked: !!P.ambFull, onChange: function (v) { P.ambFull = v; savePrefs(); } }), el("div", { "class": "ls-field", style: "margin-top: 10px" }, [el("label", { "class": "lab", "for": "s-idle", text: "A quiet session reads idle after, in minutes" }), idle, il])]));
       pane.appendChild(block("z-ss", "Signing in", [el("p", { "class": "lead" }, ["This browser is signed in to Studio on port 4417. Signing out signs out every browser on this machine; open Studio again with ", el("code", { "class": "ls-cmd", text: "$ loadout dashboard --open --studio" }), "."]), halo({ label: "Sign out every browser", kind: "danger", size: "small", cmd: "$ loadout dashboard sign-out", onPress: function () { S.Dialog({ title: "Sign every browser out?", why: "Every browser signed in to Studio or the dashboard on this machine is signed out, this one included. Nothing else changes.", danger: true, role: "alertdialog", actions: [{ label: "Sign out", kind: "danger", cmd: "$ loadout dashboard sign-out", onPress: function () { said("This prototype stays signed in. In Studio, this page now asks you to open it again.", "$ loadout dashboard sign-out"); } }] }).open(); } }, "s-signout")]));
       pane.appendChild(block("z-st", "Done in a terminal", [el("p", { "class": "lead", text: "These are only ever done where you type, so that nothing a page can press reads a secret back or makes an agreement for you." }),
         S.TerminalOnly({ title: "Set or change the team attach passphrase", why: "It sets the passphrase this page must be given separately, so it cannot be set from the page it guards.", command: "$ loadout team attach set", fact: "Team attach passphrase: set" }),
@@ -1776,11 +1784,13 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     var since = new Date(2026, 9, 17 - (+days - 1));
     return { totals: totals, since: since.getDate() + " " + since.toLocaleString("en-GB", { month: "short" }), complete: days !== "90", groups: g.map(function (x) { return { name: x[0], value: x[1], registered: x[2] }; }) };
   }
-  function renderSpend(main) {
+  function renderSpend(main, rr) {
+    if ((rr || "").indexOf("spend/value") === 0) { pageHead(main, "Spend", "what the agents have used, and what Loadout did for you"); main.appendChild(spendTabs("value")); var vb = el("div", { "class": "pblock hero" }); renderValue(vb); main.appendChild(vb); return; }
     var u = usageFor(SPEND.by, SPEND.days), words = ["--by", SPEND.by, "--days", SPEND.days];
     var per = el("div", { "class": "seg", role: "radiogroup", "aria-label": "Over the last" }, [["1", "day"], ["7", "week"], ["30", "30 days"], ["90", "90 days"]].map(function (p) { return el("button", { type: "button", role: "radio", "aria-checked": SPEND.days === p[0] ? "true" : "false", "data-k": "sp-d" + p[0], text: p[1], onclick: function () { SPEND.days = p[0]; bump(); } }); }));
     var bySel = el("select", { "class": "ls-text", id: "sp-by", "data-k": "sp-by", onchange: function () { SPEND.by = bySel.value; bump(); } }, ["project", "day", "model", "agent"].map(function (b) { return el("option", { value: b, text: b }); })); bySel.value = SPEND.by;
     pageHead(main, "Spend", "what the agents have used, in tokens, and where", [el("div", { "class": "spctl" }, [el("span", { "class": "lab", text: "Over the last" }), per])]);
+    main.appendChild(spendTabs("cost"));
     main.appendChild(block("z-pt", "Tokens", [S.TokenSplit({ totals: u.totals, since: u.since, complete: u.complete, from: "$ loadout usage " + words.join(" ") })], "hero"));
     var cols = el("div", { "class": "spgrid" });
     cols.appendChild(block("z-pb", "Where it went", [el("div", { "class": "psel inline" }, [el("label", { "for": "sp-by", text: "By" }), bySel]), S.SpendBars({ by: SPEND.by, groups: u.groups, label: "Billed input by " + SPEND.by })], "wide"));
@@ -1804,7 +1814,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
   function pageRender(box, r) {
     var b = pageBase(r);
     if (b === "ideas") { renderIdeas(box, r); } else if (b === "projects") { renderProjects(box, r); } else if (b === "context") { renderContext(box, r); }
-    else if (b === "settings") { renderSettings(box, r); } else if (b === "memory") { renderMemory(box, r); } else if (b === "spend") { renderSpend(box); }
+    else if (b === "settings") { renderSettings(box, r); } else if (b === "memory") { renderMemory(box, r); } else if (b === "spend") { renderSpend(box, r); }
     return box;
   }
   function pagePart(r, sel) { var d = pageRender(el("div", {}), r), n = d.querySelector(sel); return n || d; }
@@ -1983,9 +1993,9 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
         } };
     },
     spend: function () {
-      var parts = [["z-pt", "Tokens", "billed as input, and what the cache saved"], ["z-pb", "Where it went", "by " + SPEND.by], ["z-pr", "Running now", "loadout running"], ["z-pl", "Launched this week", "loadout launches --days 7"], ["z-ps", "Recent sessions", "loadout sessions --limit 12"], ["z-pa", "What agents reported", "loadout telemetry status"], ["z-pm", "This machine", "loadout status"]];
+      var parts = [["z-pt", "Tokens", "billed as input, and what the cache saved"], ["z-pb", "Where it went", "by " + SPEND.by], ["z-pr", "Running now", "loadout running"], ["z-pl", "Launched this week", "loadout launches --days 7"], ["z-ps", "Recent sessions", "loadout sessions --limit 12"], ["z-pa", "What agents reported", "loadout telemetry status"], ["z-pm", "This machine", "loadout status"], ["z-value", "What it did", "what Loadout did for you, counted"]];
       return { groups: [{ key: "spend", name: "Spend · the last " + ({ "1": "day", "7": "week", "30": "30 days", "90": "90 days" }[SPEND.days]), items: parts.map(function (x) { return { id: x[0], kind: "spend", title: x[1], meta: x[2], word: x[0] === "z-pr" ? "running" : "" }; }) }],
-        view: function (it) { var d = el("div", {}); renderSpend(d); var n = d.querySelector('[aria-labelledby="' + it.id + '"]'); return { el: n || d }; },
+        view: function (it) { var d = el("div", {}); if (it.id === "z-value") { renderValue(d); return { el: d }; } renderSpend(d); var n = d.querySelector('[aria-labelledby="' + it.id + '"]'); return { el: n || d }; },
         actions: function () {
           var out = [];
           [["1", "day"], ["7", "week"], ["30", "30 days"], ["90", "90 days"]].forEach(function (x) { out.push(act("Over the last " + x[1], "$ loadout usage --by " + SPEND.by + " --days " + x[0] + " · reads only", function () { SPEND.days = x[0]; bump(); return "Over the last " + x[1]; }, "", SPEND.days === x[0] ? "shown now" : null)); });
@@ -2031,6 +2041,95 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     dlg.open();
   }
 
+
+  /* ---------- round 4: is a run getting closer, stalls, picking up, what it was refused; Red Alert; tasks; what Loadout did ---------- */
+  TR.push(
+    { id: "20261017-1105-e41a", goal: "Speed up the test suite", team: "iterating-project", project: "starstats", posture: "supervised", round: 6, elapsed: "1 h 35 min", spent: 11.2, cap: 25, projected: 18.7, rate: "$0.12 a minute", held: true, stalled: 3,
+      hist: [["Unit tests finish in under a minute", ["unmet", "unmet", "met", "met", "met", "met"]], ["Integration tests run in parallel", ["not-attempted", "unmet", "unmet", "unmet", "unmet", "unmet"]], ["No test is skipped to get there", ["met", "met", "met", "met", "met", "met"]], ["CI time halves", [null, "not-attempted", "unmet", "unmet", "unmet", "unmet"]]],
+      shape: [{ word: "done", lead: "measured the suite", nodes: [["profiler/1", "done"]] }, { word: "done", lead: "split the slow fixtures", nodes: [["implementer/1", "done"]] }, { word: "done", lead: "cached the database image", nodes: [["implementer/1", "done"], ["verifier/1", "done"]] }, { word: "done", lead: "tried parallel integration tests", nodes: [["implementer/2", "done"]] }, { word: "done", lead: "tried them again with ports", nodes: [["implementer/2", "done"]] }, { word: "held after this round", lead: "the same again", nodes: [["implementer/2", "done"]] }],
+      crew: [{ node: "lead", role: "role.lead", model: "opus", word: "held", doing: "held after this round", turns: 6, cost: 3.9 }, { node: "implementer/2", role: "role.implementer", model: "sonnet", word: "done", doing: "parallel runs clash on port 5432", turns: 9, cost: 5.1 }],
+      done: { by: "set by you", criteria: [{ text: "Unit tests finish in under a minute", verdict: "met" }, { text: "Integration tests run in parallel", verdict: "unmet", meaning: "two runners at once, no shared database" }, { text: "No test is skipped to get there", verdict: "met" }, { text: "CI time halves", verdict: "unmet" }] },
+      refusals: [["13:12", "refused", "implementer/2 ran docker compose down -v", "Bash(docker compose down*) is not in its permissions"], ["13:40", "refused", "The lead asked for a dba node", "the team has no dba role"], ["14:02", "answered", "You answered the lead: try ports first", "gate g2 · by dashboard"], ["14:21", "refused", "implementer/2 edited .github/workflows/ci.yml", "outside the files its brief allows"], ["14:30", "allowed", "verifier/1 ran dotnet test", "allowed by its permissions"]] },
+    { id: "20261016-1730-2bd4", goal: "Port the charts to the new library", team: "iterating-project", project: "starstats", posture: "autonomous", round: 5, elapsed: "2 h 4 min", spent: 15, cap: 15, ended: "limited", endedOn: "budget",
+      end: { word: "limited", text: "Budget spent: $15.00 of $15.00" },
+      shape: [{ word: "done", lead: "listed every chart", nodes: [["reader/1", "done"]] }, { word: "done", lead: "ported the line charts", nodes: [["implementer/1", "done"]] }, { word: "done", lead: "ported the bar charts", nodes: [["implementer/1", "done"]] }, { word: "done", lead: "ported the maps", nodes: [["implementer/1", "done"]] }, { word: "limited", lead: "out of budget", nodes: [] }],
+      crew: [{ node: "lead", role: "role.lead", model: "opus", word: "limited", doing: "out of budget", turns: 5, cost: 6.1 }, { node: "implementer/1", role: "role.implementer", model: "sonnet", word: "done", doing: "ported 14 of 18 charts", turns: 12, cost: 8.9 }],
+      done: { by: "set by you", criteria: [{ text: "Every chart uses the new library", verdict: "unmet", meaning: "14 of 18 ported" }, { text: "The old library is removed", verdict: "not-attempted" }, { text: "Screenshots match", verdict: "met" }] } }
+  );
+  function histOf(r) {
+    if (r.hist) { return r.hist.map(function (x) { return { text: x[0], verdicts: x[1] }; }); }
+    var R = Math.max(1, r.round || 1);
+    return ((r.done || {}).criteria || []).map(function (c, i) {
+      var v = c.verdict || null, out = [];
+      for (var k = 0; k < R; k++) {
+        if (v === "met") { out.push(k >= Math.max(0, R - 1 - (i % 2) - 1) ? "met" : (k === 0 ? "not-attempted" : "unmet")); }
+        else if (v === "unmet") { out.push(k === 0 ? "not-attempted" : "unmet"); }
+        else { out.push(v); }
+      }
+      return { text: c.text, verdicts: out };
+    });
+  }
+  function progressOf(r) {
+    var hs = histOf(r); if (!hs.length) { return { total: 0 }; }
+    var R = hs[0].verdicts.length, by = [];
+    for (var k = 0; k < R; k++) { by.push(hs.filter(function (c) { return c.verdicts[k] === "met"; }).length); }
+    var lastMoved = null;
+    for (var k2 = R - 1; k2 > 0 && lastMoved === null; k2--) { if (hs.some(function (c) { return c.verdicts[k2] !== c.verdicts[k2 - 1]; })) { lastMoved = R - 1 - k2; } }
+    if (by.every(function (x) { return x === null || x === 0; }) && hs.every(function (c) { return c.verdicts.every(function (v) { return v === null; }); })) { return { total: hs.length, byRound: by, lastMoved: null }; }
+    return { total: hs.length, byRound: by, lastMoved: lastMoved === null ? R - 1 : lastMoved, stalled: !!r.stalled && !!r.held };
+  }
+  function stallActs(r) {
+    return [{ label: "Let it carry on", kind: "needs", cmd: "$ loadout team halt " + r.id + " --resume", onPress: function () { r.held = false; r.stalled = 0; TV++; toasts.add({ level: "info", text: r.goal + ": carries on", cmd: "$ loadout team halt " + r.id + " --resume" }); render(); } },
+      { label: "Tell it something, then carry on", cmd: "$ loadout team message " + r.id + " --message …, then --resume", onPress: function () { tellThenGo(r); } },
+      { label: "Stop it", kind: "danger", cmd: "$ loadout team halt " + r.id, onPress: function () { r.held = false; r.stalled = 0; r.ended = "stopped"; r.end = { word: "stopped", text: "Stopped by you after it stalled" }; TV++; toasts.add({ level: "info", text: r.goal + ": stopped", cmd: "$ loadout team halt " + r.id }); render(); } }];
+  }
+  function tellThenGo(r) {
+    var v = "", ta = el("textarea", { "class": "ls-text", rows: 4, id: "tell-lead", placeholder: "What to try instead, or what changed", oninput: function () { v = ta.value.trim(); } });
+    S.Dialog({ title: "Tell the lead, then let it carry on", why: "No done-when has moved for " + r.stalled + " rounds. The lead reads this at the start of its next round.", content: el("div", { "class": "ls-field" }, [el("label", { "class": "lab", "for": "tell-lead", text: "Your message" }), ta]),
+      actions: [{ label: "Send it and carry on", kind: "needs", solid: true, cmd: "$ loadout team message " + r.id + " --message … then $ loadout team halt " + r.id + " --resume", onPress: function () { if (!v) { toasts.add({ level: "info", text: "Say something first", cmd: "" }); return true; } r.held = false; r.stalled = 0; TV++; toasts.add({ level: "info", text: "Told the lead; " + r.goal + " carries on", cmd: "$ loadout team message " + r.id + " --message " + S.shellQuote(v) + " · $ loadout team halt " + r.id + " --resume" }); render(); } }] }).open();
+  }
+  function openPickUp(r) {
+    var dlg = null, f = S.PickUpSheet({ run: r, ended: r.endedOn || "other", spent: r.spent, cap: r.cap, rounds: r.round, roundLimit: r.roundLimit, reason: r.end ? r.end.text : r.ended,
+      onSubmit: function (c, v) { r.ended = null; r.round += 1; if (v.usd && v.usd !== "none") { r.cap = +v.usd; } r.shape.push({ word: "running", lead: "picked up where it stopped", nodes: [] }); delete r.end; TV++; toasts.add({ level: "info", text: r.goal + ": picked up again", cmd: c }); setTimeout(function () { if (dlg) { dlg.close(); } render(); }, 600); return "It carries on from round " + r.round + "."; } });
+    dlg = S.Dialog({ title: "Pick “" + r.goal + "” up where it stopped", content: f.el, cancelLabel: "Close" });
+    dlg.open();
+  }
+  function refusalsOf(r) {
+    if (r.refusals) { return r.refusals.map(function (x) { return { at: x[0], outcome: x[1], what: x[2], detail: x[3] }; }); }
+    return [{ at: "—", outcome: "answered", what: "The lead's readings of the done-when were accepted", detail: "readings gate · by dashboard" }].concat(r.ended ? [] : [{ at: "—", outcome: "allowed", what: "Every tool asked for so far was allowed", detail: "nothing refused" }]);
+  }
+
+  /* Red Alert */
+  var RA = null;
+  function alertItems() {
+    var out = waitingNow().map(function (w) { return { id: w.kind + ":" + w.id, level: "needs", text: w.kind === "run" && !w.stalled ? (TR.filter(function (r) { return r.id === w.id; })[0] || {}).team + " asks: " + w.label : w.label, go: w }; });
+    TR.filter(function (r) { return r.ended === "failed"; }).forEach(function (r) { out.push({ id: "fail:" + r.id, level: "problem", text: r.goal + " failed", go: { kind: "run", id: r.id } }); });
+    return out;
+  }
+  function refreshAlert() {
+    if (!RA) { RA = S.RedAlert({ enabled: !!P.redAlert, onGo: function (x) { goWaiting(x.go); } }); }
+    RA.enable(!!P.redAlert); RA.set(alertItems());
+  }
+
+  /* Tasks: start a session or a team run on one */
+  function allTasks() { var out = []; Object.keys(TASKS).forEach(function (k) { if (k === "~") { return; } (TASKS[k] || []).forEach(function (t) { out.push(Object.assign({ project: k }, t, { declared: t.declared })); }); }); return out; }
+  function runOnTask(project, t) { openSheet("run", { project: project, task: t.id, goal: t.title + (t.note ? "\n\n" + t.note : "") }); }
+  function sessionOnTask(project, t) { openLaunch({ project: project, task: t.id }); }
+
+  /* Spend: what it did */
+  function spendTabs(cur) { return el("nav", { "class": "tsub", "aria-label": "Spend" }, [["spend", "What it cost", "cost"], ["spend/value", "What it did", "value"]].map(function (x) { return el("a", { href: "#" + x[0], "aria-current": cur === x[2] ? "page" : null, text: x[1] }); })); }
+  function renderValue(box) {
+    var u = usageFor("project", SPEND.days), d = { "1": "day", "7": "week", "30": "30 days", "90": "90 days" }[SPEND.days], k = { "1": 0.04, "7": 0.25, "30": 1, "90": 2.8 }[SPEND.days];
+    var n = function (x) { return Math.max(0, Math.round(x * k)); };
+    var head = el("p", { "class": "vhead" }, ["In the last " + d + " Loadout launched ", el("b", { text: n(46) + " sessions" }), " with the specialists their tasks needed, took ", el("b", { text: n(7) + " backups" }), " before changing many files, and ran ", el("b", { text: n(6) + " team runs" }), ", " + n(4) + " of them to done."]);
+    box.appendChild(S.ValueReport({ head: head, groups: [
+      { name: "Sessions", figures: [{ label: "sessions launched", value: n(46), from: "loadout launches --days " + SPEND.days }, { label: "specialists loaded, on average", value: "4.1", detail: "of 63 in the library; 12 never loaded", from: "loadout instructions stats" }, { label: "sessions picked up again", value: null, detail: "loadout resume: the ledger does not mark a resume yet" }] },
+      { name: "Memory", figures: [{ label: "times memory was recalled", value: null, detail: "loadout_recall and memory find" }, { label: "facts written", value: null, detail: "loadout_remember and memory write" }] },
+      { name: "Safety", figures: [{ label: "backups taken", value: n(7), detail: "before migrate, compress and other changes to many files", from: "<State>/backups" }, { label: "checkpoints marked", value: n(3), from: "<State>/checkpoints" }, { label: "restores", value: null, detail: "backup restore and checkpoint restore" }, { label: "drift put right", value: null, detail: "drift --fix" }] },
+      { name: "Team runs", figures: [{ label: "team runs", value: n(6), from: "<State>/teams/runs" }, { label: "ran to done", value: n(4), detail: "every done-when met" }, { label: "done-when met", value: n(17), detail: "of " + n(21) + " set" }, { label: "files delivered", value: n(38), detail: "in their outboxes", from: "loadout team outbox" }] } ] }));
+    box.appendChild(el("p", { "class": "ls-from" }, ["The figures that are counted today come from the files and commands named under each. The rest are counted from the release that adds the event log, ", el("code", { text: "<State>/events/events.jsonl" }), ", read by ", el("code", { text: "loadout value --days " + SPEND.days }), "."]));
+  }
+
   /* ---------- placeholder pages ---------- */
   function renderElsewhere(main, r) {
     if (r === "settings") { main.appendChild(el("div", { "class": "head" }, [el("h1", { text: "Settings" })])); main.appendChild(el("section", { "class": "placeholder", "aria-labelledby": "z-app" }, [zone("", "Appearance", "z-app"), appearanceForm()])); return; }
@@ -2044,6 +2143,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
   function pagesRoute(r) { var b = r.split("/")[0]; return ["ideas", "projects", "context", "settings", "memory", "spend"].indexOf(b) >= 0; }
   function teamsRoute(r) { return r === "teams" || r.indexOf("teams-") === 0 || r.indexOf("run-") === 0 || r.indexOf("team-") === 0; }
   function render() {
+    if (typeof refreshAlert === "function") { refreshAlert(); }
     var rr = route(), t1 = line("t1"), i1 = line("i1"), sig = rr + "|" + TV + "|" + PV + "|" + (t1 ? [t1.waiting, t1.stage, t1.held].join(",") : "") + "|" + (i1 && rr.indexOf("ideas") === 0 ? [i1.stage, i1.failed].join(",") : "");
     var pureRoute = P.mode === "pure" && (rr === "home" || rr === "sessions" || rr === "teams" || rr.indexOf("session-") === 0 || rr.indexOf("run-") === 0 || (pagesRoute(rr) && rr.indexOf("+") < 0));
     if (pureRoute && PURE && PURE.route === rr && document.getElementById("main").childNodes.length) {
@@ -2085,7 +2185,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     else if (r === "context" || r.indexOf("context/") === 0) { renderContext(main, r); }
     else if (r === "settings" || r.indexOf("settings/") === 0) { renderSettings(main, r); }
     else if (r === "memory" || r.indexOf("memory/") === 0) { renderMemory(main, r); }
-    else if (r === "spend") { renderSpend(main); }
+    else if (r === "spend" || r.indexOf("spend/") === 0) { renderSpend(main, r); }
     else { renderElsewhere(main, r); }
     main.appendChild(el("p", { "class": "sample", text: "Example data and scripted agents: this prototype doesn't talk to Loadout. Every command shown is the real one." }));
     if (k) { var n = k === "home-task" ? document.getElementById("home-task") : document.querySelector('[data-k="' + CSS.escape(k) + '"]'); if (n) { n.focus({ preventScroll: true }); if (caret !== undefined && n.setSelectionRange && caret !== null) { try { n.setSelectionRange(caret, caret); } catch (e) { /* not a text field */ } } } }

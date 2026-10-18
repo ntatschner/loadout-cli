@@ -66,6 +66,9 @@ Loadout Studio is the design system for Studio: the app Loadout serves on this m
 - Saying something to the lead (`team message`) needs only Studio's sign-in. Typing at a live node (`team say`) needs a second credential: the passphrase, swapped for a 30-minute grant held only by the page. Setting or clearing that passphrase, and trusting a remedy, happen in a terminal.
 - Projected spend past a budget is said in words with a Needs edge, never in colour alone. Stopping is "after this round": nothing is killed mid-turn.
 
+- **Is it getting closer?** A run carries a ProgressLine ("3 of 5 met, up from 1 · last moved 2 rounds ago") on its card and board row, and its page has a CriteriaGrid: each done-when round by round. A run where no done-when has moved for three rounds is **stalled**: held after its round, and under Needs you with three answers (let it carry on, tell it something, stop it).
+- A finished run is picked up with a PickUpSheet that asks for exactly what it ran out of; its page lists what it was refused and decided (RefusalsList).
+
 ### Modes
 
 - One switch re-lays out the whole of Studio around what you are doing. It is `data-mode` on `<html>`, kept in this browser, and cycled with Ctrl+Shift+M:
@@ -93,6 +96,10 @@ Loadout Studio is the design system for Studio: the app Loadout serves on this m
   - **Minimal**: the page is one quiet column (QuietPage): one sentence, what needs you or has gone wrong, and Show everything for the rest.
   - **Pure**: the page is a WorkDesk, reached with G and a letter: I Ideas, P Projects, C Context, M Memory, U Spend (usage), O Settings (options).
 - **Forgetting a project** (ForgetProject) is on this machine only, or from the Loadout workspace for every machine, with optional cleanup that runs first and is shown command by command. The repository is never touched.
+
+### Red Alert
+
+- Off by default (`studio-red-alert`). When on and something needs you, the page's edge lights (Needs, or Bad for a problem) and one line says what, with Go to it. It clears itself. It breathes under full motion, is steady under reduced, and is a still border under none and in Pure Focus.
 
 ### Light and glow
 

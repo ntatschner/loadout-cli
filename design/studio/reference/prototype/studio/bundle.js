@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format": 4, "namespace": "LoadoutStudio", "components": [{"name": "HaloButton"}, {"name": "StartRail"}, {"name": "Command"}, {"name": "Switch"}, {"name": "Tabs"}, {"name": "ModePicker"}, {"name": "Signal"}, {"name": "EventMark"}, {"name": "Urgency"}, {"name": "Meter"}, {"name": "Toasts"}, {"name": "SideRail"}, {"name": "Dialog"}, {"name": "Picker"}, {"name": "CommandPalette"}, {"name": "Halo"}, {"name": "TubeMap"}, {"name": "LineStrip"}, {"name": "NetworkStatus"}, {"name": "Terminal"}, {"name": "SessionView"}, {"name": "Gate"}, {"name": "RunCard"}, {"name": "NeedsYou"}, {"name": "RunShape"}, {"name": "Crew"}, {"name": "DoneWhen"}, {"name": "RunNumbers"}, {"name": "RunDepths"}, {"name": "Patch"}, {"name": "SayToNode"}, {"name": "TeamCard"}, {"name": "TeamNodes"}, {"name": "TeamRules"}, {"name": "RoleRecord"}, {"name": "TeamSheet"}, {"name": "Schedules"}, {"name": "Remedy"}, {"name": "Bin"}, {"name": "Outbox"}, {"name": "ModeSwitcher"}, {"name": "ModeBar"}, {"name": "SessionTabs"}, {"name": "TermDeck"}, {"name": "RunBoard"}, {"name": "QuietList"}, {"name": "FocusFrame"}, {"name": "WorkDesk"}, {"name": "ActionPane"}, {"name": "CommandBar"}, {"name": "KeyHelp"}, {"name": "ActionDrawer"}, {"name": "TerminalOnly"}, {"name": "HealthList"}, {"name": "IdeaStages"}, {"name": "QuestionSet"}, {"name": "PlanLayer"}, {"name": "NoteDump"}, {"name": "ProjectTile"}, {"name": "TaskBoard"}, {"name": "LoadStack"}, {"name": "ConfigList"}, {"name": "StoreList"}, {"name": "TopicEditor"}, {"name": "TokenSplit"}, {"name": "SpendBars"}, {"name": "PageBeside"}, {"name": "QuietPage"}, {"name": "ForgetProject"}]} */
+/* @ds-bundle: {"format": 4, "namespace": "LoadoutStudio", "components": [{"name": "HaloButton"}, {"name": "StartRail"}, {"name": "Command"}, {"name": "Switch"}, {"name": "Tabs"}, {"name": "ModePicker"}, {"name": "Signal"}, {"name": "EventMark"}, {"name": "Urgency"}, {"name": "Meter"}, {"name": "Toasts"}, {"name": "SideRail"}, {"name": "Dialog"}, {"name": "Picker"}, {"name": "CommandPalette"}, {"name": "Halo"}, {"name": "TubeMap"}, {"name": "LineStrip"}, {"name": "NetworkStatus"}, {"name": "Terminal"}, {"name": "SessionView"}, {"name": "Gate"}, {"name": "RunCard"}, {"name": "NeedsYou"}, {"name": "RunShape"}, {"name": "Crew"}, {"name": "DoneWhen"}, {"name": "RunNumbers"}, {"name": "RunDepths"}, {"name": "Patch"}, {"name": "SayToNode"}, {"name": "TeamCard"}, {"name": "TeamNodes"}, {"name": "TeamRules"}, {"name": "RoleRecord"}, {"name": "TeamSheet"}, {"name": "Schedules"}, {"name": "Remedy"}, {"name": "Bin"}, {"name": "Outbox"}, {"name": "ModeSwitcher"}, {"name": "ModeBar"}, {"name": "SessionTabs"}, {"name": "TermDeck"}, {"name": "RunBoard"}, {"name": "QuietList"}, {"name": "FocusFrame"}, {"name": "WorkDesk"}, {"name": "ActionPane"}, {"name": "CommandBar"}, {"name": "KeyHelp"}, {"name": "ActionDrawer"}, {"name": "TerminalOnly"}, {"name": "HealthList"}, {"name": "IdeaStages"}, {"name": "QuestionSet"}, {"name": "PlanLayer"}, {"name": "NoteDump"}, {"name": "ProjectTile"}, {"name": "TaskBoard"}, {"name": "LoadStack"}, {"name": "ConfigList"}, {"name": "StoreList"}, {"name": "TopicEditor"}, {"name": "TokenSplit"}, {"name": "SpendBars"}, {"name": "PageBeside"}, {"name": "QuietPage"}, {"name": "ForgetProject"}, {"name": "ProgressLine"}, {"name": "CriteriaGrid"}, {"name": "PickUpSheet"}, {"name": "RefusalsList"}, {"name": "RedAlert"}, {"name": "TaskPicker"}, {"name": "ValueReport"}]} */
 /* Loadout Studio — plain JavaScript, no framework, no imports, no network.
    Components are CSS classes plus small helpers, written to port line for line to Svelte. */
 (function () {
@@ -45,7 +45,7 @@
   "use strict";
   var NS = window.LoadoutStudio = window.LoadoutStudio || {};
   var GLYPHS = {"play": "M7 5 L15 10 L7 15 Z", "round": "M15.5 7 A6 6 0 1 0 16 11.5 M15.5 3 V7 H11.5", "needs": "M10 4 V11.5 M10 15 V15.2", "failed": "M6 6 L14 14 M14 6 L6 14", "blocked": "M4 10a6 6 0 1 0 12 0a6 6 0 1 0-12 0 M6.5 10 H13.5", "limited": "M4 14 A6 6 0 0 1 16 14 M10 14 L6.8 10.6", "done": "M5 10.5 L8.5 14 L15 6.5", "idle": "M5 10 H15", "open": "M5 10a5 5 0 1 0 10 0a5 5 0 1 0-10 0", "held": "M7.5 5.5 V14.5 M12.5 5.5 V14.5", "stopped": "M6 6 H14 V14 H6 Z", "unknown": "M7.5 7.5 A2.5 2.5 0 1 1 10 10 V11.5 M10 14.8 V15", "dropped": "M5 15 L15 5", "shaping": "M10 3 L16 10 L10 17 L4 10 Z"};
-  var STATES = {"working": ["moving", "play", "breathe"], "running": ["moving", "play", "breathe"], "doing": ["moving", "play", "breathe"], "round running": ["moving", "round", "spin"], "needs a decision": ["needs", "needs", "pulse"], "waiting for you": ["needs", "needs", "pulse"], "failed": ["bad", "failed", "hard"], "last round failed": ["bad", "failed", "hard"], "blocked": ["bad", "blocked", "hard"], "limited": ["bad", "limited", "hard"], "done": ["good", "done", "settle"], "met": ["good", "done", "settle"], "accepted": ["good", "done", "settle"], "idle": ["rest", "idle", "dim"], "open": ["rest", "open", "still"], "captured": ["rest", "open", "still"], "shaping": ["rest", "shaping", "still"], "held": ["rest", "held", "still"], "held after this round": ["rest", "held", "still"], "stopped": ["rest", "stopped", "still"], "not attempted": ["rest", "open", "dashed"], "unknown": ["rest", "unknown", "flicker"], "dropped": ["rest", "dropped", "strike"], "needs approval": ["needs", "needs", "pulse"], "connecting": ["rest", "open", "dashed"], "reconnecting": ["rest", "round", "dashed"], "ended": ["good", "done", "settle"], "exited with an error": ["bad", "failed", "hard"], "only watching": ["rest", "held", "still"], "lost": ["bad", "blocked", "hard"], "unmet": ["bad", "failed", "hard"], "no verdict": ["rest", "unknown", "still"], "quiet": ["needs", "needs", "pulse"], "projected over": ["needs", "limited", "pulse"], "trusted": ["good", "done", "settle"], "not trusted": ["rest", "open", "still"], "changed since trusted": ["needs", "needs", "pulse"], "to put right": ["needs", "needs", "pulse"], "not approved": ["rest", "open", "still"], "not on this machine": ["rest", "open", "dashed"], "scheduled": ["rest", "held", "still"]};
+  var STATES = {"working": ["moving", "play", "breathe"], "running": ["moving", "play", "breathe"], "doing": ["moving", "play", "breathe"], "round running": ["moving", "round", "spin"], "needs a decision": ["needs", "needs", "pulse"], "waiting for you": ["needs", "needs", "pulse"], "failed": ["bad", "failed", "hard"], "last round failed": ["bad", "failed", "hard"], "blocked": ["bad", "blocked", "hard"], "limited": ["bad", "limited", "hard"], "done": ["good", "done", "settle"], "met": ["good", "done", "settle"], "accepted": ["good", "done", "settle"], "idle": ["rest", "idle", "dim"], "open": ["rest", "open", "still"], "captured": ["rest", "open", "still"], "shaping": ["rest", "shaping", "still"], "held": ["rest", "held", "still"], "held after this round": ["rest", "held", "still"], "stopped": ["rest", "stopped", "still"], "not attempted": ["rest", "open", "dashed"], "unknown": ["rest", "unknown", "flicker"], "dropped": ["rest", "dropped", "strike"], "needs approval": ["needs", "needs", "pulse"], "connecting": ["rest", "open", "dashed"], "reconnecting": ["rest", "round", "dashed"], "ended": ["good", "done", "settle"], "exited with an error": ["bad", "failed", "hard"], "only watching": ["rest", "held", "still"], "lost": ["bad", "blocked", "hard"], "unmet": ["bad", "failed", "hard"], "no verdict": ["rest", "unknown", "still"], "quiet": ["needs", "needs", "pulse"], "projected over": ["needs", "limited", "pulse"], "trusted": ["good", "done", "settle"], "not trusted": ["rest", "open", "still"], "changed since trusted": ["needs", "needs", "pulse"], "to put right": ["needs", "needs", "pulse"], "stalled": ["needs", "held", "pulse"], "not approved": ["rest", "open", "still"], "not on this machine": ["rest", "open", "dashed"], "scheduled": ["rest", "held", "still"]};
   var SVGNS = "http://www.w3.org/2000/svg";
 
   function h(tag, attrs, kids) {
@@ -919,6 +919,7 @@
     var el = h("article", { "class": "ls-run " + fam, "aria-label": r.goal });
     el.appendChild(h("div", { "class": "top" }, [o.href ? h("a", { "class": "goal", href: o.href, text: r.goal }) : h("span", { "class": "goal", text: r.goal }), sig(r.word || "running")]));
     el.appendChild(h("span", { "class": "facts", text: [r.team, r.project, r.posture, r.round ? "round " + r.round + (r.rounds ? " of " + r.rounds : "") : null, r.elapsed, r.id].filter(Boolean).join(" \u00b7 ") }));
+    if (o.progress && NS.ProgressLine) { el.appendChild(NS.ProgressLine(o.progress)); }
     if (r.spent !== undefined) { el.appendChild(Spend(r)); }
     if ((o.reasons || []).length) { el.appendChild(h("ul", { "class": "why" }, o.reasons.map(function (x) { return h("li", {}, [x.text + " ", h("span", { text: "\u00b7 clears when " + x.clears })]); }))); }
     if (o.gate) { el.appendChild(Gate(Object.assign({ compact: true, run: r.id }, o.gate))); }
@@ -932,7 +933,8 @@
     silent: ["needs a decision", "The lead took a round without asking for anything. Another one ends the run.", "it asks for a node, or finishes"],
     quiet: ["quiet", "{node} has said nothing for {for}, three times its usual turn.", "it says anything at all"],
     budget: ["projected over", "It is projected to overrun its budget: {detail}.", "it slows, finishes, or you stop it"],
-    spent: ["limited", "It has spent its budget.", "you raise it, or it stops"]
+    spent: ["limited", "It has spent its budget.", "you raise it, or it stops"],
+    stalled: ["stalled", "No done-when has moved for {detail}, so it is held after this round.", "you let it carry on, tell it something, or stop it"]
   };
   function NeedsYou(o) {
     o = o || {};
@@ -1245,10 +1247,11 @@
     var el = h("div", { "class": "ls-sheet" });
     function team() { return teams.filter(function (t) { return t.name === V.team; })[0] || null; }
     function proj() { return projects.filter(function (x) { return x.name === V.project; })[0] || null; }
+    function tasksHere() { return (o.tasks || []).filter(function (t) { return (t.project || V.project) === V.project && (t.state === "doing" || t.state === "open" || t.state === "blocked") && t.kind !== "idea"; }); }
     function command() {
       if (kind === "make") { return "$ loadout team new " + (V.name || "<name>") + (V.from ? " --from " + V.from : "") + (V.forProject ? " --for-this-project --project " + V.project : ""); }
       if (kind === "schedule") { return "$ loadout team schedule add " + (V.name || "<name>") + " " + (V.team || "<team>") + " " + q(V.goal || "\u2026") + " --project " + V.project + (V.when === "at" ? " --at " + V.at : V.when === "on" ? " --on commit" : " --every " + (V.every || "24h")) + (V.autonomy ? " --autonomy " + V.autonomy : "") + (V.usd ? " --usd " + V.usd : ""); }
-      var c = "$ loadout team run " + (V.team || "<team>") + " " + q(V.goal || "\u2026") + " --project " + V.project;
+      var c = "$ loadout team run " + (V.team || "<team>") + " " + q(V.goal || "\u2026") + " --project " + V.project + (V.task ? " --task " + V.task : "");
       if (V.autonomy) { c += " --autonomy " + V.autonomy; }
       if (V.rounds) { c += " --rounds " + V.rounds; }
       if (V.usd) { c += " --usd " + V.usd; }
@@ -1295,7 +1298,7 @@
       var i = Math.max(0, list.map(function (t) { return t.name; }).indexOf(V.team));
       return NS.Picker({ label: "Team", selected: i, options: list.map(function (t) { return { name: t.name, sub: (t.template ? "a shape to copy \u00b7 " : "") + t.description }; }), onPick: function (x) { V.team = x.name; paintAbout(); paintFoot(); } });
     }
-    function projectPicker() { return NS.Picker({ label: "Project", selected: Math.max(0, projects.map(function (x) { return x.name; }).indexOf(V.project)), options: projects.map(function (x) { return { name: x.name, sub: x.path }; }), onPick: function (x) { V.project = x.name; paintHeld(); paintFoot(); } }); }
+    function projectPicker() { return NS.Picker({ label: "Project", selected: Math.max(0, projects.map(function (x) { return x.name; }).indexOf(V.project)), options: projects.map(function (x) { return { name: x.name, sub: x.path }; }), onPick: function (x) { V.project = x.name; paintHeld(); if (el._paintTasks) { el._paintTasks(); } paintFoot(); } }); }
     var about = h("p", { "class": "about" }), held = h("div", { "class": "proj" });
     function paintAbout() {
       var t = team(); about.textContent = "";
@@ -1317,13 +1320,25 @@
       var postureIdx = Math.max(0, POSTURES.map(function (x) { return x.name; }).indexOf(V.autonomy || (team() || {}).posture || "supervised"));
       el.appendChild(h("div", { "class": "two" }, [teamPicker(false), projectPicker()]));
       el.appendChild(about);
-      el.appendChild(field("What the run is for", text({ lines: 2, value: V.goal, spell: true, placeholder: "for example: make the docs true", onInput: function (v) { V.goal = v; paintFoot(); } }), null, true));
+      var goalBox = text({ lines: 2, value: V.goal, spell: true, placeholder: "for example: make the docs true", onInput: function (v) { V.goal = v; paintFoot(); } });
+      var pickBox = h("div", { "class": "taskpick" });
+      V.task = p.task || "";
+      function paintTasks() {
+        pickBox.textContent = "";
+        var ts = tasksHere(); if (!ts.length || !NS.TaskPicker) { V.task = ""; return; }
+        if (V.task && !ts.some(function (t) { return t.id === V.task; })) { V.task = ""; }
+        pickBox.appendChild(NS.TaskPicker({ label: "A task it is for", tasks: ts, selected: V.task || null, otherLabel: "Something else", otherSub: "say what it is for below; the run records a task of its own",
+          onPick: function (t) { V.task = t ? t.id : ""; if (t) { V.goal = t.title + (t.note ? "\n\n" + t.note : ""); goalBox.value = V.goal; } paintFoot(); } }));
+      }
+      el._paintTasks = paintTasks;
+      el.appendChild(pickBox);
+      el.appendChild(field("What the run is for", goalBox, "With a task, the run moves it to doing, then done or blocked: --task. Its title and note are the goal.", true));
       el.appendChild(h("fieldset", {}, [h("legend", { text: "How it runs" }), NS.ModePicker({ label: "Posture", selected: postureIdx, options: POSTURES, onChange: function (n) { V.autonomy = n === ((team() || {}).posture || "supervised") ? "" : n; paintFoot(); } })]));
       el.appendChild(h("div", { "class": "two" }, [field("Budget, in US dollars", text({ value: V.usd, placeholder: (team() || {}).budget ? "the team's " + team().budget : "a figure, or none", onInput: function (v) { V.usd = v.trim(); paintFoot(); } }), "Or none, for no cap on purpose."), field("Rounds at most", text({ value: V.rounds, type: "number", placeholder: "no limit", onInput: function (v) { V.rounds = v.trim(); paintFoot(); } }), "The budget is the cap that binds.")]));
       el.appendChild(field("Done when, one per line", doneBox, null, true));
       el.appendChild(held);
       el.appendChild(h("fieldset", {}, [h("legend", { text: "When nobody answers" }), h("div", { "class": "two" }, [field("Take the lead's recommendation after", text({ value: V.after, placeholder: "never", onInput: function (v) { V.after = v.trim(); paintFoot(); } }), "30m, 2h or 1d. Only the lead's own questions."), NS.Picker({ label: "What happens then", options: TIMEOUTS, onPick: function (x) { V.timeout = x.name; paintFoot(); } })])]));
-      paintAbout(); paintHeld();
+      paintAbout(); paintHeld(); paintTasks();
     } else if (kind === "make") {
       el.appendChild(h("div", { "class": "two" }, [field("Its name", text({ value: V.name, placeholder: "for example: quick-review", onInput: function (v) { V.name = v.trim(); paintFoot(); } }), "Lowercase and hyphenated, as the built-in ones are."),
         NS.Picker({ label: "Start from", selected: Math.max(0, [""].concat(teams.map(function (t) { return t.name; })).indexOf(V.from)), options: [{ name: "An empty team", sub: "a file with nothing in it yet" }].concat(teams.map(function (t) { return { name: t.name, sub: (t.template ? "a shape to copy \u00b7 " : "") + t.description }; })), onPick: function (x, i) { V.from = i ? x.name : ""; paintFoot(); } })]));
@@ -1881,6 +1896,7 @@
         NS.Signal(r.word),
         h("span", { "class": "spend" }, [h("b", { text: "$" + Number(r.spent || 0).toFixed(2) }), r.cap ? " of $" + Number(r.cap).toFixed(0) : " no cap", over ? h("em", { text: "projected over" }) : null])
       ]);
+      if (r.progress && NS.ProgressLine) { var pl = NS.ProgressLine(Object.assign({ compact: true }, r.progress)); pl.classList.add("bprog"); row.appendChild(pl); }
       if (r.gate && NS.Gate) { row.appendChild(NS.Gate(Object.assign({ compact: true, run: r.id }, r.gate))); }
       ol.appendChild(row);
     });
@@ -2438,7 +2454,13 @@
     function card(t) {
       var s = h("p", { "class": "said", role: "status" }), moves = h("div", { "class": "moves" });
       (NEXT[t.state] || []).forEach(function (n) { moves.appendChild(halo({ label: MOVE[n], size: "small", kind: n === "dropped" ? "danger" : "", cmd: lineOf("task declare", [], {}, [t.id, n].concat(where)), disabledReason: o.disabledReason, onPress: function () { var was = t.state; t.state = n; if (o.onDeclare) { o.onDeclare(t, n, was); } paint(); } })); });
-      return h("article", { "class": "task " + t.state, "aria-label": t.title + ", " + t.state }, [h("span", { "class": "tt", text: t.title }), h("span", { "class": "tx", text: [t.id, t.kind, t.declaredBy, t.declared].filter(Boolean).join(" \u00b7 ") }), t.note ? h("p", { "class": "note", text: t.note }) : null, moves, s]);
+      var go = null;
+      if ((o.onSession || o.onRun) && t.kind !== "idea" && (t.state === "open" || t.state === "doing" || t.state === "blocked")) {
+        go = h("div", { "class": "go" });
+        if (o.onSession) { go.appendChild(halo({ label: "Start a session on it", size: "small", glyph: "\u25b8", cmd: "opens the launch sheet with this task \u00b7 --task-id=" + t.id, disabledReason: o.disabledReason, onPress: function () { o.onSession(t); } })); }
+        if (o.onRun) { go.appendChild(halo({ label: "Run a team on it", size: "small", glyph: "\u25b6", cmd: "opens Start a run with this task \u00b7 --task " + t.id, disabledReason: o.disabledReason || (/^team /.test(t.declaredBy || "") && t.state === "doing" ? "a team run is on it already" : null), onPress: function () { o.onRun(t); } })); }
+      }
+      return h("article", { "class": "task " + t.state, "aria-label": t.title + ", " + t.state }, [h("span", { "class": "tt", text: t.title }), h("span", { "class": "tx", text: [t.id, t.kind, t.declaredBy, t.declared].filter(Boolean).join(" \u00b7 ") }), t.note ? h("p", { "class": "note", text: t.note }) : null, moves, go, s]);
     }
     function paint() {
       el.textContent = "";
@@ -2819,4 +2841,193 @@
   }
 
   Object.assign(NS, { PageBeside: PageBeside, BesideGrid: BesideGrid, QuietPage: QuietPage, ForgetProject: ForgetProject });
+})();
+
+(function () {
+  "use strict";
+  var NS = window.LoadoutStudio = window.LoadoutStudio || {};
+  var SVGNS = "http://www.w3.org/2000/svg";
+  function h(tag, attrs, kids) {
+    var el = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) {
+      var v = attrs[k];
+      if (v === null || v === undefined || v === false) { return; }
+      if (k === "text") { el.textContent = v; } else if (k === "class") { el.className = v; } else if (k.slice(0, 2) === "on") { el.addEventListener(k.slice(2), v); } else { el.setAttribute(k, v === true ? "" : v); }
+    });
+    (kids || []).forEach(function (c) { if (c) { el.appendChild(typeof c === "string" ? document.createTextNode(c) : c); } });
+    return el;
+  }
+  function s(tag, attrs) { var e = document.createElementNS(SVGNS, tag); Object.keys(attrs || {}).forEach(function (k) { e.setAttribute(k, attrs[k]); }); return e; }
+  function icon(d) { var v = s("svg", { viewBox: "0 0 20 20", "aria-hidden": "true", "class": "g" }), p = s("path", { d: d, fill: "none", stroke: "currentColor", "stroke-width": "1.8", "stroke-linecap": "round", "stroke-linejoin": "round" }); v.appendChild(p); return v; }
+  function uid(p) { return p + Math.random().toString(36).slice(2, 7); }
+  function halo(o) { return NS.HaloButton(o.disabledReason ? Object.assign({}, o, { cmd: null, solid: false }) : o); }
+  function q(v) { return NS.shellQuote ? NS.shellQuote(v) : JSON.stringify(v); }
+  function said(el, t) { el.textContent = t ? "✓ " + t : ""; }
+  function ago(n) { return n === 0 ? "this round" : n + (n === 1 ? " round ago" : " rounds ago"); }
+  var MARK = { met: ["✓", "met"], unmet: ["✕", "unmet"], "not-attempted": ["–", "not attempted"], "not attempted": ["–", "not attempted"] };
+  function cls(v) { return v === "met" ? "met" : v === "unmet" ? "unmet" : (v === "not-attempted" || v === "not attempted") ? "na" : "none"; }
+
+  /* ProgressLine: "3 of 5 met, up from 1 · last moved 2 rounds ago", with a small line of the met count by round. The words carry it; the line is decoration. */
+  function ProgressLine(o) {
+    o = o || {};
+    var by = o.byRound || [], total = o.total || 0, met = by.length ? by[by.length - 1] : (o.met || 0), first = by.length ? by[0] : met;
+    var el = h("div", { "class": "ls-prog" + (o.stalled ? " stalled" : "") + (o.compact ? " compact" : "") });
+    if (!total) { el.appendChild(h("span", { text: "No done-when to judge it by." })); return el; }
+    var w = o.compact ? 64 : 84, H = o.compact ? 18 : 22;
+    if (by.length > 1) {
+      var v = s("svg", { viewBox: "0 0 " + w + " " + H, "aria-hidden": "true" }), step = w / (by.length - 1);
+      function y(n) { return H - 2 - (n / total) * (H - 4); }
+      var pts = by.map(function (n, i) { return (i * step).toFixed(1) + "," + y(n).toFixed(1); });
+      v.appendChild(s("line", { "class": "top", x1: 0, y1: y(total), x2: w, y2: y(total) }));
+      v.appendChild(s("path", { "class": "ar", d: "M0," + H + " L" + pts.join(" L") + " L" + w + "," + H + " Z" }));
+      v.appendChild(s("polyline", { "class": "ln", points: pts.join(" ") }));
+      v.appendChild(s("circle", { "class": "dot", cx: w, cy: y(met), r: 2.4 }));
+      el.appendChild(v);
+    }
+    var lead = h("span", {}, [h("b", { text: met + " of " + total }), " met"]);
+    if (by.length > 1 && met > first) { lead.appendChild(h("span", { "class": "up", text: ", up from " + first })); }
+    el.appendChild(lead);
+    if (o.lastMoved !== undefined && o.lastMoved !== null) { el.appendChild(h("span", { "class": "moved", text: (o.stalled ? "stalled · " : "") + "last moved " + ago(o.lastMoved) })); }
+    return el;
+  }
+
+  /* CriteriaGrid: each done-when a row, each round a column; what changed in a round is tinted; each row says when it last moved. */
+  function CriteriaGrid(o) {
+    o = o || {};
+    var rounds = o.rounds || 0, crit = o.criteria || [], now = o.current || rounds;
+    var el = h("div", { "class": "ls-cgrid" });
+    var met = crit.filter(function (c) { return c.verdicts[c.verdicts.length - 1] === "met"; }).length, was = crit.filter(function (c) { return c.verdicts[0] === "met"; }).length;
+    el.appendChild(h("p", { "class": "sum" }, [h("b", { text: met + " of " + crit.length + " met" }), rounds > 1 && met > was ? h("span", { "class": "up", text: ", up from " + was + " in round 1" }) : null, o.stalledFor ? h("span", { style: "color: var(--needs-text)", text: " · none has moved for " + o.stalledFor + " rounds" }) : null]));
+    var cid = uid("ls-cg-"), tbl = h("table", { "aria-describedby": cid }, [h("caption", { text: "Each done-when, round by round" })]);
+    var hr = h("tr", {}, [h("th", { scope: "col", text: "Done when" })]);
+    for (var r = 1; r <= rounds; r++) { hr.appendChild(h("th", { scope: "col", "class": r === now ? "now" : null, text: "R" + r, "aria-label": "Round " + r })); }
+    tbl.appendChild(h("thead", {}, [hr]));
+    var tb = h("tbody", {});
+    crit.forEach(function (c) {
+      var at = null; for (var i = c.verdicts.length - 1; i > 0; i--) { if (c.verdicts[i] !== c.verdicts[i - 1]) { at = i + 1; break; } }
+      var nowV = c.verdicts[c.verdicts.length - 1], since = c.verdicts.length - (at || 1), stuck = nowV !== "met" && since >= 3;
+      var tr = h("tr", {}, [h("th", { scope: "row" }, [c.text, h("span", { "class": "mv" + (stuck ? " stuck" : ""), text: nowV === "met" ? "met since round " + (at || 1) : (at === null ? "has not moved since round 1" : "last moved in round " + at) })])]);
+      for (var k = 0; k < rounds; k++) {
+        var v = c.verdicts[k], m = MARK[v] || ["·", "no verdict"], moved = k > 0 && v !== c.verdicts[k - 1] && v !== undefined;
+        tr.appendChild(h("td", { "class": cls(v) + (moved ? " moved" : "") }, [h("i", { "aria-hidden": "true", text: m[0] }), h("span", { "class": "ls-vh", text: "Round " + (k + 1) + ": " + m[1] + (moved ? ", changed" : "") })]));
+      }
+      tb.appendChild(tr);
+    });
+    tbl.appendChild(tb);
+    el.appendChild(h("div", { "class": "scroll", tabindex: "0", role: "region", "aria-label": "Done-when by round" }, [tbl]));
+    el.appendChild(h("p", { "class": "legend", id: cid }, [h("span", {}, [h("i", { text: "✓" }), "met"]), h("span", {}, [h("i", { text: "✕" }), "unmet"]), h("span", {}, [h("i", { text: "–" }), "not attempted"]), h("span", {}, [h("i", { text: "·" }), "no verdict"]), h("span", {}, ["tinted: changed that round"])]));
+    if (o.from) { el.appendChild(h("p", { "class": "ls-from", style: "margin: 0" }, ["The lead's account after each round, from its run journal (", h("code", { text: o.from }), ")."])); }
+    return el;
+  }
+
+  /* PickUpSheet: picking a finished run up asks for exactly what it ran out of. */
+  function PickUpSheet(o) {
+    o = o || {};
+    var r = o.run || {}, ended = o.ended || "other", V = { usd: "", rounds: "", message: "" }, out = h("p", { "class": "ls-said", role: "status" });
+    var el = h("div", { "class": "ls-pickup" }), line = h("code", { "class": "ls-cmdline" }), act = h("div", { "class": "ls-answers" });
+    var why = { budget: ["It stopped because it spent its budget: ", "$" + Number(o.spent || 0).toFixed(2) + " of $" + Number(o.cap || 0).toFixed(2), ". Say what it may spend in all from now on."], rounds: ["It stopped at its round limit: ", (o.rounds || "?") + " of " + (o.roundLimit || "?") + " rounds", ". Say how many more it may take."], other: ["It ended: ", o.reason || "stopped", ". It carries on from where it was, with what it had."] }[ended] || ["", "", ""];
+    el.appendChild(h("p", { "class": "why" }, [why[0], h("b", { text: why[1] }), why[2]]));
+    function inp(key, label, hint, ph) { var id = uid("ls-pu-"), i = h("input", { "class": "ls-text", id: id, placeholder: ph || "", autocomplete: "off", oninput: function () { V[key] = i.value.trim(); paint(); } }); return h("div", { "class": "ls-field" }, [h("label", { "class": "lab", "for": id, text: label }), i, hint ? h("span", { "class": "hint", text: hint }) : null]); }
+    var two = h("div", { "class": "two" });
+    two.appendChild(inp("usd", ended === "budget" ? "What it may spend in all, in US dollars" : "Budget (optional)", ended === "budget" ? "--usd: in all, from now on, as team resume takes it; or none for no cap. It has spent $" + Number(o.spent || 0).toFixed(2) + "." : "--usd: leave empty to keep what it had.", ended === "budget" ? "for example " + Math.ceil((o.cap || 10) * 1.5) : "as it was"));
+    two.appendChild(inp("rounds", ended === "rounds" ? "How many more rounds" : "More rounds (optional)", "--rounds: how many more it may take.", ended === "rounds" ? "for example 3" : "as it was"));
+    el.appendChild(two);
+    var mid = uid("ls-pm-"), ta = h("textarea", { "class": "ls-text", id: mid, rows: 3, placeholder: "What to do next, or what changed (optional)", oninput: function () { V.message = ta.value.trim(); paint(); } });
+    el.appendChild(h("div", { "class": "ls-field" }, [h("label", { "class": "lab", "for": mid, text: "Tell the lead" }), ta]));
+    el.appendChild(line); el.appendChild(act); el.appendChild(out);
+    function problem() {
+      if (ended === "budget" && !V.usd) { return "say what it may spend first"; }
+      if (V.usd && !/^(none|\d+(\.\d+)?)$/i.test(V.usd)) { return "a budget is a figure in US dollars, or none"; }
+      if (ended === "budget" && /^\d/.test(V.usd) && parseFloat(V.usd) <= (o.spent || 0)) { return "more than the $" + Number(o.spent || 0).toFixed(2) + " it has spent"; }
+      if (ended === "rounds" && !V.rounds) { return "say how many more rounds first"; }
+      if (V.rounds && !/^[1-9]\d*$/.test(V.rounds)) { return "rounds are a whole number, 1 or more"; }
+      return null;
+    }
+    function cmd() { return "$ loadout team resume " + (r.id || "<run>") + (V.usd ? " --usd " + V.usd : "") + (V.rounds ? " --rounds " + V.rounds : "") + (V.message ? " --message " + q(V.message) : ""); }
+    function paint() {
+      line.textContent = cmd(); act.textContent = "";
+      act.appendChild(halo({ label: "Pick it up", solid: true, glyph: "▶", cmd: "runs the command above", disabledReason: problem() || o.disabledReason, onPress: function () { var res = o.onSubmit ? o.onSubmit(cmd(), Object.assign({}, V)) : null; said(out, typeof res === "string" ? res : "It carries on from round " + ((o.rounds || 0) + 1) + "."); } }));
+    }
+    paint();
+    return { el: el, command: cmd };
+  }
+
+  /* RefusalsList: what the run was refused, allowed and decided, oldest first, refusals first to filter. */
+  var RG = { refused: "M6 6 L14 14 M14 6 L6 14", allowed: "M5 10.5 L8.5 14 L15 6.5", merged: "M6 4v8a4 4 0 0 0 4 4h4 M14 12l2 4-4 0", answered: "M4 6h12v7H9l-3 3v-3H4z" };
+  function RefusalsList(o) {
+    o = o || {};
+    var all = o.items || [], show = o.only || "all", el = h("div", { "class": "ls-refused" }), list = h("div", {});
+    var counts = { refused: all.filter(function (x) { return x.outcome === "refused"; }).length };
+    var bar = h("div", { "class": "filters", role: "group", "aria-label": "Show" });
+    [["all", "Everything (" + all.length + ")"], ["refused", "Refused (" + counts.refused + ")"]].forEach(function (f) { bar.appendChild(h("button", { type: "button", "aria-pressed": show === f[0] ? "true" : "false", text: f[1], onclick: function () { show = f[0]; Array.prototype.forEach.call(bar.children, function (b, i) { b.setAttribute("aria-pressed", ["all", "refused"][i] === show ? "true" : "false"); }); paint(); } })); });
+    el.appendChild(bar); el.appendChild(list);
+    function paint() {
+      list.textContent = "";
+      var xs = all.filter(function (x) { return show === "all" || x.outcome === show; });
+      if (!xs.length) { list.appendChild(h("p", { "class": "none", text: show === "refused" ? "Nothing was refused." : "Nothing was asked or decided." })); return; }
+      list.appendChild(h("ol", {}, xs.map(function (x) { return h("li", { "class": x.outcome }, [h("span", { "class": "t", text: x.at || "" }), icon(RG[x.outcome] || RG.answered), h("span", { "class": "w" }, [h("span", { text: x.outcome }), x.what]), x.detail ? h("span", { "class": "d", text: x.detail }) : null]); })));
+    }
+    paint();
+    if (o.from) { el.appendChild(h("p", { "class": "ls-from", style: "margin: 0" }, ["From the run's journal: ", h("code", { text: o.from }), "."])); }
+    return el;
+  }
+
+  /* RedAlert: when it is on and something needs you, the page's edge lights and one line says what. It clears itself when answered. */
+  function RedAlert(o) {
+    o = o || {};
+    var items = [], quietSig = null, label = uid("ls-ra-");
+    var reason = h("span", { "class": "r", id: label }), count = h("b", {});
+    var goBtn = h("button", { type: "button", text: "Go to it", onclick: function () { if (items[0] && o.onGo) { o.onGo(items[0]); } } });
+    var quiet = h("button", { type: "button", "class": "q", text: "Quiet until something new", onclick: function () { quietSig = sig(); paint(); } });
+    var bar = h("div", { "class": "bar", role: "status", "aria-live": "assertive", "aria-labelledby": label }, [count, reason, goBtn, quiet]);
+    var el = h("div", { "class": "ls-alert", hidden: true }, [h("div", { "class": "edge", "aria-hidden": "true" }), bar]);
+    (o.host || document.body).appendChild(el);
+    function sig() { return items.map(function (x) { return x.id; }).join("|"); }
+    function paint() {
+      var on = !!o.enabled && items.length > 0 && quietSig !== sig();
+      el.hidden = !on; if (!on) { return; }
+      var problem = items.some(function (x) { return x.level === "problem"; });
+      el.className = "ls-alert" + (problem ? " problem" : "");
+      count.textContent = items.length === 1 ? (problem ? "Something went wrong" : "Needs you") : items.length + " need you";
+      reason.textContent = items[0].text + (items.length > 1 ? " (and " + (items.length - 1) + " more)" : "");
+    }
+    return { el: el, set: function (xs) { var before = sig(); items = (xs || []).slice().sort(function (a, b) { return (b.level === "problem") - (a.level === "problem"); }); if (sig() !== before && quietSig && sig().indexOf(quietSig) < 0) { quietSig = null; } if (!items.length) { quietSig = null; } paint(); }, enable: function (v) { o.enabled = !!v; paint(); }, get showing() { return !el.hidden; }, destroy: function () { el.remove(); } };
+  }
+
+  /* TaskPicker: which recorded task this is for, doing first, then open and blocked, newest first; or something else. */
+  var ORDER = { doing: 0, open: 1, blocked: 2 };
+  function TaskPicker(o) {
+    o = o || {};
+    var ts = (o.tasks || []).slice().sort(function (a, b) { return (ORDER[a.state] - ORDER[b.state]) || String(b.declared || "").localeCompare(String(a.declared || "")); });
+    var name = uid("ls-tp-"), el = h("fieldset", { "class": "ls-taskpick" }, [h("legend", { text: o.label || "A task it is for" })]), opts = h("div", { "class": "opts" });
+    var sel = o.selected === undefined ? null : o.selected;
+    function opt(t) {
+      var r = h("input", { type: "radio", name: name, value: t ? t.id : "", onchange: function () { sel = t ? t.id : null; if (o.onPick) { o.onPick(t); } } });
+      r.checked = t ? sel === t.id : !sel;
+      return h("label", { "class": t ? "" : "other" }, [r, h("span", { "class": "t", text: t ? t.title : (o.otherLabel || "Something else") }), h("span", { "class": "x", text: t ? [t.id, t.declaredBy, t.declared].filter(Boolean).join(" · ") : (o.otherSub || "say it below") }), t ? NS.Signal(t.state) : null]);
+    }
+    ts.forEach(function (t) { opts.appendChild(opt(t)); });
+    opts.appendChild(opt(null));
+    el.appendChild(opts);
+    return el;
+  }
+
+  /* ValueReport: what Loadout did for you over a period, counted from what this machine records. A figure not recorded yet says so instead of guessing. */
+  function ValueReport(o) {
+    o = o || {};
+    var el = h("div", { "class": "ls-value" });
+    if (o.head) { el.appendChild(typeof o.head === "string" ? h("p", { "class": "vhead", text: o.head }) : o.head); }
+    (o.groups || []).forEach(function (g) {
+      var sid = uid("ls-vg-"), sec = h("section", { "class": "grp", "aria-labelledby": sid }, [h("h3", { id: sid, text: g.name })]), figs = h("div", { "class": "figs" });
+      g.figures.forEach(function (f) {
+        var waits = f.value === null || f.value === undefined;
+        figs.appendChild(h("div", { "class": "fig" + (waits ? " waits" : "") }, [h("span", { "class": "n", text: waits ? "not counted yet" : String(f.value) }), h("span", { "class": "l", text: f.label }), f.detail ? h("span", { "class": "d", text: f.detail }) : null, waits ? h("span", { "class": "w", text: f.waits || "counted once the event log ships" }) : null, f.from ? h("code", { text: f.from }) : null]));
+      });
+      sec.appendChild(figs); el.appendChild(sec);
+    });
+    el.appendChild(h("p", { "class": "how", text: o.how || "Counted on this machine from what Loadout records; nothing leaves it. These are counts of what happened, not estimates of time or money saved." }));
+    return el;
+  }
+
+  Object.assign(NS, { ProgressLine: ProgressLine, CriteriaGrid: CriteriaGrid, PickUpSheet: PickUpSheet, RefusalsList: RefusalsList, RedAlert: RedAlert, TaskPicker: TaskPicker, ValueReport: ValueReport });
 })();
