@@ -226,6 +226,105 @@ public sealed class IdeaServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Moving_an_idea_takes_its_record_with_its_task()
+    {
+        await ProjectAsync("homelab");
+        await ProjectAsync("website");
+        var idea = (await _ideas.CaptureAsync("homelab", "Status page", "me")).Value!;
+        await _ideas.RecordReplyAsync(new IdeaPlace("homelab", idea.Id), Plan());
+
+        var moved = await _ideas.MoveAsync("homelab", "website", idea.Id);
+
+        moved.Succeeded.Should().BeTrue(moved.Error);
+        moved.Value!.Kind.Should().Be(TaskKind.Idea);
+        (await _tasks.ListAsync("homelab")).Value!.Should().BeEmpty();
+        (await _tasks.ListAsync("website")).Value!.Single().Id.Should().Be(idea.Id);
+        (await _ideas.ReadAsync(new IdeaPlace("homelab", idea.Id))).Failed.Should().BeTrue("the record left too");
+        (await _ideas.ReadAsync(new IdeaPlace("website", idea.Id))).Value!.Plan.Should().NotBeNull("its rounds came with it");
+        (await _ideas.LocateAsync(idea.Id, null)).Value!.Project.Should().Be("website");
+    }
+
+    [Fact]
+    public async Task Moving_an_accepted_task_takes_its_plan_and_says_where_it_now_is()
+    {
+        await ProjectAsync("homelab");
+        await ProjectAsync("website");
+        var idea = (await _ideas.CaptureAsync(null, "Status page", "me")).Value!;
+        var place = new IdeaPlace(null, idea.Id);
+        await _ideas.RecordReplyAsync(place, Plan());
+        await _ideas.JudgeAsync(place, "A1", IdeaVerdict.Keep);
+        await _ideas.AcceptAsync(place, "homelab", "me");
+
+        var moved = await _ideas.MoveAsync("homelab", "website", idea.Id);
+
+        moved.Succeeded.Should().BeTrue(moved.Error);
+        var plan = $"projects/website/ideas/{idea.Id}.md";
+        moved.Value!.Note.Should().Contain(plan).And.NotContain("projects/homelab/");
+        (await _tasks.ListAsync("website")).Value!.Single().Note.Should().Contain(plan, "the note is written, not only returned");
+        File.Exists(Path.Combine(_workspace.LocalPath, "projects", "website", "ideas", $"{idea.Id}.md")).Should().BeTrue();
+        File.Exists(Path.Combine(_workspace.LocalPath, "projects", "homelab", "ideas", $"{idea.Id}.md")).Should().BeFalse();
+
+        var record = (await _ideas.ReadAsync(new IdeaPlace("website", idea.Id))).Value!;
+        record.Accepted!.Project.Should().Be("website");
+        record.Accepted.PlanPath.Should().Be(plan);
+    }
+
+    [Fact]
+    public async Task A_plain_task_moves_onto_the_workspace_wide_list_and_back()
+    {
+        await ProjectAsync("homelab");
+        await _tasks.DeclareAsync("homelab", "fix-login", TaskState.Doing, "me", "Fix the login");
+
+        (await _ideas.MoveAsync("homelab", null, "fix-login")).Succeeded.Should().BeTrue();
+        (await _tasks.ListAsync(null)).Value!.Single().State.Should().Be(TaskState.Doing, "it keeps where it stood");
+
+        (await _ideas.MoveAsync(null, "homelab", "fix-login")).Succeeded.Should().BeTrue();
+        (await _tasks.ListAsync("homelab")).Value!.Single().Title.Should().Be("Fix the login");
+    }
+
+    [Fact]
+    public async Task A_move_onto_a_list_with_that_idea_already_changes_nothing()
+    {
+        await ProjectAsync("homelab");
+        await ProjectAsync("website");
+        await _ideas.CaptureAsync("homelab", "Status page", "me", "same");
+        await _ideas.CaptureAsync("website", "Another page", "me", "same");
+
+        var moved = await _ideas.MoveAsync("homelab", "website", "same");
+
+        moved.Failed.Should().BeTrue();
+        moved.Error.Should().Contain("already has");
+        (await _ideas.ReadAsync(new IdeaPlace("homelab", "same"))).Value!.Ask.Should().Be("Status page");
+        (await _ideas.ReadAsync(new IdeaPlace("website", "same"))).Value!.Ask.Should().Be("Another page");
+        (await _tasks.ListAsync("homelab")).Value!.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task A_move_to_a_project_that_is_not_there_is_refused()
+    {
+        var idea = (await _ideas.CaptureAsync(null, "Status page", "me")).Value!;
+
+        var moved = await _ideas.MoveAsync(null, "nowhere", idea.Id);
+
+        moved.ExitCode.Should().Be(ExitCode.ProjectNotFound);
+        (await _tasks.ListAsync(null)).Value!.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task An_idea_with_a_round_running_is_not_moved()
+    {
+        await ProjectAsync("homelab");
+        var idea = (await _ideas.CaptureAsync(null, "Status page", "me")).Value!;
+        using var round = _space.Locks.Take(new IdeaPlace(null, idea.Id)).Value!;
+
+        var moved = await _ideas.MoveAsync(null, "homelab", idea.Id);
+
+        moved.Failed.Should().BeTrue();
+        moved.Error.Should().Contain("round");
+        (await _tasks.ListAsync(null)).Value!.Should().ContainSingle();
+    }
+
+    [Fact]
     public async Task An_idea_is_found_on_whichever_list_it_is_on_the_preferred_one_first()
     {
         await ProjectAsync("homelab");

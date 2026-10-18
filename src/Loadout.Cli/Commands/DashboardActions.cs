@@ -577,6 +577,24 @@ internal static partial class DashboardActions
     /// </remarks>
     internal static string Joined(string option, string? value) => $"{option}={value ?? string.Empty}";
 
+    /// <summary>
+    /// Where a move goes, as the command line says it, or null when the page
+    /// named nowhere or both.
+    /// </summary>
+    /// <remarks>
+    /// Null makes the verb unmapped, so the page is told nothing was done.
+    /// A destination that was lost on the way and defaulted to the
+    /// workspace-wide list would move the task off the project somebody was
+    /// looking at and say it worked.
+    /// </remarks>
+    internal static string[]? Destination(string? to, bool toGlobal) =>
+        (to is { Length: > 0 } && to.Trim().Length > 0, toGlobal) switch
+        {
+            (true, false) => ["--to", to!.Trim()],
+            (false, true) => ["--to-global"],
+            _ => null,
+        };
+
     /// <summary>A line with any list marker it was typed with taken off.</summary>
     internal static string Unlisted(string? line) =>
         ListMarker().Replace(line ?? string.Empty, string.Empty).Trim();

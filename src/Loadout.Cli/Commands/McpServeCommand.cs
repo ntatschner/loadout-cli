@@ -1027,6 +1027,37 @@ public sealed class LoadoutTools
             : declared.Error ?? "The task could not be recorded.";
     }
 
+    [McpServerTool(Name = "loadout_task_move")]
+    [Description(
+        "Move a task or an idea from this project's list to the project it belongs on, or to the "
+        + "workspace-wide list, when it was put in the wrong place. It keeps its id, state and note, "
+        + "and an idea's answers or an accepted task's plan go with it. Only when the person has said "
+        + "where it belongs; a guess moves it off the list they are looking at.")]
+    public async Task<string> MoveTaskAsync(
+        [Description("The task's or idea's id on this project's list.")] string id,
+        [Description("The project it belongs on, by its slug, or 'global' for the workspace-wide list.")]
+        string to,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(id);
+        ArgumentException.ThrowIfNullOrWhiteSpace(to);
+
+        var slug = await SlugAsync(ct).ConfigureAwait(false);
+
+        if (slug is null)
+        {
+            return "No project could be worked out from here.";
+        }
+
+        string? destination = string.Equals(to.Trim(), "global", StringComparison.OrdinalIgnoreCase) ? null : to.Trim();
+
+        var moved = await _ideas.MoveAsync(slug, destination, id, ct).ConfigureAwait(false);
+
+        return moved.Succeeded
+            ? $"Moved {moved.Value!.Id} from {slug} to {Core.Tasks.TaskPaths.Describe(destination)}."
+            : moved.Error ?? "It could not be moved.";
+    }
+
     [McpServerTool(Name = "loadout_idea_add")]
     [Description(
         "Drop an idea in to be fleshed out later, without leaving what you are doing: something "

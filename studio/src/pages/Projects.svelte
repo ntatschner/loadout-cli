@@ -338,6 +338,7 @@
         <CommandAction path="project relocate" title="It has moved on this machine" preset={{ project: shown.id }} fixed={['project']} />
         <CommandAction path="project link" title="Record in the repository which project it is" preset={{ project: shown.id }} fixed={['project']} />
         <CommandAction path="repo check" title="Check the repository for AI tooling files" preset={{ project: shown.id }} fixed={['project']} />
+        <CommandAction path="task move" title="Move a task to another project, or the workspace-wide list" preset={{ '--project': shown.id }} fixed={['--project', '--global']} label="Move it" note="Its plan and record go with it." />
         <CommandAction path="task remove" title="Forget a task entirely" preset={{ '--project': shown.id }} fixed={['--project', '--global']} label="Forget it" danger note="Moving a task to done or dropped is on the board." />
       </div>
     </section>
@@ -382,6 +383,7 @@
       {/if}
       <div class="ls-drawers">
         <CommandAction path="task declare" title="Record one" preset={{ '--global': true }} fixed={['--project', '--global']} label="Record it" />
+        <CommandAction path="task move" title="Move one onto the project it belongs to" preset={{ '--global': true }} fixed={['--project', '--global', '--to-global']} label="Move it" />
       </div>
     {:else if place === 'workspace'}
       <div class="dhead"><h2>The workspace</h2></div>

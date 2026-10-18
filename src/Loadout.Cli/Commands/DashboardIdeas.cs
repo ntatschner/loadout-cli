@@ -57,7 +57,7 @@ internal sealed class DashboardIdeas
 
     /// <summary>Every verb the page can send, for the tests that run each one.</summary>
     internal static IReadOnlyList<string> Verbs =>
-        ["add", "refine", "answer", "choose", "keep", "drop", "improve", "accept", "remove", "dump", "apply"];
+        ["add", "refine", "answer", "choose", "keep", "drop", "improve", "accept", "move", "remove", "dump", "apply"];
 
     /// <summary>The key a dump being split is kept busy under, until its id is known.</summary>
     internal const string Dumping = "(dump)";
@@ -234,6 +234,8 @@ internal sealed class DashboardIdeas
                 asking.NewProject is { Length: > 0 } made ? [$"--new-project={made}"]
                     : asking.To is { Length: > 0 } to ? ["--to", to]
                     : []),
+            "move" when DashboardActions.Destination(asking.To, asking.ToGlobal) is { } to =>
+                Line("idea move", [id], list, to),
             "remove" => Line("idea remove", [id], list),
             "dump" => Line("idea dump add", [$"--text={asking.Text}"], list),
             "apply" => Line(

@@ -979,6 +979,65 @@ public sealed class IdeaRemoveCommand : AsyncCommand<IdeaSettings>
     }
 }
 
+/// <summary>Moves an idea to the list it belongs on.</summary>
+[Description("Move an idea to another project's list, or to the workspace-wide one, with its answers and plan.")]
+[CommandMeta(CommandCategory.Workspace,
+    Intent = "idea move wrong project misplaced reassign transfer",
+    Mutates = true,
+    Example = "status-page --to homelab")]
+public sealed class IdeaMoveCommand : AsyncCommand<IdeaMoveCommand.Settings>
+{
+    private readonly IIdeaService _ideas;
+    private readonly IProjectService _projects;
+    private readonly IAnsiConsole _console;
+
+    public IdeaMoveCommand(IIdeaService ideas, IProjectService projects, IAnsiConsole console)
+    {
+        _ideas = ideas;
+        _projects = projects;
+        _console = console;
+    }
+
+    public sealed class Settings : IdeaSettings
+    {
+        [CommandOption("--to <SLUG>")]
+        [Description("The project it belongs to.")]
+        public string? To { get; init; }
+
+        [CommandOption("--to-global")]
+        [Description("Move it to the workspace-wide list, for an idea that belongs to no project yet.")]
+        public bool ToGlobal { get; init; }
+    }
+
+    /// <inheritdoc />
+    public override async Task<int> ExecuteAsync(
+        CommandContext context,
+        Settings settings,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var output = new CommandOutput(_console, settings);
+        var destination = MoveDestination.Of(settings.To, settings.ToGlobal);
+
+        if (destination.Failed)
+        {
+            return output.Fail(destination);
+        }
+
+        var place = await settings.PlaceAsync(_ideas, _projects, cancellationToken).ConfigureAwait(false);
+
+        if (place.Failed)
+        {
+            return output.Fail(place);
+        }
+
+        return await Move.RunAsync(
+            output, _ideas, place.Value!.Project, destination.Value, place.Value.Id, settings.DryRun, cancellationToken)
+            .ConfigureAwait(false);
+    }
+}
+
 /// <summary>The shared run of a command that changes one idea and shows it after.</summary>
 internal static class IdeaChange
 {

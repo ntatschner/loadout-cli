@@ -403,6 +403,156 @@ public sealed class TaskDeclareCommand : AsyncCommand<TaskDeclareCommand.Setting
     }
 }
 
+/// <summary>Where a move sends something: a project, or the workspace-wide list.</summary>
+internal static class MoveDestination
+{
+    /// <summary>
+    /// The list named by <c>--to</c> or <c>--to-global</c>, or a refusal when
+    /// neither or both was given.
+    /// </summary>
+    /// <remarks>
+    /// Asked for outright rather than defaulted. A move with no destination
+    /// that quietly went to the workspace-wide list would take a task off the
+    /// project somebody was looking at and put it where nobody looks.
+    /// </remarks>
+    public static OperationResult<string?> Of(string? to, bool toGlobal)
+    {
+        var named = to is { Length: > 0 } && to.Trim().Length > 0;
+
+        return (named, toGlobal) switch
+        {
+            (true, true) => OperationResult<string?>.Fail(
+                "--to and --to-global name different lists. Give one.", ExitCode.InvalidArguments),
+            (false, false) => OperationResult<string?>.Fail(
+                "Say where it goes: --to <project>, or --to-global for the workspace-wide list.",
+                ExitCode.InvalidArguments),
+            (true, false) => OperationResult<string?>.Ok(to!.Trim()),
+            _ => OperationResult<string?>.Ok(null),
+        };
+    }
+}
+
+/// <summary>Moves a task to the list it belongs on.</summary>
+/// <remarks>
+/// An idea's task moves its record with it, and an accepted one's plan, so
+/// this is the same move as <c>idea move</c>: one implementation, reached
+/// from whichever list somebody was looking at.
+/// </remarks>
+[Description("Move a task to another project's list, or to the workspace-wide one. Its plan and record go with it.")]
+[CommandMeta(CommandCategory.Workspace,
+    Intent = "move task wrong project misplaced reassign transfer",
+    Mutates = true,
+    Example = "fix-login --project website --to homelab")]
+public sealed class TaskMoveCommand : AsyncCommand<TaskMoveCommand.Settings>
+{
+    private readonly Core.Ideas.IIdeaService _ideas;
+    private readonly IProjectService _projects;
+    private readonly IAnsiConsole _console;
+
+    public TaskMoveCommand(
+        Core.Ideas.IIdeaService ideas,
+        IProjectService projects,
+        IAnsiConsole console)
+    {
+        _ideas = ideas;
+        _projects = projects;
+        _console = console;
+    }
+
+    public sealed class Settings : TaskSettings
+    {
+        [CommandArgument(0, "<id>")]
+        [Description("The task to move.")]
+        public string Id { get; init; } = string.Empty;
+
+        [CommandOption("--to <SLUG>")]
+        [Description("The project it belongs to.")]
+        public string? To { get; init; }
+
+        [CommandOption("--to-global")]
+        [Description("Move it to the workspace-wide list, for what belongs to no project yet.")]
+        public bool ToGlobal { get; init; }
+    }
+
+    /// <inheritdoc />
+    public override async Task<int> ExecuteAsync(
+        CommandContext context,
+        Settings settings,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var output = new CommandOutput(_console, settings);
+        var destination = MoveDestination.Of(settings.To, settings.ToGlobal);
+
+        if (destination.Failed)
+        {
+            return output.Fail(destination);
+        }
+
+        var resolution = await settings.ListAsync(_projects, cancellationToken).ConfigureAwait(false);
+
+        if (resolution.Failed)
+        {
+            return output.Fail(resolution);
+        }
+
+        return await Move.RunAsync(
+            output, _ideas, resolution.Value?.Entry.Slug, destination.Value, settings.Id, settings.DryRun, cancellationToken)
+            .ConfigureAwait(false);
+    }
+}
+
+/// <summary>The shared run of a move, for the task and idea commands both.</summary>
+internal static class Move
+{
+    public static async Task<int> RunAsync(
+        CommandOutput output,
+        Core.Ideas.IIdeaService ideas,
+        string? from,
+        string? to,
+        string id,
+        bool dryRun,
+        CancellationToken ct)
+    {
+        if (dryRun)
+        {
+            output.WriteLine(
+                $"Would move [bold]{Markup.Escape(id)}[/] from {Markup.Escape(TaskPaths.Describe(from))} "
+                + $"to {Markup.Escape(TaskPaths.Describe(to))}. Nothing was moved.");
+
+            return CommandOutput.Success();
+        }
+
+        var moved = await ideas.MoveAsync(from, to, id, ct).ConfigureAwait(false);
+
+        if (moved.Failed)
+        {
+            return output.Fail(moved);
+        }
+
+        if (output.IsJson)
+        {
+            output.WriteJson(new
+            {
+                id = moved.Value!.Id,
+                from,
+                to,
+                kind = moved.Value.Kind.ToString().ToLowerInvariant(),
+            });
+
+            return CommandOutput.Success();
+        }
+
+        output.WriteLine(
+            string.Equals(from, to, StringComparison.Ordinal)
+                ? $"{Markup.Escape(moved.Value!.Id)} is on {Markup.Escape(TaskPaths.Describe(to))} already. Nothing was moved."
+                : $"[green]+[/] Moved {Markup.Escape(moved.Value!.Id)} to {Markup.Escape(TaskPaths.Describe(to))}.");
+
+        return CommandOutput.Success();
+    }
+}
+
 /// <summary>Forgets a task.</summary>
 [Description("Forget a task entirely.")]
 [CommandMeta(CommandCategory.Workspace, Intent = "remove delete forget task", Mutates = true)]

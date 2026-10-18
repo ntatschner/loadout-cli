@@ -24,6 +24,10 @@ internal sealed record IdeaStep(string Command, IReadOnlyList<string> Arguments,
 /// <param name="NewProject">A name for a project to make, or null.</param>
 internal sealed record IdeaTarget(string? Project, string? NewProject);
 
+/// <summary>The list a misplaced idea belongs on, as the person chose it.</summary>
+/// <param name="Project">A registered project, or null for the workspace-wide list.</param>
+internal sealed record IdeaHome(string? Project);
+
 /// <summary>
 /// The command lines the ideas screen builds, one per thing it offers.
 /// </summary>
@@ -75,6 +79,16 @@ internal static class IdeaSteps
 
     internal static IdeaStep Dismiss(IdeaPlace place) => new(
         LauncherCommands.IdeaDismiss, [place.Id, .. List(place.Project)], Pause: false, place.Id);
+
+    internal static IdeaStep Move(IdeaPlace place, IdeaHome home) => new(
+        LauncherCommands.IdeaMove,
+        [
+            place.Id,
+            .. List(place.Project),
+            .. home.Project is { Length: > 0 } project ? (string[])["--to", project] : ["--to-global"],
+        ],
+        Pause: false,
+        Select: place.Id);
 
     internal static IdeaStep Remove(IdeaPlace place) => new(
         LauncherCommands.IdeaRemove, [place.Id, .. List(place.Project)], Pause: false, Select: null);

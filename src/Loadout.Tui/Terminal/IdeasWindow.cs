@@ -112,6 +112,7 @@ internal sealed class IdeasWindow : Window
             ("i", "improve"),
             ("y", "accept"),
             ("x", "dismiss failure"),
+            ("m", "move"),
             ("Del", "remove"),
             ("Esc", "close"),
         ])
@@ -139,6 +140,7 @@ internal sealed class IdeasWindow : Window
             list.OnKey(Key.I, Command.Paste, () => Take(Improve()));
             list.OnKey(Key.Y, Command.SaveAs, () => Take(Accept()));
             list.OnKey(Key.X, Command.Undo, () => Take(Dismiss()));
+            list.OnKey(Key.M, Command.Redo, () => Take(Move()));
             list.OnKey(Key.Delete, Command.DeleteCharRight, () => Take(Remove()));
         }
 
@@ -217,6 +219,13 @@ internal sealed class IdeasWindow : Window
     private IdeaStep? Dismiss() =>
         Selected is { Summary: { Running: false, Failure: not null } summary }
             ? IdeaSteps.Dismiss(summary.Place)
+            : null;
+
+    /// <remarks>Not while a round is running: the command would refuse it.</remarks>
+    private IdeaStep? Move() =>
+        Selected is { Summary: { Running: false } summary }
+            && _prompts.MoveTo(summary.Place, _projects) is { } home
+            ? IdeaSteps.Move(summary.Place, home)
             : null;
 
     private IdeaStep? Remove() =>

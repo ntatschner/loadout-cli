@@ -16,7 +16,7 @@ namespace Loadout.Core.Teams.Daemon;
 /// command somebody would have typed.
 /// </para>
 /// </remarks>
-/// <param name="Verb">add, refine, answer, choose, keep, drop, improve, accept, remove, dump or apply.</param>
+/// <param name="Verb">add, refine, answer, choose, keep, drop, improve, accept, move, remove, dump or apply.</param>
 /// <param name="Id">The idea, or for apply the dump.</param>
 /// <param name="Project">The list it is on: a project's slug, or null for the workspace-wide one.</param>
 /// <param name="Text">A new idea, or the notes to dump.</param>
@@ -27,9 +27,10 @@ namespace Loadout.Core.Teams.Daemon;
 /// <param name="Pieces">Which pieces, for keep and drop.</param>
 /// <param name="Piece">Which piece, or <c>plan</c>, for improve.</param>
 /// <param name="Request">What to change.</param>
-/// <param name="To">Where an accepted idea goes, or where applied pieces go.</param>
+/// <param name="To">Where an accepted idea goes, where applied pieces go, or where a moved idea goes.</param>
 /// <param name="NewProject">A name for a project to make for an accepted idea.</param>
 /// <param name="Only">Which pieces of a dump to record, or none for all of them.</param>
+/// <param name="ToGlobal">For move, true to send it to the workspace-wide list instead of a project.</param>
 public sealed record IdeaAction(
     string Verb,
     string? Id = null,
@@ -44,4 +45,5 @@ public sealed record IdeaAction(
     string? Request = null,
     string? To = null,
     string? NewProject = null,
-    IReadOnlyList<int>? Only = null);
+    IReadOnlyList<int>? Only = null,
+    bool ToGlobal = false);

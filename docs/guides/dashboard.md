@@ -201,6 +201,9 @@ your answers.
 - Once the plan has taken in everything you asked of it, **Accept the plan**
   puts it on a project as a task, with the plan written out beside it. A new
   project is one of the choices, and it is only ever made because you chose it.
+- **Move it to another list** is for an idea dropped on the wrong project. Its
+  questions, answers and plan go with it. It isn't offered while a round is
+  going, because the round would write its answer back where the idea was.
 
 A round with the agent takes a minute or two. The page doesn't wait for it: it
 says a round is going and reads again every few seconds until it's done. The
@@ -230,6 +233,9 @@ become turns up here once you accept it.
   waiting on, because a blocked task that doesn't say why is one somebody has to
   go and ask about.
 - **Edit the title and note** changes either. Emptying the note clears it.
+- **Move it to another list** puts a task on the project it belongs to, or on
+  the workspace-wide list. It keeps its id, state and note, and if it came from
+  an accepted idea, the plan goes with it.
 - **Remove** deletes the row, after asking. If you want a record that it
   wasn't done, drop it instead.
 - **Run a team** starts a team on the task with nothing to choose. The goal is
@@ -246,7 +252,8 @@ loadout config set team-for-tasks bug-hunt
 One team for every task is what makes it a single click. When a task wants a
 different team, or a budget of its own, use **Run a team** at the top of the
 runs pane instead. A task on the workspace-wide list has no repository to work
-in, so it has no run button; move it to a project first.
+in, so it has no run button; move it to a project first, with **Move it to
+another list**.
 
 Like the ideas page, it redraws only when something has changed, and never
 while you have something typed in a box.

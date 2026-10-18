@@ -413,6 +413,7 @@
           <div class="ls-drawers">
             <CommandAction path="idea refine" title="Take it one round further" preset={{ id: idea.id, ...listFixed }} fixed={['id', '--project', '--global']} label="Refine" open={!idea.questions.length && !idea.plan && !listed?.failure} />
             <CommandAction path="idea improve" title="Ask for the whole plan to be reworked" preset={{ id: idea.id, piece: 'plan', ...listFixed }} fixed={['id', 'piece', '--project', '--global']} label="Ask for it" />
+            <CommandAction path="idea move" title="Move it to another project" preset={{ id: idea.id, ...listFixed }} fixed={['id', '--project', '--global']} label="Move it" note="Its answers, choices and plan go with it." />
             <CommandAction path="idea remove" title="Forget this idea" preset={{ id: idea.id, ...listFixed }} fixed={['id', '--project', '--global']} label="Forget it" danger />
           </div>
           <p class="ls-from">A round asks an agent and takes a minute or two. It runs on the daemon, so you can leave this page; a toast says when it has finished.</p>

@@ -131,6 +131,7 @@ public sealed class DashboardIdeasTests : IAsyncLifetime, IDisposable
             ["drop"] = ("idea drop", ["status-page", "L1", "A2", "--project", "website"]),
             ["improve"] = ("idea improve", ["status-page", "plan", "--request=- make it smaller", "--project", "website"]),
             ["accept"] = ("idea accept", ["status-page", "--project", "website", "--new-project=Lab watch"]),
+            ["move"] = ("idea move", ["status-page", "--project", "website", "--to", "homelab"]),
             ["remove"] = ("idea remove", ["status-page", "--project", "website"]),
             ["dump"] = ("idea dump add", ["--text=- a bullet from somewhere", "--project", "website"]),
             ["apply"] = ("idea dump apply", ["status-page", "--project", "website", "--only", "1,3", "--to", "homelab"]),
@@ -159,6 +160,10 @@ public sealed class DashboardIdeasTests : IAsyncLifetime, IDisposable
             .Should().NotContain("--only").And.NotContain("--to");
 
         DashboardIdeas.Maps(new IdeaAction("reticulate")).Command.Should().BeEmpty();
+
+        DashboardIdeas.Maps(Asking("move") with { To = null, ToGlobal = true }).Arguments
+            .Should().Contain("--to-global");
+        DashboardIdeas.Maps(Asking("move") with { To = null }).Command.Should().BeEmpty("nowhere was named");
     }
 
     [Fact]
