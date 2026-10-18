@@ -182,6 +182,10 @@ public sealed class AccessibleModeTests
         {
             Out = new AnsiConsoleOutput(new StringWriter()),
             Interactive = InteractionSupport.Yes,
+
+            // Spectre marks a console non-interactive when it sees a CI
+            // server, which would make this console never interactive on CI.
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false },
         });
 
         var keys = new Spectre.Console.Testing.TestConsoleInput();
@@ -203,6 +207,7 @@ public sealed class AccessibleModeTests
         {
             Out = new AnsiConsoleOutput(new StringWriter()),
             Interactive = InteractionSupport.No,
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false },
         });
 
         var keys = new Spectre.Console.Testing.TestConsoleInput();
