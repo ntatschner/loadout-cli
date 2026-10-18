@@ -292,7 +292,7 @@ These records are claims with a name and a date, and the list this session was g
 
    - Never change an item's state or title.
    - Skip an id that isn't there and tell me; don't create it.
-   - If an item's note already holds a design note from this, leave it alone.
+   - If an item's note already holds a design note from this, don't add it again. If that note starts with "Designed, not built. Don't start on this from this record; build it only when someone asks, from its brief." and the item is now built, take that sentence out (and add the "Built on branch" sentence below); otherwise leave it alone.
    - The four items this round built (`team-run-visibility-and-reliability`, `visual-full-page-red-alert`, `add-task-drop-down-in`, `measure-loadout-s-value-to`) get one more sentence at the end of their design note: "Built on branch <your branch> in <the commits>; not merged yet." Their state stays what it is.
    - `completely-seperate-dashboard-keeping-th` covers several briefs. End its design note with one sentence saying which are built and which aren't, for example: "Built: HANDOFF.md, NEXT.md, ROUND4.md (on its branch). Designed, not built: PAGES.md, BACKGROUND.md."
 
