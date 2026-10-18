@@ -14085,12 +14085,13 @@
 
   function ends(gate, option) {
     return option === "Stop the run"
-      || ((gate.kind === "confirm" || gate.kind === "brief") && option === "no");
+      || ((gate.kind === "confirm" || gate.kind === "brief" || gate.kind === "done-when") && option === "no");
   }
 
   function asks(gate, option, instead) {
     if (instead && option !== "no") {
-      return "Send this brief?\n\n" + (instead.value.trim() || "(nothing)");
+      return (gate.kind === "done-when" ? "Hold the run to these?\n\n" : "Send this brief?\n\n")
+        + (instead.value.trim() || "(nothing)");
     }
 
     if (ends(gate, option)) {
@@ -14469,15 +14470,20 @@
         expensive to find out any other way - the worker goes off and does the
         wrong thing, competently, for ten minutes. Yes and no would make
         somebody choose between the wrong brief and no brief.
+
+        The criteria the lead proposed the run be judged on are the same box
+        under their own kind, and are not a brief to anybody.
       */
       var instead = null;
 
-      if (gate.kind === "brief") {
+      if (gate.kind === "brief" || gate.kind === "done-when") {
         var label = document.createElement("label");
 
         label.className = "lk-label";
         label.htmlFor = "instead-" + gate.id;
-        label.textContent = "The brief it would be sent. Change it if it is wrong.";
+        label.textContent = gate.kind === "done-when"
+          ? "What the run will be judged on, one per line. Change them if they are wrong."
+          : "The brief it would be sent. Change it if it is wrong.";
         card.appendChild(label);
 
         instead = document.createElement("textarea");
@@ -14579,10 +14585,12 @@
         next round until it is answered, so what they wrote could never have
         arrived. It sat in the directory while the run's clock ran out.
 
-        Only on a question. A permission and a confirm are yes or no, and a
-        brief already has its own box for the text to send instead.
+        Only on a question, and on the budget, where a figure of your own is
+        an answer. A permission and a confirm are yes or no, a brief already
+        has its own box for the text to send instead, and the readings are
+        accepted or sent back.
       */
-      if (gate.kind === "question") {
+      if (gate.kind === "question" || gate.kind === "budget") {
         var own = document.createElement("label");
 
         own.className = "lk-label";

@@ -1,0 +1,51 @@
+<!-- @dsCard group="Teams" height=600 width=1200 subtitle="A run's rounds along the lead's line, with the nodes each round briefed hanging from it" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>RunShape</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<p class="lab">Running</p><div id="a"></div>
+<p class="lab" style="margin-top: 26px">Ended, narrow</p><div id="b" style="max-width: 380px"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var RUN = "20261017-1402-ab3f";
+  var TEAMS = [
+    { name: "iterating-project", description: "Plans, implements, reviews and verifies in rounds until the goal is met", nodes: 5, lead: "lead", posture: "supervised", budget: "$25 a run", doneWhen: [] },
+    { name: "bug-hunt", description: "Reproduces a bug, proves its cause, fixes it, and proves the fix holds", nodes: 5, lead: "lead", posture: "supervised", budget: "$15 a run", doneWhen: ["a test reproduces the bug: it fails without the fix and passes with it", "the full test suite passes with the fix in place"] },
+    { name: "docs-crew", description: "Finds where the docs and the code disagree, and fixes it in the docs' own voice", nodes: 4, lead: "lead", posture: "supervised", budget: "$20 a run", doneWhen: ["every changed page passes docs audit", "every changed claim was checked against the code"] },
+    { name: "release-crew", description: "Checks the tree is fit to release, writes the notes, and tags", nodes: 4, lead: "lead", posture: "supervised", budget: "$10 a run", doneWhen: [], problems: ["it needs gh, and gh is not signed in"] },
+    { name: "product-company", description: "An executive lead, department leads, and workers under each", nodes: 9, lead: "executive", posture: "", template: true }
+  ];
+  var PROJECTS = [{ name: "loadout-cli", path: "~/code/loadout-cli" }, { name: "starstats", path: "~/code/starstats" }];
+  var HELD = { "loadout-cli": ["the suite passes"] };
+  var picked = "implementer/1";
+  function draw() {
+    var a = document.getElementById("a"); a.textContent = "";
+    a.appendChild(S.RunShape({ picked: picked, onPick: function (n) { picked = n; draw(); }, rounds: [
+      { word: "done", lead: "proposed 2 done-when; you held it to them", nodes: [["planner/1", "done"]] },
+      { word: "done", lead: "asked for an implementer and a reviewer", nodes: [["implementer/1", "done"], ["reviewer/1", "done"]] },
+      { word: "waiting for you", lead: "asks whether to fix two flaky tests", nodes: [["verifier/1", "done"], ["implementer/2", "running"]] }],
+      next: "starts when you answer" }));
+  }
+  draw();
+  document.getElementById("b").appendChild(S.RunShape({ rounds: [
+    { word: "done", lead: "asked for a reproducer", nodes: [["reproducer/1", "done"]] },
+    { word: "failed", lead: "the fix would not merge", nodes: [["fixer/1", "failed"]] },
+    { word: "done", lead: "fixer/1 again, on its own branch", nodes: [["fixer/1", "done"], ["verifier/1", "done"]] }],
+    end: { word: "done", text: "The lead said done: 2 of 2 met" } }));
+})();
+</script>
+</body>
+</html>

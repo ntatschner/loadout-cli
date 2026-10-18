@@ -7,6 +7,7 @@ import { clockOf, linesOf, type Work } from './lines';
 import type { SignalFamily } from './signals';
 import { setAccent, setDensity, setMotion, setTheme, preferredTheme } from './studio';
 import { toasts } from './toasts.svelte';
+import { isMode, morph, nextMode, type StudioMode } from './modes';
 
 export interface FeedEntry {
   t: string;
@@ -17,6 +18,24 @@ export interface FeedEntry {
 
 const LOCAL_KEYS = 'studio-keys';
 const LOCAL_FULLSCREEN = 'studio-ambient-fullscreen';
+const LOCAL_MODE = 'studio-mode';
+
+/** A string this browser keeps, or the fallback where none is kept or storage is refused. */
+function readText(key: string, fallback: string): string {
+  try {
+    return localStorage.getItem(key) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeText(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Storage refused: the choice lasts this visit.
+  }
+}
 
 function readLocal(key: string, fallback: boolean): boolean {
   try {
@@ -55,6 +74,13 @@ export class Studio {
   now = $state(Date.now());
   keys = $state(readLocal(LOCAL_KEYS, true));
   fullscreen = $state(readLocal(LOCAL_FULLSCREEN, false));
+  /**
+   * The mode, kept in this browser rather than Loadout's config, so a phone
+   * can stay Minimal while a desktop stays in Terminals.
+   */
+  /** Something the ModeBar asked Minimal to open: Minimal's Home reads it and clears it. */
+  focusing = $state<{ kind: 'session' | 'team run'; id: string } | null>(null);
+  mode = $state<StudioMode>(((value) => (isMode(value) ? value : 'default'))(readText(LOCAL_MODE, 'default')));
   loaded = $state(false);
   /** What happened while this page was open, newest first. */
   feed = $state<FeedEntry[]>([]);
@@ -138,13 +164,15 @@ export class Studio {
     this.applyPrefs();
   }
 
-  /** Theme, accent, density and motion as attributes on <html>; no theme set follows the system. */
+  /** Theme, accent, density, motion and mode as attributes on <html>; no theme set follows the system. */
   applyPrefs(): void {
     const prefs = this.prefs;
     setTheme(prefs?.theme || preferredTheme());
     setAccent(prefs?.accent ?? 'cyan');
     setDensity(prefs?.density ?? 'comfortable');
     setMotion(prefs?.motion ?? 'full');
+    // The mode is this browser's own, so it is set however the prefs read.
+    document.documentElement.setAttribute('data-mode', this.mode);
   }
 
   async loadRuns(): Promise<void> {
@@ -184,6 +212,16 @@ export class Studio {
       return;
     }
 
+    // A question answered anywhere, here, on its page or in a terminal, takes
+    // its Needs you toast with it rather than leaving it to be answered twice.
+    for (const [id, toast] of this.#asked) {
+      if (states.get(id)?.startsWith('asks:') !== true || states.get(id) !== this.#askedAs.get(id)) {
+        toasts.settle(toast, 'Answered.');
+        this.#asked.delete(id);
+        this.#askedAs.delete(id);
+      }
+    }
+
     for (const line of this.lines) {
       const was = before.get(line.id);
       const is = states.get(line.id);
@@ -193,6 +231,7 @@ export class Studio {
       }
 
       if (is.startsWith('asks:')) {
+        this.#askedAs.set(line.id, is);
         this.#log(`${line.where} asks: ${line.ask ?? 'a question'}`, 'needs', '?');
         this.#ask(line);
       } else if (is === 'ended' && was) {
@@ -203,6 +242,10 @@ export class Studio {
       }
     }
   }
+
+  /** Each line's open Needs you toast, and the question it was raised for. */
+  #asked = new Map<string, number>();
+  #askedAs = new Map<string, string>();
 
   #log(text: string, family: SignalFamily, glyph: string): void {
     this.feed = [{ t: clockOf(new Date().toISOString()) ?? '', text, family, glyph }, ...this.feed].slice(0, 8);
@@ -215,11 +258,11 @@ export class Studio {
     // A session's agent says only that it is waiting, never what the
     // choices are, so the toast takes you to its terminal to answer there.
     if (line.kind === 'session') {
-      toasts.add({
+      this.#asked.set(line.id, toasts.add({
         level: 'needs',
         text: `${line.title} ${line.approval ? 'needs approval' : 'is waiting for you'}`,
         actions: [{ label: 'Go to the question', cmd: 'opens its terminal · changes nothing', onpress: () => void (location.hash = `#session/${encodeURIComponent(line.ref)}`) }],
-      });
+      }));
 
       return;
     }
@@ -228,9 +271,21 @@ export class Studio {
       return;
     }
 
+    // A brief, the proposed done-when, readings and a budget are answered
+    // with a box or a figure, which a toast has no room for: it goes to them.
+    if (['brief', 'done-when', 'readings', 'budget'].includes(gate.kind)) {
+      this.#asked.set(line.id, toasts.add({
+        level: 'needs',
+        text: `${line.where} asks: ${gate.question}`,
+        actions: [{ label: 'Go to the question', cmd: 'opens the run · changes nothing', onpress: () => void (location.hash = `#teams/${encodeURIComponent(line.ref)}`) }],
+      }));
+
+      return;
+    }
+
     const answers = gate.options.length ? gate.options : ['yes', 'no'];
 
-    toasts.add({
+    this.#asked.set(line.id, toasts.add({
       level: 'needs',
       text: `${line.where} asks: ${gate.question}`,
       cmd: line.project ?? '',
@@ -246,7 +301,7 @@ export class Studio {
               return worked ? `You answered: ${answer}` : 'The answer was not taken';
             },
           })),
-    });
+    }));
   }
 
   async loadIdeas(): Promise<void> {
@@ -323,6 +378,33 @@ export class Studio {
     writeLocal(LOCAL_KEYS, on);
   }
 
+  /** Changes mode as one animated step, and keeps it in this browser. */
+  setMode(mode: StudioMode): void {
+    if (mode === this.mode) {
+      return;
+    }
+
+    morph(() => {
+      this.mode = mode;
+      document.documentElement.setAttribute('data-mode', mode);
+      writeText(LOCAL_MODE, mode);
+    });
+  }
+
+  /** Ctrl+Shift+M. */
+  cycleMode(): void {
+    this.setMode(nextMode(this.mode));
+  }
+
+  /** Something this browser keeps for a page: a layout, the last session. */
+  kept(key: string, fallback: string): string {
+    return readText(key, fallback);
+  }
+
+  keep(key: string, value: string): void {
+    writeText(key, value);
+  }
+
   setFullscreen(on: boolean): void {
     this.fullscreen = on;
     writeLocal(LOCAL_FULLSCREEN, on);
@@ -359,6 +441,20 @@ export class Studio {
 
       return false;
     }
+  }
+
+  /**
+   * Runs one action from a page, says how it went in a toast with the command
+   * it ran, and reads the runs again. Returns whether it worked.
+   */
+  perform(work: () => Promise<unknown>, done: string, cmd: string, then: () => Promise<unknown> = () => this.loadRuns()): Promise<boolean> {
+    if (this.watchOnly) {
+      toasts.add({ level: 'info', text: 'Studio is only watching, so nothing was changed.', cmd });
+
+      return Promise.resolve(false);
+    }
+
+    return this.#act(work, done, cmd, then);
   }
 
   answerGate(line: Work, answer: string): Promise<boolean> {

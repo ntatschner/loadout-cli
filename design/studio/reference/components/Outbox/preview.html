@@ -1,0 +1,51 @@
+<!-- @dsCard group="Teams" height=860 width=1300 subtitle="What a run delivered: a file tree beside a viewer that previews, compares and downloads" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Outbox</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div id="o"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var RUN = "20261017-1402-ab3f";
+  var OUT = { run: RUN, repository: "~/code/loadout-cli",
+    files: [
+      { path: "src/Loadout.Cli/Commands/UsageCommand.cs", change: "changed", commit: "a4f21c9", node: "implementer/1", bytes: 6120 },
+      { path: "tests/Loadout.Tests/UsageSinceTests.cs", change: "added", commit: "a4f21c9", node: "implementer/1", bytes: 1830 },
+      { path: "docs/commands.md", change: "changed", commit: "c03e7d1", node: "writer/1", bytes: 48210 },
+      { path: "docs/img/usage-since.svg", change: "added", commit: "c03e7d1", node: "writer/1", bytes: 912 },
+      { path: "docs/usage-fixture.csv", change: "added", commit: "c03e7d1", node: "writer/1", bytes: 310 },
+      { path: "docs/old-usage.md", change: "removed", commit: "c03e7d1", node: "writer/1" }],
+    loose: [{ path: "PLAN.md", kind: "plan", bytes: 3790, node: "planner/1", note: "the plan for rounds 2 and 3" }, { path: "notes/scratch.json", kind: "file", bytes: null, node: "verifier/1" }],
+    missing: ["9f1e2b7"] };
+  var TEXT = {
+    "PLAN.md": "# Plan: --since for loadout usage\n\nThe goal, taken to mean: a `--since <date>` option that leaves out entries **on or before** the date.\n\n## Rounds\n\n1. implementer/1 adds the option and a failing test first\n2. reviewer/1 reads the branch; verifier/1 runs the whole suite\n3. writer/1 updates [the commands page](docs/commands.md)\n\n| Node | Hands back |\n| --- | --- |\n| implementer/1 | a commit on its own branch |\n| verifier/1 | what it ran, and what passed |\n\n> Leave the two flaky tests alone unless you are asked.\n\n```sh\nloadout usage --since 2026-01-01\n```\n",
+    "src/Loadout.Cli/Commands/UsageCommand.cs": "namespace Loadout.Cli.Commands;\n\n/// <summary>What the agents have cost, by day.</summary>\npublic sealed class UsageCommand : AsyncCommand<UsageCommand.Settings>\n{\n    public sealed class Settings : GlobalSettings\n    {\n        [CommandOption(\"--since <DATE>\")]\n        public DateOnly? Since { get; init; }\n    }\n\n    // Entries on or before the date are left out.\n    var entries = reader.Read().Where(e => settings.Since is null || e.Day > settings.Since);\n    return 0;\n}\n",
+    "tests/Loadout.Tests/UsageSinceTests.cs": "public class UsageSinceTests\n{\n    [Fact]\n    public void Excludes_entries_on_or_before()\n    {\n        var shown = Run(\"--since\", \"2026-01-01\");\n        Assert.DoesNotContain(\"2026-01-01\", shown);\n    }\n}\n",
+    "docs/commands.md": "## loadout usage\n\nWhat the agents have cost, by day.\n\n- `--json` prints it as JSON\n- `--since <date>` leaves out entries on or before the date\n",
+    "docs/usage-fixture.csv": "day,agent,tokens,cost\n2025-12-31,claude,18200,0.41\n2026-01-02,claude,9120,0.22\n2026-01-03,codex,4400,0.09\n",
+    "docs/old-usage.md": "# Usage (old)\n\nThis page moved to commands.md.\n"
+  };
+  var SVG = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="360" height="120" viewBox="0 0 360 120"><rect width="360" height="120" fill="#0b1a24"/><line x1="30" y1="60" x2="330" y2="60" stroke="#5fd4ff" stroke-width="4"/><g fill="#0b1a24" stroke="#5fd4ff" stroke-width="4"><circle cx="60" cy="60" r="12"/><circle cx="180" cy="60" r="12"/><circle cx="300" cy="60" r="12"/></g><g fill="#d9f3ff" font-family="sans-serif" font-size="13" text-anchor="middle"><text x="60" y="98">read</text><text x="180" y="98">filter --since</text><text x="300" y="98">print</text></g></svg>');
+  function read(f, mode) {
+    if (mode === "change") { return { diff: f.path.slice(-3) === ".cs" ? [["@", "@@ " + f.path], [" ", "    public sealed class Settings : GlobalSettings"], ["+", "        [CommandOption(\"--since <DATE>\")]"], ["+", "        public DateOnly? Since { get; init; }"], ["-", "    var entries = reader.Read();"], ["+", "    var entries = reader.Read().Where(e => settings.Since is null || e.Day > settings.Since);"]] : [["@", "@@ " + f.path], ["+", "- `--since <date>` leaves out entries on or before the date"]] }; }
+    if (/\.svg$/.test(f.path)) { return { url: SVG, width: 360, height: 120 }; }
+    return new Promise(function (ok) { setTimeout(function () { ok({ text: TEXT[f.path] || "", redacted: f.path === "docs/commands.md" ? 1 : 0 }); }, 120); });
+  }
+  document.getElementById("o").appendChild(S.Outbox(Object.assign({ read: read, picked: "loose:PLAN.md" }, OUT)));
+})();
+</script>
+</body>
+</html>

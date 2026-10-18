@@ -54,6 +54,15 @@ export const SIGNAL_STATES: Record<string, [SignalFamily, string, string]> = {
   'exited with an error': ['bad', 'failed', 'hard'],
   'only watching': ['rest', 'held', 'still'],
   lost: ['bad', 'blocked', 'hard'],
+  // Team runs and their remedies (Teams).
+  quiet: ['needs', 'needs', 'pulse'],
+  'projected over': ['needs', 'limited', 'pulse'],
+  'changed since trusted': ['needs', 'needs', 'pulse'],
+  unmet: ['bad', 'failed', 'hard'],
+  trusted: ['good', 'done', 'settle'],
+  'no verdict': ['rest', 'unknown', 'still'],
+  'not trusted': ['rest', 'open', 'still'],
+  scheduled: ['rest', 'held', 'still'],
 };
 
 export interface SignalOf {

@@ -1,5 +1,6 @@
 using Loadout.Agents.Teams;
 using Loadout.Core.Git;
+using Loadout.Core.Teams;
 using Loadout.Models.Results;
 using Loadout.Models.Teams;
 using Loadout.Platform.Abstractions;
@@ -176,7 +177,7 @@ internal sealed class MergeStep
             // gate's nodes have agreed; anything else asks, because this is
             // the moment the run changes the repository somebody works in.
             var allowed = autonomy == "autonomous"
-                || await console.ConfirmAsync($"Merge {branch} into {target}", ct).ConfigureAwait(false);
+                || await console.ConfirmAsync($"Merge {branch} into {target}", GateKind.Merge, ct).ConfigureAwait(false);
 
             await journal.WriteAsync("gate.decided", node, new { gate = "merge", branch, allowed }, ct).ConfigureAwait(false);
 

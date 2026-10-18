@@ -1,0 +1,41 @@
+<!-- @dsCard group="Modes" height=520 width=1100 subtitle="One session or one run, the whole screen, grown from the line you opened" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>FocusFrame</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div id="q" style="max-width: 640px"></div><p class="lab" style="margin-top: 12px">Press a line. Escape or Back gives the page back.</p>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var SESS = [
+    { id: "s1", title: "why is this postgres query so slow", word: "working", where: "starstats", agent: "claude" },
+    { id: "s2", title: "add a retry to the upload step", word: "needs approval", where: "loadout-cli", agent: "claude", unread: true },
+    { id: "s3", title: "tidy the deploy script", word: "idle", where: "starstats", agent: "codex" },
+    { id: "s4", title: "review the memory compress change", word: "working", where: "loadout-cli", agent: "claude", unread: true }
+  ];
+  var LINES = {
+    s1: [[["› ", "fg-cyan"], ["loadout starstats --task \"why is this postgres query so slow\" --mode investigate", ""]], [["● ", "fg-green"], ["Running ", "bold"], ["EXPLAIN ANALYZE on the daily totals query", "fg-blue"]], [["  Seq Scan on events  (rows=1,840,211)", "fg-bright-black"]]],
+    s2: [[["● ", "fg-green"], ["Edit ", "bold"], ["src/Upload/Uploader.cs", "fg-blue"]], [["  Passed! ", "fg-bright-green bold"], ["14 passed, 0 failed", "fg-green"]], [["? Overwrite docs/images/dashboard-office.png?", "fg-yellow bold"]]],
+    s3: [[["● ", "fg-green"], ["Read ", "bold"], ["deploy/deploy.sh", "fg-blue"]]],
+    s4: [[["● ", "fg-green"], ["Read ", "bold"], ["src/Loadout.Core/Memory/Compress.cs", "fg-blue"]], [["● ", "fg-magenta"], ["The compress step keeps the newest entry when two collide.", "fg-bright-white"]]]
+  };
+  var STATE = { s1: "working", s2: "approval", s3: "idle", s4: "working" };
+  function term(id) { var s = SESS.filter(function (x) { return x.id === id; })[0]; return S.Terminal({ title: s.title, project: s.where, agent: s.agent, state: STATE[id], lines: LINES[id] }); }
+  document.getElementById("q").appendChild(S.QuietList({ items: [{ id: "s2", kind: "session", title: "add a retry to the upload step", word: "needs approval", where: "loadout-cli", ask: "Asks for approval. Answer it in the terminal." }, { id: "s1", kind: "session", title: "why is this postgres query so slow", word: "working", where: "starstats" }],
+    onOpen: function (x, from) { var t = term(x.id); S.FocusFrame({ title: x.title, sub: x.where + " \u00b7 claude", word: x.word, content: t.el, from: from }); setTimeout(function () { t.focus(); }, 600); } }));
+})();
+</script>
+</body>
+</html>

@@ -186,6 +186,15 @@ public sealed class FakeGit : IGitManager
     public Task<OperationResult> PushAsync(string repositoryPath, CancellationToken ct = default) =>
         throw new NotSupportedException("a team run pushes nothing");
 
+    /// <summary>What each file holds at each revision here, by "revision:path".</summary>
+    public Dictionary<string, byte[]> Blobs { get; } = new(StringComparer.Ordinal);
+
+    public Task<OperationResult<byte[]>> ReadFileAtAsync(
+        string repositoryPath, string revision, string path, CancellationToken ct = default) =>
+        Task.FromResult(Blobs.TryGetValue($"{revision}:{path}", out var bytes)
+            ? OperationResult<byte[]>.Ok(bytes)
+            : OperationResult<byte[]>.Fail($"{path} is not a file in {revision}.", Loadout.Models.ExitCode.ProjectNotFound));
+
     /// <summary>What a branch resolves to here, when a test has said.</summary>
     public Dictionary<string, string> Commits { get; } = new(StringComparer.Ordinal);
 

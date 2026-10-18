@@ -252,3 +252,77 @@ main.page:has(> .ls-session:not(.lost)) > .ls-session { flex: 1 1 auto; min-heig
 .ls-session.lost { grid-template-columns: minmax(0, 1fr); }
 .lostcard { display: grid; gap: var(--space-3); padding: var(--space-4); background: var(--bad-wash); box-shadow: inset 3px 0 0 var(--bad); color: var(--bad-text); }
 .lostcard p { margin: 0; }
+/* Teams: what the reference sets from script, as rules (Studio's policy allows no style attributes). */
+.ls-gate .figure { max-width: 260px; }
+.ls-depths .ls-say { margin-top: 12px; }
+.ls-depths .ls-patch + .ls-patch { margin-top: 22px; }
+.ls-depths .ls-xch { margin-top: 16px; }
+.ls-needs .ls-answers { margin: 0; }
+.ls-roles .body { padding-top: 6px; }
+.ls-roles .roles-table { container-type: inline-size; }
+.prform { display: grid; gap: 14px; }
+.ls-bin > .ls-note, .ls-bin > .ls-answers, .ls-bin li .ls-note, .ls-remedy > .ls-answers { margin: 0; }
+.binlist { margin: 0 0 4px; padding-left: 18px; font-family: var(--font-mono); font-size: 12.5px; }
+.ls-csv caption { text-align: left; margin: 0 0 6px; }
+.ls-outbox .tree-empty { padding: 8px 12px; margin: 0; }
+/* Teams: the overview, a run's page and a team's page (from the design's prototype). */
+.subnav { display: flex; flex-wrap: wrap; gap: 4px 22px; margin: calc(-1 * var(--space-3) * var(--density)) 0 calc(var(--space-6) * var(--density)); }
+.subnav a { padding: 6px 0; font-size: 12.5px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); text-decoration: none; }
+.subnav a:hover { color: var(--ink-strong); }
+.subnav a[aria-current="page"] { color: var(--ink-strong); box-shadow: inset 0 -2px 0 var(--accent); }
+.subnav a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.tblock, .ls-needs { margin-bottom: calc(var(--space-7) * var(--density)); }
+.runs, .remedies { display: grid; gap: 14px; max-width: 980px; }
+.teamcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 14px; }
+.remteam { max-width: 420px; margin-bottom: var(--space-5); }
+.trun { display: grid; gap: calc(var(--space-5) * var(--density)); }
+.trhead { display: grid; gap: 4px; }
+.trhead h1 { overflow-wrap: anywhere; }
+.trcols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 340px); gap: 28px 36px; align-items: start; }
+.trmain, .trside { display: grid; gap: calc(var(--space-6) * var(--density)); min-width: 0; align-content: start; }
+.trside section { display: grid; gap: 10px; justify-items: start; }
+.ls-answers.col { flex-direction: column; align-items: flex-start; }
+@media (max-width: 1023px) { .trcols { grid-template-columns: minmax(0, 1fr); } }
+.trmain .src { margin: 6px 0 0; font-size: 12.5px; color: var(--muted); }
+
+/* ---------- Modes: the bar at the top of every mode, and the layout each one gives the page ---------- */
+:root { --ls-focus-top: 57px; }
+#modebar { position: fixed; top: 0; left: var(--rail-width); right: 0; z-index: 35; padding: 0 max(28px, env(safe-area-inset-right, 0px)) 0 28px; background: color-mix(in srgb, var(--ground) 90%, transparent); backdrop-filter: blur(8px); box-shadow: inset 0 -1px 0 var(--rule); transition: left var(--dur-travel) var(--ease-travel); }
+.page { padding-top: 76px; }
+.ls-railnav { view-transition-name: ls-rail; transition: transform var(--dur-travel) var(--ease-travel), width var(--dur-base) var(--ease-out), box-shadow var(--dur-base); }
+@media (max-width: 599px) { #modebar { left: 0; padding-left: 52px; padding-right: 12px; } [data-mode="minimal"] #modebar { padding-left: 12px; } [data-mode="minimal"] .page { padding-left: 16px; padding-right: 16px; } }
+/* Minimal: the rail slides away but stays in the page, so its view transition has somewhere to go. */
+[data-mode="minimal"] .ls-railnav, [data-mode="minimal"] .ls-pagestab { transform: translateX(-120%); visibility: hidden; transition: transform var(--dur-travel) var(--ease-travel), visibility 0s var(--dur-travel); }
+[data-mode="minimal"] #modebar { left: 0; padding-left: max(28px, env(safe-area-inset-left, 0px)); background: transparent; backdrop-filter: none; box-shadow: none; }
+[data-mode="minimal"] .page { padding-left: max(28px, env(safe-area-inset-left, 0px)); }
+[data-mode="minimal"] .quietwrap { max-width: 760px; margin: 6vh auto 0; }
+.quietnone { color: var(--muted); }
+/* Terminals: the deck takes the page's full height. */
+[data-mode="terminals"] .page { padding-right: 14px; padding-left: calc(var(--rail-width) + 14px); padding-bottom: 14px; }
+@media (max-width: 599px) { [data-mode="terminals"] .page { padding-left: 12px; padding-right: 12px; } }
+.deckwrap { height: calc(100vh - 92px); min-height: 460px; }
+/* Teams: the board, with a run or a team beside it; below 1100px the page replaces the board. */
+.tfocus { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-items: start; }
+.tfocus.open { grid-template-columns: minmax(0, 1fr) minmax(420px, 48%); }
+.tfocus .bcol { min-width: 0; }
+.tfocus .bcol .head { margin-bottom: 14px; }
+.tfocus .bpanel { position: sticky; top: 70px; max-height: calc(100vh - 86px); overflow: auto; padding: 4px 18px 24px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule), var(--shadow-float); animation: lsPanelIn .5s var(--ease-travel) both; }
+.tfocus .bpanel .trcols { grid-template-columns: minmax(0, 1fr); }
+.tfocus .bpanel .pclose { position: sticky; top: 0; z-index: 2; display: flex; justify-content: flex-end; padding: 8px 0; background: var(--surface); }
+@keyframes lsPanelIn { from { opacity: 0; transform: translateX(40px); } }
+[data-motion="reduced"] .tfocus .bpanel, [data-motion="none"] .tfocus .bpanel { animation: none; }
+@media (prefers-reduced-motion: reduce) { .tfocus .bpanel { animation: none !important; } }
+@media (max-width: 1099px) { .tfocus.open { grid-template-columns: minmax(0, 1fr); } .tfocus.open .bcol { display: none; } .tfocus .bpanel { position: static; max-height: none; } }
+.qrun { display: grid; gap: 22px; max-width: 980px; margin: 0 auto; }
+
+/* ---------- Pure Focus: the desk takes the page's height ---------- */
+[data-mode="pure"] .page { padding-right: 14px; padding-left: calc(var(--rail-width) + 14px); padding-bottom: 14px; }
+@media (max-width: 599px) { [data-mode="pure"] .page { padding-left: 48px; padding-right: 10px; } }
+[data-mode="pure"] #modebar { backdrop-filter: none; background: var(--ground); }
+[data-mode="pure"] .ls-toasts { top: auto; bottom: 64px; }
+.deskwrap { height: calc(100vh - 92px); min-height: 480px; }
+.ls-desk .apwrap { display: grid; min-height: 0; }
+.pview { display: grid; gap: 18px; align-content: start; }
+.pview .facts { margin: 0; }
+.pview .event { margin: 6px 0 0; font-size: 13px; }
+.pview .event .mono { margin-right: 10px; }

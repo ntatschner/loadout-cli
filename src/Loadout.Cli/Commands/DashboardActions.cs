@@ -1138,8 +1138,26 @@ internal static partial class DashboardActions
             arguments.Add(gate);
         }
 
-        arguments.Add("--answer");
-        arguments.Add(action.Answer ?? "no");
+        // Sending a question back is its own option on the command, which
+        // checks it is a question that can go back. An answer sent beside it
+        // is passed too rather than dropped, so the command refuses the pair
+        // instead of the page reporting whichever half this chose to keep.
+        if (action.ThinkAgain)
+        {
+            arguments.Add("--think-again");
+
+            if (action.Answer is { Length: > 0 } alongside)
+            {
+                arguments.Add("--answer");
+                arguments.Add(alongside);
+            }
+        }
+        else
+        {
+            arguments.Add("--answer");
+            arguments.Add(action.Answer ?? "no");
+        }
+
         arguments.Add("--by");
         arguments.Add("dashboard");
 

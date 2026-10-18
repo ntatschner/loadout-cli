@@ -56,11 +56,22 @@ async function send(method: string, path: string, body?: unknown): Promise<Respo
   return response;
 }
 
+/** A refusal in words: the reason where the body is JSON carrying one, as several of the daemon's routes answer, otherwise the body. */
+function reasonOf(body: string): string {
+  try {
+    const read = JSON.parse(body) as { error?: unknown };
+
+    return typeof read?.error === 'string' && read.error ? read.error : body;
+  } catch {
+    return body;
+  }
+}
+
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const response = await send(method, path, body);
 
   if (!response.ok) {
-    throw new Refused((await response.text()) || `${method} ${path} answered ${response.status}.`, response.status);
+    throw new Refused(reasonOf(await response.text()) || `${method} ${path} answered ${response.status}.`, response.status);
   }
 
   if (response.status === 204) {
@@ -245,6 +256,8 @@ export interface RunGate {
   recommendation: string | null;
   at: string;
   until: string | null;
+  /** When nobody answers: what happens, and when. */
+  timer?: { at: string; does: string } | null;
 }
 
 export interface RunNode {
@@ -254,6 +267,22 @@ export interface RunNode {
   activity: string;
   doing: string | null;
   lastSeen: string | null;
+  turns?: number;
+  cost?: number;
+  denials?: number;
+  branch?: string | null;
+  model?: string | null;
+  base?: string | null;
+  said?: string | null;
+  tookSeconds?: number | null;
+}
+
+/** The numbers that change a decision about a run (RunMetrics). */
+export interface RunNumbers {
+  money: { spent: number; perMinute: number; rate: string; projected: number | null; budget: number | null; overrunning: boolean };
+  rounds: { round: number; seconds: number; requests: number; running: boolean }[];
+  nodes: { node: string; role: string; seconds: number; cost: number }[];
+  trouble: { denials: number; rejected: number; retried: number; quietRounds: number; conflicts: number; any: boolean };
 }
 
 export interface Run {
@@ -270,11 +299,19 @@ export interface Run {
   rounds: number;
   roundLimit: number;
   elapsedSeconds: number;
-  coverage: { criterion: string; verdict: string; verdictInWords: string; met: boolean }[];
+  coverage: { criterion: string; verdict: string; verdictInWords: string; met: boolean; because?: string | null; understood?: string | null; source?: string | null }[];
   gates: RunGate[];
   budget: { spent: number; cap: number | null; uncapped: boolean };
   nodes: RunNode[];
   attention: { kind: string; detail: string; clears: string }[];
+  autonomy?: string;
+  cost?: number;
+  readings?: { criterion: string; reading: string }[];
+  goalUnderstood?: string | null;
+  merged?: string[];
+  atMostRemainingSeconds?: number | null;
+  numbers?: RunNumbers;
+  turns?: { at: string; node: string; round: number; attempt: number; exchanges: number; cost: number; denials: number; completed: boolean; status: string | null; outcome: string | null }[];
 }
 
 export interface Runs {
@@ -286,7 +323,7 @@ export interface Runs {
 export const runs = {
   list: () => call<Runs>('GET', '/api/runs'),
   /** POST /api/runs/{run}/{verb}, the classic page's own route, which runs the command for the verb. */
-  act: (run: string, verb: string, body: Record<string, string> = {}) =>
+  act: (run: string, verb: string, body: Record<string, string | boolean> = {}) =>
     call<string>('POST', `/api/runs/${encodeURIComponent(run)}/${verb}`, body),
 };
 
@@ -466,3 +503,115 @@ export function listen(changed: (what: string[]) => void): () => void {
 
   return () => source.close();
 }
+
+/* ---------- team runs, read and steered from the Teams pages ---------- */
+
+export interface Choices {
+  teams: { name: string; description: string; whose: string; template: boolean; trouble: string | null; nodes: number; autonomy: string; doneWhen: string[] | null; takeRecommendationAfter: string | null }[];
+  projects: string[];
+  here: string | null;
+  projectDoneWhen: Record<string, { text: string; teams: string[] }[]>;
+}
+
+export interface StreamStep {
+  at: string;
+  kind: 'said' | 'tool' | 'answered' | 'refused' | 'started' | 'ended';
+  tool: string | null;
+  target: string | null;
+  text: string | null;
+  sub: boolean;
+}
+
+export interface RunDocument {
+  name: string;
+  kind: string;
+  subject: string;
+  bytes: number;
+  written: string;
+}
+
+export interface NodeDiff {
+  node: string;
+  branch: string;
+  from: string;
+  merged: boolean;
+  summary: string;
+  patch: string;
+  cut: boolean;
+}
+
+export interface Outcome {
+  criterion: string;
+  reading: string | null;
+  verdict: string | null;
+  met: boolean;
+  because: string | null;
+  source: string | null;
+  delivered: { node: string; kind: string; at: string }[];
+  unfound: string[];
+}
+
+/** A route that answers a refusal as JSON with its reason: the body is read whatever the status. */
+async function answered<T extends { error: string | null }>(method: string, path: string, body: unknown): Promise<T> {
+  const response = await send(method, path, body);
+  const text = await response.text();
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Refused(text || `${method} ${path} answered ${response.status}.`, response.status);
+  }
+}
+
+const runPath = (run: string, rest = '') => `/api/runs/${encodeURIComponent(run)}${rest}`;
+const query = (pairs: Record<string, string>) => new URLSearchParams({ ...pairs, ...(printed ? { token: printed } : {}) }).toString();
+
+export const teamApi = {
+  choices: () => call<Choices>('GET', '/api/choices'),
+  daemon: () => call<{ daemon: boolean; paused: boolean | null }>('GET', '/api/daemon'),
+  bin: () => call<{ days: number; entries: { kind: 'run' | 'team'; name: string; team: string; binned: string; goes: string | null; unmerged: string[]; bytes: number }[] }>('GET', '/api/bin'),
+  roles: () => call<{ roles: { role: string; model: string | null; runs: number; turns: number; cost: number; each: number; accepted: number; rejected: number; accepting: number | null; denials: number; refusals: number; seconds: number }[] }>('GET', '/api/roles'),
+  /** Starts a run in the background: the command a sheet shows, watched for a few seconds so an early refusal comes back. */
+  start: (body: Record<string, unknown>) => answered<{ started: boolean; error: string | null }>('POST', '/api/start', body),
+  prune: (body: Record<string, unknown>) => answered<{ cleared: boolean; error: string | null }>('POST', '/api/prune', body),
+  stream: (run: string, node: string, after = 0) => call<{ node: string; total: number; steps: StreamStep[] }>('GET', runPath(run, `/stream/${encodeURIComponent(node)}?after=${after}`)),
+  spent: (run: string) => call<{ nodes: { node: string; role: string; thinking: number; tools: number; writing: number; idle: number }[] }>('GET', runPath(run, '/spent')),
+  documents: (run: string) => call<{ documents: RunDocument[] }>('GET', runPath(run, '/documents')),
+  document: (run: string, name: string) => call<{ name: string; kind: string; subject: string; text: string }>('GET', runPath(run, `/documents/${encodeURIComponent(name)}`)),
+  diff: (run: string, node: string) => call<NodeDiff>('GET', runPath(run, `/diff/${encodeURIComponent(node)}`)),
+  outcomes: (run: string) => call<Outcome[]>('GET', runPath(run, '/outcomes')),
+  attachState: () => call<{ here: boolean; set: boolean; can: boolean }>('GET', '/api/attach/passphrase'),
+  /** Swaps the passphrase for a 30-minute grant, held only by the page. */
+  attach: (passphrase: string) => call<{ grant: string | null; minutes: number; error: string | null }>('POST', '/api/attach', { passphrase }),
+  /** Types at a live node, behind the grant. */
+  async say(run: string, node: string, message: string, grant: string): Promise<void> {
+    const response = await fetch(runPath(run, '/say'), {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-Loadout-Attach': grant, ...(printed ? { 'X-Loadout-Token': printed } : {}) },
+      body: JSON.stringify({ node, message }),
+    });
+
+    if (!response.ok) {
+      throw new Refused((await response.text()) || 'It was not sent.', response.status);
+    }
+  },
+  /** The journal as it is written: every line from the start, then each new one. */
+  journal(run: string, line: (entry: { at: string; node: string | null; kind: string; said: string; what: string }) => void): () => void {
+    const source = new EventSource(`${runPath(run, '/events')}${printed ? `?token=${encodeURIComponent(printed)}` : ''}`, { withCredentials: true });
+
+    source.addEventListener('line', (event) => {
+      try {
+        line(JSON.parse((event as MessageEvent).data));
+      } catch {
+        // A line this page does not read: left out.
+      }
+    });
+
+    return () => source.close();
+  },
+  /** Where a delivered file is read from: committed at a commit, or loose on disk now. */
+  fileAddress: (run: string, file: { commit?: string; path: string; loose?: boolean }, download = false) =>
+    runPath(run, `/file?${query({ ...(file.loose ? { loose: file.path } : { commit: file.commit ?? '', path: file.path }), ...(download ? { download: '1' } : {}) })}`),
+  zipAddress: (run: string) => runPath(run, `/outbox.zip${printed ? `?token=${encodeURIComponent(printed)}` : ''}`),
+};

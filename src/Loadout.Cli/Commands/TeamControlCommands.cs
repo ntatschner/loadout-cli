@@ -170,15 +170,16 @@ public sealed class TeamGateCommand : AsyncCommand<TeamGateCommand.Settings>
             return output.Fail("Say which with --gate.", ExitCode.InvalidArguments);
         }
 
-        // Only where there are options to reject. A permission or a
+        // Only where there are options to reject and a lead to send them back
+        // to: its own question, and its readings. A permission or a
         // confirmation is yes or no, and "think again" there would read as a
         // yes to a question nobody answered.
         if (settings.ThinkAgain)
         {
-            if (gate.Kind != "question")
+            if (!GateKind.ThinksAgain(gate.Kind))
             {
                 return output.Fail(
-                    "--think-again sends a lead's question back to it. This is not a question with options: answer it with --answer.",
+                    "--think-again sends a lead's question or its readings back to it. This is neither: answer it with --answer.",
                     ExitCode.InvalidArguments);
             }
 
@@ -226,7 +227,7 @@ public sealed class TeamGateCommand : AsyncCommand<TeamGateCommand.Settings>
         // what the page's own box sends - so recording it as a refusal would
         // write down the opposite of what happened. The option that ends a run
         // is one of the lead's own, and whoever asked reads it as that.
-        var yes = gate.Kind == "question"
+        var yes = GateKind.Chooses(gate.Kind)
             || answer is "yes" or "y" or "allow" or "true"
             || gate.Choices.Any(one => string.Equals(one, answer, StringComparison.OrdinalIgnoreCase))
                 && answer is not ("no" or "n" or "refuse" or "false");
@@ -236,7 +237,7 @@ public sealed class TeamGateCommand : AsyncCommand<TeamGateCommand.Settings>
             gate.Id,
             new AskAnswer(
                 yes,
-                gate.Kind is "permission" or "remedy" || settings.Reason is not { Length: > 0 }
+                gate.Kind is GateKind.Permission or GateKind.Remedy || settings.Reason is not { Length: > 0 }
                     ? NodePermissions.Told(yes, settings.Reason)
                     : settings.Reason,
                 Chosen: answer,

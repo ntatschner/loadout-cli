@@ -65,7 +65,15 @@ public sealed class DashboardTeamConsole : ITeamConsole
     public bool AnswersInPlace => true;
 
     /// <inheritdoc />
-    public async Task<bool> ConfirmAsync(string what, CancellationToken ct = default)
+    public Task<bool> ConfirmAsync(string what, CancellationToken ct = default) =>
+        ConfirmAsync(what, GateKind.Confirm, ct);
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// The kind goes in the question's file, which is where a page reads it:
+    /// a merge is a confirm whose no leaves the branch and carries on.
+    /// </remarks>
+    public async Task<bool> ConfirmAsync(string what, string kind, CancellationToken ct = default)
     {
         if (_directory is not { Length: > 0 } directory)
         {
@@ -85,7 +93,7 @@ public sealed class DashboardTeamConsole : ITeamConsole
                 Tool: string.Empty,
                 Target: null,
                 At: _time.GetUtcNow(),
-                Kind: "confirm",
+                Kind: kind,
                 Asked: what),
             _time,
 
@@ -107,7 +115,11 @@ public sealed class DashboardTeamConsole : ITeamConsole
     /// A checkpoint that only says yes or no makes somebody choose between the
     /// wrong brief and no brief.
     /// </remarks>
-    public async Task<string?> ReviseAsync(string what, string task, CancellationToken ct = default)
+    public Task<string?> ReviseAsync(string what, string task, CancellationToken ct = default) =>
+        ReviseAsync(what, task, GateKind.Brief, ct);
+
+    /// <inheritdoc />
+    public async Task<string?> ReviseAsync(string what, string task, string kind, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(task);
 
@@ -130,8 +142,10 @@ public sealed class DashboardTeamConsole : ITeamConsole
 
                 // Its own kind, so a page can offer a box rather than two
                 // buttons. Anything that does not know the kind falls back to
-                // yes and no, which is the answer it had before.
-                Kind: "brief",
+                // yes and no, which is the answer it had before. A brief or the
+                // criteria the run will be judged on: both are a box, and only
+                // one of them is somebody about to be briefed.
+                Kind: kind,
                 Asked: what,
                 Recommendation: task),
             _time,
@@ -151,7 +165,7 @@ public sealed class DashboardTeamConsole : ITeamConsole
 
     /// <inheritdoc />
     public Task<string?> DecideAsync(ReportQuestion question, CancellationToken ct = default) =>
-        AskingAsync(question, null, ct);
+        DecideAsync(question, GateKind.Question, null, ct);
 
     /// <inheritdoc />
     /// <remarks>
@@ -159,9 +173,11 @@ public sealed class DashboardTeamConsole : ITeamConsole
     /// read it, so both can count down to what will actually happen.
     /// </remarks>
     public Task<string?> DecideAsync(ReportQuestion question, QuestionTimer timer, CancellationToken ct = default) =>
-        AskingAsync(question, timer, ct);
+        DecideAsync(question, GateKind.Question, timer, ct);
 
-    private async Task<string?> AskingAsync(ReportQuestion question, QuestionTimer? timer, CancellationToken ct)
+    /// <inheritdoc />
+    public async Task<string?> DecideAsync(
+        ReportQuestion question, string kind, QuestionTimer? timer, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(question);
 
@@ -181,12 +197,16 @@ public sealed class DashboardTeamConsole : ITeamConsole
                 Tool: string.Empty,
                 Target: null,
                 At: _time.GetUtcNow(),
-                Kind: "question",
+                Kind: kind,
                 Asked: question.Question,
 
                 // The lead's own options, plus the two it cannot offer: sending
-                // the question back to it, and stopping.
-                Options: [.. question.Options, TeamRunner.ThinkAgain, Stop],
+                // the question back to it, and stopping. Not sending back the
+                // budget, which the lead never asked: "Think again" there was
+                // read as a figure that was not one, and ended the run.
+                Options: GateKind.ThinksAgain(kind)
+                    ? [.. question.Options, TeamRunner.ThinkAgain, Stop]
+                    : [.. question.Options, Stop],
                 Recommendation: question.Recommendation,
                 Timer: timer),
             _time,

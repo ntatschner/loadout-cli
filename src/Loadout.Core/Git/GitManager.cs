@@ -562,6 +562,89 @@ internal sealed class GitManager : IGitManager
         return OperationResult<IReadOnlyList<GitFileChange>>.Ok(files);
     }
 
+    /// <summary>The biggest file <see cref="ReadFileAtAsync"/> will hold in memory.</summary>
+    internal const long MostToRead = 50L * 1024 * 1024;
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Through <c>git archive</c> into a file of its own, because that is the
+    /// one way to have git write a blob somewhere other than standard output,
+    /// which arrives here as text. Line endings are left as committed rather
+    /// than turned into this machine's. The archive honours the repository's
+    /// own export attributes, so a file marked export-ignore reads as absent.
+    /// </remarks>
+    public async Task<OperationResult<byte[]>> ReadFileAtAsync(
+        string repositoryPath,
+        string revision,
+        string path,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(repositoryPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(revision);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+        // Never an option, whatever the caller was handed: archive takes no
+        // "--" to end them, and a revision is the one argument before the path.
+        if (revision.StartsWith('-'))
+        {
+            return OperationResult<byte[]>.Fail($"'{revision}' is not a revision.", ExitCode.InvalidArguments);
+        }
+
+        var archive = Path.Combine(Path.GetTempPath(), "loadout-read-" + Guid.NewGuid().ToString("N") + ".zip");
+
+        try
+        {
+            var result = await RunAsync(
+                repositoryPath,
+                ["-c", "core.autocrlf=false", "archive", "--format=zip", "--output=" + archive, revision, ":(literal)" + path],
+                LocalOperationTimeout,
+                ct).ConfigureAwait(false);
+
+            if (result.Failed)
+            {
+                return OperationResult<byte[]>.Fail(result.Error!, ExitCode.RepositoryUnavailable);
+            }
+
+            using var zip = System.IO.Compression.ZipFile.OpenRead(archive);
+
+            var entry = zip.Entries.FirstOrDefault(one =>
+                string.Equals(one.FullName, path, StringComparison.Ordinal));
+
+            if (entry is null)
+            {
+                return OperationResult<byte[]>.Fail($"{path} is not a file in {revision}.", ExitCode.ProjectNotFound);
+            }
+
+            if (entry.Length > MostToRead)
+            {
+                return OperationResult<byte[]>.Fail(
+                    $"{path} is {entry.Length:N0} bytes, which is more than this will read.", ExitCode.InvalidArguments);
+            }
+
+            await using var stream = entry.Open();
+            using var bytes = new MemoryStream((int)entry.Length);
+
+            await stream.CopyToAsync(bytes, ct).ConfigureAwait(false);
+
+            return OperationResult<byte[]>.Ok(bytes.ToArray());
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            return OperationResult<byte[]>.Fail($"{path} could not be read: {ex.Message}", ExitCode.RepositoryUnavailable);
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(archive);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Left in the temporary directory, which is what it is for.
+            }
+        }
+    }
+
     /// <summary>Git's letter for what happened to a file, as a word.</summary>
     private static string Change(string letter) => letter.Length == 0 ? "changed" : letter[0] switch
     {

@@ -183,6 +183,29 @@ public sealed class RunOutboxTests : IDisposable
     }
 
     [Fact]
+    public async Task Where_no_node_says_where_the_run_worked_the_path_it_started_on_does()
+    {
+        // A lead launched with no directory of its own, and an implementer
+        // and a reviewer each in a worktree since cleared away: only the
+        // run's own start names the repository.
+        Journal(
+            "{\"at\":\"2026-09-15T22:55:00+00:00\",\"run\":\"r\",\"node\":null,\"kind\":\"run.started\",\"data\":{\"team\":\"trial\",\"path\":"
+                + System.Text.Json.JsonSerializer.Serialize(Repository) + "}}",
+            "{\"at\":\"2026-09-15T22:55:01+00:00\",\"run\":\"r\",\"node\":\"lead\",\"kind\":\"node.launched\",\"data\":{\"launch\":\"L\",\"role\":\"role.project-lead\"}}",
+            Launched("implementer/1", "teams/r/impl-1"));
+        Report("report-implementer-1-1.json", Delivering("implementer/1", "3469742"));
+
+        var git = new FakeGit(Repository);
+        git.Touched["3469742"] = [new GitFileChange("docs/NOTES.md", "added"), new GitFileChange("OLD.txt", "removed")];
+
+        var outbox = (await Outbox(git).ForAsync(Run)).Value!;
+
+        outbox.Repository.Should().Be(Repository);
+        outbox.Missing.Should().BeEmpty();
+        outbox.Files.Select(file => file.Path).Should().Equal("docs/NOTES.md", "OLD.txt");
+    }
+
+    [Fact]
     public async Task A_run_that_never_says_where_it_worked_says_so_rather_than_nothing()
     {
         // Every node had a worktree of its own, so no event names the

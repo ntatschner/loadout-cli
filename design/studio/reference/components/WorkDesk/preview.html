@@ -1,0 +1,56 @@
+<!-- @dsCard group="Modes" height=780 width=1300 subtitle="Pure Focus: list, view and actions, a command bar, and every key shown" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>WorkDesk</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div id="d" style="height: 720px"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  document.documentElement.setAttribute("data-mode", "pure");
+  var GROUPS = [
+    { key: "needs", name: "Needs you", items: [{ id: "r2", kind: "team run", title: "Add --since to loadout usage", meta: "team run · iterating-project · round 3", word: "waiting for you" }, { id: "s2", kind: "session", title: "add a retry to the upload step", meta: "session · loadout-cli · claude", word: "needs approval" }] },
+    { key: "sessions", name: "Sessions", items: [{ id: "s1", kind: "session", title: "why is this postgres query so slow", meta: "starstats · claude · investigate", word: "working" }, { id: "s3", kind: "session", title: "tidy the deploy script", meta: "starstats · codex", word: "idle" }] },
+    { key: "runs", name: "Team runs", items: [{ id: "r1", kind: "team run", title: "Make the docs true", meta: "docs-crew · round 2", word: "running" }, { id: "r3", kind: "team run", title: "Release 0.66.0", meta: "release-crew · round 3", word: "running" }] },
+    { key: "ideas", name: "Ideas", items: [{ id: "i1", kind: "idea", title: "Run the launcher in a browser", meta: "loadout-cli · round 2 back", word: "shaping" }] },
+    { key: "tasks", name: "Tasks", items: [{ id: "k2", kind: "task", title: "Move uploads to the new bucket", meta: "starstats · waiting on access", word: "blocked" }] }
+  ];
+  var RUN = "20261017-1402-ab3f";
+  function actions(x) {
+    if (x.id === "r2") { return [{ label: "Leave them", kind: "needs", cmd: "$ loadout team gate " + RUN + " --gate g4 --answer \"Leave them\" --by dashboard" }, { label: "Fix them here", kind: "needs", cmd: "… --answer \"Fix them here\" --by dashboard" }, { label: "Think again", cmd: "… --think-again --by dashboard" }, { label: "Hold after this round", cmd: "$ loadout team halt " + RUN + " --pause" }, { label: "Stop after this round", kind: "danger", cmd: "$ loadout team halt " + RUN }]; }
+    if (x.kind === "session") { return [{ label: "Go to the question", kind: x.word === "needs approval" ? "needs" : "", cmd: "focuses its terminal · answered there" }, { label: "End the session", kind: "danger", cmd: "stops the agent in this terminal" }]; }
+    if (x.kind === "team run") { return [{ label: "Hold after this round", cmd: "$ loadout team halt <run> --pause" }, { label: "Change what it may spend", cmd: "$ loadout team budget <run> --usd <figure or none>" }, { label: "Stop after this round", kind: "danger", cmd: "$ loadout team halt <run>" }]; }
+    if (x.kind === "idea") { return [{ label: "Another round", cmd: "$ loadout idea refine browser-launcher" }]; }
+    return [{ label: "Mark it doing", cmd: "$ loadout task declare new-bucket doing --project starstats" }];
+  }
+  function view(x) {
+    if (x.kind === "session") { return { el: S.Terminal({ title: x.title, project: "loadout-cli", agent: "claude", state: x.word === "needs approval" ? "approval" : "working", lines: [[["● ", "fg-green"], ["Edit ", "bold"], ["src/Upload/Uploader.cs", "fg-blue"]], [["  Passed! ", "fg-bright-green bold"], ["14 passed, 0 failed", "fg-green"]]] }).el }; }
+    if (x.id === "r2") { var d = document.createElement("div"); d.style.cssText = "display: grid; gap: 18px"; d.appendChild(S.Gate({ kind: "question", run: RUN, gate: "g4", node: "lead", asked: "asked 6 min ago", question: "The suite has two flaky tests unrelated to --since. Fix them in this run, or leave them?", options: ["Leave them", "Fix them here"], recommendation: "Leave them" })); d.appendChild(S.RunShape({ rounds: [{ word: "done", lead: "proposed 2 done-when", nodes: [["planner/1", "done"]] }, { word: "done", lead: "an implementer and a reviewer", nodes: [["implementer/1", "done"], ["reviewer/1", "done"]] }, { word: "waiting for you", lead: "asks about two flaky tests", nodes: [["verifier/1", "done"]] }], next: "starts when you answer" })); return { el: d }; }
+    var p = document.createElement("p"); p.style.cssText = "margin: 0; color: var(--muted)"; p.textContent = x.title + ": " + x.meta + "."; return { el: p };
+  }
+  function commands(q, picked) {
+    var rows = [];
+    actions(picked || GROUPS[0].items[0]).forEach(function (a) { rows.push({ kind: "action", label: a.label, cmd: a.cmd }); });
+    [["Home", "everything"], ["Sessions", "go"], ["Team runs", "go"], ["Ideas", "go"], ["Tasks", "go"]].forEach(function (g) { rows.push({ kind: "go", label: g[0] }); });
+    [["team run", "Start a team run"], ["team list", "The teams you can run"], ["usage", "What the agents have cost"], ["resume --last", "Carry the last session on"]].forEach(function (c) { rows.push({ kind: "command", label: c[1], cmd: "$ loadout " + c[0] }); });
+    q = q.toLowerCase();
+    return rows.filter(function (r) { return !q || (r.label + " " + (r.cmd || "")).toLowerCase().indexOf(q) >= 0; });
+  }
+  var D = S.WorkDesk({ groups: GROUPS, selected: "r2", view: view, actions: actions, commands: commands, goKeys: { h: "home", s: "sessions", t: "teams", i: "ideas", k: "tasks", n: "needs" } });
+  document.getElementById("d").appendChild(D.el);
+})();
+</script>
+</body>
+</html>

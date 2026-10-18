@@ -281,6 +281,8 @@ public sealed partial class TeamRunnerTests : IDisposable
         _console.Revisions.Should().ContainSingle()
             .Which.Should().Be(
                 "Add --since to loadout usage; a test fails without it and passes with it.");
+
+        _console.Kinds.Should().Equal([GateKind.Brief], "a worker's brief is asked as one");
     }
 
     [Fact]
@@ -1659,6 +1661,9 @@ public sealed partial class TeamRunnerTests : IDisposable
         _console.RevisionsAsked.Should().ContainSingle()
             .Which.Should().Contain("held as well").And.Contain(Suite);
 
+        // As what it is, so a page does not say somebody is about to be briefed.
+        _console.Kinds.Should().Contain(GateKind.DoneWhen).And.NotContain(GateKind.Brief);
+
         var journal = await JournalAsync(outcome);
 
         journal.Should().Contain(line =>
@@ -1856,6 +1861,9 @@ public sealed partial class TeamRunnerTests : IDisposable
         asked.Should().ContainSingle().Which.Should().Match<ReportQuestion>(question =>
             question.Question.Contains($"\"{Mine}\" read as: read as: {Mine}")
             && question.Recommendation == TeamRunner.AcceptReadings);
+
+        // As the readings, not as one of the lead's own questions.
+        _console.Kinds.Should().Contain(GateKind.Readings).And.NotContain(GateKind.Question);
 
         var journal = await JournalAsync(outcome);
 
@@ -3127,6 +3135,24 @@ public sealed partial class TeamRunnerTests : IDisposable
         second.Should().Contain("cannot be merged").And.Contain("docs/commands.md").And.Contain("main");
     }
 
+    /// <remarks>
+    /// Its own kind, so a page can say a no leaves the branch where it is
+    /// rather than drawing it as a confirm whose no stops the run.
+    /// </remarks>
+    [Fact]
+    public async Task A_merge_is_asked_as_a_merge()
+    {
+        var git = new FakeGit(Path.Combine(_root, "repo"));
+
+        ScriptAGatedRun();
+
+        var outcome = (await RunAsync(git: git)).Value!;
+
+        _console.Confirmations.Should().Contain(one => one.StartsWith("Merge ", StringComparison.Ordinal));
+        _console.Kinds.Should().Equal(GateKind.Merge);
+        outcome.Merged.Should().ContainSingle();
+    }
+
     [Fact]
     public async Task A_branch_that_conflicts_twice_is_left_alone_and_said_so()
     {
@@ -3851,6 +3877,33 @@ public sealed partial class TeamRunnerTests : IDisposable
             Timers.Add(timer);
 
             return Task.FromResult(Decide(question));
+        }
+
+        /// <summary>
+        /// The kind of stop each question that said one was asked as, in order.
+        /// </summary>
+        public List<string> Kinds { get; } = [];
+
+        public Task<bool> ConfirmAsync(string what, string kind, CancellationToken ct = default)
+        {
+            Kinds.Add(kind);
+
+            return ConfirmAsync(what, ct);
+        }
+
+        public Task<string?> ReviseAsync(string what, string task, string kind, CancellationToken ct = default)
+        {
+            Kinds.Add(kind);
+
+            return ReviseAsync(what, task, ct);
+        }
+
+        public Task<string?> DecideAsync(
+            ReportQuestion question, string kind, QuestionTimer? timer, CancellationToken ct = default)
+        {
+            Kinds.Add(kind);
+
+            return timer is null ? DecideAsync(question, ct) : DecideAsync(question, timer, ct);
         }
 
         public void Note(string line) => Notes.Add(line);

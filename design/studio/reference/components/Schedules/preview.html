@@ -1,0 +1,28 @@
+<!-- @dsCard group="Teams" height=380 width=1000 subtitle="Runs that start without you, and whether the daemon will fire them" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Schedules</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div id="s" style="max-width: 820px"></div><p class="lab" style="margin-top: 22px">With the daemon not running</p><div id="t" style="max-width: 820px"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var items = [{ name: "nightly-docs", team: "docs-crew", goal: "check the docs against the code", when: "every 24h", next: "tonight 23:00", autonomy: "autonomous", usd: "10" }, { name: "on-commit-bugs", team: "bug-hunt", goal: "look at what the suite is failing", when: "on commit", autonomy: "supervised" }];
+  document.getElementById("s").appendChild(S.Schedules({ daemon: { running: true }, items: items }));
+  document.getElementById("t").appendChild(S.Schedules({ daemon: { running: false }, items: items.slice(0, 1) }));
+})();
+</script>
+</body>
+</html>

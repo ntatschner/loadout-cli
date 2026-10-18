@@ -1,6 +1,7 @@
 using System.Reflection;
 using FluentAssertions;
 using Loadout.Agents.Teams;
+using Loadout.Core.Teams;
 using Loadout.Models.Teams;
 using Xunit;
 
@@ -49,6 +50,28 @@ public sealed class OneAtATimeTests
 
         inner.Reached.Should().Equal(
             "ConfirmAsync", "ReviseAsync", "DecideAsync", "Note", "Starting", "CanAsk");
+    }
+
+    /// <remarks>
+    /// The overloads that say which kind of stop each is share their names
+    /// with the plain ones, so the check below, which goes by name, cannot see
+    /// one left unforwarded: it would ask the plain question and every stop
+    /// would reach the page as the kind it used to share.
+    /// </remarks>
+    [Fact]
+    public async Task The_kind_of_each_stop_reaches_the_person()
+    {
+        var inner = new Recording();
+
+        using var one = new OneAtATime(inner);
+
+        ITeamConsole wrapped = one;
+
+        await wrapped.ConfirmAsync("merge it", "merge");
+        await wrapped.ReviseAsync("judged on", "the tests pass", "done-when");
+        await wrapped.DecideAsync(new ReportQuestion("more?", ["a"], "a"), "budget", null);
+
+        inner.Reached.Should().Equal("ConfirmAsync merge", "ReviseAsync done-when", "DecideAsync budget");
     }
 
     [Fact]
@@ -108,6 +131,28 @@ public sealed class OneAtATimeTests
         public Task<string?> DecideAsync(ReportQuestion question, CancellationToken ct = default)
         {
             Reached.Add("DecideAsync");
+
+            return Task.FromResult<string?>(question.Recommendation);
+        }
+
+        public Task<bool> ConfirmAsync(string what, string kind, CancellationToken ct = default)
+        {
+            Reached.Add("ConfirmAsync " + kind);
+
+            return Task.FromResult(true);
+        }
+
+        public Task<string?> ReviseAsync(string what, string task, string kind, CancellationToken ct = default)
+        {
+            Reached.Add("ReviseAsync " + kind);
+
+            return Task.FromResult<string?>(task);
+        }
+
+        public Task<string?> DecideAsync(
+            ReportQuestion question, string kind, QuestionTimer? timer, CancellationToken ct = default)
+        {
+            Reached.Add("DecideAsync " + kind);
 
             return Task.FromResult<string?>(question.Recommendation);
         }

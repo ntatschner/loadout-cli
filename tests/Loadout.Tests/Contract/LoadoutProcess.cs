@@ -273,6 +273,48 @@ public sealed class LoadoutProcess : IDisposable
         }
     }
 
+    /// <summary>
+    /// Starts a command and returns it running, isolated as RunAsync isolates
+    /// it, for a test that watches one which waits for a person. Its output is
+    /// read and dropped; the caller ends it.
+    /// </summary>
+    public Process Start(params string[] arguments)
+    {
+        var executable = Executable
+            ?? throw new InvalidOperationException(
+                "The command line has not been built. Run: dotnet build src/Loadout.Cli");
+
+        var start = new ProcessStartInfo(executable)
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            RedirectStandardInput = true,
+            UseShellExecute = false,
+            WorkingDirectory = _home,
+        };
+
+        foreach (var argument in arguments)
+        {
+            start.ArgumentList.Add(argument);
+        }
+
+        Isolate(start);
+
+        foreach (var (name, value) in Environment)
+        {
+            start.Environment[name] = value;
+        }
+
+        var process = StartWithRetry(start);
+        process.StandardInput.Close();
+        process.OutputDataReceived += (_, _) => { };
+        process.ErrorDataReceived += (_, _) => { };
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+
+        return process;
+    }
+
     private async Task<LoadoutRun> RunOnceAsync(string[] arguments)
     {
         using (await EnterAsync().ConfigureAwait(false))

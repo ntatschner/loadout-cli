@@ -1,0 +1,36 @@
+<!-- @dsCard group="Modes" height=760 width=1300 subtitle="Team Focus: every live run as a line on one board, the one that needs you first" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>RunBoard</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div id="b"></div><p class="out" role="status" id="out"></p>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var out = document.getElementById("out");
+  var runs = [
+    { id: "r1", goal: "Make the docs true", team: "docs-crew", project: "loadout-cli", word: "running", round: 2, spent: 14.9, cap: 20, projected: 26.3, rounds: [{ word: "done", nodes: [["docs-auditor/1", "done"]] }, { word: "running", nodes: [["writer/1", "running"], ["docs-auditor/1", "quiet"]] }] },
+    { id: "r2", goal: "Add --since to loadout usage", team: "iterating-project", project: "loadout-cli", word: "waiting for you", round: 3, spent: 6.12, cap: 25, rounds: [{ word: "done", nodes: [["planner/1", "done"]] }, { word: "done", nodes: [["implementer/1", "done"], ["reviewer/1", "done"]] }, { word: "waiting for you", nodes: [["verifier/1", "done"]] }],
+      gate: { kind: "question", gate: "g4", node: "lead", asked: "asked 6 min ago", question: "Fix the two flaky tests in this run, or leave them?", options: ["Leave them", "Fix them here"], recommendation: "Leave them" } },
+    { id: "r3", goal: "Release 0.66.0", team: "release-crew", project: "loadout-cli", word: "running", round: 3, spent: 3.1, cap: 10, rounds: [{ word: "done", nodes: [["writer/1", "done"], ["checker/1", "done"]] }, { word: "done", nodes: [["writer/1", "done"]] }, { word: "running", nodes: [["releaser/1", "running"]] }] },
+    { id: "r4", goal: "Check the docs against the code", team: "docs-crew", project: "loadout-cli", word: "done", round: 4, spent: 9.4, cap: 20, rounds: [{ word: "done", nodes: [["docs-auditor/1", "done"]] }, { word: "done", nodes: [["writer/1", "done"], ["writer/2", "done"]] }, { word: "done", nodes: [["docs-auditor/1", "done"]] }] }];
+  var picked = null;
+  function draw() { var b = document.getElementById("b"); b.textContent = ""; b.appendChild(S.RunBoard({ runs: runs, picked: picked, teams: [{ name: "docs-crew", word: "running", fact: "2 runs" }, { name: "iterating-project", word: "waiting for you", fact: "1 run" }, { name: "release-crew", word: "running", fact: "1 run" }, { name: "bug-hunt", word: "idle", fact: "none live" }],
+    onPick: function (id) { picked = id; draw(); out.textContent = "Opens " + id + " beside the board"; }, onTeam: function (n) { out.textContent = "Opens " + n + "'s page beside the board"; } })); }
+  draw();
+})();
+</script>
+</body>
+</html>

@@ -329,4 +329,58 @@ public sealed class GitMergeTests : IAsyncLifetime
         merged.Failed.Should().BeTrue();
         merged.Error.Should().NotBeNullOrWhiteSpace();
     }
+
+    /// <remarks>
+    /// <para>
+    /// Also here because this is where real git runs. Bytes, because an image
+    /// read back as git's text output is a PNG decoded as UTF-8 and never the
+    /// same file again; and a name with brackets beside the name its pattern
+    /// would match, so the one read is the one named.
+    /// </para>
+    /// <para>
+    /// This passes without the literal prefix the read puts on the path too:
+    /// git tries a pathspec as a plain name before as a pattern. The prefix is
+    /// for a name starting with a colon, which git would read as pathspec
+    /// magic and which this machine's file system cannot hold to test.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_file_reads_back_exactly_as_a_commit_left_it()
+    {
+        byte[] image = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0xFF, 0x80];
+
+        // Committed as written, whatever this machine's own setting, so what
+        // is compared is what went in.
+        await GitAsync("config", "core.autocrlf", "false");
+
+        Directory.CreateDirectory(Path.Combine(_repository, "art"));
+        await File.WriteAllBytesAsync(Path.Combine(_repository, "art", "lead.png"), image);
+        await File.WriteAllTextAsync(Path.Combine(_repository, "f[1].txt"), "bracketed\r\n");
+        await File.WriteAllTextAsync(Path.Combine(_repository, "f1.txt"), "not this one\n");
+        await GitAsync("add", ".");
+        await GitAsync("commit", "--message", "art");
+
+        var commit = (await GitAsync("rev-parse", "HEAD")).Trim();
+
+        (await _git.ReadFileAtAsync(_repository, commit, "art/lead.png")).Value.Should().Equal(image);
+        (await _git.ReadFileAtAsync(_repository, commit, "f[1].txt")).Value.Should().Equal("bracketed\r\n"u8.ToArray());
+
+        // And a file as the commit before had it, which is how a removed one is read.
+        await GitAsync("rm", "--quiet", "README.md");
+        await GitAsync("commit", "--message", "gone");
+
+        var gone = (await GitAsync("rev-parse", "HEAD")).Trim();
+
+        (await _git.ReadFileAtAsync(_repository, gone, "README.md")).Failed.Should().BeTrue();
+        (await _git.ReadFileAtAsync(_repository, gone + "^", "README.md")).Value.Should().Equal("one\n"u8.ToArray());
+    }
+
+    [Fact]
+    public async Task A_revision_that_looks_like_an_option_is_never_passed_to_git()
+    {
+        var read = await _git.ReadFileAtAsync(_repository, "--remote=elsewhere", "README.md");
+
+        read.Failed.Should().BeTrue();
+        read.ExitCode.Should().Be(Loadout.Models.ExitCode.InvalidArguments);
+    }
 }

@@ -100,6 +100,30 @@ public sealed class DashboardVerbContractTests
     }
 
     /// <summary>
+    /// Sending a question back, the one shape of the gate verb the page
+    /// fills that the line above does not: it types --think-again in place
+    /// of --answer.
+    /// </summary>
+    [BuiltCliFact]
+    public async Task Think_again_from_the_page_is_a_command_line_the_parser_accepts()
+    {
+        var (command, arguments) = DashboardActions.Maps(
+            new RunAction("20260101-0000-0000", "gate", Gate: "gate-1", ThinkAgain: true));
+
+        arguments.Should().Contain("--think-again").And.NotContain("--answer");
+
+        using var loadout = new LoadoutProcess();
+
+        var run = await loadout.RunAsync([.. command.Split(' '), .. arguments, "--non-interactive", "--dry-run"]);
+
+        var everything = run.StandardOutput + run.StandardError;
+
+        everything.Should().NotContain("Unknown option");
+        everything.Should().NotContain("Unexpected option");
+        everything.Should().NotContain("Option does not have a name");
+    }
+
+    /// <summary>
     /// The two schedule verbs, filled in as the sheet fills them.
     /// </summary>
     /// <remarks>

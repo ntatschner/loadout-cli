@@ -54,6 +54,10 @@ it widens over the page without pushing it. Below 600px wide it becomes a
 the exact `loadout` command it runs, so you can always do the same thing from a
 terminal instead.
 
+Along the top is the mode bar: the five modes, search, and whatever is waiting
+on you. Everything here describes Default; [step 16](#16-change-the-whole-layout-with-a-mode)
+covers the others.
+
 ### 3. Read Home
 
 Home shows everything in flight: team runs, the sessions the daemon is hosting,
@@ -179,9 +183,11 @@ loadout config set studio-halo gyroscope
 loadout config set studio-idle-after 20
 ```
 
-The two things kept in the browser are the single-letter shortcuts (**A** for
-Ambient, **N** for a new session) and whether Ambient fills the screen. They're
-about the keyboard and screen in front of you, not about how you read.
+The things kept in the browser are the single-letter shortcuts (**A** for
+Ambient, **N** for a new session), whether Ambient fills the screen, and the
+mode with what each mode remembers. They're about the keyboard and screen in
+front of you, not about how you read, so a phone can stay in Minimal while a
+desktop stays in Terminals.
 
 **Settings** has more than Studio's own. **Loadout's settings** lists every
 setting `loadout config` knows, in the same groups the terminal's Settings
@@ -242,20 +248,67 @@ as it goes, so it opens in a terminal here.
 
 ### 11. Steer a team run
 
-**Teams** lists the team runs on this machine, running ones first. Choose one to
-see where it stands: what it's waiting on, answered there with the command each
-answer runs; what it's met of its *done when*; who is on it, with their turns and
-what they've cost; and the last lines of its journal. While it runs you can say
-something to the lead or to one node, change what it may spend, hold it, let it
-carry on or stop it, or answer it in your own words. Once it's ended you can pick
-it up again, open a pull request for what a node made, see the files it
-delivered, or forget it.
+**Teams** opens on everything a run wants of you, under **Needs you**. A run
+lands there when it asks something, when its lead takes a round without asking
+for anything, when a node goes quiet for three times its usual turn, or when its
+budget is spent or projected to be. Each reason clears itself: nothing is
+dismissed by hand. A question is answered where it's shown, and each kind has
+its own answers:
 
-**More** has the teams you can run, starting a run, runs on a schedule,
-remedies, the shared tools every team can use, the bin, and where a run's call
-for help goes. Trusting a remedy and
-setting the attach passphrase show their commands only, since both are made in a
-terminal.
+- **The lead's question**: its options, the one it recommends drawn solid, and
+  **Think again**, which sends it back to the lead.
+- **Its readings** of your done-when, before any worker starts: accept them, or
+  send them back.
+- **A brief**, in a manual run: in a box you can change before it goes. Change
+  it and the button says **Send your brief**, and the command gains
+  `--instead`.
+- **The proposed done-when**: one criterion per line, in a box.
+- **A confirmation or a permission**: yes or no.
+- **Its budget**: raise it, take the cap off, or type a figure.
+
+Under each answer is the `loadout team gate` command it runs.
+
+Below that are the runs going, each with **Hold after this round**, **Let it
+carry on** and **Stop after this round**, and the ones that ended, with **Run it
+again** (which opens Start a run filled in, and starts nothing), **Pick it up
+where it stopped** and **Forget it**. Then the teams you can run, and the runs on
+a schedule, with whether the daemon will fire them.
+
+**Start a run**, **Make a team** and **Run one on a schedule** open a sheet that
+writes its command under the form as you fill it in. Start a run asks once more,
+naming the team and the goal, because it spends money and edits a project. A
+schedule can't be manual, and can't repeat faster than every five minutes.
+
+Choose a run to open its page: its shape (the lead's line, with the nodes each
+round briefed hanging from it), what it will be judged on, who is on it, its
+spend, a box to say something to the lead, and what you can do to it. Below
+are five depths, on keys **1** to **5**:
+
+1. **What it said**: the journal as it's written, or one node's stream.
+   Typing at a live node needs the attach passphrase as well as your sign-in;
+   it's swapped for a grant that lasts 30 minutes and lives only in the page.
+2. **What it cost**: what it's costing, where that's projected to end, where
+   the time went and what went wrong.
+3. **The papers**: each brief beside the report it got back.
+4. **What it changed**: each node's patch, with **Open a pull request**. That
+   asks first, and offers **Say what it would do**, which runs it with
+   `--dry-run`.
+5. **What it delivered**: the run's files in a tree, by node and commit or by
+   folder, beside a viewer that shows Markdown rendered, code with line
+   numbers, a CSV as a table and an image as itself. **The change** shows the
+   file's part of its node's patch. **Download**, **Download all** and **Copy
+   path** read only, so they show no command; each file shows the terminal line
+   that reads it instead. Lines that look like credentials are taken out before
+   a file is shown, and you're told how many.
+
+A team's page has its nodes, what a run of it follows, its runs here, and how
+its roles have been doing, read only when you open it. **The bin** puts runs and
+teams back, empties for good after naming what goes, and clears out old runs,
+saying which as a sentence first. **Remedies** answers a remedy's requests;
+trusting a remedy is a standing agreement, so the page shows the command for a
+terminal instead. So does setting or clearing the attach passphrase, since the
+page can't set the passphrase that guards it. Naming a run's room stays on the
+classic dashboard, which is the one that draws the office.
 
 ### 12. Shape an idea
 
@@ -325,6 +378,98 @@ line. Starting a session sends you to **Sessions**, where Studio hosts it.
 On Home, **A** or **Ambient** turns Studio into something for a spare screen:
 the key numbers, the halo on whatever most needs you, and everything else
 circling it. **Escape** or **Leave ambient** leaves it.
+
+### 16. Change the whole layout with a mode
+
+The mode bar at the top of every page has five modes, and **Ctrl Shift M**
+moves to the next from anywhere, a terminal included. The palette lists each
+one as *Mode: Terminals* and so on. The mode is kept in this browser, not in
+Loadout's config.
+
+- **Default** is Studio as the rest of this guide describes it.
+- **Terminals** turns Home, Sessions and a session's page into one deck: every
+  hosted session a tab, over one, two or four live panes. **Ctrl Alt 1** to
+  **9** picks a session by its tab, and **Ctrl Alt** with the arrows moves
+  between the panes shown. A dot on a tab means output since you looked. **Go
+  to the one waiting** appears when a session needs you, and *Find in this
+  terminal* searches the one you're in, highlighting matches in the needs
+  colour. Below 900px it's one pane and the tabs. The layout and the last
+  session you picked are remembered.
+- **Teams** turns Home and the Teams page into a board: each run one row with
+  its goal, a small line of its rounds and nodes, its state and its spend, the
+  one that needs you first, with its question answered in the row. The teams
+  run along the top. Picking a run or a team opens its page beside the board;
+  below 1100px it replaces the board, and **Close** goes back. Remedies, the
+  bin, shared tools and the webhook stay on the Teams page in Default.
+- **Minimal** is one quiet column of what's live, sessions and runs together,
+  what needs you first with its question under it. Opening one gives it the
+  screen: a session as just its terminal, a run as just its question, its shape
+  and its done-when. **Escape** or **Back** gives the column back. The rail
+  slides away; the mode bar stays.
+- **Pure** is [step 17](#17-pure-focus).
+
+Whatever the mode, the count on the right of the mode bar is everything waiting
+on you, sessions and runs together, and pressing it goes to the oldest question
+wherever that mode shows it. No mode hides a question.
+
+Changing mode is one animated step where your browser can do it, a short fade
+under reduced motion, and simply happens under none.
+
+Each pane in Terminals is its own connection to the session. A pane you stop
+showing closes its connection; show it again and the daemon replays what the
+session has written, so nothing is missed. Typing goes only to the pane that
+has the keyboard, and **Ctrl ]** gives the keyboard back to its tab.
+
+### 17. Pure Focus
+
+Pure Focus is for acting fast, with the keyboard or the mouse. It's flat: no
+glow, nothing that breathes or pulses, 1px edges, in your own theme and accent.
+The only movement is a brief flash on what you ran.
+
+Home, Sessions, a session, Teams and a run all become one desk of three panes
+over a command bar:
+
+- **List**, on the left: what needs you, then sessions, team runs, ideas and
+  tasks.
+- **View**, in the middle: the thing you picked. A session is its terminal; a
+  run is its question, its shape, its done-when and its crew; an idea or a task
+  is its facts and latest events.
+- **Actions**, on the right: up to nine, numbered, each with the command it
+  runs. They're the same actions, with the same commands, as anywhere else.
+
+Every key is printed beside what it does, and **?** lists them all:
+
+| Key | Does |
+|---|---|
+| **J**, **K**, or the arrows on the list | move the selection |
+| **Home**, **End** | first, last |
+| **Enter** | open what's picked in the view |
+| **Escape** | back to the list; keeps an armed action |
+| **1** to **9** | run that action |
+| **/** | filter the list |
+| **:** | open the command bar |
+| **G** then **H**, **S**, **T**, **I**, **K** or **N** | the list: everything, sessions, team runs, ideas, tasks, what needs you |
+| **F6**, **Shift F6** | the next or previous pane |
+| **?** | every key |
+
+Single keys work only when you're not typing. In a terminal every key goes to
+the agent, and **Ctrl ]** brings you back to the list. With single-letter
+shortcuts off, only **Escape** and the list's own arrows, **Home**, **End** and
+**Enter** work; **F6**, the buttons and the command bar still do.
+
+An action that can't be undone, such as **Stop after this round** or **End the
+session**, asks for its number twice. The first press says *Press 5 again to
+stop after this round* for three seconds, and **Escape** keeps it. There's no
+dialog, which is deliberate: a dialog would take the keyboard away from the
+desk.
+
+The command bar finds the picked thing's actions, places and things, and every
+command in Studio's catalogue, each showing what it runs before you press
+**Enter**. A command opens its form on the Commands page, in Default.
+
+The scope and the last thing you picked are remembered. A team's page, the
+remedies and the bin aren't part of the desk; they open as pages, in the flat
+look.
 
 ## Watching only
 

@@ -56,6 +56,29 @@ The icons down the left side are the pages:
 
 Press **Ctrl** and **K** together to search for anything.
 
+## Change how Studio is laid out
+
+Along the top are five buttons called *modes*. Each one lays out the whole of
+Studio for a different job. Press **Ctrl**, **Shift** and **M** together to move
+to the next one. Your browser remembers which you picked.
+
+- *Default* is Studio as this page describes it.
+- *Terminals* shows your sessions as tabs, with up to four on the screen at
+  once, so you can watch and type into several.
+- *Teams* shows every team's run as one line on a board. You can answer a
+  question in its line.
+- *Minimal* shows one quiet list of what's happening. Pick one and it fills the
+  screen. Press **Esc** to go back.
+- *Pure* puts a list, the thing you picked, and its buttons side by side. Every
+  button has a number, and pressing the number does the same as clicking it.
+  Press **?** to see every key.
+
+Whichever you pick, the top right of the screen says how many things are
+waiting for you. Press it to go to the oldest.
+
+In Pure, a button that can't be undone, like stopping a run, asks you to press
+its number twice. Press **Esc** if you change your mind.
+
 ## Start a session
 
 A *session* is one conversation with an AI coding agent.
@@ -82,6 +105,25 @@ Sometimes a team of agents stops to ask you a question. You'll see it under
 
 Each answer has a button. Under each button is the command it runs, in case
 you'd rather type it.
+
+On the *Teams* page, **Needs you** lists every reason a team wants you. Each one
+goes away by itself once it's dealt with.
+
+Some questions have a box. If a team is about to give an agent its
+instructions, you can change them in the box before they're sent.
+
+## A team's run
+
+Choose a run on the *Teams* page to see it. Press **1** to **5** to see:
+
+1. what it said
+2. what it cost
+3. the instructions each agent was given, and what it said back
+4. what it changed in the code
+5. the files it made, which you can read and download
+
+Nothing on that page can be changed by accident: anything that changes
+something asks you first, or shows you the command it runs.
 
 ## Make it easier to read
 

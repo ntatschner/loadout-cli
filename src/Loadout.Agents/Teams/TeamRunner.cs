@@ -248,6 +248,35 @@ public interface ITeamConsole
         await ConfirmAsync($"{what}: {task}", ct).ConfigureAwait(false) ? task : null;
 
     /// <summary>
+    /// The same three questions, saying which kind of stop each is, as
+    /// <see cref="GateKind"/> names them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// For a console that draws them differently: the runner's readings and
+    /// budget questions go through the same call as the lead's own, the
+    /// proposed done-when through the same call as a brief, and a merge
+    /// through the same call as every other step a manual run holds. Told
+    /// here, by whoever asks, rather than guessed from the words, which
+    /// change whenever somebody rewords them.
+    /// </para>
+    /// <para>
+    /// A console that draws them all alike asks the plain question, which is
+    /// what every console did before.
+    /// </para>
+    /// </remarks>
+    Task<bool> ConfirmAsync(string what, string kind, CancellationToken ct = default) =>
+        ConfirmAsync(what, ct);
+
+    /// <inheritdoc cref="ConfirmAsync(string, string, CancellationToken)"/>
+    Task<string?> ReviseAsync(string what, string task, string kind, CancellationToken ct = default) =>
+        ReviseAsync(what, task, ct);
+
+    /// <inheritdoc cref="ConfirmAsync(string, string, CancellationToken)"/>
+    Task<string?> DecideAsync(ReportQuestion question, string kind, QuestionTimer? timer, CancellationToken ct = default) =>
+        timer is null ? DecideAsync(question, ct) : DecideAsync(question, timer, ct);
+
+    /// <summary>
     /// A node's question about a call its role does not cover, and what the
     /// person said.
     /// </summary>
@@ -379,7 +408,7 @@ internal sealed class OneAtATime(ITeamConsole inner) : ITeamConsole, IDisposable
     }
 
     /// <remarks>
-    /// Forwarded for the same reason as <see cref="ReviseAsync"/>: the default
+    /// Forwarded for the same reason as <see cref="ReviseAsync(string, string, CancellationToken)"/>: the default
     /// would ask yes or no through this wrapper, and a console offering the
     /// three answers would never be asked.
     /// </remarks>
@@ -423,6 +452,55 @@ internal sealed class OneAtATime(ITeamConsole inner) : ITeamConsole, IDisposable
         try
         {
             return await inner.DecideAsync(question, timer, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _turn.Release();
+        }
+    }
+
+    /// <remarks>
+    /// The three that say which kind of stop they are, forwarded for the same
+    /// reason as the rest: the defaults would ask this wrapper's plain
+    /// questions, and every stop would reach the page as the kind it used to
+    /// share with something else.
+    /// </remarks>
+    public async Task<bool> ConfirmAsync(string what, string kind, CancellationToken ct = default)
+    {
+        await _turn.WaitAsync(ct).ConfigureAwait(false);
+
+        try
+        {
+            return await inner.ConfirmAsync(what, kind, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _turn.Release();
+        }
+    }
+
+    public async Task<string?> ReviseAsync(string what, string task, string kind, CancellationToken ct = default)
+    {
+        await _turn.WaitAsync(ct).ConfigureAwait(false);
+
+        try
+        {
+            return await inner.ReviseAsync(what, task, kind, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _turn.Release();
+        }
+    }
+
+    public async Task<string?> DecideAsync(
+        ReportQuestion question, string kind, QuestionTimer? timer, CancellationToken ct = default)
+    {
+        await _turn.WaitAsync(ct).ConfigureAwait(false);
+
+        try
+        {
+            return await inner.DecideAsync(question, kind, timer, ct).ConfigureAwait(false);
         }
         finally
         {
@@ -1302,6 +1380,9 @@ public sealed partial class TeamRunner : ITeamRunner
                 ? " The project's own are held as well and are not in the box: " + string.Join("; ", standing) + "."
                 : string.Empty),
             string.Join(Environment.NewLine, proposal),
+
+            // Not a brief: nobody is about to be sent these.
+            GateKind.DoneWhen,
             ct).ConfigureAwait(false);
 
         if (Tidied(answer?.Split('\n')) is not { Count: > 0 } agreed)
@@ -1602,6 +1683,11 @@ public sealed partial class TeamRunner : ITeamRunner
                 $"The run has spent ${spent:0.00} of its ${budget:0.00} budget. Give it more",
                 [Offer(half), Offer(twice), TakeTheCapOff],
                 Offer(half)),
+
+            // The run's question rather than the lead's, so a page offers a
+            // figure of its own and not sending it back to think again.
+            GateKind.Budget,
+            null,
             ct).ConfigureAwait(false);
 
         if (chosen is null)

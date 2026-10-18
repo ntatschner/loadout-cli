@@ -101,6 +101,19 @@ describe('Terminal', () => {
     toggle.remove();
   });
 
+  it('asks the page around it where to go on Ctrl+], where it was given nowhere', () => {
+    const around = document.createElement('div');
+    const asked = vi.fn();
+    around.addEventListener('leaveterminal', asked);
+    document.body.appendChild(around);
+    render(Terminal, { target: around, props: { title: 'starstats', status: 'working' } });
+
+    made[0].keys!(new KeyboardEvent('keydown', { key: ']', code: 'BracketRight', ctrlKey: true }));
+
+    expect(asked).toHaveBeenCalledOnce();
+    around.remove();
+  });
+
   it('lifts colours to 7:1 in the high-contrast themes and 4.5:1 otherwise, and names the screen', () => {
     render(Terminal, { title: 'starstats', status: 'working' });
     expect(made[0].options.minimumContrastRatio).toBe(4.5);

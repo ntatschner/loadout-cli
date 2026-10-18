@@ -174,6 +174,24 @@ gives the keyboard back to the page. The terminal's sixteen colours meet 4.5:1
 in every theme and 7:1 in the high-contrast ones, and an agent's own colours
 are lifted to the same floor. What the session needs is said in words under the
 screen, and announced once. The cursor blinks only with motion at full.
+
+On the Teams page, a run's five depths are tabs on keys **1** to **5**; those
+keys do nothing while you're typing, in a dialog or in a terminal, or when
+single-letter shortcuts are off. The files a run delivered are a tree: the
+arrow keys move and fold, **Home** and **End** jump, and **Enter** opens a file.
+Spend past a budget is said in words with an edge beside it, never in colour
+alone.
+
+Studio's modes change the layout, not how it reads. **Ctrl Shift M** moves
+between them from anywhere, a terminal included, and the mode bar's switcher is
+a radio group on the arrow keys. In Terminals, the tabs are a tab list with
+their keys announced, and **Ctrl ]** gives the keyboard back to the tab. Pure
+Focus is built for the keyboard: the list is a listbox whose active item is
+announced as you move, the three panes are labelled regions you move between
+with **F6**, the command bar is a combobox, and every action's key is both
+printed and announced. A danger action asks for its key twice and says so in
+words, rather than opening a dialog that would take the keyboard away.
+Under no motion nothing in any mode moves, and a change of mode simply happens.
 [Using Studio](studio.md) covers the rest.
 
 ### 9. Turn on speech, only if you want it
@@ -219,6 +237,10 @@ can't check it.
 | Studio: axe-core, and text contrast in its four themes | **Not run** |
 | Studio's terminal: Ctrl ] leaving it, the contrast floor per theme, the screen-reader mode under the preset | Tested, in jsdom, with xterm.js stubbed |
 | Studio's terminal with a screen reader reading it | **Not tested** |
+| Studio's modes and Pure Focus: their keys, the switcher, the deck's keys, the desk's keys and the command bar | Tested, in jsdom |
+| Studio's Pure Focus driven by keyboard alone, and by mouse alone | Done in a browser |
+| Studio's modes and Pure Focus at 390 and 320 pixels wide | **Not checked** |
+| Studio's Pure Focus with a screen reader | **Not tested** |
 | Any screen reader, used with any of this | **Not tested** |
 | A keyboard-only pass by a person | **Not recorded** |
 

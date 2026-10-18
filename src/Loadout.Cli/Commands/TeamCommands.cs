@@ -1611,11 +1611,14 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
 
         var autonomy = (settings.Autonomy ?? team.Rules.Autonomy).Trim().ToLowerInvariant();
 
-        if (autonomy == "manual" && !settings.AllowsPrompting && !settings.DryRun)
+        if (autonomy == "manual" && !settings.AllowsPrompting && !settings.DryRun && !Serving(_paths, _processes))
         {
             // Manual mode is a person at every gate. Without one there is
             // nobody to hold them, and a run that answered its own gates
-            // would be autonomous wearing manual's name.
+            // would be autonomous wearing manual's name. A daemon serving the
+            // dashboard is somewhere to hold them: with nobody at a terminal,
+            // DriveAsync sends every question there, and a person answers it
+            // on the page, as a manual run started from the page expects.
             return output.Fail(
                 "Manual mode asks a person at every step, and nobody can answer here. "
                 + "Run it from a terminal, or choose --autonomy supervised.",
@@ -1867,7 +1870,7 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
     /// whether that process is still the one that wrote it is the difference
     /// between sending a question somewhere and sending it nowhere.
     /// </remarks>
-    private static bool Serving(IPlatformPaths paths, IProcessInspector processes) =>
+    internal static bool Serving(IPlatformPaths paths, IProcessInspector processes) =>
         Loadout.Core.Teams.Daemon.DaemonNote.Live(paths, processes) is not null;
 
     /// <summary>
