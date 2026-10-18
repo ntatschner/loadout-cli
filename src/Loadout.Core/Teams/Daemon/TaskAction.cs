@@ -15,16 +15,20 @@ namespace Loadout.Core.Teams.Daemon;
 /// command somebody would have typed.
 /// </para>
 /// </remarks>
-/// <param name="Verb">add, state, edit, remove or run.</param>
+/// <param name="Verb">add, state, edit, move, remove or run.</param>
 /// <param name="Id">The task. For add, an id to use, or null for one made from the title.</param>
 /// <param name="Project">The list it is on: a project's slug, or null for the workspace-wide one.</param>
 /// <param name="Title">What the task is, for add and edit.</param>
 /// <param name="Note">A note, for add and edit; for state, why it is blocked.</param>
 /// <param name="State">The state to declare: open, doing, blocked, done or dropped. For edit, the one it has now.</param>
+/// <param name="To">For move, the project it belongs on.</param>
+/// <param name="ToGlobal">For move, true to send it to the workspace-wide list instead.</param>
 public sealed record TaskAction(
     string Verb,
     string? Id = null,
     string? Project = null,
     string? Title = null,
     string? Note = null,
-    string? State = null);
+    string? State = null,
+    string? To = null,
+    bool ToGlobal = false);

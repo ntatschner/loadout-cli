@@ -81,6 +81,8 @@
 | `loadout list` | List registered projects |
 | `loadout running` | The sessions running now, and how long each has been quiet |
 | `loadout task list\|declare\|remove` | Record what is being worked on, and check it against the repository. `--global` is the list for what belongs to no project yet |
+| `loadout task move <id> --to <project>` | Move a task put on the wrong project, or `--to-global` to the workspace-wide list. It keeps its id, state and note, and an accepted plan goes with it |
+| `loadout idea move <id> --to <project>` | The same for an idea, with its questions, answers and plan. Not while a round on it is running |
 | `loadout idea add\|list\|show\|remove` | Drop an idea in, on a project or the workspace-wide list, to be fleshed out later |
 | `loadout idea refine <id>` | Have an agent take an idea one round further: ask its questions, propose a plan with options for each layer, or revise it. It asks the agent and model the last round that came back used, unless you give `--agent` or `--model`, and says which before it starts. One round per idea at a time on this machine |
 | `loadout idea dismiss <id>` | Clear the "last round failed" marker on an idea you have stopped refining, without paying for another round. Answers and the plan stay |
@@ -483,7 +485,7 @@ Every launch declares Loadout itself as an MCP server, so the handoff runs both
 ways: a session can ask the launcher things rather than parse console output
 written for a person.
 
-Seventeen tools, each making the same call its command makes:
+Eighteen tools, each making the same call its command makes:
 
 | | |
 |---|---|
@@ -495,6 +497,7 @@ Seventeen tools, each making the same call its command makes:
 | `loadout_remember` | Record one durable fact about the project, with a description, screened for credentials |
 | `loadout_tasks` | What the project is working on, and what the repository does not back up, as `task list` says it |
 | `loadout_task_declare` | Record where a task stands, attributed and dated, as `task declare` does |
+| `loadout_task_move` | Move a task or idea from this project to the one it belongs on, as `task move` does |
 | `loadout_idea_add` | Drop an idea in without leaving the work in hand, as `idea add` does |
 | `loadout_ideas` | Every idea and where it stands, or one in full, as `idea list` and `idea show` say it |
 | `loadout_mode` | Change the posture for the rest of the session, and get what that changes |

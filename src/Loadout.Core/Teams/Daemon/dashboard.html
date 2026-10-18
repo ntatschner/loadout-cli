@@ -12121,7 +12121,7 @@
       if (!(list.tasks || []).length && !list.error) { return; }
 
       any = true;
-      drawTaskList(page, list, answer.team);
+      drawTaskList(page, list, answer.team, projects);
     });
 
     if (!any) {
@@ -12154,7 +12154,7 @@
     adding.appendChild(row);
   }
 
-  function drawTaskList(page, list, team) {
+  function drawTaskList(page, list, team, projects) {
     var tasks = (list.tasks || []).slice().sort(function (a, b) {
       return (taskOrder[a.state] - taskOrder[b.state]) || (a.declared < b.declared ? 1 : -1);
     });
@@ -12165,7 +12165,7 @@
     var box = group(page, (list.project || "Workspace-wide") + " — " + going.length + " not finished",
       list.error ? "This list could not be read: " + list.error : null);
 
-    going.forEach(function (one) { drawTask(box, one, list.project, team); });
+    going.forEach(function (one) { drawTask(box, one, list.project, team, projects); });
 
     if (!going.length && !list.error) {
       box.appendChild(ideaEl("p", "lk-help", "Nothing open."));
@@ -12177,12 +12177,12 @@
       past.open = !!tasksOpen[key];
       past.addEventListener("toggle", function () { tasksOpen[key] = past.open; });
       past.appendChild(ideaEl("summary", null, "Done and dropped (" + closed.length + ")"));
-      closed.forEach(function (one) { drawTask(past, one, list.project, team); });
+      closed.forEach(function (one) { drawTask(past, one, list.project, team, projects); });
       box.appendChild(past);
     }
   }
 
-  function drawTask(into, task, project, team) {
+  function drawTask(into, task, project, team, projects) {
     var key = (project || "") + "/" + task.id;
 
     function send(extra, done) {
@@ -12282,6 +12282,46 @@
     }));
     editing.appendChild(editRow);
     card.appendChild(editing);
+
+    // Every other list, so there is always somewhere to send it and never
+    // the list it is on already.
+    var elsewhere = [{ value: "", text: "The workspace-wide list" }]
+      .concat((projects || []).map(function (slug) { return { value: slug, text: slug }; }))
+      .filter(function (one) { return one.value !== (project || ""); });
+
+    if (!elsewhere.length) { return; }
+
+    var moving = ideaEl("details", "task-change");
+    moving.appendChild(ideaEl("summary", null, "Move it to another list"));
+
+    var whereId = "task-field-" + (++taskFields);
+    var whereField = ideaEl("div", "lk-field");
+    var whereLabel = ideaEl("label", "lk-label", "It belongs on");
+    whereLabel.setAttribute("for", whereId);
+    var where = ideaEl("select", "lk-select");
+    where.id = whereId;
+
+    elsewhere.forEach(function (one) {
+      var option = ideaEl("option", null, one.text);
+      option.value = one.value;
+      where.appendChild(option);
+    });
+
+    whereField.appendChild(whereLabel);
+    whereField.appendChild(where);
+    moving.appendChild(whereField);
+    moving.appendChild(ideaEl("p", "lk-help",
+      "It keeps its id, state and note. A plan it was accepted with goes with it."));
+
+    var moveRow = ideaEl("div", "lk-btn-row");
+    moveRow.appendChild(ideaButton("Move it", false, function () {
+      var to = where.value;
+
+      send({ verb: "move", to: to || null, toGlobal: !to },
+        task.id + " is on " + (to || "the workspace-wide list") + " now.");
+    }));
+    moving.appendChild(moveRow);
+    card.appendChild(moving);
   }
 
   /*
@@ -12915,6 +12955,31 @@
     if (detail.accepted) {
       card.appendChild(ideaEl("p", null,
         "Accepted onto " + detail.accepted.project + ". The plan is at " + detail.accepted.plan + "."));
+    }
+
+    if (ideasActs && !busy && detail.stage !== "accepted") {
+      var moving = ideaEl("details", "task-change");
+      moving.appendChild(ideaEl("summary", null, "Move it to another list"));
+
+      var to = ideaList(moving, "It belongs on", projects);
+
+      // Never offered the list it is on already.
+      Array.prototype.slice.call(to.options).forEach(function (option) {
+        if (option.value === (where.project || "")) { to.removeChild(option); }
+      });
+
+      moving.appendChild(ideaEl("p", "lk-help", "Its answers, choices and plan go with it."));
+
+      var moveRow = ideaEl("div", "lk-btn-row");
+      moveRow.appendChild(ideaButton("Move it", false, function () {
+        var slug = to.value;
+
+        send({ verb: "move", to: slug || null, toGlobal: !slug },
+          detail.id + " is on " + (slug || "the workspace-wide list") + " now.");
+      }));
+      moving.appendChild(moveRow);
+
+      if (to.options.length) { card.appendChild(moving); }
     }
 
     if (ideasActs && !busy) {

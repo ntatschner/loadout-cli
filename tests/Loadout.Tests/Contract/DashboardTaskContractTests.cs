@@ -35,7 +35,7 @@ public sealed class DashboardTaskContractTests
     public async Task Every_verb_the_tasks_page_sends_is_a_line_the_parser_accepts(string verb)
     {
         var (command, arguments) = DashboardTasks.Maps(new TaskAction(
-            verb, Id: "fix-login", Project: "website", Title: "- Fix the login", Note: "- a bullet", State: "blocked"));
+            verb, Id: "fix-login", Project: "website", Title: "- Fix the login", Note: "- a bullet", State: "blocked", To: "homelab"));
 
         await AcceptedAsync(verb, [.. command.Split(' '), .. arguments, "--dry-run"]);
     }

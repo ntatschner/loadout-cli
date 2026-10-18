@@ -102,7 +102,8 @@ public sealed class DashboardTasksTests : IAsyncLifetime, IDisposable
         Project: project,
         Title: "- Fix the login",
         Note: "- after the cookie change",
-        State: "blocked");
+        State: "blocked",
+        To: "homelab");
 
     [Fact]
     public void Each_verb_types_its_command_with_every_field_it_reads()
@@ -115,6 +116,7 @@ public sealed class DashboardTasksTests : IAsyncLifetime, IDisposable
                 ["fix-login", "blocked", "--note=- after the cookie change", "--project", "website"]),
             ["edit"] = ("task declare",
                 ["fix-login", "blocked", "--title=- Fix the login", "--note=- after the cookie change", "--project", "website"]),
+            ["move"] = ("task move", ["fix-login", "--project", "website", "--to", "homelab"]),
             ["remove"] = ("task remove", ["fix-login", "--project", "website"]),
         };
 
@@ -136,6 +138,18 @@ public sealed class DashboardTasksTests : IAsyncLifetime, IDisposable
         // the page names it outright.
         DashboardTasks.Maps(Asking("remove", project: null)).Arguments
             .Should().Equal("fix-login", "--global", "--non-interactive");
+    }
+
+    [Fact]
+    public void A_move_goes_where_it_was_sent_and_nowhere_when_that_was_lost()
+    {
+        DashboardTasks.Maps(Asking("move") with { To = null, ToGlobal = true }).Arguments
+            .Should().Equal("fix-login", "--project", "website", "--to-global", "--non-interactive");
+
+        // Not defaulted to the workspace-wide list: a destination dropped on
+        // the way would otherwise move the task and say it worked.
+        DashboardTasks.Maps(Asking("move") with { To = null }).Command.Should().BeEmpty();
+        DashboardTasks.Maps(Asking("move") with { ToGlobal = true }).Command.Should().BeEmpty();
     }
 
     [Fact]

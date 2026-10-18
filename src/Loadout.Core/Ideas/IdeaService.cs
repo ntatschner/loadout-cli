@@ -148,6 +148,21 @@ public interface IIdeaService
 
     /// <summary>Forgets an idea: its task and its record.</summary>
     Task<OperationResult> RemoveAsync(IdeaPlace place, CancellationToken ct = default);
+
+    /// <summary>
+    /// Moves a task or an idea to another list, keeping its id, and takes what
+    /// is kept beside it along: an idea's working record, and the plan of one
+    /// that was accepted. For something put on the wrong project.
+    /// </summary>
+    /// <param name="from">The list it is on: a project, or null for the workspace-wide one.</param>
+    /// <param name="to">The list it belongs on, the same way.</param>
+    /// <param name="id">Its id.</param>
+    /// <param name="ct">Cancellation.</param>
+    Task<OperationResult<TaskItem>> MoveAsync(
+        string? from,
+        string? to,
+        string id,
+        CancellationToken ct = default);
 }
 
 /// <inheritdoc />
@@ -722,6 +737,194 @@ internal sealed partial class IdeaService : IIdeaService
 
         return OperationResult.Ok();
     }
+
+    /// <inheritdoc />
+    public async Task<OperationResult<TaskItem>> MoveAsync(
+        string? from,
+        string? to,
+        string id,
+        CancellationToken ct = default)
+    {
+        if (TaskIds.Rejection(id) is { } rejected)
+        {
+            return OperationResult<TaskItem>.Fail(rejected, ExitCode.InvalidArguments);
+        }
+
+        if (Unavailable() is { } missing)
+        {
+            return OperationResult<TaskItem>.Fail(missing, ExitCode.WorkspaceSyncFailed);
+        }
+
+        from = from is { Length: > 0 } ? from.Trim() : null;
+        to = to is { Length: > 0 } ? to.Trim() : null;
+
+        if (to is not null && (await _workspace.ReadProjectAsync(to, ct).ConfigureAwait(false)).Failed)
+        {
+            return OperationResult<TaskItem>.Fail(
+                $"'{to}' is not a project in this workspace.", ExitCode.ProjectNotFound);
+        }
+
+        var trimmed = id.Trim();
+        var listed = await _tasks.ListAsync(from, ct).ConfigureAwait(false);
+
+        if (listed.Failed)
+        {
+            return OperationResult<TaskItem>.Fail(listed.Error!, listed.ExitCode);
+        }
+
+        if (listed.Value!.FirstOrDefault(item => Same(item.Id, trimmed)) is not { } moving)
+        {
+            return OperationResult<TaskItem>.Fail(
+                $"'{trimmed}' is not on {TaskPaths.Describe(from)}.", ExitCode.InvalidArguments);
+        }
+
+        if (string.Equals(from, to, StringComparison.Ordinal))
+        {
+            return OperationResult<TaskItem>.Ok(moving);
+        }
+
+        var source = new IdeaPlace(from, trimmed);
+        var landed = new IdeaPlace(to, trimmed);
+
+        // A round writes its answer to the record where it found it, so a
+        // record moved from under one would be written back beside nothing.
+        if (_locks.Held(source))
+        {
+            return OperationResult<TaskItem>.Fail(
+                $"A round on {trimmed} is running on this machine. Move it when the round has finished.",
+                ExitCode.InvalidArguments);
+        }
+
+        // Held for the move, so a round cannot start on it half way.
+        var taken = _locks.Take(source);
+
+        if (taken.Failed)
+        {
+            return OperationResult<TaskItem>.Fail(taken.Error!, taken.ExitCode);
+        }
+
+        using var held = taken.Value!;
+
+        var there = await _tasks.ListAsync(to, ct).ConfigureAwait(false);
+
+        if (there.Failed)
+        {
+            return OperationResult<TaskItem>.Fail(there.Error!, there.ExitCode);
+        }
+
+        var record = RecordPath(source);
+        var plan = PlanPath(source);
+        var toRecord = RecordPath(landed);
+        var toPlan = PlanPath(landed);
+
+        // Checked before anything is copied, so a refusal leaves both lists
+        // exactly as they were rather than with a stray copy to clear up.
+        if (there.Value!.Any(item => Same(item.Id, trimmed)) || File.Exists(toRecord) || File.Exists(toPlan))
+        {
+            return OperationResult<TaskItem>.Fail(
+                $"{TaskPaths.Describe(to)} already has something called '{trimmed}', so nothing was moved. "
+                + "Remove or rename one of them first.",
+                ExitCode.InvalidArguments);
+        }
+
+        var oldPlan = TaskPaths.Relative(from, $"ideas/{trimmed}.md");
+        var newPlan = TaskPaths.Relative(to, $"ideas/{trimmed}.md");
+
+        // Copied first, then the task moved, then the originals taken away: the
+        // same order as the task's own move, for the same reason. Something in
+        // two places can be seen and cleared; something in neither is gone.
+        if (await LoadAsync(source, ct).ConfigureAwait(false) is { } kept)
+        {
+            if (kept.Accepted is { } acceptance)
+            {
+                acceptance.Project = to ?? string.Empty;
+
+                if (string.Equals(acceptance.PlanPath, oldPlan, StringComparison.Ordinal))
+                {
+                    acceptance.PlanPath = newPlan;
+                }
+            }
+
+            var saved = await _yaml.SaveAsync(toRecord, kept, true, ct).ConfigureAwait(false);
+
+            if (saved.Failed)
+            {
+                return OperationResult<TaskItem>.Fail(saved.Error!, saved.ExitCode);
+            }
+        }
+
+        if (File.Exists(plan))
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(toPlan)!);
+                File.Copy(plan, toPlan);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                TryDelete(toRecord);
+
+                return OperationResult<TaskItem>.Fail($"The plan could not be copied: {ex.Message}");
+            }
+        }
+
+        var moved = await _tasks.MoveAsync(from, to, trimmed, ct).ConfigureAwait(false);
+
+        if (moved.Failed)
+        {
+            TryDelete(toRecord);
+            TryDelete(toPlan);
+
+            return moved;
+        }
+
+        var result = moved.Value!;
+
+        // The note an acceptance wrote names where the plan is, and would go
+        // on naming the list it left. Only that mention is changed.
+        if (File.Exists(toPlan + "x") && result.Note.Contains(oldPlan, StringComparison.Ordinal))
+        {
+            var rewritten = await _yaml.UpdateAsync<TaskList>(
+                TaskPaths.List(_workspace.LocalPath, to),
+                () => new TaskList(),
+                list =>
+                {
+                    if (list.Items.FirstOrDefault(item => Same(item.Id, trimmed)) is { } landedTask)
+                    {
+                        landedTask.Note = landedTask.Note.Replace(oldPlan, newPlan, StringComparison.Ordinal);
+                        result = landedTask;
+                    }
+                },
+                true,
+                ct).ConfigureAwait(false);
+
+            if (rewritten.Failed)
+            {
+                return OperationResult<TaskItem>.Fail(
+                    $"{trimmed} moved to {TaskPaths.Describe(to)}, but its note still names the plan at "
+                    + $"{oldPlan}: {rewritten.Error}",
+                    rewritten.ExitCode);
+            }
+        }
+
+        if (File.Exists(toRecord))
+        {
+            TryDelete(record);
+        }
+
+        if (File.Exists(toPlan))
+        {
+            TryDelete(plan);
+        }
+
+        return OperationResult<TaskItem>.Ok(result);
+    }
+
+    private string PlanPath(IdeaPlace place) =>
+        Path.Combine(TaskPaths.Ideas(_workspace.LocalPath, place.Project), $"{place.Id}.md");
+
+    private static bool Same(string left, string right) =>
+        string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
 
     private async Task<OperationResult<IdeaRecord>> ChangeAsync(
         IdeaPlace place,

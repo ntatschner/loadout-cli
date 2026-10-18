@@ -56,7 +56,7 @@ internal sealed class DashboardTasks
     }
 
     /// <summary>Every verb <see cref="Maps"/> answers, for the tests that run each one.</summary>
-    internal static IReadOnlyList<string> Verbs => ["add", "state", "edit", "remove"];
+    internal static IReadOnlyList<string> Verbs => ["add", "state", "edit", "move", "remove"];
 
     /// <summary>
     /// What the page draws: every project's tasks, the workspace-wide list,
@@ -277,6 +277,8 @@ internal sealed class DashboardTasks
                     DashboardActions.Joined("--note", asking.Note?.Trim()),
                 ],
                 list),
+            "move" when DashboardActions.Destination(asking.To, asking.ToGlobal) is { } to =>
+                Line("task move", [id], list, to),
             "remove" => Line("task remove", [id], list),
             _ => (string.Empty, []),
         };

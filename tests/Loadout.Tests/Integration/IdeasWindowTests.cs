@@ -59,7 +59,60 @@ public sealed class IdeasWindowTests
             return Target;
         }
 
+        public IdeaHome? Home { get; init; }
+
+        public IdeaHome? MoveTo(IdeaPlace place, IReadOnlyList<string> projects) { Asked.Add("move"); return Home; }
+
         public bool Confirm(string question, string yes) { Asked.Add("confirm"); return Yes; }
+    }
+
+    [Fact]
+    public void Moving_names_the_list_it_leaves_and_the_one_it_goes_to()
+    {
+        var cases = new (IdeaHome Home, string[] Arguments)[]
+        {
+            (new IdeaHome("homelab"), ["asking", "--project", "website", "--to", "homelab"]),
+            (new IdeaHome(null), ["asking", "--project", "website", "--to-global"]),
+        };
+
+        foreach (var (home, arguments) in cases)
+        {
+            var (window, app) = Open(new Scripted { Home = home }, select: "asking");
+
+            using (app)
+            using (window)
+            {
+                var step = Press(window, Key.M);
+
+                step!.Command.Should().Be(LauncherCommands.IdeaMove);
+                step.Arguments.Should().Equal(arguments);
+                step.Select.Should().Be("asking");
+            }
+        }
+    }
+
+    [Fact]
+    public void Moving_and_then_saying_never_mind_builds_nothing()
+    {
+        var prompts = new Scripted { Home = null };
+        var (window, app) = Open(prompts, select: "asking");
+
+        using (app)
+        using (window)
+        {
+            Press(window, Key.M).Should().BeNull();
+            prompts.Asked.Should().Equal("move");
+        }
+    }
+
+    [Fact]
+    public void A_move_is_never_offered_to_the_list_the_idea_is_on()
+    {
+        DialogIdeaPrompts.IdeaHomes(new IdeaPlace("website", "x"), ["homelab", "website"])
+            .Should().Equal(new IdeaHome(null), new IdeaHome("homelab"));
+
+        DialogIdeaPrompts.IdeaHomes(new IdeaPlace(null, "x"), ["homelab", "website"])
+            .Should().Equal(new IdeaHome("homelab"), new IdeaHome("website"));
     }
 
     private static IdeaReply Questions() => new()

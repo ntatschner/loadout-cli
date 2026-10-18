@@ -39,6 +39,9 @@ internal interface IIdeaPrompts
     /// <summary>Where an accepted idea goes.</summary>
     IdeaTarget? Destination(IdeaPlace place, IdeaPlan plan, IReadOnlyList<string> projects);
 
+    /// <summary>Which other list a misplaced idea belongs on.</summary>
+    IdeaHome? MoveTo(IdeaPlace place, IReadOnlyList<string> projects);
+
     /// <summary>Yes or no, where a keypress alone is not agreement.</summary>
     bool Confirm(string question, string yes);
 }
@@ -201,6 +204,25 @@ internal sealed class DialogIdeaPrompts : IIdeaPrompts
             ? new IdeaTarget(null, made)
             : null;
     }
+
+    public IdeaHome? MoveTo(IdeaPlace place, IReadOnlyList<string> projects)
+    {
+        var homes = IdeaHomes(place, projects);
+
+        return homes.Count > 0
+            && Pick($"Move {place.Id} from {place.Where} to which list? Its answers and plan go with it.",
+                homes.Select(home => home.Project ?? "The workspace-wide list").ToList()) is { } at
+            ? homes[at]
+            : null;
+    }
+
+    /// <summary>Every list but the one the idea is on, the workspace-wide one first.</summary>
+    internal static IReadOnlyList<IdeaHome> IdeaHomes(IdeaPlace place, IReadOnlyList<string> projects) =>
+    [
+        .. ((string?[])[null, .. projects])
+            .Where(project => !string.Equals(project, place.Project, StringComparison.Ordinal))
+            .Select(project => new IdeaHome(project)),
+    ];
 
     public bool Confirm(string question, string yes)
     {

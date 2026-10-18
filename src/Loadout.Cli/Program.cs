@@ -723,6 +723,7 @@ public static class Program
                 "tasks backlog todo status where were we open work");
             task.AddCommand<TaskListCommand>("list");
             task.AddCommand<TaskDeclareCommand>("declare");
+            task.AddCommand<TaskMoveCommand>("move");
             task.AddCommand<TaskRemoveCommand>("remove");
         });
 
@@ -743,6 +744,7 @@ public static class Program
             idea.AddCommand<IdeaImproveCommand>("improve");
             idea.AddCommand<IdeaAcceptCommand>("accept");
             idea.AddCommand<IdeaDismissCommand>("dismiss");
+            idea.AddCommand<IdeaMoveCommand>("move");
             idea.AddCommand<IdeaRemoveCommand>("remove");
             idea.AddBranch("dump", dump =>
             {
