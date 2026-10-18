@@ -899,7 +899,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
   }
   function teamsWaiting() { return TR.filter(function (r) { return runWord(r) === "waiting for you"; }).length; }
   function subnav(cur) {
-    return el("nav", { "class": "tsub", "aria-label": "Teams" }, [["teams", "Runs and teams"], ["teams-remedies", "Remedies"], ["teams-bin", "The bin"]].map(function (x) { return el("a", { href: "#" + x[0], "aria-current": cur === x[0] ? "page" : null, text: x[1] }); }));
+    return el("nav", { "class": "tsub", "aria-label": "Teams" }, [["teams", "Runs and teams"], ["teams-office", "Office"], ["teams-remedies", "Remedies"], ["teams-bin", "The bin"]].filter(function (x) { return x[0] !== "teams-office" || (P.mode !== "minimal" && P.mode !== "pure"); }).map(function (x) { return el("a", { href: "#" + x[0], "aria-current": cur === x[0] ? "page" : null, text: x[1] }); }));
   }
   function renderTeams(main) {
     var w = teamsWaiting(), running = TR.filter(function (r) { var x = runWord(r); return x !== "done" && x !== "stopped" && x !== "failed"; });
@@ -1128,6 +1128,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     var grid = el("div", { "class": "tfocus" + (run || team ? " open" : "") });
     var left = el("div", { "class": "bcol" }, [el("div", { "class": "head", style: "margin-bottom: 14px" }, [el("div", {}, [el("h1", { text: "Teams" }), el("span", { "class": "fact" + (w ? " need" : ""), text: live + " live · " + (w ? w + " waiting on you" : "none waiting on you") })]), el("span", { "class": "grow" }),
       halo({ label: "Start a run", solid: true, size: "small", glyph: "▶", cmd: "opens the sheet · starts nothing yet", onPress: function () { openSheet("run"); } }, "tf-start")]),
+      el("nav", { "class": "tsub", "aria-label": "Teams" }, [["teams", "Board"], ["teams-office", "Office"]].map(function (x) { return el("a", { href: "#" + x[0], "aria-current": x[0] === "teams" ? "page" : null, text: x[1] }); })),
       S.RunBoard({ runs: boardRuns(), teams: boardTeams(), picked: run, team: team, onPick: function (id) { go("run-" + id); }, onTeam: function (n) { go("team-" + n); } })]);
     grid.appendChild(left);
     if (run || team) {
@@ -1813,11 +1814,11 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
 
 
   /* ---------- the six pages in every mode: beside in Terminals and Teams, a quiet column in Minimal, a desk in Pure ---------- */
-  var BESIDE = null, PAGE_NAMES = { ideas: "Ideas", projects: "Projects", context: "Context", settings: "Settings", memory: "Memory", spend: "Spend" };
+  var BESIDE = null, PAGE_NAMES = { "teams-office": "Office", ideas: "Ideas", projects: "Projects", context: "Context", settings: "Settings", memory: "Memory", spend: "Spend" };
   function pageBase(r) { return r.split("/")[0]; }
   function pageRender(box, r) {
     var b = pageBase(r);
-    if (b === "ideas") { renderIdeas(box, r); } else if (b === "projects") { renderProjects(box, r); } else if (b === "context") { renderContext(box, r); }
+    if (b === "teams-office") { renderOffice(box, r, true); } else if (b === "ideas") { renderIdeas(box, r); } else if (b === "projects") { renderProjects(box, r); } else if (b === "context") { renderContext(box, r); }
     else if (b === "settings") { renderSettings(box, r); } else if (b === "memory") { renderMemory(box, r); } else if (b === "spend") { renderSpend(box, r); }
     return box;
   }
@@ -1827,7 +1828,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     fn();
     if (k) { var n = document.querySelector('[data-k="' + CSS.escape(k) + '"]'); if (n) { n.focus({ preventScroll: true }); try { if (caret !== null && caret !== undefined && n.setSelectionRange) { n.setSelectionRange(caret, caret); } } catch (e) { /* not a text field */ } } }
   }
-  function closeBeside() { go(P.lastFocus && !pagesRoute(P.lastFocus) ? P.lastFocus : "home"); }
+  function closeBeside() { go(P.lastFocus && !pagesRoute(P.lastFocus) && P.lastFocus !== "teams-office" ? P.lastFocus : "home"); }
 
   /* Terminal Focus and Team Focus: the page opens beside what you are watching. */
   function renderBeside(main, r, kind) {
@@ -2134,6 +2135,183 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     box.appendChild(el("p", { "class": "ls-from" }, ["The figures that are counted today come from the files and commands named under each. The rest are counted from the release that adds the event log, ", el("code", { text: "<State>/events/events.jsonl" }), ", read by ", el("code", { text: "loadout value --days " + SPEND.days }), "."]));
   }
 
+
+  /* ---------- the office: the shared engine's building, in Studio's frame. Here a still drawn from the office's own pixel art; Studio draws it with the real engine. ---------- */
+  var OFFICE = { daemonHeld: false, rooms: {} };
+  var ART = {}, ART_NAMES = ["glass", "glass-night", "tech-lobby", "tech-entrance", "brick", "concrete", "roof", "pavement", "road", "grass", "floor-carpet", "floor-wood", "tech-desk", "tech-exec-desk", "tech-meeting-6", "tech-kitchen", "tech-coffee", "tech-cooler", "tech-sofa", "tech-coffee-table", "tech-plant-tall", "tech-plant-small", "tech-visitor-chair", "tech-whiteboard", "tech-status-board", "tech-bookshelf", "tech-copier", "tech-partition-planter", "cast-lead", "cast-developer", "cast-tester", "cast-reviewer", "cast-analyst", "cast-engineer"];
+  function art(n) { if (!ART[n]) { ART[n] = new Image(); ART[n].src = "../../../../src/Loadout.Core/Teams/Office/loadout-tech/" + n + ".png"; } return ART[n]; }
+  function artReady(cb) { var left = ART_NAMES.length; ART_NAMES.forEach(function (n) { var i = art(n); if (i.complete && i.naturalWidth) { if (--left === 0) { cb(); } } else { i.addEventListener("load", function () { if (--left === 0) { cb(); } }); i.addEventListener("error", function () { if (--left === 0) { cb(); } }); } }); }
+  /* Sprite rects, from the kit: [x, y, w, h] of the side facing the viewer, and the footprint in tiles. */
+  var PIECE = {
+    "tech-desk": { s: [0, 20, 72, 55], n: [105, 15, 72, 60], fp: [3, 1] }, "tech-exec-desk": { s: [0, 23, 72, 58], fp: [3, 1] },
+    "tech-meeting-6": { s: [166, 11, 114, 73], fp: [3, 2] }, "tech-kitchen": { s: [115, 16, 95, 59], fp: [3, 1] }, "tech-coffee": { s: [54, 3, 32, 36], fp: [1, 1] },
+    "tech-cooler": { s: [67, 0, 36, 64], fp: [1, 1] }, "tech-sofa": { s: [90, 12, 59, 38], fp: [2, 1] }, "tech-coffee-table": { s: [103, 14, 51, 32], fp: [2, 1] },
+    "tech-plant-tall": { s: [80, 0, 52, 77], fp: [1, 1] }, "tech-plant-small": { s: [41, 0, 20, 25], fp: [1, 1] }, "tech-visitor-chair": { s: [62, 2, 32, 39], fp: [1, 1] },
+    "tech-whiteboard": { s: [82, 13, 62, 55], fp: [2, 1] }, "tech-status-board": { s: [100, 36, 84, 50], fp: [3, 1] }, "tech-bookshelf": { s: [92, 11, 70, 80], fp: [2, 1] },
+    "tech-copier": { s: [77, 4, 45, 53], fp: [2, 1] }, "tech-partition-planter": { s: [75, 18, 61, 42], fp: [1, 1] } };
+  var CAST = { lead: [48, 73], developer: [48, 77], tester: [48, 76], reviewer: [48, 76], analyst: [47, 76], engineer: [48, 76] };
+  var POSE = { type_s: 52, sit_n: 7, type_n: 8, sofa_s: 65, idle_s: 44, sit_s: 51 };
+  var RUNCOL = { working: "#4ec9e0", waiting: "#f0b44c", failed: "#ef6a5e", done: "#7bd88f" };
+
+  function officeRuns() {
+    var floors = [6, 4, 3, 8, 2, 7];
+    return TR.slice(0, 6).map(function (r, i) { var w = runWord(r); return { r: r, floor: floors[i], word: w, tone: w === "waiting for you" || w === "stalled" ? "waiting" : w === "failed" ? "failed" : w === "done" || w === "stopped" ? "done" : "working", room: OFFICE.rooms[r.id] || "" }; });
+  }
+  function roomName(o) { return o.room || o.r.goal; }
+
+  function OfficeStill() {
+    var stage, cv, opts, inside = null, zoom = 1, view = "street", cam = 0, ready = false, turnN = 0;
+    function dims() { var b = stage.getBoundingClientRect(); return { w: Math.max(1, Math.round(b.width)), h: Math.max(1, Math.round(b.height)) }; }
+    function ctx() { var d = dims(); cv.width = d.w; cv.height = d.h; var g = cv.getContext("2d"); g.imageSmoothingEnabled = false; return { g: g, w: d.w, h: d.h }; }
+    function img(g, n, sx, sy, sw, sh, dx, dy, dw, dh) { var i = art(n); if (i.naturalWidth) { g.drawImage(i, sx, sy, sw, sh, Math.round(dx), Math.round(dy), Math.round(dw), Math.round(dh)); } }
+    function tile(g, n, x, y, w, h, s) { var i = art(n); if (!i.naturalWidth) { return; } var tw = i.naturalWidth * s, th = i.naturalHeight * s; g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip(); for (var yy = y; yy < y + h; yy += th) { for (var xx = x; xx < x + w; xx += tw) { g.drawImage(i, Math.round(xx), Math.round(yy), Math.round(tw), Math.round(th)); } } g.restore(); }
+    /* Outside, from the street: the scale is the zoom (a half, one, two), the camera steps a storey at a time. */
+    function S() { return [0.5, 1, 2][zoom - 1]; }
+    function tower() {
+      var d = dims(), s = S(), st = 160 * s, bays = 6, tw = 64 * bays * s, x = Math.round(d.w / 2 - tw / 2), ground = d.h - 52 * Math.max(1, s), lobbyTop = ground - 320 * s;
+      var base = lobbyTop + cam * st;
+      return { s: s, st: st, x: x, tw: tw, ground: ground + cam * st, lobbyTop: base, floorTop: function (n) { return base - n * st; }, bays: bays };
+    }
+    function drawOutside() {
+      var c = ctx(), g = c.g, T = tower(), s = T.s;
+      var sky = g.createLinearGradient(0, 0, 0, c.h); sky.addColorStop(0, "#6fa7d8"); sky.addColorStop(1, "#cfe3f1"); g.fillStyle = sky; g.fillRect(0, 0, c.w, c.h);
+      /* The neighbourhood: lower blocks either side, faded so they never hide the tower. */
+      g.globalAlpha = 0.7;
+      [[-0.46, 5, "brick"], [-0.3, 3, "concrete"], [0.3, 4, "concrete"], [0.44, 6, "brick"]].forEach(function (b, i) { var bw = 128 * s * (i % 2 ? 1.5 : 1), bx = c.w / 2 + b[0] * c.w - bw / 2; for (var k = 0; k < b[1]; k++) { tile(g, b[2], bx, T.ground - (k + 1) * T.st, bw, T.st, s); } });
+      g.globalAlpha = 1;
+      /* Basements, faint through the street. */
+      g.fillStyle = "rgba(20, 26, 34, 0.55)"; g.fillRect(T.x, T.ground, T.tw, c.h - T.ground);
+      tile(g, "road", 0, T.ground + 18 * Math.max(1, s), c.w, c.h, s); tile(g, "pavement", 0, T.ground, c.w, 18 * Math.max(1, s), s);
+      g.fillStyle = "rgba(20, 26, 34, 0.45)"; g.fillRect(T.x, T.ground + 18 * Math.max(1, s), T.tw, c.h);
+      g.strokeStyle = "rgba(255,255,255,0.35)"; g.setLineDash([4, 4]); g.strokeRect(T.x + 6, T.ground + 24 * Math.max(1, s), T.tw / 2 - 12, 26 * Math.max(1, s)); g.strokeRect(T.x + T.tw / 2 + 6, T.ground + 24 * Math.max(1, s), T.tw / 2 - 12, 26 * Math.max(1, s)); g.setLineDash([]);
+      g.fillStyle = "rgba(255,255,255,0.7)"; g.font = Math.max(10, 11 * s) + "px monospace"; g.fillText("server room", T.x + 12, T.ground + 24 * Math.max(1, s) + 16 * Math.max(1, s)); g.fillText("garbage room", T.x + T.tw / 2 + 12, T.ground + 24 * Math.max(1, s) + 16 * Math.max(1, s));
+      /* The lobby: double height, with the entrance in the middle. */
+      for (var i = 0; i < 10; i++) { img(g, "tech-lobby", 0, 0, 32, 320, T.x + (i < 5 ? i : i + 2) * 32 * s, T.lobbyTop, 32 * s, 320 * s); }
+      img(g, "tech-entrance", 0, 0, 64, 320, T.x + 5 * 32 * s, T.lobbyTop, 64 * s, 320 * s);
+      var runs = officeRuns();
+      for (var n = 1; n <= 10; n++) {
+        var y = T.floorTop(n), o = runs.filter(function (x) { return x.floor === n; })[0];
+        for (var b = 0; b < T.bays; b++) { img(g, o && b < 4 ? "glass-night" : "glass", 0, 0, 64, 160, T.x + b * 64 * s, y, 64 * s, 160 * s); }
+        if (o) { g.fillStyle = RUNCOL[o.tone]; g.fillRect(T.x, y + T.st - 4 * Math.max(1, s), T.tw, 4 * Math.max(1, s)); }
+      }
+      var crown = T.floorTop(10) - 40 * s;
+      tile(g, "concrete", T.x - 6 * s, crown, T.tw + 12 * s, 40 * s, s); tile(g, "roof", T.x - 6 * s, crown - 10 * s, T.tw + 12 * s, 10 * s, s);
+      var need = runs.some(function (x) { return x.tone === "failed"; }) ? RUNCOL.failed : runs.some(function (x) { return x.tone === "waiting"; }) ? RUNCOL.waiting : RUNCOL.working;
+      g.fillStyle = need; g.font = "bold " + Math.round(22 * s) + "px monospace"; g.textAlign = "center"; g.fillText("L O A D O U T", T.x + T.tw / 2, crown + 28 * s); g.textAlign = "left";
+      if (view !== "street") { g.fillStyle = "rgba(13,17,23,0.8)"; g.fillRect(10, 10, 330, 24); g.fillStyle = "#fff"; g.font = "12px monospace"; g.fillText("This still only has the street view; Studio turns the real one.", 16, 26); }
+    }
+    /* Inside a floor, square on from the south: carpet, the north wall with its rooms, the team's pods along the windows. */
+    var T = 24;
+    function F() { return { s: zoom === 1 ? 1 : zoom === 2 ? 2 : 3 }; }
+    function floorPlan() {
+      var o = inside, crew = o.r.crew || [], people = [], casts = ["developer", "tester", "reviewer", "analyst", "engineer"];
+      var deskX = [10, 13, 16, 19];
+      crew.forEach(function (c, i) {
+        if (i === 0) { people.push({ c: c, cast: "lead", pose: "type_s", tx: 3, ty: 10 }); return; }
+        var k = i - 1, rowA = k % 2 === 0, x = deskX[Math.floor(k / 2) % 4] + 1;
+        if (c.word === "done" && k >= 2) { people.push({ c: c, cast: casts[k % casts.length], pose: "sofa_s", tx: 24 + (k % 2), ty: 10 }); return; }
+        people.push({ c: c, cast: casts[k % casts.length], pose: rowA ? "type_s" : "type_n", tx: x, ty: rowA ? 8 : 11 });
+      });
+      return { people: people, deskX: deskX };
+    }
+    function originF() { var d = dims(), s = F().s, W = 30 * T * s, H = 15 * T * s; return { s: s, x: Math.round(Math.max(8, (d.w - W) / 2)), y: Math.round(Math.max(8, (d.h - H) / 2)), W: W, H: H }; }
+    function piece(g, O, n, tx, ty, side) { var p = PIECE[n], r = p[side || "s"] || p.s, s = O.s, w = r[2] * s, h = r[3] * s, x = O.x + tx * T * s + (p.fp[0] * T * s - w) / 2, y = O.y + (ty + p.fp[1]) * T * s - h; img(g, n, r[0], r[1], r[2], r[3], x, y, w, h); }
+    function person(g, O, p) { var a = CAST[p.cast], f = POSE[p.pose], s = O.s, sx = (f % 8) * 96, sy = Math.floor(f / 8) * 96, px = O.x + (p.tx + 0.5) * T * s, py = O.y + (p.ty + 0.9) * T * s; img(g, "cast-" + p.cast, sx, sy, 96, 96, px - a[0] * s * 0.62, py - a[1] * s * 0.62, 96 * s * 0.62, 96 * s * 0.62); p.rect = { x: px - 16 * s, y: py - 40 * s, w: 32 * s, h: 42 * s }; }
+    function drawFloor() {
+      var c = ctx(), g = c.g, O = originF(), s = O.s, plan = floorPlan();
+      g.fillStyle = "#0d1117"; g.fillRect(0, 0, c.w, c.h);
+      tile(g, "floor-carpet", O.x, O.y, O.W, O.H, s * 0.75);
+      g.fillStyle = "#2c3644"; g.fillRect(O.x, O.y, O.W, 2 * T * s); g.fillStyle = "#4a5768"; g.fillRect(O.x, O.y + 2 * T * s - 3 * s, O.W, 3 * s);
+      tile(g, "floor-wood", O.x + 22 * T * s, O.y + 2 * T * s, 8 * T * s, 5 * T * s, s * 0.75);
+      g.fillStyle = "rgba(140, 190, 220, 0.35)"; g.fillRect(O.x, O.y + O.H - T * s * 0.5, O.W, T * s * 0.5);
+      g.strokeStyle = "rgba(200, 225, 240, 0.55)"; g.lineWidth = 2 * s;
+      g.strokeRect(O.x + 1 * T * s, O.y + 2 * T * s, 8 * T * s, 5 * T * s); g.strokeRect(O.x + 1 * T * s, O.y + 9 * T * s, 6 * T * s, 5 * T * s);
+      piece(g, O, "tech-status-board", 13, 0); piece(g, O, "tech-whiteboard", 2, 2); piece(g, O, "tech-meeting-6", 3, 4);
+      piece(g, O, "tech-kitchen", 23, 2); piece(g, O, "tech-coffee", 26, 2); piece(g, O, "tech-cooler", 28, 2); piece(g, O, "tech-copier", 18, 2); piece(g, O, "tech-bookshelf", 10, 2);
+      piece(g, O, "tech-plant-tall", 9, 6); piece(g, O, "tech-plant-tall", 21, 6); piece(g, O, "tech-partition-planter", 7, 10); piece(g, O, "tech-plant-small", 29, 13);
+      piece(g, O, "tech-exec-desk", 2, 11); piece(g, O, "tech-visitor-chair", 3, 12);
+      var ppl = plan.people, byRow = function (ty) { ppl.filter(function (p) { return p.ty === ty; }).forEach(function (p) { person(g, O, p); }); };
+      byRow(10);
+      plan.deskX.forEach(function (x) { piece(g, O, "tech-desk", x, 9, "s"); });
+      byRow(8);
+      plan.deskX.forEach(function (x) { piece(g, O, "tech-desk", x, 10, "n"); });
+      byRow(11);
+      piece(g, O, "tech-coffee-table", 24, 11); piece(g, O, "tech-sofa", 24, 10);
+      ppl.filter(function (p) { return p.pose === "sofa_s"; }).forEach(function (p) { person(g, O, p); });
+    }
+    function draw() { if (!cv) { return; } if (inside) { drawFloor(); } else { drawOutside(); } }
+    function rooms() {
+      var O = originF(), s = O.s, R = function (x, y, w, h) { return { x: O.x + x * T * s, y: O.y + y * T * s, w: w * T * s, h: h * T * s }; };
+      return [{ id: "controls", kind: "room", room: "controls", label: "The lead’s office", detail: roomName(inside), rect: R(1, 9, 6, 5) },
+        { id: "questions", kind: "room", room: "questions", label: "Meeting room", detail: inside.tone === "waiting" ? "a question is waiting for you" : "nobody meeting", rect: R(1, 2, 8, 5) },
+        { id: "work", kind: "room", room: "work", label: "Working here", detail: inside.r.team, rect: R(9.5, 7.6, 12, 5.2) },
+        { id: "idle", kind: "room", room: "idle", label: "The kitchen and the sofa", detail: "taking a break", rect: R(22, 2, 8, 11) }];
+    }
+    var api = {
+      mount: function (st, o) { stage = st; opts = o; cv = document.createElement("canvas"); cv.setAttribute("aria-hidden", "true"); stage.insertBefore(cv, stage.firstChild); artReady(function () { ready = true; draw(); opts.onChange(); }); draw(); },
+      where: function () {
+        if (inside) { return { place: "floor", label: "Floor " + inside.floor + ": " + roomName(inside), detail: inside.r.team + " · " + inside.word + " · square on from the " + ["south", "south-west", "west", "north-west", "north", "north-east", "east", "south-east"][turnN % 8], canTurn: true, canLevel: [true, true], zoom: zoom, zoomRange: [1, 3] }; }
+        var runs = officeRuns(); return { place: "outside", label: "The building", detail: runs.length + " runs on " + runs.length + " floors · " + (view === "street" ? "from the street" : view === "aerial" ? "from above" : "from a corner"), view: view, canTurn: true, canLevel: [cam > -8, cam < 0], zoom: zoom, zoomRange: [1, 3] };
+      },
+      targets: function () {
+        if (!ready) { return []; }
+        if (inside) { var plan = floorPlan(), O = originF(); plan.people.forEach(function (p) { var s = O.s, px = O.x + (p.tx + 0.5) * T * s, py = O.y + (p.ty + 0.9) * T * s; p.rect = { x: px - 16 * s, y: py - 40 * s, w: 32 * s, h: 42 * s }; });
+          return plan.people.map(function (p) { return { id: "p-" + p.c.node, kind: "person", label: p.c.node === "lead" ? "The lead" : p.c.node + ", " + String(p.c.role || "").replace("role.", ""), detail: p.c.doing, run: inside.r.id, rect: p.rect }; }).concat(rooms()); }
+        var T2 = tower(), d = dims(), out = [];
+        officeRuns().forEach(function (o) { var y = T2.floorTop(o.floor); if (y + T2.st > 0 && y < d.h) { out.push({ id: "floor-" + o.floor, kind: "floor", label: "Floor " + o.floor + ": " + roomName(o), detail: o.r.team + " · " + o.word, run: o.r.id, rect: { x: T2.x, y: y, w: T2.tw, h: T2.st } }); } });
+        if (T2.lobbyTop < d.h) { out.push({ id: "lobby", kind: "room", room: "arrivals", label: "The lobby", detail: "reception, and what is scheduled next", rect: { x: T2.x, y: T2.lobbyTop, w: T2.tw, h: 320 * T2.s } }); }
+        var bm = 24 * Math.max(1, T2.s); if (T2.ground + bm < d.h) { out.push({ id: "server", kind: "room", room: "server", label: "The server room", detail: OFFICE.daemonHeld ? "schedules held" : "the daemon, running", rect: { x: T2.x, y: T2.ground + bm, w: T2.tw / 2, h: 26 * Math.max(1, T2.s) } }); out.push({ id: "bin", kind: "room", room: "bin", label: "The garbage room", detail: TS.bin.length + " in the bin", rect: { x: T2.x + T2.tw / 2, y: T2.ground + bm, w: T2.tw / 2, h: 26 * Math.max(1, T2.s) } }); }
+        return out.sort(function (a, b) { return a.rect.y - b.rect.y; });
+      },
+      activate: function (id) { if (!inside && id.indexOf("floor-") === 0) { var n = +id.slice(6); inside = officeRuns().filter(function (o) { return o.floor === n; })[0]; turnN = 0; draw(); return "entered"; } return "picked"; },
+      back: function () { if (!inside) { return false; } inside = null; draw(); return true; },
+      turn: function (d) { turnN = (turnN + (d > 0 ? 1 : 7)) % 8; draw(); },
+      zoom: function (d) { zoom = Math.max(1, Math.min(3, zoom + d)); draw(); },
+      level: function (d) { if (inside) { var runs = officeRuns().sort(function (a, b) { return a.floor - b.floor; }), i = runs.indexOf(runs.filter(function (o) { return o.floor === inside.floor; })[0]), nx = runs[i + d]; if (nx) { inside = nx; draw(); } return; } cam = Math.max(-8, Math.min(0, cam - d)); draw(); },
+      setView: function (v) { view = v; draw(); }, resize: function () { draw(); }, destroy: function () { if (cv) { cv.remove(); } },
+      run: function () { return inside; }
+    };
+    return api;
+  }
+
+  /* What each room or person opens: the classic popup's actions, as Studio buttons with their commands. */
+  function officePanel(view, eng, t) {
+    var close = function () { view.hide(); };
+    var inside = eng.run(), runOf = function (id) { return TR.filter(function (r) { return r.id === id; })[0]; };
+    var r = t.run ? runOf(t.run) : inside && inside.r, o = r && officeRuns().filter(function (x) { return x.r === r; })[0];
+    var open = r ? { label: "Open the run", onPress: function () { go("run-" + r.id); } } : null;
+    var p;
+    if (t.kind === "person") { var c = (r.crew || []).filter(function (x) { return "p-" + x.node === t.id; })[0] || {}; p = { kind: "Somebody", title: t.label, lines: [c.doing || "", c.word ? "On " + roomName(o) + ": " + c.word : ""], actions: [open] }; }
+    else if (t.room === "controls") {
+      var running = ["done", "stopped", "failed"].indexOf(runWord(r)) < 0;
+      p = { kind: "The lead’s office", title: roomName(o), lines: [o.room ? r.goal : "", "Spent $" + r.spent.toFixed(2) + (r.cap ? " of $" + r.cap : "")], actions: [open, running ? { label: "Stop the run", danger: true, cmd: "$ loadout team halt " + r.id, ask: "Stop " + roomName(o) + "? Its nodes are told to finish, and it ends.", yes: "Stop it", said: "Asked the run to stop." } : null].filter(Boolean),
+        rename: { run: r.id, current: OFFICE.rooms[r.id] || "", worked: r.goal, onSave: function (v) { if (v) { OFFICE.rooms[r.id] = v; } else { delete OFFICE.rooms[r.id]; } toasts.add({ level: "info", text: v ? "The room is called " + v : "Back to its worked-out name", cmd: v ? "$ loadout team name " + r.id + " --room " + (S.shellQuote ? S.shellQuote(v) : JSON.stringify(v)) : "$ loadout team name " + r.id + " --clear" }); view.refresh(); } } };
+    }
+    else if (t.room === "questions") { var gq = runGate(r); p = { kind: "Meeting room", title: roomName(o), lines: gq ? ["Waiting for you:", gq.question, "It’s answered on the run’s page, where there is room to read it."] : ["Nobody is meeting just now."], actions: [open] }; }
+    else if (t.room === "work") { p = { kind: "Working here", title: r.team, list: (r.crew || []).filter(function (c) { return c.word !== "done"; }).map(function (c) { return c.node + " · " + c.doing; }), actions: [open] }; }
+    else if (t.room === "idle") { var idle = (r.crew || []).filter(function (c) { return c.word === "done"; }); p = { kind: "Taking a break", title: "The kitchen and the sofa", list: idle.length ? idle.map(function (c) { return c.node + " · finished: " + c.doing; }) : ["Nobody is free just now."] }; }
+    else if (t.room === "arrivals") { p = { kind: "Reception", title: "The lobby", lines: [officeRuns().length + " runs in the building. What is scheduled next:"], actions: TS.scheds.map(function (s2) { return { label: "Stop " + s2.name, danger: true, cmd: "$ loadout team schedule remove " + s2.name, ask: "Stop scheduling " + s2.name + "? It will not fire again.", yes: "Stop scheduling it", said: s2.name + " will not fire again.", onPress: function () { TS.scheds = TS.scheds.filter(function (x) { return x !== s2; }); TV++; } }; }), list: TS.scheds.map(function (s2) { return s2.name + " · " + s2.team + " · " + s2.when; }) }; }
+    else if (t.room === "server") { p = { kind: "The server room", title: "The daemon", lines: [OFFICE.daemonHeld ? "Running, with every schedule held." : "Running · " + TS.scheds.length + " schedules"], actions: [OFFICE.daemonHeld ? { label: "Resume the schedules", cmd: "$ loadout daemon resume", ask: "Let the schedules fire again?", yes: "Resume them", said: "Schedules resumed.", onPress: function () { OFFICE.daemonHeld = false; } } : { label: "Hold the schedules", cmd: "$ loadout daemon pause", ask: "Hold every schedule until they are resumed? Runs already going carry on.", yes: "Hold them", said: "Schedules held.", onPress: function () { OFFICE.daemonHeld = true; } }, { label: "Restart the daemon", danger: true, cmd: "$ loadout daemon restart", ask: "Restart the daemon? This page goes away for a moment and comes back.", yes: "Restart it", said: "The daemon is restarting." }] }; }
+    else if (t.room === "bin") { p = { kind: "The garbage room", title: TS.bin.length ? TS.bin.length + " in the bin" : "An empty bin", list: TS.bin.map(function (e) { return (e.kind === "team" ? "Team " : "Run ") + e.name + " · " + e.what + " · " + e.left + " days left"; }), actions: TS.bin.slice(0, 2).reduce(function (a, e) { return a.concat([{ label: "Bring " + e.name + " back", cmd: e.kind === "team" ? "$ loadout team restore " + e.name : "$ loadout team runs restore " + e.name, said: "Brought back.", onPress: function () { TS.bin = TS.bin.filter(function (x) { return x !== e; }); TV++; } }, { label: "Delete " + e.name + " for good", danger: true, cmd: "$ loadout team bin empty " + e.name + " --yes", ask: "Delete " + e.name + " for good? Nothing brings it back.", yes: "Delete it", said: "Deleted.", onPress: function () { TS.bin = TS.bin.filter(function (x) { return x !== e; }); TV++; } }]); }, []) }; }
+    if (!p) { return; }
+    p.onClose = close;
+    view.show(S.OfficePanel(p));
+  }
+
+  var OFFICEVIEW = null;
+  function renderOffice(main, r, inBeside) {
+    if (!inBeside) {
+      if (P.mode === "teams") { main.appendChild(el("div", { "class": "head", style: "margin-bottom: 14px" }, [el("div", {}, [el("h1", { text: "Teams" }), el("span", { "class": "fact", text: "the same runs, as a building" })])])); main.appendChild(el("nav", { "class": "tsub", "aria-label": "Teams" }, [["teams", "Board"], ["teams-office", "Office"]].map(function (x) { return el("a", { href: "#" + x[0], "aria-current": x[0] === "teams-office" ? "page" : null, text: x[1] }); }))); }
+      else { var w = teamsWaiting(); main.appendChild(el("div", { "class": "head" }, [el("div", {}, [el("h1", { text: "Teams" }), el("span", { "class": "fact" + (w ? " need" : ""), text: "the same runs, as a building · " + (w ? w + " waiting on you" : "none waiting on you") })])])); main.appendChild(subnav("teams-office")); }
+    }
+    if (OFFICEVIEW) { OFFICEVIEW.destroy(); OFFICEVIEW = null; }
+    var eng = OfficeStill();
+    var v = S.OfficeView({ engine: eng, settingsHref: "#settings/machine", label: "The office", onPick: function (t) { officePanel(v, eng, t); } });
+    v.mode = P.mode; OFFICEVIEW = v;
+    main.appendChild(el("div", { "class": "tblock" }, [v.el, el("p", { "class": "calm", style: "margin-top: 10px; font-size: 12.5px" }, ["A still drawn from the office’s own pixel art. Studio draws it with the same engine as the classic dashboard, live. The same runs are on the ", el("a", { href: "#teams", text: P.mode === "teams" ? "board" : "Runs and teams" }), " tab, in words."])]));
+    return main;
+  }
+
   /* ---------- placeholder pages ---------- */
   function renderElsewhere(main, r) {
     if (r === "settings") { main.appendChild(el("div", { "class": "head" }, [el("h1", { text: "Settings" })])); main.appendChild(el("section", { "class": "placeholder", "aria-labelledby": "z-app" }, [zone("", "Appearance", "z-app"), appearanceForm()])); return; }
@@ -2155,7 +2333,10 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
       if (PURE.pv === PV) { renderNav(); renderAmbient(); return; }
     }
     if (!pureRoute && PURE) { PURE.desk.destroy(); PURE = null; LIVE = null; }
-    var deckRoute = P.mode === "terminals" && (rr === "home" || rr === "sessions" || rr.indexOf("session-") === 0 || pagesRoute(rr));
+    if (rr === "teams-office" && (P.mode === "minimal" || P.mode === "pure")) { go("teams"); return; }
+    if (rr !== "teams-office" && OFFICEVIEW) { OFFICEVIEW.destroy(); OFFICEVIEW = null; }
+    if (rr === "teams-office" && P.mode !== "terminals" && OFFICEVIEW && OFFICEVIEW.mode === P.mode && OFFICEVIEW.el.isConnected) { OFFICEVIEW.refresh(); renderNav(); renderAmbient(); return; }
+    var deckRoute = P.mode === "terminals" && (rr === "home" || rr === "sessions" || rr.indexOf("session-") === 0 || pagesRoute(rr) || rr === "teams-office");
     if (deckRoute && DECK && DECK.route === rr && document.getElementById("main").childNodes.length) { refreshDeck(); if (pagesRoute(rr)) { refreshBeside(); } renderNav(); renderAmbient(); return; }
     if (!deckRoute) { DECK = null; }
     var steady = teamsRoute(rr) || pagesRoute(rr) || (P.mode === "teams" && rr === "home") || (P.mode === "minimal" && rr === "home" && FOCUS);
@@ -2168,9 +2349,11 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     var main = document.getElementById("main"), r = route(); main.textContent = "";
     if (PURE) { PURE.desk.destroy(); PURE = null; }
     if (BESIDE) { BESIDE.destroy(); BESIDE = null; }
-    if (!pagesRoute(r)) { P.lastFocus = r; }
+    if (!pagesRoute(r) && r !== "teams-office") { P.lastFocus = r; }
     if (P.mode === "pure" && pagesRoute(r) && r.indexOf("+") < 0) { renderPurePage(main, r); }
     else if ((P.mode === "terminals" || P.mode === "teams") && pagesRoute(r)) { renderBeside(main, r, P.mode); }
+    else if (P.mode === "terminals" && r === "teams-office") { renderBeside(main, r, "terminals"); }
+    else if (r === "teams-office") { renderOffice(main, r); }
     else if (P.mode === "minimal" && pagesRoute(r)) { renderQuietPage(main, r); }
     else if (P.mode === "pure" && (r === "home" || r === "sessions" || r === "teams" || r.indexOf("session-") === 0 || r.indexOf("run-") === 0)) { renderPure(main, r); }
     else if (P.mode === "terminals" && (r === "home" || r === "sessions" || r.indexOf("session-") === 0)) { renderDeck(main, r.indexOf("session-") === 0 ? r.slice(8) : null); }
