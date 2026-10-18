@@ -2096,7 +2096,10 @@ A stop waits for the runs the daemon started — from a schedule, the page or a
 webhook, since they all run inside it — and starts nothing new meanwhile. A node
 mid-turn that is killed loses the turn and what was paid for it, which is the
 same reason a run's own stop lands between rounds. `--now` is there for when
-you would rather lose that than wait. The command watches for ten seconds and
+you would rather lose that than wait. Each run it ends still writes down how far
+it got, as *stopped with the process running it*, so it shows as stopped rather
+than running and can be picked up again with `team resume`; the daemon gives
+them up to twenty seconds to do that. The command watches for ten seconds and
 says whether the daemon has gone or is still finishing.
 
 A hold is only on the clock. Runs already going carry on, and anything started

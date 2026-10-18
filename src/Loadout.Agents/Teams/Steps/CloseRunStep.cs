@@ -77,16 +77,7 @@ internal sealed class CloseRunStep
 
         // After the watch, so nothing it has outstanding is closed under it;
         // before the ending, so the page stops offering them as the run goes.
-        // Not cancellable, because a run being cancelled is one of the ways it
-        // ends with a question open.
-        foreach (var ask in await NodePermissions.CloseAsync(directory, CancellationToken.None).ConfigureAwait(false))
-        {
-            await journal.WriteAsync(
-                "node.answered",
-                ask.Node,
-                new { tool = ask.Tool, allowed = false, by = NodePermissions.Ended, question = ask.Question },
-                CancellationToken.None).ConfigureAwait(false);
-        }
+        await CloseAsksAsync(directory, journal).ConfigureAwait(false);
 
         await journal.WriteAsync(
             "run.finished", null, new { ended = run.Ended, outcome = TeamRunner.Filed(run.Ended), cost = run.Cost, rounds = run.Rounds, merged }, ct).ConfigureAwait(false);
@@ -108,5 +99,50 @@ internal sealed class CloseRunStep
             runId, directory, run.Ended, run.Final, run.Cost, run.Rounds,
             run.Warnings.Distinct(StringComparer.Ordinal).ToList(), run.Branches, merged));
 
+    }
+
+    /// <summary>
+    /// The ending of a run whose process is being stopped, written before it goes.
+    /// </summary>
+    /// <remarks>
+    /// No merge: the work was cut off mid-round and nobody has looked at it,
+    /// and the branches stay where they are for a resume or a person to take
+    /// up. Nothing here is cancellable, because cancelled is why it is here.
+    /// </remarks>
+    public async Task StoppedAsync(RunContext run, JournalWriter journal, Watching watching)
+    {
+        run.Ended = TeamRunner.ProcessStopped;
+
+        await watching.StopAsync().ConfigureAwait(false);
+        await CloseAsksAsync(run.Directory, journal).ConfigureAwait(false);
+
+        await journal.WriteAsync(
+            "run.finished", null,
+            new { ended = run.Ended, outcome = TeamRunner.Filed(run.Ended), cost = run.Cost, rounds = run.Rounds, merged = Array.Empty<string>() },
+            CancellationToken.None).ConfigureAwait(false);
+
+        await _declare.RunAsync(
+            run, journal, run.Slug, run.RunId, run.ForTask, run.Team, TeamRunner.Landed(run.Ended), run.Request.Goal,
+            $"{run.Ended}; {run.Rounds} round(s), ${run.Cost:0.00}. loadout team status {run.RunId}", CancellationToken.None)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Closes every question still open, as answered no by the run ending.
+    /// </summary>
+    /// <remarks>
+    /// Not cancellable, because a run being cancelled is one of the ways it
+    /// ends with a question open.
+    /// </remarks>
+    private static async Task CloseAsksAsync(string directory, JournalWriter journal)
+    {
+        foreach (var ask in await NodePermissions.CloseAsync(directory, CancellationToken.None).ConfigureAwait(false))
+        {
+            await journal.WriteAsync(
+                "node.answered",
+                ask.Node,
+                new { tool = ask.Tool, allowed = false, by = NodePermissions.Ended, question = ask.Question },
+                CancellationToken.None).ConfigureAwait(false);
+        }
     }
 }

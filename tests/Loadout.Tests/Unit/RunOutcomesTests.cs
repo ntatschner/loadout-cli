@@ -41,6 +41,7 @@ public sealed class RunOutcomesTests
     [InlineData("stopped by the person", RunOutcome.Stopped)]
     [InlineData("stopped at a decision", RunOutcome.Stopped)]
     [InlineData("stopped before the lead was briefed", RunOutcome.Stopped)]
+    [InlineData("stopped with the process running it", RunOutcome.Stopped)]
 
     // Did not get there.
     [InlineData("the lead could not be started", RunOutcome.Failed)]

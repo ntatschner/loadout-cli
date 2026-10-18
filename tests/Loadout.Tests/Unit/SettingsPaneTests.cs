@@ -40,11 +40,14 @@ public sealed class SettingsPaneTests
         Line(new SettingsChange("webhook")).Should().Be("team webhook enable");
         Line(new SettingsChange("webhook", Off: true)).Should().Be("team webhook disable");
 
-        Line(new SettingsChange("remedy", "restart-it"))
-            .Should().Be("team remedy trust restart-it");
+        // A remedy belongs to a team, and the command refuses one without it:
+        // the page sent the team and this once left it behind, so revoking
+        // from the page always failed with "Which team?".
+        Line(new SettingsChange("remedy", "restart-it", Team: "system-watch"))
+            .Should().Be("team remedy trust restart-it --team system-watch");
 
-        Line(new SettingsChange("remedy", "restart-it", Off: true))
-            .Should().Be("team remedy trust restart-it --revoke");
+        Line(new SettingsChange("remedy", "restart-it", Off: true, Team: "system-watch"))
+            .Should().Be("team remedy trust restart-it --team system-watch --revoke");
     }
 
     [Fact]

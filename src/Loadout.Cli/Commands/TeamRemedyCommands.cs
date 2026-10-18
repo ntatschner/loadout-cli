@@ -274,7 +274,9 @@ public sealed class TeamRemedyShowCommand : AsyncCommand<TeamRemedyShowCommand.S
                 rule = TeamRemediesCommand.Rule(rules, remedy.Kind),
                 ruling = decided.Ruling.ToString().ToLowerInvariant(),
                 because = decided.Because,
-                script = settings.Script && script.Succeeded ? script.Value : null,
+                // "script" is the file, as the record names it; this is what
+                // is in it. Both called "script" refused to serialise at all.
+                scriptText = settings.Script && script.Succeeded ? script.Value : null,
             });
 
             return CommandOutput.Success();

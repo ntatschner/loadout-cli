@@ -97,9 +97,15 @@ internal static partial class DashboardActions
                 or "studio-density" or "studio-motion" or "studio-idle-after"
                 => ("config set", [change.What, change.Value ?? string.Empty]),
 
-            "remedy" => ("team remedy trust", change.Off
-                ? [change.Value ?? string.Empty, "--revoke"]
-                : [change.Value ?? string.Empty]),
+            // A remedy is one team's, and the command refuses a name without
+            // the team it belongs to. Left out when the page sent none, so the
+            // refusal is the command's own "Which team?" rather than a guess.
+            "remedy" => ("team remedy trust",
+            [
+                change.Value ?? string.Empty,
+                .. change.Team is { Length: > 0 } team ? (string[])["--team", team] : [],
+                .. change.Off ? (string[])["--revoke"] : [],
+            ]),
 
             _ => (string.Empty, []),
         };

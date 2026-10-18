@@ -639,6 +639,7 @@ public sealed partial class TeamRunner : ITeamRunner
         }
 
         var lead = run.Lead!;
+        var stopped = false;
 
         try
         {
@@ -682,9 +683,23 @@ public sealed partial class TeamRunner : ITeamRunner
                 }
             }
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // The process running this is being stopped: Ctrl+C, or the
+            // daemon that started it told to stop now. Not a kill - there is
+            // still time to say so - and a run that does not write its ending
+            // reads as running for good.
+            stopped = true;
+        }
         finally
         {
             await _close.EndLeadAsync(run, journal).ConfigureAwait(false);
+        }
+
+        if (stopped)
+        {
+            await _close.StoppedAsync(run, journal, watching).ConfigureAwait(false);
+            ct.ThrowIfCancellationRequested();
         }
 
         return await _close.RunAsync(run, journal, watching, ct).ConfigureAwait(false);
@@ -704,6 +719,9 @@ public sealed partial class TeamRunner : ITeamRunner
 
     /// <summary>The ending written when the lead never got going at all.</summary>
     internal const string Unstartable = "the lead could not be started";
+
+    /// <summary>The ending written when the process running the run was stopped mid-round.</summary>
+    internal const string ProcessStopped = "stopped with the process running it";
 
     /// <summary>
     /// The category an ending falls into, written down beside it.
