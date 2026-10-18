@@ -179,12 +179,20 @@ When everything above is committed, update Loadout's own records so that whoever
 
 These records are claims with a name and a date. Work from what the workspace says now, and change nothing you can't see.
 
+**Records only: this step builds nothing.** Some of what it records is designed but not built yet (`PAGES.md`, and any `ROUND4.md` part that isn't on `main` or your branch when you get here). Writing the record must not start that work.
+
+- Run only the commands below: `task list`, `task declare`, `idea add`, `memory show`, `memory write`, `memory replace` and `workspace save`. None of them starts anything. They write Loadout's records, and `workspace save` commits and pushes the workspace.
+- Don't run `idea refine`, `idea dump add`, `team run`, `team schedule add` or `launch` for any item here. (`loadout <project>` is `launch` too.) Don't start a session or a build for one, and don't change code for one. Never declare anything `doing` from this step.
+- An item that isn't built stays `open`, and its note **starts** with: "Designed, not built. Don't start on this from this record; build it only when someone asks, from its brief." Open tasks are listed in every new session's context, so that sentence is what tells a later session to leave it alone until it is asked.
+- To know what is built, look at `main` and your branch, not at this brief. For example, `studio-background` in `ConfigKeys` means `BACKGROUND.md` is built.
+- Every command here takes `--dry-run`. Run each once with it first, and check what it would write.
+
 1. **Read the list.** Run `loadout task list --project loadout-cli --all --json`. Ideas are tasks of kind `idea`, so they are in it too.
 
 2. **The idea `studio-embossed-background`.**
    - If it exists, append to its note. `task declare` **replaces** the note and **sets the state**, so re-declare it with its **current state** and its **current note, then a blank line, then this**:
 
-     > Designed in design/studio/BACKGROUND.md: a field map (embossed survey map, fixed seed), plain / map / map-animated as `studio-background` (default map), the scan only under full motion and never in Pure Focus, plain in high contrast, levels measured to keep all text 4.5:1. The rail and the mode bar get an embossed edge with grid ticks; the rail is solid when it widens. Built on branch <your branch> in <the commits>.
+     > Designed in design/studio/BACKGROUND.md: a field map (embossed survey map, fixed seed), plain / map / map-animated as `studio-background` (default map), the scan only under full motion and never in Pure Focus, plain in high contrast, levels measured to keep all text 4.5:1. The rail and the mode bar get an embossed edge with grid ticks; the rail is solid when it widens. Built on branch <your branch> in <the commits>; not merged yet.
 
      ```
      loadout task declare studio-embossed-background <its current state> --note "<its current note>
@@ -192,7 +200,7 @@ These records are claims with a name and a date. Work from what the workspace sa
      <the note above>" --project loadout-cli --by "studio design"
      ```
 
-     Never change its state or title. If its note already says it was designed in `BACKGROUND.md`, leave it alone.
+     Never change its state or title. If its note starts with "Designed, not built", drop that sentence, since this brief is now built; keep the rest. If its note already says it was built from `BACKGROUND.md`, leave it alone.
    - If it doesn't exist, create it with the note above:
 
      ```
@@ -200,15 +208,15 @@ These records are claims with a name and a date. Work from what the workspace sa
      ```
 
 3. **The memory topic `studio-design`.** `loadout memory write` replaces a topic's facts rather than adding to them. So:
-   - if the topic exists, run `loadout memory show studio-design --project loadout-cli` and add one fact to its text: "BACKGROUND.md: the field map background (`studio-background`) and the nav's embossed edge." Then save it with `loadout memory replace studio-design --project loadout-cli --file <the edited text> --expect <the version show printed>`.
+   - if the topic exists, run `loadout memory show studio-design --project loadout-cli` and add one fact to its text: "BACKGROUND.md: the field map background (`studio-background`) and the nav's embossed edge; built on its branch." If an existing fact says `BACKGROUND.md` is not built, change it to say it is. Then save it with `loadout memory replace studio-design --project loadout-cli --file <the edited text> --expect <the version show printed>`.
    - if it doesn't exist, write it:
 
      ```
-     loadout memory write studio-design --description "Where Studio's designs and handoffs live" --fact "Studio's design system, prototype and handoffs are in design/studio/. Each brief (HANDOFF.md, NEXT.md, PAGES.md, ROUND4.md, BACKGROUND.md) names what is decided; don't reopen those decisions." --fact "BACKGROUND.md: the field map background (studio-background) and the nav's embossed edge." --project loadout-cli
+     loadout memory write studio-design --description "Where Studio's designs and handoffs live" --fact "Studio's design system, prototype and handoffs are in design/studio/. Each brief (HANDOFF.md, NEXT.md, PAGES.md, ROUND4.md, BACKGROUND.md) names what is decided; don't reopen those decisions. A brief that isn't built is for later: don't start it unless asked." --fact "BACKGROUND.md: the field map background (studio-background) and the nav's embossed edge; built on its branch." --project loadout-cli
      ```
 
      If it refuses because a similar topic already exists, add the two facts to that topic instead (`show`, then `replace`), and tell me which.
 
 4. **Save the workspace:** `loadout workspace save`, so your other machines have it.
 
-Tell me what each step did: updated, created, or skipped and why.
+Tell me what each step did: updated, created, or skipped and why. Confirm that nothing was started: no session, run, refine round or schedule.
