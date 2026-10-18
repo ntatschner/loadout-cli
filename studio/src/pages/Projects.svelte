@@ -1,16 +1,23 @@
 <script lang="ts">
-  // The projects Loadout knows on this machine: each one's facts, its
-  // working trees and its health, and everything that can be done to it,
-  // each through its own command. Read with the same commands a terminal
-  // would use, so the page and 'loadout project show' cannot disagree.
+  // Projects: a wall of tiles, one per project, with the picked project
+  // opened under it as a dossier: its facts, a board of what is being worked
+  // on, its health, and what can be done to it, each through its own
+  // command. Read with the commands a terminal uses, so the page and
+  // 'loadout project show' cannot disagree.
   import { untrack } from 'svelte';
   import Command from '../lib/components/Command.svelte';
   import CommandAction from '../lib/components/CommandAction.svelte';
+  import ForgetDialog from '../lib/components/ForgetDialog.svelte';
   import HaloButton from '../lib/components/HaloButton.svelte';
+  import HealthList from '../lib/components/HealthList.svelte';
+  import ProjectTile from '../lib/components/ProjectTile.svelte';
+  import TaskBoard from '../lib/components/TaskBoard.svelte';
   import { commands, readJson, SignedOut } from '../lib/api';
   import { lineFor } from '../lib/commandLine';
-  import { router } from '../lib/router.svelte';
+  import { declareWords, type Task } from '../lib/tasks';
+  import type { Finding } from '../lib/health';
   import { studio } from '../lib/state.svelte';
+  import { toasts } from '../lib/toasts.svelte';
 
   let { rest, onlaunch }: { rest: string[]; onlaunch: () => void } = $props();
 
@@ -38,11 +45,9 @@
     context: Record<string, boolean>;
   }
 
-  interface Finding {
-    name: string;
-    severity: string;
-    detail: string;
-    fixable: boolean;
+  interface Drifted {
+    project: string;
+    findings: (Finding & { name: string; severity: string; detail: string; fixable: boolean })[];
   }
 
   interface Repository {
@@ -62,27 +67,22 @@
 
   let projects = $state<Listed[] | null>(null);
   let shown = $state<Shown | null>(null);
-  let worktrees = $state<{ path: string; branch: string; primary: boolean }[]>([]);
-  let health = $state<Finding[] | null>(null);
+  let worktrees = $state<{ path: string; branch: string; primary: boolean }[] | null>(null);
+  let health = $state<Drifted['findings'] | null>(null);
   let repository = $state<Repository | null>(null);
   let workspace = $state<Workspace | null>(null);
-
-  interface Task {
-    id: string;
-    title: string;
-    state: string;
-    kind: string;
-    declaredBy: string;
-    declared: string;
-    note: string | null;
-  }
-
   let tasks = $state<Task[] | null>(null);
   let globalTasks = $state<Task[] | null>(null);
   let problem = $state<string | null>(null);
 
+  // The tiles' counts, read once the wall is drawn: a tile without them shows none.
+  let open = $state<Record<string, { doing: number; blocked: number }>>({});
+  let fixable = $state<Record<string, number> | null>(null);
+  let ideaCounts = $state<Record<string, number> | null>(null);
+
   const slug = $derived(rest[0] && !rest[0].startsWith('+') ? rest[0] : null);
   const place = $derived(rest[0]?.startsWith('+') ? rest[0].slice(1) : null);
+  const refused = $derived(studio.watchOnly ? studio.watchOnlyReason : undefined);
 
   function fail(error: unknown) {
     if (error instanceof SignedOut) {
@@ -97,11 +97,86 @@
       projects = (await readJson<{ projects: Listed[] }>('project list')).projects;
     } catch (error) {
       fail(error);
+
+      return;
     }
+
+    loadCounts(projects);
+  }
+
+  function loadCounts(all: Listed[]) {
+    for (const one of all) {
+      readJson<{ tasks: Task[] }>('task list', ['--project', one.id]).then(
+        (read) => (open = { ...open, [one.id]: { doing: read.tasks.filter((task) => task.state === 'doing').length, blocked: read.tasks.filter((task) => task.state === 'blocked').length } }),
+        () => undefined,
+      );
+    }
+
+    readJson<Drifted[]>('drift').then(
+      (read) => (fixable = Object.fromEntries(read.map((one) => [one.project, one.findings.filter((finding) => finding.fixable).length]))),
+      () => (fixable = null),
+    );
+    readJson<{ ideas: { project?: string | null; stage: string }[] }>('idea list').then((read) => {
+      const by: Record<string, number> = {};
+
+      for (const idea of read.ideas.filter((one) => one.stage !== 'accepted')) {
+        if (idea.project) {
+          by[idea.project] = (by[idea.project] ?? 0) + 1;
+        }
+      }
+
+      ideaCounts = by;
+    }, () => (ideaCounts = null));
+  }
+
+  async function loadProject(name: string) {
+    try {
+      shown = await readJson<Shown>('project show', [name]);
+    } catch (error) {
+      fail(error);
+
+      return;
+    }
+
+    // The rest is worth having but not worth holding the facts up for.
+    readJson<{ worktrees: NonNullable<typeof worktrees> }>('project worktrees', [name]).then((read) => (worktrees = read.worktrees), () => (worktrees = null));
+    readJson<Drifted[]>('drift', [name]).then((read) => (health = read[0]?.findings ?? []), () => (health = null));
+    readJson<{ repositories: Repository[] }>('repo check', [name]).then((read) => (repository = read.repositories[0] ?? null), () => (repository = null));
+    loadTasks(name);
+  }
+
+  // --all, because without it done and dropped are left out, and the board folds them away rather than dropping them.
+  function loadTasks(name: string) {
+    readJson<{ tasks: Task[] }>('task list', ['--project', name, '--all']).then((read) => (tasks = read.tasks), () => (tasks = null));
+  }
+
+  function loadGlobal() {
+    readJson<{ tasks: Task[] }>('task list', ['--global', '--all']).then((read) => (globalTasks = read.tasks), fail);
   }
 
   $effect(() => {
     void loadList();
+  });
+
+  $effect(() => {
+    shown = null;
+    health = null;
+    repository = null;
+    worktrees = null;
+    tasks = null;
+    problem = null;
+
+    if (slug) {
+      void loadProject(slug);
+    }
+  });
+
+  $effect(() => {
+    if (place === 'tasks') {
+      loadGlobal();
+    } else if (place === 'workspace') {
+      readJson<Workspace>('workspace status').then((read) => (workspace = read), fail);
+    }
   });
 
   // A job that ended may have changed what is shown, so it is read again in
@@ -122,242 +197,212 @@
       if (slug) {
         void loadProject(slug);
       }
+
+      if (place === 'tasks') {
+        loadGlobal();
+      }
     });
   });
 
-  $effect(() => {
-    shown = null;
-    health = null;
-    repository = null;
-    worktrees = [];
-    problem = null;
+  /** Runs one step as a job; the page reads again when it ends. */
+  async function act(path: string, words: string[]): Promise<boolean> {
+    if (studio.watchOnly) {
+      toasts.add({ level: 'info', text: 'Studio is only watching, so nothing was changed.', cmd: lineFor(path, words) });
 
-    if (slug) {
-      void loadProject(slug);
+      return false;
     }
-  });
 
-  $effect(() => {
-    if (place === 'tasks') {
-      readJson<{ tasks: Task[] }>('task list', ['--global']).then((read) => (globalTasks = read.tasks), fail);
-    }
-  });
-
-  /** Says where a task stands, as 'loadout task declare' does. */
-  async function declare(task: Task, state: string, where: string[]) {
     try {
-      await commands.run('task declare', [task.id, state, ...where]);
+      await commands.run(path, words);
       await studio.loadJobs();
-    } catch (error) {
-      fail(error);
-    }
-  }
 
-  const NEXT: Record<string, string[]> = {
-    open: ['doing', 'blocked', 'dropped'],
-    doing: ['done', 'blocked', 'open'],
-    blocked: ['doing', 'dropped'],
-    done: ['open'],
-    dropped: ['open'],
-  };
-  const WORD: Record<string, string> = { doing: 'Start it', done: 'Mark it done', blocked: 'It is blocked', dropped: 'Drop it', open: 'Reopen it' };
-
-  $effect(() => {
-    if (place === 'workspace') {
-      readJson<Workspace>('workspace status').then((read) => (workspace = read), fail);
-    }
-  });
-
-  async function loadProject(name: string) {
-    try {
-      shown = await readJson<Shown>('project show', [name]);
+      return true;
     } catch (error) {
       fail(error);
 
-      return;
+      return false;
     }
-
-    // The rest is worth having but not worth holding the facts up for.
-    readJson<{ worktrees: typeof worktrees }>('project worktrees', [name]).then((read) => (worktrees = read.worktrees), () => (worktrees = []));
-    readJson<{ project: string; findings: Finding[] }[]>('drift', [name]).then((read) => (health = read[0]?.findings ?? []), () => (health = null));
-    readJson<{ repositories: Repository[] }>('repo check', [name]).then((read) => (repository = read.repositories[0] ?? null), () => (repository = null));
-    readJson<{ tasks: Task[] }>('task list', ['--project', name]).then((read) => (tasks = read.tasks), () => (tasks = null));
   }
+
+  // Record a task.
+  let newTitle = $state('');
+  let newId = $state('');
+  const recordWords = $derived(
+    shown ? [...declareWords(newId.trim() || '<id>', 'open', []), '--title', newTitle.trim() || '<title>', '--project', shown.id] : [],
+  );
+
+  async function record() {
+    if (await act('task declare', recordWords)) {
+      newTitle = '';
+      newId = '';
+    }
+  }
+
+  // Forget project, from the dossier.
+  let forgetting = $state(false);
 
   const PLACES = [
-    { key: 'add', label: 'Add a repository you have' },
-    { key: 'new', label: 'Make a new project' },
-    { key: 'find', label: 'Find repositories and stray memory' },
-    { key: 'tasks', label: 'Tasks for no project yet' },
-    { key: 'workspace', label: 'The workspace' },
+    { key: 'add', label: 'Add a repository you have', sub: 'loadout project add' },
+    { key: 'new', label: 'Make a new project', sub: 'loadout project new' },
+    { key: 'find', label: 'Find repositories and stray memory', sub: 'loadout project discover' },
   ];
+
+  const picked = $derived(!!slug || !!place);
+  const fixes = $derived(health?.filter((finding) => finding.fixable).length ?? 0);
+  const repoFinding = $derived<Finding | null>(
+    repository
+      ? { name: 'AI tooling files', severity: repository.compliant ? 'Info' : 'Warning', detail: repository.compliant ? 'none tracked in the repository' : `${repository.findings.length} tracked in the repository` }
+      : null,
+  );
+  const extras = $derived(shown ? Object.entries(shown.context).filter(([, on]) => on).map(([key]) => key) : []);
 </script>
 
-{#snippet taskList(list: Task[], where: string[])}
-  <ul class="tasks">
-    {#each list as task (task.id)}
-      <li class={`task ${task.state}`}>
-        <p class="t"><span class="qid">{task.id}</span> {task.title} <span class="calm small">· {task.state} · {task.declaredBy}, {new Date(task.declared).toLocaleDateString()}</span></p>
-        {#if task.note}<p class="calm small">{task.note}</p>{/if}
-        <div class="ls-answers flush">
-          {#each NEXT[task.state] ?? [] as state (state)}
-            <HaloButton label={WORD[state]} size="small" cmd={lineFor('task declare', [task.id, state, ...where])} disabledReason={studio.watchOnly ? studio.watchOnlyReason : undefined} onpress={() => void declare(task, state, where)} />
-          {/each}
-        </div>
-      </li>
-    {:else}
-      <li class="calm">Nothing recorded.</li>
-    {/each}
-  </ul>
-{/snippet}
+<div class="head"><div><h1>Projects</h1><span class="fact">{projects ? `${projects.length} known · ${projects.filter((one) => one.available).length} on this machine` : 'the projects Loadout knows'}</span></div></div>
 
-<div class="head"><div><h1>Projects</h1><span class="fact">{projects ? `${projects.length} on this machine` : 'the projects Loadout knows'}</span></div></div>
+{#if problem}<p class="offline" role="alert">{problem}</p>{/if}
 
-<div class="memory">
-  <aside class="memside" aria-label="Projects">
+<nav aria-label="Projects">
+  <div class={['ls-pwall', picked ? 'compact' : ''].filter(Boolean).join(' ')}>
     {#if projects === null}
       <p class="calm" role="status">Reading…</p>
-    {:else if projects.length === 0}
-      <p class="calm">No projects yet. Add a repository you have, or make a new one.</p>
-    {:else}
-      <ul class="slist">
-        {#each projects as one (one.id)}
-          <li>
-            <a class="srow" href={`#projects/${encodeURIComponent(one.id)}`} aria-current={slug === one.id ? 'page' : undefined}>
-              <span class="t">{one.name}</span>
-              <span class="x">{one.id} · {one.defaultAgent}{one.available ? '' : ' · not on this machine'}</span>
-            </a>
-          </li>
-        {/each}
-      </ul>
-      <p class="calm small">The same list as <code class="ls-cmd">loadout project list</code> or <code class="ls-cmd">loadout list</code>.</p>
     {/if}
+    {#each projects ?? [] as one (one.id)}
+      <ProjectTile project={one} href={`#projects/${encodeURIComponent(one.id)}`} picked={slug === one.id}
+        doing={open[one.id]?.doing} blocked={open[one.id]?.blocked} findings={fixable ? (fixable[one.id] ?? 0) : undefined} ideas={ideaCounts?.[one.id]} />
+    {/each}
+    {#each PLACES as one (one.key)}
+      <ProjectTile place={one.label} sub={one.sub} href={`#projects/+${one.key}`} picked={place === one.key} />
+    {/each}
+  </div>
+  <p class="ls-from">The same as <code>$ loadout project list</code> or <code>loadout list</code>. Also <a href="#projects/+tasks" aria-current={place === 'tasks' ? 'page' : undefined}>tasks for no project yet</a> and <a href="#projects/+workspace" aria-current={place === 'workspace' ? 'page' : undefined}>the workspace</a>.</p>
+</nav>
 
-    <section class="store" aria-labelledby="pj-more">
-      <h2 class="ls-zone" id="pj-more">More</h2>
-      <ul class="slist">
-        {#each PLACES as one (one.key)}
-          <li><a class="srow" href={`#projects/+${one.key}`} aria-current={place === one.key ? 'page' : undefined}><span class="t">{one.label}</span></a></li>
-        {/each}
-      </ul>
-    </section>
-  </aside>
+{#if slug && shown}
+  <section class="dossier" aria-labelledby="dh">
+    <div class="dhead"><h2 id="dh">{shown.name}</h2><span class="slug">{shown.id}{shown.aliases.length ? ` · also ${shown.aliases.join(', ')}` : ''}</span></div>
+    <dl class="facts">
+      <div><dt>Where</dt><dd>{#if shown.available}<code>{shown.path}</code>{:else}not on this machine{/if}</dd></div>
+      <div><dt>Branch</dt><dd>{shown.branch ?? 'none'}{shown.clean === false ? ' · uncommitted changes' : shown.clean ? ' · clean' : ''}</dd></div>
+      <div><dt>Remote</dt><dd>{shown.remote || 'none recorded'}</dd></div>
+      <div><dt>Agent</dt><dd>{shown.defaultAgent}</dd></div>
+      <div><dt>Launched</dt><dd>{shown.launchCount} time{shown.launchCount === 1 ? '' : 's'}</dd></div>
+      <div><dt>Profiles</dt><dd>{shown.profiles.length ? shown.profiles.join(', ') : 'none'}</dd></div>
+      <div><dt>Every session also gets</dt><dd>{extras.join(', ') || 'nothing extra'}</dd></div>
+      <div class={worktrees && worktrees.length > 1 ? 'wide' : ''}><dt>Working trees</dt><dd>{#if worktrees === null}…{:else if worktrees.length <= 1}just the one{:else}<ul class="trees">{#each worktrees as tree (tree.path)}<li><code>{tree.path}</code> · {tree.branch}{tree.primary ? ' · the main one' : ''}</li>{/each}</ul>{/if}</dd></div>
+    </dl>
+    <p class="ls-from">From <code>$ loadout project show {shown.id}</code> and <code>$ loadout project worktrees {shown.id}</code>.</p>
+    <Command why="The same, in a terminal:" command={lineFor('project show', [shown.id])} />
 
-  <section class="memmain" aria-label="Project">
-    {#if problem}<p class="offline" role="alert">{problem}</p>{/if}
+    <div class="dgrid">
+      <section class="pblock" aria-labelledby="dt">
+        <h2 class="ls-zone" id="dt">What is being worked on</h2>
+        {#if tasks}
+          <TaskBoard {tasks} where={['--project', shown.id]} from={`$ loadout task list --project ${shown.id} --all`} disabledReason={refused} ondeclare={(task, state) => void act('task declare', declareWords(task.id, state, ['--project', shown!.id]))} />
+        {:else}
+          <p class="calm" role="status">Reading…</p>
+        {/if}
+        <form class="tasknew" onsubmit={(event) => { event.preventDefault(); if (newTitle.trim() && newId.trim()) void record(); }}>
+          <div class="ls-field"><label class="lab" for="tn-title">Record a task</label><input id="tn-title" class="ls-text" placeholder="What needs doing" bind:value={newTitle} autocomplete="off" /></div>
+          <div class="ls-field"><label class="lab" for="tn-id">Its id</label><input id="tn-id" class="ls-text" placeholder="a-short-id" bind:value={newId} autocomplete="off" spellcheck="false" /></div>
+          <HaloButton label="Record it" size="small" solid={!refused && !!newTitle.trim() && !!newId.trim()} cmd={lineFor('task declare', recordWords)} disabledReason={refused ?? (!newTitle.trim() ? 'say what needs doing' : !newId.trim() ? 'give it an id' : undefined)} onpress={() => void record()} />
+        </form>
+      </section>
 
-    {#if slug && shown}
-      <h2 class="topicname">{shown.name}</h2>
-      <dl class="facts">
-        <dt>Slug</dt><dd><code class="ls-cmd">{shown.id}</code>{#if shown.aliases.length} · also {shown.aliases.join(', ')}{/if}</dd>
-        <dt>Where</dt><dd>{#if shown.available}<code class="ls-cmd">{shown.path}</code>{:else}not on this machine{/if}</dd>
-        {#if shown.branch}<dt>Branch</dt><dd>{shown.branch}{shown.clean === false ? ' · uncommitted changes' : shown.clean ? ' · clean' : ''}</dd>{/if}
-        <dt>Remote</dt><dd>{shown.remote || 'none recorded'}</dd>
-        <dt>Agent</dt><dd>{shown.defaultAgent}</dd>
-        <dt>Launched</dt><dd>{shown.launchCount} time{shown.launchCount === 1 ? '' : 's'}</dd>
-        <dt>Profiles</dt><dd>{shown.profiles.length ? shown.profiles.join(', ') : 'none'}</dd>
-        <dt>Every session also gets</dt><dd>{Object.entries(shown.context).filter(([, on]) => on).map(([key]) => key).join(', ') || 'nothing extra'}</dd>
-      </dl>
-      <Command why="The same, in a terminal:" command={`$ loadout project show ${shown.id}`} />
-
-      {#if worktrees.length > 1}
-        <h3 class="ls-zone">Working trees</h3>
-        <ul class="plain">
-          {#each worktrees as tree (tree.path)}<li><code class="ls-cmd">{tree.path}</code> · {tree.branch}{tree.primary ? ' · the main one' : ''}</li>{/each}
-        </ul>
-      {/if}
-
-
-      <h3 class="ls-zone">Tasks</h3>
-      {#if tasks}
-        {@render taskList(tasks.filter((task) => task.state !== 'done' && task.state !== 'dropped'), ['--project', shown.id])}
-        <p class="calm small">What is being worked on, as <code class="ls-cmd">loadout task list --project {shown.id}</code> says; done and dropped ones are left out here.</p>
-      {:else}
-        <p class="calm" role="status">Reading…</p>
-      {/if}
-      <div class="acts">
-        <CommandAction path="task declare" title="Record a task, or say where one stands" preset={{ '--project': shown.id }} fixed={['--project', '--global']} label="Record it" />
-        <CommandAction path="task remove" title="Forget a task entirely" preset={{ '--project': shown.id }} fixed={['--project', '--global']} label="Forget it" />
-      </div>
-
-      <h3 class="ls-zone">Health</h3>
-      {#if health === null}
-        <p class="calm" role="status">Checking…</p>
-      {:else}
-        <ul class="findings">
-          {#each health as finding (finding.name)}
-            <li class={finding.severity.toLowerCase()}><span class="sev">{finding.severity}</span> <span class="n">{finding.name}</span> · {finding.detail}{finding.fixable ? ' · can be put right' : ''}</li>
-          {/each}
-          {#if repository}
-            <li class={repository.compliant ? 'info' : 'warning'}><span class="sev">{repository.compliant ? 'Info' : 'Warning'}</span> <span class="n">AI tooling files</span> · {repository.compliant ? 'none tracked in the repository' : `${repository.findings.length} tracked in the repository`}</li>
+      <section class="pblock" aria-labelledby="dhl">
+        <h2 class="ls-zone" id="dhl">Health</h2>
+        {#if health === null}
+          <p class="calm" role="status">Checking…</p>
+        {:else}
+          <HealthList findings={repoFinding ? [...health, repoFinding] : health} from={`$ loadout drift ${shown.id} and loadout repo check ${shown.id}`} />
+          {#if fixes}
+            <CommandAction path="drift" title={`Put right the ${fixes} that can be put right`} preset={{ PROJECT: shown.id, '--fix': true, '--yes': true }} fixed={['PROJECT']} label="Put it right" />
           {/if}
-        </ul>
-        <p class="calm small">From <code class="ls-cmd">loadout drift {shown.id}</code> and <code class="ls-cmd">loadout repo check {shown.id}</code>.</p>
-      {/if}
+        {/if}
+      </section>
+    </div>
 
-      <h3 class="ls-zone">Do</h3>
-      <div class="acts">
-        {#if health?.some((finding) => finding.fixable)}
-          <CommandAction path="drift" title="Put right what can be put right" preset={{ PROJECT: shown.id, '--fix': true, '--yes': true }} fixed={['PROJECT']} label="Put it right" />
+    <section class="pblock" aria-labelledby="dd">
+      <h2 class="ls-zone" id="dd">Do</h2>
+      <div class="ls-drawers">
+        <h4 class="gh">Open it</h4>
+        {#if shown.available}
+          <CommandAction path="code" title="Open it in the editor" preset={{ project: shown.id }} fixed={['project']} label="Open" />
+          <CommandAction path="project open" title="Open its folder" preset={{ project: shown.id }} fixed={['project']} label="Open" />
+        {:else}
+          <CommandAction path="project clone" title="Clone it onto this machine" preset={{ project: shown.id }} fixed={['project']} label="Clone it" />
         {/if}
-        {#if !shown.available}
-          <CommandAction path="project clone" title="Clone it onto this machine" preset={{ project: shown.id }} fixed={['project']} />
-        {/if}
-        <CommandAction path="project onboard" title="Onboard it with an agent" {onlaunch} />
-        <CommandAction path="code" title="Open it in the editor" preset={{ project: shown.id }} fixed={['project']} label="Open" />
-        <CommandAction path="project open" title="Open its folder" preset={{ project: shown.id }} fixed={['project']} label="Open" />
+        <CommandAction path="project onboard" title="Onboard it with an agent" preset={{ project: shown.id }} {onlaunch} />
+        <h4 class="gh">Change how it is set up</h4>
         <CommandAction path="project context" title="Change what every session also gets" preset={{ '--project': shown.id }} fixed={['--project']} />
         <CommandAction path="project proposal" title="A proposed change to its settings" preset={{ project: shown.id }} fixed={['project']} />
         <CommandAction path="project relocate" title="It has moved on this machine" preset={{ project: shown.id }} fixed={['project']} />
         <CommandAction path="project link" title="Record in the repository which project it is" preset={{ project: shown.id }} fixed={['project']} />
         <CommandAction path="repo check" title="Check the repository for AI tooling files" preset={{ project: shown.id }} fixed={['project']} />
-        <CommandAction path="project remove" title="Stop knowing this project" preset={{ project: shown.id }} fixed={['project']} label="Remove" />
+        <CommandAction path="task remove" title="Forget a task entirely" preset={{ '--project': shown.id }} fixed={['--project', '--global']} label="Forget it" danger note="Moving a task to done or dropped is on the board." />
       </div>
-      <p class="calm small">Removing a project forgets its registration. Its code is never deleted.</p>
-    {:else if slug}
-      <p class="calm" role="status">Reading…</p>
-    {:else if place === 'add'}
-      <h2 class="topicname">Add a repository you have</h2>
-      <CommandAction path="project add" title="Register a Git repository on this machine" open />
-      <CommandAction path="project clone" title="Clone a project the workspace knows but this machine does not have" />
+    </section>
+
+    <section class="pblock" aria-labelledby="df">
+      <h2 class="ls-zone" id="df">Forget project</h2>
+      <p class="lead">Loadout can forget {shown.name} on this machine only, or from the workspace for every machine. Its repository and code are never touched.</p>
+      <HaloButton label="Forget project…" kind="danger" size="small" cmd={`opens what it would run · ${lineFor('project remove', [shown.id])}`} onpress={() => (forgetting = true)} />
+    </section>
+  </section>
+{:else if slug}
+  <p class="calm" role="status">Reading…</p>
+{:else if place}
+  <section class="dossier" aria-label="Project place">
+    {#if place === 'add'}
+      <div class="dhead"><h2>Add a repository you have</h2></div>
+      <div class="ls-drawers">
+        <CommandAction path="project add" title="Register a Git repository on this machine" open />
+        <CommandAction path="project clone" title="Clone a project the workspace knows but this machine does not have" />
+      </div>
     {:else if place === 'new'}
-      <h2 class="topicname">Make a new project</h2>
-      <CommandAction path="project new" title="A new project, empty or from one you have" open />
-      <CommandAction path="start" title="Your first project, step by step with an agent" {onlaunch} />
+      <div class="dhead"><h2>Make a new project</h2></div>
+      <div class="ls-drawers">
+        <CommandAction path="project new" title="A new project, empty or from one you have" open />
+        <CommandAction path="start" title="Your first project, step by step with an agent" {onlaunch} />
+      </div>
     {:else if place === 'find'}
-      <h2 class="topicname">Find repositories and stray memory</h2>
-      <CommandAction path="project discover" title="Repositories under the folders Loadout looks in" open />
-      <CommandAction path="project survey" title="Agent memory no project accounts for" />
-      <CommandAction path="drift" title="Where every project has drifted from what was recorded" />
-      <CommandAction path="repo check" title="AI tooling files tracked in a repository" />
+      <div class="dhead"><h2>Find repositories and stray memory</h2></div>
+      <div class="ls-drawers">
+        <CommandAction path="project discover" title="Repositories under the folders Loadout looks in" open />
+        <CommandAction path="project survey" title="Agent memory no project accounts for" />
+        <CommandAction path="drift" title="Where every project has drifted from what was recorded" />
+        <CommandAction path="repo check" title="AI tooling files tracked in a repository" />
+      </div>
     {:else if place === 'tasks'}
-      <h2 class="topicname">Tasks for no project yet</h2>
-      <p class="calm">The workspace-wide list, for work that does not belong to a project yet.</p>
+      <div class="dhead"><h2>Tasks for no project yet</h2></div>
+      <p class="lead">The workspace-wide list, for work that does not belong to a project yet.</p>
       {#if globalTasks}
-        {@render taskList(globalTasks.filter((task) => task.state !== 'done' && task.state !== 'dropped'), ['--global'])}
-        <p class="calm small">From <code class="ls-cmd">loadout task list --global</code>.</p>
+        <TaskBoard tasks={globalTasks} where={['--global']} from="$ loadout task list --global --all" disabledReason={refused} ondeclare={(task, state) => void act('task declare', declareWords(task.id, state, ['--global']))} />
+      {:else}
+        <p class="calm" role="status">Reading…</p>
       {/if}
-      <div class="acts">
+      <div class="ls-drawers">
         <CommandAction path="task declare" title="Record one" preset={{ '--global': true }} fixed={['--project', '--global']} label="Record it" />
       </div>
     {:else if place === 'workspace'}
-      <h2 class="topicname">The workspace</h2>
-      <p class="calm">Where projects, memory, specialists and tasks are kept, and synced between your machines.</p>
+      <div class="dhead"><h2>The workspace</h2></div>
+      <p class="lead">Where projects, memory, specialists and tasks are kept, and synced between your machines.</p>
       {#if workspace}
         <dl class="facts">
-          <dt>Remote</dt><dd>{workspace.remote || 'none: this machine only'}</dd>
-          <dt>Here</dt><dd><code class="ls-cmd">{workspace.localPath}</code>{workspace.cloned ? '' : ' · not cloned yet'}</dd>
-          <dt>Projects</dt><dd>{workspace.projects}</dd>
+          <div><dt>Remote</dt><dd>{workspace.remote || 'none: this machine only'}</dd></div>
+          <div><dt>Here</dt><dd><code>{workspace.localPath}</code>{workspace.cloned ? '' : ' · not cloned yet'}</dd></div>
+          <div><dt>Projects</dt><dd>{workspace.projects}</dd></div>
         </dl>
-        <Command why="From:" command="$ loadout workspace status" />
+        <p class="ls-from">From <code>$ loadout workspace status</code>.</p>
       {/if}
-      <div class="acts">
+      <div class="ls-drawers">
         <CommandAction path="workspace sync" title="Bring in what other machines saved" />
         <CommandAction path="workspace save" title="Save and push what changed here" />
         <CommandAction path="workspace open" title="Open its folder" label="Open" />
       </div>
-    {:else if projects?.length}
-      <p class="calm">Choose a project to see it and what can be done to it.</p>
     {/if}
   </section>
-</div>
+{/if}
+
+{#if forgetting && shown}
+  <ForgetDialog project={shown} onclose={() => (forgetting = false)} />
+{/if}

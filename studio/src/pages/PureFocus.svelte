@@ -22,7 +22,8 @@
   import { answerGate, carryOn, hold, runLines, stop } from '../lib/teamsAct';
   import { criteriaOf, crewOf, gateOf, shapeOf } from '../lib/teamsData';
   import { toasts } from '../lib/toasts.svelte';
-  import { isScope, pureGroups, SCOPE_WORDS, type PureAction, type PureCommand, type PureItem, type PureScope } from '../lib/pure';
+  import { isScope, PAGE_KEYS, pureGroups, SCOPE_WORDS, type PureAction, type PureCommand, type PureItem, type PureScope } from '../lib/pure';
+  import { PAGE_TITLES } from '../lib/modes';
 
   interface Props {
     /** The route: home, sessions, session or teams. */
@@ -171,6 +172,10 @@
       rows.push({ kind: 'go', label: `The list: ${words}`, cmd: 'changes nothing', run: () => go(where) });
     }
 
+    for (const [key, where] of Object.entries(PAGE_KEYS)) {
+      rows.push({ kind: 'go', label: PAGE_TITLES[where], cmd: `its desk · G then ${key.toUpperCase()}`, run: () => router.go(where) });
+    }
+
     for (const item of pureGroups(studio.lines, studio.runs, studio.idleAfter, 'all').flatMap((group) => group.items)) {
       rows.push({ kind: 'go', label: item.title, cmd: `${item.kind} · ${item.word}`, run: () => void desk?.select(item.id) });
     }
@@ -222,6 +227,7 @@
     {actions}
     {commands}
     ongo={go}
+    onpage={(where) => router.go(where)}
     onselect={picked}
   >
     {#snippet view(item)}

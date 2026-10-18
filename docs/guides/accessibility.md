@@ -182,6 +182,18 @@ arrow keys move and fold, **Home** and **End** jump, and **Enter** opens a file.
 Spend past a budget is said in words with an edge beside it, never in colour
 alone.
 
+Ideas, Projects, Context, Settings, Memory and Spend are built the same way.
+Each finding says its severity as a word and a glyph (error, warning, info,
+fine) as well as an edge in its colour. An idea's questions are fieldsets with
+their options as radios, and the plan's For and Against marks are read out as
+words. The bar of what a session loads is a row of buttons, each named for a
+specialist and its tokens, so it reads without being seen. Spend by day is a
+chart you focus and read with the arrow keys, **Home** and **End**, into a
+readout a screen reader hears. A command folded into a drawer is a button that
+says whether it's open, and the line it will run is announced as you fill it
+in. Forgetting a project on every machine asks for a second press and says so
+in words, rather than in colour.
+
 Studio's modes change the layout, not how it reads. **Ctrl Shift M** moves
 between them from anywhere, a terminal included, and the mode bar's switcher is
 a radio group on the arrow keys. In Terminals, the tabs are a tab list with
@@ -190,7 +202,12 @@ Focus is built for the keyboard: the list is a listbox whose active item is
 announced as you move, the three panes are labelled regions you move between
 with **F6**, the command bar is a combobox, and every action's key is both
 printed and announced. A danger action asks for its key twice and says so in
-words, rather than opening a dialog that would take the keyboard away.
+words, rather than opening a dialog that would take the keyboard away. In
+Terminals and Teams, one of those six pages opens beside the terminals or the
+board, as a labelled region; **Escape** closes it, but not while you're typing
+in a field, inside a terminal (Escape belongs to the agent there) or in a
+dialog. In Minimal each of them is one column: a sentence, then a list with
+what needs you or has gone wrong first.
 Under no motion nothing in any mode moves, and a change of mode simply happens.
 [Using Studio](studio.md) covers the rest.
 
@@ -239,7 +256,12 @@ can't check it.
 | Studio's terminal with a screen reader reading it | **Not tested** |
 | Studio's modes and Pure Focus: their keys, the switcher, the deck's keys, the desk's keys and the command bar | Tested, in jsdom |
 | Studio's Pure Focus driven by keyboard alone, and by mouse alone | Done in a browser |
-| Studio's modes and Pure Focus at 390 and 320 pixels wide | **Not checked** |
+| Studio's six pages (Ideas, Projects, Context, Settings, Memory and Spend) at 1440, 768, 390 and 320 pixels wide, in all five modes, with every drawer open | No sideways scrolling, measured in a browser |
+| Studio's six pages in the four themes | Looked at in a browser, every page in Dark and one page in each of the others; contrast **not measured** |
+| Studio's six pages: an idea's questions, the task board, the load bar, Spend by day, Forget project | Tested, in jsdom |
+| Studio's six pages, Pure Focus's page desks by keyboard alone | Done in a browser |
+| Studio's six pages with a screen reader | **Not tested** |
+| Home, Sessions and Teams in the modes at 390 and 320 pixels wide | **Not checked** |
 | Studio's Pure Focus with a screen reader | **Not tested** |
 | Any screen reader, used with any of this | **Not tested** |
 | A keyboard-only pass by a person | **Not recorded** |

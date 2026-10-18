@@ -128,6 +128,27 @@ public sealed partial class StudioCoverageTests
     }
 
     [Fact]
+    public void Every_refused_option_is_explained_in_its_own_words()
+    {
+        // The catalogue carries a command's own reason but not a refused
+        // option's, so Studio repeats that reason where it shows the line for
+        // a terminal (tools verify <tool> --agree on Settings). Changing the
+        // reason here without the page would leave the page saying something
+        // else.
+        var sources = string.Join('\n', Directory
+            .EnumerateFiles(Path.Combine(RepositoryRoot(), "studio", "src"), "*.svelte", SearchOption.AllDirectories)
+            .Select(File.ReadAllText));
+
+        foreach (var (path, options) in StudioCoverage.Refused)
+        {
+            foreach (var (option, why) in options)
+            {
+                sources.Should().Contain(why, $"Studio shows '{path} {option}' as a line for a terminal, with the reason StudioCoverage gives");
+            }
+        }
+    }
+
+    [Fact]
     public void What_is_left_for_the_commands_page_only_shrinks()
     {
         var left = StudioCoverage.Reach

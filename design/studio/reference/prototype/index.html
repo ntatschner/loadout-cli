@@ -1,12 +1,4 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<style>:root{padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}body{margin:0;font:14px system-ui}img{max-width:100%}[hidden]{display:none!important}</style>
-</head>
-<body>
-<title>Loadout Studio</title>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><title>Loadout Studio</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="studio/tokens.css">
 <link rel="stylesheet" href="studio/bundle.css">
@@ -201,6 +193,168 @@ body { background: var(--ground); color: var(--ink); }
 .deskwrap { height: calc(100vh - 92px); min-height: 480px; }
 [data-mode="pure"] .ls-toasts { top: auto; bottom: 64px; }
 .pview { display: grid; gap: 18px; align-content: start; }
+/* ---------- the six pages ---------- */
+.pblock { margin-bottom: calc(var(--space-7) * var(--density)); min-width: 0; }
+.pblock .lead, .ctx .lead { margin: 0 0 10px; font-size: 14.5px; color: var(--ink-soft); max-width: 72ch; }
+.pblock > .ls-drawers, .pblock > .ls-drawer { margin-top: 12px; }
+.pblock h3.sub { margin: 22px 0 6px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+.psel { display: inline-flex; align-items: center; gap: 10px; max-width: 100%; min-width: 0; }
+.psel label { font-size: 12px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+.psel select { width: auto; min-width: 0; max-width: min(320px, calc(100vw - 150px)); }
+.pblock .ls-halo, .work .ls-halo, .head .ls-halo { white-space: normal; text-align: left; }
+.pblock .ls-halo .ring, .work .ls-halo .ring { flex: none; }
+.psel.inline { margin-bottom: 12px; }
+.plain { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; font-size: 14px; color: var(--ink-soft); }
+.plain li { display: grid; gap: 1px; min-width: 0; overflow-wrap: anywhere; }
+.plain li b { font-weight: 500; color: var(--ink-strong); }
+.plain li .x { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+.plain li code { font-family: var(--font-mono); font-size: 12px; }
+.plain.live li { display: flex; align-items: center; gap: 10px; }
+.rowsx { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
+.rowsx li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; padding: 9px 12px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule); font-size: 13.5px; color: var(--ink-soft); min-width: 0; }
+.rowsx li b { font-weight: 500; color: var(--ink-strong); }
+.rowsx li code { font-family: var(--font-mono); font-size: 12px; color: var(--ink); overflow-wrap: anywhere; min-width: 0; }
+.ihead { display: grid; gap: 2px; margin-bottom: 14px; }
+.ihead h2 { margin: 0; font-size: 24px; line-height: 1.25; font-weight: 300; color: var(--ink-strong); overflow-wrap: anywhere; }
+.ihead .slug { margin: 0; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+/* Ideas: a shelf and a workbench */
+.bench { display: grid; grid-template-columns: minmax(220px, 290px) minmax(0, 1fr); gap: 32px; align-items: start; }
+.shelf { position: sticky; top: 18px; display: grid; gap: 2px; max-height: calc(100vh - 36px); overflow: auto; padding-right: 4px; }
+.shelf .gh { margin: 12px 0 4px; font-size: 11.5px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); }
+.shelf .gh:first-child { margin-top: 0; }
+.shelf ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 1px; }
+.shelf a { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1px 10px; align-items: center; padding: 8px 10px; color: inherit; text-decoration: none; }
+.shelf a:hover { background: var(--tint-hover-c); }
+.shelf a:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.shelf a[aria-current="page"] { background: var(--tint-picked-c); box-shadow: inset 3px 0 0 var(--accent); }
+.shelf a .t { font-size: 14.5px; color: var(--ink-strong); overflow-wrap: anywhere; }
+.shelf a .x { grid-column: 1; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.shelf a .ls-sig { grid-row: 1 / span 2; grid-column: 2; }
+.shelf a .ls-sig b { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.shelf a.place .t { color: var(--accent-text); font-size: 13.5px; }
+.work { display: grid; gap: 16px; min-width: 0; }
+.work > .ls-istages-wrap { margin: 2px 0 6px; }
+@media (max-width: 420px) { .seg button { padding: 0 9px; font-size: 12.5px; } }
+.work .understand { margin: 0; font-size: 17px; line-height: 1.45; font-weight: 300; color: var(--ink-strong); max-width: 68ch; }
+.work details.asked { font-size: 14px; color: var(--ink-soft); }
+.work details.asked summary { cursor: pointer; color: var(--muted); }
+.work details.asked p { margin: 6px 0 0; padding-left: 12px; box-shadow: inset 2px 0 0 var(--rule); }
+.work .accepted { margin: 0; padding: 10px 14px; font-size: 14.5px; background: var(--surface); box-shadow: inset 3px 0 0 var(--good), inset 0 0 0 1px var(--rule); }
+.work .accepted code { font-family: var(--font-mono); font-size: 12.5px; }
+.work .pblock { margin-bottom: 8px; }
+.work .ls-layer + .ls-layer { margin-top: 18px; }
+.accept { display: grid; gap: 12px; padding: 14px 16px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule); }
+.accept .place { margin: 0; font-size: 14.5px; color: var(--ink); }
+.accept fieldset { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; min-width: 0; }
+.accept legend { padding: 0; margin-bottom: 6px; font-size: 11.5px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-soft); }
+.accept .opt { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-size: 14px; color: var(--ink); }
+.accept .opt input[type="radio"] { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.accept .opt select, .accept .opt .ls-text { width: auto; flex: 0 1 260px; min-width: 0; }
+.ls-text.big { min-height: 120px; font-family: var(--font-sans); font-size: 16px; }
+.wherebar .lab { font-size: 11.5px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-soft); }
+pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); font-size: 13px; color: var(--ink); }
+@media (max-width: 860px) { .bench { grid-template-columns: minmax(0, 1fr); gap: 20px; } .shelf { position: static; max-height: none; } }
+/* Projects: the wall and the dossier */
+.ls-pwall.compact { grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); }
+.ls-pwall.compact .ls-ptile { padding: 10px 12px; }
+.ls-pwall.compact .ls-ptile.place { min-height: 0; }
+.ls-pwall.compact .ls-ptile .facts { display: none; }
+.dossier { margin-top: 22px; padding-top: 18px; box-shadow: inset 0 1px 0 var(--rule); display: grid; gap: 16px; min-width: 0; }
+.dhead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; }
+.dhead h2 { margin: 0; font-size: 28px; font-weight: 200; color: var(--ink-strong); }
+.dhead .slug { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); }
+.dossier .facts { margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 0; padding: 1px 0 0 1px; }
+.dossier .facts > div { display: grid; align-content: start; gap: 2px; padding: 10px 14px; margin: -1px 0 0 -1px; box-shadow: inset 0 0 0 1px var(--rule); min-width: 0; }
+.dossier .facts dt { font-size: 11px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.dossier .facts dd { margin: 0; font-size: 14px; color: var(--ink-strong); overflow-wrap: anywhere; }
+.dgrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 360px); gap: 28px; align-items: start; }
+.tasknew { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto; gap: 10px 14px; align-items: end; margin-top: 14px; padding: 12px 14px; box-shadow: inset 0 0 0 1px var(--rule); }
+.tasknew .ls-field { display: grid; gap: 4px; min-width: 0; }
+.tasknew .lab { font-size: 11.5px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft); }
+@media (max-width: 1100px) { .dgrid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 700px) { .tasknew { grid-template-columns: minmax(0, 1fr); } }
+/* Context */
+.ctx { display: grid; gap: 4px; min-width: 0; }
+.explain { display: flex; flex-wrap: wrap; align-items: end; gap: 14px 22px; margin-bottom: 22px; padding: 14px 16px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule); }
+.explain .grow { flex: 1 1 280px; display: grid; gap: 4px; min-width: 0; }
+.explain .lab { margin: 0; padding: 0; font-size: 11.5px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft); }
+.explain fieldset.modes { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; border: 0; min-width: 0; }
+.explain fieldset.modes legend { margin-bottom: 4px; }
+.explain .modes label { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; font-size: 13.5px; color: var(--ink); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--control-edge); cursor: pointer; }
+.explain .modes label:has(input:checked) { color: var(--ink-strong); background: var(--tint-picked-c); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.explain .modes label:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+.explain .modes input { width: 14px; height: 14px; margin: 0; accent-color: var(--accent); }
+.specs { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 8px; }
+.spec { display: grid; gap: 4px; padding: 12px 14px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule); color: inherit; text-decoration: none; }
+.spec:hover { background: var(--surface-2); }
+.spec:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.spec .k { font-family: var(--font-mono); font-size: 11px; color: var(--accent-text); }
+.spec b { font-size: 16px; font-weight: 400; color: var(--ink-strong); }
+.spec .s { font-size: 13px; color: var(--ink-soft); }
+.spec .n { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.ctx pre.body { margin: 0 0 12px; padding: 14px 16px; max-height: 360px; overflow: auto; white-space: pre-wrap; font-family: var(--font-mono); font-size: 13px; line-height: 1.55; color: var(--ink); background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule); }
+.ctx .back { margin: 0 0 10px; font-size: 13.5px; }
+.ctx .ls-rules { margin-bottom: 12px; }
+.bytes { display: flex; flex-wrap: wrap; gap: 6px 32px; margin-bottom: 12px; }
+.bytes p { margin: 0; font-size: 14px; color: var(--ink-soft); }
+.bytes b { font-size: 26px; font-weight: 200; color: var(--ink-strong); margin-right: 6px; font-variant-numeric: tabular-nums; }
+.ctx .plain li { display: block; }
+.ctx .plain .ls-sig { vertical-align: middle; }
+/* Settings */
+.setwrap { display: grid; grid-template-columns: minmax(200px, 250px) minmax(0, 1fr); gap: 36px; align-items: start; }
+.setidx { position: sticky; top: 18px; }
+.setidx ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 1px; }
+.setidx a { display: grid; gap: 1px; padding: 9px 12px; color: inherit; text-decoration: none; }
+.setidx a:hover { background: var(--tint-hover-c); }
+.setidx a:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.setidx a[aria-current="page"] { background: var(--tint-picked-c); box-shadow: inset 3px 0 0 var(--accent); }
+.setidx .t { font-size: 14.5px; color: var(--ink-strong); }
+.setidx .x { font-size: 12px; color: var(--muted); }
+.setpane { min-width: 0; max-width: 980px; }
+.setpane .ls-switch { max-width: 560px; }
+.dstat { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px; align-items: start; margin-bottom: 14px; padding: 14px 16px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule); }
+.dstat b { font-size: 17px; font-weight: 400; color: var(--ink-strong); }
+.dstat p { margin: 4px 0 0; font-size: 13.5px; color: var(--ink-soft); }
+.dstat p.x { font-family: var(--font-mono); font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+@media (max-width: 860px) { .setwrap { grid-template-columns: minmax(0, 1fr); gap: 18px; } .setidx { position: static; } .setidx ul { grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 1fr)); } .setidx .x { display: none; } }
+/* Memory */
+.memgrid { display: grid; grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) minmax(240px, 320px); gap: 28px; align-items: start; }
+.memgrid > .ls-stores { position: sticky; top: 18px; }
+.memmid { display: grid; gap: 14px; min-width: 0; }
+.memside { display: grid; gap: 0; min-width: 0; }
+.mfind { display: grid; gap: 6px; }
+.mfind .lab { font-size: 11.5px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft); }
+.found { margin-top: 10px; }
+@media (max-width: 1180px) { .memgrid { grid-template-columns: minmax(200px, 250px) minmax(0, 1fr); } .memside { grid-column: 1 / -1; } }
+@media (max-width: 760px) { .memgrid { grid-template-columns: minmax(0, 1fr); } .memgrid > .ls-stores { position: static; } }
+/* Spend */
+.spctl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.spctl .lab { font-size: 12px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+.seg { display: inline-flex; flex-wrap: wrap; box-shadow: inset 0 0 0 1px var(--control-edge); }
+.seg button { min-height: 36px; padding: 0 14px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
+.seg button[aria-checked="true"] { background: var(--tint-picked-c); color: var(--ink-strong); box-shadow: inset 0 -2px 0 var(--accent); }
+.seg button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.pblock.hero { max-width: 1100px; }
+.spgrid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 32px; align-items: start; max-width: 1100px; }
+.spgrid .pblock.wide { min-width: 0; }
+@media (max-width: 960px) { .spgrid { grid-template-columns: minmax(0, 1fr); gap: 0; } }
+/* the six pages in every mode */
+@container page (max-width: 900px) {
+  .bench, .memgrid, .dgrid, .setwrap, .spgrid { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .shelf, .setidx, .memgrid > .ls-stores { position: static; max-height: none; }
+  .setidx ul { grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 1fr)); }
+  .setidx .x { display: none; }
+  .memside { grid-column: auto; }
+  .head h1 { font-size: 24px; line-height: 28px; }
+  .tasknew { grid-template-columns: minmax(0, 1fr); }
+}
+.ls-beside .sample { display: none; }
+.qfocus { max-width: 1100px; margin: 0 auto; }
+.qfocus > .work, .qfocus > .ctx, .qfocus > .setpane, .qfocus > .memmid, .qfocus > .memside { max-width: none; }
+.qall .head { margin-top: 4px; }
+[data-mode="minimal"] .qall .bench, [data-mode="minimal"] .qall .memgrid, [data-mode="minimal"] .qall .setwrap, [data-mode="minimal"] .qall .dgrid, [data-mode="minimal"] .qall .spgrid { grid-template-columns: minmax(0, 1fr); }
+[data-mode="minimal"] .qall .shelf, [data-mode="minimal"] .qall .setidx, [data-mode="minimal"] .qall .memgrid > .ls-stores { position: static; max-height: none; }
+[data-mode="minimal"] .qall .memside { grid-column: auto; }
 </style>
 
 <a class="skip" href="#main">Skip to the page</a>
@@ -356,11 +510,11 @@ body { background: var(--ground); color: var(--ink); }
 
   /* ---------- the rail ---------- */
   function renderNav() {
-    var w = ST.lines.filter(function (l) { return l.waiting; }), r = route(), cur = r.indexOf("session") === 0 ? "sessions" : (teamsRoute(r) ? "teams" : r);
+    var w = ST.lines.filter(function (l) { return l.waiting; }), r = route(), cur = r.indexOf("session") === 0 ? "sessions" : (teamsRoute(r) ? "teams" : r.split("/")[0]);
     var sw = w.filter(function (l) { return l.kind === "session"; }).length, tw = w.filter(function (l) { return l.kind === "team run"; }).length;
     var running = ST.lines.filter(function (l) { return l.kind === "session" && l.stage === 2 && !l.waiting; }).length;
-    var facts = { home: [w.length ? w.length + " waiting on you" : "all calm", !!w.length], sessions: [sw ? sw + " waiting on you" : running + " running", !!sw], ideas: [ST.lines.filter(function (l) { return l.kind === "idea"; }).length + " being shaped", false],
-      teams: [teamsWaiting() ? teamsWaiting() + " waiting on you" : "all calm", !!teamsWaiting()], memory: ["12 topics", false], context: ["2,403 tokens", false], spend: [Math.round(ST.tokens / 600) + "% of threshold", false], projects: ["3 projects", false], settings: ["", false] };
+    var facts = { home: [w.length ? w.length + " waiting on you" : "all calm", !!w.length], sessions: [sw ? sw + " waiting on you" : running + " running", !!sw], ideas: [IDEAS.filter(function (x) { return !x.accepted; }).length + " being shaped", IDEAS.some(function (x) { return ideaWord(x) === "waiting for you"; })],
+      teams: [teamsWaiting() ? teamsWaiting() + " waiting on you" : "all calm", !!teamsWaiting()], memory: [Object.keys(MEM).reduce(function (n, k) { return n + MEM[k].project.length + MEM[k].user.length + MEM[k].machine.length; }, 0) + " topics", false], context: ["2,403 tokens", false], spend: ["11.3M tokens this month", false], projects: [PROJ.length + " projects", false], settings: ["", false] };
     var nav = document.getElementById("nav"); nav.textContent = "";
     var rail = S.SideRail({ current: cur, onSearch: openPalette, pages: PAGES.map(function (p) { return { key: p[0], name: p[1], fact: facts[p[0]][0], need: facts[p[0]][1], href: "#" + p[0] }; }) });
     var foot = el("button", { type: "button", "class": "ls-rl ls-appearance", onclick: openAppearance, "data-k": "appearance" }, [svgIcon("M10 3a7 7 0 1 0 0 14a3.5 3.5 0 0 1 0-7a3.5 3.5 0 0 0 0-7z M10 3a7 7 0 0 1 0 14"), el("span", { "class": "n", text: "Appearance" }), el("span", { "class": "f", text: themeName() })]);
@@ -1060,7 +1214,8 @@ body { background: var(--ground); color: var(--ink); }
   function pureCommands(q, picked) {
     var rows = [];
     if (picked) { pureActions(picked).forEach(function (a, i) { rows.push({ kind: "action", label: (i + 1) + "  " + a.label, cmd: a.disabledReason || a.cmd, run: function () { if (PURE) { setTimeout(function () { PURE.desk.select(picked.id, true); }, 0); } if (!a.disabledReason && a.run) { var said = a.run(); toasts.add({ level: "info", text: said || a.label, cmd: a.cmd || "" }); } } }); }); }
-    [["Everything", "all"], ["Needs you", "needs"], ["Sessions", "sessions"], ["Team runs", "runs"], ["Ideas", "ideas"], ["Tasks", "tasks"]].forEach(function (s) { rows.push({ kind: "go", label: s[0], cmd: "the list, scoped", run: function () { pureScope(s[1]); } }); });
+    [["Everything", "all"], ["Needs you", "needs"], ["Sessions", "sessions"], ["Team runs", "runs"], ["Ideas, in this list", "ideas"], ["Tasks", "tasks"]].forEach(function (s) { rows.push({ kind: "go", label: s[0], cmd: "the list, scoped", run: function () { P.pureScope = s[1]; savePrefs(); if (PURE && PURE.page) { go("home"); } else { pureScope(s[1]); } } }); });
+    Object.keys(PAGE_NAMES).forEach(function (k) { rows.push({ kind: "go", label: PAGE_NAMES[k], cmd: "its desk \u00b7 G then " + Object.keys(GOKEYS).filter(function (x) { return GOKEYS[x] === k; })[0].toUpperCase(), run: function () { go(k); } }); });
     pureGroups("all").forEach(function (g) { g.items.forEach(function (x) { rows.push({ kind: "go", label: x.title, cmd: x.kind + " · " + x.word, run: function () { if (PURE) { PURE.desk.select(x.id); } } }); }); });
     if (picked && picked.kind === "team run") { rows.push({ kind: "go", label: "Open its full page", cmd: "the five depths", run: function () { setMode("default"); setTimeout(function () { go("run-" + picked.id); }, 60); } }); }
     [["Start a session", "$ loadout <project> --task \"…\"", function () { openLaunch(); }], ["Start a team run", "$ loadout team run <team> \"<goal>\" --project <slug>", function () { openSheet("run"); }], ["Make a team", "$ loadout team new <name>", function () { openSheet("make"); }], ["Run one on a schedule", "$ loadout team schedule add <name> <team> \"<goal>\"", function () { openSheet("schedule"); }],
@@ -1076,8 +1231,7 @@ body { background: var(--ground); color: var(--ink); }
     var scope = r === "sessions" ? "sessions" : (r === "teams" ? "runs" : (P.pureScope || "all"));
     var wrap = el("div", { "class": "deskwrap" });
     var d = S.WorkDesk({ groups: pureGroups(scope), selected: sel || P.pureSelected, view: pureView, actions: pureActions, commands: pureCommands, keys: P.keys,
-      goKeys: { h: "all", s: "sessions", t: "runs", i: "ideas", k: "tasks", n: "needs" }, onGo: function (where) { pureScope(where); toasts.add({ level: "info", text: "The list: " + { all: "everything", sessions: "sessions", runs: "team runs", ideas: "ideas", tasks: "tasks", needs: "what needs you" }[where], cmd: "G then a letter" }); },
-      onSelect: function (id) { P.pureSelected = id; savePrefs(); } });
+      goKeys: GOKEYS, onGo: pureGo, onSelect: function (id) { P.pureSelected = id; savePrefs(); } });
     wrap.appendChild(d.el); main.appendChild(wrap);
     PURE = { route: r, desk: d, sig: pureSig() };
   }
@@ -1095,26 +1249,812 @@ body { background: var(--ground); color: var(--ink); }
     PURE.sig = s;
   }
 
+  /* ---------- the six pages: Ideas, Projects, Context, Settings, Memory and Spend, each its own shape ---------- */
+  var PV = 0;
+  function bump() { PV++; setTimeout(render, 20); }
+  function said(text, cmd, level) { toasts.add({ level: level || "info", text: text, cmd: cmd || "" }); }
+  function ran(words) { return function (v, info) { said((info.preview ? "Previewed: " : info.reads ? "Read: " : "Ran: ") + (words || "it"), info.line + (info.preview ? "" : "")); return info.preview ? "Previewed. Nothing changed." : info.reads ? "Read. Nothing changed." : "Done."; }; }
+  function pageHead(main, title, fact, extra) { main.appendChild(el("div", { "class": "head" }, [el("div", {}, [el("h1", { text: title }), fact ? el("span", { "class": "fact", text: fact }) : null]), el("span", { "class": "grow" })].concat(extra || []))); }
+  function from(cmd, rest) { return el("p", { "class": "ls-from" }, ["From ", el("code", { text: cmd }), rest || "."]); }
+  function pnav(label, items, cur) { return el("nav", { "class": "tsub", "aria-label": label }, items.map(function (x) { return el("a", { href: "#" + x[0], "aria-current": cur === x[0] ? "page" : null, text: x[1] }); })); }
+  function block(id, title, kids, cls) { return el("section", { "class": "pblock" + (cls ? " " + cls : ""), "aria-labelledby": id }, [zone("", title, id)].concat(kids)); }
+  function projSelect(cur, onPick, label) {
+    var id = "psel-" + Math.random().toString(36).slice(2, 6), s = el("select", { "class": "ls-text", id: id, "data-k": "psel", onchange: function () { onPick(s.value); } }, PROJ.filter(function (p) { return p.available; }).map(function (p) { return el("option", { value: p.id, text: p.name + " · " + p.id }); }));
+    s.value = cur; return el("div", { "class": "psel" }, [el("label", { "for": id, text: label || "Project" }), s]);
+  }
+
+  /* --- shared example data, matching Home's lines --- */
+  var PROJ = [
+    { id: "loadout-cli", name: "Loadout CLI", available: true, path: "~/code/loadout-cli", defaultAgent: "claude", pinned: true, branch: "main", clean: false, remote: "github.com/ntatschner/loadout-cli", aliases: ["loadout"], launchCount: 214, profiles: ["release"], context: ["the workspace's memory", "docs/ARCHITECTURE.md"], worktrees: [["~/code/loadout-cli", "main", true], ["~/code/loadout-cli-feature-x", "feature-x", false]] },
+    { id: "starstats", name: "StarStats", available: true, path: "~/code/starstats", defaultAgent: "claude", pinned: false, branch: "feature/new-bucket", clean: true, remote: "github.com/ntatschner/starstats", aliases: [], launchCount: 88, profiles: [], context: ["the workspace's memory"], worktrees: [["~/code/starstats", "feature/new-bucket", true]] },
+    { id: "home-lab", name: "Home lab", available: false, path: "", defaultAgent: "codex", pinned: false, branch: null, clean: null, remote: "github.com/ntatschner/home-lab", aliases: [], launchCount: 9, profiles: [], context: [], worktrees: [] }
+  ];
+  function proj(id) { return PROJ.filter(function (p) { return p.id === id; })[0]; }
+  var TASKS = {
+    "loadout-cli": [
+      { id: "memory-import-notice", title: "Fix the memory import notice", state: "doing", kind: "bug", declaredBy: "claude", declared: "16 Oct", note: null },
+      { id: "specialist-examples", title: "Add value examples to specialist docs", state: "open", kind: "docs", declaredBy: "you", declared: "15 Oct", note: null },
+      { id: "flaky-tests", title: "Two flaky tests in the suite", state: "open", kind: "bug", declaredBy: "team run", declared: "17 Oct", note: "Left for later by the --since run" },
+      { id: "release-065", title: "Release 0.65.0", state: "done", kind: "release", declaredBy: "release-crew", declared: "10 Oct", note: null }],
+    starstats: [
+      { id: "upload-retries", title: "Retry the upload with backoff", state: "open", kind: "feature", declaredBy: "you", declared: "16 Oct", note: null },
+      { id: "new-bucket", title: "Move uploads to the new bucket", state: "blocked", kind: "chore", declaredBy: "you", declared: "12 Oct", note: "Waiting on access to the new bucket" },
+      { id: "old-charts", title: "Port the old charts", state: "dropped", kind: "chore", declaredBy: "you", declared: "2 Oct", note: null }],
+    "~": [{ id: "laptop-setup", title: "Set the new laptop up with Loadout", state: "open", kind: "chore", declaredBy: "you", declared: "14 Oct", note: null }],
+    "home-lab": []
+  };
+  var HEALTH = {
+    "loadout-cli": [{ name: "AGENTS.md", severity: "Warning", detail: "Changed since Loadout wrote it", fixable: true }, { name: "pre-commit hook", severity: "Error", detail: "Missing, so AI tooling files could be committed", fixable: true }, { name: "AI tooling files", severity: "Info", detail: "none tracked in the repository" }],
+    starstats: [{ name: "AI tooling files", severity: "Info", detail: "none tracked in the repository" }],
+    "home-lab": []
+  };
+
+  /* ===== Ideas: a workbench for one idea at a time ===== */
+  var IDEAS = [
+    { id: "browser-launcher", list: "loadout-cli", title: "Run the launcher in a browser", stage: "Proposed", ask: "I'd like to open the launcher from a browser tab instead of the terminal, on this machine at least.",
+      understanding: "A page served on this machine that does what the terminal launcher does: pick a project, a task and a mode, and start the session.",
+      questions: [
+        { id: "q1", question: "Should the browser launcher replace the terminal one, or sit beside it?", why: "It decides whether the terminal launcher keeps its own screens.", options: ["Beside it", "Replace it"], recommendation: "Beside it", answer: null },
+        { id: "q2", question: "Who opens it: only you on this machine, or anyone on the network?", why: "Anyone on the network means it needs signing in.", options: ["Only this machine", "The network, signed in"], recommendation: "Only this machine", answer: null },
+        { id: "q3", question: "What should it show first?", why: null, options: [], recommendation: "The projects, most recent first", answer: "The projects, most recent first" }],
+      plan: { revision: 2, title: "A browser launcher beside the terminal one", layers: [
+        { id: "L1", name: "What it does", purpose: "The launcher's job, unchanged: project, task, mode, start.", chosen: "o1", verdict: "Keep", options: [
+          { id: "o1", title: "The same steps as the terminal", detail: "Project, then task, then mode, then start.", pros: ["Nothing new to learn"], cons: [], recommended: true }] },
+        { id: "L2", name: "How it is served", purpose: "Where the page comes from and who can reach it.", chosen: null, verdict: "Undecided", options: [
+          { id: "o1", title: "From the daemon", detail: "The daemon that already hosts sessions serves the page too.", pros: ["One process to run", "Sessions are already there"], cons: ["The daemon must be running"], recommended: true },
+          { id: "o2", title: "Its own server", detail: "A separate command serves it, run when wanted.", pros: ["Nothing else needs to run"], cons: ["A second port", "Sessions live elsewhere"], recommended: false }] },
+        { id: "L3", name: "Where the session runs", purpose: "What happens when you press start.", chosen: null, verdict: "Undecided", options: [
+          { id: "o1", title: "In a terminal the page hosts", detail: "The session opens in the page, as Studio's sessions do.", pros: ["No window juggling"], cons: ["Needs a pseudo-terminal"], recommended: true },
+          { id: "o2", title: "In a new terminal window", detail: "The page asks the desktop to open a terminal.", pros: ["Your own terminal"], cons: ["Differs on every desktop"], recommended: false }] }],
+        additions: [{ id: "A1", title: "A link from the terminal launcher", why: "So people find the browser one from where they already are.", verdict: "Undecided" }],
+        placement: { slug: "loadout-cli", isNew: false, name: "Loadout CLI", reason: "the launcher lives there" } },
+      accepted: null },
+    { id: "retry-dashboard", list: "starstats", title: "Show upload retries on the dashboard", stage: "Ready", ask: "When uploads retry, show it on the stats dashboard.", understanding: "A small panel counting retries per day, from the upload log.", questions: [{ id: "q1", question: "Per day or per hour?", why: null, options: ["Per day", "Per hour"], recommendation: "Per day", answer: "Per day" }], plan: null, accepted: null },
+    { id: "follow-system-theme", list: "~", title: "Every tool follows the system theme", stage: "Captured", ask: "Everything I use should follow the system light and dark setting.", understanding: "", questions: [], plan: null, accepted: null },
+    { id: "company-sign-in", list: "starstats", title: "Sign in with the company account", stage: "Accepted", ask: "Use the company account to sign in to StarStats.", understanding: "Single sign-on through the company's identity provider.", questions: [], plan: { revision: 3, title: "Company sign-in", layers: [], additions: [], placement: null }, accepted: { project: "starstats", plan: "docs/plans/company-sign-in.md", by: "you", when: "9 Oct" } }
+  ];
+  var DUMPS = [{ id: "d3", source: "Notes app, Tuesday", captured: "16 Oct 21:40", split: "16 Oct 21:41", items: [
+    { number: 1, title: "A dark mode for the launcher", excerpt: "the launcher should follow the system theme", kind: "idea" },
+    { number: 2, title: "Fix the flaky upload test", excerpt: "it fails one run in ten on CI", kind: "task" },
+    { number: 3, title: "Ask about the bucket move", excerpt: "who grants access to the new bucket?", kind: "task", recorded: true }] }];
+  function ideaWhere(x) { return x.list === "~" ? ["--global"] : ["--project", x.list]; }
+  function ideaWord(x) {
+    if (x.id === "browser-launcher") { var l = line("i1"); if (l && l.failed) { return "last round failed"; } if (l && l.stage === 2) { return "round running"; } }
+    var u = x.questions.filter(function (q) { return !q.answer; }).length;
+    return u ? "waiting for you" : x.stage === "Accepted" ? "accepted" : "shaping";
+  }
+  function renderIdeas(main, r) {
+    var parts = r.split("/"), sel = parts[1] === "+add" || parts[1] === "+dumps" ? parts[1] : (parts[2] || null);
+    var waiting = IDEAS.filter(function (x) { return ideaWord(x) === "waiting for you"; }).length;
+    pageHead(main, "Ideas", IDEAS.filter(function (x) { return !x.accepted; }).length + " being shaped" + (waiting ? " · " + waiting + " waiting on you" : ""), [
+      halo({ label: "Drop an idea in", size: "small", solid: true, glyph: "+", cmd: "opens the box · records nothing yet", onPress: function () { go("ideas/+add"); } }, "i-add")]);
+    if (!sel && IDEAS.length) { sel = IDEAS[0].id; }
+    var bench = el("div", { "class": "bench" }), shelf = el("nav", { "class": "shelf", "aria-label": "Ideas" });
+    var lists = {}; IDEAS.forEach(function (x) { (lists[x.list] = lists[x.list] || []).push(x); });
+    Object.keys(lists).forEach(function (k) {
+      shelf.appendChild(el("h2", { "class": "gh", text: k === "~" ? "Workspace-wide" : k }));
+      shelf.appendChild(el("ul", {}, lists[k].map(function (x) {
+        var w = ideaWord(x), u = x.questions.filter(function (q) { return !q.answer; }).length;
+        return el("li", {}, [el("a", { href: "#ideas/" + x.list + "/" + x.id, "data-k": "idea-" + x.id, "aria-current": sel === x.id ? "page" : null }, [el("span", { "class": "t", text: x.title }), S.Signal(w), el("span", { "class": "x", text: u ? u + " question" + (u === 1 ? "" : "s") + " for you" : x.stage.toLowerCase() })])]);
+      })));
+    });
+    shelf.appendChild(el("h2", { "class": "gh", text: "More" }));
+    shelf.appendChild(el("ul", {}, [["+add", "Drop an idea in"], ["+dumps", "Notes kept elsewhere"]].map(function (p) { return el("li", {}, [el("a", { href: "#ideas/" + p[0], "aria-current": sel === p[0] ? "page" : null, "class": "place" }, [el("span", { "class": "t", text: p[1] })])]); })));
+    shelf.appendChild(from("$ loadout idea list"));
+    bench.appendChild(shelf);
+    var work = el("div", { "class": "work" }); bench.appendChild(work); main.appendChild(bench);
+    if (sel === "+add") { return ideaAdd(work); }
+    if (sel === "+dumps") { return ideaDumps(work); }
+    var x = IDEAS.filter(function (i) { return i.id === sel; })[0]; if (!x) { work.appendChild(el("p", { "class": "calm", text: "Choose an idea to answer its questions, shape its plan or accept it." })); return; }
+    var where = ideaWhere(x), w = ideaWord(x), i1 = x.id === "browser-launcher" ? line("i1") : null;
+    work.appendChild(el("div", { "class": "ihead" }, [el("h2", { text: x.plan ? x.plan.title : x.title }), el("p", { "class": "slug", text: x.id + " · " + (x.list === "~" ? "workspace-wide" : x.list) + (x.plan ? " · plan revision " + x.plan.revision : "") })]));
+    work.appendChild(S.IdeaStages({ stage: x.stage, word: w }));
+    if (x.understanding) { work.appendChild(el("p", { "class": "understand", text: x.understanding })); }
+    work.appendChild(el("details", { "class": "asked" }, [el("summary", { text: "What was asked" }), el("p", { text: x.ask })]));
+    if (i1 && i1.failed) {
+      work.appendChild(el("div", { "class": "waitcard problem" }, [el("span", { "class": "w", text: i1.failed }), el("p", { "class": "q", text: "The last round failed. Nothing it was doing was kept." }), el("div", { "class": "ls-answers" }, [
+        halo({ label: "Try the round again", kind: "danger", size: "small", cmd: "$ loadout idea refine browser-launcher --project loadout-cli", onPress: function () { refine(); bump(); } }),
+        halo({ label: "Clear the marker", size: "small", cmd: "$ loadout idea dismiss browser-launcher --project loadout-cli", onPress: function () { i1.failed = ""; i1.note = "round 2 back"; bump(); said("Cleared the 'last round failed' marker", "$ loadout idea dismiss browser-launcher --project loadout-cli"); } })])]));
+    }
+    if (i1 && i1.stage === 2 && !i1.failed) { work.appendChild(el("p", { "class": "ls-note needs", text: "A round is running on the daemon. You can leave this page; a toast says when it ends." })); }
+    if (x.accepted) { work.appendChild(el("p", { "class": "accepted" }, ["✓ Accepted onto ", el("b", { text: x.accepted.project }), " by " + x.accepted.by + " on " + x.accepted.when + ". The plan is at ", el("code", { text: x.accepted.plan }), "."])); }
+    var unanswered = x.questions.filter(function (q) { return !q.answer; });
+    if (x.questions.length && !x.accepted) {
+      work.appendChild(block("z-iq", unanswered.length ? "Questions for you" : "Questions, answered", [S.QuestionSet({ id: x.id, where: where, questions: x.questions, onSend: function (a, refineToo, lines) {
+        said(a.length + " answer" + (a.length === 1 ? "" : "s") + " saved" + (refineToo ? ", and round 3 started" : ""), lines.join(" · ") + (refineToo ? " · then $ loadout idea refine " + x.id + " " + where.join(" ") : ""));
+        if (refineToo && i1) { refine(); }
+        setTimeout(bump, 1200);
+      } }).el]));
+    }
+    if (x.plan && x.plan.layers.length) {
+      var pz = block("z-iplan", "The plan · revision " + x.plan.revision, [el("p", { "class": "calm", style: "margin: 0 0 6px; font-size: 13.5px", text: "Each layer's options side by side. Choose one, keep or drop the layer, or send it back with what should change." })]);
+      x.plan.layers.forEach(function (L) { pz.appendChild(S.PlanLayer({ idea: x.id, where: where, layer: L, accepted: !!x.accepted, onChoose: function (o) { L.chosen = o; said("Chose " + o + " for " + L.id, "$ loadout idea choose " + x.id + " " + L.id + " " + o + " " + where.join(" ")); bump(); }, onVerdict: function (v) { L.verdict = v; bump(); }, onImprove: function (req) { L.verdict = "Improve"; said("Sent " + L.id + " back: " + req, "$ loadout idea improve " + x.id + " " + L.id + " --request=" + S.shellQuote(req) + " " + where.join(" ")); bump(); } })); });
+      if (x.plan.additions.length) { pz.appendChild(el("h3", { "class": "sub", text: "Additions the agent proposes" })); x.plan.additions.forEach(function (A) { pz.appendChild(S.PlanLayer({ idea: x.id, where: where, addition: A, accepted: !!x.accepted, onVerdict: function (v) { A.verdict = v; bump(); } })); }); }
+      work.appendChild(pz);
+    }
+    if (x.plan && !x.accepted) { work.appendChild(block("z-iacc", "Accept it", [ideaAccept(x, where)])); }
+    if (!x.accepted) {
+      work.appendChild(block("z-imore", "More", [S.ActionDrawers([{ items: [
+        { path: "idea refine", title: "Take it one round further", label: "Refine", open: !x.questions.length && !x.plan, fields: [{ name: "id", value: x.id, fixed: true }, { name: where[0], label: where[0] === "--global" ? "Workspace-wide" : "Project", value: where[0] === "--global" ? true : where[1], kind: where[0] === "--global" ? "flag" : "text", fixed: true }, { name: "--model", label: "Model", placeholder: "the default" }], onRun: function (v, info) { if (i1) { refine(); } said("Round started", info.line); setTimeout(bump, 400); return "A round is running on the daemon."; } },
+        { path: "idea improve", title: "Ask for the whole plan to be reworked", label: "Ask for it", fields: [{ name: "id", value: x.id, fixed: true }, { name: "piece", label: "Piece", value: "plan", fixed: true }, { name: "--request", label: "What should change", lines: 2, joined: true, required: true }, { name: where[0], label: "Project", value: where[1] || true, kind: where[1] ? "text" : "flag", fixed: true }], onRun: ran("the plan sent back") },
+        { path: "idea remove", title: "Forget this idea", label: "Forget it", danger: true, fields: [{ name: "id", value: x.id, fixed: true }, { name: where[0], label: "Project", value: where[1] || true, kind: where[1] ? "text" : "flag", fixed: true }], onRun: function (v, info) { IDEAS = IDEAS.filter(function (i) { return i.id !== x.id; }); said("Forgot " + x.title, info.line); setTimeout(function () { go("ideas"); }, 200); return "Forgotten."; } }] }])]));
+    }
+    work.appendChild(S.Command({ why: "The same, in a terminal:", command: "$ loadout idea show " + x.id + " " + where.join(" ") }));
+  }
+  function ideaAccept(x, where) {
+    var pl = x.plan.placement, choice = pl && pl.isNew ? "new" : "to", to = pl ? pl.slug : "loadout-cli", nm = "", box = el("div", { "class": "accept" });
+    var undecided = x.plan.layers.filter(function (L) { return L.verdict === "Undecided" && !L.chosen; }).length;
+    if (pl) { box.appendChild(el("p", { "class": "place" }, ["The agent would put it on ", el("b", { text: pl.name }), pl.isNew ? ", a new project" : "", ": " + pl.reason + "."])); }
+    var nameId = "acc-new", rowTo = el("label", { "class": "opt" }, [el("input", { type: "radio", name: "acc", value: "to", checked: choice === "to" ? true : null, onchange: function () { choice = "to"; paint(); } }), "Onto a project ", projSelect(to, function (v) { to = v; paint(); }, "Which project").querySelector("select")]);
+    var newIn = el("input", { "class": "ls-text", id: nameId, placeholder: "its name", oninput: function () { nm = newIn.value.trim(); paint(); } });
+    var rowNew = el("label", { "class": "opt" }, [el("input", { type: "radio", name: "acc", value: "new", checked: choice === "new" ? true : null, onchange: function () { choice = "new"; paint(); } }), "As a new project ", newIn]);
+    box.appendChild(el("fieldset", { "class": "where" }, [el("legend", { text: "Where the plan goes" }), rowTo, rowNew]));
+    if (undecided) { box.appendChild(el("p", { "class": "ls-note needs", text: undecided + " layer" + (undecided === 1 ? " has" : "s have") + " no option chosen yet. Accepting now takes the plan as it stands." })); }
+    var act = el("div", { "class": "ls-answers" }); box.appendChild(act);
+    function paint() {
+      act.textContent = "";
+      var ln = "$ loadout idea accept " + x.id + " " + where.join(" ") + (choice === "new" ? " --new-project=" + (nm ? S.shellQuote(nm) : "<name>") : " --to " + to);
+      act.appendChild(halo({ label: "Accept the plan", kind: "", solid: true, glyph: "✓", cmd: ln, disabledReason: choice === "new" && !nm ? "name the new project first" : null, onPress: function () { x.accepted = { project: choice === "new" ? nm : to, plan: "docs/plans/" + x.id + ".md", by: "you", when: "17 Oct" }; x.stage = "Accepted"; said("Accepted onto " + x.accepted.project, ln, "done"); bump(); } }, "i-accept"));
+    }
+    paint();
+    return box;
+  }
+  function ideaAdd(work) {
+    work.appendChild(el("div", { "class": "ihead" }, [el("h2", { text: "Drop an idea in" }), el("p", { "class": "slug", text: "An idea, to be fleshed out by an agent later. Nothing is asked of an agent until you start a round." })]));
+    var text = "", list = "loadout-cli", ta = el("textarea", { "class": "ls-text big", id: "i-new", rows: 4, placeholder: "The idea, in your own words", oninput: function () { text = ta.value; paint(); } });
+    var where = el("div", { "class": "wherebar" }, [el("label", { "for": "i-new", "class": "lab", text: "The idea" })]);
+    work.appendChild(where); work.appendChild(ta);
+    var pick = projSelect(list, function (v) { list = v; paint(); }, "For");
+    var sel = pick.querySelector("select"); sel.appendChild(el("option", { value: "~", text: "No project yet · workspace-wide" }));
+    work.appendChild(pick);
+    var act = el("div", { "class": "ls-answers" }); work.appendChild(act);
+    function paint() {
+      act.textContent = "";
+      var w = list === "~" ? ["--global"] : ["--project", list], ln = "$ loadout idea add --text=" + (text.trim() ? S.shellQuote(text.trim()) : "<idea>") + " " + w.join(" ");
+      act.appendChild(halo({ label: "Drop it in", solid: true, glyph: "+", cmd: ln, disabledReason: text.trim() ? null : "say the idea first", onPress: function () { var id = text.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 32); IDEAS.push({ id: id, list: list, title: text.trim(), stage: "Captured", ask: text.trim(), understanding: "", questions: [], plan: null, accepted: null }); said("Dropped in: " + text.trim(), ln, "done"); go("ideas/" + list + "/" + id); } }, "i-drop"));
+    }
+    paint();
+  }
+  function ideaDumps(work) {
+    work.appendChild(el("div", { "class": "ihead" }, [el("h2", { text: "Notes kept elsewhere" }), el("p", { "class": "slug", text: "Paste notes from wherever you keep them, and an agent splits them into ideas and tasks. Nothing is recorded until you record the pieces." })]));
+    work.appendChild(S.ActionDrawers([{ items: [{ path: "idea dump add", title: "Drop notes in", label: "Drop them in", open: true, fields: [{ name: "--text", label: "The notes", lines: 5, joined: true, required: true }], onRun: function (v, info) { DUMPS.unshift({ id: "d" + (DUMPS.length + 4), source: "Pasted here", captured: "17 Oct", split: null, items: [] }); said("Dropped the notes in. Split them to see the pieces.", info.line); bump(); return "Dropped in."; } }] }]));
+    DUMPS.forEach(function (d) { work.appendChild(S.NoteDump({ dump: d, onApply: function (ks) { d.items.forEach(function (it) { if (ks.indexOf(String(it.number)) >= 0) { it.recorded = true; } }); said("Recorded " + ks.length, "$ loadout idea dump apply " + d.id); bump(); }, onSplit: function () { said("Splitting " + d.id + " again", "$ loadout idea dump split " + d.id); }, onShow: function () { S.Dialog({ title: d.source, why: d.id + " · captured " + d.captured, content: el("pre", { "class": "dumpshow", text: d.items.map(function (i) { return i.excerpt || i.title; }).join("\n\n") }), cancelLabel: "Close" }).open(); } })); });
+    work.appendChild(from("$ loadout idea dump list"));
+  }
+
+  /* ===== Projects: a wall of projects; a picked one opens as a dossier under it ===== */
+  function renderProjects(main, r) {
+    var parts = r.split("/"), sel = parts[1] || null;
+    pageHead(main, "Projects", PROJ.length + " known · " + PROJ.filter(function (p) { return p.available; }).length + " on this machine");
+    var wall = el("div", { "class": "ls-pwall" + (sel ? " compact" : "") });
+    PROJ.forEach(function (p) {
+      var ts = TASKS[p.id] || [], f = (HEALTH[p.id] || []).filter(function (x) { return x.fixable; }).length, ideas = IDEAS.filter(function (x) { return x.list === p.id && !x.accepted; }).length;
+      wall.appendChild(key(S.ProjectTile({ project: p, href: "#projects/" + p.id, picked: sel === p.id, doing: ts.filter(function (t) { return t.state === "doing"; }).length, blocked: ts.filter(function (t) { return t.state === "blocked"; }).length, findings: p.available ? f : undefined, ideas: ideas }), "pt-" + p.id));
+    });
+    [["+add", "Add a repository you have", "loadout project add"], ["+new", "Make a new project", "loadout project new"], ["+find", "Find repositories and stray memory", "loadout project discover"]].forEach(function (x) { wall.appendChild(S.ProjectTile({ place: x[1], sub: x[2], href: "#projects/" + x[0] })); });
+    main.appendChild(wall);
+    main.appendChild(el("p", { "class": "ls-from" }, ["The same as ", el("code", { text: "$ loadout project list" }), " or ", el("code", { text: "loadout list" }), ". Also: ", el("a", { href: "#projects/+tasks", text: "tasks for no project yet" }), " · ", el("a", { href: "#projects/+workspace", text: "the workspace" }), "."]));
+    var p = sel ? proj(sel) : null;
+    if (p) { return dossier(main, p); }
+    if (sel === "+add") { return placePage(main, "Add a repository you have", [{ path: "project add", title: "Register a Git repository on this machine", open: true, fields: [{ name: "path", label: "Where it is", placeholder: "~/code/my-repo" }, { name: "--slug", label: "Slug", placeholder: "from the folder" }] }, { path: "project clone", title: "Clone a project the workspace knows but this machine does not have", fields: [{ name: "project", label: "Project", value: "home-lab", kind: "choice", options: ["home-lab"] }, { name: "destination", label: "Where to", placeholder: "the folder Loadout clones into" }] }]); }
+    if (sel === "+new") { return placePage(main, "Make a new project", [{ path: "project new", title: "A new project, empty or from one you have", open: true, fields: [{ name: "name", label: "Name", required: true }, { name: "--from", label: "From a project you have", kind: "choice", options: ["", "loadout-cli", "starstats"], value: "" }, { name: "--path", label: "Where", placeholder: "the default folder" }, { name: "--remote", label: "Remote", placeholder: "none" }] }, { path: "start", title: "Your first project, step by step with an agent", effect: "session" }]); }
+    if (sel === "+find") { return placePage(main, "Find repositories and stray memory", [{ path: "project discover", title: "Repositories under the folders Loadout looks in", effect: "reads", open: true }, { path: "project survey", title: "Agent memory no project accounts for", changesOnlyWith: ["--apply"], fields: [{ name: "--apply", label: "Bring it in, not only list it", kind: "flag" }] }, { path: "drift", title: "Where every project has drifted from what was recorded", changesOnlyWith: ["--fix"], fields: [{ name: "--fix", label: "Put right what can be put right", kind: "flag" }, { name: "--yes", label: "Without asking each time", kind: "flag" }] }, { path: "repo check", title: "AI tooling files tracked in a repository", effect: "reads" }]); }
+    if (sel === "+tasks") {
+      main.appendChild(block("z-gt", "Tasks for no project yet", [el("p", { "class": "calm", style: "margin: 0 0 10px; font-size: 14px", text: "The workspace-wide list, for work that does not belong to a project yet." }), S.TaskBoard({ tasks: TASKS["~"], where: ["--global"], from: "$ loadout task list --global --all", onDeclare: function (t, n) { said(t.title + ": " + n, "$ loadout task declare " + t.id + " " + n + " --global"); } }).el, taskNew("~")]));
+      return;
+    }
+    if (sel === "+workspace") {
+      main.appendChild(block("z-ws", "The workspace", [el("p", { "class": "calm", style: "margin: 0 0 12px; font-size: 14px", text: "Where projects, memory, specialists and tasks are kept, and synced between your machines." }),
+        el("dl", { "class": "ls-rules" }, [el("dt", { text: "Remote" }), el("dd", { text: "github.com/ntatschner/loadout-workspace" }), el("dt", { text: "Here" }), el("dd", { text: "~/.loadout/workspace" }), el("dt", { text: "Projects" }), el("dd", { text: "3" })]), from("$ loadout workspace status"),
+        S.ActionDrawers([{ items: [{ path: "workspace sync", title: "Bring in what other machines saved", label: "Sync", onRun: ran("synced") }, { path: "workspace save", title: "Save and push what changed here", label: "Save", onRun: ran("saved") }, { path: "workspace open", title: "Open its folder", label: "Open", onRun: ran("opened") }] }])]));
+      return;
+    }
+  }
+  function placePage(main, title, items) { main.appendChild(block("z-place", title, [S.ActionDrawers([{ items: items.map(function (d) { return Object.assign({ onRun: ran(d.title.toLowerCase()) }, d); }) }])])); }
+  function taskNew(where) {
+    var id = "", title = "", box = el("form", { "class": "tasknew", onsubmit: function (e) { e.preventDefault(); } });
+    var a = el("input", { "class": "ls-text", id: "tn-title", placeholder: "Retry the upload with backoff", oninput: function () { title = a.value.trim(); if (!idTouched) { id = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 28); b.value = id; } paint(); } });
+    var idTouched = false, b = el("input", { "class": "ls-text", id: "tn-id", placeholder: "upload-retries", oninput: function () { idTouched = true; id = b.value.trim(); paint(); } });
+    box.appendChild(el("div", { "class": "ls-field" }, [el("label", { "class": "lab", "for": "tn-title", text: "Record a task" }), a]));
+    box.appendChild(el("div", { "class": "ls-field" }, [el("label", { "class": "lab", "for": "tn-id", text: "Its id" }), b]));
+    var act = el("div", {}); box.appendChild(act);
+    function paint() {
+      act.textContent = ""; var w = where === "~" ? ["--global"] : ["--project", where], ln = "$ loadout task declare " + (id || "<id>") + " open --title " + (title ? S.shellQuote(title) : "<title>") + " " + w.join(" ");
+      act.appendChild(halo({ label: "Record it", size: "small", solid: true, cmd: ln, disabledReason: title && id ? null : "give it a title and an id", onPress: function () { TASKS[where].push({ id: id, title: title, state: "open", kind: "", declaredBy: "you", declared: "17 Oct", note: null }); said("Recorded " + title, ln, "done"); bump(); } }, "tn-go"));
+    }
+    paint();
+    return box;
+  }
+  function dossier(main, p) {
+    var d = el("article", { "class": "dossier", "aria-labelledby": "z-dos" });
+    d.appendChild(el("div", { "class": "dhead" }, [el("h2", { id: "z-dos", text: p.name }), el("span", { "class": "slug", text: p.id + (p.aliases.length ? " · also " + p.aliases.join(", ") : "") })]));
+    d.appendChild(el("dl", { "class": "facts" }, [
+      ["Where", p.available ? p.path : "not on this machine"], ["Branch", p.branch ? p.branch + (p.clean === false ? " · uncommitted changes" : " · clean") : "—"], ["Remote", p.remote || "none recorded"], ["Agent", p.defaultAgent],
+      ["Launched", p.launchCount + " times"], ["Profiles", p.profiles.join(", ") || "none"], ["Every session also gets", p.context.join(", ") || "nothing extra"], ["Working trees", p.worktrees.length > 1 ? p.worktrees.map(function (w) { return w[1] + (w[2] ? " (the main one)" : ""); }).join(", ") : (p.worktrees.length ? "one" : "—")]
+    ].map(function (f) { return el("div", {}, [el("dt", { text: f[0] }), el("dd", { text: f[1] })]); })));
+    d.appendChild(S.Command({ why: "The same, in a terminal:", command: "$ loadout project show " + p.id }));
+    d.appendChild(from("$ loadout project show " + p.id + " and loadout project worktrees " + p.id));
+    var grid = el("div", { "class": "dgrid" });
+    var tasks = TASKS[p.id] || [];
+    grid.appendChild(block("z-dt", "What is being worked on", [S.TaskBoard({ tasks: tasks, where: ["--project", p.id], from: "$ loadout task list --project " + p.id + " --all", onDeclare: function (t, n) { said(t.title + ": " + S.TASK_MOVE[n].toLowerCase(), "$ loadout task declare " + t.id + " " + n + " --project " + p.id); PV++; } }).el, taskNew(p.id)], "wide"));
+    var hs = HEALTH[p.id] || [], fx = hs.filter(function (f) { return f.fixable; }).length;
+    var hb = block("z-dh", "Health", p.available ? [S.HealthList({ findings: hs, from: "$ loadout drift " + p.id + " and loadout repo check " + p.id, noneText: "Nothing has drifted." })] : [el("p", { "class": "calm", text: "Not on this machine, so there is nothing here to check. Clone it to see its health." })]);
+    if (fx) { hb.appendChild(S.ActionDrawers([{ items: [{ path: "drift", title: "Put right what can be put right", label: "Put it right", changesOnlyWith: ["--fix"], open: false, fields: [{ name: "PROJECT", label: "Project", value: p.id, fixed: true }, { name: "--fix", label: "Fix, not only report", kind: "flag", value: true }, { name: "--yes", label: "Without asking each time", kind: "flag", value: true }], onRun: function (v, info) { if (info.reads) { said("Read the drift. Nothing changed.", info.line); return "Read."; } HEALTH[p.id] = hs.filter(function (f) { return !f.fixable; }); said("Put " + fx + " right", info.line, "done"); bump(); return "Put right."; } }] }])); }
+    grid.appendChild(hb);
+    d.appendChild(grid);
+    var groups = [];
+    groups.push({ name: "Open it", items: (p.available ? [{ path: "code", title: "Open it in the editor", label: "Open", fields: [{ name: "project", value: p.id, fixed: true }] }, { path: "project open", title: "Open its folder", label: "Open", fields: [{ name: "project", value: p.id, fixed: true }] }] : [{ path: "project clone", title: "Clone it onto this machine", open: true, fields: [{ name: "project", value: p.id, fixed: true }, { name: "destination", label: "Where to", placeholder: "the folder Loadout clones into" }] }]).concat([{ path: "project onboard", title: "Onboard it with an agent", effect: "session", fields: [{ name: "project", value: p.id, fixed: true }] }]) });
+    groups.push({ name: "Change how it is set up", items: [
+      { path: "project context", title: "Change what every session also gets", fields: [{ name: "--project", label: "Project", value: p.id, fixed: true }, { name: "key", label: "Key" }, { name: "value", label: "Value" }] },
+      { path: "project proposal", title: "A proposed change to its settings", changesOnlyWith: ["--apply", "--discard"], fields: [{ name: "project", value: p.id, fixed: true }, { name: "--apply", label: "Apply it", kind: "flag" }, { name: "--discard", label: "Discard it", kind: "flag" }] },
+      { path: "project relocate", title: "It has moved on this machine", fields: [{ name: "project", value: p.id, fixed: true }, { name: "path", label: "Where it is now", required: true }] },
+      { path: "project link", title: "Record in the repository which project it is", fields: [{ name: "project", value: p.id, fixed: true }] },
+      { path: "repo check", title: "Check the repository for AI tooling files", effect: "reads", fields: [{ name: "project", value: p.id, fixed: true }] }] });
+    groups[1].items.push({ path: "task remove", title: "Forget a task entirely", label: "Forget it", danger: true, why: "To say a task is done or dropped, move it on the board instead.", fields: [{ name: "id", label: "Task", kind: "choice", options: tasks.map(function (t) { return t.id; }) }, { name: "--project", value: p.id, fixed: true }] });
+    groups.forEach(function (g) { g.items.forEach(function (i) { i.onRun = i.onRun || ran(i.title.toLowerCase()); }); });
+    d.appendChild(block("z-ddo", "Do", [S.ActionDrawers(groups)]));
+    d.appendChild(block("z-dfg", "Forget project", [el("p", { "class": "lead", text: "Forget it on this machine only, or from the Loadout workspace for every machine, and choose what goes with it. Its repository and code are never touched." }), halo({ label: "Forget project\u2026", kind: "danger", size: "small", cmd: "opens the dialog \u00b7 changes nothing yet", onPress: function () { openForget(p); } }, "p-forget")]));
+    main.appendChild(d);
+  }
+
+  /* ===== Context: what a session starts with, and what it costs ===== */
+  var SPECS = {
+    foundation: { title: "Foundation", kind: "foundation", summary: "Change safety, engineering core, evidence first", origin: "built in", tokens: 1200, always: true, activation: { always: true }, body: "# Foundation\n\nChange only what the task needs. Read before you write.\nSay what you verified and how; say what you did not." },
+    "language.csharp": { title: "C# and .NET", kind: "language", summary: "Idioms, nullable reference types, async all the way", origin: "built in", tokens: 3100, activation: { globs: ["**/*.cs", "*.csproj"] }, body: "# C#\n\nNullable reference types are on. Prefer records for data.\nAsync all the way down; no .Result." },
+    "practice.testing": { title: "Testing", kind: "practice", summary: "Tests first where they fit; one behaviour per test", origin: "built in", tokens: 2400, activation: { taskPhrases: ["test", "flaky"], modes: ["implement", "review"] }, body: "# Testing\n\nOne behaviour per test, named for the behaviour." },
+    "design.cli": { title: "Command-line design", kind: "design", summary: "Verbs, options, exit codes and output that scripts can read", origin: "workspace", tokens: 1700, activation: { taskPhrases: ["command", "option", "flag"] }, body: "# Command-line design\n\nEvery command has --json. Exit codes mean something." },
+    "style.voice": { title: "Your writing voice", kind: "style", summary: "Rendered from your voice guide", origin: "yours", tokens: 1000, always: true, activation: { always: true }, body: "# Your writing voice\n\nPlain words. Short sentences. No em dashes." },
+    "database.postgresql": { title: "PostgreSQL", kind: "database", summary: "Indexes, migrations and EXPLAIN", origin: "built in", tokens: 1900, activation: { dependencies: ["Npgsql"], globs: ["db/migrations/**"] }, body: "# PostgreSQL\n\nRead EXPLAIN ANALYZE before changing a query." },
+    "framework.svelte": { title: "Svelte", kind: "framework", summary: "Runes, stores and accessible components", origin: "built in", tokens: 2200, activation: { globs: ["**/*.svelte"] }, body: "# Svelte\n\nRunes, not stores, for new code." }
+  };
+  var CX = { task: "", mode: "implement" };
+  function explain(slug) {
+    var sel = ["foundation", "style.voice"], om = [], t = CX.task.toLowerCase();
+    if (slug !== "home-lab") { sel.push("language.csharp"); }
+    if (slug === "starstats") { sel.push("database.postgresql"); } else { om.push({ id: "database.postgresql", reason: "no PostgreSQL in this project" }); }
+    if (/test|flaky/.test(t) || CX.mode === "review") { sel.push("practice.testing"); } else { om.push({ id: "practice.testing", reason: CX.mode === "advise" ? "advise mode does not change code" : "the task does not mention tests" }); }
+    if (/command|option|flag|--/.test(t)) { sel.push("design.cli"); } else { om.push({ id: "design.cli", reason: "the task names no command" }); }
+    om.push({ id: "framework.svelte", reason: slug === "loadout-cli" ? "the task touches no .svelte files" : "no Svelte here" });
+    var modeCost = { implement: 276, advise: 180, investigate: 240, review: 210 }[CX.mode];
+    var items = sel.map(function (id) { var s = SPECS[id]; return { id: id, title: s.title, estimatedTokens: s.tokens, always: !!s.always, reason: s.always ? "every session" : ({ "language.csharp": "the repository is C#", "database.postgresql": "Npgsql is a dependency", "practice.testing": CX.mode === "review" ? "review mode" : "the task says tests", "design.cli": "the task names a command" }[id] || "") }; });
+    items.push({ id: "mode." + CX.mode, title: CX.mode.charAt(0).toUpperCase() + CX.mode.slice(1) + " mode", estimatedTokens: modeCost, always: false, reason: "the mode you chose" });
+    return { selected: items, omitted: om, conflicts: 1, budget: 8000 };
+  }
+  var CSECT = [["load", "What a session loads"], ["specialists", "Specialists"], ["rules", "Rules and styles"], ["docs", "Documents"], ["health", "Health"], ["voice", "Your writing voice"], ["handoff", "Handing over"]];
+  function renderContext(main, r) {
+    var parts = r.split("/"), slug = parts[1] || "loadout-cli", sec = parts[2] || "load";
+    pageHead(main, "Context", "what a session reads before it starts, and what it costs", [projSelect(slug, function (v) { go("context/" + v + "/" + (sec === "specialist" ? "specialists" : sec)); }, "Project")]);
+    main.appendChild(pnav("Context", CSECT.map(function (c) { return ["context/" + slug + "/" + c[0], c[1]]; }), "context/" + slug + "/" + (sec === "specialist" ? "specialists" : sec)));
+    var box = el("div", { "class": "ctx" }); main.appendChild(box);
+    if (sec === "load") {
+      var e = explain(slug), words = (CX.task ? [S.shellQuote(CX.task)] : []).concat(["--project", slug, "--mode", CX.mode]);
+      var form = el("form", { "class": "explain", onsubmit: function (ev) { ev.preventDefault(); bump(); } });
+      var ti = el("input", { "class": "ls-text", id: "cx-task", "data-k": "cx-task", value: CX.task, placeholder: "Fix the flaky upload test", oninput: function () { CX.task = ti.value; } });
+      ti.value = CX.task;
+      form.appendChild(el("div", { "class": "ls-field grow" }, [el("label", { "class": "lab", "for": "cx-task", text: "The task, in a sentence (optional)" }), ti]));
+      var mf = el("fieldset", { "class": "modes" }, [el("legend", { "class": "lab", text: "Mode" })]);
+      ["implement", "advise", "investigate", "review"].forEach(function (m) { mf.appendChild(el("label", {}, [el("input", { type: "radio", name: "cx-mode", value: m, checked: CX.mode === m ? true : null, "data-k": "cx-m-" + m, onchange: function () { CX.mode = m; bump(); } }), m])); });
+      form.appendChild(mf);
+      form.appendChild(halo({ label: "Explain it", solid: true, size: "small", cmd: "$ loadout instructions explain " + words.join(" ") + " · reads only", onPress: function () { CX.task = ti.value; bump(); } }, "cx-go"));
+      box.appendChild(form);
+      box.appendChild(block("z-cl", "What a session on " + slug + " would load", [S.LoadStack({ selected: e.selected, omitted: e.omitted, conflicts: e.conflicts, tokenBudget: e.budget, href: function (id) { return SPECS[id] ? "#context/" + slug + "/specialist/" + id : null; } }), from("$ loadout instructions explain " + words.join(" "))]));
+      box.appendChild(S.ActionDrawers([{ items: [{ path: "instructions explain", title: "Compare it with another mode, task or profile", label: "Compare", effect: "reads", fields: [{ name: "task", label: "Task", placeholder: "optional" }, { name: "--project", value: slug, fixed: true }, { name: "--mode", label: "Mode", kind: "choice", options: ["implement", "advise", "investigate", "review"], value: "advise" }], onRun: ran("the comparison") }] }]));
+      return;
+    }
+    if (sec === "specialists" || sec === "specialist") {
+      if (sec === "specialist") { return specialistPage(box, slug, parts[3]); }
+      var grid = el("div", { "class": "specs" });
+      Object.keys(SPECS).forEach(function (id) { var s = SPECS[id]; grid.appendChild(el("a", { "class": "spec", href: "#context/" + slug + "/specialist/" + id, "data-k": "sp-" + id }, [el("span", { "class": "k", text: s.kind + (s.always ? " · always" : "") }), el("b", { text: s.title }), el("span", { "class": "s", text: s.summary }), el("span", { "class": "n", text: s.tokens.toLocaleString("en-GB") + " tokens · " + s.origin })])); });
+      box.appendChild(block("z-cs", "Specialists", [grid, from("$ loadout instructions list " + slug)]));
+      box.appendChild(S.ActionDrawers([{ items: [{ path: "instructions new", title: "Draft a new specialist or skill", fields: [{ name: "--project", value: slug, fixed: true }], onRun: ran("a draft") }, { path: "instructions export", title: "Copy a built-in one into the workspace to edit", fields: [{ name: "SPECIALIST", label: "Specialist", kind: "choice", options: Object.keys(SPECS) }], onRun: ran("copied") }] }]));
+      return;
+    }
+    if (sec === "rules") {
+      box.appendChild(block("z-cr", "Rules", [
+        el("div", { "class": "bytes" }, [el("p", {}, [el("b", { text: "4,210" }), " bytes always loaded"]), el("p", {}, [el("b", { text: "11,880" }), " scoped to the files they cover"])]),
+        el("ul", { "class": "plain" }, [["src/Loadout.Tui/**", "tui-colours.md", "1,940 bytes"], ["studio/**", "studio-pages.md", "6,300 bytes"], ["tests/**", "tests.md", "3,640 bytes"]].map(function (x) { return el("li", {}, [el("b", { text: x[1] }), " · ", el("code", { text: x[0] }), " · " + x[2]]); })),
+        S.HealthList({ verdict: "Fine", findings: [{ name: "AGENTS.md", severity: "Info", detail: "2,900 bytes; within the always-loaded budget" }], noneText: "Nothing to put right." }),
+        from("$ loadout rules list " + slug + ", loadout rules budget " + slug + " and loadout rules audit " + slug)]));
+      box.appendChild(block("z-cst", "Coding styles", [el("ul", { "class": "plain" }, [el("li", {}, [el("b", { text: "plain-csharp" }), " · ", S.Signal("met"), " in force · Records, no regions, early returns"]), el("li", {}, [el("b", { text: "dense-csharp" }), " · Fewer lines, more expression bodies"])]), from("$ loadout style list " + slug)]));
+      box.appendChild(block("z-cpr", "Profiles", [el("ul", { "class": "plain" }, [el("li", {}, [el("b", { text: "release" }), " · Loads the release checklist and the changelog rules"])]), from("$ loadout profile list " + slug)]));
+      box.appendChild(block("z-csh", "Guidance for everybody", [el("p", { "class": "calm", style: "font-size: 14px", text: "Nothing here looks like it belongs to every project." }), from("$ loadout share candidates --project " + slug, ": guidance that never mentions this project.")]));
+      box.appendChild(S.ActionDrawers([{ items: [
+        { path: "style use", title: "Choose the style this project uses", label: "Use it", fields: [{ name: "style", label: "Style", kind: "choice", options: ["plain-csharp", "dense-csharp"] }, { name: "--project", value: slug, fixed: true }], onRun: ran("the style chosen") },
+        { path: "style show", title: "Read a coding style", label: "Show", effect: "reads", fields: [{ name: "style", label: "Style", kind: "choice", options: ["plain-csharp", "dense-csharp"] }, { name: "--project", value: slug, fixed: true }], onRun: ran("the style") },
+        { path: "rules split", title: "Split an oversized instruction file into scoped rules", changesOnlyWith: ["--apply"], fields: [{ name: "--from", label: "From", placeholder: "AGENTS.md" }, { name: "--apply", label: "Write the rules, not only show the split", kind: "flag" }], onRun: ran("the split") },
+        { path: "share promote", title: "Move guidance into the workspace's global layer", label: "Move it", changesOnlyWith: ["--apply"], fields: [{ name: "path", label: "File", required: true }, { name: "--apply", label: "Move it, not only show what would move", kind: "flag" }], onRun: ran("the move") }] }]));
+      return;
+    }
+    if (sec === "docs") {
+      box.appendChild(block("z-cd", "Documents", [el("p", { "class": "lead", text: "38 documents checked; 2 places where they have come adrift." }), S.HealthList({ findings: [{ name: "docs/commands/usage.md:41", severity: "Warning", detail: "names --by week, which loadout usage does not have" }, { name: "README.md:112", severity: "Warning", detail: "links docs/teams.md, which was renamed docs/team-runs.md" }] }), from("$ loadout docs audit " + slug)]));
+      box.appendChild(S.ActionDrawers([{ items: [
+        { path: "docs find", title: "Where a type or member is declared", label: "Find it", effect: "reads", open: true, fields: [{ name: "name", label: "Type or member", placeholder: "StudioCoverage", required: true }, { name: "--project", value: slug, fixed: true }], onRun: ran("where it is declared") },
+        { path: "docs refresh", title: "Bring the symbol index up to date", fields: [{ name: "--project", value: slug, fixed: true }], onRun: ran("the index refreshed") },
+        { path: "docs export", title: "Write a reference or guide", fields: [{ name: "--project", value: slug, fixed: true }], onRun: ran("written") },
+        { path: "docs ci", title: "Write a CI workflow that regenerates them", fields: [{ name: "--project", value: slug, fixed: true }], onRun: ran("the workflow written") }] }]));
+      return;
+    }
+    if (sec === "health") {
+      box.appendChild(block("z-ch", "Health", [el("p", { "class": "lead", text: "6 specialists apply here, and 41 checks ran: 1 place where the project departs from what they ask." }), S.HealthList({ findings: [{ name: "practice.testing", severity: "Warning", detail: "tests/Loadout.Tests/UploadTests.cs has three behaviours in one test" }] }), el("p", { "class": "lead", text: "The library has 64 specialists: 0 errors, 1 warning." }), S.HealthList({ findings: [{ name: "design.cli", severity: "Warning", detail: "its summary is longer than 120 characters" }] }), from("$ loadout instructions audit --project " + slug + " and loadout instructions validate " + slug)]));
+      box.appendChild(S.ActionDrawers([{ items: [{ path: "instructions stats", title: "Which specialists launches actually reached", label: "Show", effect: "reads", fields: [{ name: "--project", value: slug, fixed: true }], onRun: ran("the stats") }, { path: "instructions probe", title: "How often sessions did what a specialist asks", onRun: ran("the probe") }] }]));
+      return;
+    }
+    if (sec === "voice") {
+      box.appendChild(block("z-cv", "Your writing voice", [el("p", { "class": "lead", text: "How you write, learned from your own writing and checked against it. The rules in force are rendered into the style specialist your sessions load." }),
+        el("dl", { "class": "ls-rules" }, [el("dt", { text: "Guide" }), el("dd", { text: "plain-english@3 · Plain words, short sentences" }), el("dt", { text: "Layers" }), el("dd", { text: "words: 12 rules · sentences: 7 rules · structure: not learned yet" })]),
+        el("ul", { "class": "plain" }, ["No em dashes · words · learned from 41 samples", "One idea per sentence · sentences · learned from 41 samples", "Say what was verified · sentences · learned from 18 samples"].map(function (t) { return el("li", { text: t }); })),
+        from("$ loadout voice show --project " + slug, ". 4 learn runs so far, as loadout voice runs lists them."),
+        el("p", { "class": "ls-from" }, ["Guides here: plain-english@3, house-style@1 (yours), from ", el("code", { text: "$ loadout voice guide list" }), "."])]));
+      box.appendChild(S.ActionDrawers([{ name: "Check and mark", items: [
+        { path: "voice check", title: "Check a message or a file against it", label: "Check it", effect: "reads", open: true, fields: [{ name: "--project", value: slug, fixed: true }], onRun: ran("the check") },
+        { path: "voice mark", title: "Mark writing as yours, so learning counts it", label: "Mark it", fields: [{ name: "--project", value: slug, fixed: true }], onRun: ran("marked") },
+        { path: "voice render", title: "Render it into the style specialist sessions load", label: "Render it", fields: [{ name: "--project", value: slug, fixed: true }], onRun: ran("rendered") }] },
+        { name: "Learn, ask as they go", items: [
+        { path: "voice learn", title: "Learn it from your own writing, rule by rule", effect: "session", why: "Learning asks you about each rule as it goes, so it opens in a terminal here.", fields: [{ name: "--project", value: slug, fixed: true }], onRun: ran("a terminal") },
+        { path: "voice guide draft", title: "Draft a new guide with an agent", effect: "session", onRun: ran("a terminal") }] },
+        { name: "Read", items: [{ path: "voice runs", title: "Past learn runs, with what each cost", label: "Show", effect: "reads", fields: [{ name: "--project", value: slug, fixed: true }], onRun: ran("the runs") }, { path: "voice guide show", title: "A guide's sources, checks and thresholds", label: "Show", effect: "reads", onRun: ran("the guide") }] }]));
+      return;
+    }
+    if (sec === "handoff") {
+      box.appendChild(block("z-cho", "Handing over", [el("p", { "class": "lead", text: "A handoff is a note the next session reads first: what this one worked out, so it does not have to again." }), S.ActionDrawers([{ items: [{ path: "handoff", title: "Write or read a handoff", open: true, fields: [{ name: "project", value: slug, fixed: true }], onRun: ran("the handoff") }] }])]));
+    }
+  }
+  function specialistPage(box, slug, id) {
+    var s = SPECS[id]; if (!s) { box.appendChild(el("p", { "class": "calm", text: "No such specialist." })); return; }
+    var a = s.activation, loads = a.always ? "always" : [a.globs ? "for files like " + a.globs.join(", ") : null, a.dependencies ? "with " + a.dependencies.join(", ") : null, a.taskPhrases ? "for tasks that say " + a.taskPhrases.map(function (p) { return "“" + p + "”"; }).join(" or ") : null, a.modes ? "in " + a.modes.join(" or ") + " mode" : null].filter(Boolean).join("; ") || "when asked for";
+    box.appendChild(el("p", { "class": "back" }, [el("a", { href: "#context/" + slug + "/specialists", text: "← Specialists" })]));
+    box.appendChild(el("div", { "class": "ihead" }, [el("h2", { text: s.title }), el("p", { "class": "slug", text: id + " · " + s.origin + " · " + s.tokens.toLocaleString("en-GB") + " tokens" })]));
+    box.appendChild(el("p", { "class": "lead", text: s.summary }));
+    box.appendChild(el("dl", { "class": "ls-rules" }, [el("dt", { text: "Loads" }), el("dd", { text: loads })]));
+    box.appendChild(el("pre", { "class": "body", "aria-label": "What it says", tabindex: "0", text: s.body }));
+    box.appendChild(S.Command({ why: "The same, in a terminal:", command: "$ loadout instructions show " + id + " --project " + slug }));
+    box.appendChild(S.ActionDrawers([{ items: [{ path: "instructions export", title: "Copy it into the workspace to edit", label: "Copy it", fields: [{ name: "SPECIALIST", value: id, fixed: true }, { name: "--project", value: slug, fixed: true }], onRun: ran("copied") }, { path: "instructions probe", title: "How often sessions did what it asks", label: "Measure it", fields: [{ name: "specialist", value: id, fixed: true }], onRun: ran("the probe") }] }]));
+  }
+
+  /* ===== Settings: a section index on the left, one section at a time ===== */
+  var CONFIG = [
+    { group: "Launching", settings: [
+      { name: "default-agent", value: "", description: "The agent a launch uses when none is named.", machineLocal: false, flag: false, whenUnset: "claude" },
+      { name: "token-budget", value: "8000", description: "The tokens a session's instructions should stay under.", machineLocal: false, flag: false, whenUnset: "6000" },
+      { name: "launch-in-new-window", value: "true", description: "Open each launch in a new terminal window.", machineLocal: true, flag: true, whenUnset: null } ] },
+    { group: "Workspace", settings: [
+      { name: "workspace-remote", value: "github.com/ntatschner/loadout-workspace", description: "Where the workspace is pushed and pulled.", machineLocal: false, flag: false, whenUnset: null },
+      { name: "auto-sync", value: "", description: "Sync the workspace when a launch starts.", machineLocal: true, flag: true, whenUnset: "off" } ] },
+    { group: "Studio", settings: [
+      { name: "studio-idle-after", value: "", description: "Minutes before a quiet session reads idle.", machineLocal: false, flag: false, whenUnset: "10" },
+      { name: "studio-layout-lens", value: "", description: "Home's Lens layout, as Edit layout saved it.", machineLocal: false, flag: false, whenUnset: "as it came" } ] }
+  ];
+  var SSECT = [["studio", "Studio", "how it looks, keys, signing in"], ["loadout", "Loadout's settings", "every loadout config setting"], ["agents", "Agents and packs", "MCP servers, secrets, packs"], ["safety", "Backups and safety", "backups, checkpoints, protections"], ["daemon", "The daemon", "running · starts at log-in"], ["machine", "This machine", "doctor: 1 to put right"]];
+  var DAEMON = { held: false, autostart: true };
+  function renderSettings(main, r) {
+    var sec = r.split("/")[1] || "studio";
+    pageHead(main, "Settings", "Studio, Loadout and this machine");
+    var two = el("div", { "class": "setwrap" }), idx = el("nav", { "class": "setidx", "aria-label": "Settings sections" });
+    idx.appendChild(el("ul", {}, SSECT.map(function (s) { return el("li", {}, [el("a", { href: "#settings/" + s[0], "aria-current": sec === s[0] ? "page" : null, "data-k": "set-" + s[0] }, [el("span", { "class": "t", text: s[1] }), el("span", { "class": "x", text: s[0] === "daemon" ? (DAEMON.held ? "schedules held" : "running") + " · " + (DAEMON.autostart ? "starts at log-in" : "started by hand") : s[2] })])]); })));
+    two.appendChild(idx);
+    var pane = el("div", { "class": "setpane" }); two.appendChild(pane); main.appendChild(two);
+    if (sec === "studio") {
+      pane.appendChild(block("z-sa", "Appearance", [appearanceForm()]));
+      pane.appendChild(block("z-sl", "Layouts", [el("p", { "class": "lead", text: "Home's Lens and Map are edited in place, from Edit layout on Home. These put them back as they came." }), el("div", { "class": "ls-answers" }, [halo({ label: "Reset the Lens", size: "small", cmd: "$ loadout config set studio-layout-lens \"\"", onPress: function () { said("The Lens is back as it came", "$ loadout config set studio-layout-lens \"\""); } }), halo({ label: "Reset the Map", size: "small", cmd: "$ loadout config set studio-layout-map \"\"", onPress: function () { said("The Map is back as it came", "$ loadout config set studio-layout-map \"\""); } })])]));
+      var idle = el("input", { "class": "ls-text", type: "number", id: "s-idle", min: "1", max: "1440", value: "10", style: "max-width: 120px", "data-k": "s-idle", oninput: function () { il.textContent = "$ loadout config set studio-idle-after " + (idle.value || "10"); } }), il = el("code", { "class": "ls-cmd", text: "$ loadout config set studio-idle-after 10" });
+      pane.appendChild(block("z-sk", "Ambient and keys", [S.Switch({ label: "Single-letter shortcuts", sub: "A for Ambient, N for a new session · kept in this browser", checked: P.keys, onChange: function (v) { P.keys = v; savePrefs(); } }), S.Switch({ label: "Ambient fills the screen", sub: "kept in this browser", checked: !!P.ambFull, onChange: function (v) { P.ambFull = v; savePrefs(); } }), el("div", { "class": "ls-field", style: "margin-top: 10px" }, [el("label", { "class": "lab", "for": "s-idle", text: "A quiet session reads idle after, in minutes" }), idle, il])]));
+      pane.appendChild(block("z-ss", "Signing in", [el("p", { "class": "lead" }, ["This browser is signed in to Studio on port 4417. Signing out signs out every browser on this machine; open Studio again with ", el("code", { "class": "ls-cmd", text: "$ loadout dashboard --open --studio" }), "."]), halo({ label: "Sign out every browser", kind: "danger", size: "small", cmd: "$ loadout dashboard sign-out", onPress: function () { S.Dialog({ title: "Sign every browser out?", why: "Every browser signed in to Studio or the dashboard on this machine is signed out, this one included. Nothing else changes.", danger: true, role: "alertdialog", actions: [{ label: "Sign out", kind: "danger", cmd: "$ loadout dashboard sign-out", onPress: function () { said("This prototype stays signed in. In Studio, this page now asks you to open it again.", "$ loadout dashboard sign-out"); } }] }).open(); } }, "s-signout")]));
+      pane.appendChild(block("z-st", "Done in a terminal", [el("p", { "class": "lead", text: "These are only ever done where you type, so that nothing a page can press reads a secret back or makes an agreement for you." }),
+        S.TerminalOnly({ title: "Set or change the team attach passphrase", why: "It sets the passphrase this page must be given separately, so it cannot be set from the page it guards.", command: "$ loadout team attach set", fact: "Team attach passphrase: set" }),
+        S.TerminalOnly({ title: "Agree to a tool's tests running on this machine", why: "Agreeing to a tool's tests is made in a terminal on purpose.", command: "$ loadout tools verify <tool> --agree" }),
+        S.TerminalOnly({ title: "Store a secret", why: "It asks for the value at a masked prompt, so the secret never sits in a page or a command line.", command: "$ loadout secret set <name>" })]));
+      pane.appendChild(block("z-sab", "About", [el("dl", { "class": "ls-rules" }, [el("dt", { text: "Version" }), el("dd", { text: "0.66.0" }), el("dt", { text: "Platform" }), el("dd", { text: "linux-x64" }), el("dt", { text: "Terminal" }), el("dd", { text: "available" })])]));
+      return;
+    }
+    if (sec === "loadout") {
+      pane.appendChild(block("z-slo", "Loadout's settings", [el("p", { "class": "lead", text: "Every setting loadout config knows, in the groups the terminal's Settings screen uses, each changed where it is shown." }), S.ConfigList({ groups: CONFIG, onSet: function (n, v) { said("Set " + n + (v === "" ? " back to its default" : " to " + v), "$ loadout config set " + n + " " + (v === "" ? "\"\"" : S.shellQuote(v)), "done"); }, onExplain: function (s) { return "$ loadout config get " + s.name + " --explain\n" + s.name + " = " + (s.value || "(unset)") + "\n" + s.description + (s.whenUnset ? "\nUnset, it uses " + s.whenUnset + "." : "") + (s.machineLocal ? "\nKept on this machine only." : "\nSynced with the workspace."); } }).el,
+        S.ActionDrawers([{ items: [{ path: "config edit", title: "The configuration file itself", label: "Show where", fields: [{ name: "--path-only", label: "Only say where it is", kind: "flag", value: true }], onRun: function (v, info) { said("~/.loadout/config.json", info.line); return "~/.loadout/config.json"; } }] }])]));
+      return;
+    }
+    if (sec === "agents") {
+      pane.appendChild(block("z-sm", "MCP servers", [el("p", { "class": "lead", text: "The servers every project's agent loads. A project's own are on its Context page." }),
+        el("ul", { "class": "rowsx" }, [["github", "stdio", "npx @modelcontextprotocol/server-github", "global"], ["docs-search", "http", "https://docs.internal/mcp", "global"]].map(function (x) { return el("li", {}, [el("b", { text: x[0] }), el("span", { text: x[1] }), el("code", { text: x[2] }), el("span", { text: x[3] })]); })),
+        from("$ loadout mcp list --global"),
+        S.ActionDrawers([{ items: [{ path: "mcp add", title: "Add a server", fields: [{ name: "NAME", label: "Name", required: true }, { name: "COMMAND-OR-URL", label: "Command or URL", required: true }, { name: "--arg", label: "An argument", placeholder: "optional" }, { name: "--global", label: "For every project", kind: "flag", value: true, fixed: true }], onRun: ran("the server added") }, { path: "mcp remove", title: "Remove one", label: "Remove", danger: true, fields: [{ name: "NAME", label: "Name", kind: "choice", options: ["github", "docs-search"] }, { name: "--global", label: "For every project", kind: "flag", value: true, fixed: true }], onRun: ran("the server removed") }] }])]));
+      pane.appendChild(block("z-sse", "Secrets", [el("p", { "class": "lead", text: "Kept in this machine's credential store. Studio never shows one back." }),
+        S.TerminalOnly({ title: "Store one", why: "It asks for the value at a masked prompt, so the secret never sits in a page or a command line.", command: "$ loadout secret set <name>" }),
+        S.ActionDrawers([{ items: [{ path: "secret test", title: "Check a reference resolves", label: "Check it", effect: "reads", fields: [{ name: "reference", label: "Reference", placeholder: "secret:NUGET_KEY", required: true }], onRun: function (v, info) { said("It resolves. The value is not shown.", info.line); return "It resolves. The value is not shown."; } }, { path: "secret remove", title: "Remove one", label: "Remove", danger: true, onRun: ran("removed") }] }])]));
+      var packs = [{ name: "dotnet-pack", remote: "github.com/loadout-packs/dotnet", ref: "v3", approved: true }, { name: "infra", remote: "github.com/acme/infra-specialists", ref: "main", approved: false }];
+      pane.appendChild(block("z-sp", "Specialist packs", [el("ul", { "class": "rowsx" }, packs.map(function (p) { return el("li", {}, [el("b", { text: p.name }), el("code", { text: p.remote }), el("span", { text: "@ " + p.ref }), el("span", { "class": "ls-tag " + (p.approved ? "good" : "needs"), text: p.approved ? "approved here" : "not approved here" })]); })),
+        from("$ loadout pack list", ". Fetching a pack is not approving it: approve one only once you have read it."),
+        S.ActionDrawers([{ items: [
+          { path: "pack approve", title: "Approve a pack's pinned commit here", label: "Approve", fields: [{ name: "name", label: "Pack", kind: "choice", options: ["infra"] }], onRun: function (v, info) { packs[1].approved = true; said("Approved infra here", info.line, "done"); return "Approved."; } },
+          { path: "pack add", title: "Declare a pack", fields: [{ name: "name", label: "Name", required: true }, { name: "remote", label: "Remote", required: true }, { name: "--ref", label: "Ref", placeholder: "main" }], onRun: ran("declared") },
+          { path: "pack update", title: "Move a pack's pin to what its ref points at", label: "Update", fields: [{ name: "name", label: "Pack", kind: "choice", options: ["dotnet-pack", "infra"] }], onRun: ran("updated") },
+          { path: "pack remove", title: "Stop declaring one", label: "Remove", danger: true, fields: [{ name: "name", label: "Pack", kind: "choice", options: ["dotnet-pack", "infra"] }], onRun: ran("removed") }] }])]));
+      return;
+    }
+    if (sec === "safety") {
+      pane.appendChild(block("z-sb", "Backups", [el("p", { "class": "lead", text: "Taken before anything that changes many files at once, so it can be undone." }),
+        el("ul", { "class": "rowsx" }, [["20261016-2214-migrate", "migrate", "16 Oct 22:14", "41 files"], ["20261012-0930-memory-compress", "memory compress", "12 Oct 09:30", "3 files"]].map(function (x) { return el("li", {}, [el("code", { text: x[0] }), el("span", { text: x[1] }), el("span", { text: x[2] }), el("span", { text: x[3] })]); })),
+        from("$ loadout backup list"),
+        S.ActionDrawers([{ items: [{ path: "backup restore", title: "Undo what one was taken for", label: "Restore", changesOnlyWith: ["--apply"], why: "Without --apply it lists what it would put back, and changes nothing.", fields: [{ name: "id", label: "Backup", kind: "choice", options: ["20261016-2214-migrate", "20261012-0930-memory-compress"] }, { name: "--apply", label: "Put the files back", kind: "flag" }], onRun: ran("the restore") }] }])]));
+      pane.appendChild(block("z-sc", "Checkpoints", [el("p", { "class": "lead", text: "A name for where a project stands, to come back to." }),
+        S.ActionDrawers([{ items: [
+          { path: "checkpoint create", title: "Mark where a project stands", label: "Mark it", fields: [{ name: "name", label: "Name", placeholder: "before-the-rename", required: true }, { name: "--because", label: "Because", placeholder: "a sentence" }, { name: "--project", label: "Project", kind: "choice", options: ["loadout-cli", "starstats"] }], onRun: ran("marked") },
+          { path: "checkpoint list", title: "A project's checkpoints", label: "Show", effect: "reads", fields: [{ name: "--project", label: "Project", kind: "choice", options: ["loadout-cli", "starstats"] }], onRun: ran("the checkpoints") },
+          { path: "checkpoint restore", title: "Put a checkpoint's files back", label: "Restore", changesOnlyWith: ["--apply"], fields: [{ name: "name", label: "Checkpoint", required: true }, { name: "--apply", label: "Put the files back", kind: "flag" }, { name: "--project", label: "Project", kind: "choice", options: ["loadout-cli", "starstats"] }], onRun: ran("the restore") },
+          { path: "checkpoint remove", title: "Forget one", label: "Forget it", danger: true, fields: [{ name: "name", label: "Checkpoint", required: true }, { name: "--project", label: "Project", kind: "choice", options: ["loadout-cli", "starstats"] }], onRun: ran("forgotten") }] }])]));
+      pane.appendChild(block("z-sk2", "Keeping AI files out of repositories", [S.ActionDrawers([{ items: [{ path: "protect", title: "Install the Git protections", fields: [{ name: "project", label: "Project", kind: "choice", options: ["", "loadout-cli", "starstats"] }, { name: "--all", label: "Every project", kind: "flag" }], onRun: ran("protected") }, { path: "migrate", title: "Move existing AI tooling files into the workspace", fields: [{ name: "project", label: "Project", kind: "choice", options: ["", "loadout-cli", "starstats"] }], onRun: ran("moved") }] }])]));
+      return;
+    }
+    if (sec === "daemon") {
+      var st = el("div", { "class": "dstat" }, [S.Signal(DAEMON.held ? "held" : "running", { big: true }), el("div", {}, [el("b", { text: DAEMON.held ? "Running, schedules held" : "Running" }), el("p", { text: "It serves this page, hosts its sessions and fires scheduled team runs. Stopping or restarting it ends the sessions it hosts." }), el("p", { "class": "x", text: (DAEMON.autostart ? "It starts when you log in, from ~/.config/systemd/user/loadout-daemon.service." : "It does not start when you log in.") })])]);
+      var acts = el("div", { "class": "ls-answers" });
+      acts.appendChild(DAEMON.held ? halo({ label: "Let the schedules fire", size: "small", solid: true, cmd: "$ loadout daemon resume", onPress: function () { DAEMON.held = false; said("The schedules fire again", "$ loadout daemon resume"); bump(); } }, "d-res") : halo({ label: "Hold the schedules", size: "small", cmd: "$ loadout daemon pause", onPress: function () { DAEMON.held = true; said("The schedules are held. Runs already going carry on.", "$ loadout daemon pause"); bump(); } }, "d-hold"));
+      function ends(label, cmd, kind) { return halo({ label: label, size: "small", kind: kind, cmd: cmd, onPress: function () { S.Dialog({ title: label + "?", why: "It ends the 3 sessions it hosts: their terminals close. Team runs pick up where they were when it is back.", danger: kind === "danger", role: "alertdialog", actions: [{ label: label, kind: kind || "", cmd: cmd, onPress: function () { said("In Studio, this page reconnects when the daemon is back.", cmd); } }] }).open(); } }); }
+      acts.appendChild(ends("Restart it", "$ loadout daemon restart", ""));
+      acts.appendChild(ends("Stop it", "$ loadout daemon stop", "danger"));
+      acts.appendChild(DAEMON.autostart ? halo({ label: "Stop it starting at log-in", size: "small", cmd: "$ loadout daemon autostart disable", onPress: function () { DAEMON.autostart = false; said("It no longer starts when you log in", "$ loadout daemon autostart disable"); bump(); } }) : halo({ label: "Start it at log-in", size: "small", cmd: "$ loadout daemon autostart enable", onPress: function () { DAEMON.autostart = true; said("It starts when you log in", "$ loadout daemon autostart enable"); bump(); } }));
+      pane.appendChild(block("z-sd", "The daemon", [st, acts, from("$ loadout daemon autostart show"), S.ActionDrawers([{ items: [{ path: "daemon continue", title: "Let the schedules fire, by its other name", label: "Let them fire", why: "The same as daemon resume.", onRun: function (v, info) { DAEMON.held = false; said("The schedules fire again", info.line); bump(); return "Done."; } }] }])]));
+      return;
+    }
+    if (sec === "machine") {
+      pane.appendChild(block("z-smc", "How this machine stands", [S.HealthList({ findings: [{ name: "dotnet", severity: "ok", detail: "10.0.100" }, { name: "git", severity: "ok", detail: "2.47.1" }, { name: "shell integration", severity: "Warning", detail: "the zsh completion is out of date", fixable: true }, { name: "credential store", severity: "ok", detail: "the system keyring" }], from: "$ loadout doctor" }),
+        S.ActionDrawers([{ items: [{ path: "doctor", title: "Put right what can be put right", label: "Put it right", changesOnlyWith: ["--fix"], fields: [{ name: "--fix", label: "Fix, not only check", kind: "flag", value: true }, { name: "--yes", label: "Without asking each time", kind: "flag", value: true }], onRun: ran("put right") }] }])]));
+      pane.appendChild(block("z-smo", "More", [S.ActionDrawers([{ items: [
+        { path: "setup", title: "Set the launcher up on this machine again", effect: "session", why: "It asks as it goes, so it opens in a terminal Studio hosts.", onRun: ran("a terminal") },
+        { path: "desktop", title: "The desktop entry for the launcher", fields: [{ name: "--remove", label: "Remove it instead", kind: "flag" }], onRun: ran("the entry") },
+        { path: "commands", title: "Everything Loadout can do, as the terminal lists it", label: "List them", effect: "reads", onRun: ran("the list") }] }]), el("p", { "class": "ls-from", text: "Every command also has a form on the Commands page." })]));
+    }
+  }
+
+  /* ===== Memory: stores on the left, the topic in the middle, its health and tools on the right ===== */
+  var MEM = {
+    "loadout-cli": { project: [
+      { name: "release-process", description: "How a release is cut, tagged and published", facts: 4, kind: "procedure", written: "16 Oct", version: "a41f9c2e77", text: "Releases are cut from main.\nRun the suite with --configuration Release first.\nTag as v<major>.<minor>.<patch>; the tag push publishes.\nThe changelog is written from the merged pull requests.\n", clash: true },
+      { name: "test-layout", description: "Where tests live and how they are named", facts: 6, kind: "reference", written: "11 Oct", version: "77b0e1d4a2", text: "Unit tests: tests/Loadout.Tests, one folder per area.\nStudio tests: studio/src/**/*.test.ts.\nNames say the behaviour: Does_X_when_Y.\n" },
+      { name: "studio-coverage", description: "Which commands Studio runs, and which it never does", facts: 3, kind: "decision", written: "8 Oct", version: "02cc9a1f50", text: "StudioCoverage.cs lists every command and its effect.\nTerminal-only: secrets, agreements, the attach passphrase.\n" }],
+      user: [{ name: "writing-style", description: "Plain words; no em dashes", facts: 9, kind: "preference", written: "2 Oct", version: "5f3a90be11", text: "Plain words. Short sentences.\nNo em dashes.\nSay what was verified.\n" }],
+      machine: [{ name: "local-paths", description: "Where this machine keeps things", facts: 2, kind: "reference", written: "1 Oct", version: "9a0d1c3e8f", text: "Repositories under ~/code.\nThe workspace at ~/.loadout/workspace.\n" }],
+      agent: { command: "loadout memory import loadout-cli --apply", wouldImport: ["build-quirks", "ci-secrets"], drifted: ["test-layout"] } },
+    starstats: { project: [{ name: "query-performance", description: "What made the daily totals slow, and the index that fixed it", facts: 3, kind: "finding", written: "17 Oct", version: "c1d2e3f4a5", text: "The daily totals query read every row: no index on events.created_at.\nAn index on events (created_at) brings it under 40 ms.\n" }], user: [], machine: [], agent: null }
+  };
+  var STORES = [["project", "This project", "Travels with the workspace."], ["user", "Your work, any project", "Travels with the workspace."], ["machine", "This machine only", "Never synced. Read-only here."]];
+  function renderMemory(main, r) {
+    var parts = r.split("/"), slug = parts[1] || "loadout-cli", store = parts[2] || null, name = parts[3] || null, m = MEM[slug] || { project: [], user: [], machine: [], agent: null };
+    var count = m.project.length + m.user.length + m.machine.length;
+    pageHead(main, "Memory", count + " topics for " + slug, [projSelect(slug, function (v) { go("memory/" + v); }, "Project")]);
+    var g = el("div", { "class": "memgrid" });
+    g.appendChild(S.StoreList({ picked: { store: store, name: name }, href: function (s, n) { return "#memory/" + slug + "/" + s + "/" + n; }, stores: STORES.map(function (s) { return { key: s[0], label: s[1], hint: s[2], readOnly: s[0] === "machine", topics: m[s[0]] }; }), agent: m.agent }));
+    var mid = el("div", { "class": "memmid" }); g.appendChild(mid);
+    var t = store && name ? (m[store] || []).filter(function (x) { return x.name === name; })[0] : null;
+    if (t) {
+      mid.appendChild(S.TopicEditor({ project: slug, topic: Object.assign({ scope: store }, t), storeLabel: STORES.filter(function (s) { return s[0] === store; })[0][1], editable: store !== "machine", readOnlyReason: "This machine's memory is read-only here.",
+        onSave: function (text, version) { if (t.clash) { t.clash = false; var theirs = { name: t.name, scope: store, description: t.description, kind: t.kind, written: "17 Oct 14:02 · your other machine", version: "c90d13ab42", text: "Releases are cut from main.\nRun the suite with --configuration Release first.\nTag as v<major>.<minor>.<patch>; the tag push publishes.\nNuGet publishing needs the NUGET_KEY secret.\nThe changelog is written from the merged pull requests.\n" }; return { changed: theirs }; } t.text = text; t.version = Math.random().toString(16).slice(2, 12); t.written = "17 Oct"; return { saved: Object.assign({ scope: store }, t) }; },
+        onSaved: function (x) { said("Saved " + x.name, "$ loadout workspace save · commits it to the workspace", "done"); } }).el);
+      mid.appendChild(from("$ loadout memory show " + t.name + " --project " + slug + (store !== "project" ? " --scope " + store : ""), ": as stored."));
+      if (store === "project") { mid.appendChild(S.ActionDrawers([{ items: [{ path: "memory delete", title: "Delete this topic", label: "Delete it", danger: true, why: "A backup is taken first. Topics that link to it are named and left as they are.", fields: [{ name: "topic", value: t.name, fixed: true }, { name: "project", value: slug, fixed: true }, { name: "--yes", label: "Without asking", kind: "flag", value: true }], onRun: function (v, info) { m.project = m.project.filter(function (x) { return x !== t; }); said("Deleted " + t.name + ". A backup was taken first.", info.line); setTimeout(function () { go("memory/" + slug); }, 200); return "Deleted."; } }] }])); }
+    } else {
+      mid.appendChild(el("div", { "class": "ihead" }, [el("h2", { text: "What " + slug + " remembers" }), el("p", { "class": "slug", text: "The topics on the left are loadout memory list " + slug + ". Choose one to read or edit it." })]));
+      mid.appendChild(memFind(slug));
+    }
+    var side = el("aside", { "class": "memside", "aria-label": "Health and tools" });
+    var aud = slug === "loadout-cli" ? [{ name: "test-layout", severity: "Warning", detail: "differs from what the agent recorded outside the workspace", fixable: false }, { name: "studio-coverage", severity: "Info", detail: "not revisited in 9 days" }] : [];
+    side.appendChild(block("z-mh", "Health", [S.HealthList({ verdict: aud.length ? "Needs a look" : "Clean", findings: aud, from: "$ loadout memory audit " + slug, noneText: "Every topic is in order." })]));
+    if (t) { side.appendChild(memFind(slug)); }
+    side.appendChild(block("z-mdo", "Do", [S.ActionDrawers([{ items: [
+      { path: "memory write", title: "Record a fact", label: "Record it", fields: [{ name: "topic", label: "Topic", required: true }, { name: "--fact", label: "The fact", lines: 2, required: true }, { name: "--project", value: slug, fixed: true }], onRun: ran("recorded") },
+      { path: "memory audit", title: "Clean up what the audit found", label: "Clean it", changesOnlyWith: ["--apply"], fields: [{ name: "project", value: slug, fixed: true }, { name: "--clean", label: "Clean", kind: "flag", value: true }, { name: "--apply", label: "Do it, not only report", kind: "flag" }], onRun: ran("the clean-up") },
+      { path: "memory import", title: "Bring in what the agent recorded outside the workspace", label: "Import", changesOnlyWith: ["--apply"], fields: [{ name: "project", value: slug, fixed: true }, { name: "--apply", label: "Bring it in, not only report", kind: "flag" }], onRun: ran("the import") },
+      { path: "memory compress", title: "Move durable facts out of always-loaded instructions", label: "Compress", changesOnlyWith: ["--apply"], fields: [{ name: "PROJECT", label: "Project", value: slug, fixed: true }, { name: "--apply", label: "Move them, not only report", kind: "flag" }], onRun: ran("the compression") },
+      { path: "memory reindex", title: "Rebuild the index from the topics that exist", label: "Rebuild it", fields: [{ name: "project", value: slug, fixed: true }], onRun: ran("the index rebuilt") },
+      { path: "memory review", title: "Walk the topics nobody has revisited", effect: "session", why: "It asks you to keep or expire each, so it opens in a terminal here.", fields: [{ name: "project", value: slug, fixed: true }], onRun: ran("a terminal") }] }]), el("p", { "class": "ls-from", text: "Clean, import and compress only report what they would do until you tick --apply." })]));
+    g.appendChild(side);
+    main.appendChild(g);
+  }
+  function memFind(slug) {
+    var q = "", res = el("div", { "class": "found", "aria-live": "polite" });
+    var inp = el("input", { "class": "ls-text", id: "m-find", "data-k": "m-find", type: "search", placeholder: "how is a release tagged?", oninput: function () { q = inp.value; paint(); } });
+    var b = el("div", {}); function paint() { b.textContent = ""; b.appendChild(halo({ label: "Find", size: "small", cmd: "$ loadout memory find " + (q.trim() ? S.shellQuote(q.trim()) : "<question>") + " --project " + slug + " · reads only", disabledReason: q.trim() ? null : "say what you are looking for", onPress: run }, "m-go")); }
+    function run() {
+      res.textContent = ""; var words = q.toLowerCase().split(/\W+/).filter(function (w) { return w.length > 2; }), m = MEM[slug] || {}, hits = [];
+      ["project", "user", "machine"].forEach(function (s) { (m[s] || []).forEach(function (t) { var hay = (t.name + " " + t.description + " " + t.text).toLowerCase(), matched = words.filter(function (w) { return hay.indexOf(w) >= 0; }); if (matched.length) { hits.push([s, t, matched]); } }); });
+      if (!hits.length) { res.appendChild(el("p", { "class": "calm", style: "font-size: 13.5px", text: "Nothing matches. It matches words rather than meanings, so a topic that says the same thing differently will not come back." })); return; }
+      res.appendChild(el("ul", { "class": "plain" }, hits.map(function (h) { return el("li", {}, [el("a", { href: "#memory/" + slug + "/" + h[0] + "/" + h[1].name, text: h[1].name }), " · " + h[1].description + " · matched " + h[2].join(", ")]); })));
+    }
+    var f = el("form", { "class": "mfind", onsubmit: function (e) { e.preventDefault(); if (q.trim()) { run(); } } }, [el("label", { "class": "lab", "for": "m-find", text: "Find the topics that answer" }), inp, b]);
+    paint();
+    return block("z-mf", "Find", [f, res]);
+  }
+
+  /* ===== Spend: one number, where it went, and what is running ===== */
+  var SPEND = { by: "project", days: "30" };
+  function usageFor(by, days) {
+    var k = { "1": 0.04, "7": 0.26, "30": 1, "90": 2.7 }[days] || 1;
+    var totals = { input: 4.2e6 * k, output: 1.9e6 * k, thinking: 0.6e6 * k, cacheRead: 38.5e6 * k, total: 45.2e6 * k, billedInputEquivalent: 11.3e6 * k, savedFraction: 0.74, cacheHitFraction: 0.9 };
+    var g = by === "project" ? [["loadout-cli", 6.1e6], ["starstats", 3.2e6], ["home-lab", 0.9e6], ["~/Downloads/scratch", 0.4e6, false], ["~/code/old-site", 0.2e6, false]]
+      : by === "model" ? [["claude-opus", 7.4e6], ["claude-sonnet", 2.9e6], ["gpt-5-codex", 1.0e6]]
+      : by === "agent" ? [["claude", 10.3e6], ["codex", 1.0e6]] : null;
+    if (by === "day") { g = []; var n = Math.max(1, +days); for (var i = 0; i < n; i++) { var d = new Date(2026, 9, 17 - (n - 1 - i)); g.push([d.getDate() + " " + d.toLocaleString("en-GB", { month: "short" }), Math.round(150000 + 500000 * Math.abs(Math.sin(i * 0.7)) + (d.getDay() % 6 === 0 ? -120000 : 0))]); } }
+    else { g = g.map(function (x) { return [x[0], x[1] * k, x[2]]; }); }
+    var since = new Date(2026, 9, 17 - (+days - 1));
+    return { totals: totals, since: since.getDate() + " " + since.toLocaleString("en-GB", { month: "short" }), complete: days !== "90", groups: g.map(function (x) { return { name: x[0], value: x[1], registered: x[2] }; }) };
+  }
+  function renderSpend(main) {
+    var u = usageFor(SPEND.by, SPEND.days), words = ["--by", SPEND.by, "--days", SPEND.days];
+    var per = el("div", { "class": "seg", role: "radiogroup", "aria-label": "Over the last" }, [["1", "day"], ["7", "week"], ["30", "30 days"], ["90", "90 days"]].map(function (p) { return el("button", { type: "button", role: "radio", "aria-checked": SPEND.days === p[0] ? "true" : "false", "data-k": "sp-d" + p[0], text: p[1], onclick: function () { SPEND.days = p[0]; bump(); } }); }));
+    var bySel = el("select", { "class": "ls-text", id: "sp-by", "data-k": "sp-by", onchange: function () { SPEND.by = bySel.value; bump(); } }, ["project", "day", "model", "agent"].map(function (b) { return el("option", { value: b, text: b }); })); bySel.value = SPEND.by;
+    pageHead(main, "Spend", "what the agents have used, in tokens, and where", [el("div", { "class": "spctl" }, [el("span", { "class": "lab", text: "Over the last" }), per])]);
+    main.appendChild(block("z-pt", "Tokens", [S.TokenSplit({ totals: u.totals, since: u.since, complete: u.complete, from: "$ loadout usage " + words.join(" ") })], "hero"));
+    var cols = el("div", { "class": "spgrid" });
+    cols.appendChild(block("z-pb", "Where it went", [el("div", { "class": "psel inline" }, [el("label", { "for": "sp-by", text: "By" }), bySel]), S.SpendBars({ by: SPEND.by, groups: u.groups, label: "Billed input by " + SPEND.by })], "wide"));
+    var running = ST.lines.filter(function (l) { return l.kind === "session" && l.stage === 2; });
+    cols.appendChild(block("z-pr", "Running now", [running.length ? el("ul", { "class": "plain live" }, running.map(function (l) { return el("li", {}, [S.Signal(wordOf(l)), el("span", {}, [el("b", { text: l.where }), " · " + (l.agent || "claude") + " · " + (l.mins || 0) + " min"])]); })) : el("p", { "class": "calm", text: "No sessions are running." }), from("$ loadout running")]));
+    main.appendChild(cols);
+    var three = el("div", { "class": "spgrid" });
+    three.appendChild(block("z-pl", "Launched this week", [el("ul", { "class": "plain" }, [["loadout-cli", "claude", "implement", "add a retry to the upload step", "today 13:21", "1,456 of 8,000"], ["starstats", "claude", "investigate", "why is this postgres query so slow", "today 13:30", "2,140 of 8,000"], ["starstats", "codex", "implement", "tidy the deploy script", "today 13:08", "1,120 of 8,000"], ["loadout-cli", "claude", "review", "review the memory compress change", "15 Oct", "1,890 of 8,000"]].map(function (x) { return el("li", {}, [el("b", { text: x[3] }), el("span", { "class": "x", text: [x[0], x[1], x[2], x[4], "started with " + x[5] + " tokens"].join(" · ") })]); })), from("$ loadout launches --days 7")]));
+    three.appendChild(block("z-ps", "Recent sessions", [el("ul", { "class": "plain" }, ST.recent.map(function (r) { return el("li", {}, [el("b", { text: r[3] }), el("span", { "class": "x", text: [r[1], r[2], r[0]].join(" · ") })]); })), from("$ loadout sessions --limit 12"),
+      S.ActionDrawers([{ items: [{ path: "resume", title: "Resume a session in a terminal here", effect: "session", fields: [{ name: "--last", label: "The last one", kind: "flag", value: true }], onRun: ran("a terminal") }] }])]));
+    main.appendChild(three);
+    main.appendChild(block("z-pa", "What agents reported", [el("p", { "class": "lead", text: "Not collecting. Launched agents report their own usage only while the receiver runs." }), S.TerminalOnly({ title: "Run the receiver", why: "It is a server that runs until Ctrl+C.", command: "$ loadout telemetry serve" }), from("$ loadout telemetry status")]));
+    main.appendChild(block("z-pm", "This machine", [el("dl", { "class": "ls-rules" }, [el("dt", { text: "Projects" }), el("dd", { text: "3 registered · 2 here · 1 elsewhere only" }), el("dt", { text: "Workspace" }), el("dd", { text: "set up and cloned" }), el("dt", { text: "Agents" }), el("dd", { text: "claude 2.1.302 · codex 0.9.1 · claude by default" })]), from("$ loadout status"),
+      S.ActionDrawers([{ items: [{ path: "usage", title: "Usage your own way: by model, a project, or as a table", label: "Show", effect: "reads", fields: [{ name: "--by", label: "By", kind: "choice", options: ["project", "day", "model", "agent"] }, { name: "--days", label: "Days", value: "30" }, { name: "--project", label: "Project", kind: "choice", options: ["", "loadout-cli", "starstats"] }, { name: "--format", label: "Format", placeholder: "table" }], onRun: ran("usage") }, { path: "spend refresh", title: "Work out where spending stands for the status line", label: "Refresh it", onRun: ran("refreshed") }] }])]));
+  }
+
+
+  /* ---------- the six pages in every mode: beside in Terminals and Teams, a quiet column in Minimal, a desk in Pure ---------- */
+  var BESIDE = null, PAGE_NAMES = { ideas: "Ideas", projects: "Projects", context: "Context", settings: "Settings", memory: "Memory", spend: "Spend" };
+  function pageBase(r) { return r.split("/")[0]; }
+  function pageRender(box, r) {
+    var b = pageBase(r);
+    if (b === "ideas") { renderIdeas(box, r); } else if (b === "projects") { renderProjects(box, r); } else if (b === "context") { renderContext(box, r); }
+    else if (b === "settings") { renderSettings(box, r); } else if (b === "memory") { renderMemory(box, r); } else if (b === "spend") { renderSpend(box); }
+    return box;
+  }
+  function pagePart(r, sel) { var d = pageRender(el("div", {}), r), n = d.querySelector(sel); return n || d; }
+  function keepFocus(fn) {
+    var a = document.activeElement, k = a && a.getAttribute && a.getAttribute("data-k"), caret = a && a.selectionStart;
+    fn();
+    if (k) { var n = document.querySelector('[data-k="' + CSS.escape(k) + '"]'); if (n) { n.focus({ preventScroll: true }); try { if (caret !== null && caret !== undefined && n.setSelectionRange) { n.setSelectionRange(caret, caret); } } catch (e) { /* not a text field */ } } }
+  }
+  function closeBeside() { go(P.lastFocus && !pagesRoute(P.lastFocus) ? P.lastFocus : "home"); }
+
+  /* Terminal Focus and Team Focus: the page opens beside what you are watching. */
+  function renderBeside(main, r, kind) {
+    var focus = el("div", {});
+    if (kind === "terminals") { renderDeck(focus, null); DECK.route = r; } else { renderBoard(focus, "teams"); }
+    if (BESIDE) { BESIDE.destroy(); }
+    BESIDE = S.PageBeside({ page: PAGE_NAMES[pageBase(r)], beside: kind === "terminals" ? "your terminals" : "the runs board", onClose: closeBeside });
+    BESIDE.set(pageRender(el("div", {}), r)); BESIDE.r = r; BESIDE.pv = PV;
+    main.appendChild(S.BesideGrid(focus, BESIDE));
+  }
+  function refreshBeside() { if (!BESIDE || BESIDE.pv === PV) { return; } keepFocus(function () { BESIDE.set(pageRender(el("div", {}), BESIDE.r)); }); BESIDE.pv = PV; }
+
+  /* Minimal: each page is one quiet column. */
+  function ideaWorkFor(x) { return pagePart("ideas/" + x.list + "/" + x.id, ".work"); }
+  function quietFor(r) {
+    var b = pageBase(r), items = [], sentence = el("p", {}), open = {};
+    function B(t) { return el("b", { text: t }); }
+    if (b === "ideas") {
+      var live = IDEAS.filter(function (x) { return !x.accepted; }), wait = live.filter(function (x) { return ideaWord(x) === "waiting for you"; });
+      live.forEach(function (x) { var u = x.questions.filter(function (q) { return !q.answer; }), w = ideaWord(x); items.push({ id: x.id, kind: "idea", title: x.title, word: w, where: x.list === "~" ? "workspace-wide" : x.list, ask: w === "last round failed" ? "The last round failed. Try it again or clear the marker." : u.length ? u[0].question + (u.length > 1 ? " (and " + (u.length - 1) + " more)" : "") : "" }); open[x.id] = function () { return { title: x.title, sub: x.id + " · " + x.list, word: w, content: ideaWorkFor(x) }; }; });
+      sentence.append(B(live.length + " ideas"), " being shaped", wait.length ? "; " : ".", wait.length ? B(wait.length + " waits for your answers") : "", wait.length ? "." : "");
+    }
+    if (b === "projects") {
+      var blocked = 0, fix = 0;
+      PROJ.forEach(function (p) {
+        (TASKS[p.id] || []).filter(function (t) { return t.state === "blocked"; }).forEach(function (t) { blocked++; items.push({ id: "t-" + t.id, kind: "task", title: t.title, word: "blocked", where: p.id, ask: t.note || "" }); open["t-" + t.id] = function () { return { title: t.title, sub: "task · " + p.id, word: "blocked", content: S.TaskBoard({ tasks: [t], where: ["--project", p.id], onDeclare: function (tt, n) { said(tt.title + ": " + S.TASK_MOVE[n].toLowerCase(), "$ loadout task declare " + tt.id + " " + n + " --project " + p.id); PV++; } }).el }; }; });
+        (HEALTH[p.id] || []).filter(function (f) { return f.fixable; }).forEach(function (f, i) { fix++; var id = "h-" + p.id + i; items.push({ id: id, kind: "health", title: f.name + " \u00b7 " + f.detail, word: "to put right", where: p.id }); open[id] = function () { return { title: p.name + ": its health", sub: "loadout drift " + p.id, word: "to put right", content: pagePart("projects/" + p.id, '[aria-labelledby="z-dh"]') }; }; });
+      });
+      sentence.append(PROJ.length + " projects, " + PROJ.filter(function (p) { return p.available; }).length + " on this machine. ");
+      if (blocked || fix) { sentence.append(B(blocked + " task" + (blocked === 1 ? " is" : "s are") + " blocked"), " and ", B(fix + " thing" + (fix === 1 ? "" : "s") + " can be put right"), "."); }
+    }
+    if (b === "context") {
+      var slug = r.split("/")[1] || "loadout-cli", e = explain(slug), used = e.selected.reduce(function (s, x) { return s + x.estimatedTokens; }, 0);
+      sentence.append("A session on " + slug + " starts with ", B(used.toLocaleString("en-GB") + " tokens"), used > e.budget ? ", over its budget of " + e.budget.toLocaleString("en-GB") + "." : ", within its budget of " + e.budget.toLocaleString("en-GB") + ".");
+      [["docs", "2 places where the documents have come adrift", "README.md links a renamed page; a guide names --by week, which usage does not have"], ["health", "1 place where the project departs from a specialist", "practice.testing: three behaviours in one test"]].forEach(function (x) { items.push({ id: x[0], kind: "context", title: x[1], word: "to put right", where: slug, ask: x[2] }); open[x[0]] = function () { return { title: x[1], sub: "context · " + slug, word: "to put right", content: pagePart("context/" + slug + "/" + x[0], ".ctx") }; }; });
+    }
+    if (b === "settings") {
+      items.push({ id: "machine", kind: "this machine", title: "The zsh completion is out of date", word: "to put right", where: "doctor", ask: "loadout doctor --fix puts it right." });
+      open.machine = function () { return { title: "This machine", sub: "loadout doctor", word: "to put right", content: pagePart("settings/machine", ".setpane") }; };
+      items.push({ id: "agents", kind: "pack", title: "The pack infra is not approved here", word: "not approved", where: "agents and packs" });
+      open.agents = function () { return { title: "Agents and packs", sub: "loadout pack list", word: "not approved", content: pagePart("settings/agents", ".setpane") }; };
+      if (DAEMON.held) { items.push({ id: "daemon", kind: "daemon", title: "The daemon's schedules are held", word: "held", where: "the daemon" }); open.daemon = function () { return { title: "The daemon", sub: "loadout daemon", word: "held", content: pagePart("settings/daemon", ".setpane") }; }; }
+      sentence.append("The daemon is ", B(DAEMON.held ? "running, its schedules held" : "running"), DAEMON.autostart ? " and starts when you log in. " : ". ", B("1 thing"), " on this machine can be put right.");
+    }
+    if (b === "memory") {
+      var n = Object.keys(MEM).reduce(function (s, k) { return s + MEM[k].project.length + MEM[k].user.length + MEM[k].machine.length; }, 0);
+      items.push({ id: "test-layout", kind: "topic", title: "test-layout differs from what the agent recorded", word: "needs a decision", where: "loadout-cli", ask: "Keep the workspace's copy, or bring the agent's in." });
+      open["test-layout"] = function () { return { title: "test-layout", sub: "memory · loadout-cli", word: "needs a decision", content: pagePart("memory/loadout-cli/project/test-layout", ".memmid") }; };
+      items.push({ id: "import", kind: "memory", title: "2 topics the agent recorded outside the workspace", word: "needs a decision", where: "loadout-cli", ask: "build-quirks and ci-secrets would come in with loadout memory import." });
+      open["import"] = function () { return { title: "Recorded outside the workspace", sub: "memory · loadout-cli", word: "needs a decision", content: pagePart("memory/loadout-cli", ".memside") }; };
+      sentence.append(B(n + " topics"), " across " + Object.keys(MEM).length + " projects. The audit of loadout-cli says ", B("needs a look"), ".");
+    }
+    if (b === "spend") {
+      var u = usageFor("project", "30");
+      sentence.append(B(S.tokens(u.totals.billedInputEquivalent) + " tokens"), " billed as input in the last 30 days; the cache saved ", B("74%"), ".");
+      ST.lines.filter(function (l) { return l.kind === "session" && l.stage === 2; }).forEach(function (l) { items.push({ id: l.id, kind: "session", title: l.title, word: wordOf(l), where: l.where }); });
+    }
+    return { items: items, sentence: sentence, open: open };
+  }
+  function renderQuietPage(main, r) {
+    var q = quietFor(r), b = pageBase(r);
+    var qp = S.QuietPage({ title: PAGE_NAMES[b], sentence: q.sentence, items: q.items, open: r.indexOf("/") > 0, calmText: "Nothing on " + PAGE_NAMES[b] + " needs you.",
+      onOpen: function (x, from) {
+        if (x.kind === "session") { openQuiet(x, from); return; }
+        var f = q.open[x.id] && q.open[x.id](); if (!f) { return; }
+        if (FOCUS) { FOCUS.close(); FOCUS = null; }
+        FOCUS = S.FocusFrame({ title: f.title, sub: f.sub, word: f.word, content: el("div", { "class": "qfocus" }, [f.content]), from: from, onClose: function () { FOCUS = null; } });
+      },
+      everything: function () { return pageRender(el("div", { "class": "qall" }), r); } });
+    main.appendChild(qp.el);
+  }
+
+  /* Pure Focus: each page is a WorkDesk, reached with G and its letter. */
+  var GOKEYS = { h: "all", s: "sessions", t: "runs", k: "tasks", n: "needs", i: "ideas", p: "projects", c: "context", m: "memory", u: "spend", o: "settings" };
+  function pureGo(where) {
+    if (PAGE_NAMES[where]) { go(where); toasts.add({ level: "info", text: PAGE_NAMES[where] + ", as a desk", cmd: "G then " + Object.keys(GOKEYS).filter(function (k) { return GOKEYS[k] === where; })[0].toUpperCase() }); return; }
+    P.pureScope = where; savePrefs();
+    if (PURE && PURE.page) { go("home"); } else { pureScope(where); }
+    toasts.add({ level: "info", text: "The list: " + { all: "everything", sessions: "sessions", runs: "team runs", tasks: "tasks", needs: "what needs you" }[where], cmd: "G then a letter" });
+  }
+  function act(label, cmd, fn, kind, why) { return { label: label, cmd: cmd, kind: kind || "", disabledReason: why, run: function () { var r = fn ? fn() : null; if (cmd && cmd.indexOf("$ ") === 0) { said(typeof r === "string" ? r : label, cmd); } return typeof r === "string" ? r : label; } }; }
+  function openForgetById(id) { var p = proj(id); if (p) { openForget(p); } return "Opened Forget " + (p ? p.name : id); }
+  var DESKS = {
+    ideas: function () {
+      var groups = [], wait = IDEAS.filter(function (x) { return ideaWord(x) === "waiting for you" || ideaWord(x) === "last round failed"; });
+      function item(x) { var u = x.questions.filter(function (q) { return !q.answer; }).length; return { id: x.id, kind: "idea", title: x.title, meta: (x.list === "~" ? "workspace-wide" : x.list) + " · " + (u ? u + " question" + (u === 1 ? "" : "s") + " for you" : x.stage.toLowerCase()), word: ideaWord(x) }; }
+      if (wait.length) { groups.push({ key: "needs", name: "Needs you", items: wait.map(item) }); }
+      var lists = {}; IDEAS.filter(function (x) { return wait.indexOf(x) < 0; }).forEach(function (x) { (lists[x.list] = lists[x.list] || []).push(x); });
+      Object.keys(lists).forEach(function (k) { groups.push({ key: k, name: k === "~" ? "Workspace-wide" : k, items: lists[k].map(item) }); });
+      function find(id) { return IDEAS.filter(function (x) { return x.id === id; })[0]; }
+      return { groups: groups, view: function (it) { var x = find(it.id); return { el: x ? ideaWorkFor(x) : el("p", { text: "Gone." }) }; },
+        actions: function (it) {
+          var x = find(it.id); if (!x) { return []; }
+          var w = ideaWhere(x).join(" "), out = [], i1 = x.id === "browser-launcher" ? line("i1") : null;
+          if (i1 && i1.failed) { out.push(act("Try the round again", "$ loadout idea refine " + x.id + " " + w, function () { refine(); bump(); }, "needs")); out.push(act("Clear the marker", "$ loadout idea dismiss " + x.id + " " + w, function () { i1.failed = ""; bump(); })); }
+          else if (!x.accepted) { out.push(act("Take it one round further", "$ loadout idea refine " + x.id + " " + w, function () { if (i1) { refine(); } bump(); return "A round is running on the daemon"; })); }
+          if (x.plan && !x.accepted && x.plan.placement) { var to = x.plan.placement.slug; out.push(act("Accept it onto " + to, "$ loadout idea accept " + x.id + " " + w + " --to " + to, function () { x.accepted = { project: to, plan: "docs/plans/" + x.id + ".md", by: "you", when: "17 Oct" }; x.stage = "Accepted"; bump(); return "Accepted onto " + to; })); }
+          if (!x.accepted) { out.push(act("Forget this idea", "$ loadout idea remove " + x.id + " " + w, function () { IDEAS = IDEAS.filter(function (y) { return y !== x; }); bump(); return "Forgot " + x.title; }, "danger")); }
+          out.push(act("Drop a new idea in", "opens the box · records nothing yet", function () { setMode("default"); setTimeout(function () { go("ideas/+add"); }, 60); }));
+          return out;
+        } };
+    },
+    projects: function () {
+      function item(p) { var b = (TASKS[p.id] || []).filter(function (t) { return t.state === "blocked"; }).length, f = (HEALTH[p.id] || []).filter(function (x) { return x.fixable; }).length; return { id: p.id, kind: "project", title: p.name, meta: p.id + (p.available ? " · " + p.branch + (b ? " · " + b + " blocked" : "") : " · elsewhere only"), word: !p.available ? "not on this machine" : f ? "to put right" : b ? "blocked" : "" }; }
+      return { groups: [{ key: "here", name: "On this machine", items: PROJ.filter(function (p) { return p.available; }).map(item) }, { key: "away", name: "Not on this machine", items: PROJ.filter(function (p) { return !p.available; }).map(item) }].filter(function (g) { return g.items.length; }),
+        view: function (it) { return { el: pagePart("projects/" + it.id, ".dossier") }; },
+        actions: function (it) {
+          var p = proj(it.id); if (!p) { return []; }
+          var out = [], fx = (HEALTH[p.id] || []).filter(function (f) { return f.fixable; }).length;
+          if (p.available) { out.push(act("Open it in the editor", "$ loadout code " + p.id)); out.push(act("Open its folder", "$ loadout project open " + p.id)); }
+          else { out.push(act("Clone it onto this machine", "$ loadout project clone " + p.id, function () { p.available = true; p.path = "~/code/" + p.id; bump(); return "Cloned " + p.id; })); }
+          if (fx) { out.push(act("Put " + fx + " right", "$ loadout drift " + p.id + " --fix --yes", function () { HEALTH[p.id] = HEALTH[p.id].filter(function (f) { return !f.fixable; }); bump(); return "Put " + fx + " right"; })); }
+          out.push(act("Onboard it with an agent", "opens a terminal here, hosted by the daemon", function () { return "In Studio, a terminal opens with loadout project onboard " + p.id; }));
+          out.push(act("Forget project…", "opens the dialog · changes nothing yet", function () { return openForgetById(p.id); }));
+          return out;
+        } };
+    },
+    context: function (r) {
+      var slug = r.split("/")[1] || "loadout-cli";
+      var secs = CSECT.map(function (c) { return { id: "sec-" + c[0], kind: "section", title: c[1], meta: "context · " + slug, word: c[0] === "docs" || c[0] === "health" ? "to put right" : "" }; });
+      var specs = Object.keys(SPECS).map(function (id) { var s = SPECS[id]; return { id: "spec-" + id, kind: "specialist", title: s.title, meta: id + " · " + s.tokens.toLocaleString("en-GB") + " tokens" + (s.always ? " · always" : ""), word: "" }; });
+      return { groups: [{ key: "secs", name: "Context of " + slug, items: secs }, { key: "specs", name: "Specialists", items: specs }],
+        view: function (it) { var r2 = it.id.indexOf("sec-") === 0 ? "context/" + slug + "/" + it.id.slice(4) : "context/" + slug + "/specialist/" + it.id.slice(5); var d = pageRender(el("div", {}), r2), c = d.querySelector(".ctx"); return { el: c || d }; },
+        actions: function (it) {
+          var out = [], sec = it.id.slice(4);
+          if (it.id === "sec-load") { ["implement", "advise", "investigate", "review"].forEach(function (m) { out.push(act("Explain it in " + m + " mode", "$ loadout instructions explain --project " + slug + " --mode " + m + " · reads only", function () { CX.mode = m; bump(); return "Explained, " + m + " mode"; })); }); }
+          if (it.id.indexOf("spec-") === 0) { var sid = it.id.slice(5); out.push(act("Copy it into the workspace to edit", "$ loadout instructions export " + sid + " --project " + slug)); out.push(act("Measure how often sessions did what it asks", "$ loadout instructions probe " + sid)); }
+          if (sec === "docs") { out.push(act("Bring the symbol index up to date", "$ loadout docs refresh --project " + slug)); }
+          if (sec === "health") { out.push(act("Which specialists launches reached", "$ loadout instructions stats --project " + slug + " · reads only")); }
+          if (sec === "voice") { out.push(act("Render it into the style specialist", "$ loadout voice render --project " + slug)); out.push(act("Learn it from your writing", "opens a terminal here, hosted by the daemon", function () { return "In Studio, a terminal opens with loadout voice learn --project " + slug; })); }
+          if (sec === "handoff") { out.push(act("Write or read a handoff", "$ loadout handoff " + slug)); }
+          PROJ.filter(function (p) { return p.available && p.id !== slug; }).forEach(function (p) { out.push(act("The same for " + p.id, "the context of another project", function () { go("context/" + p.id); })); });
+          return out;
+        } };
+    },
+    settings: function () {
+      var words = { studio: "", loadout: "", agents: "not approved", safety: "", daemon: DAEMON.held ? "held" : "running", machine: "to put right" };
+      return { groups: [{ key: "sections", name: "Settings", items: SSECT.map(function (s) { return { id: s[0], kind: "section", title: s[1], meta: s[2], word: words[s[0]] }; }) }],
+        view: function (it) { return { el: pagePart("settings/" + it.id, ".setpane") }; },
+        actions: function (it) {
+          var out = [];
+          if (it.id === "studio") { out.push(act("Reset the Lens", "$ loadout config set studio-layout-lens \"\"")); out.push(act("Reset the Map", "$ loadout config set studio-layout-map \"\"")); out.push(act("Sign out every browser", "$ loadout dashboard sign-out", function () { return "This prototype stays signed in"; }, "danger")); }
+          if (it.id === "agents") { out.push(act("Approve infra's pinned commit here", "$ loadout pack approve infra")); }
+          if (it.id === "daemon") {
+            out.push(DAEMON.held ? act("Let the schedules fire", "$ loadout daemon resume", function () { DAEMON.held = false; bump(); }) : act("Hold the schedules", "$ loadout daemon pause", function () { DAEMON.held = true; bump(); }));
+            out.push(act("Restart it", "$ loadout daemon restart", function () { return "In Studio, this page reconnects when it is back"; }, "danger"));
+            out.push(act("Stop it", "$ loadout daemon stop", function () { return "In Studio, this page waits for it"; }, "danger"));
+            out.push(DAEMON.autostart ? act("Stop it starting at log-in", "$ loadout daemon autostart disable", function () { DAEMON.autostart = false; bump(); }) : act("Start it at log-in", "$ loadout daemon autostart enable", function () { DAEMON.autostart = true; bump(); }));
+          }
+          if (it.id === "machine") { out.push(act("Put right what can be put right", "$ loadout doctor --fix --yes")); out.push(act("Set the launcher up again", "opens a terminal here, hosted by the daemon", function () { return "In Studio, a terminal opens with loadout setup"; })); }
+          if (!out.length) { out.push(act("Change things in the view", "Enter opens the view; its forms show their commands", null, "", "this section's changes are in its forms")); }
+          return out;
+        } };
+    },
+    memory: function (r) {
+      var slug = r.split("/")[1] || "loadout-cli", m = MEM[slug] || { project: [], user: [], machine: [] };
+      var groups = STORES.map(function (s) { return { key: s[0], name: s[1], items: (m[s[0]] || []).map(function (t) { return { id: s[0] + "/" + t.name, kind: "topic", title: t.name, meta: t.description, word: t.name === "test-layout" ? "needs a decision" : "" }; }) }; }).filter(function (g) { return g.items.length; });
+      return { groups: groups, view: function (it) { return { el: pagePart("memory/" + slug + "/" + it.id, ".memmid") }; },
+        actions: function (it) {
+          var st = it.id.split("/")[0], nm = it.id.split("/")[1], out = [];
+          if (st === "project") { out.push(act("Delete this topic", "$ loadout memory delete " + nm + " " + slug + " --yes", function () { m.project = m.project.filter(function (t) { return t.name !== nm; }); bump(); return "Deleted " + nm + ". A backup was taken first."; }, "danger")); }
+          out.push(act("Rebuild the index", "$ loadout memory reindex " + slug));
+          out.push(act("Clean up what the audit found", "$ loadout memory audit " + slug + " --clean --apply"));
+          out.push(act("Walk the topics nobody has revisited", "opens a terminal here, hosted by the daemon", function () { return "In Studio, a terminal opens with loadout memory review " + slug; }));
+          Object.keys(MEM).filter(function (k) { return k !== slug; }).forEach(function (k) { out.push(act("The memory of " + k, "another project's topics", function () { go("memory/" + k); })); });
+          return out;
+        } };
+    },
+    spend: function () {
+      var parts = [["z-pt", "Tokens", "billed as input, and what the cache saved"], ["z-pb", "Where it went", "by " + SPEND.by], ["z-pr", "Running now", "loadout running"], ["z-pl", "Launched this week", "loadout launches --days 7"], ["z-ps", "Recent sessions", "loadout sessions --limit 12"], ["z-pa", "What agents reported", "loadout telemetry status"], ["z-pm", "This machine", "loadout status"]];
+      return { groups: [{ key: "spend", name: "Spend · the last " + ({ "1": "day", "7": "week", "30": "30 days", "90": "90 days" }[SPEND.days]), items: parts.map(function (x) { return { id: x[0], kind: "spend", title: x[1], meta: x[2], word: x[0] === "z-pr" ? "running" : "" }; }) }],
+        view: function (it) { var d = el("div", {}); renderSpend(d); var n = d.querySelector('[aria-labelledby="' + it.id + '"]'); return { el: n || d }; },
+        actions: function () {
+          var out = [];
+          [["1", "day"], ["7", "week"], ["30", "30 days"], ["90", "90 days"]].forEach(function (x) { out.push(act("Over the last " + x[1], "$ loadout usage --by " + SPEND.by + " --days " + x[0] + " · reads only", function () { SPEND.days = x[0]; bump(); return "Over the last " + x[1]; }, "", SPEND.days === x[0] ? "shown now" : null)); });
+          ["project", "day", "model", "agent"].forEach(function (b) { out.push(act("By " + b, "$ loadout usage --by " + b + " --days " + SPEND.days + " · reads only", function () { SPEND.by = b; bump(); return "By " + b; }, "", SPEND.by === b ? "shown now" : null)); });
+          out.push(act("Work out where spending stands", "$ loadout spend refresh"));
+          return out;
+        } };
+    }
+  };
+  function renderPurePage(main, r) {
+    var b = pageBase(r), cfg = DESKS[b](r), sub = r.split("/").slice(1).join("/");
+    if (PURE) { PURE.desk.destroy(); PURE = null; }
+    P.pureSel = P.pureSel || {};
+    var all = []; cfg.groups.forEach(function (g) { all = all.concat(g.items); });
+    var want = b === "memory" && r.split("/").length > 3 ? r.split("/").slice(2).join("/") : b === "ideas" && r.split("/").length > 2 ? r.split("/")[2] : b === "projects" && r.split("/")[1] ? r.split("/")[1] : b === "settings" && r.split("/")[1] ? r.split("/")[1] : null;
+    var sel = want && all.some(function (x) { return x.id === want; }) ? want : (P.pureSel[b] && all.some(function (x) { return x.id === P.pureSel[b]; }) ? P.pureSel[b] : (all[0] || {}).id);
+    var wrap = el("div", { "class": "deskwrap" });
+    var d = S.WorkDesk({ groups: cfg.groups, selected: sel, label: PAGE_NAMES[b], view: cfg.view, actions: function (x) { return cfg.actions(x).map(function (a) { var run = a.run; return Object.assign({}, a, { run: function () { var s = run ? run() : a.label; setTimeout(function () { if (PURE && PURE.page) { PURE.desk.repaintActions(); } }, 40); return s; } }); }); }, commands: pureCommands, keys: P.keys, goKeys: GOKEYS, onGo: pureGo,
+      onSelect: function (id) { P.pureSel[b] = id; savePrefs(); } });
+    wrap.appendChild(d.el); main.appendChild(wrap);
+    PURE = { route: r, desk: d, page: b, pv: PV, sub: sub };
+  }
+
+  /* Forget project: here or everywhere, with what goes with it. */
+  function openForget(p) {
+    var dlg = null;
+    var f = S.ForgetProject({ project: p, counts: { tasks: (TASKS[p.id] || []).map(function (t) { return t.id; }), ideas: IDEAS.filter(function (x) { return x.list === p.id && !x.accepted; }).map(function (x) { return x.id; }), topics: ((MEM[p.id] || {}).project || []).map(function (t) { return t.name; }) },
+      definition: { path: "~/.loadout/workspace/projects/" + p.id, files: 14 },
+      onRun: function (plan) {
+        if (plan.preview) { said("Previewed " + plan.lines.length + " commands. Nothing changed.", plan.lines.join(" · ")); return "Previewed " + plan.lines.length + " commands. Nothing changed."; }
+        if (plan.scope === "here") { p.available = false; p.path = ""; p.branch = null; }
+        else {
+          PROJ = PROJ.filter(function (x) { return x !== p; });
+          if (plan.picked.tasks) { delete TASKS[p.id]; }
+          if (plan.picked.ideas) { IDEAS = IDEAS.filter(function (x) { return x.list !== p.id || x.accepted; }); }
+          if (plan.picked.topics && MEM[p.id]) { delete MEM[p.id]; }
+        }
+        said(plan.scope === "here" ? "Forgot where " + p.name + " is on this machine. The repository was not touched." : p.name + " is forgotten on every machine. The repository was not touched.", plan.lines.join(" · "), "done");
+        setTimeout(function () { if (dlg) { dlg.close(); } go("projects"); bump(); }, 900);
+        return plan.scope === "here" ? "Forgotten on this machine." : "Forgotten on every machine.";
+      } });
+    dlg = S.Dialog({ title: "Forget " + p.name, content: f.el, cancelLabel: "Close", danger: true });
+    dlg.open();
+  }
+
   /* ---------- placeholder pages ---------- */
   function renderElsewhere(main, r) {
     if (r === "settings") { main.appendChild(el("div", { "class": "head" }, [el("h1", { text: "Settings" })])); main.appendChild(el("section", { "class": "placeholder", "aria-labelledby": "z-app" }, [zone("", "Appearance", "z-app"), appearanceForm()])); return; }
     var e = ELSEWHERE[r] || ["Not found", "$ loadout --help", "This page doesn't exist."];
     main.appendChild(el("div", { "class": "head" }, [el("h1", { text: e[0] })]));
-    main.appendChild(el("div", { "class": "placeholder" }, [el("p", { "class": "calm", text: e[2] + " This page isn't part of the prototype; Home, Sessions and Teams are." }), S.Command({ why: "Until then, in a terminal:", command: e[1] })]));
+    main.appendChild(el("div", { "class": "placeholder" }, [el("p", { "class": "calm", text: e[2] + " This page isn't part of the prototype." }), S.Command({ why: "Until then, in a terminal:", command: e[1] })]));
   }
 
   /* ---------- render, keeping focus where it was ---------- */
   var lastTeams = "";
+  function pagesRoute(r) { var b = r.split("/")[0]; return ["ideas", "projects", "context", "settings", "memory", "spend"].indexOf(b) >= 0; }
   function teamsRoute(r) { return r === "teams" || r.indexOf("teams-") === 0 || r.indexOf("run-") === 0 || r.indexOf("team-") === 0; }
   function render() {
-    var rr = route(), t1 = line("t1"), sig = rr + "|" + TV + "|" + (t1 ? [t1.waiting, t1.stage, t1.held].join(",") : "");
-    var pureRoute = P.mode === "pure" && (rr === "home" || rr === "sessions" || rr === "teams" || rr.indexOf("session-") === 0 || rr.indexOf("run-") === 0);
-    if (pureRoute && PURE && PURE.route === rr && document.getElementById("main").childNodes.length) { refreshPure(); renderNav(); renderAmbient(); return; }
+    var rr = route(), t1 = line("t1"), i1 = line("i1"), sig = rr + "|" + TV + "|" + PV + "|" + (t1 ? [t1.waiting, t1.stage, t1.held].join(",") : "") + "|" + (i1 && rr.indexOf("ideas") === 0 ? [i1.stage, i1.failed].join(",") : "");
+    var pureRoute = P.mode === "pure" && (rr === "home" || rr === "sessions" || rr === "teams" || rr.indexOf("session-") === 0 || rr.indexOf("run-") === 0 || (pagesRoute(rr) && rr.indexOf("+") < 0));
+    if (pureRoute && PURE && PURE.route === rr && document.getElementById("main").childNodes.length) {
+      if (!PURE.page) { refreshPure(); renderNav(); renderAmbient(); return; }
+      if (PURE.pv === PV) { renderNav(); renderAmbient(); return; }
+    }
     if (!pureRoute && PURE) { PURE.desk.destroy(); PURE = null; LIVE = null; }
-    var deckRoute = P.mode === "terminals" && (rr === "home" || rr === "sessions" || rr.indexOf("session-") === 0);
-    if (deckRoute && DECK && DECK.route === rr && document.getElementById("main").childNodes.length) { refreshDeck(); renderNav(); renderAmbient(); return; }
+    var deckRoute = P.mode === "terminals" && (rr === "home" || rr === "sessions" || rr.indexOf("session-") === 0 || pagesRoute(rr));
+    if (deckRoute && DECK && DECK.route === rr && document.getElementById("main").childNodes.length) { refreshDeck(); if (pagesRoute(rr)) { refreshBeside(); } renderNav(); renderAmbient(); return; }
     if (!deckRoute) { DECK = null; }
-    var steady = teamsRoute(rr) || (P.mode === "teams" && rr === "home") || (P.mode === "minimal" && rr === "home" && FOCUS);
+    var steady = teamsRoute(rr) || pagesRoute(rr) || (P.mode === "teams" && rr === "home") || (P.mode === "minimal" && rr === "home" && FOCUS);
     if (steady && sig === lastTeams && document.getElementById("main").childNodes.length) { renderNav(); renderAmbient(); return; }
     lastTeams = steady ? sig : "";
     if (!teamsRoute(rr) && DEPTHS) { DEPTHS.unbind(); DEPTHS = null; }
@@ -1122,7 +2062,13 @@ body { background: var(--ground); color: var(--ink); }
     if (!k && a && a.id === "home-task") { k = "home-task"; }
     renderNav();
     var main = document.getElementById("main"), r = route(); main.textContent = "";
-    if (P.mode === "pure" && (r === "home" || r === "sessions" || r === "teams" || r.indexOf("session-") === 0 || r.indexOf("run-") === 0)) { renderPure(main, r); }
+    if (PURE) { PURE.desk.destroy(); PURE = null; }
+    if (BESIDE) { BESIDE.destroy(); BESIDE = null; }
+    if (!pagesRoute(r)) { P.lastFocus = r; }
+    if (P.mode === "pure" && pagesRoute(r) && r.indexOf("+") < 0) { renderPurePage(main, r); }
+    else if ((P.mode === "terminals" || P.mode === "teams") && pagesRoute(r)) { renderBeside(main, r, P.mode); }
+    else if (P.mode === "minimal" && pagesRoute(r)) { renderQuietPage(main, r); }
+    else if (P.mode === "pure" && (r === "home" || r === "sessions" || r === "teams" || r.indexOf("session-") === 0 || r.indexOf("run-") === 0)) { renderPure(main, r); }
     else if (P.mode === "terminals" && (r === "home" || r === "sessions" || r.indexOf("session-") === 0)) { renderDeck(main, r.indexOf("session-") === 0 ? r.slice(8) : null); }
     else if (P.mode === "teams" && (r === "home" || r === "teams" || r.indexOf("run-") === 0 || r.indexOf("team-") === 0)) { renderBoard(main, r); }
     else if (P.mode === "minimal" && r === "home") { renderQuiet(main); }
@@ -1134,6 +2080,12 @@ body { background: var(--ground); color: var(--ink); }
     else if (r === "teams-bin") { renderBin(main); }
     else if (r.indexOf("run-") === 0) { renderRun(main, r.slice(4)); }
     else if (r.indexOf("team-") === 0) { renderTeam(main, r.slice(5)); }
+    else if (r === "ideas" || r.indexOf("ideas/") === 0) { renderIdeas(main, r); }
+    else if (r === "projects" || r.indexOf("projects/") === 0) { renderProjects(main, r); }
+    else if (r === "context" || r.indexOf("context/") === 0) { renderContext(main, r); }
+    else if (r === "settings" || r.indexOf("settings/") === 0) { renderSettings(main, r); }
+    else if (r === "memory" || r.indexOf("memory/") === 0) { renderMemory(main, r); }
+    else if (r === "spend") { renderSpend(main); }
     else { renderElsewhere(main, r); }
     main.appendChild(el("p", { "class": "sample", text: "Example data and scripted agents: this prototype doesn't talk to Loadout. Every command shown is the real one." }));
     if (k) { var n = k === "home-task" ? document.getElementById("home-task") : document.querySelector('[data-k="' + CSS.escape(k) + '"]'); if (n) { n.focus({ preventScroll: true }); if (caret !== undefined && n.setSelectionRange && caret !== null) { try { n.setSelectionRange(caret, caret); } catch (e) { /* not a text field */ } } } }
@@ -1182,5 +2134,4 @@ body { background: var(--ground); color: var(--ink); }
   render();
 })();
 </script>
-</body>
-</html>
+</body></html>

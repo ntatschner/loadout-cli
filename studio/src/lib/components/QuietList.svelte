@@ -1,6 +1,6 @@
 <script lang="ts">
-  // Minimal: one column of what is live. What needs you comes first, with
-  // its question said under it; the rest quietly after.
+  // Minimal: one column of what is live. What needs you or has gone wrong
+  // comes first, with its question said under it; the rest quietly after.
   import Signal from './Signal.svelte';
   import { css } from '../css';
   import { signalOf } from '../signals';
@@ -15,8 +15,10 @@
 
   let { items, label = 'Everything live', onopen = undefined }: Props = $props();
 
-  const needs = $derived(items.filter((item) => signalOf(item.word).family === 'needs'));
-  const rest = $derived(items.filter((item) => signalOf(item.word).family !== 'needs'));
+  // What needs you, and what has gone wrong (blocked, failed), rises to the top together.
+  const rises = (item: QuietItem) => ['needs', 'bad'].includes(signalOf(item.word).family);
+  const needs = $derived(items.filter(rises));
+  const rest = $derived(items.filter((item) => !rises(item)));
 </script>
 
 {#snippet row(item: QuietItem, calm: boolean, index: number)}

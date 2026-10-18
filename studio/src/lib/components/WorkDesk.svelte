@@ -12,7 +12,7 @@
   import KeyHelp from './KeyHelp.svelte';
   import Signal from './Signal.svelte';
   import { signalOf } from '../signals';
-  import { filtered, GO_KEYS, typingIn, type PureAction, type PureCommand, type PureGroup, type PureItem, type PureScope } from '../pure';
+  import { filtered, GO_KEYS, PAGE_KEYS, typingIn, type PureAction, type PureCommand, type PureGroup, type PureItem, type PureScope } from '../pure';
 
   interface Props {
     groups: PureGroup[];
@@ -25,10 +25,12 @@
     actions: (item: PureItem) => PureAction[];
     commands: (typed: string, item: PureItem | null) => PureCommand[];
     ongo?: (scope: PureScope) => void;
+    /** G then I, P, C, M, U or O: a page, as its own desk. */
+    onpage?: (page: string) => void;
     onselect?: (id: string) => void;
   }
 
-  let { groups, selected = null, keys = true, label = 'Everything live', view, actions, commands, ongo = undefined, onselect = undefined }: Props = $props();
+  let { groups, selected = null, keys = true, label = 'Everything live', view, actions, commands, ongo = undefined, onpage = undefined, onselect = undefined }: Props = $props();
 
   const listId = `ls-wd-${Math.random().toString(36).slice(2, 7)}`;
   // svelte-ignore state_referenced_locally
@@ -145,10 +147,14 @@
       }
 
       const where = GO_KEYS[key.toLowerCase()];
+      const page = PAGE_KEYS[key.toLowerCase()];
 
       if (where) {
         event.preventDefault();
         ongo?.(where);
+      } else if (page) {
+        event.preventDefault();
+        onpage?.(page);
       }
 
       return;
@@ -244,7 +250,7 @@
               role="option"
               id={optionId(item)}
               data-id={item.id}
-              class={signalOf(item.word).family}
+              class={item.word ? signalOf(item.word).family : 'plain'}
               aria-selected={item.id === current?.id ? 'true' : 'false'}
               onclick={() => void select(item.id)}
               ondblclick={() => {
@@ -252,7 +258,7 @@
                 void openView();
               }}
             >
-              <Signal word={item.word} /><span class="t">{item.title}</span><span class="x">{item.meta}</span><span class="w">{item.word}</span>
+              {#if item.word}<Signal word={item.word} />{:else}<span class="nosig" aria-hidden="true"></span>{/if}<span class="t">{item.title}</span><span class="x">{item.meta}</span>{#if item.word}<span class="w">{item.word}</span>{/if}
             </li>
           {/each}
         {:else}
@@ -267,7 +273,7 @@
       {#if current}
         <button type="button" class="ls-halo small back" onclick={closeView}><span class="ring" aria-hidden="true"></span>List</button>
         <span class="vtitle"><b>{current.title}</b><span>{current.meta}</span></span>
-        <Signal word={current.word} />
+        {#if current.word}<Signal word={current.word} />{/if}
         <span class="hint" aria-hidden="true"><kbd class="ls-kbd">Esc</kbd>list</span>
       {:else}
         <span>View</span>

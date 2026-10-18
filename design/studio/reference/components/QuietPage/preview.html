@@ -1,0 +1,34 @@
+<!-- @dsCard group="Modes" height=640 width=900 subtitle="A page in Minimal: one sentence, what matters now, and everything else behind one button" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>QuietPage</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div id="q"></div><p class="out" id="out" role="status"></p>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  document.documentElement.setAttribute("data-mode", "minimal");
+  var sentence = document.createElement("p"); sentence.innerHTML = "3 projects, 2 on this machine. <b>1 task is blocked</b> and <b>2 things can be put right</b>.";
+  document.getElementById("q").appendChild(S.QuietPage({ title: "Projects", sentence: sentence,
+    items: [
+      { id: "k2", kind: "task", title: "Move uploads to the new bucket", word: "blocked", where: "starstats", ask: "Waiting on access to the new bucket" },
+      { id: "h1", kind: "health", title: "The pre-commit hook is missing", word: "to put right", where: "loadout-cli", ask: "AI tooling files could be committed. loadout drift --fix puts it back." },
+      { id: "h2", kind: "health", title: "AGENTS.md changed since Loadout wrote it", word: "to put right", where: "loadout-cli" } ],
+    onOpen: function (x) { document.getElementById("out").textContent = "Opens " + x.title + " full screen."; },
+    everything: function () { var p = document.createElement("p"); p.style.color = "var(--muted)"; p.textContent = "The whole Projects page, as in Default."; return p; } }).el);
+})();
+</script>
+</body>
+</html>

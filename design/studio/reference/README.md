@@ -77,6 +77,23 @@ Loadout Studio is the design system for Studio: the app Loadout serves on this m
 - The ModeBar is at the top of every mode, with whatever is waiting on you, so a focus mode never hides a question.
 - Changing mode is one animated step (`morph()`): the page sinks, the new layout rises, and the rail and the mode bar travel on their own. Under reduced motion it fades; under none it just changes.
 
+### Pages
+
+- Ideas, Projects, Context, Settings, Memory and Spend each have their own shape, built around what is on them, not one shared list beside a page:
+  - **Ideas** is a shelf and a workbench: where the idea stands (IdeaStages), its questions answered in the page (QuestionSet), its plan as layers of options side by side (PlanLayer), then Accept it. Notes from elsewhere come in as a NoteDump.
+  - **Projects** is a wall of tiles (ProjectTile); a picked project opens under it as a dossier: its facts, a TaskBoard of open, doing and blocked, and its health (HealthList).
+  - **Context** leads with what a session would start with, as one bar of specialists against the token budget (LoadStack), for a task and a mode you choose.
+  - **Settings** is a section index beside one section. Loadout's own settings are a searchable ConfigList, each changed where it is shown.
+  - **Memory** is the stores on the left (StoreList), the topic edited in the middle (TopicEditor, which shows a clash beside your edit and never overwrites), and its health and tools on the right.
+  - **Spend** is one number (TokenSplit), where it went (SpendBars), and what is running and was launched.
+- A page's main actions are in place. The rest of its commands are ActionDrawers: closed, one line each with the effect (reads only, changes something, starts a session, terminal only), and opened into the command's form, its exact line and its button.
+- What is only ever done in a terminal (secrets, agreements, the attach passphrase, a server that runs until Ctrl+C) is a TerminalOnly block: the command, why, and Copy. Never a button that does it.
+- **In every mode.** The six pages follow the mode you are in:
+  - **Terminals** and **Teams**: the page opens beside your terminals or the runs board (PageBeside), which stay live. Escape closes it.
+  - **Minimal**: the page is one quiet column (QuietPage): one sentence, what needs you or has gone wrong, and Show everything for the rest.
+  - **Pure**: the page is a WorkDesk, reached with G and a letter: I Ideas, P Projects, C Context, M Memory, U Spend (usage), O Settings (options).
+- **Forgetting a project** (ForgetProject) is on this machine only, or from the Loadout workspace for every machine, with optional cleanup that runs first and is shown command by command. The repository is never touched.
+
 ### Light and glow
 
 - Glow is light from the accent or a signal colour: `0 0 var(--glow-md) -2px var(--glow)` round a ring, `var(--glow-sm)` on a dot, `var(--glow-lg)` on hover and focus.

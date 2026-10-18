@@ -1,20 +1,25 @@
 <script lang="ts">
-  // What a session is given before it starts, and what that costs: the
-  // specialists a task would load and why, the rules and styles a project
-  // carries, its profiles, and whether its documents still describe it.
+  // Context: what a session on a project would start with, as one bar of
+  // specialists against the token budget, for a task and a mode you choose;
+  // then the specialists, the rules and styles a project carries, whether
+  // its documents still describe it, your writing voice and handing over.
   // Read with the commands a terminal uses, so this page and 'loadout
   // instructions explain' cannot disagree.
   import { untrack } from 'svelte';
   import Command from '../lib/components/Command.svelte';
   import CommandAction from '../lib/components/CommandAction.svelte';
   import HaloButton from '../lib/components/HaloButton.svelte';
-  import Meter from '../lib/components/Meter.svelte';
+  import HealthList from '../lib/components/HealthList.svelte';
+  import LoadStack from '../lib/components/LoadStack.svelte';
+  import Signal from '../lib/components/Signal.svelte';
   import { readJson, SignedOut } from '../lib/api';
   import { lineFor } from '../lib/commandLine';
+  import type { Finding } from '../lib/health';
   import { router } from '../lib/router.svelte';
   import { studio } from '../lib/state.svelte';
 
-  let { rest }: { rest: string[] } = $props();
+  /** focused: just the section, for one opened on its own in Minimal. */
+  let { rest, focused = false }: { rest: string[]; focused?: boolean } = $props();
 
   interface Selected {
     id: string;
@@ -55,10 +60,18 @@
     body: string;
   }
 
+  interface Style {
+    name: string;
+    /** Set only for a style in force: personal, named or codebase. */
+    layer?: string | null;
+    coreTokens?: number;
+    languages?: string[];
+  }
+
   const SECTIONS = [
-    { key: 'load', label: 'What a session would load' },
+    { key: 'load', label: 'What a session loads' },
     { key: 'specialists', label: 'Specialists' },
-    { key: 'rules', label: 'Rules and coding styles' },
+    { key: 'rules', label: 'Rules and styles' },
     { key: 'docs', label: 'Documents' },
     { key: 'health', label: 'Health' },
     { key: 'voice', label: 'Your writing voice' },
@@ -66,22 +79,24 @@
   ];
   const MODES = ['implement', 'advise', 'investigate', 'review'];
 
-  let projects = $state<{ id: string; name: string }[] | null>(null);
+  let projects = $state<{ id: string; name: string; available?: boolean }[] | null>(null);
   let explained = $state<Explained | null>(null);
   let task = $state('');
   let mode = $state('implement');
   let specialists = $state<Specialist[] | null>(null);
   let kind = $state('');
   let shown = $state<Shown | null>(null);
-  let rules = $state<{ list: { path?: string; name?: string; bytes?: number; globs?: string[] }[]; budget: { alwaysLoadedBytes: number; scopedBytes: number; overBudget: boolean }; audit: { verdict: string; findings: { message?: string; detail?: string }[] } } | null>(null);
-  let styles = $state<{ name: string; inForce?: boolean; description?: string }[] | null>(null);
+  let rules = $state<{ list: { path?: string; name?: string; bytes?: number; globs?: string[] }[]; budget: { alwaysLoadedBytes: number; scopedBytes: number; overBudget: boolean }; audit: { verdict: string; findings: { rule?: string; severity?: string; kind?: string; detail?: string }[] } } | null>(null);
+  let styles = $state<Style[] | null>(null);
   let profiles = $state<{ name: string; description: string }[] | null>(null);
   let candidates = $state<{ path?: string; file?: string; reason?: string }[] | null>(null);
-  let docs = $state<{ documents: number; findings: { path?: string; line?: number; message?: string; detail?: string }[] } | null>(null);
-  let health = $state<{ audit: { checks: number; applicable: number; findings: { message?: string; detail?: string }[] }; validate: { specialists: number; errors: number; warnings: number; findings: { id?: string; message?: string }[] } } | null>(null);
+  let docs = $state<{ documents: number; findings: { path?: string; line?: number; kind?: string; detail?: string }[] } | null>(null);
+  let health = $state<{ audit: { checks: number; applicable: number; findings: { specialist?: string; rule?: string; occurrences?: number; caveat?: string }[] }; validate: { specialists: number; errors: number; warnings: number; findings: { specialist?: string; severity?: string; kind?: string; detail?: string }[] } } | null>(null);
   let voice = $state<{ guide: { id: string; version: number; summary: string; reference: string }; layers: { layer: string; name: string; exists: boolean; rules: number }[]; rules: Record<string, unknown>[] } | null>(null);
   let runs = $state<Record<string, unknown>[] | null>(null);
   let guides = $state<{ reference: string; id: string; version: number; summary: string; ships: boolean }[] | null>(null);
+  // Which specialists instructions list says are always loaded, for the bar's hatching.
+  let always = $state<Set<string> | null>(null);
   let problem = $state<string | null>(null);
 
   // #context/<project>/<section>, and #context/<project>/specialist/<id>.
@@ -98,14 +113,21 @@
   }
 
   $effect(() => {
-    readJson<{ projects: { id: string; name: string }[] }>('project list').then((read) => {
+    // A read that ends after the page has gone must not send the browser back here.
+    let gone = false;
+
+    readJson<{ projects: { id: string; name: string; available?: boolean }[] }>('project list').then((read) => {
       projects = read.projects;
 
-      if (!slug && read.projects.length) {
+      if (!gone && !untrack(() => slug) && !focused && read.projects.length && router.route.page === 'context') {
         router.go('context', read.projects[0].id);
       }
     }, fail);
+
+    return () => (gone = true);
   });
+
+  const explainWords = $derived([...(task.trim() ? [task.trim()] : []), '--project', slug ?? '', '--mode', mode]);
 
   async function explain() {
     if (!slug) {
@@ -113,7 +135,7 @@
     }
 
     try {
-      explained = await readJson<Explained>('instructions explain', [...(task.trim() ? [task.trim()] : []), '--project', slug, '--mode', mode]);
+      explained = await readJson<Explained>('instructions explain', explainWords);
     } catch (error) {
       fail(error);
     }
@@ -124,6 +146,10 @@
 
     try {
       if (where === 'load') {
+        readJson<{ specialists: Specialist[] }>('instructions list', [project]).then(
+          (read) => (always = new Set(read.specialists.filter((one) => one.always).map((one) => one.id))),
+          () => (always = null),
+        );
         await explain();
       } else if (where === 'specialists') {
         specialists = (await readJson<{ specialists: Specialist[] }>('instructions list', [project, ...(kind ? ['--kind', kind] : [])])).specialists;
@@ -133,8 +159,8 @@
         const [list, budget, audit, style, profile] = await Promise.all([
           readJson<{ rules: { path?: string; name?: string; bytes?: number; globs?: string[] }[] }>('rules list', [project]),
           readJson<{ alwaysLoadedBytes: number; scopedBytes: number; overBudget: boolean }>('rules budget', [project]),
-          readJson<{ verdict: string; findings: { message?: string; detail?: string }[] }>('rules audit', [project]),
-          readJson<{ styles: { name: string; inForce?: boolean; description?: string }[] }>('style list', [project]),
+          readJson<NonNullable<typeof rules>['audit']>('rules audit', [project]),
+          readJson<{ styles: Style[] }>('style list', [project]),
           readJson<{ profiles: { name: string; description: string }[] }>('profile list', [project]),
         ]);
         rules = { list: list.rules, budget, audit };
@@ -147,18 +173,18 @@
       } else if (where === 'docs') {
         docs = await readJson('docs audit', [project]);
       } else if (where === 'voice') {
-        const [shown, ran, listed] = await Promise.all([
+        const [read, ran, listed] = await Promise.all([
           readJson<NonNullable<typeof voice>>('voice show', ['--project', project]),
           readJson<{ runs: Record<string, unknown>[] }>('voice runs', ['--project', project]),
           readJson<{ guides: NonNullable<typeof guides> }>('voice guide list'),
         ]);
-        voice = shown;
+        voice = read;
         runs = ran.runs;
         guides = listed.guides;
       } else if (where === 'health') {
         const [audit, validate] = await Promise.all([
-          readJson<{ checks: number; applicable: number; findings: { message?: string; detail?: string }[] }>('instructions audit', ['--project', project]),
-          readJson<{ specialists: number; errors: number; warnings: number; findings: { id?: string; message?: string }[] }>('instructions validate', [project]),
+          readJson<NonNullable<typeof health>['audit']>('instructions audit', ['--project', project]),
+          readJson<NonNullable<typeof health>['validate']>('instructions validate', [project]),
         ]);
         health = { audit, validate };
       }
@@ -169,7 +195,9 @@
 
   $effect(() => {
     if (slug) {
-      void load(slug, section, specialist);
+      const [project, where, id] = [slug, section, specialist];
+
+      untrack(() => void load(project, where, id));
     }
   });
 
@@ -191,207 +219,243 @@
   });
 
   const kinds = $derived([...new Set((specialists ?? []).map((one) => one.kind))]);
-  const explainWords = $derived([...(task.trim() ? [task.trim()] : []), '--project', slug ?? '', '--mode', mode]);
-  const words = (finding: { message?: string; detail?: string; path?: string; line?: number; id?: string }) =>
-    [finding.id, finding.path ? `${finding.path}${finding.line ? `:${finding.line}` : ''}` : null, finding.message, finding.detail].filter(Boolean).join(' · ');
+  const loaded = $derived(explained ? explained.selected.map((one) => ({ ...one, always: always?.has(one.id) ?? false })) : []);
+  const href = (id: string) => `#context/${encodeURIComponent(slug ?? '')}/specialist/${encodeURIComponent(id)}`;
+
+  // Findings from each audit in HealthList's one shape. The documents and
+  // convention audits give no severity: a reference adrift and a departure
+  // from what a specialist asks are each something to look at, a warning.
+  const ruleFindings = $derived<Finding[]>((rules?.audit.findings ?? []).map((one) => ({ name: one.rule ?? one.kind, severity: one.severity, detail: one.detail })));
+  const docFindings = $derived<Finding[]>((docs?.findings ?? []).map((one) => ({ name: one.path ? `${one.path}${one.line ? `:${one.line}` : ''}` : one.kind, severity: 'warning', detail: [one.kind, one.detail].filter(Boolean).join(' · ') })));
+  const auditFindings = $derived<Finding[]>((health?.audit.findings ?? []).map((one) => ({ name: one.specialist, severity: 'warning', detail: [one.rule, one.occurrences ? `${one.occurrences} place${one.occurrences === 1 ? '' : 's'}` : null, one.caveat].filter(Boolean).join(' · ') })));
+  const validateFindings = $derived<Finding[]>((health?.validate.findings ?? []).map((one) => ({ name: one.specialist ?? one.kind, severity: one.severity, detail: one.detail })));
+
+  function activation(one: Shown['activation']): string {
+    if (one.always) {
+      return 'Always: every session on every project starts with it.';
+    }
+
+    const parts = [
+      one.globs.length ? `for files like ${one.globs.join(', ')}` : '',
+      one.dependencies.length ? `when the project depends on ${one.dependencies.join(', ')}` : '',
+      one.taskPhrases.length ? `for tasks that say ${one.taskPhrases.join(', ')}` : '',
+      one.modes.length ? `in ${one.modes.join(', ')} mode` : '',
+    ].filter(Boolean);
+
+    return parts.length ? `It loads ${parts.join('; ')}.` : 'It loads only when asked for by name.';
+  }
+
+  const bytes = (n: number) => n.toLocaleString('en-GB');
 </script>
 
-<div class="head"><div><h1>Context</h1><span class="fact">what a session reads before it starts, and what it costs</span></div></div>
+{#if !focused}
+<div class="head">
+  <div><h1>Context</h1><span class="fact">what a session reads before it starts, and what it costs</span></div>
+  <span class="grow"></span>
+  {#if projects}
+    <div class="psel">
+      <label for="context-project">Project</label>
+      <select id="context-project" class="ls-text" value={slug ?? ''} onchange={(event) => router.go('context', (event.currentTarget as HTMLSelectElement).value, section === 'specialist' ? 'specialists' : section)}>
+        {#each projects as one (one.id)}<option value={one.id}>{one.name} · {one.id}</option>{/each}
+      </select>
+    </div>
+  {/if}
+</div>
 
-<div class="memory">
-  <aside class="memside" aria-label="Context">
-    {#if projects}
-      <label class="fld find"><span class="lab">Project</span>
-        <select name="context-project" value={slug ?? ''} onchange={(event) => router.go('context', (event.currentTarget as HTMLSelectElement).value, section === 'specialist' ? 'specialists' : section)}>
-          {#each projects as one (one.id)}<option value={one.id}>{one.name}</option>{/each}
-        </select>
-      </label>
+<nav class="subnav" aria-label="Context">
+  {#each SECTIONS as one (one.key)}
+    <a href={`#context/${encodeURIComponent(slug ?? '')}/${one.key}`} aria-current={section === one.key || (one.key === 'specialists' && section === 'specialist') ? 'page' : undefined}>{one.label}</a>
+  {/each}
+</nav>
+{/if}
+
+<div class="ctx">
+  {#if problem}<p class="offline" role="alert">{problem}</p>{/if}
+
+  {#if !slug}
+    <p class="calm" role="status">Reading…</p>
+  {:else if section === 'load'}
+    <form class="explain" onsubmit={(event) => { event.preventDefault(); void explain(); }}>
+      <div class="grow">
+        <label class="lab" for="context-task">The task, in a sentence (optional)</label>
+        <input id="context-task" class="ls-text" bind:value={task} autocomplete="off" placeholder="What the session is for" />
+      </div>
+      <fieldset class="modes">
+        <legend class="lab">Mode</legend>
+        {#each MODES as one (one)}<label><input type="radio" name="context-mode" value={one} bind:group={mode} />{one}</label>{/each}
+      </fieldset>
+      <HaloButton label="Explain it" size="small" cmd={`${lineFor('instructions explain', explainWords)} · reads only`} onpress={() => void explain()} />
+    </form>
+    {#if explained}
+      <LoadStack selected={loaded} omitted={explained.omitted} conflicts={explained.conflicts.length}
+        estimatedTokens={explained.context.estimatedTokens} tokenBudget={explained.context.tokenBudget} nearBudget={explained.context.nearBudget} {href} />
+      <p class="ls-from">From <code>{lineFor('instructions explain', explainWords)}</code>.</p>
+    {:else}
+      <p class="calm" role="status">Reading…</p>
     {/if}
-    <ul class="slist">
-      {#each SECTIONS as one (one.key)}
-        <li><a class="srow" href={`#context/${encodeURIComponent(slug ?? '')}/${one.key}`} aria-current={section === one.key || (one.key === 'specialists' && section === 'specialist') ? 'page' : undefined}><span class="t">{one.label}</span></a></li>
-      {/each}
-    </ul>
-  </aside>
-
-  <section class="memmain" aria-label="Context">
-    {#if problem}<p class="offline" role="alert">{problem}</p>{/if}
-
-    {#if !slug}
+    <div class="ls-drawers pblock">
+      <CommandAction path="instructions explain" title="Compare it with another mode, task or profile" preset={{ '--project': slug }} fixed={['--project']} label="Compare" />
+    </div>
+  {:else if section === 'specialists'}
+    {#if specialists}
+      <div class="psel inline">
+        <label for="specialist-kind">Kind</label>
+        <select id="specialist-kind" class="ls-text" bind:value={kind} onchange={() => slug && void load(slug, 'specialists', null)}>
+          <option value="">every kind</option>
+          {#each kinds as one (one)}<option value={one}>{one}</option>{/each}
+        </select>
+      </div>
+      <div class="specs">
+        {#each specialists as one (one.id)}
+          <a class="spec" href={href(one.id)}>
+            <span class="k">{one.kind}{one.always ? ' · always' : ''}</span>
+            <b>{one.title}</b>
+            <span class="s">{one.summary}</span>
+            <span class="n">{one.estimatedTokens} tokens · {one.origin}</span>
+          </a>
+        {/each}
+      </div>
+      <p class="ls-from">From <code>$ loadout instructions list {slug}</code>.</p>
+    {:else}
       <p class="calm" role="status">Reading…</p>
-    {:else if section === 'load'}
-      <h2 class="topicname">What a session on {slug} would load</h2>
-      <form class="cmdform" onsubmit={(event) => { event.preventDefault(); void explain(); }}>
-        <label class="fld"><span class="lab">The task, in a sentence (optional)</span><input name="context-task" bind:value={task} autocomplete="off" /></label>
-        <label class="fld"><span class="lab">Mode</span>
-          <select name="context-mode" bind:value={mode}>{#each MODES as one (one)}<option value={one}>{one}</option>{/each}</select>
-        </label>
-        <div class="ls-answers flush"><HaloButton label="Explain it" solid size="small" cmd={lineFor('instructions explain', explainWords)} onpress={() => void explain()} /></div>
-      </form>
-      {#if explained}
-        <Meter label="Tokens every session starts with" value={explained.context.estimatedTokens} max={Math.max(explained.context.tokenBudget, explained.context.estimatedTokens)} threshold={explained.context.tokenBudget} thresholdLabel="budget" overWords="over the budget" unit="tokens" />
-        <h3 class="ls-zone">Loaded</h3>
-        <ul class="findings">
-          {#each explained.selected as one (one.id)}
-            <li class="info"><a href={`#context/${encodeURIComponent(slug)}/specialist/${encodeURIComponent(one.id)}`}><span class="n">{one.title}</span></a> <span class="sev">{one.id}</span> · {one.reason} · {one.estimatedTokens} tokens</li>
-          {/each}
-        </ul>
-        {#if explained.omitted.length}
-          <h3 class="ls-zone">Considered and left out</h3>
-          <ul class="plain">{#each explained.omitted as one (one.id)}<li><span class="n">{one.id}</span> · {one.reason}</li>{/each}</ul>
-        {/if}
-        {#if explained.conflicts.length}<p class="calm small">{explained.conflicts.length} overlap{explained.conflicts.length === 1 ? '' : 's'} settled; the narrower one wins.</p>{/if}
-      {/if}
-      <div class="acts">
-        <CommandAction path="instructions explain" title="Compare it with another mode, task or profile" preset={{ '--project': slug }} fixed={['--project']} label="Compare" />
+    {/if}
+    <div class="ls-drawers pblock">
+      <CommandAction path="instructions new" title="Draft a new specialist or skill" preset={{ '--project': slug }} />
+      <CommandAction path="instructions export" title="Copy a built-in one into the workspace to edit" />
+    </div>
+  {:else if section === 'specialist' && shown}
+    <p class="back"><a href={`#context/${encodeURIComponent(slug)}/specialists`}>← Specialists</a></p>
+    <div class="ihead"><h2>{shown.title}</h2><p class="slug">{shown.id} · {shown.origin} · {shown.estimatedTokens} tokens</p></div>
+    <p class="lead">{shown.summary}</p>
+    <p class="lead">{activation(shown.activation)}</p>
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+    <pre class="body" tabindex="0" aria-label="What it says">{shown.body}</pre>
+    <Command why="The same, in a terminal:" command={lineFor('instructions show', [shown.id, '--project', slug])} />
+    <div class="ls-drawers pblock">
+      <CommandAction path="instructions export" title="Copy it into the workspace to edit" preset={{ SPECIALIST: shown.id, '--project': slug }} fixed={['SPECIALIST']} label="Copy it" />
+      <CommandAction path="instructions probe" title="How often sessions did what it asks" preset={{ specialist: shown.id }} fixed={['specialist']} label="Measure it" />
+    </div>
+  {:else if section === 'specialist'}
+    <p class="calm" role="status">Reading…</p>
+  {:else if section === 'rules'}
+    {#if rules}
+      <div class="bytes">
+        <p><b>{bytes(rules.budget.alwaysLoadedBytes)}</b>bytes always loaded</p>
+        <p><b>{bytes(rules.budget.scopedBytes)}</b>bytes scoped to the files they cover{rules.budget.overBudget ? ', over the budget' : ''}</p>
       </div>
-    {:else if section === 'specialists'}
-      <h2 class="topicname">Specialists</h2>
-      {#if specialists}
-        <label class="fld"><span class="lab">Kind</span>
-          <select name="specialist-kind" bind:value={kind} onchange={() => slug && void load(slug, 'specialists', null)}>
-            <option value="">every kind</option>
-            {#each kinds as one (one)}<option value={one}>{one}</option>{/each}
-          </select>
-        </label>
-        <ul class="slist">
-          {#each specialists as one (one.id)}
-            <li><a class="srow" href={`#context/${encodeURIComponent(slug)}/specialist/${encodeURIComponent(one.id)}`}><span class="t">{one.title}{one.always ? ' · always' : ''}</span><span class="x">{one.id} · {one.estimatedTokens} tokens · {one.summary}</span></a></li>
-          {/each}
-        </ul>
-        <p class="calm small">From <code class="ls-cmd">loadout instructions list {slug}</code>.</p>
-      {:else}
-        <p class="calm" role="status">Reading…</p>
-      {/if}
-      <div class="acts">
-        <CommandAction path="instructions new" title="Draft a new specialist or skill" preset={{ '--project': slug }} />
-        <CommandAction path="instructions export" title="Copy a built-in one into the workspace to edit" />
-      </div>
-    {:else if section === 'specialist' && shown}
-      <h2 class="topicname">{shown.title}</h2>
-      <p class="calm">{shown.summary} <span class="effect">· {shown.id} · {shown.origin} · {shown.estimatedTokens} tokens</span></p>
-      <dl class="facts">
-        <dt>Loads</dt><dd>{shown.activation.always ? 'always' : [shown.activation.globs.length ? `for files like ${shown.activation.globs.join(', ')}` : '', shown.activation.dependencies.length ? `with ${shown.activation.dependencies.join(', ')}` : '', shown.activation.taskPhrases.length ? `for tasks that say ${shown.activation.taskPhrases.join(', ')}` : '', shown.activation.modes.length ? `in ${shown.activation.modes.join(', ')} mode` : ''].filter(Boolean).join('; ') || 'when asked for'}</dd>
-      </dl>
-      <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-      <pre class="output prose" tabindex="0" aria-label="What it says">{shown.body}</pre>
-      <Command why="The same, in a terminal:" command={`$ loadout instructions show ${shown.id} --project ${slug}`} />
-      <div class="acts">
-        <CommandAction path="instructions export" title="Copy it into the workspace to edit" preset={{ SPECIALIST: shown.id, '--project': slug }} fixed={['SPECIALIST']} label="Copy it" />
-        <CommandAction path="instructions probe" title="How often sessions did what it asks" preset={{ specialist: shown.id }} fixed={['specialist']} label="Measure it" />
-      </div>
-    {:else if section === 'specialist'}
-      <p class="calm" role="status">Reading…</p>
-    {:else if section === 'rules'}
-      <h2 class="topicname">Rules and coding styles</h2>
-      {#if rules}
-        <p class="calm">{rules.budget.alwaysLoadedBytes} bytes always loaded, {rules.budget.scopedBytes} scoped to the files they cover{rules.budget.overBudget ? ', which is over the budget' : ''}. The audit says <strong>{rules.audit.verdict.toLowerCase()}</strong>.</p>
+      <section class="pblock" aria-labelledby="cr">
+        <h2 class="ls-zone" id="cr">Rules</h2>
         {#if rules.list.length}
-          <ul class="plain">{#each rules.list as one, index (index)}<li><span class="n">{one.name ?? one.path}</span>{one.globs?.length ? ` · ${one.globs.join(', ')}` : ''}{one.bytes ? ` · ${one.bytes} bytes` : ''}</li>{/each}</ul>
+          <ul class="rowsx">{#each rules.list as one, index (index)}<li><b>{one.name ?? one.path}</b>{#if one.globs?.length}<code>{one.globs.join(', ')}</code>{/if}{#if one.bytes}<span>{bytes(one.bytes)} bytes</span>{/if}</li>{/each}</ul>
         {:else}
-          <p class="calm">No path-scoped rules.</p>
+          <p class="lead">No path-scoped rules.</p>
         {/if}
-        {#each rules.audit.findings as finding, index (index)}<p class="attention">{words(finding)}</p>{/each}
-        <p class="calm small">From <code class="ls-cmd">loadout rules list {slug}</code>, <code class="ls-cmd">loadout rules budget {slug}</code> and <code class="ls-cmd">loadout rules audit {slug}</code>.</p>
-      {/if}
-      <h3 class="ls-zone">Coding styles</h3>
+        <h3 class="sub">The audit</h3>
+        <HealthList findings={ruleFindings} verdict={rules.audit.verdict} from={`$ loadout rules list ${slug}, loadout rules budget ${slug} and loadout rules audit ${slug}`} />
+      </section>
+    {/if}
+    <section class="pblock" aria-labelledby="cs">
+      <h2 class="ls-zone" id="cs">Coding styles</h2>
       {#if styles}
         {#if styles.length}
-          <ul class="plain">{#each styles as one (one.name)}<li><span class="n">{one.name}</span>{one.inForce ? ' · in force' : ''}{one.description ? ` · ${one.description}` : ''}</li>{/each}</ul>
-        {:else}
-          <p class="calm">No coding styles yet.</p>
-        {/if}
-        <p class="calm small">From <code class="ls-cmd">loadout style list {slug}</code>.</p>
-      {/if}
-      <h3 class="ls-zone">Profiles</h3>
-      {#if profiles}
-        <ul class="plain">{#each profiles as one (one.name)}<li><span class="n">{one.name}</span> · {one.description}</li>{/each}</ul>
-        <p class="calm small">From <code class="ls-cmd">loadout profile list {slug}</code>.</p>
-      {/if}
-      <h3 class="ls-zone">Guidance for everybody</h3>
-      {#if candidates?.length}
-        <ul class="plain">{#each candidates as one, index (index)}<li><code class="ls-cmd">{one.path ?? one.file}</code>{one.reason ? ` · ${one.reason}` : ''}</li>{/each}</ul>
-      {:else if candidates}
-        <p class="calm">Nothing here looks like it belongs to every project.</p>
-      {/if}
-      <p class="calm small">Guidance that never mentions this project, from <code class="ls-cmd">loadout share candidates --project {slug}</code>.</p>
-      <div class="acts">
-        <CommandAction path="share promote" title="Move guidance into the workspace's global layer" label="Move it" />
-        <CommandAction path="rules split" title="Split an oversized instruction file into scoped rules" preset={{ project: slug }} fixed={['project']} />
-        <CommandAction path="style show" title="Read a coding style" preset={{ '--project': slug }} fixed={['--project']} label="Show" />
-        <CommandAction path="style use" title="Choose the style this project uses" preset={{ '--project': slug }} fixed={['--project']} label="Use it" />
-      </div>
-    {:else if section === 'docs'}
-      <h2 class="topicname">Documents</h2>
-      {#if docs}
-        <p class="calm">{docs.documents} document{docs.documents === 1 ? '' : 's'} checked; {docs.findings.length ? `${docs.findings.length} place${docs.findings.length === 1 ? '' : 's'} where they have come adrift` : 'every reference resolves'}.</p>
-        {#each docs.findings as finding, index (index)}<p class="attention">{words(finding)}</p>{/each}
-        <p class="calm small">From <code class="ls-cmd">loadout docs audit {slug}</code>.</p>
-      {:else}
-        <p class="calm" role="status">Checking…</p>
-      {/if}
-      <div class="acts">
-        <CommandAction path="docs find" title="Where a type or member is declared" preset={{ '--project': slug }} fixed={['--project']} label="Find it" />
-        <CommandAction path="docs refresh" title="Bring the symbol index up to date" preset={{ '--project': slug }} fixed={['--project']} />
-        <CommandAction path="docs export" title="Write a reference or guide" preset={{ '--project': slug }} fixed={['--project']} />
-        <CommandAction path="docs ci" title="Write a CI workflow that regenerates them" preset={{ '--project': slug }} fixed={['--project']} />
-      </div>
-    {:else if section === 'health'}
-      <h2 class="topicname">Health</h2>
-      {#if health}
-        <p class="calm">{health.audit.applicable} specialists apply here, and {health.audit.checks} checks ran: {health.audit.findings.length ? `${health.audit.findings.length} place${health.audit.findings.length === 1 ? '' : 's'} where the project departs from what they ask` : 'nothing departs from what they ask'}.</p>
-        {#each health.audit.findings as finding, index (index)}<p class="attention">{words(finding)}</p>{/each}
-        <p class="calm">The library has {health.validate.specialists} specialists: {health.validate.errors} error{health.validate.errors === 1 ? '' : 's'}, {health.validate.warnings} warning{health.validate.warnings === 1 ? '' : 's'}.</p>
-        {#each health.validate.findings as finding, index (index)}<p class="attention">{words(finding)}</p>{/each}
-        <p class="calm small">From <code class="ls-cmd">loadout instructions audit --project {slug}</code> and <code class="ls-cmd">loadout instructions validate {slug}</code>.</p>
-      {:else}
-        <p class="calm" role="status">Checking…</p>
-      {/if}
-      <div class="acts">
-        <CommandAction path="instructions stats" title="Which specialists launches actually reached" preset={{ '--project': slug }} fixed={['--project']} label="Show" />
-        <CommandAction path="instructions probe" title="How often sessions did what a specialist asks" />
-      </div>
-    {:else if section === 'voice'}
-      <h2 class="topicname">Your writing voice</h2>
-      <p class="calm">How you write, learned from your own writing and checked against it. The rules in force are rendered into the style specialist your sessions load.</p>
-      {#if voice}
-        <dl class="facts">
-          <dt>Guide</dt><dd>{voice.guide.reference} · {voice.guide.summary}</dd>
-          <dt>Layers</dt><dd>{voice.layers.map((one) => `${one.name}: ${one.exists ? `${one.rules} rule${one.rules === 1 ? '' : 's'}` : 'not learned yet'}`).join(' · ')}</dd>
-        </dl>
-        {#if voice.rules.length}
-          <ul class="plain">
-            {#each voice.rules as rule, index (index)}
-              <li>{Object.values(rule).filter((value) => typeof value === 'string').slice(0, 3).join(' · ')}</li>
+          <ul class="rowsx">
+            {#each styles as one (one.name)}
+              <li><b>{one.name}</b>{#if one.layer}<Signal word="met" /><span>in force · {one.layer}</span>{:else}<span>in the library, not in force</span>{/if}{#if one.coreTokens}<code>{one.coreTokens} tokens</code>{/if}</li>
             {/each}
           </ul>
+        {:else}
+          <p class="lead">No coding styles yet.</p>
         {/if}
-        <p class="calm small">From <code class="ls-cmd">loadout voice show --project {slug}</code>.</p>
-        {#if runs?.length}
-          <p class="calm">{runs.length} learn run{runs.length === 1 ? '' : 's'} so far, as <code class="ls-cmd">loadout voice runs</code> lists them.</p>
-        {/if}
-        {#if guides}
-          <p class="calm small">Guides here: {guides.map((one) => `${one.reference}${one.ships ? '' : ' (yours)'}`).join(', ')}, from <code class="ls-cmd">loadout voice guide list</code>.</p>
-        {/if}
-      {:else}
-        <p class="calm" role="status">Reading…</p>
+        <p class="ls-from">From <code>$ loadout style list {slug}</code>.</p>
       {/if}
-      <div class="acts">
-        <CommandAction path="voice check" title="Check a message or a file against it" preset={{ '--project': slug }} fixed={['--project']} label="Check it" open />
-        <CommandAction path="voice mark" title="Mark writing as yours, so learning counts it" preset={{ '--project': slug }} fixed={['--project']} label="Mark it" />
-        <CommandAction path="voice render" title="Render it into the style specialist sessions load" preset={{ '--project': slug }} fixed={['--project']} label="Render it" />
-        <CommandAction path="voice runs" title="Past learn runs, with what each cost" preset={{ '--project': slug }} fixed={['--project']} label="Show" />
-        <CommandAction path="voice guide show" title="A guide's sources, checks and thresholds" label="Show" />
-        <CommandAction path="voice learn" title="Learn it from your own writing, rule by rule" preset={{ '--project': slug }} fixed={['--project']} />
-        <CommandAction path="voice guide draft" title="Draft a new guide with an agent" />
+    </section>
+    <section class="pblock" aria-labelledby="cp">
+      <h2 class="ls-zone" id="cp">Profiles</h2>
+      {#if profiles}
+        <ul class="rowsx">{#each profiles as one (one.name)}<li><b>{one.name}</b><span>{one.description}</span></li>{/each}</ul>
+        <p class="ls-from">From <code>$ loadout profile list {slug}</code>.</p>
+      {/if}
+    </section>
+    <section class="pblock" aria-labelledby="cg">
+      <h2 class="ls-zone" id="cg">Guidance for everybody</h2>
+      {#if candidates?.length}
+        <ul class="rowsx">{#each candidates as one, index (index)}<li><code>{one.path ?? one.file}</code>{#if one.reason}<span>{one.reason}</span>{/if}</li>{/each}</ul>
+      {:else if candidates}
+        <p class="lead">Nothing here looks like it belongs to every project.</p>
+      {/if}
+      <p class="ls-from">Guidance that never mentions this project, from <code>$ loadout share candidates --project {slug}</code>.</p>
+      <div class="ls-drawers">
+        <CommandAction path="style use" title="Choose the style this project uses" preset={{ '--project': slug }} fixed={['--project']} label="Use it" />
+        <CommandAction path="style show" title="Read a coding style" preset={{ '--project': slug }} fixed={['--project']} label="Show" />
+        <CommandAction path="rules split" title="Split an oversized instruction file into scoped rules" preset={{ project: slug }} fixed={['project']} />
+        <CommandAction path="share promote" title="Move guidance into the workspace's global layer" label="Move it" />
       </div>
-      <p class="calm small">Learning a voice and drafting a guide ask you about each rule as they go, so they open in a terminal here.</p>
-    {:else if section === 'handoff'}
-      <h2 class="topicname">Handing over</h2>
-      <p class="calm">A handoff is a note the next session reads first: what this one worked out, so it does not have to again.</p>
-      <div class="acts">
-        <CommandAction path="handoff" title="Write or read a handoff" preset={{ project: slug }} fixed={['project']} open />
-      </div>
+    </section>
+  {:else if section === 'docs'}
+    {#if docs}
+      <p class="lead">{docs.documents} document{docs.documents === 1 ? '' : 's'} checked; {docs.findings.length ? `${docs.findings.length} place${docs.findings.length === 1 ? '' : 's'} where they have come adrift` : 'every reference resolves'}.</p>
+      <HealthList findings={docFindings} from={`$ loadout docs audit ${slug}`} noneText="Every reference resolves." />
+    {:else}
+      <p class="calm" role="status">Checking…</p>
     {/if}
-  </section>
+    <div class="ls-drawers pblock">
+      <CommandAction path="docs find" title="Where a type or member is declared" preset={{ '--project': slug }} fixed={['--project']} label="Find it" />
+      <CommandAction path="docs refresh" title="Bring the symbol index up to date" preset={{ '--project': slug }} fixed={['--project']} />
+      <CommandAction path="docs export" title="Write a reference or guide" preset={{ '--project': slug }} fixed={['--project']} />
+      <CommandAction path="docs ci" title="Write a CI workflow that regenerates them" preset={{ '--project': slug }} fixed={['--project']} />
+    </div>
+  {:else if section === 'health'}
+    {#if health}
+      <p class="lead">{health.audit.applicable} specialists apply here, and {health.audit.checks} checks ran: {health.audit.findings.length ? `${health.audit.findings.length} place${health.audit.findings.length === 1 ? '' : 's'} where the project departs from what they ask` : 'nothing departs from what they ask'}.</p>
+      <HealthList findings={auditFindings} from={`$ loadout instructions audit --project ${slug}`} noneText="Nothing departs from what the specialists ask." />
+      <h3 class="sub">The library</h3>
+      <p class="lead">The library has {health.validate.specialists} specialists: {health.validate.errors} error{health.validate.errors === 1 ? '' : 's'}, {health.validate.warnings} warning{health.validate.warnings === 1 ? '' : 's'}.</p>
+      <HealthList findings={validateFindings} from={`$ loadout instructions validate ${slug}`} noneText="Every specialist reads as it should." />
+    {:else}
+      <p class="calm" role="status">Checking…</p>
+    {/if}
+    <div class="ls-drawers pblock">
+      <CommandAction path="instructions stats" title="Which specialists launches actually reached" preset={{ '--project': slug }} fixed={['--project']} label="Show" />
+      <CommandAction path="instructions probe" title="How often sessions did what a specialist asks" />
+    </div>
+  {:else if section === 'voice'}
+    <p class="lead">How you write, learned from your own writing and checked against it. The rules in force are rendered into the style specialist your sessions load.</p>
+    {#if voice}
+      <dl class="facts">
+        <dt>Guide</dt><dd>{voice.guide.reference} · {voice.guide.summary}</dd>
+        <dt>Layers</dt><dd>{voice.layers.map((one) => `${one.name}: ${one.exists ? `${one.rules} rule${one.rules === 1 ? '' : 's'}` : 'not learned yet'}`).join(' · ')}</dd>
+        {#if runs}<dt>Learn runs</dt><dd>{runs.length} so far, as <code>loadout voice runs</code> lists them</dd>{/if}
+      </dl>
+      {#if voice.rules.length}
+        <ul class="rowsx">
+          {#each voice.rules as rule, index (index)}
+            <li>{Object.values(rule).filter((value) => typeof value === 'string').slice(0, 3).join(' · ')}</li>
+          {/each}
+        </ul>
+      {/if}
+      <p class="ls-from">From <code>$ loadout voice show --project {slug}</code>.</p>
+      {#if guides}
+        <p class="ls-from">Guides here: {guides.map((one) => `${one.reference}${one.ships ? '' : ' (yours)'}`).join(', ')}, from <code>$ loadout voice guide list</code>.</p>
+      {/if}
+    {:else}
+      <p class="calm" role="status">Reading…</p>
+    {/if}
+    <div class="ls-drawers pblock">
+      <h4 class="gh">Check and mark</h4>
+      <CommandAction path="voice check" title="Check a message or a file against it" preset={{ '--project': slug }} fixed={['--project']} label="Check it" />
+      <CommandAction path="voice mark" title="Mark writing as yours, so learning counts it" preset={{ '--project': slug }} fixed={['--project']} label="Mark it" />
+      <CommandAction path="voice render" title="Render it into the style specialist sessions load" preset={{ '--project': slug }} fixed={['--project']} label="Render it" />
+      <h4 class="gh">Learn, ask as they go</h4>
+      <CommandAction path="voice learn" title="Learn it from your own writing, rule by rule" preset={{ '--project': slug }} fixed={['--project']} />
+      <CommandAction path="voice guide draft" title="Draft a new guide with an agent" />
+      <h4 class="gh">Read</h4>
+      <CommandAction path="voice runs" title="Past learn runs, with what each cost" preset={{ '--project': slug }} fixed={['--project']} label="Show" />
+      <CommandAction path="voice guide show" title="A guide's sources, checks and thresholds" label="Show" />
+    </div>
+  {:else if section === 'handoff'}
+    <p class="lead">A handoff is a note the next session reads first: what this one worked out, so it does not have to again.</p>
+    <div class="ls-drawers">
+      <CommandAction path="handoff" title="Write or read a handoff" preset={{ project: slug }} fixed={['project']} open />
+    </div>
+  {/if}
 </div>

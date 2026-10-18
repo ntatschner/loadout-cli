@@ -8,6 +8,7 @@
   import { untrack } from 'svelte';
   import Command from './Command.svelte';
   import HaloButton from './HaloButton.svelte';
+  import TerminalOnly from './TerminalOnly.svelte';
   import JobResult from './JobResult.svelte';
   import { commands, sessions, SignedOut, type Job, type StudioCommand, type StudioOption } from '../api';
   import { router } from '../router.svelte';
@@ -28,9 +29,19 @@
     onlaunch?: () => void;
     /** Hide the description, for a page that has already said what this does. */
     plain?: boolean;
+    /**
+     * Drawn inside an ActionDrawer, which already shows the effect: the
+     * button that changes something is the solid one, and a disabled one is
+     * never solid.
+     */
+    drawer?: boolean;
+    /** Said in place of the command's own description. */
+    why?: string;
+    /** The button acknowledges a loss. */
+    danger?: boolean;
   }
 
-  let { command, preset = {}, fixed = [], label = 'Run', onstarted = undefined, onlaunch = undefined, plain = false }: Props = $props();
+  let { command, preset = {}, fixed = [], label = 'Run', onstarted = undefined, onlaunch = undefined, plain = false, drawer = false, why = undefined, danger = false }: Props = $props();
 
   // Text for arguments and valued options, true or false for flags.
   // Loosely typed on purpose: the form's shape is the command's, known only at run time.
@@ -72,6 +83,9 @@
   const reads = $derived(readsWith(command, words));
   const previewable = $derived(!reads && command.options.some((one) => one.name === '--dry-run'));
   const runReason = $derived(notYet ?? (studio.watchOnly && !reads ? 'Studio is only watching: preview it, or type the command in a terminal' : undefined));
+  // A command that acts only when given an option reads until it is, and its button says so.
+  const acting = $derived(command.reach.effect === 'changes' ? (command.reach.changesOnlyWith ?? []) : []);
+  const runCmd = $derived(reads ? (acting.length ? `reads only · changes with ${acting.join(' or ')}` : 'reads only') : 'changes something');
 
   // A command that asks as it goes is not a job, since nobody could answer
   // it: it opens in a terminal the daemon hosts, and the page goes to it.
@@ -124,14 +138,16 @@
   const id = (name: string) => `f-${command.path.replace(/[^a-z0-9]/gi, '-')}-${name.replace(/[^a-z0-9]/gi, '-')}`;
 </script>
 
-{#if !plain}
+{#if drawer}
+  {#if why ?? command.description}<p class="why">{why ?? command.description}</p>{/if}
+{:else if !plain}
   <p class="calm">{command.description} <span class="effect">· {EFFECT[command.reach.effect]}</span></p>
 {/if}
 
 {#if problem}<p class="offline" role="alert">{problem}</p>{/if}
 
 {#if command.reach.effect === 'terminalOnly'}
-  <Command why={`Studio does not run this: it ${command.reach.reason}.`} command={`$ loadout ${command.path}`} />
+  <TerminalOnly title="Studio does not run this" why={`It ${command.reach.reason}.`} command={`$ loadout ${command.path}`} />
 {:else if command.reach.effect === 'session' && command.path === 'launch'}
   <p class="calm">This starts an agent session. Studio hosts sessions from Sessions, where you can type into them.</p>
   {#if onlaunch}
@@ -195,7 +211,7 @@
       </details>
     {/if}
 
-    <Command why="It runs:" command={lineFor(command.path, words)} />
+    <Command why="It runs:" command={lineFor(command.path, words)} live={drawer} />
 
     <div class="ls-answers flush">
       {#if asks}
@@ -204,7 +220,11 @@
         {#if previewable}
           <HaloButton label="Preview" size="small" cmd="adds --dry-run · changes nothing" disabledReason={notYet ?? undefined} onpress={() => void run(true)} />
         {/if}
-        <HaloButton label={starting ? 'Starting…' : label} solid={reads} kind={reads ? '' : 'needs'} size="small" cmd={reads ? 'reads only' : 'changes something'} disabledReason={runReason} onpress={() => void run(false)} />
+        {#if drawer}
+          <HaloButton label={starting ? 'Starting…' : label} solid={!reads && !runReason} kind={danger && !reads ? 'danger' : ''} size="small" cmd={runCmd} disabledReason={runReason} onpress={() => void run(false)} />
+        {:else}
+          <HaloButton label={starting ? 'Starting…' : label} solid={reads} kind={reads ? '' : 'needs'} size="small" cmd={runCmd} disabledReason={runReason} onpress={() => void run(false)} />
+        {/if}
       {/if}
     </div>
   </form>
