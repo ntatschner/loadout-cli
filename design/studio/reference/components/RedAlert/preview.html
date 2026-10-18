@@ -1,0 +1,27 @@
+<!-- @dsCard group="Signals" height=520 width=1100 subtitle="Red Alert: the page’s edge lights when something needs you" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>RedAlert</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div style="height: 420px; padding: 60px 30px; color: var(--muted)">The page as it is; the edge and the line are over it.</div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var R = S.RedAlert({ enabled: true, host: document.body, onGo: function (x) { document.body.firstElementChild.textContent = "Goes to: " + x.text; } });
+  R.set([{ id: "r2", level: "needs", text: "iterating-project asks: fix the two flaky tests here, or leave them?" }, { id: "s2", level: "needs", text: "add a retry to the upload step needs approval" }]);
+})();
+</script>
+</body>
+</html>

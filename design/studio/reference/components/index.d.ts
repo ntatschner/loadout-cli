@@ -220,9 +220,11 @@ export interface RunSummary { id: string; goal: string; team: string; project?: 
 /** The spend line: what it has spent, of what, and where it is projected to end. */
 export declare function Spend(r: RunSummary): HTMLElement;
 /** One run in a list, with what it asks answered in place. */
-export declare function RunCard(o: { run: RunSummary; href?: string; gate?: GateOptions; reasons?: { text: string; clears: string }[]; actions?: HaloButtonOptions[] }): HTMLElement;
+export declare function RunCard(o: { run: RunSummary; href?: string; gate?: GateOptions; reasons?: { text: string; clears: string }[]; actions?: HaloButtonOptions[];
+  /** Whether it is getting closer: a ProgressLine under its facts. */
+  progress?: Parameters<typeof ProgressLine>[0] }): HTMLElement;
 
-export type NeedReason = "asked" | "silent" | "quiet" | "budget" | "spent";
+export type NeedReason = "asked" | "silent" | "quiet" | "budget" | "spent" | "stalled";
 /** Every reason a run wants you. Each clears itself; nothing is dismissed by hand. */
 export declare function NeedsYou(o: { items: { reason: NeedReason; run: string; goal: string; team?: string; href?: string; node?: string; quiet?: string; detail?: string; text?: string; clears?: string; gate?: GateOptions; actions?: HaloButtonOptions[] }[] }): HTMLElement;
 
@@ -273,7 +275,9 @@ export declare function RoleRecord(o: { rows?: [string, string | null, number, n
 
 export interface SheetTeam { name: string; description: string; nodes: number; lead: string; posture: string; budget?: string; doneWhen?: string[]; template?: boolean; problems?: string[] }
 /** Start a run, Make a team, or Run one on a schedule. el is the form; open() shows it as a sheet. */
-export declare function TeamSheet(o: { kind: "run" | "make" | "schedule"; teams: SheetTeam[]; projects: { name: string; path: string }[]; projectDoneWhen?: Record<string, string[]>; preset?: Record<string, string>; daemon?: boolean; watchOnly?: boolean; onSubmit?: (command: string, values: Record<string, unknown>) => void }): { el: HTMLElement; command: () => string; open: () => ReturnType<typeof Dialog> };
+export declare function TeamSheet(o: { kind: "run" | "make" | "schedule"; teams: SheetTeam[]; projects: { name: string; path: string }[];
+  /** The recorded tasks a run can be for (Start a run only): picking one adds --task <id> and fills the goal from its title and note. */
+  tasks?: { id: string; title: string; state: string; kind?: string; note?: string | null; project?: string; declared?: string }[]; projectDoneWhen?: Record<string, string[]>; preset?: Record<string, string>; daemon?: boolean; watchOnly?: boolean; onSubmit?: (command: string, values: Record<string, unknown>) => void }): { el: HTMLElement; command: () => string; open: () => ReturnType<typeof Dialog> };
 /** Runs that start without you, and whether the daemon will fire them. */
 export declare function Schedules(o: { daemon: { running: boolean; paused?: boolean }; items: { name: string; team: string; goal: string; when: string; next?: string; autonomy?: string; usd?: string }[]; onRemove?: (name: string) => void; disabledReason?: string }): HTMLElement;
 /** A remedy: what it is, this machine's rule for its kind, whether this script is trusted, and the requests waiting on you. */
@@ -323,7 +327,9 @@ export declare function SessionTabs(o: { sessions: DeckSession[]; current?: stri
 /** Terminal Focus: tabs over one, two or four panes of Terminal, a find bar, and the keys. The deck makes no terminals itself: terminal(id) does. */
 export declare function TermDeck(o: { sessions: DeckSession[]; current?: string; layout?: 1 | 2 | 4; terminal: (id: string) => ReturnType<typeof Terminal>; onPick?: (id: string) => void; onLayout?: (n: number) => void; onNew?: () => void; onShown?: (ids: string[], terms: Record<string, ReturnType<typeof Terminal>>) => void }): { el: HTMLElement; pick: (id: string, focus?: boolean) => void; setLayout: (n: 1 | 2 | 4) => void; terminal: (id: string) => ReturnType<typeof Terminal> | undefined; update: (sessions: DeckSession[]) => void; readonly current: string; readonly layout: number };
 
-export interface BoardRun { id: string; goal: string; team: string; project?: string; word: string; round: number; rounds: { word: string; nodes?: [string, string][] }[]; spent?: number; cap?: number | null; projected?: number; gate?: GateOptions }
+export interface BoardRun { id: string; goal: string; team: string; project?: string; word: string; round: number; rounds: { word: string; nodes?: [string, string][] }[]; spent?: number; cap?: number | null; projected?: number; gate?: GateOptions;
+  /** Whether it is getting closer: a compact ProgressLine under the row. */
+  progress?: { total: number; byRound?: number[]; lastMoved?: number | null; stalled?: boolean } }
 /** A run's rounds as a small line, for a board row. Decoration: the row's words say the same. */
 export declare function MiniLine(rounds: BoardRun["rounds"], ended: boolean, running: boolean): HTMLElement;
 /** Team Focus: every run as a line, the one that needs you first, teams along the top. */
@@ -407,7 +413,11 @@ export declare function NoteDump(o: { dump: { id: string; source?: string; captu
 export declare function ProjectTile(o: { project?: { id: string; name: string; available?: boolean; path?: string; defaultAgent?: string; pinned?: boolean; branch?: string | null; clean?: boolean | null }; href?: string; picked?: boolean; doing?: number; blocked?: number; findings?: number; ideas?: number; place?: string; sub?: string }): HTMLElement;
 export interface Task { id: string; title: string; state: "open" | "doing" | "blocked" | "done" | "dropped"; kind?: string; declaredBy?: string; declared?: string; note?: string | null }
 /** Open, Doing and Blocked side by side; done and dropped folded away. Each task moves on with `loadout task declare`. */
-export declare function TaskBoard(o: { tasks: Task[]; where: string[]; from?: string; disabledReason?: string; onDeclare?: (task: Task, state: string, was: string) => void }): { el: HTMLElement; set: (tasks: Task[]) => void };
+export declare function TaskBoard(o: { tasks: Task[]; where: string[]; from?: string; disabledReason?: string; onDeclare?: (task: Task, state: string, was: string) => void;
+  /** Start a session on a task: opens the launch sheet with it picked (--task-id). Shown on open, doing and blocked tasks, never on ideas. */
+  onSession?: (task: Task) => void;
+  /** Run a team on a task: opens Start a run with it picked (--task). Disabled when a team run already has it in doing. */
+  onRun?: (task: Task) => void }): { el: HTMLElement; set: (tasks: Task[]) => void };
 /** What a session would start with: one bar of its specialists against the token budget, why each is there, and what was left out. */
 export declare function LoadStack(o: {
   selected: { id: string; title: string; reason?: string; estimatedTokens: number; always?: boolean }[];
@@ -459,3 +469,21 @@ export declare function ForgetProject(o: {
   disabledReason?: string;
   onRun?: (plan: { scope: "here" | "everywhere"; lines: string[]; preview: boolean; picked: Record<string, boolean> }) => string | void;
 }): { el: HTMLElement; readonly scope: "here" | "everywhere"; steps: () => string[] };
+
+/* ---------- Team run progress, Red Alert, tasks and value (stage 10) ---------- */
+
+export type Verdict = "met" | "unmet" | "not-attempted" | "not attempted" | null;
+/** "3 of 5 met, up from 1 · last moved 2 rounds ago", with a small line of the met count by round (decoration; the words carry it). For run cards and the board. */
+export declare function ProgressLine(o: { total: number; byRound?: number[]; met?: number; lastMoved?: number | null; stalled?: boolean; compact?: boolean }): HTMLElement;
+/** Each done-when a row, each round a column, met / unmet / not attempted / no verdict as glyph and word; what changed in a round is tinted. For a run's page. */
+export declare function CriteriaGrid(o: { rounds: number; current?: number; criteria: { text: string; verdicts: Verdict[] }[]; stalledFor?: number; from?: string }): HTMLElement;
+/** Picking a finished run up: asks for exactly what it ran out of (`team resume --usd` in all from now on, `--rounds` more), and an optional message. */
+export declare function PickUpSheet(o: { run: { id: string }; ended: "budget" | "rounds" | "other"; spent?: number; cap?: number; rounds?: number; roundLimit?: number; reason?: string; disabledReason?: string; onSubmit?: (command: string, values: { usd: string; rounds: string; message: string }) => string | void }): { el: HTMLElement; command: () => string };
+/** What a run was refused, allowed and decided, from its journal, with a Refused filter. */
+export declare function RefusalsList(o: { items: { at?: string; outcome: "refused" | "allowed" | "answered" | "merged"; what: string; detail?: string }[]; only?: "all" | "refused"; from?: string }): HTMLElement;
+/** When enabled and something needs you, the page's edge lights (Needs, or Bad for a problem) and one line says what, with Go to it and Quiet until something new. Clears itself. Breathes under full motion; steady under reduced; a still border under none and in Pure Focus. */
+export declare function RedAlert(o: { enabled?: boolean; host?: HTMLElement; onGo?: (item: { id: string; text: string; level: "needs" | "problem" }) => void }): { el: HTMLElement; set: (items: { id: string; text: string; level: "needs" | "problem" }[]) => void; enable: (on: boolean) => void; readonly showing: boolean; destroy: () => void };
+/** Which recorded task this is for: doing, then open, then blocked, newest first; or something else. */
+export declare function TaskPicker(o: { tasks: { id: string; title: string; state: string; declaredBy?: string; declared?: string; note?: string | null }[]; selected?: string | null; label?: string; otherLabel?: string; otherSub?: string; onPick?: (task: { id: string; title: string; note?: string | null } | null) => void }): HTMLElement;
+/** What Loadout did, counted, never estimated. A figure that is not recorded yet (value null) says so. */
+export declare function ValueReport(o: { head?: string | Node; groups: { name: string; figures: { label: string; value: number | string | null; detail?: string; from?: string; waits?: string }[] }[]; how?: string }): HTMLElement;
