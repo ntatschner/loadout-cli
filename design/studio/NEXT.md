@@ -39,7 +39,7 @@ Don't reopen these.
 
 - **The full set.** The Teams overview, a run's page, a team's page, the three sheets, and the smaller parts (remedies, the bin, saying something to a node, opening a pull request).
 - **A run is drawn as a line.** RunShape uses the Map's grammar: the lead's line runs through the rounds as stations, and the nodes each round briefed hang from it. It uses the accent, never the Map's `line-*` identity colours. Below 620px of its own width it turns vertical.
-- **The office stays in the classic dashboard.** Studio doesn't draw rooms, so `team name` and `team office check` aren't on the new pages.
+- ~~**The office stays in the classic dashboard.**~~ Superseded by `OFFICE.md`: Studio draws the office with the classic dashboard's engine, shared, and `team name` moves into Studio. `team office check` stays in a terminal.
 - **Five depths, keys 1 to 5.** What it said, What it cost, The papers, What it changed, and a new fifth, **What it delivered**.
 - **What it delivered is a read-only file handler (Outbox).** It has a tree by node and commit, or by folder, beside a viewer:
   - **Markdown** is rendered, with Source to see it as written.

@@ -496,3 +496,30 @@ export declare function setBackground(value: Background, el?: Element): void;
 export declare const BACKGROUNDS: Background[];
 /** The embossed survey map behind every page: contour lines (every fifth heavier), grid squares and map references, the same map on every visit. Still unless data-background is map-animated and motion is full and the mode isn't Pure; hidden for plain and both high-contrast themes. Mount once. */
 export declare function FieldMap(o?: { seed?: number; scale?: number; levels?: number; cell?: number; square?: number; host?: HTMLElement; width?: number; height?: number }): { el: HTMLElement; redraw: () => void; destroy: () => void };
+
+/* ---------- The office (stage 12) ---------- */
+
+/** Something in the office the keyboard can stop on: a floor from outside, or a person or room inside. Its rect is in CSS pixels inside the stage. */
+export interface OfficeTarget { id: string; kind: "floor" | "level" | "person" | "room"; label: string; detail?: string; run?: string; room?: string; rect: { x: number; y: number; w: number; h: number } }
+export interface OfficeWhere { place: "outside" | "lobby" | "roof" | "basement-1" | "basement-2" | "floor"; label: string; detail?: string; view?: "corner" | "aerial" | "street"; canTurn: boolean; canLevel: [boolean, boolean]; zoom: number; zoomRange: [number, number] }
+/**
+ * What the shared office engine (the classic dashboard's, moved to its own file) offers a host page.
+ * It draws exactly as it does today. The only new things are where() and targets(), so the host can draw a
+ * focus ring and move between things by keyboard, and activate(), which does what a click does.
+ */
+export interface OfficeEngine {
+  mount(stage: HTMLElement, o: { motion: () => "full" | "reduced" | "none"; onChange: () => void }): void;
+  where(): OfficeWhere;
+  targets(): OfficeTarget[];
+  /** A floor from outside: goes in ("entered"). A person or a room: "picked", and the host shows its panel. */
+  activate(id: string): "entered" | "picked";
+  /** Out a level (a floor to the building); false when already outside. */
+  back(): boolean;
+  turn(d: -1 | 1): void; zoom(d: -1 | 1): void; level(d: -1 | 1): void; setView(v: "corner" | "aerial" | "street"): void;
+  resize?(): void; destroy(): void;
+}
+/** Studio's frame round the office: where you are, the toolbar (back, levels, outside views, turn, zoom), the picture with a keyboard focus ring, a side for panels, and the keys. */
+export declare function OfficeView(o: { engine: OfficeEngine; label?: string; settingsHref?: string; onPick?: (t: OfficeTarget) => void }): { el: HTMLElement; stage: HTMLElement; side: HTMLElement; show: (panel: HTMLElement) => void; hide: () => void; refresh: () => void; focus: (id?: string) => void; destroy: () => void };
+export interface OfficeAction { label: string; cmd?: string; danger?: boolean; ask?: string; yes?: string; said?: string; disabledReason?: string; onPress?: () => void }
+/** A room or a person: what it is, what's going on in it, the classic popup's actions as Studio buttons with their commands, and Name this room for a run's own room. */
+export declare function OfficePanel(o: { kind?: string; title: string; lines?: string[]; list?: string[]; teams?: { name: string; list?: string[]; open?: () => void }[]; actions?: OfficeAction[]; rename?: { run: string; current?: string; worked?: string; onSave?: (name: string) => void }; onClose?: () => void }): HTMLElement;

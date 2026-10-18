@@ -68,6 +68,7 @@ Loadout Studio is the design system for Studio: the app Loadout serves on this m
 
 - **Is it getting closer?** A run carries a ProgressLine ("3 of 5 met, up from 1 · last moved 2 rounds ago") on its card and board row, and its page has a CriteriaGrid: each done-when round by round. A run where no done-when has moved for three rounds is **stalled**: held after its round, and under Needs you with three answers (let it carry on, tell it something, stop it).
 - A finished run is picked up with a PickUpSheet that asks for exactly what it ran out of; its page lists what it was refused and decided (RefusalsList).
+- **The office.** The Teams page has an **Office** view beside its runs: the classic dashboard's pixel-art building, one floor per run, drawn by the same engine in Studio's frame (OfficeView). The art keeps its own colours in every theme; the frame round it follows the theme. Tab into it and the arrow keys move a two-tone focus ring between floors, people and rooms; Enter opens; Escape goes back. A room or a person opens an OfficePanel with the classic popup's actions as Studio buttons that show their commands, and the lead's office can be named (`loadout team name`). It shows in Default, Team Focus and Terminal Focus (beside the terminals), never in Minimal or Pure Focus.
 
 ### Modes
 
