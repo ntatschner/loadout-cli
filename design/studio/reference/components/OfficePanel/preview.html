@@ -1,0 +1,35 @@
+<!-- @dsCard group="Teams" height=720 width=1100 subtitle="A room or a person, with the classic popup’s actions as Studio buttons that show their commands" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OfficePanel</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div class="row" style="align-items: flex-start; gap: 18px; flex-wrap: wrap"><div id="a" style="width: 330px"></div><div id="b" style="width: 330px"></div><div id="c" style="width: 330px"></div></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  document.getElementById("a").appendChild(S.OfficePanel({ kind: "The lead’s office", title: "Release 0.66.0", lines: ["Ship 0.66.0: changelog, tag, packages.", "Spent $4.12 of $10"], actions: [
+    { label: "Open the run", onPress: function () {} },
+    { label: "Stop the run", danger: true, cmd: "$ loadout team halt 20261018-0912-a1f3", ask: "Stop Release 0.66.0? Its nodes are told to finish, and it ends.", yes: "Stop it", said: "Asked the run to stop." } ],
+    rename: { run: "20261018-0912-a1f3", current: "", worked: "Release 0.66.0" } }));
+  document.getElementById("b").appendChild(S.OfficePanel({ kind: "The server room", title: "The daemon", lines: ["Running since 08:02 · 3 schedules"], actions: [
+    { label: "Hold the schedules", cmd: "$ loadout daemon pause", ask: "Hold every schedule until they are resumed? Runs already going carry on.", yes: "Hold them", said: "Schedules held." },
+    { label: "Restart the daemon", danger: true, cmd: "$ loadout daemon restart", ask: "Restart the daemon? This page goes away for a moment and comes back.", yes: "Restart it" } ] }));
+  document.getElementById("c").appendChild(S.OfficePanel({ kind: "Meeting room", title: "Shared by two teams", teams: [
+    { name: "release-crew", list: ["Waiting for you: approve the tag"], open: function () {} },
+    { name: "docs-sweep", list: ["Nobody meeting"], open: function () {} } ] }));
+})();
+</script>
+</body>
+</html>

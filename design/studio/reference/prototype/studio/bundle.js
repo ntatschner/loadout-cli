@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format": 4, "namespace": "LoadoutStudio", "components": [{"name": "HaloButton"}, {"name": "StartRail"}, {"name": "Command"}, {"name": "Switch"}, {"name": "Tabs"}, {"name": "ModePicker"}, {"name": "Signal"}, {"name": "EventMark"}, {"name": "Urgency"}, {"name": "Meter"}, {"name": "Toasts"}, {"name": "SideRail"}, {"name": "Dialog"}, {"name": "Picker"}, {"name": "CommandPalette"}, {"name": "Halo"}, {"name": "TubeMap"}, {"name": "LineStrip"}, {"name": "NetworkStatus"}, {"name": "Terminal"}, {"name": "SessionView"}, {"name": "Gate"}, {"name": "RunCard"}, {"name": "NeedsYou"}, {"name": "RunShape"}, {"name": "Crew"}, {"name": "DoneWhen"}, {"name": "RunNumbers"}, {"name": "RunDepths"}, {"name": "Patch"}, {"name": "SayToNode"}, {"name": "TeamCard"}, {"name": "TeamNodes"}, {"name": "TeamRules"}, {"name": "RoleRecord"}, {"name": "TeamSheet"}, {"name": "Schedules"}, {"name": "Remedy"}, {"name": "Bin"}, {"name": "Outbox"}, {"name": "ModeSwitcher"}, {"name": "ModeBar"}, {"name": "SessionTabs"}, {"name": "TermDeck"}, {"name": "RunBoard"}, {"name": "QuietList"}, {"name": "FocusFrame"}, {"name": "WorkDesk"}, {"name": "ActionPane"}, {"name": "CommandBar"}, {"name": "KeyHelp"}, {"name": "ActionDrawer"}, {"name": "TerminalOnly"}, {"name": "HealthList"}, {"name": "IdeaStages"}, {"name": "QuestionSet"}, {"name": "PlanLayer"}, {"name": "NoteDump"}, {"name": "ProjectTile"}, {"name": "TaskBoard"}, {"name": "LoadStack"}, {"name": "ConfigList"}, {"name": "StoreList"}, {"name": "TopicEditor"}, {"name": "TokenSplit"}, {"name": "SpendBars"}, {"name": "PageBeside"}, {"name": "QuietPage"}, {"name": "ForgetProject"}, {"name": "ProgressLine"}, {"name": "CriteriaGrid"}, {"name": "PickUpSheet"}, {"name": "RefusalsList"}, {"name": "RedAlert"}, {"name": "TaskPicker"}, {"name": "ValueReport"}, {"name": "FieldMap"}]} */
+/* @ds-bundle: {"format": 4, "namespace": "LoadoutStudio", "components": [{"name": "HaloButton"}, {"name": "StartRail"}, {"name": "Command"}, {"name": "Switch"}, {"name": "Tabs"}, {"name": "ModePicker"}, {"name": "Signal"}, {"name": "EventMark"}, {"name": "Urgency"}, {"name": "Meter"}, {"name": "Toasts"}, {"name": "SideRail"}, {"name": "Dialog"}, {"name": "Picker"}, {"name": "CommandPalette"}, {"name": "Halo"}, {"name": "TubeMap"}, {"name": "LineStrip"}, {"name": "NetworkStatus"}, {"name": "Terminal"}, {"name": "SessionView"}, {"name": "Gate"}, {"name": "RunCard"}, {"name": "NeedsYou"}, {"name": "RunShape"}, {"name": "Crew"}, {"name": "DoneWhen"}, {"name": "RunNumbers"}, {"name": "RunDepths"}, {"name": "Patch"}, {"name": "SayToNode"}, {"name": "TeamCard"}, {"name": "TeamNodes"}, {"name": "TeamRules"}, {"name": "RoleRecord"}, {"name": "TeamSheet"}, {"name": "Schedules"}, {"name": "Remedy"}, {"name": "Bin"}, {"name": "Outbox"}, {"name": "ModeSwitcher"}, {"name": "ModeBar"}, {"name": "SessionTabs"}, {"name": "TermDeck"}, {"name": "RunBoard"}, {"name": "QuietList"}, {"name": "FocusFrame"}, {"name": "WorkDesk"}, {"name": "ActionPane"}, {"name": "CommandBar"}, {"name": "KeyHelp"}, {"name": "ActionDrawer"}, {"name": "TerminalOnly"}, {"name": "HealthList"}, {"name": "IdeaStages"}, {"name": "QuestionSet"}, {"name": "PlanLayer"}, {"name": "NoteDump"}, {"name": "ProjectTile"}, {"name": "TaskBoard"}, {"name": "LoadStack"}, {"name": "ConfigList"}, {"name": "StoreList"}, {"name": "TopicEditor"}, {"name": "TokenSplit"}, {"name": "SpendBars"}, {"name": "PageBeside"}, {"name": "QuietPage"}, {"name": "ForgetProject"}, {"name": "ProgressLine"}, {"name": "CriteriaGrid"}, {"name": "PickUpSheet"}, {"name": "RefusalsList"}, {"name": "RedAlert"}, {"name": "TaskPicker"}, {"name": "ValueReport"}, {"name": "FieldMap"}, {"name": "OfficeView"}, {"name": "OfficePanel"}]} */
 /* Loadout Studio — plain JavaScript, no framework, no imports, no network.
    Components are CSS classes plus small helpers, written to port line for line to Svelte. */
 (function () {
@@ -3110,4 +3110,174 @@
   }
 
   Object.assign(NS, { FieldMap: FieldMap, setBackground: setBackground, BACKGROUNDS: BACKGROUNDS });
+})();
+
+(function () {
+  "use strict";
+  var NS = window.LoadoutStudio = window.LoadoutStudio || {};
+  function h(tag, attrs, kids) {
+    var el = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) {
+      var v = attrs[k];
+      if (v === null || v === undefined || v === false) { return; }
+      if (k === "text") { el.textContent = v; } else if (k === "class") { el.className = v; } else if (k.slice(0, 2) === "on") { el.addEventListener(k.slice(2), v); } else { el.setAttribute(k, v === true ? "" : v); }
+    });
+    (kids || []).forEach(function (c) { if (c) { el.appendChild(typeof c === "string" ? document.createTextNode(c) : c); } });
+    return el;
+  }
+  function q(v) { return NS.shellQuote ? NS.shellQuote(v) : JSON.stringify(v); }
+  function centre(t) { return { x: t.rect.x + t.rect.w / 2, y: t.rect.y + t.rect.h / 2 }; }
+
+  /* The nearest target in a direction: along the arrow first, then across it, so a row is walked before the next row is jumped to. */
+  function nearest(targets, from, dx, dy) {
+    var a = centre(from), best = null, score = Infinity;
+    targets.forEach(function (t) {
+      if (t === from) { return; }
+      var b = centre(t), along = (b.x - a.x) * dx + (b.y - a.y) * dy, across = Math.abs((b.x - a.x) * dy) + Math.abs((b.y - a.y) * dx);
+      if (along <= 1) { return; }
+      var sc = along + across * 2;
+      if (sc < score) { score = sc; best = t; }
+    });
+    return best;
+  }
+
+  /* OfficeView: the frame. The engine draws the building and says where things are; the frame gives it Studio's toolbar, a keyboard way round, a focus ring and room for a panel. */
+  var VIEWS = [["corner", "Corner"], ["aerial", "Aerial"], ["street", "From the street"]];
+  function OfficeView(o) {
+    o = o || {};
+    var engine = o.engine, focusId = null, hoverId = null, targets = [];
+    var where = h("div", { "class": "where" });
+    var live = h("span", { "class": "ls-vh", "aria-live": "polite" });
+    var ringTag = h("span", { "class": "tag" });
+    var ring = h("span", { "class": "oring", hidden: true }, [ringTag]);
+    var hover = h("span", { "class": "oring hover", hidden: true });
+    var stage = h("div", { "class": "stage", tabindex: "0", role: "group", "aria-roledescription": "office picture", "aria-keyshortcuts": "ArrowUp ArrowDown ArrowLeft ArrowRight Enter Escape Q E + - PageUp PageDown" }, [hover, ring, live]);
+    var side = h("div", { "class": "side" });
+    var body = h("div", { "class": "body" }, [stage, side]);
+    function btn(label, title, key, on) { return h("button", { type: "button", title: title, "aria-label": title, onclick: on }, [label, key ? h("kbd", { text: key }) : null]); }
+    var bBack = btn("Back to the building", "Back to the building", "Esc", function () { goBack(); });
+    var bUp = btn("↑", "A level up", null, function () { engine.level(1); changed(true); });
+    var bDown = btn("↓", "A level down", null, function () { engine.level(-1); changed(true); });
+    var bLeft = btn("⟲", "Turn left", "Q", function () { engine.turn(-1); changed(false); });
+    var bRight = btn("⟳", "Turn right", "E", function () { engine.turn(1); changed(false); });
+    var bOut = btn("−", "Zoom out", null, function () { engine.zoom(-1); changed(false); });
+    var bIn = btn("+", "Zoom in", null, function () { engine.zoom(1); changed(false); });
+    var viewBtns = VIEWS.map(function (v) { var b = btn(v[1], "See it " + (v[0] === "street" ? "from the street" : v[0] === "aerial" ? "from above" : "from a corner"), null, function () { engine.setView(v[0]); changed(true); }); b.dataset.view = v[0]; return b; });
+    var views = h("span", { "class": "grp", role: "group", "aria-label": "Outside views" }, viewBtns);
+    var settings = o.settingsHref ? h("a", { href: o.settingsHref, text: "Office art and size" }) : null;
+    var tools = h("div", { "class": "tools" }, [bBack, h("span", { "class": "grp", role: "group", "aria-label": "Levels" }, [bUp, bDown]), views, h("span", { "class": "grp", role: "group", "aria-label": "Turn" }, [bLeft, bRight]), h("span", { "class": "grp", role: "group", "aria-label": "Zoom" }, [bOut, bIn]), settings]);
+    var keys = h("p", { "class": "keys" });
+    keys.innerHTML = "<kbd>Tab</kbd> into the office · <kbd>← ↑ → ↓</kbd> move · <kbd>Enter</kbd> open · <kbd>Esc</kbd> back · <kbd>Q</kbd> <kbd>E</kbd> turn · <kbd>+</kbd> <kbd>−</kbd> zoom · <kbd>PgUp</kbd> <kbd>PgDn</kbd> level";
+    var el = h("section", { "class": "ls-office", "aria-label": o.label || "The office" }, [h("div", { "class": "obar" }, [where, tools]), body, keys]);
+
+    function byId(id) { for (var i = 0; i < targets.length; i++) { if (targets[i].id === id) { return targets[i]; } } return null; }
+    function place(r, t) {
+      if (!t) { r.hidden = true; return; }
+      r.hidden = false; r.style.left = t.rect.x + "px"; r.style.top = t.rect.y + "px"; r.style.width = t.rect.w + "px"; r.style.height = t.rect.h + "px";
+      r.classList.toggle("below", t.rect.y < 64);
+    }
+    function paintRing() {
+      var t = byId(focusId);
+      place(ring, document.activeElement === stage ? t : null);
+      if (t) { ringTag.textContent = ""; ringTag.appendChild(document.createTextNode(t.label)); if (t.detail) { ringTag.appendChild(h("small", { text: t.detail })); } }
+      /* Keep the tag inside the picture: shift it left when the thing is near the right edge. */
+      if (t && !ring.hidden) { ringTag.style.left = "0px"; var room = stage.clientWidth - t.rect.x - 6, tw = ringTag.offsetWidth; ringTag.style.left = (tw > room ? Math.max(-t.rect.x + 6, room - tw) : 0) + "px"; }
+      place(hover, hoverId && hoverId !== focusId ? byId(hoverId) : null);
+    }
+    function paintBar() {
+      var w = engine.where();
+      where.textContent = ""; where.appendChild(document.createTextNode(w.label)); if (w.detail) { where.appendChild(h("small", { text: w.detail })); }
+      stage.setAttribute("aria-label", "The office: " + w.label + ". Arrow keys move between " + (w.place === "outside" ? "floors" : "people and rooms") + "; Enter opens.");
+      bBack.hidden = w.place === "outside";
+      bUp.disabled = !w.canLevel[0]; bDown.disabled = !w.canLevel[1];
+      bLeft.disabled = bRight.disabled = !w.canTurn;
+      bOut.disabled = w.zoom <= w.zoomRange[0]; bIn.disabled = w.zoom >= w.zoomRange[1];
+      views.hidden = w.place !== "outside";
+      viewBtns.forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.view === w.view)); });
+    }
+    function announce(t) { live.textContent = t ? t.label + (t.detail ? ", " + t.detail : "") : ""; }
+    function changed(moved) {
+      targets = engine.targets();
+      if (moved || !byId(focusId)) { focusId = targets.length ? targets[0].id : null; if (moved) { announce(byId(focusId)); } }
+      paintBar(); paintRing();
+    }
+    function goBack() { if (side.firstChild) { hidePanel(); return true; } if (engine.back()) { changed(true); return true; } return false; }
+    function activate(t) {
+      if (!t) { return; }
+      var r = engine.activate(t.id);
+      if (r === "entered") { changed(true); return; }
+      if (o.onPick) { o.onPick(t); }
+    }
+    function showPanel(node) { side.textContent = ""; side.appendChild(node); body.classList.add("has-side"); var f = node.querySelector("h3"); if (f) { f.tabIndex = -1; f.focus(); } setTimeout(function () { changed(false); }, 0); }
+    function hidePanel() { side.textContent = ""; body.classList.remove("has-side"); stage.focus(); setTimeout(function () { changed(false); }, 0); }
+
+    stage.addEventListener("focus", function () { if (!byId(focusId) && targets.length) { focusId = targets[0].id; } paintRing(); announce(byId(focusId)); });
+    stage.addEventListener("blur", paintRing);
+    side.addEventListener("keydown", function (e) { var tg = e.target && e.target.tagName; if (e.key === "Escape" && tg !== "INPUT" && tg !== "TEXTAREA" && side.firstChild) { e.preventDefault(); hidePanel(); } });
+    stage.addEventListener("keydown", function (e) {
+      var k = e.key, t = byId(focusId), next = null;
+      if (e.ctrlKey || e.metaKey || e.altKey) { return; }
+      if (k === "ArrowRight") { next = t && nearest(targets, t, 1, 0); } else if (k === "ArrowLeft") { next = t && nearest(targets, t, -1, 0); }
+      else if (k === "ArrowDown") { next = t && nearest(targets, t, 0, 1); } else if (k === "ArrowUp") { next = t && nearest(targets, t, 0, -1); }
+      else if (k === "Home") { next = targets[0]; } else if (k === "End") { next = targets[targets.length - 1]; }
+      else if (k === "Enter" || k === " ") { e.preventDefault(); activate(t); return; }
+      else if (k === "Escape") { if (goBack()) { e.preventDefault(); } return; }
+      else if (k === "q" || k === "Q") { if (!bLeft.disabled) { bLeft.click(); } e.preventDefault(); return; }
+      else if (k === "e" || k === "E") { if (!bRight.disabled) { bRight.click(); } e.preventDefault(); return; }
+      else if (k === "+" || k === "=") { if (!bIn.disabled) { bIn.click(); } e.preventDefault(); return; }
+      else if (k === "-" || k === "_") { if (!bOut.disabled) { bOut.click(); } e.preventDefault(); return; }
+      else if (k === "PageUp") { if (!bUp.disabled) { bUp.click(); } e.preventDefault(); return; }
+      else if (k === "PageDown") { if (!bDown.disabled) { bDown.click(); } e.preventDefault(); return; }
+      else { return; }
+      e.preventDefault();
+      if (next) { focusId = next.id; paintRing(); announce(next); }
+    });
+    function hit(e) { var r = stage.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top, found = null; targets.forEach(function (t) { if (x >= t.rect.x && x <= t.rect.x + t.rect.w && y >= t.rect.y && y <= t.rect.y + t.rect.h) { found = t; } }); return found; }
+    stage.addEventListener("pointermove", function (e) { var t = hit(e); hoverId = t ? t.id : null; stage.style.cursor = t ? "pointer" : "default"; paintRing(); });
+    stage.addEventListener("pointerleave", function () { hoverId = null; paintRing(); });
+    stage.addEventListener("click", function (e) { var t = hit(e); if (t) { focusId = t.id; activate(t); } });
+
+    engine.mount(stage, { motion: function () { return NS.motion ? NS.motion() : "full"; }, onChange: function () { changed(false); } });
+    var ro = typeof ResizeObserver === "function" ? new ResizeObserver(function () { if (engine.resize) { engine.resize(); } changed(false); }) : null;
+    if (ro) { ro.observe(stage); }
+    setTimeout(function () { changed(false); }, 0);
+    return { el: el, stage: stage, side: side, show: showPanel, hide: hidePanel, refresh: function () { changed(false); }, focus: function (id) { if (id) { focusId = id; } stage.focus(); }, destroy: function () { if (ro) { ro.disconnect(); } engine.destroy(); el.remove(); } };
+  }
+
+  /* OfficePanel: a room or a person, with the same actions the classic popup has, as Studio buttons that show their commands. Anything that can't be undone asks first, by name. */
+  function OfficePanel(o) {
+    o = o || {};
+    var said = h("p", { "class": "said", role: "status" });
+    var close = h("button", { type: "button", "class": "close", "aria-label": "Close " + (o.title || "this"), text: "×", onclick: function () { if (o.onClose) { o.onClose(); } } });
+    var kids = [close, h("p", { "class": "kind", text: o.kind || "" }), h("h3", { text: o.title || "" })];
+    (o.lines || []).forEach(function (l) { if (l) { kids.push(h("p", { text: l })); } });
+    if (o.list && o.list.length) { kids.push(h("ul", {}, o.list.map(function (l) { return h("li", { text: l }); }))); }
+    (o.teams || []).forEach(function (t) {
+      kids.push(h("p", { "class": "team", text: t.name }));
+      if (t.list && t.list.length) { kids.push(h("ul", {}, t.list.map(function (l) { return h("li", { text: l }); }))); }
+      if (t.open) { kids.push(NS.HaloButton({ label: "Open " + t.name, size: "small", onPress: t.open })); }
+    });
+    var acts = h("div", { "class": "acts" });
+    (o.actions || []).forEach(function (a) {
+      acts.appendChild(NS.HaloButton({ label: a.label, size: "small", kind: a.danger ? "danger" : "", cmd: a.cmd, disabledReason: a.disabledReason, onPress: function () {
+        function go() { var r = a.onPress && a.onPress(); said.textContent = a.said ? "✓ " + a.said : ""; return r; }
+        if (!a.ask) { go(); return; }
+        NS.Dialog({ title: a.label, why: a.ask, danger: !!a.danger, role: "alertdialog", actions: [{ label: a.yes || a.label, kind: a.danger ? "danger" : "", solid: true, cmd: a.cmd, onPress: function () { go(); } }] }).open();
+      } }));
+    });
+    if (acts.firstChild) { kids.push(acts); }
+    if (o.rename) {
+      var r = o.rename, id = "ls-on-" + Math.random().toString(36).slice(2, 7), input = h("input", { id: id, type: "text", value: r.current || "", placeholder: r.worked || "", autocomplete: "off" });
+      var row = h("div", { "class": "row" });
+      function line() { var v = input.value.trim(); return v ? "$ loadout team name " + r.run + " --room " + q(v) : "$ loadout team name " + r.run + " --clear"; }
+      var save = NS.HaloButton({ label: "Name it", size: "small", cmd: line(), onPress: function () { var v = input.value.trim(); if (r.onSave) { r.onSave(v); } said.textContent = v ? "✓ Called " + v + " from now on." : "✓ Back to " + (r.worked || "the worked-out name") + "."; } });
+      input.addEventListener("input", function () { var c = save.querySelector ? save.querySelector(".ls-cmd, code") : null; if (c) { c.textContent = line(); } });
+      row.appendChild(save);
+      kids.push(h("div", { "class": "name" }, [h("label", { "for": id, text: "Name this room" }), input, row, h("p", { "class": "hint", text: "Empty puts the worked-out name back: " + (r.worked || "") })]));
+    }
+    kids.push(said);
+    return h("section", { "class": "ls-officepanel", "aria-label": o.title || "The office" }, kids);
+  }
+
+  Object.assign(NS, { OfficeView: OfficeView, OfficePanel: OfficePanel });
 })();
