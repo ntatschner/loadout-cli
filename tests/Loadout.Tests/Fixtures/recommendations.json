@@ -1,0 +1,13 @@
+[
+  { "name": "an exact match marks that option", "options": ["Beside it", "Replace it"], "recommendation": "Beside it", "choices": ["Beside it", "Replace it"], "recommended": 0, "note": null },
+  { "name": "case and spaces are ignored", "options": ["Beside it", "Replace it"], "recommendation": "  replace   IT ", "choices": ["Beside it", "Replace it"], "recommended": 1, "note": null },
+  { "name": "an option the recommendation starts with is marked, and the rest is its reason", "options": ["Beside it", "Replace it"], "recommendation": "Beside it, because the screens stay", "choices": ["Beside it", "Replace it"], "recommended": 0, "note": "because the screens stay" },
+  { "name": "a recommendation that an option starts with marks it", "options": ["Beside it, keeping classic", "Replace it"], "recommendation": "Beside it", "choices": ["Beside it, keeping classic", "Replace it"], "recommended": 0, "note": null },
+  { "name": "the longest prefix wins", "options": ["Beside", "Beside it", "Replace it"], "recommendation": "Beside it, because the screens stay", "choices": ["Beside", "Beside it", "Replace it"], "recommended": 1, "note": "because the screens stay" },
+  { "name": "a prefix must end at a word", "options": ["Beside", "Replace it"], "recommendation": "Besides everything", "choices": ["Beside", "Replace it", "Besides everything"], "recommended": 2, "note": null },
+  { "name": "a tie is no match, so it gets a chip of its own", "options": ["Beside it, keeping classic", "Beside it, retiring classic"], "recommendation": "Beside it", "choices": ["Beside it, keeping classic", "Beside it, retiring classic", "Beside it"], "recommended": 2, "note": null },
+  { "name": "no match adds a chip of its own", "options": ["Beside it", "Replace it"], "recommendation": "Neither, for now", "choices": ["Beside it", "Replace it", "Neither, for now"], "recommended": 2, "note": null },
+  { "name": "no options makes the recommendation the only chip", "options": [], "recommendation": "The projects", "choices": ["The projects"], "recommended": 0, "note": null },
+  { "name": "no recommendation marks nothing", "options": ["Beside it", "Replace it"], "recommendation": null, "choices": ["Beside it", "Replace it"], "recommended": null, "note": null },
+  { "name": "an empty recommendation marks nothing", "options": ["Beside it", "Replace it"], "recommendation": "  ", "choices": ["Beside it", "Replace it"], "recommended": null, "note": null }
+]

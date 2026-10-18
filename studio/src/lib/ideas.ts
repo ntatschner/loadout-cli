@@ -102,6 +102,86 @@ export function settledDrafts(questions: Question[], drafts: Record<string, stri
   return kept;
 }
 
+/** A question's chips: its options, with the recommendation marked or added, and any reason left over. */
+export interface Offered {
+  choices: string[];
+  recommended: number | null;
+  note: string | null;
+}
+
+const collapse = (text: string) => text.trim().replace(/\s+/g, ' ');
+
+/** True when the shorter of the two starts the longer and ends at a word. */
+function startsAtWord(longer: string, shorter: string): boolean {
+  return longer.startsWith(shorter) && (longer.length === shorter.length || !/[\p{L}\p{N}]/u.test(longer[shorter.length]));
+}
+
+/**
+ * Which option the agent recommends, so it can be picked rather than retyped.
+ * An exact match ignoring case and spaces first, then the longest option that
+ * starts the recommendation or that the recommendation starts, ending at a
+ * word. A tie would be a guess, so it counts as no match, and a recommendation
+ * that matches nothing becomes a chip of its own. IdeaWork.Recommend applies
+ * the same rule as rounds come in; both are tested against
+ * tests/Loadout.Tests/Fixtures/recommendations.json.
+ */
+export function offeredChoices(question: Pick<Question, 'options' | 'recommendation'>): Offered {
+  const choices = [...question.options];
+  const wanted = collapse(question.recommendation ?? '');
+
+  if (!wanted) {
+    return { choices, recommended: null, note: null };
+  }
+
+  const said = wanted.toLowerCase();
+  const exact = choices.findIndex((one) => collapse(one).toLowerCase() === said);
+
+  if (exact >= 0) {
+    return { choices, recommended: exact, note: null };
+  }
+
+  let best = -1;
+  let length = 0;
+  let tied = false;
+
+  choices.forEach((one, index) => {
+    const option = collapse(one).toLowerCase();
+    const shared = startsAtWord(said, option) ? option.length : startsAtWord(option, said) ? said.length : 0;
+
+    if (shared > length) {
+      [best, length, tied] = [index, shared, false];
+    } else if (shared > 0 && shared === length) {
+      tied = true;
+    }
+  });
+
+  if (best < 0 || tied) {
+    return { choices: [...choices, wanted], recommended: choices.length, note: null };
+  }
+
+  const rest = wanted.slice(collapse(choices[best]).length).replace(/^[\s,;:.\-–—]+/, '');
+
+  return { choices, recommended: best, note: rest || null };
+}
+
+/**
+ * Drafts with every recommendation taken, for the questions still open with
+ * nothing drafted. Drafts already there are kept, and nothing is sent.
+ */
+export function acceptRecommendations(questions: Question[], drafts: Record<string, string>, open: (question: Question) => boolean): Record<string, string> {
+  const next = { ...drafts };
+
+  for (const one of questions) {
+    const { choices, recommended } = offeredChoices(one);
+
+    if (recommended !== null && open(one) && !(next[one.id] ?? '').trim()) {
+      next[one.id] = choices[recommended];
+    }
+  }
+
+  return next;
+}
+
 export interface DumpItem {
   number: number;
   title: string;

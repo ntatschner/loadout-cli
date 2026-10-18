@@ -6,7 +6,7 @@
   import { untrack } from 'svelte';
   import HaloButton from './HaloButton.svelte';
   import { lineFor } from '../commandLine';
-  import { changedAnswers, settledDrafts, type Answer, type Question } from '../ideas';
+  import { acceptRecommendations, changedAnswers, offeredChoices, settledDrafts, type Answer, type Question } from '../ideas';
 
   interface Props {
     id: string;
@@ -42,9 +42,17 @@
   const changed = $derived(changedAnswers(id, where, questions.map((one) => ({ ...one, answer: answerOf(one) })), drafts));
   const count = $derived(changed.length);
   const reason = $derived(disabledReason ?? (count ? undefined : 'answer a question first'));
+  const open = (question: Question) => !answerOf(question);
+  const taken = $derived(acceptRecommendations(questions, drafts, open));
+  const takeable = $derived(Object.keys(taken).filter((question) => taken[question] !== drafts[question]).length);
+  const takeReason = $derived(disabledReason ?? (takeable ? undefined : 'no recommendations left to take'));
 
   function draft(question: string, text: string) {
     drafts = { ...drafts, [question]: text };
+  }
+
+  function takeAll() {
+    drafts = taken;
   }
 
   function change(question: Question) {
@@ -91,7 +99,8 @@
       {@const answer = answerOf(question)}
       {@const answered = !!answer && !editing[question.id]}
       {@const typed = (drafts[question.id] ?? '').trim()}
-      {@const own = typed && !question.options.includes(typed) ? (drafts[question.id] ?? '') : ''}
+      {@const offered = offeredChoices(question)}
+      {@const own = typed && !offered.choices.includes(typed) ? (drafts[question.id] ?? '') : ''}
       <section class={['q', answered ? 'answered' : typed ? 'drafted' : ''].filter(Boolean).join(' ')} aria-labelledby={`${name}-${question.id}`}>
         <span class="who">{[question.id, answered ? 'answered' : typed ? 'your answer, not sent yet' : 'the agent asks'].join(' · ')}</span>
         {#if answered}
@@ -101,15 +110,15 @@
           <fieldset>
             <legend id={`${name}-${question.id}`}>{question.question}</legend>
             {#if question.why}<p class="why">{question.why}</p>{/if}
-            {#if question.options.length}
+            {#if offered.choices.length}
               <div class="opts">
-                {#each question.options as option, index (index)}
-                  <label class="opt"><input type="radio" name={`${name}-${question.id}-o`} value={option} checked={typed === option} onchange={() => draft(question.id, option)} />{option}{#if question.recommendation === option}<span class="rec">recommended</span>{/if}</label>
+                {#each offered.choices as option, index (index)}
+                  <label class="opt"><input type="radio" name={`${name}-${question.id}-o`} value={option} checked={typed === option} onchange={() => draft(question.id, option)} />{option}{#if offered.recommended === index}<span class="rec">recommended</span>{/if}</label>
                 {/each}
               </div>
             {/if}
-            {#if question.recommendation && !question.options.includes(question.recommendation)}
-              <p class="why">Recommended: {question.recommendation}</p>
+            {#if offered.note && offered.recommended !== null}
+              <p class="why">Why it recommends {offered.choices[offered.recommended]}: {offered.note}</p>
             {/if}
             <div class="own">
               <label for={`${name}-${question.id}-w`}>Or in your own words</label>
@@ -126,6 +135,7 @@
     <div class="ls-answers flush">
       <HaloButton label={sending ? 'Sending…' : 'Send answers and refine'} kind="needs" solid={!reason} glyph="✓" cmd={`${count} × loadout idea answer, then ${lineFor('idea refine', [id, ...where])}`} disabledReason={reason} onpress={() => void send(true)} />
       <HaloButton label="Only save the answers" cmd={`${count} × loadout idea answer`} disabledReason={reason} onpress={() => void send(false)} />
+      <HaloButton label="Accept all recommendations" cmd={`fills ${takeable} answer${takeable === 1 ? '' : 's'}; sends nothing`} disabledReason={takeReason} onpress={takeAll} />
     </div>
     {#if count}
       <details>
