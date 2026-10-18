@@ -331,6 +331,10 @@ public static class Program
             .AddCoreServices()
             .AddAgentServices();
 
+        // Wrapped before anything holds it, so a profile that stops redraws
+        // later cannot also stop the questions.
+        AnsiConsole.Console = new AnsweringConsole(AnsiConsole.Console, new AnsweringConsole.TerminalKeys());
+
         services.AddSingleton(AnsiConsole.Console);
         services.AddSingleton(new PassthroughArguments(passthrough));
         services.AddSingleton<IProjectOnboarding, ProjectOnboarding>();

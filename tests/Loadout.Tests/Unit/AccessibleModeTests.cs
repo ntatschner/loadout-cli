@@ -172,6 +172,55 @@ public sealed class AccessibleModeTests
     }
 
     [Fact]
+    public void A_profile_that_refuses_redraws_can_still_be_asked_a_question()
+    {
+        // Spectre's own input refuses to read once the console is not
+        // interactive, so 'loadout update' under the adhd preset failed with
+        // "Failed to read input in non-interactive mode" at its confirmation.
+        // A real console, because the test console's input never refuses.
+        var real = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Out = new AnsiConsoleOutput(new StringWriter()),
+            Interactive = InteractionSupport.Yes,
+
+            // Spectre marks a console non-interactive when it sees a CI
+            // server, which would make this console never interactive on CI.
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false },
+        });
+
+        var keys = new Spectre.Console.Testing.TestConsoleInput();
+        keys.PushTextWithEnter("y");
+
+        var console = new AnsweringConsole(real, keys);
+
+        AccessibleMode.Resolve(["--accessible=adhd"], null, null).Apply(console, noColour: null);
+
+        console.Profile.Capabilities.Interactive.Should().BeFalse("redraws are still refused");
+        console.Confirm("Install 0.71.0?", defaultValue: false).Should().BeTrue();
+    }
+
+    [Fact]
+    public void A_console_that_was_never_interactive_still_refuses_to_ask()
+    {
+        // A pipe or the daemon's log: a question there would wait on nobody.
+        var real = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Out = new AnsiConsoleOutput(new StringWriter()),
+            Interactive = InteractionSupport.No,
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false },
+        });
+
+        var keys = new Spectre.Console.Testing.TestConsoleInput();
+        keys.PushTextWithEnter("y");
+
+        var console = new AnsweringConsole(real, keys);
+
+        var asking = () => console.Confirm("Install 0.71.0?", defaultValue: false);
+
+        asking.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
     public void A_profile_that_says_nothing_about_redraws_leaves_them_alone()
     {
         var console = New(ColorSystem.TrueColor, unicode: true);
