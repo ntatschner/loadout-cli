@@ -1,0 +1,30 @@
+<!-- @dsCard group="Actions" height=420 width=760 subtitle="Which recorded task this is for" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TaskPicker</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div id="t" style="max-width: 600px"></div><p class="out" id="out" role="status"></p>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  document.getElementById("t").appendChild(S.TaskPicker({ selected: "memory-import-notice", tasks: [
+    { id: "specialist-examples", title: "Add value examples to specialist docs", state: "open", declaredBy: "you", declared: "2026-10-15" },
+    { id: "memory-import-notice", title: "Fix the memory import notice", state: "doing", declaredBy: "claude", declared: "2026-10-16" },
+    { id: "flaky-tests", title: "Two flaky tests in the suite", state: "blocked", declaredBy: "team run", declared: "2026-10-17" } ],
+    onPick: function (t) { document.getElementById("out").textContent = t ? "--task " + t.id : "Something else"; } }));
+})();
+</script>
+</body>
+</html>
