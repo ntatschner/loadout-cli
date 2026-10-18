@@ -271,6 +271,14 @@ When everything above is committed, update Loadout's own records so that whoever
 
 These records are claims with a name and a date, and the list this session was given wasn't checked against the workspace. So work from what the workspace says now, and change nothing you can't see.
 
+**Records only: this step builds nothing.** Some of what it records is designed but not built yet (`PAGES.md`, `BACKGROUND.md`, and anything else not on `main` or your branch when you get here). Writing the record must not start that work.
+
+- Run only the commands below: `task list`, `task declare`, `idea add`, `memory show`, `memory write`, `memory replace` and `workspace save`. None of them starts anything. They write Loadout's records, and `workspace save` commits and pushes the workspace.
+- Don't run `idea refine`, `idea dump add`, `team run`, `team schedule add` or `launch` for any item here. (`loadout <project>` is `launch` too.) Don't start a session or a build for one, and don't change code for one. Never declare anything `doing` from this step.
+- An item that isn't built stays `open`, and its note **starts** with: "Designed, not built. Don't start on this from this record; build it only when someone asks, from its brief." Open tasks are listed in every new session's context, so that sentence is what tells a later session to leave it alone until it is asked.
+- To know what is built, look at `main` and your branch, not at this brief. For example, `studio-background` in `ConfigKeys` means `BACKGROUND.md` is built.
+- Every command here takes `--dry-run`. Run each once with it first, and check what it would write.
+
 1. **Read the list.** Run `loadout task list --project loadout-cli --all --json`. Ideas are tasks of kind `idea`, so they are in it too.
 
 2. **Append a design note to each item that exists.**
@@ -285,6 +293,8 @@ These records are claims with a name and a date, and the list this session was g
    - Never change an item's state or title.
    - Skip an id that isn't there and tell me; don't create it.
    - If an item's note already holds a design note from this, leave it alone.
+   - The four items this round built (`team-run-visibility-and-reliability`, `visual-full-page-red-alert`, `add-task-drop-down-in`, `measure-loadout-s-value-to`) get one more sentence at the end of their design note: "Built on branch <your branch> in <the commits>; not merged yet." Their state stays what it is.
+   - `completely-seperate-dashboard-keeping-th` covers several briefs. End its design note with one sentence saying which are built and which aren't, for example: "Built: HANDOFF.md, NEXT.md, ROUND4.md (on its branch). Designed, not built: PAGES.md, BACKGROUND.md."
 
    | Id | Design note |
    |---|---|
@@ -300,12 +310,12 @@ These records are claims with a name and a date, and the list this session was g
    loadout task declare studio-six-pages open --title "Rebuild Studio's six generic pages, in every mode" --note "Designed in design/studio/PAGES.md: Ideas, Projects (with Forget project), Context, Settings, Memory and Spend, each in its own shape (Part 1), and each page in Terminal Focus, Team Focus, Minimal and Pure Focus (Part 2, after the modes). Prototype and design system are linked from it." --project loadout-cli --by "studio design"
    ```
 
-   If `PAGES.md` has been built, declare it `done` instead of `open`, with the same note.
+   If `PAGES.md` isn't built (the usual case), start the note with "Designed, not built. Don't start on this from this record; build it only when someone asks, from its brief." and keep it `open`. If it has been built and merged, declare it `done` instead, with the note as written.
 
 4. **Record the next design round as an idea:**
 
    ```
-   loadout idea add --id studio-embossed-background --text="A military-style embossed background for Studio, animated with a static variant, and the same treatment for the nav, in keeping with Studio's theme. Designed in design/studio/BACKGROUND.md: a field map, plain / map / map-animated as studio-background. Not built yet." --project loadout-cli --by "studio design"
+   loadout idea add --id studio-embossed-background --text="A military-style embossed background for Studio, animated with a static variant, and the same treatment for the nav, in keeping with Studio's theme. Designed, not built. Don't start on this from this record; build it only when someone asks, from its brief. Designed in design/studio/BACKGROUND.md: a field map, plain / map / map-animated as studio-background." --project loadout-cli --by "studio design"
    ```
 
    Skip it if an idea with that id exists. `BACKGROUND.md`'s own last step appends to it.
@@ -313,11 +323,13 @@ These records are claims with a name and a date, and the list this session was g
 5. **One memory fact**, so every session on this project knows where the designs are:
 
    ```
-   loadout memory write studio-design --description "Where Studio's designs and handoffs live" --fact "Studio's design system, prototype and handoffs are in design/studio/: HANDOFF.md (built), NEXT.md (built, 0.68.0), PAGES.md (six pages and their modes), ROUND4.md (run progress, Red Alert, tasks in Start a run, What it did), BACKGROUND.md (the field map background and the nav's edge). Each brief names what is decided; don't reopen those decisions." --project loadout-cli
+   loadout memory write studio-design --description "Where Studio's designs and handoffs live" --fact "Studio's design system, prototype and handoffs are in design/studio/: HANDOFF.md (built), NEXT.md (built, 0.68.0), PAGES.md (six pages and their modes; not built), ROUND4.md (run progress, Red Alert, tasks in Start a run, What it did; built on its branch), BACKGROUND.md (the field map background and the nav's edge; not built). A brief marked not built is for later: don't start it unless asked. Each brief names what is decided; don't reopen those decisions." --project loadout-cli
    ```
+
+   Before you run it, check each "built" and "not built" against `main` and your branch, and correct any that have changed.
 
    `memory write` replaces a topic's facts. If `studio-design` already exists, or the write refuses because a similar topic exists, add the fact to that topic instead: `loadout memory show <topic> --project loadout-cli`, edit the text, then `loadout memory replace <topic> --project loadout-cli --file <the edited text> --expect <the version show printed>`. Tell me which topic.
 
 6. **Save the workspace:** `loadout workspace save`, so your other machines have it.
 
-Tell me what each step did: updated, created, or skipped and why.
+Tell me what each step did: updated, created, or skipped and why. Confirm that nothing was started: no session, run, refine round or schedule.

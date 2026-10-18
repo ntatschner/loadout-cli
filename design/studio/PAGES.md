@@ -5,7 +5,7 @@ Studio is built and merged. Six of its pages still show their data as plain list
 1. **The pages.** Rebuild each to its design. The Commands page stays as it is.
 2. **The pages in every mode.** Give each page its version in Terminal Focus, Team Focus, Minimal and Pure Focus.
 
-**Loadout's own records** of this work (a task for it, notes on the related ideas, one memory fact) are written by the last section of `ROUND4.md`, "Record it in Loadout", which covers every Studio brief.
+**Loadout's own records** of this work (a task for it, notes on the related ideas, one memory fact) are written by the last section of `ROUND4.md`, "Record it in Loadout", which covers every Studio brief. That section only writes records. It marks this brief "Designed, not built" until it is, and it never starts this work.
 
 **Order.** Part 1 stands on its own: it doesn't depend on `NEXT.md` (Teams, modes and Pure Focus), so it can be built before, after or beside it. Part 2 builds on the modes, so build it after `NEXT.md`'s Part 2 (Modes) and Part 3 (Pure Focus).
 
