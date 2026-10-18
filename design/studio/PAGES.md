@@ -496,6 +496,7 @@ Branch off `claude/determined-meitner-6wqi6z`. Commit in logical steps:
 12. the committed build
 13. tests (or with each step, if you prefer)
 14. docs
+15. **Record it in Loadout** (below), as the very last step
 
 Don't push or open a pull request until I say so.
 
@@ -509,3 +510,19 @@ Finish by telling me:
 - whether the terminals kept their scrollback when a page opened and closed beside them;
 - which existing tests you updated, and why each still guards the same thing;
 - anything from the designs you couldn't build, and why.
+
+# Record it in Loadout
+
+When everything above is committed, update the task for this work so whoever picks it up next knows it is built. **This step writes one record and builds nothing.** Don't run `idea refine`, `idea dump add`, `team run`, `team schedule add` or `launch`. Don't start a session for any other item, and never declare anything `doing`.
+
+1. Run `loadout task list --project loadout-cli --all --json` and find `studio-six-pages`.
+2. If it exists, re-declare it with its **current state** and its current note. Take out the sentence "Designed, not built. Don't start on this from this record; build it only when someone asks, from its brief." and add, at the end, "Built on branch <your branch> in <the commits>; not merged yet.":
+
+   ```
+   loadout task declare studio-six-pages <its current state> --note "<the note, changed as above>" --project loadout-cli --by "studio design"
+   ```
+
+   Run it once with `--dry-run` first. If the task doesn't exist, don't create it; tell me.
+3. `loadout workspace save`.
+
+Tell me what it did, and confirm that nothing was started.
