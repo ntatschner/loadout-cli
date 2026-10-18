@@ -8,6 +8,7 @@ using Loadout.Cli.Infrastructure;
 using Loadout.Core.Teams;
 using Loadout.Core.Teams.Daemon;
 using Loadout.Models.Results;
+using Loadout.Models.Tasks;
 using Loadout.Tests.Fakes;
 using Loadout.Tui;
 using Spectre.Console;
@@ -214,6 +215,29 @@ public sealed class DashboardIdeasTests : IAsyncLifetime, IDisposable
         idea.GetProperty("detail").GetProperty("stage").GetString().Should().Be("captured");
         read.GetProperty("projects")[0].GetString().Should().Be("website");
         read.GetProperty("dumping").GetBoolean().Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task What_the_page_reads_says_where_a_moved_idea_came_from_and_which_became_work_elsewhere()
+    {
+        await _space.ProjectAsync("website");
+        await _space.Ideas.CaptureAsync(null, "A status page", "me", "status-page");
+        await _space.Ideas.CaptureAsync(null, "Dark mode", "me", "dark-mode");
+        await _space.Ideas.MoveAsync(null, "website", "status-page");
+        await _space.Ideas.MoveAsync(null, "website", "dark-mode");
+
+        // What accepting does to the task, without an agent to write a plan.
+        await _space.Tasks.DeclareAsync("website", "dark-mode", TaskState.Open, "me", kind: TaskKind.Task);
+
+        var read = JsonSerializer.SerializeToElement(await Ideas(new Typed()).ReadAsync(CancellationToken.None));
+
+        var idea = read.GetProperty("ideas").EnumerateArray().Single();
+        idea.GetProperty("detail").GetProperty("id").GetString().Should().Be("status-page");
+        idea.GetProperty("moved").GetProperty("from").ValueKind.Should().Be(JsonValueKind.Null, "it came from the workspace-wide list");
+
+        var gone = read.GetProperty("movedOn").EnumerateArray().Single();
+        gone.GetProperty("id").GetString().Should().Be("dark-mode");
+        gone.GetProperty("to").GetString().Should().Be("website");
     }
 
     [Fact]

@@ -237,6 +237,9 @@ public sealed class WaitingRoomTests
         public Task<OperationResult<TaskItem>> MoveAsync(
             string? fromSlug, string? toSlug, string id, CancellationToken ct = default) =>
             throw new NotSupportedException("Nothing here writes.");
+
+        public Task<OperationResult<IReadOnlyList<TaskMoved>>> MovedAsync(CancellationToken ct = default) =>
+            Task.FromResult(OperationResult<IReadOnlyList<TaskMoved>>.Ok([]));
     }
 
 }

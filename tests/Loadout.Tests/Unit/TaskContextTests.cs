@@ -280,5 +280,8 @@ public sealed class TaskContextTests : IDisposable
         public Task<OperationResult<TaskItem>> MoveAsync(
             string? fromSlug, string? toSlug, string id, CancellationToken ct = default) =>
             throw new NotSupportedException();
+
+        public Task<OperationResult<IReadOnlyList<TaskMoved>>> MovedAsync(CancellationToken ct = default) =>
+            System.Threading.Tasks.Task.FromResult(OperationResult<IReadOnlyList<TaskMoved>>.Ok([]));
     }
 }

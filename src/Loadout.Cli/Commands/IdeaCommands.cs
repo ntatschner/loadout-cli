@@ -244,6 +244,16 @@ public sealed class IdeaListCommand : AsyncCommand<IdeaListCommand.Settings>
                 || string.Equals(idea.Place.Project, only, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
+        // Ideas that are work on another list now, shown under the list they
+        // left: that is where somebody would look for one and not find it.
+        var movedOn = await _ideas.MovedOnAsync(cancellationToken).ConfigureAwait(false);
+        var gone = movedOn.Succeeded
+            ? [.. movedOn.Value!
+                .Where(one => !settings.Global || one.From is null)
+                .Where(one => settings.Project is not { Length: > 0 } only
+                    || string.Equals(one.From, only, StringComparison.OrdinalIgnoreCase))]
+            : new List<IdeaMovedOn>();
+
         if (output.IsJson)
         {
             output.WriteJson(new
@@ -260,28 +270,44 @@ public sealed class IdeaListCommand : AsyncCommand<IdeaListCommand.Settings>
                     unanswered = idea.Unanswered,
                     running = idea.Running,
                     failure = IdeaView.Failure(idea.Failure),
+                    moved = TaskTrace.Json(idea.Moved),
                 }),
+                movedOn = gone.Select(one => new { id = one.Id, title = one.Title, from = one.From, to = one.Where, at = one.Utc }),
             });
 
             return CommandOutput.Success();
         }
 
-        if (shown.Count == 0)
+        if (shown.Count == 0 && gone.Count == 0)
         {
             output.WriteLine("[dim]No ideas yet. Drop one in with: loadout idea add \"...\"[/]");
 
             return CommandOutput.Success();
         }
 
-        foreach (var group in shown.GroupBy(idea => idea.Place.Project))
-        {
-            output.WriteLine($"[bold]{Markup.Escape(Core.Tasks.TaskPaths.Describe(group.Key))}[/]");
+        var lists = shown.Select(idea => idea.Place.Project)
+            .Concat(gone.Select(one => one.From))
+            .Distinct()
+            .OrderBy(list => list is null ? 0 : 1)
+            .ThenBy(list => list, StringComparer.Ordinal);
 
-            foreach (var idea in group)
+        foreach (var list in lists)
+        {
+            output.WriteLine($"[bold]{Markup.Escape(Core.Tasks.TaskPaths.Describe(list))}[/]");
+
+            foreach (var idea in shown.Where(idea => idea.Place.Project == list))
             {
                 output.WriteLine(
                     $"  {Markup.Escape(idea.Place.Id),-28} {IdeaView.Marked(idea),-24} "
-                    + Markup.Escape(idea.Title));
+                    + Markup.Escape(idea.Title)
+                    + (idea.Moved is { } came ? $"  [dim]{Markup.Escape(TaskTrace.From(came))}[/]" : string.Empty));
+            }
+
+            foreach (var one in gone.Where(one => one.From == list))
+            {
+                output.WriteLine(
+                    $"  [dim]{Markup.Escape(one.Id),-28} {"moved on",-24} {Markup.Escape(one.Title)}, "
+                    + $"a task on {Markup.Escape(Core.Tasks.TaskPaths.Describe(one.Where))} now[/]");
             }
         }
 
@@ -839,6 +865,7 @@ public sealed class IdeaAcceptCommand : AsyncCommand<IdeaAcceptCommand.Settings>
                 project = accepted.Value.Project,
                 plan = accepted.Value.PlanPath,
                 title = accepted.Value.Task.Title,
+                from = accepted.Value.From,
             });
 
             return CommandOutput.Success();
@@ -847,6 +874,16 @@ public sealed class IdeaAcceptCommand : AsyncCommand<IdeaAcceptCommand.Settings>
         output.WriteLine(
             $"[green]+[/] {Markup.Escape(accepted.Value!.Task.Id)} is now a task on "
             + $"[bold]{Markup.Escape(accepted.Value.Project)}[/]. {Markup.Escape(reason)}");
+
+        if (accepted.Value.Moved)
+        {
+            var left = Core.Tasks.TaskPaths.Describe(accepted.Value.From);
+
+            output.WriteLine(
+                $"[dim]  It moved from {Markup.Escape(left)} to {Markup.Escape(accepted.Value.Project)}, "
+                + $"and {Markup.Escape(left)} still shows where it went.[/]");
+        }
+
         output.WriteLine($"[dim]  The plan is at {Markup.Escape(accepted.Value.PlanPath)} in the workspace.[/]");
 
         return CommandOutput.Success();

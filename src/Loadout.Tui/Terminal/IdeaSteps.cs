@@ -1,6 +1,8 @@
 using System.Globalization;
 using Loadout.Core.Ideas;
+using Loadout.Core.Tasks;
 using Loadout.Models.Ideas;
+using Loadout.Models.Tasks;
 
 namespace Loadout.Tui.Terminal;
 
@@ -106,7 +108,7 @@ internal static class IdeaSteps
     /// marks for what was decided, for the reason the teams screen gives: a
     /// state somebody has to see the colour of is one some people cannot read.
     /// </remarks>
-    internal static IReadOnlyList<string> Detail(IdeaPlace place, IdeaRecord? record, int width)
+    internal static IReadOnlyList<string> Detail(IdeaPlace place, IdeaRecord? record, int width, TaskMove? moved = null)
     {
         var lines = new List<string>();
 
@@ -128,6 +130,14 @@ internal static class IdeaSteps
         var stage = IdeaWork.StageOf(record);
 
         Say($"{place.Id} on {place.Where}: {Stage(stage, IdeaWork.Unanswered(record).Count)}");
+
+        if (moved is not null)
+        {
+            Say(string.Create(
+                CultureInfo.InvariantCulture,
+                $"Moved here from {TaskPaths.Describe(moved.From.Length > 0 ? moved.From : null)} on {moved.Utc:yyyy-MM-dd}."), 2);
+        }
+
         Say(record.Ask, 2);
 
         if (IdeaWork.FailureOf(record) is { } failed)
@@ -216,6 +226,25 @@ internal static class IdeaSteps
         }
 
         return lines;
+    }
+
+    /// <summary>What the detail pane shows for an idea that is a task on another list now.</summary>
+    internal static IReadOnlyList<string> MovedOn(IdeaMovedOn gone, int width)
+    {
+        ArgumentNullException.ThrowIfNull(gone);
+
+        var where = TaskPaths.Describe(gone.Where);
+        var look = gone.Where is { Length: > 0 } project ? $"--project {project}" : "--global";
+
+        return
+        [
+            .. Wrap(string.Create(
+                CultureInfo.InvariantCulture,
+                $"{gone.Id} was an idea on {TaskPaths.Describe(gone.From)}. It has been a task on {where} "
+                + $"since {gone.Utc:yyyy-MM-dd}, so nothing here acts on it."), Math.Max(20, width)),
+            string.Empty,
+            $"  loadout task list {look}",
+        ];
     }
 
     /// <summary>

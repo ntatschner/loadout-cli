@@ -21,6 +21,7 @@
   import { router } from '../lib/router.svelte';
   import { acceptWords, sendAnswers, stateWord, type DumpItem, type Question } from '../lib/ideas';
   import { studio } from '../lib/state.svelte';
+  import { listHref, movedSaid, whereSaid } from '../lib/tasks';
   import { toasts } from '../lib/toasts.svelte';
 
   /** focused: just the workbench, for an idea opened on its own in Minimal. */
@@ -37,6 +38,17 @@
     running: boolean;
     /** The last round, when it failed; absent once it is dismissed or a round succeeds. */
     failure?: { when: string | null; agent: string | null; model: string | null; error: string } | null;
+    /** Where it was moved from, when it was. */
+    moved?: { from: string | null; at: string } | null;
+  }
+
+  /** An idea that is a task on another list now, shown so it is not simply gone. */
+  interface MovedOn {
+    id: string;
+    title: string;
+    from: string | null;
+    to: string | null;
+    at: string;
   }
 
   interface Option {
@@ -90,6 +102,7 @@
   }
 
   let ideas = $state<Listed[] | null>(null);
+  let movedOn = $state<MovedOn[]>([]);
   let idea = $state<Idea | null>(null);
   let dumps = $state<Dump[] | null>(null);
   let projects = $state<{ slug: string; name: string }[]>([]);
@@ -119,7 +132,9 @@
 
   async function loadList() {
     try {
-      ideas = (await readJson<{ ideas: Listed[] }>('idea list')).ideas;
+      const read = await readJson<{ ideas: Listed[]; movedOn?: MovedOn[] }>('idea list');
+      ideas = read.ideas;
+      movedOn = read.movedOn ?? [];
     } catch (error) {
       fail(error);
     }
@@ -316,6 +331,20 @@
       </ul>
     {/each}
 
+    {#if movedOn.length}
+      <h2 class="gh">Became tasks elsewhere</h2>
+      <ul class="gone">
+        {#each movedOn as gone (gone.id)}
+          <li>
+            <a class="place" href={listHref(gone.to)}>
+              <span class="t">{gone.title || gone.id}</span>
+              <span class="x">was on {whereSaid(gone.from)} · a task on {whereSaid(gone.to)} now</span>
+            </a>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+
     <h2 class="gh">More</h2>
     <ul>
       <li><a class="place" href="#ideas/+add" aria-current={place === 'add' ? 'page' : undefined}><span class="t">Drop an idea in</span></a></li>
@@ -332,6 +361,7 @@
       <div class="ihead">
         <h2>{idea.plan?.title ?? idea.ask}</h2>
         <p class="slug">{idea.id} · {project ?? 'workspace-wide'}{idea.plan ? ` · plan revision ${idea.plan.revision}` : ''}</p>
+        {#if listed?.moved}<p class="slug">Moved here {movedSaid(listed.moved)}</p>{/if}
       </div>
       <IdeaStages stage={idea.stage} {word} />
       {#if idea.plan?.understanding}<p class="understand">{idea.plan.understanding}</p>{/if}

@@ -14,7 +14,7 @@
   import TaskBoard from '../lib/components/TaskBoard.svelte';
   import { commands, readJson, SignedOut } from '../lib/api';
   import { lineFor } from '../lib/commandLine';
-  import { declareWords, type Task } from '../lib/tasks';
+  import { declareWords, type MovedAway, type Task } from '../lib/tasks';
   import type { Finding } from '../lib/health';
   import { studio } from '../lib/state.svelte';
   import { toasts } from '../lib/toasts.svelte';
@@ -73,6 +73,9 @@
   let workspace = $state<Workspace | null>(null);
   let tasks = $state<Task[] | null>(null);
   let globalTasks = $state<Task[] | null>(null);
+  // What left each list, kept apart from its tasks so no count includes one.
+  let away = $state<MovedAway[]>([]);
+  let globalAway = $state<MovedAway[]>([]);
   let problem = $state<string | null>(null);
 
   // The tiles' counts, read once the wall is drawn: a tile without them shows none.
@@ -147,11 +150,11 @@
 
   // --all, because without it done and dropped are left out, and the board folds them away rather than dropping them.
   function loadTasks(name: string) {
-    readJson<{ tasks: Task[] }>('task list', ['--project', name, '--all']).then((read) => (tasks = read.tasks), () => (tasks = null));
+    readJson<{ tasks: Task[]; movedAway?: MovedAway[] }>('task list', ['--project', name, '--all']).then((read) => { tasks = read.tasks; away = read.movedAway ?? []; }, () => (tasks = null));
   }
 
   function loadGlobal() {
-    readJson<{ tasks: Task[] }>('task list', ['--global', '--all']).then((read) => (globalTasks = read.tasks), fail);
+    readJson<{ tasks: Task[]; movedAway?: MovedAway[] }>('task list', ['--global', '--all']).then((read) => { globalTasks = read.tasks; globalAway = read.movedAway ?? []; }, fail);
   }
 
   $effect(() => {
@@ -164,6 +167,7 @@
     repository = null;
     worktrees = null;
     tasks = null;
+    away = [];
     problem = null;
 
     if (slug) {
@@ -297,7 +301,7 @@
       <section class="pblock" aria-labelledby="dt">
         <h2 class="ls-zone" id="dt">What is being worked on</h2>
         {#if tasks}
-          <TaskBoard {tasks} where={['--project', shown.id]} from={`$ loadout task list --project ${shown.id} --all`} disabledReason={refused} ondeclare={(task, state) => void act('task declare', declareWords(task.id, state, ['--project', shown!.id]))} />
+          <TaskBoard {tasks} {away} where={['--project', shown.id]} from={`$ loadout task list --project ${shown.id} --all`} disabledReason={refused} ondeclare={(task, state) => void act('task declare', declareWords(task.id, state, ['--project', shown!.id]))} />
         {:else}
           <p class="calm" role="status">Reading…</p>
         {/if}
@@ -377,7 +381,7 @@
       <div class="dhead"><h2>Tasks for no project yet</h2></div>
       <p class="lead">The workspace-wide list, for work that does not belong to a project yet.</p>
       {#if globalTasks}
-        <TaskBoard tasks={globalTasks} where={['--global']} from="$ loadout task list --global --all" disabledReason={refused} ondeclare={(task, state) => void act('task declare', declareWords(task.id, state, ['--global']))} />
+        <TaskBoard tasks={globalTasks} away={globalAway} where={['--global']} from="$ loadout task list --global --all" disabledReason={refused} ondeclare={(task, state) => void act('task declare', declareWords(task.id, state, ['--global']))} />
       {:else}
         <p class="calm" role="status">Reading…</p>
       {/if}

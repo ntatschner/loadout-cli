@@ -1289,6 +1289,11 @@
   #tasks .task > summary, #tasks .task-closed > summary, #tasks .task-change > summary { cursor: pointer; }
   #tasks .task > summary { font-weight: 600; }
   #tasks .task-note { white-space: pre-wrap; }
+
+  /* A trace of something that is somewhere else now: quieter than the work
+     around it, and in words as well as colour. */
+  .task-moved { align-items: center; margin-block: var(--space-2); }
+  .task-moved > p { margin: 0; color: var(--ink-muted); flex: 1 1 auto; }
   #tasks details.task-change { margin-block: var(--space-2); }
   #tasks details.task-change > summary { color: var(--ink-muted); }
   #ideas fieldset.idea-question, #ideas fieldset.idea-layer, #ideas fieldset.idea-addition { border: var(--lk-border) solid var(--line); border-radius: var(--radius-md); margin-block: var(--space-3); padding: var(--space-3); }
@@ -11998,6 +12003,35 @@
   var tasksOpen = {};
   var taskFields = 0;
 
+  // The card to bring into view on the next draw, set by a trace's "Show it".
+  var tasksFocus = null;
+
+  // Where a moved task went, opened where it is now. The list it is on may be
+  // folded, and done and dropped are folded again inside it, so both are opened.
+  function showTask(project, id, state) {
+    var key = (project || "") + "/" + id;
+
+    tasksOpen[key] = true;
+
+    // Not known when coming from the ideas tab, so opened then too.
+    if (state !== "open" && state !== "doing" && state !== "blocked") { tasksOpen["closed:" + (project || "")] = true; }
+
+    tasksFocus = key;
+
+    var at = views.map(function (one) { return one.box; }).indexOf("tasks");
+
+    if (view !== at) { showView(at); }
+
+    // Forced: the lists may not have changed, but which cards are open has.
+    readTasks(true);
+  }
+
+  function whereSaid(project) { return project || "the workspace-wide list"; }
+
+  function movedSaid(moved) {
+    return "from " + whereSaid(moved.from) + ", " + new Date(moved.at).toLocaleDateString();
+  }
+
   function drawTasksView() {
     if (tasksDrawn === null || Date.now() - tasksReadAt > 15000) {
       readTasks(false);
@@ -12118,7 +12152,7 @@
     var any = false;
 
     lists.forEach(function (list) {
-      if (!(list.tasks || []).length && !list.error) { return; }
+      if (!(list.tasks || []).length && !(list.away || []).length && !list.error) { return; }
 
       any = true;
       drawTaskList(page, list, answer.team, projects);
@@ -12180,6 +12214,19 @@
       closed.forEach(function (one) { drawTask(past, one, list.project, team, projects); });
       box.appendChild(past);
     }
+
+    // Not tasks of this list, so not in its count and with no buttons that
+    // change anything: only where each went, and a way to get there.
+    (list.away || []).forEach(function (gone) {
+      var row = ideaEl("div", "task-moved lk-btn-row");
+
+      row.appendChild(ideaEl("p", "lk-help",
+        (gone.title || gone.id) + " moved to " + whereSaid(gone.to) + ", "
+        + new Date(gone.at).toLocaleDateString() + "."));
+
+      row.appendChild(ideaButton("Show it", true, function () { showTask(gone.to, gone.id, gone.state); }));
+      box.appendChild(row);
+    });
   }
 
   function drawTask(into, task, project, team, projects) {
@@ -12202,7 +12249,18 @@
     card.appendChild(ideaEl("summary", null, (task.title || task.id) + " — " + task.state));
 
     card.appendChild(ideaEl("p", "lk-help",
-      task.id + " · " + (task.by || "somebody") + ", " + new Date(task.declared).toLocaleString()));
+      task.id + " · " + (task.by || "somebody") + ", " + new Date(task.declared).toLocaleString()
+      + (task.moved ? " · moved here " + movedSaid(task.moved) : "")));
+
+    if (tasksFocus === key) {
+      tasksFocus = null;
+
+      // After the draw that put it on the page, so there is somewhere to scroll to.
+      setTimeout(function () {
+        card.scrollIntoView({ block: "center" });
+        card.querySelector("summary").focus();
+      }, 0);
+    }
 
     if (task.note) {
       card.appendChild(ideaEl("p", "task-note", task.note));
@@ -12800,17 +12858,38 @@
     (answer.dumps || []).forEach(function (dump) { drawDump(page, dump, projects); });
 
     var ideas = answer.ideas || [];
+    var movedOn = answer.movedOn || [];
 
-    if (!ideas.length) {
+    if (!ideas.length && !movedOn.length) {
       page.appendChild(ideaEl("p", "lk-empty", "No ideas yet."));
       return;
     }
 
-    var list = group(page, "Every idea", null);
+    if (ideas.length) {
+      var list = group(page, "Every idea", null);
 
-    ideas.forEach(function (one) {
-      drawIdea(list, one, (answer.busy || []).indexOf(one.detail.id) >= 0, projects);
-    });
+      ideas.forEach(function (one) {
+        drawIdea(list, one, (answer.busy || []).indexOf(one.detail.id) >= 0, projects);
+      });
+    }
+
+    // Ideas that are work on another project now. They are on no ideas list,
+    // so without this an accepted idea is simply gone from the page.
+    if (movedOn.length) {
+      var became = group(page, "Became tasks elsewhere",
+        "Accepted or moved onto another list as work. They are on the Tasks tab now.");
+
+      movedOn.forEach(function (gone) {
+        var row = ideaEl("div", "task-moved lk-btn-row");
+
+        row.appendChild(ideaEl("p", "lk-help",
+          (gone.title || gone.id) + ": was on " + whereSaid(gone.from) + ", a task on "
+          + whereSaid(gone.to) + " since " + new Date(gone.at).toLocaleDateString() + "."));
+
+        row.appendChild(ideaButton("Show it", true, function () { showTask(gone.to, gone.id, null); }));
+        became.appendChild(row);
+      });
+    }
   }
 
   function drawIdeaForms(page, projects, dumping) {
@@ -12922,6 +13001,10 @@
     var summary = ideaEl("summary", null,
       one.title + " — " + stageWords(detail, busy) + " (" + (detail.project || "workspace-wide") + ")");
     card.appendChild(summary);
+
+    if (one.moved) {
+      card.appendChild(ideaEl("p", "lk-help", "Moved here " + movedSaid(one.moved) + "."));
+    }
 
     card.appendChild(ideaEl("p", "idea-ask", detail.ask));
 

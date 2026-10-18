@@ -1429,6 +1429,11 @@ a.ls-ptile:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px;
 .ls-tboard .task .said:empty { display: none; }
 .ls-tboard details.closed { padding: 8px 10px; box-shadow: inset 0 0 0 1px var(--rule); }
 .ls-tboard details.closed summary { cursor: pointer; font-size: 13px; color: var(--ink-soft); }
+.ls-tboard .task .came { font-size: 12px; color: var(--muted); }
+.ls-tboard .away { padding: 8px 10px; box-shadow: inset 0 0 0 1px var(--rule); }
+.ls-tboard .away h4 { margin: 0 0 4px; font-size: 11.5px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); }
+.ls-tboard .away ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.ls-tboard .away li { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
 .ls-tboard details.closed .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 6px; margin-top: 8px; }
 @container (max-width: 640px) { .ls-tboard .cols { grid-template-columns: minmax(0, 1fr); } }
 .ls-tag.dashed { box-shadow: none; outline: 1px dashed var(--rule); outline-offset: -1px; background: transparent; }

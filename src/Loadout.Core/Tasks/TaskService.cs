@@ -70,6 +70,35 @@ public interface ITaskService
         string? toSlug,
         string id,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Every task on every list that was moved there, and the list it is on now.
+    /// </summary>
+    /// <remarks>
+    /// One read of every list, rather than one per list asked about: a page
+    /// showing every list's trace would otherwise read each file once for each
+    /// list. Filtering by where they came from is the caller's.
+    /// </remarks>
+    Task<OperationResult<IReadOnlyList<TaskMoved>>> MovedAsync(CancellationToken ct = default);
+}
+
+/// <summary>A task that was moved, and the list it is on now.</summary>
+/// <param name="Task">The task, with where it came from in <see cref="TaskItem.Moved"/>.</param>
+/// <param name="Where">The project it is on now, or null for the workspace-wide list.</param>
+public sealed record TaskMoved(TaskItem Task, string? Where)
+{
+    /// <summary>The list it left, as a slug, or null for the workspace-wide list.</summary>
+    public string? From => Task.Moved?.From is { Length: > 0 } from ? from : null;
+
+    /// <summary>Whether it left this list, a project's slug or null for the workspace-wide one.</summary>
+    public bool Left(string? list)
+    {
+        var named = list is { Length: > 0 } ? list : null;
+
+        return Task.Moved is not null
+            && string.Equals(From, named, StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(Where, named, StringComparison.OrdinalIgnoreCase);
+    }
 }
 
 /// <inheritdoc />
@@ -292,6 +321,10 @@ internal sealed class TaskService : ITaskService
         // is gone with nothing to say so.
         var clash = false;
 
+        // The latest move only. A task moved twice says where it came from
+        // last, which is the list somebody looking for it would have seen it on.
+        moving.Moved = new TaskMove { From = fromSlug ?? string.Empty, Utc = _time.GetUtcNow() };
+
         var written = await _yaml.UpdateAsync<TaskList>(
             PathFor(toSlug),
             () => new TaskList(),
@@ -333,6 +366,46 @@ internal sealed class TaskService : ITaskService
                 $"'{trimmed}' was added to {TaskPaths.Describe(toSlug)} but could not be taken off "
                 + $"{TaskPaths.Describe(fromSlug)}, so it is in both: {taken.Error}",
                 taken.ExitCode);
+    }
+
+    /// <inheritdoc />
+    public async Task<OperationResult<IReadOnlyList<TaskMoved>>> MovedAsync(CancellationToken ct = default)
+    {
+        if (!_workspace.IsAvailable())
+        {
+            return OperationResult<IReadOnlyList<TaskMoved>>.Fail(
+                "There is no workspace on this machine, so there is nowhere to keep tasks.",
+                ExitCode.WorkspaceSyncFailed);
+        }
+
+        var moved = new List<TaskMoved>();
+        var projects = Path.Combine(_workspace.LocalPath, "projects");
+
+        IEnumerable<string?> lists = Directory.Exists(projects)
+            ? [null, .. Directory.EnumerateDirectories(projects).Select(Path.GetFileName).Order(StringComparer.Ordinal)]
+            : [null];
+
+        foreach (var list in lists)
+        {
+            if (!File.Exists(PathFor(list)))
+            {
+                continue;
+            }
+
+            // A list that cannot be read is left out rather than failing every
+            // other list's trace: the trace is a convenience, and reading the
+            // list itself says what is wrong with it.
+            var listed = await ListAsync(list, ct).ConfigureAwait(false);
+
+            if (listed.Succeeded)
+            {
+                moved.AddRange(listed.Value!
+                    .Where(item => item.Moved is not null)
+                    .Select(item => new TaskMoved(item, list)));
+            }
+        }
+
+        return OperationResult<IReadOnlyList<TaskMoved>>.Ok(moved);
     }
 
     private static bool Same(string left, string right) =>

@@ -283,6 +283,127 @@ public sealed class IdeaServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task A_moved_task_says_where_it_came_from_and_the_list_it_left_holds_nothing_of_it()
+    {
+        await ProjectAsync("homelab");
+        await ProjectAsync("website");
+        await _tasks.DeclareAsync("website", "fix-login", TaskState.Open, "me", "Fix the login");
+
+        var before = DateTimeOffset.UtcNow.AddSeconds(-1);
+        (await _ideas.MoveAsync("website", "homelab", "fix-login")).Succeeded.Should().BeTrue();
+
+        var landed = (await _tasks.ListAsync("homelab")).Value!.Single();
+        landed.Moved!.From.Should().Be("website");
+        landed.Moved.Utc.Should().BeAfter(before);
+
+        // The trace is worked out from the task, not left on the old list, so
+        // nothing reading the old list meets a row that is not its own.
+        (await _tasks.ListAsync("website")).Value!.Should().BeEmpty();
+
+        var moved = (await _tasks.MovedAsync()).Value!.Single();
+        moved.Where.Should().Be("homelab");
+        moved.Left("website").Should().BeTrue();
+        moved.Left("homelab").Should().BeFalse();
+        moved.Left(null).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task A_task_moved_twice_says_only_where_it_came_from_last()
+    {
+        await ProjectAsync("homelab");
+        await ProjectAsync("website");
+        await _tasks.DeclareAsync("website", "fix-login", TaskState.Open, "me", "Fix the login");
+
+        await _ideas.MoveAsync("website", null, "fix-login");
+        await _ideas.MoveAsync(null, "homelab", "fix-login");
+
+        var moved = (await _tasks.MovedAsync()).Value!.Single();
+        moved.From.Should().BeNull("it came to homelab from the workspace-wide list");
+        moved.Left(null).Should().BeTrue();
+        moved.Left("website").Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task A_task_moved_back_where_it_was_leaves_no_trace_there()
+    {
+        await ProjectAsync("homelab");
+        await ProjectAsync("website");
+        await _tasks.DeclareAsync("website", "fix-login", TaskState.Open, "me", "Fix the login");
+
+        await _ideas.MoveAsync("website", "homelab", "fix-login");
+        await _ideas.MoveAsync("homelab", "website", "fix-login");
+
+        var moved = (await _tasks.MovedAsync()).Value!.Single();
+        moved.Where.Should().Be("website");
+        moved.Left("website").Should().BeFalse("it is there");
+        moved.Left("homelab").Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Accepting_onto_another_project_is_a_move_and_accepting_where_it_is_is_not()
+    {
+        await ProjectAsync("homelab");
+        var elsewhere = (await _ideas.CaptureAsync(null, "Status page", "me")).Value!;
+        var here = (await _ideas.CaptureAsync("homelab", "Alerts page", "me")).Value!;
+
+        foreach (var (list, id) in new[] { ((string?)null, elsewhere.Id), ("homelab", here.Id) })
+        {
+            var place = new IdeaPlace(list, id);
+            await _ideas.RecordReplyAsync(place, Plan());
+            await _ideas.JudgeAsync(place, "A1", IdeaVerdict.Keep);
+            (await _ideas.AcceptAsync(place, "homelab", "me")).Succeeded.Should().BeTrue();
+        }
+
+        var tasks = (await _tasks.ListAsync("homelab")).Value!;
+        tasks.Single(t => t.Id == elsewhere.Id).Moved!.From.Should().BeEmpty("it came from the workspace-wide list");
+        tasks.Single(t => t.Id == here.Id).Moved.Should().BeNull("it never left homelab");
+    }
+
+    [Fact]
+    public async Task Only_an_idea_that_became_work_elsewhere_is_moved_on()
+    {
+        await ProjectAsync("homelab");
+        await ProjectAsync("website");
+
+        var accepted = (await _ideas.CaptureAsync(null, "Status page", "me")).Value!;
+        var place = new IdeaPlace(null, accepted.Id);
+        await _ideas.RecordReplyAsync(place, Plan());
+        await _ideas.JudgeAsync(place, "A1", IdeaVerdict.Keep);
+        var said = (await _ideas.AcceptAsync(place, "homelab", "me")).Value!;
+
+        // Still an idea, on the list it went to, so the ideas list shows it there.
+        await _ideas.CaptureAsync("website", "Dark mode", "me", "dark-mode");
+        await _ideas.MoveAsync("website", "homelab", "dark-mode");
+
+        // Never an idea, so the ideas views have nothing to say about it.
+        await _tasks.DeclareAsync("website", "fix-login", TaskState.Open, "me", "Fix the login");
+        await _ideas.MoveAsync("website", "homelab", "fix-login");
+
+        said.From.Should().BeNull();
+        said.Moved.Should().BeTrue();
+
+        var gone = (await _ideas.MovedOnAsync()).Value!.Single();
+        gone.Id.Should().Be(accepted.Id);
+        gone.From.Should().BeNull();
+        gone.Where.Should().Be("homelab");
+        gone.Title.Should().Be("Status page");
+
+        (await _ideas.ListAsync()).Value!.Single(i => i.Place.Id == "dark-mode").Moved!.From.Should().Be("website");
+    }
+
+    [Fact]
+    public async Task A_task_recorded_before_moves_were_traced_reads_as_never_moved()
+    {
+        await ProjectAsync("homelab");
+        await File.WriteAllTextAsync(
+            Path.Combine(_workspace.LocalPath, "projects", "homelab", "tasks.yaml"),
+            "schemaVersion: 1\nitems:\n- id: old-one\n  title: From before\n  state: Open\n");
+
+        (await _tasks.ListAsync("homelab")).Value!.Single().Moved.Should().BeNull();
+        (await _tasks.MovedAsync()).Value!.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task A_move_onto_a_list_with_that_idea_already_changes_nothing()
     {
         await ProjectAsync("homelab");

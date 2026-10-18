@@ -204,6 +204,11 @@ your answers.
 - **Move it to another list** is for an idea dropped on the wrong project. Its
   questions, answers and plan go with it. It isn't offered while a round is
   going, because the round would write its answer back where the idea was.
+  The idea says where it was moved from on the list it went to.
+- **Became tasks elsewhere** lists ideas that are work on another project
+  now, from accepting one or moving it later. Accepting takes an idea off
+  every ideas list, so without this one accepted onto a new project is
+  simply gone from the page. **Show it** opens the task where it is.
 
 A round with the agent takes a minute or two. The page doesn't wait for it: it
 says a round is going and reads again every few seconds until it's done. The
@@ -235,7 +240,10 @@ become turns up here once you accept it.
 - **Edit the title and note** changes either. Emptying the note clears it.
 - **Move it to another list** puts a task on the project it belongs to, or on
   the workspace-wide list. It keeps its id, state and note, and if it came from
-  an accepted idea, the plan goes with it.
+  an accepted idea, the plan goes with it. The list it left shows it under
+  the list's own tasks, as moved to wherever it went, with **Show it** to
+  open it there. It isn't counted as one of that list's tasks, and has no
+  other buttons, because it isn't that list's work any more.
 - **Remove** deletes the row, after asking. If you want a record that it
   wasn't done, drop it instead.
 - **Run a team** starts a team on the task with nothing to choose. The goal is

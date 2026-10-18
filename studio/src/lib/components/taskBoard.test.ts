@@ -51,4 +51,31 @@ describe('TaskBoard', () => {
     expect(declared).toEqual([['t-open', 'doing']]);
     expect(screen.getByRole('article', { name: 'Open one, doing' })).toBeTruthy();
   });
+
+  it('lists what moved away apart from the columns, with only the way to where it is now', () => {
+    const shown = render(TaskBoard, {
+      tasks: TASKS,
+      where: ['--project', 'p'],
+      away: [
+        { id: 'gone', title: 'Gone one', to: 'homelab', at: '2026-10-18T10:00:00Z' },
+        { id: 'global', title: 'Global one', to: null, at: '2026-10-18T10:00:00Z' },
+      ],
+    });
+
+    const away = within(screen.getByRole('region', { name: 'Moved away' }));
+    expect(away.getByText(/Gone one moved to homelab/)).toBeTruthy();
+    expect(away.getAllByRole('link', { name: 'Show it' }).map((a) => a.getAttribute('href'))).toEqual(['#projects/homelab', '#projects/+tasks']);
+    expect(away.queryAllByRole('button')).toHaveLength(0);
+    expect(shown.container.querySelectorAll('.cols .task')).toHaveLength(3);
+    expect(screen.queryByRole('article', { name: /Gone one/ })).toBeNull();
+  });
+
+  it('says where a moved task came from on its card', () => {
+    render(TaskBoard, {
+      tasks: [{ id: 'came', title: 'Came one', state: 'open', moved: { from: null, at: '2026-10-18T10:00:00Z' } }],
+      where: ['--project', 'p'],
+    });
+
+    expect(within(screen.getByRole('article', { name: /^Came one/ })).getByText(/Moved here from the workspace-wide list/)).toBeTruthy();
+  });
 });

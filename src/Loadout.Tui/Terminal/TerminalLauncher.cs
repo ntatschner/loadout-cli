@@ -601,6 +601,7 @@ public sealed class TerminalLauncher : ILauncherTui
             }
 
             var projects = await _projects.ListAsync(ct).ConfigureAwait(false);
+            var movedOn = await _ideas.MovedOnAsync(ct).ConfigureAwait(false);
 
             IdeaStep? step;
 
@@ -614,7 +615,8 @@ public sealed class TerminalLauncher : ILauncherTui
                     project?.Entry.Slug,
                     select,
                     new DialogIdeaPrompts(application),
-                    application);
+                    application,
+                    movedOn.Succeeded ? movedOn.Value : null);
 
                 await application.RunAsync(window, ct).ConfigureAwait(false);
 

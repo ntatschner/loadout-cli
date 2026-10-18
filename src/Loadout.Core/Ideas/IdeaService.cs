@@ -32,6 +32,7 @@ public sealed record IdeaPlace(string? Project, string Id)
 /// <param name="Unanswered">How many of the agent's questions wait on an answer.</param>
 /// <param name="Failure">The latest round that went wrong, or null.</param>
 /// <param name="Running">True while a round on it is running on this machine.</param>
+/// <param name="Moved">Where it was moved from, or null when it has stayed where it was dropped in.</param>
 public sealed record IdeaSummary(
     IdeaPlace Place,
     string Title,
@@ -41,13 +42,27 @@ public sealed record IdeaSummary(
     DateTimeOffset DeclaredUtc,
     int Unanswered,
     IdeaAttempt? Failure = null,
-    bool Running = false);
+    bool Running = false,
+    TaskMove? Moved = null);
 
 /// <summary>What accepting an idea did.</summary>
 /// <param name="Task">The task it became.</param>
 /// <param name="Project">The project it is now on.</param>
 /// <param name="PlanPath">The plan, relative to the workspace.</param>
-public sealed record IdeaAccepted(TaskItem Task, string Project, string PlanPath);
+/// <param name="From">The list it was on, a slug or null for the workspace-wide one.</param>
+public sealed record IdeaAccepted(TaskItem Task, string Project, string PlanPath, string? From = null)
+{
+    /// <summary>Whether accepting it took it off the list it was on.</summary>
+    public bool Moved => !string.Equals(From, Project, StringComparison.Ordinal);
+}
+
+/// <summary>An idea that became a task on another list, as the list it left shows it.</summary>
+/// <param name="Id">Its id, the same on both lists.</param>
+/// <param name="Title">Its task's title.</param>
+/// <param name="From">The list it left, a slug or null for the workspace-wide one.</param>
+/// <param name="Where">The list it is a task on now, the same way.</param>
+/// <param name="Utc">When it moved.</param>
+public sealed record IdeaMovedOn(string Id, string Title, string? From, string? Where, DateTimeOffset Utc);
 
 /// <summary>
 /// Ideas and everything a person says about them: capture, answers, choices,
@@ -75,6 +90,17 @@ public interface IIdeaService
 
     /// <summary>Every idea on every list, workspace-wide first.</summary>
     Task<OperationResult<IReadOnlyList<IdeaSummary>>> ListAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Every idea that is a task on another list now, by accepting or by a move
+    /// after it, so the list it left can say where it went.
+    /// </summary>
+    /// <remarks>
+    /// Worked out from the task's own record of where it came from, and an
+    /// idea's record beside it, so it lasts as long as they do and nothing is
+    /// kept on the list it left.
+    /// </remarks>
+    Task<OperationResult<IReadOnlyList<IdeaMovedOn>>> MovedOnAsync(CancellationToken ct = default);
 
     /// <summary>
     /// Finds which list an idea is on: the one preferred first, then the
@@ -325,11 +351,39 @@ internal sealed partial class IdeaService : IIdeaService
                     item.DeclaredUtc,
                     record is null ? 0 : IdeaWork.Unanswered(record).Count,
                     record is null ? null : IdeaWork.FailureOf(record),
-                    _locks.Held(place)));
+                    _locks.Held(place),
+                    item.Moved));
             }
         }
 
         return OperationResult<IReadOnlyList<IdeaSummary>>.Ok(ideas);
+    }
+
+    /// <inheritdoc />
+    public async Task<OperationResult<IReadOnlyList<IdeaMovedOn>>> MovedOnAsync(CancellationToken ct = default)
+    {
+        if (Unavailable() is { } missing)
+        {
+            return OperationResult<IReadOnlyList<IdeaMovedOn>>.Fail(missing, ExitCode.WorkspaceSyncFailed);
+        }
+
+        var moved = await _tasks.MovedAsync(ct).ConfigureAwait(false);
+
+        if (moved.Failed)
+        {
+            return OperationResult<IReadOnlyList<IdeaMovedOn>>.Fail(moved.Error!, moved.ExitCode);
+        }
+
+        // Work, not ideas: an idea that moved is still on the ideas list, on
+        // the list it went to. One that became work is on no ideas list at
+        // all, and only its record says it was ever an idea.
+        var gone = moved.Value!
+            .Where(one => one.Task.Kind == TaskKind.Task && one.Left(one.From))
+            .Where(one => File.Exists(RecordPath(new IdeaPlace(one.Where, one.Task.Id))))
+            .Select(one => new IdeaMovedOn(one.Task.Id, one.Task.Title, one.From, one.Where, one.Task.Moved!.Utc))
+            .ToList();
+
+        return OperationResult<IReadOnlyList<IdeaMovedOn>>.Ok(gone);
     }
 
     /// <inheritdoc />
@@ -704,7 +758,7 @@ internal sealed partial class IdeaService : IIdeaService
             TryDelete(RecordPath(place));
         }
 
-        return OperationResult<IdeaAccepted>.Ok(new IdeaAccepted(declared.Value!, destination, planPath));
+        return OperationResult<IdeaAccepted>.Ok(new IdeaAccepted(declared.Value!, destination, planPath, place.Project));
     }
 
     /// <inheritdoc />

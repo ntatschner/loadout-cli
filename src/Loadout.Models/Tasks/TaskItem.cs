@@ -79,4 +79,23 @@ public sealed class TaskItem
 
     /// <summary>Anything worth adding. Empty is normal.</summary>
     public string Note { get; set; } = string.Empty;
+
+    /// <summary>The list it was on before it was last moved, or null when it never has been.</summary>
+    /// <remarks>
+    /// Kept on the task rather than left behind on the list it came from, so a
+    /// list only ever holds work that is its own: a session, a count or a team
+    /// reading it never meets a row that is somewhere else now. The trace the
+    /// old list shows is worked out from this, and lasts as long as the task.
+    /// </remarks>
+    public TaskMove? Moved { get; set; }
+}
+
+/// <summary>Where a task came from, and when it left.</summary>
+public sealed class TaskMove
+{
+    /// <summary>The project's slug, or empty for the workspace-wide list.</summary>
+    public string From { get; set; } = string.Empty;
+
+    /// <summary>When it was moved.</summary>
+    public DateTimeOffset Utc { get; set; }
 }

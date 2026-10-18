@@ -102,6 +102,9 @@ public sealed class AccessibilityContextTests : IDisposable
         public Task<OperationResult<Loadout.Models.Tasks.TaskItem>> MoveAsync(
             string? fromSlug, string? toSlug, string id, CancellationToken ct = default) =>
             throw new NotSupportedException("compiling a context moves nothing");
+
+        public Task<OperationResult<IReadOnlyList<Loadout.Core.Tasks.TaskMoved>>> MovedAsync(CancellationToken ct = default) =>
+            Task.FromResult(OperationResult<IReadOnlyList<Loadout.Core.Tasks.TaskMoved>>.Ok([]));
     }
 
     [Fact]

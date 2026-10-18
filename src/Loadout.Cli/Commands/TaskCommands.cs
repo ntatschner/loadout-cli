@@ -134,6 +134,16 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
             : [.. listed.Value!.Where(item =>
                 item.State is not (TaskState.Done or TaskState.Dropped))];
 
+        // What left this list, kept apart from its tasks so nothing counting
+        // them, or suggesting what to do next, ever counts one of these.
+        var moved = await _tasks.MovedAsync(cancellationToken).ConfigureAwait(false);
+        var away = moved.Succeeded
+            ? [.. moved.Value!
+                .Where(one => one.Left(slug))
+                .Where(one => settings.All || one.Task.State is not (TaskState.Done or TaskState.Dropped))
+                .OrderBy(one => one.Task.Id, StringComparer.Ordinal)]
+            : new List<TaskMoved>();
+
         if (output.IsJson)
         {
             output.WriteJson(new
@@ -147,6 +157,15 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
                     item.DeclaredBy,
                     declared = item.DeclaredUtc,
                     item.Note,
+                    moved = TaskTrace.Json(item.Moved),
+                }),
+                movedAway = away.Select(one => new
+                {
+                    id = one.Task.Id,
+                    title = one.Task.Title,
+                    kind = one.Task.Kind.ToString().ToLowerInvariant(),
+                    to = one.Where,
+                    at = one.Task.Moved!.Utc,
                 }),
                 unsupported = disagreements.Select(d => new { task = d.TaskId, d.Detail }),
                 suggested = Suggestions.Compose(Work(shown), disagreements)
@@ -162,6 +181,8 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
                 ? $"[dim]{Markup.Escape(TaskPaths.Describe(slug))} has no tasks recorded.[/]"
                 : $"[dim]Nothing open. {listed.Value!.Count} recorded in total; --all shows them.[/]");
 
+            TaskTrace.Write(output, away);
+
             return CommandOutput.Success();
         }
 
@@ -175,8 +196,12 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
 
             output.WriteLine(
                 $"  [dim]{Markup.Escape(item.DeclaredBy.Length > 0 ? item.DeclaredBy : "nobody named")}"
-                + $", {item.DeclaredUtc:yyyy-MM-dd}[/]");
+                + $", {item.DeclaredUtc:yyyy-MM-dd}"
+                + (item.Moved is { } came ? $" · {Markup.Escape(TaskTrace.From(came))}" : string.Empty)
+                + "[/]");
         }
+
+        TaskTrace.Write(output, away);
 
         if (disagreements.Count > 0)
         {
@@ -403,6 +428,44 @@ public sealed class TaskDeclareCommand : AsyncCommand<TaskDeclareCommand.Setting
     }
 }
 
+/// <summary>How a moved task's trace is said, on the command line and in JSON.</summary>
+internal static class TaskTrace
+{
+    /// <summary>Where a task came from, as the list it is on now says it.</summary>
+    public static string From(TaskMove moved) =>
+        $"from {TaskPaths.Describe(moved.From.Length > 0 ? moved.From : null)}, {moved.Utc:yyyy-MM-dd}";
+
+    /// <summary>Where a moved task came from, for JSON, or null when it never moved.</summary>
+    public static object? Json(TaskMove? moved) =>
+        moved is null ? null : new { from = moved.From.Length > 0 ? moved.From : null, at = moved.Utc };
+
+    /// <summary>
+    /// What left this list, after its own tasks and apart from them, with the
+    /// command that shows each where it is now.
+    /// </summary>
+    public static void Write(CommandOutput output, IReadOnlyList<TaskMoved> away)
+    {
+        if (away.Count == 0)
+        {
+            return;
+        }
+
+        output.WriteBlankLine();
+        output.WriteLine("[bold]Moved away[/]  [dim]not on this list any more[/]");
+
+        foreach (var one in away)
+        {
+            var where = TaskPaths.Describe(one.Where);
+            var look = one.Where is { Length: > 0 } project ? $"--project {project}" : "--global";
+
+            output.WriteLine(
+                $"[dim]{Markup.Escape(one.Task.Id),-22} moved to {Markup.Escape(where)}, "
+                + $"{one.Task.Moved!.Utc:yyyy-MM-dd}  {Markup.Escape(one.Task.Title)}[/]");
+            output.WriteLine($"[dim]  loadout task list {Markup.Escape(look)}[/]");
+        }
+    }
+}
+
 /// <summary>Where a move sends something: a project, or the workspace-wide list.</summary>
 internal static class MoveDestination
 {
@@ -547,7 +610,9 @@ internal static class Move
         output.WriteLine(
             string.Equals(from, to, StringComparison.Ordinal)
                 ? $"{Markup.Escape(moved.Value!.Id)} is on {Markup.Escape(TaskPaths.Describe(to))} already. Nothing was moved."
-                : $"[green]+[/] Moved {Markup.Escape(moved.Value!.Id)} to {Markup.Escape(TaskPaths.Describe(to))}.");
+                : $"[green]+[/] Moved {Markup.Escape(moved.Value!.Id)} from {Markup.Escape(TaskPaths.Describe(from))} "
+                    + $"to {Markup.Escape(TaskPaths.Describe(to))}. {Markup.Escape(TaskPaths.Describe(from))} "
+                    + "still shows where it went.");
 
         return CommandOutput.Success();
     }
