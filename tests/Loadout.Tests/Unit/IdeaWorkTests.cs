@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FluentAssertions;
 using Loadout.Core.Ideas;
 using Loadout.Models.Ideas;
@@ -280,5 +281,61 @@ public sealed class IdeaWorkTests
         IdeaWork.Destination(global, new IdeaPlan { Project = new IdeaPlacement { IsNew = true, Name = "Lab watch" } }, ["homelab"])
             .Should().Match<IdeaDestination>(d => d.Unsettled && d.Reason.Contains("Lab watch"),
                 "making a project is the person's to decide");
+    }
+
+    private sealed record RecommendationCase(string Name, string[] Options, string? Recommendation, string[] Choices, int? Recommended, string? Note);
+
+    // The same table the Studio Ideas page is tested against, so the two rules agree.
+    public static TheoryData<string> RecommendationCases()
+    {
+        var data = new TheoryData<string>();
+
+        foreach (var one in ReadRecommendationCases())
+        {
+            data.Add(one.Name);
+        }
+
+        return data;
+    }
+
+    private static RecommendationCase[] ReadRecommendationCases() =>
+        JsonSerializer.Deserialize<RecommendationCase[]>(
+            File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "recommendations.json")),
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+
+    [Theory]
+    [MemberData(nameof(RecommendationCases))]
+    public void A_recommendation_is_stored_as_one_of_the_options(string name)
+    {
+        var one = ReadRecommendationCases().Single(c => c.Name == name);
+        var record = Fresh();
+        var reply = Questions("Beside it, or replace it?");
+        reply.Questions[0].Options = [.. one.Options];
+        reply.Questions[0].Recommendation = one.Recommendation ?? string.Empty;
+
+        IdeaWork.Merge(record, reply, Now);
+
+        var question = record.Rounds.Single().Questions.Single();
+        question.Options.Should().Equal(one.Choices);
+        question.Recommendation.Should().Be(one.Recommended is { } at ? one.Choices[at] : string.Empty);
+
+        if (one.Note is not null)
+        {
+            question.Why.Should().Contain(one.Note, "the words after the matched option are the agent's reasoning");
+        }
+    }
+
+    [Fact]
+    public void Reasoning_already_in_why_is_not_repeated()
+    {
+        var record = Fresh();
+        var reply = Questions("Beside it, or replace it?");
+        reply.Questions[0].Options = ["Beside it", "Replace it"];
+        reply.Questions[0].Recommendation = "Beside it, because the screens stay";
+        reply.Questions[0].Why = "Because the screens stay.";
+
+        IdeaWork.Merge(record, reply, Now);
+
+        record.Rounds.Single().Questions.Single().Why.Should().Be("Because the screens stay.");
     }
 }

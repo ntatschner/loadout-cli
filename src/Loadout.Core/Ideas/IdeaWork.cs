@@ -174,6 +174,83 @@ public static class IdeaWork
         || record.Rounds.Any(round => round.Revision >= plan.Revision);
 
     /// <summary>
+    /// Makes a question's recommendation one of its options, so it can be
+    /// picked rather than retyped: an exact match ignoring case and spaces,
+    /// then the longest option that starts the recommendation or that the
+    /// recommendation starts, ending at a word. A tie would be a guess, so it
+    /// counts as no match, and a recommendation that matches nothing is added
+    /// as an option. Words left over after a matched option are the agent's
+    /// reasoning, kept in Why.
+    /// </summary>
+    /// <remarks>
+    /// The Studio Ideas page applies the same rule when it shows a question,
+    /// for ideas saved before this ran. Both are tested against
+    /// tests/Loadout.Tests/Fixtures/recommendations.json.
+    /// </remarks>
+    private static IdeaQuestion Recommend(IdeaQuestion question)
+    {
+        var wanted = Collapse(question.Recommendation);
+
+        if (wanted.Length == 0)
+        {
+            question.Recommendation = string.Empty;
+            return question;
+        }
+
+        var exact = question.Options.FindIndex(option => string.Equals(Collapse(option), wanted, StringComparison.OrdinalIgnoreCase));
+
+        if (exact >= 0)
+        {
+            question.Recommendation = question.Options[exact];
+            return question;
+        }
+
+        var best = -1;
+        var length = 0;
+        var tied = false;
+
+        for (var index = 0; index < question.Options.Count; index++)
+        {
+            var option = Collapse(question.Options[index]);
+            var shared = StartsAtWord(wanted, option) ? option.Length : StartsAtWord(option, wanted) ? wanted.Length : 0;
+
+            if (shared > length)
+            {
+                (best, length, tied) = (index, shared, false);
+            }
+            else if (shared > 0 && shared == length)
+            {
+                tied = true;
+            }
+        }
+
+        if (best < 0 || tied)
+        {
+            question.Options.Add(wanted);
+            question.Recommendation = wanted;
+            return question;
+        }
+
+        var rest = wanted[Math.Min(Collapse(question.Options[best]).Length, wanted.Length)..].TrimStart(' ', ',', ';', ':', '.', '-', '–', '—');
+
+        if (rest.Length > 0 && !question.Why.Contains(rest, StringComparison.OrdinalIgnoreCase))
+        {
+            question.Why = question.Why.Length == 0 ? $"Recommended: {wanted}." : $"{question.Why} Recommended: {wanted}.";
+        }
+
+        question.Recommendation = question.Options[best];
+        return question;
+    }
+
+    private static string Collapse(string text) =>
+        string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+    /// <summary>True when the shorter starts the longer and ends at a word.</summary>
+    private static bool StartsAtWord(string longer, string shorter) =>
+        longer.StartsWith(shorter, StringComparison.OrdinalIgnoreCase)
+        && (longer.Length == shorter.Length || !char.IsLetterOrDigit(longer[shorter.Length]));
+
+    /// <summary>
     /// Folds an agent's answer into the record: new questions become a round,
     /// a plan replaces the last one, carrying over what the person decided
     /// about each piece that is still there.
@@ -193,14 +270,14 @@ public static class IdeaWork
                 Revision = reply.Plan is null ? record.Plan?.Revision ?? 0 : (record.Plan?.Revision ?? 0) + 1,
                 Questions =
                 [
-                    .. reply.Questions.Select((q, index) => new IdeaQuestion
+                    .. reply.Questions.Select((q, index) => Recommend(new IdeaQuestion
                     {
                         Id = $"Q{asked + index + 1}",
                         Question = q.Question.Trim(),
                         Why = q.Why.Trim(),
                         Options = [.. q.Options.Select(o => o.Trim()).Where(o => o.Length > 0)],
                         Recommendation = q.Recommendation.Trim(),
-                    }),
+                    })),
                 ],
             });
         }
@@ -383,7 +460,8 @@ public static class IdeaWork
         {
             return "Ask the clarifying questions whose answers would change the design, and nothing "
                 + "you can reasonably decide yourself. At most eight, each with why it matters, the "
-                + "answers you think likely, and the one you would recommend. Do not propose a plan "
+                + "answers you think likely, and the one you would recommend. The recommendation must be "
+                + "one of those answers, word for word, with any reasoning in why. Do not propose a plan "
                 + "yet, unless the idea is already so clear that no answer would change it.";
         }
 
