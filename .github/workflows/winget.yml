@@ -1,56 +1,56 @@
-# Submits the winget manifest for a release.
+# Submits the winget manifest for the newest release, at most once a day.
 #
-# Called by release.yml rather than listening for `release: published`. That
-# release is created by a workflow using GITHUB_TOKEN, and GitHub raises no
-# workflow runs from events that token causes.
+# Not run by release.yml any more. Every submission opens a pull request
+# against microsoft/winget-pkgs, which a validation pipeline installs on a
+# clean machine and a moderator then reviews by hand. Releasing several times
+# a day queued one of those per release, each superseded within hours, and
+# each costing a moderator the time to look. So once a day this takes the
+# newest release, submits it if winget does not have it and nothing for it is
+# waiting, and closes the submissions it supersedes.
 #
-# The only one of the three channels with a queue behind it. This opens a pull
-# request against microsoft/winget-pkgs; a validation pipeline installs the MSI
-# on a clean machine and a person looks at it afterwards. So the release does
-# not wait on it, and a failure here is not a failure of the release.
+# Started from the Actions page it does the same at once, for the newest
+# release or the tag given: that is the deliberate way past the daily rule.
 name: winget
 
 on:
-  workflow_call:
-    inputs:
-      tag:
-        description: The release tag to publish, for example v0.17.0
-        required: true
-        type: string
-    # Not required. A release must not go red because a channel nobody has
-    # set up yet has no credentials: the job below checks and skips instead.
-    secrets:
-      WINGET_TOKEN:
-        required: false
-
-  release:
-    types: [published]
+  schedule:
+    # 07:00 UTC, after a day's releases rather than in the middle of them.
+    - cron: '0 7 * * *'
 
   workflow_dispatch:
     inputs:
       tag:
-        description: The release tag to publish, for example v0.17.0
-        required: true
+        description: The release tag to publish, for example v0.17.0. Empty for the newest release.
+        required: false
         type: string
 
 permissions:
   contents: read
 
+# One submission at a time, so a dispatch during the scheduled run cannot open
+# a second pull request for the same version.
+concurrency:
+  group: winget
+  cancel-in-progress: false
+
 jobs:
   # A job of its own because a secret cannot be read in a job-level `if`, and
-  # skipping is the answer that reads correctly on the release: not configured
-  # is not a failure.
+  # skipping is the answer that reads correctly: not configured, or nothing new
+  # to send, is not a failure.
   configured:
-    name: Is winget publishing set up?
+    name: Is there anything to submit?
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       ready: ${{ steps.check.outputs.ready }}
+      tag: ${{ steps.check.outputs.tag }}
+      version: ${{ steps.check.outputs.version }}
 
     steps:
       - id: check
         env:
           TOKEN: ${{ secrets.WINGET_TOKEN }}
+          ASKED: ${{ inputs.tag }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
@@ -65,60 +65,66 @@ jobs:
           # point of this check. 'wingetcreate update' updates something that
           # exists; the first submission has to be made by hand with
           # 'wingetcreate new' and accepted into winget-pkgs before any of this
-          # can run. Without this the job fails on the release after a token is
-          # added, which reads as a regression rather than as setup half done.
+          # can run.
           #
           # winget-pkgs lays manifests out by the first letter of the publisher,
-          # lowercased, then publisher, then package.
+          # lowercased, then publisher, then package. Each version is a folder.
           package="manifests/t/TheCodeSaiyan/Loadout"
 
-          if gh api "repos/microsoft/winget-pkgs/contents/$package" \
-            --jq '.[0].name' > /dev/null 2>&1; then
-            echo "ready=true" >> "$GITHUB_OUTPUT"
+          if ! gh api "repos/microsoft/winget-pkgs/contents/$package" --jq '.[].name' > published.txt 2> /dev/null; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::TheCodeSaiyan.Loadout is not in winget-pkgs yet, so there is nothing to update. Create it once with 'wingetcreate new' and get that pull request accepted; every release after that is submitted automatically."
             exit 0
           fi
 
-          echo "ready=false" >> "$GITHUB_OUTPUT"
-          echo "::notice::TheCodeSaiyan.Loadout is not in winget-pkgs yet, so there is nothing to update. Create it once with 'wingetcreate new' and get that pull request accepted; every release after that updates it automatically."
+          # The newest release, which is never a draft or a prerelease.
+          tag="${ASKED:-}"
+
+          if [ -z "$tag" ]; then
+            tag=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq '.tagName')
+          fi
+
+          version="${tag#v}"
+
+          if [ -z "$version" ]; then
+            echo "No release to publish." >&2
+            exit 1
+          fi
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          if grep -qxF "$version" published.txt; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::winget already has $version; nothing to submit."
+            exit 0
+          fi
+
+          # The title wingetcreate gives every update. The search narrows it,
+          # and the exact comparison decides.
+          title="New version: TheCodeSaiyan.Loadout version $version"
+
+          if gh pr list --repo microsoft/winget-pkgs --state open --search "TheCodeSaiyan.Loadout $version in:title" --json title --jq '.[].title' | grep -qxF "$title"; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::$version is already waiting in winget-pkgs; nothing to submit."
+            exit 0
+          fi
+
+          echo "ready=true" >> "$GITHUB_OUTPUT"
 
   manifest:
     name: Submit the manifest
     needs: configured
     runs-on: windows-latest
     timeout-minutes: 20
-
-    # Only a release event can be a prerelease, and only a prerelease is
-    # refused. Written as "dispatch or not a prerelease" this skips every
-    # workflow_call: the event is then the caller's tag push, there is no
-    # release object, and the comparison quietly comes out false.
-    if: >-
-      needs.configured.outputs.ready == 'true'
-      && (github.event_name != 'release' || github.event.release.prerelease == false)
+    if: needs.configured.outputs.ready == 'true'
 
     steps:
-      - name: Work out the release
-        id: release
-        env:
-          TAG: ${{ inputs.tag || github.event.release.tag_name }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          version="${TAG#v}"
-
-          if [ -z "$version" ]; then
-            echo "No tag to publish." >&2
-            exit 1
-          fi
-
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-
       - name: Check the installers are actually there
         id: installers
         env:
-          TAG: ${{ steps.release.outputs.tag }}
-          VERSION: ${{ steps.release.outputs.version }}
+          TAG: ${{ needs.configured.outputs.tag }}
+          VERSION: ${{ needs.configured.outputs.version }}
         shell: bash
         run: |
           set -euo pipefail
@@ -167,7 +173,7 @@ jobs:
           # renaming means a new package and orphaning everyone who installed
           # the old one.
           ./wingetcreate.exe update TheCodeSaiyan.Loadout `
-            --version ${{ steps.release.outputs.version }} `
+            --version ${{ needs.configured.outputs.version }} `
             --urls "${{ steps.installers.outputs.x64 }}" "${{ steps.installers.outputs.arm64 }}" `
             --submit `
             --token $env:WINGET_TOKEN
@@ -180,3 +186,36 @@ jobs:
             Write-Host "::error::wingetcreate exited $LASTEXITCODE. If this is the first submission, run 'wingetcreate new' locally to create TheCodeSaiyan.Loadout before this workflow can update it."
             exit $LASTEXITCODE
           }
+
+      # Only after a submission went in, so a failed one never leaves nothing
+      # waiting at all. Only this account's own updates of this package are
+      # touched, and only those for another version.
+      - name: Close what it supersedes
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
+          VERSION: ${{ needs.configured.outputs.version }}
+          CURRENT: 'New version: TheCodeSaiyan.Loadout version ${{ needs.configured.outputs.version }}'
+        run: |
+          set -euo pipefail
+
+          open() {
+            gh pr list --repo microsoft/winget-pkgs --author @me --state open --search "TheCodeSaiyan.Loadout in:title" --json number,title --jq "$1"
+          }
+
+          # Search can take a moment to see the pull request just opened.
+          current=""
+
+          for attempt in 1 2 3 4 5 6; do
+            current=$(open '.[] | select(.title == env.CURRENT) | .number' | head -n 1)
+            [ -n "$current" ] && break
+            sleep 10
+          done
+
+          by="the $VERSION submission"
+          [ -n "$current" ] && by="#$current ($VERSION)"
+
+          for number in $(open '.[] | select((.title | startswith("New version: TheCodeSaiyan.Loadout version ")) and .title != env.CURRENT) | .number'); do
+            gh pr close "$number" --repo microsoft/winget-pkgs --comment "Superseded by $by, so closing this one to save moderators the time."
+            echo "closed #$number"
+          done
