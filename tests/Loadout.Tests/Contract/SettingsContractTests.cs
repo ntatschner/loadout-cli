@@ -84,6 +84,12 @@ public sealed class SettingsContractTests
         (run.StandardOutput + run.StandardError).Should().NotContain(
             "Unknown command",
             $"'{what}' names a command that does not exist");
+
+        // Parsed is not enough: a line missing what the command needs is
+        // refused just the same, and the page reports the refusal as its own.
+        (run.StandardOutput + run.StandardError).Should().NotContain(
+            "Which team?",
+            $"'{what}' leaves out the team the page sent");
     }
 
     [BuiltCliTheory]
@@ -103,5 +109,6 @@ public sealed class SettingsContractTests
 
         (run.StandardOutput + run.StandardError).Should().NotContain("Unknown option");
         (run.StandardOutput + run.StandardError).Should().NotContain("Unknown command");
+        (run.StandardOutput + run.StandardError).Should().NotContain("Which team?");
     }
 }
