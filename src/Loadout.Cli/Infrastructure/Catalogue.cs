@@ -213,9 +213,9 @@ internal static class Catalogue
 /// </summary>
 internal sealed class CommandCatalogue : ICommandCatalogue
 {
-    private readonly Func<string[], Task<int>> _run;
+    private readonly Func<string[], CancellationToken, Task<int>> _run;
 
-    internal CommandCatalogue(Func<string[], Task<int>> run) => _run = run;
+    internal CommandCatalogue(Func<string[], CancellationToken, Task<int>> run) => _run = run;
 
     /// <inheritdoc />
     public IReadOnlyList<CatalogueEntry> Commands => Catalogue.Commands;
@@ -230,6 +230,10 @@ internal sealed class CommandCatalogue : ICommandCatalogue
 
         string[] parts = [.. path.Split(' ', StringSplitOptions.RemoveEmptyEntries), .. arguments];
 
-        return _run(parts);
+        // Handed on, so a command run from here hears its caller stopping. A
+        // team run started by the daemon never did: told to stop now, the
+        // daemon went and took the run with it mid-round, and the journal it
+        // left read as a run still going.
+        return _run(parts, ct);
     }
 }

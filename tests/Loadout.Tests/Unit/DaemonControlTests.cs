@@ -195,6 +195,62 @@ public sealed class DaemonControlTests : IDisposable
     }
 
     /// <summary>
+    /// Stopping, the daemon waits for the runs it started to write their
+    /// endings, and gives up on one that does not within the time it allows.
+    /// </summary>
+    [Fact]
+    public async Task Stopping_it_waits_a_while_for_its_runs_to_end_and_no_longer()
+    {
+        var held = new Held();
+        var running = new TeamDaemonCommand.InFlight(held);
+
+        var run = running.RunAsync("team run", [], CancellationToken.None);
+        await held.Asked();
+
+        var settling = running.SettledAsync(TimeSpan.FromSeconds(10), TimeProvider.System);
+
+        await Task.Delay(TimeSpan.FromMilliseconds(400));
+        settling.IsCompleted.Should().BeFalse("its run has not finished ending");
+
+        held.Release();
+        await run;
+
+        (await settling).Should().BeTrue();
+
+        var stuck = new Held();
+        var still = new TeamDaemonCommand.InFlight(stuck);
+        _ = still.RunAsync("team run", [], CancellationToken.None);
+        await stuck.Asked();
+
+        (await still.SettledAsync(TimeSpan.FromMilliseconds(300), TimeProvider.System))
+            .Should().BeFalse("a run that will not end goes with the daemon rather than keeping it");
+
+        stuck.Release();
+    }
+
+    /// <summary>
+    /// A command run from the catalogue hears its caller stopping. A daemon's
+    /// runs did not, so 'stop --now' took them mid-round with no ending written.
+    /// </summary>
+    [Fact]
+    public async Task A_command_run_from_the_catalogue_is_given_its_callers_token()
+    {
+        using var stopping = new CancellationTokenSource();
+        CancellationToken given = default;
+
+        var catalogue = new CommandCatalogue((_, ct) =>
+        {
+            given = ct;
+
+            return Task.FromResult(0);
+        });
+
+        await catalogue.RunAsync("team run", [], stopping.Token);
+
+        given.Should().Be(stopping.Token);
+    }
+
+    /// <summary>
     /// The successor gets the settings its predecessor was started with, and
     /// the port it was actually serving when that was left to the machine: a
     /// bookmarked page should still be there after a restart.

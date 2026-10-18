@@ -215,9 +215,12 @@ public sealed class TeamDaemonStopCommand(
 
         output.WriteLine(gone
             ? $"[green]+[/] Stopped {Markup.Escape(Named(running))}."
-            : $"[green]+[/] Asked {Markup.Escape(Named(running))} to stop. It is finishing the runs it started, "
-              + "starts nothing new meanwhile, and stops when they end. "
-              + "'loadout daemon stop --now' ends them at once.");
+            : settings.Now
+                ? $"[green]+[/] Asked {Markup.Escape(Named(running))} to stop now. It is ending the runs it "
+                  + "started, writing down how far each got, and stops in a few seconds more."
+                : $"[green]+[/] Asked {Markup.Escape(Named(running))} to stop. It is finishing the runs it started, "
+                  + "starts nothing new meanwhile, and stops when they end. "
+                  + "'loadout daemon stop --now' ends them at once.");
 
         return CommandOutput.Success();
     }

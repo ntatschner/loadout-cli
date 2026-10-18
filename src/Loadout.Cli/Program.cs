@@ -352,7 +352,7 @@ public static class Program
         // registered into: the launcher hands a command back to the same
         // CommandApp rather than carrying a second implementation of any of it.
         services.AddSingleton<ICommandCatalogue>(_ =>
-            new CommandCatalogue(arguments => RunParserAsync(registrar, arguments)));
+            new CommandCatalogue((arguments, ct) => RunParserAsync(registrar, arguments, ct)));
 
         // Registered rather than resolved and handed round, because the
         // interactive launcher builds from these same services and a prompt in
@@ -489,13 +489,13 @@ public static class Program
     /// twice, because the catalogue ignores a path it already holds.
     /// </para>
     /// </summary>
-    private static Task<int> RunParserAsync(TypeRegistrar registrar, string[] arguments)
+    private static Task<int> RunParserAsync(TypeRegistrar registrar, string[] arguments, CancellationToken ct)
     {
         var app = new CommandApp(registrar);
 
         app.Configure(config => Configure(config, showFullExceptions: false));
 
-        return app.RunAsync(arguments);
+        return app.RunAsync(arguments, ct);
     }
 
     /// <summary>What running the launcher with no arguments should do.</summary>

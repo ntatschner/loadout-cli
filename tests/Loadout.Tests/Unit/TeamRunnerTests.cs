@@ -98,7 +98,8 @@ public sealed partial class TeamRunnerTests : IDisposable
         UsdCap machineBudget = default,
         string? task = null,
         StandingCriteria? standing = null,
-        string? onTimeout = null)
+        string? onTimeout = null,
+        CancellationToken ct = default)
     {
         return await new TeamRunner(
             _launcher,
@@ -113,7 +114,8 @@ public sealed partial class TeamRunnerTests : IDisposable
                 Criteria: criteria, TakeRecommendationAfter: takeRecommendationAfter,
                 Budget: budget, MachineBudget: machineBudget, Task: task, Standing: standing,
                 OnTimeout: onTimeout),
-            console ?? _console);
+            console ?? _console,
+            ct);
     }
 
     // ------------------------------------------------------------ scripts
@@ -2465,6 +2467,59 @@ public sealed partial class TeamRunnerTests : IDisposable
 
         outcome.Ended.Should().Be("stopped by request");
         outcome.Rounds.Should().Be(0, "nothing was asked of it");
+    }
+
+    /// <summary>
+    /// A run whose process is being stopped - Ctrl+C, or the daemon that
+    /// started it told to stop now - writes its ending before it goes.
+    /// </summary>
+    /// <remarks>
+    /// It used to leave the journal mid-round, and a journal with no finish
+    /// reads as a run still going: shown as running on every page, refused by
+    /// 'team runs remove' without --force, and never resumable, for a run
+    /// nothing was running any more.
+    /// </remarks>
+    [Fact]
+    public async Task A_run_whose_process_is_stopped_writes_its_ending_before_it_goes()
+    {
+        using var stopping = new CancellationTokenSource();
+        string? directory = null;
+        var started = 0;
+
+        _launcher.BeforeStart = where =>
+        {
+            directory = where;
+
+            // The implementer, mid-round, as the daemon's stop lands.
+            if (Interlocked.Increment(ref started) == 2)
+            {
+                stopping.Cancel();
+            }
+        };
+
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadRequests(AskImplementer()), 0.01m),
+            Result(LeadDone(), 0.01m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.01m));
+
+        var running = () => RunAsync(rounds: 5, ct: stopping.Token);
+
+        await running.Should().ThrowAsync<OperationCanceledException>("the stop is still the caller's to hear");
+
+        var journal = await File.ReadAllLinesAsync(Path.Combine(directory!, "journal.jsonl"));
+        var finished = journal.Last(line => line.Length > 0);
+
+        finished.Should().Contain("\"kind\":\"run.finished\"");
+        finished.Should().Contain("\"outcome\":\"stopped\"");
+
+        var runs = new RunJournal(_paths);
+
+        runs.Summarise(Path.GetFileName(directory!)).Value!.Running.Should().BeFalse();
+        RunResumption.Read(runs, Path.GetFileName(directory!)).Resumption
+            .Should().NotBeNull("a run cut off mid-round is one somebody may want to pick up");
     }
 
     [Fact]

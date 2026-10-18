@@ -60,6 +60,15 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     /// <summary>How long a successor waits for the daemon it replaces to go.</summary>
     private static readonly TimeSpan Handover = TimeSpan.FromSeconds(30);
 
+    /// <summary>How long the runs it started get to write their endings once it is stopping.</summary>
+    /// <remarks>
+    /// Long enough for a lead to be ended and its ending written, which is
+    /// most of a node's fifteen seconds of grace; short enough that "now"
+    /// still means now. A run that has not finished by then goes with the
+    /// process, as it always did.
+    /// </remarks>
+    internal static readonly TimeSpan Unwinding = TimeSpan.FromSeconds(20);
+
     private readonly IScheduleService _schedules;
     private readonly IRunJournal _journal;
     private readonly ICommandCatalogue _commands;
@@ -541,6 +550,16 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         }
         catch (OperationCanceledException)
         {
+        }
+
+        // The runs it started have heard the stop, and each writes how far it
+        // got before it goes. Leaving first took them mid-round, and a journal
+        // with no ending reads as a run still going, for good.
+        if (!await _inFlight.SettledAsync(Unwinding, _time).ConfigureAwait(false))
+        {
+            output.WriteLine($"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] "
+                + $"{_inFlight.Running} run(s) had not finished ending after {Unwinding.TotalSeconds:0} seconds, "
+                + "and go with the daemon.");
         }
 
         // After the listener, so no page can start one while the rest end,
@@ -1041,6 +1060,24 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
 
         /// <summary>How many commands are running through this now.</summary>
         public int Running => Volatile.Read(ref _running);
+
+        /// <summary>
+        /// Waits for every command running through this to return, or for the
+        /// time to run out; true when nothing is left running.
+        /// </summary>
+        public async Task<bool> SettledAsync(TimeSpan within, TimeProvider time)
+        {
+            ArgumentNullException.ThrowIfNull(time);
+
+            var until = time.GetUtcNow() + within;
+
+            while (Running > 0 && time.GetUtcNow() < until)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(100), time, CancellationToken.None).ConfigureAwait(false);
+            }
+
+            return Running == 0;
+        }
 
         public IReadOnlyList<CatalogueEntry> Commands => inner.Commands;
 
