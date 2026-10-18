@@ -1,0 +1,29 @@
+<!-- @dsCard group="Pages" height=900 width=820 subtitle="Forget a project here or everywhere, and choose what goes with it" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ForgetProject</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div id="f" style="max-width: 640px"></div><p class="out" id="out" role="status"></p>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  document.getElementById("f").appendChild(S.ForgetProject({ project: { id: "starstats", name: "StarStats", available: true },
+    counts: { tasks: ["upload-retries", "new-bucket"], ideas: ["retry-dashboard"], topics: ["query-performance"] },
+    definition: { path: "~/.loadout/workspace/projects/starstats", files: 14 },
+    onRun: function (plan) { document.getElementById("out").textContent = plan.lines.join("  \u00b7  "); return plan.preview ? "Previewed. Nothing changed." : "Forgotten " + (plan.scope === "everywhere" ? "on every machine." : "on this machine."); } }).el);
+})();
+</script>
+</body>
+</html>

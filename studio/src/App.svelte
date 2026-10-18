@@ -3,7 +3,9 @@
   // notifications, the palette and Ambient. Signing in is the daemon's: a
   // browser it does not know is shown how to open Studio signed in, and
   // nothing else.
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
+  import BesideGrid from './lib/components/BesideGrid.svelte';
+  import PageBeside from './lib/components/PageBeside.svelte';
   import SideRail from './lib/components/SideRail.svelte';
   import Toasts from './lib/components/Toasts.svelte';
   import CommandPalette from './lib/components/CommandPalette.svelte';
@@ -29,10 +31,17 @@
   import { paletteGroups } from './lib/paletteGroups';
   import { THEME_NAMES, type Theme } from './lib/studio';
   import { reportLink } from './lib/report';
+  import { tokens } from './lib/glyphs';
   import type { RailPage } from './lib/types';
   import ModeBar from './lib/components/ModeBar.svelte';
   import Quiet from './pages/Quiet.svelte';
-  import { isModeKey, type Waiting } from './lib/modes';
+  import QuietIdeas from './pages/quiet/QuietIdeas.svelte';
+  import QuietProjects from './pages/quiet/QuietProjects.svelte';
+  import QuietContext from './pages/quiet/QuietContext.svelte';
+  import QuietSettings from './pages/quiet/QuietSettings.svelte';
+  import QuietMemory from './pages/quiet/QuietMemory.svelte';
+  import QuietSpend from './pages/quiet/QuietSpend.svelte';
+  import { besideReturn, isModeKey, isSixPage, PAGE_TITLES, type Waiting } from './lib/modes';
 
   let palette = $state(false);
   let appearance = $state(false);
@@ -62,7 +71,7 @@
     { key: 'teams', name: 'Teams', fact: teamWaiting ? `${teamWaiting} waiting on you` : `${teamRunning} running`, need: teamWaiting > 0 },
     { key: 'memory', name: 'Memory', fact: 'by topic' },
     { key: 'context', name: 'Context', fact: 'what a session reads' },
-    { key: 'spend', name: 'Spend', fact: 'tokens and cost' },
+    { key: 'spend', name: 'Spend', fact: studio.spentMonth === null ? 'tokens and cost' : `${tokens(studio.spentMonth)} tokens this month` },
     { key: 'projects', name: 'Projects', fact: '' },
     { key: 'commands', name: 'Commands', fact: studio.jobs.some((job) => job.state === 'running') ? `${studio.jobs.filter((job) => job.state === 'running').length} running` : 'everything else' },
     { key: 'settings', name: 'Settings', fact: '' },
@@ -126,6 +135,34 @@
   );
   const board = $derived(studio.mode === 'teams' && page === 'home');
   const quiet = $derived(studio.mode === 'minimal' && page === 'home');
+  // The six pages follow the mode: in Terminals and Teams they open beside
+  // the deck or the board, which stay where they are and stay live.
+  const six = $derived(isSixPage(page));
+  const deckHost = $derived(deck || (studio.mode === 'terminals' && six));
+  // In Pure Focus each of the six pages is a desk; its places (+add and the rest) stay pages, in the flat look.
+  const pureDesk = $derived(studio.mode === 'pure' && six && !router.route.rest[0]?.startsWith('+'));
+  const boardHost = $derived(board || (studio.mode === 'teams' && six));
+
+  // The deck's session, kept while a page is open beside it, so opening one never changes the panes.
+  let deckId = $state<string | null>(null);
+  // Where closing a page beside goes back to.
+  let lastOther = $state<string[]>(['home']);
+
+  $effect(() => {
+    const route = router.route;
+
+    untrack(() => {
+      lastOther = besideReturn(lastOther, route);
+
+      if (route.page === 'session' || route.page === 'home' || route.page === 'sessions') {
+        deckId = route.page === 'session' ? (route.rest[0] ?? null) : null;
+      }
+    });
+  });
+
+  function closeBeside() {
+    router.go(...lastOther);
+  }
 
   function keys(event: KeyboardEvent) {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
@@ -139,7 +176,7 @@
     const typing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable || target.closest('.xterm'));
 
     // Pure Focus has its own single keys, every one shown, and these are not among them.
-    if (typing || pure || event.ctrlKey || event.metaKey || event.altKey || !studio.keys || document.querySelector('.ls-dialog')) {
+    if (typing || pure || pureDesk || event.ctrlKey || event.metaKey || event.altKey || !studio.keys || document.querySelector('.ls-dialog')) {
       return;
     }
 
@@ -208,16 +245,31 @@
       {:then view}
         <view.default page={page} named={page === 'session' || page === 'teams' ? (router.route.rest[0] ?? null) : null} onlaunch={() => openLaunch()} />
       {/await}
-    {:else if deck}
-      <!-- One deck for Home, Sessions and a session's page, so moving
-           between them keeps its panes and their connections. -->
-      {#await import('./pages/TerminalFocus.svelte')}
-        <p class="calm" role="status">Opening the terminals…</p>
-      {:then view}
-        <view.default id={page === 'session' ? (router.route.rest[0] ?? null) : null} onlaunch={() => openLaunch()} />
+    {:else if pureDesk && isSixPage(page)}
+      {#await import('./pages/PageDesk.svelte')}
+        <p class="calm" role="status">Opening the desk…</p>
+      {:then desk}
+        {#key page}
+          <desk.default {page} rest={router.route.rest} onlaunch={() => openLaunch()} />
+        {/key}
       {/await}
-    {:else if board}
-      <Teams rest={[]} />
+    {:else if deckHost}
+      <!-- One deck for Home, Sessions, a session's page and any of the six
+           pages beside it, so moving between them keeps its panes and their
+           connections. -->
+      <BesideGrid beside={six ? besidePage : undefined}>
+        {#snippet focus()}
+          {#await import('./pages/TerminalFocus.svelte')}
+            <p class="calm" role="status">Opening the terminals…</p>
+          {:then view}
+            <view.default id={deckId} onlaunch={() => openLaunch()} />
+          {/await}
+        {/snippet}
+      </BesideGrid>
+    {:else if boardHost}
+      <BesideGrid beside={six ? besidePage : undefined}>
+        {#snippet focus()}<Teams rest={[]} />{/snippet}
+      </BesideGrid>
     {:else if quiet}
       <Quiet />
     {:else if router.route.page === 'home'}
@@ -236,26 +288,57 @@
           <view.default id={router.route.rest[0]} />
         {/key}
       {/await}
-    {:else if router.route.page === 'settings'}
-      <Settings rest={router.route.rest} />
-    {:else if router.route.page === 'memory'}
-      <Memory slug={router.route.rest[0] ?? null} scope={router.route.rest[1] ?? null} name={router.route.rest[2] ?? null} />
-    {:else if router.route.page === 'spend'}
-      <Spend />
-    {:else if router.route.page === 'context'}
-      <Context rest={router.route.rest} />
+    {:else if studio.mode === 'minimal' && six}
+      <!-- Each of the six pages as one quiet column; the route is the same, so a deep link opens with everything shown. -->
+      {#key page}
+        {#if page === 'ideas'}
+          <QuietIdeas rest={router.route.rest} />
+        {:else if page === 'projects'}
+          <QuietProjects rest={router.route.rest} onlaunch={() => { router.go('sessions'); openLaunch(); }} />
+        {:else if page === 'context'}
+          <QuietContext rest={router.route.rest} />
+        {:else if page === 'settings'}
+          <QuietSettings rest={router.route.rest} />
+        {:else if page === 'memory'}
+          <QuietMemory rest={router.route.rest} />
+        {:else}
+          <QuietSpend />
+        {/if}
+      {/key}
+    {:else if six}
+      {@render sixPage()}
     {:else if router.route.page === 'teams'}
       <Teams rest={router.route.rest} />
-    {:else if router.route.page === 'ideas'}
-      <Ideas rest={router.route.rest} />
-    {:else if router.route.page === 'projects'}
-      <Projects rest={router.route.rest} onlaunch={() => { router.go('sessions'); openLaunch(); }} />
     {:else if router.route.page === 'commands'}
       <Commands rest={router.route.rest} onlaunch={() => { router.go('sessions'); openLaunch(); }} />
     {:else}
       <Elsewhere />
     {/if}
   </main>
+
+  {#snippet sixPage()}
+    {#if page === 'settings'}
+      <Settings rest={router.route.rest} />
+    {:else if page === 'memory'}
+      <Memory slug={router.route.rest[0] ?? null} scope={router.route.rest[1] ?? null} name={router.route.rest[2] ?? null} />
+    {:else if page === 'spend'}
+      <Spend />
+    {:else if page === 'context'}
+      <Context rest={router.route.rest} />
+    {:else if page === 'ideas'}
+      <Ideas rest={router.route.rest} />
+    {:else if page === 'projects'}
+      <Projects rest={router.route.rest} onlaunch={() => { router.go('sessions'); openLaunch(); }} />
+    {/if}
+  {/snippet}
+
+  {#snippet besidePage()}
+    {#if isSixPage(page)}
+      <PageBeside page={PAGE_TITLES[page]} beside={studio.mode === 'teams' ? 'the runs board' : 'your terminals'} onclose={closeBeside}>
+        {@render sixPage()}
+      </PageBeside>
+    {/if}
+  {/snippet}
 
   <Toasts />
 

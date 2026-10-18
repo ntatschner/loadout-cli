@@ -1,0 +1,27 @@
+<!-- @dsCard group="Pages" height=260 width=820 subtitle="Captured to Accepted: where an idea stands" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>IdeaStages</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<p class="lab">Waiting for answers</p><div id="a" style="max-width: 720px; margin-bottom: 28px"></div><p class="lab">A round running</p><div id="b" style="max-width: 720px"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  document.getElementById("a").appendChild(S.IdeaStages({ stage: "Answering", word: "waiting for you" }));
+  document.getElementById("b").appendChild(S.IdeaStages({ stage: "Proposed", word: "round running" }));
+})();
+</script>
+</body>
+</html>

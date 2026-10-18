@@ -189,57 +189,95 @@ mode with what each mode remembers. They're about the keyboard and screen in
 front of you, not about how you read, so a phone can stay in Minimal while a
 desktop stays in Terminals.
 
-**Settings** has more than Studio's own. **Loadout's settings** lists every
-setting `loadout config` knows, in the same groups the terminal's Settings
-screen uses, and each is changed where it's shown: edit it and **Set it** runs
-`loadout config set`. Empty clears it back to its default. **Agents and packs**
-covers the MCP servers every project loads, secrets (checked and removed here;
-stored only in a terminal, at a masked prompt) and specialist packs. **Backups
-and safety** covers backups, checkpoints and keeping AI files out of
-repositories. **The daemon** holds and restarts the daemon and says whether it
-starts when you log in, and **This machine** shows what `loadout doctor` finds.
+**Settings** has more than Studio's own, in sections listed down the left.
+**Loadout's settings** lists every setting `loadout config` knows, in the same
+groups the terminal's Settings screen uses. Type in the box to find one by name
+or by what it does, and the groups with a match open. Each is changed where
+it's shown: edit it and **Set it** runs `loadout config set`, **Put it back**
+undoes your edit, **Clear it** puts a set value back to its default, and
+**Explain it** shows what `loadout config get --explain` says about it.
+
+**Agents and packs** covers the MCP servers every project loads, secrets
+(checked and removed here; stored only in a terminal, at a masked prompt) and
+specialist packs, each marked approved here or not. **Backups and safety**
+covers backups, checkpoints and keeping AI files out of repositories. **The
+daemon** says whether it's running, whether its schedules are held and whether
+it starts when you log in, with a button for each of those. Restarting or
+stopping it asks first, because it ends the sessions the daemon hosts. **This
+machine** shows what `loadout doctor` finds, worst first.
+
+What is only ever done in a terminal has a block saying what to type and why,
+with **Copy**, and never a button: setting a secret, the attach passphrase,
+agreeing to a tool's tests, and the telemetry receiver on Spend. Copy copies the
+line and runs nothing.
+
+![Settings in Studio: the sections down the left, and Loadout's settings searched for studio, nine of 82 shown, each with what it does, what it uses when unset, a box to change it and Explain it.](../images/studio-settings.png)
 
 ### 8. Keep what a project remembers
 
-**Memory** lists what each project remembers, by store: this project's, yours
-across every project, and this machine's, which is read-only here. Choose a
-topic to read it as stored and edit it in place. A save carries the version you
-read, so if somebody else changed it meanwhile you see theirs beside yours and
-choose, rather than one overwriting the other.
+**Memory** is three columns. On the left is what a project remembers, by store:
+this project's, yours across every project, and this machine's, which is
+read-only here, each topic with how many facts it holds. In the middle is the
+topic you chose, to read as stored and edit in place. On the right is what the
+memory audit makes of the project, a search, and the tools.
 
-With no topic chosen, the page finds the topics that answer a question, shows
-what the memory audit makes of the project, and offers recording a fact,
-cleaning up what the audit found, bringing in what the agent recorded outside
-the workspace, moving durable facts out of always-loaded instructions, and
-rebuilding the index. Cleaning, importing and compressing only report what they
-would do until you tick `--apply`. A project topic can be deleted too; a backup
-is taken first.
+A save carries the version you read, and **Save** shows the command it stands
+for: `loadout memory replace <topic> --project <slug> --file <path> --expect
+<version>`. If somebody else changed the topic meanwhile, nothing is saved: you
+see what's on disk now beside your edit, with the lines only on disk marked, and
+choose **Keep my edit, then save** or **Take theirs**. One never overwrites the
+other.
+
+The tools record a fact, rebuild the index, clean up what the audit found,
+bring in what the agent recorded outside the workspace, move durable facts out
+of always-loaded instructions, and walk the topics nobody has revisited.
+Cleaning, importing and compressing only report what they would do until you
+tick `--apply`. A project topic can be deleted too; a backup is taken first.
+
+![Memory in Studio: a project's three stores on the left with each topic's fact count, the topic release-process open for editing in the middle with Save waiting for a change, and the memory audit's findings and the tools on the right.](../images/studio-memory.png)
 
 ### 9. See what it's costing
 
-**Spend** reads the agents' own transcripts and shows what they've used in
-tokens: what was billed as input once the cache had done its work, what was
-written, and how much the cache saved, by project, day, model or agent over the
-last day, week, 30 or 90 days. Reading a long history takes a while, up to a
-minute or so, and the page says it's reading meanwhile.
+**Spend** reads the agents' own transcripts and leads with one number: what
+was billed as input once the cache had done its work, and how much the cache
+saved. Under it, one bar splits the period four ways (input, read from the
+cache, output and thinking), each with its own pattern as well as its colour.
+Choose the day, week, 30 or 90 days at the top. Reading a long history takes a
+while, up to a minute or so, and the page says it's reading meanwhile.
 
-Below that are the sessions running now, what was launched this week and how
-many tokens each started with, the recent sessions, what launched agents reported
-about themselves when the receiver was running, and a summary of this machine.
+**Where it went** shows the twenty largest by project, model or agent, and says
+how many smaller ones were left out; a folder that isn't a registered project
+says so. By day, it's a chart you read by hovering or with the arrow keys.
+There are no budgets on this page: budgets belong to team runs.
+
+Beside that are the sessions running now, then what was launched this week and
+how many tokens each started with, the recent sessions, what launched agents
+reported about themselves when the receiver was running, and a summary of this
+machine. The rail's Spend says what the last 30 days cost, once you've opened
+the page.
+
+![Spend in Studio: 11.2M tokens billed as input over 30 days and the cache saving 86%, a bar split four ways, then the tokens by project with a folder marked not a project, and the recent sessions.](../images/studio-spend.png)
 
 ### 10. See what a session will be told
 
 **Context** shows, for one project, what a session would load before it starts.
-Type the task in a sentence and choose a mode, and **Explain it** lists each
-specialist it would load and why, with the tokens they cost against your budget.
-Any specialist opens to show what it says and when it loads.
+Choose the project at the top, type the task in a sentence and choose a mode,
+and **Explain it** draws one bar: a segment for each specialist it would load,
+against a mark for your token budget, with the total and whether it's within,
+near or over it. Under the bar, each specialist says why it's loaded and what
+it costs; the ones loaded for every session are hatched. Point at a segment and
+its row lights, and the other way round. Any specialist opens to show what it
+says and when it loads.
 
-The other sections cover the project's path-scoped rules and coding styles, its
+The other sections, along the tabs, cover the specialists themselves, the
+project's path-scoped rules and coding styles (the one in force says so), its
 profiles, whether its documents still describe the repository, and whether the
 project departs from what its specialists ask. Each has its actions below it:
 splitting an oversized instruction file into rules, choosing a coding style,
 drafting or copying a specialist, finding where a type is declared, and writing a
 handoff for the next session.
+
+![Context in Studio: the task and mode for a session on starstats, then 1,873 tokens within a budget of 12,000 as one bar of specialists, the always-loaded ones hatched, and each specialist with why it loads and what it costs.](../images/studio-context.png)
 
 **Your writing voice** shows the voice learned from your own writing and the
 rules in force, checks a message or a file against it, and renders it into the
@@ -312,18 +350,27 @@ classic dashboard, which is the one that draws the office.
 
 ### 12. Shape an idea
 
-**Ideas** lists every idea being shaped, by project, and marks the ones with
-questions waiting for you. Choose one and answer its questions in the page:
-pick one of the agent's options or say it in your own words, then **Send answers
-and refine** to have an agent take it one round further, or **Only save the
-answers** to come back to it. A round runs on the daemon, so you can leave the
-page; a toast says when it's finished.
+**Ideas** is a shelf of every idea being shaped, by project, beside a workbench
+for the one you chose. The workbench shows where the idea stands (captured,
+answering, ready, proposed or accepted), what the agent understood, and, if its
+last round failed, why, with **Try the round again** and **Clear the marker**.
 
-Once there's a plan, each layer shows its options with what's for and against
-them. **Choose this**, **Keep it** and **Drop it** each run the command shown
-under them, and a layer, an addition or the whole plan can be sent back with a
-request. **Accept the plan** writes it out and turns the idea into a task on its
-project.
+Answer its questions in the page: pick one of the agent's options or say it in
+your own words, then **Send answers and refine** to have an agent take it one
+round further, or **Only save the answers** to come back to it. Each answer is
+its own `loadout idea answer`, listed before you send. A round runs on the
+daemon, so you can leave the page; a toast says when it's finished.
+
+![Ideas in Studio: the shelf of ideas by project on the left, and the workbench for one: where it stands, from captured to accepted, what the agent understood, and its questions, one answered and one offering two options, the recommended one marked.](../images/studio-ideas.png)
+
+Once there's a plan, each layer shows its options side by side with what's for
+and against them. **Choose this**, **Keep it** and **Drop it** each run the
+command shown under them, and a layer, an addition or the whole plan can be sent
+back with a sentence saying what should change. **Accept the plan** puts it onto
+a project, or makes a new one for it, and says if any layer still has no option
+chosen.
+
+![An idea's plan in Studio: each layer's options side by side with what is for and against them, the chosen one marked, and under each option and layer the command that Choose this, Keep it and Drop it run.](../images/studio-ideas-plan.png)
 
 **Notes kept elsewhere** takes notes you've pasted from somewhere else and has an
 agent split them into ideas and tasks. Nothing is recorded until you apply the
@@ -331,23 +378,40 @@ pieces.
 
 ### 13. Look after your projects
 
-**Projects** lists the projects this machine knows. Choose one to see where it
-is, its branch, its agent and how often it's been launched, its working trees,
-and its health: where it has drifted from what was recorded, and whether any AI
-tooling files are tracked in the repository. Below that is everything you can do
-to it, each folded until you open it: open it in the editor or its folder, change
-what every session gets, put right the drift that can be put right, relocate it,
-link it, or stop knowing it. Each shows the command it runs, and what's shown is
-read again once it finishes.
+**Projects** is a wall of tiles, one for each project Loadout knows, with what
+matters at a glance: tasks under way and blocked, what can be put right, and
+ideas. Choose one and it opens underneath: where it is, its branch, remote,
+agent and how often it's been launched, its working trees, and its health:
+where it has drifted from what was recorded, and whether any AI tooling files
+are tracked in the repository.
 
-A project's **Tasks** list what is being worked on, each moved on with one press
-(start it, mark it done, say it's blocked, drop it), and new tasks are recorded
-below them. Done and dropped ones are left out.
+**What is being worked on** is a board of its tasks in three columns, open,
+doing and blocked, with done and dropped folded away rather than left out. Each
+task is moved on with one press (start it, say it's blocked, mark it done,
+reopen it, drop it), and a new one is recorded under the board. Below that is
+everything else you can do to it, each folded until you open it: open it in the
+editor or its folder, onboard it, change what every session gets, relocate it,
+link it. Each shows the command it runs, and what's shown is read again once it
+finishes.
 
-**More** has the rest: adding a repository you have, making a new project,
-finding repositories and stray memory, tasks that belong to no project yet, and
-the workspace, where you can bring in
-what other machines saved and save and push what changed here.
+![A project's dossier in Studio: its facts, then a board of its tasks in open, doing and blocked, each with the moves it allows, and beside it the project's health, worst first, with what can be put right.](../images/studio-projects.png)
+
+**Forget project…** opens a dialog. Forgetting it on this machine only means
+Loadout forgets where it is here; it stays in the workspace for your other
+machines. Forgetting it from the workspace means every machine forgets it, and
+its tasks, ideas and memory topics can go with it, each removed by its own
+command, listed in order before anything runs. **Preview** runs them all with
+`--dry-run`, and forgetting it on every machine needs a second press within
+five seconds. The project's folder of instructions, rules and memory stays in
+the workspace whatever you choose, because no command deletes it; the dialog
+says where it is. The repository and its code are never touched.
+
+![Forgetting a project in Studio: forgetting it from the Loadout workspace chosen, its seven tasks ticked to go with it, the folder that stays in the workspace named, and every command that will run listed in order.](../images/studio-forget.png)
+
+The tiles at the end of the wall add a repository you have, make a new project,
+or find repositories and stray memory. Under the wall are tasks that belong to
+no project yet, and the workspace, where you can bring in what other machines
+saved and save and push what changed here.
 
 ### 14. Run anything else from Commands
 
@@ -408,6 +472,27 @@ Loadout's config.
   slides away; the mode bar stays.
 - **Pure** is [step 17](#17-pure-focus).
 
+Ideas, Projects, Context, Settings, Memory and Spend follow the mode too, at
+the same addresses:
+
+- In **Terminals** and **Teams** they open beside the terminals or the board,
+  which stay live: you can still type into a session or answer a run while a
+  page is open. **Close** or **Escape** goes back to where you were, but Escape
+  is left alone while you're typing in a field or a terminal, or in a dialog.
+  Below 1100px the page takes the width. Opening or closing a page beside the
+  terminals never reconnects them, so their scrollback stays.
+
+  ![Memory opened beside the terminals in Terminal Focus: the deck on the left, and on the right a panel headed Memory, beside your terminals, holding the page laid out as one column, with Close and Esc.](../images/studio-beside.png)
+- In **Minimal** each is one quiet column: a sentence on how things stand, with
+  what needs you in bold, then what needs you or has gone wrong, then **Show
+  everything** for the page as it is in Default. Opening an item fills the
+  screen with just that: an idea's workbench, a blocked task, a section of
+  Settings, a topic. **Escape** gives the column back. A link to a page opens
+  with everything shown.
+
+  ![Ideas in Minimal: one sentence, 3 ideas being shaped and 1 waiting for answers, the waiting idea first with its question under it, the rest below, and Show everything.](../images/studio-minimal.png)
+- In **Pure** each is a desk of its own, described below.
+
 Whatever the mode, the count on the right of the mode bar is everything waiting
 on you, sessions and runs together, and pressing it goes to the oldest question
 wherever that mode shows it. No mode hides a question.
@@ -448,7 +533,8 @@ Every key is printed beside what it does, and **?** lists them all:
 | **1** to **9** | run that action |
 | **/** | filter the list |
 | **:** | open the command bar |
-| **G** then **H**, **S**, **T**, **I**, **K** or **N** | the list: everything, sessions, team runs, ideas, tasks, what needs you |
+| **G** then **H**, **S**, **T**, **K** or **N** | the list: everything, sessions, team runs, tasks, what needs you |
+| **G** then **I**, **P**, **C**, **M**, **U** or **O** | a page's desk: Ideas, Projects, Context, Memory, Spend (usage), Settings (options) |
 | **F6**, **Shift F6** | the next or previous pane |
 | **?** | every key |
 
@@ -470,6 +556,21 @@ command in Studio's catalogue, each showing what it runs before you press
 The scope and the last thing you picked are remembered. A team's page, the
 remedies and the bin aren't part of the desk; they open as pages, in the flat
 look.
+
+**G** then a letter opens one of the six pages as a desk of its own: **I**
+Ideas, **P** Projects, **C** Context, **M** Memory, **U** Spend (for usage) and
+**O** Settings (for options). The list is what the page holds: ideas with what
+needs you first, projects on this machine and then elsewhere, Context's sections
+and specialists, Settings' sections, a project's topics by store, or Spend's
+blocks. The view is the page itself, laid out to fit. The actions are the
+page's own: refining or accepting an idea, opening, onboarding or forgetting a
+project, explaining what an implement, advise, investigate or review session
+would load, holding or
+restarting the daemon, rebuilding a project's memory index, changing Spend's
+period. The command bar has a row for each desk too. Adding a repository,
+dropping an idea in and the other places still open as pages.
+
+![The Projects desk in Pure Focus: the projects on this machine in the list, the picked project's page in the view, and its numbered actions on the right, each with its command, over the command bar.](../images/studio-pure.png)
 
 ## Watching only
 

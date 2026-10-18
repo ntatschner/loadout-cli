@@ -196,7 +196,8 @@ export interface BoardTeam {
 /** Something live, as Minimal's one column lists it. */
 export interface QuietItem {
   id: string;
-  kind: 'session' | 'team run';
+  /** A session or a team run on Home; on the six pages, whatever the page lists. */
+  kind: string;
   title: string;
   word: string;
   where?: string | null;
@@ -207,4 +208,21 @@ export interface QuietItem {
 /** Ctrl+Shift+M, which cycles the modes from anywhere, a terminal included. */
 export function isModeKey(event: Pick<KeyboardEvent, 'ctrlKey' | 'shiftKey' | 'altKey' | 'metaKey' | 'key' | 'code'>): boolean {
   return event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey && (event.key === 'M' || event.key === 'm' || event.code === 'KeyM');
+}
+
+/** The six pages that follow the mode: beside the deck or the board, quiet in Minimal, a desk in Pure Focus. */
+export const SIX_PAGES = ['ideas', 'projects', 'context', 'settings', 'memory', 'spend'] as const;
+
+export type SixPage = (typeof SIX_PAGES)[number];
+
+export const isSixPage = (page: string | null | undefined): page is SixPage => (SIX_PAGES as readonly string[]).includes(page ?? '');
+
+export const PAGE_TITLES: Record<SixPage, string> = { ideas: 'Ideas', projects: 'Projects', context: 'Context', settings: 'Settings', memory: 'Memory', spend: 'Spend' };
+
+/**
+ * Where closing a page opened beside goes back to: the last route that was
+ * not one of the six pages, kept as each route is shown, or Home.
+ */
+export function besideReturn(kept: string[], route: { page: string; rest: string[] }): string[] {
+  return isSixPage(route.page) || route.page === 'unknown' ? kept : [route.page, ...route.rest];
 }

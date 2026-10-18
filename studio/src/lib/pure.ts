@@ -13,14 +13,16 @@ export interface PureItem {
   id: string;
   /** The id a command names. */
   ref: string;
-  kind: 'session' | 'team run' | 'idea' | 'task';
+  /** A session, team run, idea or task on Home's desk; on a page's desk, whatever that page lists. */
+  kind: string;
   title: string;
   meta: string;
+  /** Its state word; empty for something with no state, such as a section of Settings. */
   word: string;
 }
 
 export interface PureGroup {
-  key: PureScope | 'needs';
+  key: string;
   name: string;
   items: PureItem[];
 }
@@ -46,8 +48,11 @@ export interface PureCommand {
 
 export type PureScope = 'all' | 'needs' | 'sessions' | 'runs' | 'ideas' | 'tasks';
 
-/** G then a letter: where the list goes. */
-export const GO_KEYS: Record<string, PureScope> = { h: 'all', s: 'sessions', t: 'runs', i: 'ideas', k: 'tasks', n: 'needs' };
+/** G then a letter: where Home's list goes. */
+export const GO_KEYS: Record<string, PureScope> = { h: 'all', s: 'sessions', t: 'runs', k: 'tasks', n: 'needs' };
+
+/** G then a letter: a page, as its own desk. U for usage (Spend), O for options (Settings). */
+export const PAGE_KEYS: Record<string, 'ideas' | 'projects' | 'context' | 'memory' | 'spend' | 'settings'> = { i: 'ideas', p: 'projects', c: 'context', m: 'memory', u: 'spend', o: 'settings' };
 
 export const SCOPE_WORDS: Record<PureScope, string> = {
   all: 'everything',
@@ -64,7 +69,8 @@ export const isScope = (value: string | null | undefined): value is PureScope =>
 export const PURE_KEYS: [string, [string[], string][]][] = [
   ['Move', [[['J', '↓'], 'next in the list'], [['K', '↑'], 'previous'], [['Home'], 'first'], [['End'], 'last'], [['/'], 'filter the list']]],
   ['Open and act', [[['Enter'], 'open the picked one in the view'], [['Esc'], 'back to the list'], [['1'], 'to 9: run that action'], [['Ctrl', ']'], 'leave a terminal']]],
-  ['Go', [[['G', 'H'], 'Home: everything'], [['G', 'S'], 'sessions'], [['G', 'T'], 'team runs'], [['G', 'I'], 'ideas'], [['G', 'K'], 'tasks'], [['G', 'N'], 'what needs you']]],
+  ['Go', [[['G', 'H'], 'Home: everything'], [['G', 'S'], 'sessions'], [['G', 'T'], 'team runs'], [['G', 'K'], 'tasks'], [['G', 'N'], 'what needs you']]],
+  ['Go to a page', [[['G', 'I'], 'Ideas'], [['G', 'P'], 'Projects'], [['G', 'C'], 'Context'], [['G', 'M'], 'Memory'], [['G', 'U'], 'Spend (usage)'], [['G', 'O'], 'Settings (options)']]],
   ['Everywhere', [[[':'], 'the command bar'], [['F6'], 'the next pane'], [['?'], 'this list'], [['Ctrl', 'Shift', 'M'], 'change mode'], [['Ctrl', 'K'], 'the palette']]],
 ];
 

@@ -84,6 +84,8 @@ export class Studio {
   loaded = $state(false);
   /** What happened while this page was open, newest first. */
   feed = $state<FeedEntry[]>([]);
+  /** Tokens billed as input over the last 30 days, once Spend has read them: the rail's Spend fact. */
+  spentMonth = $state<number | null>(null);
 
   lines: Work[] = $derived(linesOf({ runs: this.runs, sessions: this.sessions, ideas: this.ideas, busy: this.busy, tasks: this.tasks }, this.now));
   waiting: Work[] = $derived(this.lines.filter((line) => line.waiting));

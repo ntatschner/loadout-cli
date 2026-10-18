@@ -1,0 +1,31 @@
+<!-- @dsCard group="Pages" height=640 width=460 subtitle="A project’s memory by store, and what the agent recorded elsewhere" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>StoreList</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div id="s" style="max-width: 380px"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  document.getElementById("s").appendChild(S.StoreList({ picked: { store: "project", name: "release-process" }, href: function (s, n) { return "#memory/loadout-cli/" + s + "/" + n; },
+    stores: [
+      { key: "project", label: "This project", hint: "Travels with the workspace.", topics: [{ name: "release-process", description: "How a release is cut, tagged and published", facts: 4 }, { name: "test-layout", description: "Where tests live and how they are named", facts: 6 }] },
+      { key: "user", label: "Your work, any project", hint: "Travels with the workspace.", topics: [{ name: "writing-style", description: "Plain words; no em dashes", facts: 9 }] },
+      { key: "machine", label: "This machine only", hint: "Never synced.", readOnly: true, topics: [] } ],
+    agent: { command: "loadout memory import loadout-cli --apply", wouldImport: ["build-quirks", "ci-secrets"], drifted: ["test-layout"] } }));
+})();
+</script>
+</body>
+</html>

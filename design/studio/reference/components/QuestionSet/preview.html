@@ -1,0 +1,36 @@
+<!-- @dsCard group="Pages" height=820 width=900 subtitle="The questions an agent asked about an idea, answered in the page" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>QuestionSet</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div id="q" style="max-width: 760px"></div><p class="out" id="out" role="status"></p>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var IDEA = { id: "browser-launcher", where: ["--project", "loadout-cli"],
+    questions: [
+      { id: "q1", question: "Should the browser launcher replace the terminal one, or sit beside it?", why: "It decides whether the terminal launcher keeps its own screens.", options: ["Beside it", "Replace it"], recommendation: "Beside it", answer: null },
+      { id: "q2", question: "Who opens it: only you on this machine, or anyone on the network?", why: "Anyone on the network means it needs signing in.", options: ["Only this machine", "The network, signed in"], recommendation: "Only this machine", answer: null },
+      { id: "q3", question: "What should it show first?", why: null, options: [], recommendation: "The projects, most recent first", answer: "The projects, most recent first" }
+    ],
+    layer: { id: "L2", name: "How it is served", purpose: "Where the page comes from and who can reach it.", chosen: "o1", verdict: "Undecided", options: [
+      { id: "o1", title: "From the daemon", detail: "The daemon that already hosts sessions serves the page too.", pros: ["One process to run", "Sessions are already there"], cons: ["The daemon must be running"], recommended: true },
+      { id: "o2", title: "Its own server", detail: "loadout launcher serve, run when wanted.", pros: ["Nothing else needs to run"], cons: ["A second port", "Sessions live elsewhere"], recommended: false }
+    ] } };
+  document.getElementById("q").appendChild(S.QuestionSet({ id: IDEA.id, where: IDEA.where, questions: IDEA.questions, onSend: function (a, refine) { document.getElementById("out").textContent = a.length + " answers" + (refine ? ", then another round" : ""); } }).el);
+})();
+</script>
+</body>
+</html>

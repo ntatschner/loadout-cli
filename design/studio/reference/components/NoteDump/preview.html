@@ -1,0 +1,29 @@
+<!-- @dsCard group="Pages" height=520 width=860 subtitle="Notes from elsewhere, split into ideas and tasks; tick what to record" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>NoteDump</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div id="n" style="max-width: 780px"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  document.getElementById("n").appendChild(S.NoteDump({ dump: { id: "d3", source: "Notes app, Tuesday", captured: "16 Oct 21:40", split: "16 Oct 21:41", items: [
+    { number: 1, title: "A dark mode for the launcher", excerpt: "the launcher should follow the system theme", kind: "idea" },
+    { number: 2, title: "Fix the flaky upload test", excerpt: "it fails one run in ten on CI", kind: "task" },
+    { number: 3, title: "Ask Sam about the bucket move", kind: "task", recorded: true } ] } }));
+})();
+</script>
+</body>
+</html>

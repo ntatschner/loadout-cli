@@ -1,39 +1,42 @@
 <script lang="ts">
-  // Ideas, a round at a time: the questions an agent asked, answered in the
-  // page; a round started from here; the plan's layers and options chosen,
-  // kept, dropped or sent back; and the idea accepted onto a project. Every
-  // step is the command a terminal would type, run on the daemon, so a round
-  // outlives the page that started it. Notes kept elsewhere come in as dumps.
+  // Ideas: a shelf of ideas beside a workbench for one. The workbench says
+  // where the idea stands, what was understood and asked, the questions an
+  // agent asked (answered here), the plan's layers side by side, and where
+  // the plan goes when it is accepted. Every step is the command a terminal
+  // would type, run on the daemon, so a round outlives the page that started
+  // it. Notes kept elsewhere come in as dumps.
   import { untrack } from 'svelte';
   import Command from '../lib/components/Command.svelte';
   import CommandAction from '../lib/components/CommandAction.svelte';
+  import Dialog from '../lib/components/Dialog.svelte';
   import HaloButton from '../lib/components/HaloButton.svelte';
+  import IdeaStages from '../lib/components/IdeaStages.svelte';
+  import NoteDump from '../lib/components/NoteDump.svelte';
+  import PlanLayer from '../lib/components/PlanLayer.svelte';
+  import QuestionSet from '../lib/components/QuestionSet.svelte';
   import Signal from '../lib/components/Signal.svelte';
-  import { commands, readJson, SignedOut } from '../lib/api';
+  import { commands, memory, readJson, SignedOut } from '../lib/api';
+  import { runJob } from '../lib/jobs';
   import { lineFor } from '../lib/commandLine';
   import { router } from '../lib/router.svelte';
+  import { acceptWords, sendAnswers, stateWord, type DumpItem, type Question } from '../lib/ideas';
   import { studio } from '../lib/state.svelte';
   import { toasts } from '../lib/toasts.svelte';
 
-  let { rest }: { rest: string[] } = $props();
+  /** focused: just the workbench, for an idea opened on its own in Minimal. */
+  let { rest, focused = false }: { rest: string[]; focused?: boolean } = $props();
 
   interface Listed {
     id: string;
     title: string;
-    project: string | null;
+    project?: string | null;
     stage: string;
+    /** The idea's task state: open, doing, blocked, done or dropped. */
     state: string;
     unanswered: number;
     running: boolean;
-  }
-
-  interface Question {
-    id: string;
-    question: string;
-    why: string;
-    options: string[];
-    recommendation: string | null;
-    answer: string | null;
+    /** The last round, when it failed; absent once it is dismissed or a round succeeds. */
+    failure?: { when: string | null; agent: string | null; model: string | null; error: string } | null;
   }
 
   interface Option {
@@ -83,23 +86,28 @@
     source: string;
     captured: string;
     split: string | null;
-    items: { number: number; title: string; excerpt: string; kind: string; recorded?: boolean }[];
+    items: DumpItem[];
   }
 
   let ideas = $state<Listed[] | null>(null);
   let idea = $state<Idea | null>(null);
   let dumps = $state<Dump[] | null>(null);
-  let answers = $state<Record<string, string>>({});
+  let projects = $state<{ slug: string; name: string }[]>([]);
   let problem = $state<string | null>(null);
+  let showing = $state<{ id: string; text: string } | null>(null);
 
   // #ideas/<list>/<id>, where the list is a project's slug or '~' for the
-  // workspace-wide one; #ideas/+add and #ideas/+dumps for the rest.
+  // workspace-wide one; #ideas/+add and #ideas/+dumps for the rest. With
+  // none named, the first idea on the shelf is on the workbench.
   const place = $derived(rest[0]?.startsWith('+') ? rest[0].slice(1) : null);
-  const list = $derived(place ? null : (rest[0] ?? null));
-  const id = $derived(place ? null : (rest[1] ?? null));
+  const first = $derived(ideas?.[0] ?? null);
+  const list = $derived(place ? null : (rest[0] ?? (first ? (first.project ?? '~') : null)));
+  const id = $derived(place ? null : (rest[1] ?? (rest[0] ? null : (first?.id ?? null))));
   const project = $derived(list && list !== '~' ? list : null);
   const where = $derived(project ? ['--project', project] : ['--global']);
   const listed = $derived(ideas?.find((one) => one.id === id && (one.project ?? null) === project) ?? null);
+  const word = $derived(listed ? stateWord(listed) : idea ? stateWord({ stage: idea.stage, unanswered: idea.questions.filter((one) => !one.answer).length }) : '');
+  const refused = $derived(studio.watchOnly ? studio.watchOnlyReason : undefined);
 
   function fail(error: unknown) {
     if (error instanceof SignedOut) {
@@ -120,25 +128,22 @@
   async function loadIdea(name: string, words: string[]) {
     try {
       idea = await readJson<Idea>('idea show', [name, ...words]);
-
-      // A draft that has been saved is the answer now, and is shown as one.
-      for (const question of idea.questions) {
-        if (question.answer && answers[question.id] === question.answer) {
-          delete answers[question.id];
-        }
-      }
     } catch (error) {
       fail(error);
     }
   }
 
+  function loadDumps() {
+    readJson<{ dumps: Dump[] }>('idea dump list').then((read) => (dumps = read.dumps), fail);
+  }
+
   $effect(() => {
     void loadList();
+    memory.projects().then((all) => (projects = all), () => (projects = []));
   });
 
   $effect(() => {
     idea = null;
-    answers = {};
     problem = null;
 
     if (id) {
@@ -148,7 +153,7 @@
 
   $effect(() => {
     if (place === 'dumps') {
-      readJson<{ dumps: Dump[] }>('idea dump list').then((read) => (dumps = read.dumps), fail);
+      loadDumps();
     }
   });
 
@@ -171,7 +176,7 @@
       }
 
       if (place === 'dumps') {
-        readJson<{ dumps: Dump[] }>('idea dump list').then((read) => (dumps = read.dumps), fail);
+        loadDumps();
       }
     });
   });
@@ -196,25 +201,40 @@
     }
   }
 
-  // Prose goes joined to its option, as the dashboard sends it: the parser
-  // refuses a value that starts with a dash given any other way.
-  const answerWords = (question: string) => [id!, question, `--answer=${answers[question] ?? ''}`, ...where];
-  const changedAnswers = $derived(idea?.questions.filter((one) => (answers[one.id] ?? '').trim() && answers[one.id] !== one.answer) ?? []);
+  /**
+   * Runs one step and waits for it to end, true only if it succeeded: how
+   * each answer is sent, so the next one, and the refine after them, start
+   * only once it is recorded. Started without waiting, a refine ran before
+   * its answers were in and was refused for the questions they answered.
+   */
+  async function actToEnd(path: string, words: string[]): Promise<boolean> {
+    if (studio.watchOnly) {
+      toasts.add({ level: 'info', text: 'Studio is only watching, so nothing was changed.', cmd: lineFor(path, words) });
 
-  async function sendAnswers(thenRefine: boolean) {
-    for (const question of changedAnswers) {
-      if (!(await act('idea answer', answerWords(question.id)))) {
-        return;
-      }
+      return false;
     }
 
-    if (thenRefine) {
-      await act('idea refine', [id!, ...where]);
+    try {
+      await runJob(path, words);
+      await studio.loadJobs();
+
+      return true;
+    } catch (error) {
+      fail(error);
+
+      return false;
     }
   }
 
-  const stateWord = (one: { running: boolean; unanswered: number; stage: string }) =>
-    one.running ? 'round running' : one.unanswered > 0 ? 'waiting for you' : one.stage === 'accepted' ? 'accepted' : 'shaping';
+  async function show(dump: string) {
+    try {
+      const read = await commands.read('idea dump show', [dump]);
+
+      showing = { id: dump, text: (read.output ?? read.error ?? '').trim() };
+    } catch (error) {
+      fail(error);
+    }
+  }
 
   const groups = $derived.by(() => {
     const by = new Map<string, Listed[]>();
@@ -229,12 +249,52 @@
 
   const href = (one: Listed) => `#ideas/${encodeURIComponent(one.project ?? '~')}/${encodeURIComponent(one.id)}`;
   const listFixed = $derived<Record<string, string | boolean>>(project ? { '--project': project } : { '--global': true });
+  const waiting = $derived((ideas ?? []).filter((one) => stateWord(one) === 'waiting for you').length);
+  const shaping = $derived((ideas ?? []).filter((one) => one.stage !== 'accepted').length);
+
+  // Accept it: onto a project, or as a new one. Starts where the plan says it goes.
+  let goes = $state<'project' | 'new'>('project');
+  let onto = $state('');
+  let named = $state('');
+
+  $effect(() => {
+    const placement = idea?.plan?.placement ?? null;
+
+    untrack(() => {
+      goes = placement?.isNew ? 'new' : 'project';
+      onto = placement && !placement.isNew ? placement.slug : (project ?? projects[0]?.slug ?? '');
+      named = placement?.isNew ? placement.name : '';
+    });
+  });
+
+  const undecided = $derived(idea?.plan?.layers.filter((layer) => layer.options.length && !layer.chosen && layer.verdict.toLowerCase() !== 'drop').length ?? 0);
+  const acceptLine = $derived(idea ? acceptWords(idea.id, where, goes === 'project' ? { project: onto || '<slug>' } : { newProject: named.trim() || '<name>' }) : []);
+  const acceptReason = $derived(refused ?? (goes === 'project' ? (onto ? undefined : 'choose the project it goes on') : named.trim() ? undefined : 'name the new project'));
+
+  // Drop an idea in.
+  let text = $state('');
+  let forList = $state('~');
+  const addWords = $derived([`--text=${text.trim() || '<idea>'}`, ...(forList === '~' ? ['--global'] : ['--project', forList])]);
+
+  async function drop() {
+    if (await act('idea add', addWords)) {
+      toasts.add({ level: 'done', text: 'Dropped it in. It is on the shelf; refine it when you want an agent to flesh it out.', cmd: lineFor('idea add', addWords) });
+      text = '';
+    }
+  }
 </script>
 
-<div class="head"><div><h1>Ideas</h1><span class="fact">{ideas ? `${ideas.length} being shaped` : 'ideas you are shaping, a round at a time'}</span></div></div>
+{#if !focused}
+<div class="head">
+  <div><h1>Ideas</h1><span class={['fact', waiting ? 'need' : ''].filter(Boolean).join(' ')}>{ideas ? `${shaping} being shaped${waiting ? ` · ${waiting} waiting on you` : ''}` : 'ideas you are shaping, a round at a time'}</span></div>
+  <span class="grow"></span>
+  <HaloButton label="Drop an idea in" size="small" solid glyph="+" cmd="opens the box · records nothing yet" onpress={() => router.go('ideas', '+add')} />
+</div>
+{/if}
 
-<div class="memory">
-  <aside class="memside" aria-label="Ideas">
+<div class={['bench', focused ? 'solo' : ''].filter(Boolean).join(' ')}>
+  {#if !focused}
+  <nav class="shelf" aria-label="Ideas">
     {#if ideas === null}
       <p class="calm" role="status">Reading…</p>
     {:else if ideas.length === 0}
@@ -242,173 +302,162 @@
     {/if}
 
     {#each groups as [key, ones] (key)}
-      <section class="store" aria-labelledby={`id-${key}`}>
-        <h2 class="ls-zone" id={`id-${key}`}>{key === '~' ? 'Workspace-wide' : key}</h2>
-        <ul class="slist">
-          {#each ones as one (one.id)}
-            <li>
-              <a class="srow" href={href(one)} aria-current={id === one.id && (one.project ?? null) === project ? 'page' : undefined}>
-                <span class="t">{one.title}</span>
-                <span class="x">{one.unanswered ? `${one.unanswered} question${one.unanswered === 1 ? '' : 's'} for you` : one.stage}</span>
-                <Signal word={stateWord(one)} />
-              </a>
-            </li>
-          {/each}
-        </ul>
-      </section>
-    {/each}
-    <p class="calm small">The same as <code class="ls-cmd">loadout idea list</code>.</p>
-
-    <section class="store" aria-labelledby="id-more">
-      <h2 class="ls-zone" id="id-more">More</h2>
-      <ul class="slist">
-        <li><a class="srow" href="#ideas/+add" aria-current={place === 'add' ? 'page' : undefined}><span class="t">Drop an idea in</span></a></li>
-        <li><a class="srow" href="#ideas/+dumps" aria-current={place === 'dumps' ? 'page' : undefined}><span class="t">Notes kept elsewhere</span></a></li>
+      <h2 class="gh">{key === '~' ? 'Workspace-wide' : key}</h2>
+      <ul>
+        {#each ones as one (one.id)}
+          <li>
+            <a href={href(one)} aria-current={!place && id === one.id && (one.project ?? null) === project ? 'page' : undefined}>
+              <span class="t">{one.title}</span>
+              <Signal word={stateWord(one)} />
+              <span class="x">{one.failure ? 'last round failed' : one.unanswered ? `${one.unanswered} question${one.unanswered === 1 ? '' : 's'} for you` : one.stage}</span>
+            </a>
+          </li>
+        {/each}
       </ul>
-    </section>
-  </aside>
+    {/each}
 
-  <section class="memmain" aria-label="Idea">
+    <h2 class="gh">More</h2>
+    <ul>
+      <li><a class="place" href="#ideas/+add" aria-current={place === 'add' ? 'page' : undefined}><span class="t">Drop an idea in</span></a></li>
+      <li><a class="place" href="#ideas/+dumps" aria-current={place === 'dumps' ? 'page' : undefined}><span class="t">Notes kept elsewhere</span></a></li>
+    </ul>
+    <p class="ls-from">From <code>$ loadout idea list</code>.</p>
+  </nav>
+  {/if}
+
+  <section class="work" aria-label="Idea">
     {#if problem}<p class="offline" role="alert">{problem}</p>{/if}
 
     {#if id && idea}
-      <h2 class="topicname">{idea.plan?.title ?? idea.ask}</h2>
-      {#if listed}<div class="jobhead"><Signal word={stateWord(listed)} /></div>{/if}
-      {#if idea.plan}<p class="calm">{idea.plan.understanding}</p>{/if}
-      <details class="more"><summary>What was asked</summary><p>{idea.ask}</p></details>
-      <Command why="The same, in a terminal:" command={lineFor('idea show', [idea.id, ...where])} />
+      <div class="ihead">
+        <h2>{idea.plan?.title ?? idea.ask}</h2>
+        <p class="slug">{idea.id} · {project ?? 'workspace-wide'}{idea.plan ? ` · plan revision ${idea.plan.revision}` : ''}</p>
+      </div>
+      <IdeaStages stage={idea.stage} {word} />
+      {#if idea.plan?.understanding}<p class="understand">{idea.plan.understanding}</p>{/if}
+      <details class="asked"><summary>What was asked</summary><p>{idea.ask}</p></details>
 
       {#if idea.accepted}
-        <p class="calm">Accepted onto <strong>{idea.accepted.project}</strong> by {idea.accepted.by}. The plan is at <code class="ls-cmd">{idea.accepted.plan}</code>.</p>
+        <p class="accepted">Accepted onto <strong>{idea.accepted.project}</strong> by {idea.accepted.by}. The plan is at <code>{idea.accepted.plan}</code>.</p>
       {/if}
 
-      {#if idea.questions.length}
-        <h3 class="ls-zone">Questions</h3>
-        <ol class="questions">
-          {#each idea.questions as question (question.id)}
-            <li class="question">
-              <p class="q"><span class="qid">{question.id}</span> {question.question}</p>
-              <p class="calm small">{question.why}</p>
-              {#if question.answer && answers[question.id] === undefined}
-                <p class="answered">You answered: {question.answer}</p>
-              {/if}
-              {#if !idea.accepted}
-                <fieldset class="choices">
-                  <legend class="ls-sr">Answer {question.id}</legend>
-                  {#each question.options as option, index (index)}
-                    <label class="chk"><input type="radio" name={`a-${question.id}`} value={option} bind:group={answers[question.id]} /> <span>{option}{question.recommendation === option ? ' · recommended' : ''}</span></label>
-                  {/each}
-                </fieldset>
-                <label class="fld"><span class="lab">Or in your own words</span><textarea rows="2" name={`own-${question.id}`} bind:value={answers[question.id]} spellcheck="true"></textarea></label>
-                {#if question.recommendation && !question.options.includes(question.recommendation)}
-                  <p class="calm small">Recommended: {question.recommendation}</p>
-                {/if}
-              {/if}
-            </li>
-          {/each}
-        </ol>
-        {#if !idea.accepted}
+      {#if listed?.failure}
+        <div class="waitcard problem" role="alert">
+          <span class="w">last round failed{listed.failure.agent ? ` · ${listed.failure.agent}${listed.failure.model ? `, model ${listed.failure.model}` : ''}` : ''}{listed.failure.when ? ` · ${new Date(listed.failure.when).toLocaleString()}` : ''}</span>
+          <p class="q">{listed.failure.error}</p>
           <div class="ls-answers flush">
-            <HaloButton label="Send answers and refine" solid size="small" cmd={`${changedAnswers.length} × loadout idea answer, then $ loadout idea refine ${idea.id}`} disabledReason={studio.watchOnly ? studio.watchOnlyReason : changedAnswers.length === 0 ? 'answer a question first' : undefined} onpress={() => void sendAnswers(true)} />
-            <HaloButton label="Only save the answers" size="small" cmd={`${changedAnswers.length} × loadout idea answer`} disabledReason={studio.watchOnly ? studio.watchOnlyReason : changedAnswers.length === 0 ? 'answer a question first' : undefined} onpress={() => void sendAnswers(false)} />
+            <HaloButton label="Try the round again" size="small" glyph="↻" cmd={lineFor('idea refine', [idea.id, ...where])} disabledReason={refused} onpress={() => void act('idea refine', [idea!.id, ...where])} />
+            <HaloButton label="Clear the marker" size="small" cmd={lineFor('idea dismiss', [idea.id, ...where])} disabledReason={refused} onpress={() => void act('idea dismiss', [idea!.id, ...where])} />
           </div>
-        {/if}
+        </div>
       {/if}
 
-      {#if idea.plan}
-        <h3 class="ls-zone">The plan · revision {idea.plan.revision}</h3>
-        {#each idea.plan.layers as layer (layer.id)}
-          <section class="layer" aria-labelledby={`ly-${layer.id}`}>
-            <h4 id={`ly-${layer.id}`}><span class="qid">{layer.id}</span> {layer.name} <span class="calm small">· {layer.verdict}</span></h4>
-            <p class="calm">{layer.purpose}</p>
-            <div class="options">
-              {#each layer.options as option (option.id)}
-                <article class="option" class:chosen={layer.chosen === option.id}>
-                  <p class="t"><span class="qid">{option.id}</span> {option.title}{option.recommended ? ' · recommended' : ''}{layer.chosen === option.id ? ' · chosen' : ''}</p>
-                  <p class="calm small">{option.detail}</p>
-                  {#if option.pros.length}<ul class="pros">{#each option.pros as pro, index (index)}<li>For: {pro}</li>{/each}</ul>{/if}
-                  {#if option.cons.length}<ul class="cons">{#each option.cons as con, index (index)}<li>Against: {con}</li>{/each}</ul>{/if}
-                  {#if !idea.accepted && layer.chosen !== option.id}
-                    <HaloButton label="Choose this" size="small" cmd={lineFor('idea choose', [idea.id, layer.id, option.id, ...where])} disabledReason={studio.watchOnly ? studio.watchOnlyReason : undefined} onpress={() => void act('idea choose', [idea!.id, layer.id, option.id, ...where])} />
-                  {/if}
-                </article>
-              {/each}
-            </div>
-            {#if !idea.accepted}
-              <div class="ls-answers flush">
-                <HaloButton label="Keep it" size="small" cmd={lineFor('idea keep', [idea.id, layer.id, ...where])} disabledReason={studio.watchOnly ? studio.watchOnlyReason : undefined} onpress={() => void act('idea keep', [idea!.id, layer.id, ...where])} />
-                <HaloButton label="Drop it" size="small" cmd={lineFor('idea drop', [idea.id, layer.id, ...where])} disabledReason={studio.watchOnly ? studio.watchOnlyReason : undefined} onpress={() => void act('idea drop', [idea!.id, layer.id, ...where])} />
-              </div>
-              <CommandAction path="idea improve" title={`Ask for ${layer.id} to be reworked`} preset={{ id: idea.id, piece: layer.id, ...listFixed }} fixed={['id', 'piece', '--project', '--global']} label="Ask for it" />
-            {/if}
-          </section>
-        {/each}
+      {#if idea.questions.length && !idea.accepted}
+        <section class="pblock" aria-labelledby="iq">
+          <h2 class="ls-zone" id="iq">Questions for you</h2>
+          <QuestionSet id={idea.id} {where} questions={idea.questions} disabledReason={refused} onsend={(answers, refine) => sendAnswers(idea!.id, where, answers, refine, (path, words) => (path === 'idea answer' ? actToEnd(path, words) : act(path, words)))} />
+        </section>
+      {/if}
 
-        {#if idea.plan.additions.length}
-          <h3 class="ls-zone">Additions</h3>
-          {#each idea.plan.additions as addition (addition.id)}
-            <section class="layer" aria-labelledby={`ad-${addition.id}`}>
-              <h4 id={`ad-${addition.id}`}><span class="qid">{addition.id}</span> {addition.title} <span class="calm small">· {addition.verdict}</span></h4>
-              <p class="calm">{addition.why}</p>
-              {#if !idea.accepted}
-                <div class="ls-answers flush">
-                  <HaloButton label="Keep it" size="small" cmd={lineFor('idea keep', [idea.id, addition.id, ...where])} disabledReason={studio.watchOnly ? studio.watchOnlyReason : undefined} onpress={() => void act('idea keep', [idea!.id, addition.id, ...where])} />
-                  <HaloButton label="Drop it" size="small" cmd={lineFor('idea drop', [idea.id, addition.id, ...where])} disabledReason={studio.watchOnly ? studio.watchOnlyReason : undefined} onpress={() => void act('idea drop', [idea!.id, addition.id, ...where])} />
-                </div>
-              {/if}
-            </section>
+      {#if idea.plan && (idea.plan.layers.length || idea.plan.additions.length)}
+        <section class="pblock" aria-labelledby="ip">
+          <h2 class="ls-zone" id="ip">The plan · revision {idea.plan.revision}</h2>
+          {#each idea.plan.layers as layer (layer.id)}
+            <PlanLayer idea={idea.id} {where} {layer} accepted={!!idea.accepted} disabledReason={refused}
+              onchoose={(option) => void act('idea choose', [idea!.id, layer.id, option, ...where])}
+              onverdict={(verdict) => void act(verdict === 'Keep' ? 'idea keep' : 'idea drop', [idea!.id, layer.id, ...where])}
+              onimprove={(request) => void act('idea improve', [idea!.id, layer.id, `--request=${request}`, ...where])} />
           {/each}
-        {/if}
+          {#if idea.plan.additions.length}
+            <h3 class="sub">Additions the agent proposes</h3>
+            {#each idea.plan.additions as addition (addition.id)}
+              <PlanLayer idea={idea.id} {where} {addition} accepted={!!idea.accepted} disabledReason={refused}
+                onverdict={(verdict) => void act(verdict === 'Keep' ? 'idea keep' : 'idea drop', [idea!.id, addition.id, ...where])}
+                onimprove={(request) => void act('idea improve', [idea!.id, addition.id, `--request=${request}`, ...where])} />
+            {/each}
+          {/if}
+        </section>
+      {/if}
 
-        {#if idea.plan.placement}
-          <p class="calm">It would go on <strong>{idea.plan.placement.name}</strong>{idea.plan.placement.isNew ? ', a new project' : ''}: {idea.plan.placement.reason}</p>
-        {/if}
+      {#if idea.plan && !idea.accepted}
+        <section class="accept" aria-labelledby="ia">
+          <h2 class="ls-zone" id="ia">Accept it</h2>
+          {#if idea.plan.placement}
+            <p class="place">The agent would put it on <strong>{idea.plan.placement.name}</strong>{idea.plan.placement.isNew ? ', a new project' : ''}: {idea.plan.placement.reason}</p>
+          {/if}
+          <fieldset>
+            <legend>Where the plan goes</legend>
+            <label class="opt">
+              <input type="radio" name="accept-goes" value="project" bind:group={goes} />
+              Onto a project
+              <select class="ls-text" name="accept-onto" aria-label="The project it goes on" bind:value={onto} disabled={goes !== 'project'}>
+                {#each projects as one (one.slug)}<option value={one.slug}>{one.name} · {one.slug}</option>{/each}
+              </select>
+            </label>
+            <label class="opt">
+              <input type="radio" name="accept-goes" value="new" bind:group={goes} />
+              As a new project
+              <input class="ls-text" name="accept-new-project" aria-label="The new project's name" placeholder="its name" bind:value={named} disabled={goes !== 'new'} />
+            </label>
+          </fieldset>
+          {#if undecided}<p><span class="ls-tag needs">{undecided} layer{undecided === 1 ? ' has' : 's have'} no option chosen</span> It can still be accepted; the plan says so where it is written.</p>{/if}
+          <div class="ls-answers flush">
+            <HaloButton label="Accept the plan" solid={!acceptReason} glyph="✓" size="small" cmd={lineFor('idea accept', acceptLine)} disabledReason={acceptReason} onpress={() => void act('idea accept', acceptLine)} />
+          </div>
+        </section>
       {/if}
 
       {#if !idea.accepted}
-        <h3 class="ls-zone">Do</h3>
-        <div class="acts">
-          <CommandAction path="idea refine" title="Take it one round further" preset={{ id: idea.id, ...listFixed }} fixed={['id', '--project', '--global']} label="Refine" open={!idea.questions.length && !idea.plan} />
-          <CommandAction path="idea improve" title="Ask for the whole plan to be reworked" preset={{ id: idea.id, piece: 'plan', ...listFixed }} fixed={['id', 'piece', '--project', '--global']} label="Ask for it" />
-          {#if idea.plan}
-            <CommandAction path="idea accept" title="Accept the plan" preset={{ id: idea.id, ...listFixed }} fixed={['id', '--project', '--global']} label="Accept" />
-          {/if}
-          <CommandAction path="idea dismiss" title="Clear the 'last round failed' marker" preset={{ id: idea.id, ...listFixed }} fixed={['id', '--project', '--global']} label="Clear it" />
-          <CommandAction path="idea remove" title="Forget this idea" preset={{ id: idea.id, ...listFixed }} fixed={['id', '--project', '--global']} label="Forget it" />
-        </div>
-        <p class="calm small">A round asks an agent and takes a minute or two. It runs on the daemon, so you can leave this page; a toast says when it has finished.</p>
+        <section class="pblock" aria-labelledby="im">
+          <h2 class="ls-zone" id="im">More</h2>
+          <div class="ls-drawers">
+            <CommandAction path="idea refine" title="Take it one round further" preset={{ id: idea.id, ...listFixed }} fixed={['id', '--project', '--global']} label="Refine" open={!idea.questions.length && !idea.plan && !listed?.failure} />
+            <CommandAction path="idea improve" title="Ask for the whole plan to be reworked" preset={{ id: idea.id, piece: 'plan', ...listFixed }} fixed={['id', 'piece', '--project', '--global']} label="Ask for it" />
+            <CommandAction path="idea remove" title="Forget this idea" preset={{ id: idea.id, ...listFixed }} fixed={['id', '--project', '--global']} label="Forget it" danger />
+          </div>
+          <p class="ls-from">A round asks an agent and takes a minute or two. It runs on the daemon, so you can leave this page; a toast says when it has finished.</p>
+        </section>
       {/if}
+
+      <Command why="The same, in a terminal:" command={lineFor('idea show', [idea.id, ...where])} />
     {:else if id}
       <p class="calm" role="status">Reading…</p>
     {:else if place === 'add'}
-      <h2 class="topicname">Drop an idea in</h2>
-      <CommandAction path="idea add" title="An idea, to be fleshed out by an agent later" open />
+      <div class="ihead"><h2>Drop an idea in</h2><p class="slug">an agent fleshes it out when you refine it</p></div>
+      <label class="ls-vh" for="idea-text">The idea, in your own words</label>
+      <textarea id="idea-text" class="ls-text big" rows="5" placeholder="The idea, in your own words. It is kept as you write it." bind:value={text}></textarea>
+      <div class="accept wherebar">
+        <label class="opt"><span class="lab">For</span>
+          <select class="ls-text" name="idea-for" bind:value={forList}>
+            <option value="~">No project yet</option>
+            {#each projects as one (one.slug)}<option value={one.slug}>{one.name} · {one.slug}</option>{/each}
+          </select>
+        </label>
+      </div>
+      <div class="ls-answers flush">
+        <HaloButton label="Drop it in" solid={!refused && !!text.trim()} glyph="+" cmd={lineFor('idea add', addWords)} disabledReason={refused ?? (text.trim() ? undefined : 'write the idea first')} onpress={() => void drop()} />
+      </div>
     {:else if place === 'dumps'}
-      <h2 class="topicname">Notes kept elsewhere</h2>
-      <p class="calm">Paste notes from wherever you keep them, and an agent splits them into ideas and tasks. Nothing is recorded until you apply the pieces.</p>
+      <div class="ihead"><h2>Notes kept elsewhere</h2><p class="slug">split into ideas and tasks by an agent; nothing is recorded until you say</p></div>
       <CommandAction path="idea dump add" title="Drop notes in" open />
       {#if dumps === null}
         <p class="calm" role="status">Reading…</p>
       {:else}
         {#each dumps as dump (dump.id)}
-          <section class="layer" aria-labelledby={`dp-${dump.id}`}>
-            <h4 id={`dp-${dump.id}`}>{dump.id} <span class="calm small">· {dump.source} · {new Date(dump.captured).toLocaleString()}</span></h4>
-            <ul class="plain">
-              {#each dump.items as item (item.number)}<li><span class="qid">{item.number}</span> {item.title} <span class="calm small">· {item.kind}{item.recorded ? ' · recorded' : ''}</span></li>{/each}
-            </ul>
-            <div class="acts">
-              <CommandAction path="idea dump show" title="Read it" preset={{ id: dump.id }} fixed={['id']} label="Show" />
-              <CommandAction path="idea dump apply" title="Record its pieces" preset={{ id: dump.id }} fixed={['id']} label="Record" />
-              <CommandAction path="idea dump split" title="Split it again" preset={{ id: dump.id }} fixed={['id']} label="Split" />
-            </div>
-          </section>
+          <NoteDump {dump} disabledReason={refused} onapply={(words) => void act('idea dump apply', words)} onsplit={() => void act('idea dump split', [dump.id])} onshow={() => void show(dump.id)} />
         {:else}
           <p class="calm">No notes dropped in yet.</p>
         {/each}
-        <p class="calm small">From <code class="ls-cmd">loadout idea dump list</code>.</p>
+        <p class="ls-from">From <code>$ loadout idea dump list</code>.</p>
       {/if}
-    {:else if ideas?.length}
-      <p class="calm">Choose an idea to answer its questions, shape its plan or accept it.</p>
+    {:else if ideas?.length === 0}
+      <p class="calm">Nothing on the shelf yet. Drop an idea in, and refine it when you want an agent to flesh it out.</p>
     {/if}
   </section>
 </div>
+
+{#if showing}
+  <Dialog title={`Notes ${showing.id}`} why={lineFor('idea dump show', [showing.id])} cancelLabel="Close" onclose={() => (showing = null)}>
+    <pre class="dumpshow">{showing.text}</pre>
+  </Dialog>
+{/if}

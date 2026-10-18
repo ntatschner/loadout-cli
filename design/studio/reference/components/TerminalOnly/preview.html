@@ -1,0 +1,29 @@
+<!-- @dsCard group="Pages" height=420 width=820 subtitle="What is only ever done in a terminal: the command, why, and Copy" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TerminalOnly</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div id="t" style="max-width: 760px"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var t = document.getElementById("t");
+  t.appendChild(S.TerminalOnly({ title: "Store a secret", why: "It asks for the value at a masked prompt, so the secret never sits in a page or a command line.", command: "$ loadout secret set <name>" }));
+  t.appendChild(S.TerminalOnly({ title: "Set the team attach passphrase", why: "It sets the passphrase this page must be given separately, so it cannot be set from the page it guards.", command: "$ loadout team attach set", fact: "Passphrase: not set" }));
+  t.appendChild(S.TerminalOnly({ title: "Agree to a tool's tests running here", why: "Agreeing to a tool's tests is made in a terminal on purpose.", command: "$ loadout tools verify <tool> --agree" }));
+})();
+</script>
+</body>
+</html>

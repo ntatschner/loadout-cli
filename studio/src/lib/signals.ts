@@ -63,6 +63,10 @@ export const SIGNAL_STATES: Record<string, [SignalFamily, string, string]> = {
   'no verdict': ['rest', 'unknown', 'still'],
   'not trusted': ['rest', 'open', 'still'],
   scheduled: ['rest', 'held', 'still'],
+  // The six pages in every mode.
+  'to put right': ['needs', 'needs', 'pulse'],
+  'not approved': ['rest', 'open', 'still'],
+  'not on this machine': ['rest', 'open', 'dashed'],
 };
 
 export interface SignalOf {
