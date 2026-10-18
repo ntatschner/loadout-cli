@@ -882,7 +882,7 @@ internal sealed partial class IdeaService : IIdeaService
 
         // The note an acceptance wrote names where the plan is, and would go
         // on naming the list it left. Only that mention is changed.
-        if (File.Exists(toPlan + "x") && result.Note.Contains(oldPlan, StringComparison.Ordinal))
+        if (File.Exists(toPlan) && result.Note.Contains(oldPlan, StringComparison.Ordinal))
         {
             var rewritten = await _yaml.UpdateAsync<TaskList>(
                 TaskPaths.List(_workspace.LocalPath, to),
