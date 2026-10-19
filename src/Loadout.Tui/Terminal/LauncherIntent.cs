@@ -99,6 +99,9 @@ internal enum LauncherAction
     /// session started on one, at once or through the launch sheet.
     /// </summary>
     Tasks,
+
+    /// <summary>Search everything for <see cref="LauncherIntent.Query"/>, as 'loadout find' does.</summary>
+    Find,
 }
 
 /// <summary>
@@ -121,13 +124,19 @@ internal enum LauncherAction
 /// <see cref="LauncherAction.Resume"/>. Null means "let the picker ask",
 /// which is what choosing Resume without picking a session means.
 /// </param>
+/// <param name="Query">
+/// What to look for, for <see cref="LauncherAction.Find"/>. Kept apart from
+/// <paramref name="CommandPath"/>, which is split on spaces, because a query
+/// is prose and has to reach the command as one argument.
+/// </param>
 internal sealed record LauncherIntent(
     LauncherAction Action,
     ProjectResolution? Project = null,
     string? Agent = null,
     string? CommandPath = null,
     string? SessionId = null,
-    LaunchOptions? Options = null)
+    LaunchOptions? Options = null,
+    string? Query = null)
 {
     /// <summary>Closing the launcher without asking for anything.</summary>
     internal static readonly LauncherIntent Quit = new(LauncherAction.Quit);

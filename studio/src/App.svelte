@@ -15,6 +15,7 @@
   import Ambient from './pages/Ambient.svelte';
   import Sessions from './pages/Sessions.svelte';
   import LaunchSheet from './pages/LaunchSheet.svelte';
+  import { search } from './lib/search';
   import type { Chosen } from './lib/tasks';
   import Settings from './pages/Settings.svelte';
   import Appearance from './pages/Appearance.svelte';
@@ -349,7 +350,7 @@
     <Ambient onleave={() => (ambient = false)} onlaunch={() => { router.go('sessions'); openLaunch(); }} />
   {/if}
   {#if palette}
-    <CommandPalette {groups} onclose={() => (palette = false)} />
+    <CommandPalette {groups} search={(query) => search(query, router.go.bind(router))} onclose={() => (palette = false)} />
   {/if}
   {#if appearance}
     <Dialog title="Appearance" why="Every Studio screen follows these, in every browser: they are kept in Loadout's config." cancelLabel="Done" actions={[]} onclose={() => (appearance = false)}>

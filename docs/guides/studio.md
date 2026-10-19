@@ -52,7 +52,10 @@ it widens over the page without pushing it. Below 600px wide it becomes a
 **Ctrl K** (or **Cmd K**) opens the palette from anywhere. It has three groups:
 *Go to* a page, find what's *In flight*, and *Do* something. Every action shows
 the exact `loadout` command it runs, so you can always do the same thing from a
-terminal instead.
+terminal instead. Type two characters or more and pause, and it also searches
+your tasks, ideas, sessions, team runs and projects, the same search as
+`loadout find`, and lists what it finds under the three groups. Choosing one
+takes you to where Studio shows it.
 
 Along the top is the mode bar: the five modes, search, and whatever is waiting
 on you. Everything here describes Default; [step 16](#16-change-the-whole-layout-with-a-mode)

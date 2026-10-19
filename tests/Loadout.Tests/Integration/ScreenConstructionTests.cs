@@ -153,6 +153,60 @@ public sealed class ScreenConstructionTests
     }
 
     [Fact]
+    public void The_palette_offers_to_search_everything_for_what_was_typed_after_the_commands()
+    {
+        using IApplication app = Application.Create();
+
+        app.Init(DriverRegistry.Names.ANSI);
+        app.Screen = new Rectangle(0, 0, Width, Height);
+
+        using var palette = new CommandPaletteDialog(
+            [new CatalogueEntry("doctor", "Check this machine", null)],
+            app);
+
+        app.Begin(palette);
+        app.LayoutAndDraw();
+
+        var filter = palette.SubViews.OfType<TextField>().Single();
+        var list = palette.SubViews.OfType<ListView>().Single();
+
+        // A word no command matches still finds something, as the only row.
+        filter.Text = "login page";
+        list.Source!.ToList().Cast<object?>().Select(row => row?.ToString()).Should()
+            .Equal("  Search everything for 'login page'   (loadout find)");
+
+        list.SetFocus();
+        list.NewKeyDownEvent(Key.Enter);
+
+        palette.SearchFor.Should().Be("login page");
+        palette.Chosen.Should().BeNull();
+    }
+
+    [Fact]
+    public void A_command_the_typing_matches_still_comes_before_the_search()
+    {
+        using IApplication app = Application.Create();
+
+        app.Init(DriverRegistry.Names.ANSI);
+        app.Screen = new Rectangle(0, 0, Width, Height);
+
+        using var palette = new CommandPaletteDialog(
+            [new CatalogueEntry("doctor", "Check this machine", null)],
+            app);
+
+        app.Begin(palette);
+        app.LayoutAndDraw();
+
+        palette.SubViews.OfType<TextField>().Single().Text = "doc";
+        var list = palette.SubViews.OfType<ListView>().Single();
+        list.SetFocus();
+        list.NewKeyDownEvent(Key.Enter);
+
+        palette.Chosen.Should().Be("doctor");
+        palette.SearchFor.Should().BeNull();
+    }
+
+    [Fact]
     public void The_manager_screen_can_be_built_and_drawn()
     {
         Drawn(app => new ManagerWindow("alpha", Loaded(), app));

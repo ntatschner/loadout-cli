@@ -177,6 +177,11 @@ it, and a test asserts the two agree. Commands are grouped by what they're for,
 and the ones that change files say so — a palette that looks identical for
 reading settings and rewriting them is asking you to remember which is which.
 
+Type two characters or more and the last row searches everything for them:
+tasks, ideas, sessions, team runs and projects, as `loadout find` does. It's
+last so that typing a command's name still lands on the command, and a word no
+command matches still finds something.
+
 The few that can't work from a menu are listed with the reason rather than
 hidden: `completion` writes a script you pipe somewhere, `statusline` gets run
 by the agent several times a minute. Something you can't find looks exactly like

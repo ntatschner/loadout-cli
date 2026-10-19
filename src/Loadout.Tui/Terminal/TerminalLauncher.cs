@@ -386,6 +386,13 @@ public sealed class TerminalLauncher : ILauncherTui
 
         application.Run(palette);
 
+        if (palette.SearchFor is { Length: > 0 } query)
+        {
+            window.Close(new LauncherIntent(LauncherAction.Find, window.Selected, Query: query));
+
+            return;
+        }
+
         if (palette.Chosen is not { Length: > 0 } chosen)
         {
             return;
@@ -807,6 +814,13 @@ public sealed class TerminalLauncher : ILauncherTui
 
             case LauncherAction.Tasks when intent.Project is { } working:
                 return await ShowTasksAsync(working, ct).ConfigureAwait(false);
+
+            case LauncherAction.Find when intent.Query is { Length: > 0 } query:
+                // One argument, joined with '=', so a query of several words,
+                // or one starting with a minus, reaches the command whole.
+                await _catalogue.RunAsync(LauncherCommands.Find, [$"--query={query}"], ct).ConfigureAwait(false);
+                Pause();
+                return null;
 
             case LauncherAction.Command when intent.CommandPath is { Length: > 0 } path:
                 // Run against the project on screen. The launcher knew which

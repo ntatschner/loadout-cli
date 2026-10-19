@@ -31,8 +31,20 @@ internal sealed class CommandPaletteDialog : Dialog
 
     private List<CatalogueEntry> _shown;
 
+    /// <summary>What has been typed, trimmed.</summary>
+    private string _typed = string.Empty;
+
     /// <summary>The command to run, or null if nothing was chosen.</summary>
     internal string? Chosen { get; private set; }
+
+    /// <summary>
+    /// What to look for everywhere, when the last row was chosen rather than a
+    /// command: 'loadout find' with what was typed. Null otherwise.
+    /// </summary>
+    internal string? SearchFor { get; private set; }
+
+    /// <summary>Whether the last row searches everything: once two characters have been typed.</summary>
+    private bool Searching => _typed.Length >= 2;
 
     internal CommandPaletteDialog(IReadOnlyList<CatalogueEntry> commands, IApplication application)
     {
@@ -69,6 +81,7 @@ internal sealed class CommandPaletteDialog : Dialog
         filter.TextChanged += (_, _) =>
         {
             var text = filter.Text?.Trim() ?? string.Empty;
+            _typed = text;
 
             // Matches on what a command is for as well as what it is called.
             // Somebody wanting to undo a mistake types "undo", not "backup
@@ -95,6 +108,14 @@ internal sealed class CommandPaletteDialog : Dialog
         _list.Accepting += (_, e) =>
         {
             e.Handled = true;
+
+            if (OnSearch())
+            {
+                SearchFor = _typed;
+                _application.RequestStop(this);
+
+                return;
+            }
 
             // A command that needs a terminal is left showing its reason
             // rather than run into a screen that would paint over it.
@@ -126,11 +147,18 @@ internal sealed class CommandPaletteDialog : Dialog
             ? _shown[index]
             : null;
 
+    /// <summary>Whether the cursor is on the row that searches everything.</summary>
+    private bool OnSearch() => Searching && _list.SelectedItem == _shown.Count;
+
     private void Render()
     {
-        _list.SetSource(new ObservableCollection<string>(_shown.Select(Describe)));
+        // The search goes last, so typing a command's name still lands on the
+        // command, and a word no command matches still finds something.
+        _list.SetSource(new ObservableCollection<string>(Searching
+            ? [.. _shown.Select(Describe), $"  Search everything for '{_typed}'   (loadout find)"]
+            : [.. _shown.Select(Describe)]));
 
-        if (_shown.Count > 0)
+        if (_shown.Count > 0 || Searching)
         {
             _list.SelectedItem = 0;
         }
@@ -140,6 +168,13 @@ internal sealed class CommandPaletteDialog : Dialog
 
     private void Explain()
     {
+        if (OnSearch())
+        {
+            _explanation.Text = "Tasks, ideas, sessions, team runs and projects, with the query every list takes.";
+
+            return;
+        }
+
         var entry = Current();
 
         _explanation.Text = entry is null

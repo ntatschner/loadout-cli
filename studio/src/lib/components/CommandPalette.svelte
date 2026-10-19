@@ -1,25 +1,53 @@
 <script lang="ts">
   // Ctrl or Cmd K from anywhere: go to a page, find work in flight, or do
   // something, every action showing the command it runs. A combobox in a
-  // modal dialog, controlling a listbox through aria-activedescendant.
+  // modal dialog, controlling a listbox through aria-activedescendant. Given
+  // a search, what is typed is also looked for everywhere once it is two
+  // characters long and typing has paused, and what that finds follows the
+  // palette's own rows.
   import Dialog from './Dialog.svelte';
-  import { tick } from 'svelte';
+  import { onDestroy, tick } from 'svelte';
   import { paletteRows, type PaletteGroup, type PaletteRow } from '../palette';
 
   interface Props {
     groups: PaletteGroup[];
     placeholder?: string;
     onclose?: () => void;
+    /** Looks for what is typed everywhere, as more groups. */
+    search?: (query: string) => Promise<PaletteGroup[]>;
   }
 
-  let { groups, placeholder = 'Go to a page, find work, or do something', onclose = undefined }: Props = $props();
+  let { groups, placeholder = 'Go to a page, find work, or do something', onclose = undefined, search = undefined }: Props = $props();
 
   const id = `ls-pal-${Math.random().toString(36).slice(2, 7)}`;
   let query = $state('');
   let active = $state(0);
   let list = $state<HTMLDivElement | undefined>();
 
-  const shown = $derived(paletteRows(groups, query));
+  let found = $state<PaletteGroup[]>([]);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let asked = 0;
+
+  $effect(() => {
+    const typed = query.trim();
+    const mine = ++asked;
+
+    clearTimeout(timer);
+
+    if (!search || typed.length < 2) {
+      found = [];
+
+      return;
+    }
+
+    timer = setTimeout(() => {
+      search(typed).then((groups) => mine === asked && (found = groups));
+    }, 250);
+  });
+
+  onDestroy(() => clearTimeout(timer));
+
+  const shown = $derived([...paletteRows(groups, query), ...found]);
   const flat = $derived(shown.flatMap((group) => group.items));
 
   $effect(() => {

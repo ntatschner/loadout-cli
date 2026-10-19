@@ -182,6 +182,14 @@ public static class ServiceRegistration
         services.AddSingleton<Teams.TeamBin>();
         services.AddSingleton<Sessions.LaunchSheet>();
         services.AddSingleton<Teams.IRunJournal, Teams.RunJournal>();
+
+        // Global search, one source per kind, in the order results are grouped.
+        services.AddSingleton<Lists.ISearchSource, Lists.TaskSearchSource>();
+        services.AddSingleton<Lists.ISearchSource, Lists.IdeaSearchSource>();
+        services.AddSingleton<Lists.ISearchSource, Lists.SessionSearchSource>();
+        services.AddSingleton<Lists.ISearchSource, Lists.RunSearchSource>();
+        services.AddSingleton<Lists.ISearchSource, Lists.ProjectSearchSource>();
+        services.AddSingleton<Lists.SearchService>();
         services.AddSingleton<Teams.IRunOutbox, Teams.RunOutbox>();
         services.AddSingleton<Teams.IRemedyBook, Teams.RemedyBook>();
         services.AddSingleton<Tools.ToolHarness>();

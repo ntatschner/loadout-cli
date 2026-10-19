@@ -976,6 +976,7 @@ public static class Program
         Top<SessionListCommand>(config, "sessions");
         Top<SessionRunningCommand>(config, "running");
         Top<ResumeCommand>(config, "resume");
+        Top<FindCommand>(config, "find");
         Top<UsageCommand>(config, "usage");
         Top<LaunchesCommand>(config, "launches");
 

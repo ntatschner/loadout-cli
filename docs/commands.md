@@ -80,6 +80,7 @@
 | `loadout commands` | List everything the launcher can do, grouped by what it is for |
 | `loadout list` | List registered projects |
 | `loadout running` | The sessions running now, and how long each has been quiet |
+| `loadout find <query>` | Search tasks, ideas, sessions, team runs and projects at once, grouped, each with the command that shows it. Takes the [list query](#filtering-and-sorting-a-list): `kind:task state:open login` searches only open tasks. A query starting with a minus goes as `--query=` |
 | `loadout task list\|declare\|remove` | Record what is being worked on, and check it against the repository. `--global` is the list for what belongs to no project yet |
 | `loadout task list --filter <query> --sort <fields>` | Keep and order the list with the same query syntax Studio uses, described under [Filtering and sorting a list](#filtering-and-sorting-a-list) |
 | `loadout task move <id> --to <project>` | Move a task put on the wrong project, or `--to-global` to the workspace-wide list. It keeps its id, state and note, and an accepted plan goes with it. The list it left shows where it went, and `task list` on the new one says where it came from |
