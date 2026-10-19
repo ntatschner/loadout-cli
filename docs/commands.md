@@ -200,13 +200,27 @@ dropped tasks are hidden, as they always were, and `--all` shows them. A
 `--filter` replaces that default rather than adding to it, so a filter that
 names done work finds it.
 
+The other lists take the same `--filter` and `--sort`, each over its own fields:
+
+| Command | Fields |
+| --- | --- |
+| `loadout list` | `id`, `name`, `agent`, `where` (`here` or `elsewhere`), `pinned`, `launched`, `launches` |
+| `loadout idea list` | `id`, `title`, `project`, `stage`, `by`, `updated`, `unanswered` |
+| `loadout sessions` | `id`, `title`, `project`, `agent`, `branch`, `active` |
+| `loadout team runs` | `id`, `team`, `project`, `state` (`waiting`, `running` or `ended`), `goal`, `ended`, `started`, `cost`, `rounds` |
+
+Without either option each prints what it always has, in the order it always
+had. `loadout sessions` filters the sessions `--limit` reads, so a filter over
+a long history wants a bigger limit.
+
 A query that starts with a minus goes as `--filter=-state:open`, and a
 descending sort as `--sort=-updated`. Given with a space, the command line
 reads the minus as the start of another option and refuses it.
 
 A filter you set in Studio is saved for that list, as the config key
 `studio-query-tasks`, and it's what the list opens with next time, in Studio
-and in the terminal. `loadout task list` uses it when it writes for a person,
+and in the terminal. Projects and ideas keep theirs the same way, as
+`studio-query-projects` and `studio-query-ideas`. `loadout task list` uses it when it writes for a person,
 and says so on its first line. With `--json` it is left alone unless you add
 `--saved`, so a script gets the same list whoever last changed a filter on a
 screen. `--filter` or `--all` sets it aside for that run. To set it by hand:

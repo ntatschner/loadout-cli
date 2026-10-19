@@ -37,25 +37,42 @@ public class SessionSettings : GlobalSettings
 /// </summary>
 [Description("List recent agent sessions, newest first.")]
 [CommandMeta(CommandCategory.Start, Intent = "history recent previous what was i doing")]
-public sealed class SessionListCommand : AsyncCommand<SessionSettings>
+public sealed class SessionListCommand : AsyncCommand<SessionListCommand.Settings>
 {
     private readonly ISessionResumption _sessions;
     private readonly SessionScope _scope;
     private readonly IAnsiConsole _console;
+    private readonly TimeProvider _time;
 
     public SessionListCommand(
         ISessionResumption sessions,
         SessionScope scope,
-        IAnsiConsole console)
+        IAnsiConsole console,
+        TimeProvider time)
     {
         _sessions = sessions;
         _scope = scope;
         _console = console;
+        _time = time;
+    }
+
+    /// <summary>What listing takes beyond what resuming does: the query, over the sessions --limit considers.</summary>
+    public sealed class Settings : SessionSettings
+    {
+        [CommandOption("--filter <QUERY>")]
+        [Description("Keep only what the query says, the query every list takes, such as \"agent:codex login\". One starting with a minus goes as --filter=-agent:claude.")]
+        public string? Filter { get; init; }
+
+        [CommandOption("--sort <FIELDS>")]
+        [Description("Sort by these fields, commas between: id, title, project, agent, branch, active. Reversed with a minus: --sort=-active.")]
+        public string? Sort { get; init; }
     }
 
     /// <inheritdoc />
-    public override async Task<int> ExecuteAsync(CommandContext context, SessionSettings settings, CancellationToken cancellationToken)
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(settings);
+
         var output = new CommandOutput(_console, settings);
 
         var query = await _scope.QueryAsync(settings).ConfigureAwait(false);
@@ -67,8 +84,18 @@ public sealed class SessionListCommand : AsyncCommand<SessionSettings>
             return output.Fail(result);
         }
 
-        var resumable = result.Value!;
-        var sessions = resumable.Select(r => r.Session).ToList();
+        var queried = ListOptions.Apply(
+            Core.Lists.SessionFields.All, settings.Filter, settings.Sort, [.. result.Value!.Select(r => r.Session)], _time.GetUtcNow());
+
+        if (queried.Failed)
+        {
+            return output.Fail(queried);
+        }
+
+        // Back to what each kept session was launched for, in the query's order.
+        var launches = result.Value!.ToDictionary<ResumableSession, AgentSession>(r => r.Session, ReferenceEqualityComparer.Instance);
+        var resumable = queried.Value!.Select(session => launches[session]).ToList();
+        var sessions = queried.Value!;
 
         if (output.IsJson)
         {

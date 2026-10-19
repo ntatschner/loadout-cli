@@ -16,6 +16,8 @@
   import QuestionSet from '../lib/components/QuestionSet.svelte';
   import Signal from '../lib/components/Signal.svelte';
   import { commands, memory, readJson, SignedOut } from '../lib/api';
+  import ListToolbar from '../lib/components/ListToolbar.svelte';
+  import { CommandList } from '../lib/commandList.svelte';
   import { runJob } from '../lib/jobs';
   import { lineFor } from '../lib/commandLine';
   import { router } from '../lib/router.svelte';
@@ -101,8 +103,10 @@
     items: DumpItem[];
   }
 
-  let ideas = $state<Listed[] | null>(null);
-  let movedOn = $state<MovedOn[]>([]);
+  // The shelf, through 'idea list' with the shared query.
+  const shelf = new CommandList<Listed>('idea list', 'ideas', 'ideas');
+  const ideas = $derived(shelf.items);
+  const movedOn = $derived((shelf.read?.movedOn as MovedOn[] | undefined) ?? []);
   let idea = $state<Idea | null>(null);
   let dumps = $state<Dump[] | null>(null);
   let projects = $state<{ slug: string; name: string }[]>([]);
@@ -136,13 +140,7 @@
   }
 
   async function loadList() {
-    try {
-      const read = await readJson<{ ideas: Listed[]; movedOn?: MovedOn[] }>('idea list');
-      ideas = read.ideas;
-      movedOn = read.movedOn ?? [];
-    } catch (error) {
-      fail(error);
-    }
+    await untrack(() => shelf.load([]));
   }
 
   async function loadIdea(name: string, words: string[]) {
@@ -369,9 +367,12 @@
 <div class={['bench', focused ? 'solo' : ''].filter(Boolean).join(' ')}>
   {#if !focused}
   <nav class="shelf" aria-label="Ideas">
-    {#if ideas === null}
+    <ListToolbar noun="ideas" query={shelf.text} shape={shelf.shape} shown={ideas?.length ?? null} recorded={shelf.recorded} problem={shelf.problem} onchange={(query) => void shelf.ask(query)} />
+    {#if shelf.error}
+      <p class="offline" role="alert">{shelf.error}</p>
+    {:else if ideas === null}
       <p class="calm" role="status">Reading…</p>
-    {:else if ideas.length === 0}
+    {:else if ideas.length === 0 && !shelf.recorded}
       <p class="calm">No ideas being shaped. Drop one in.</p>
     {/if}
 

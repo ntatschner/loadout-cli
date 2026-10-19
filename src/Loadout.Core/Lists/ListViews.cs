@@ -28,6 +28,8 @@ public static class ListViews
     public static readonly IReadOnlyList<View> All =
     [
         new("tasks", TaskFields.DefaultQuery, TaskFields.All.Check),
+        new("projects", string.Empty, ProjectFields.All.Check),
+        new("ideas", string.Empty, IdeaFields.All.Check),
     ];
 
     /// <summary>The view with this name, or null.</summary>

@@ -378,32 +378,54 @@ public sealed class TeamShowCommand : AsyncCommand<TeamShowCommand.Settings>
 /// <summary>What the runs on this machine did.</summary>
 [Description("List the team runs on this machine, newest first.")]
 [CommandMeta(CommandCategory.Start, Intent = "team runs history what did the team do")]
-public sealed class TeamRunsCommand : AsyncCommand<GlobalSettings>
+public sealed class TeamRunsCommand : AsyncCommand<TeamRunsCommand.Settings>
 {
     private readonly IRunJournal _journal;
     private readonly IAnsiConsole _console;
+    private readonly TimeProvider _time;
 
-    public TeamRunsCommand(IRunJournal journal, IAnsiConsole console)
+    public TeamRunsCommand(IRunJournal journal, IAnsiConsole console, TimeProvider time)
     {
         _journal = journal;
         _console = console;
+        _time = time;
+    }
+
+    public sealed class Settings : GlobalSettings
+    {
+        [CommandOption("--filter <QUERY>")]
+        [Description("Keep only what the query says, the query every list takes, such as \"state:waiting,running team:release-crew\". One starting with a minus goes as --filter=-state:ended.")]
+        public string? Filter { get; init; }
+
+        [CommandOption("--sort <FIELDS>")]
+        [Description("Sort by these fields, commas between: id, team, project, state, goal, ended, started, cost, rounds. Reversed with a minus: --sort=-cost.")]
+        public string? Sort { get; init; }
     }
 
     /// <inheritdoc />
     public override Task<int> ExecuteAsync(
         CommandContext context,
-        GlobalSettings settings,
+        Settings settings,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(_console, settings);
 
-        var runs = _journal.List()
+        var listed = _journal.List()
             .Select(_journal.Summarise)
             .Where(result => result.Succeeded)
             .Select(result => result.Value!)
             .ToList();
+
+        var queried = ListOptions.Apply(Core.Lists.RunFields.All, settings.Filter, settings.Sort, listed, _time.GetUtcNow());
+
+        if (queried.Failed)
+        {
+            return Task.FromResult(output.Fail(queried));
+        }
+
+        var runs = queried.Value!;
 
         if (output.IsJson)
         {
@@ -423,6 +445,8 @@ public sealed class TeamRunsCommand : AsyncCommand<GlobalSettings>
                     nodes = run.Nodes.Count,
                     run.Merged,
                 }),
+                recorded = listed.Count,
+                query = ListOptions.Shape(Core.Lists.RunFields.All, settings.Filter, settings.Sort),
             });
 
             return Task.FromResult(CommandOutput.Success());

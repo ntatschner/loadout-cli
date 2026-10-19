@@ -20,10 +20,12 @@
     recorded?: number | null;
     /** What the daemon refused about the query, if it did. */
     problem?: string | null;
+    /** Whether '/' comes here. Only one toolbar on a page should take it. */
+    slash?: boolean;
     onchange: (query: string) => void;
   }
 
-  let { noun, query, shape, shown = null, recorded = null, problem = null, onchange }: Props = $props();
+  let { noun, query, shape, shown = null, recorded = null, problem = null, slash: takesSlash = true, onchange }: Props = $props();
 
   const id = `ls-lt-${Math.random().toString(36).slice(2, 7)}`;
   let box = $state<HTMLInputElement | undefined>();
@@ -66,7 +68,7 @@
   }
 
   function slash(event: KeyboardEvent) {
-    if (event.key === '/' && !event.ctrlKey && !event.metaKey && !event.altKey && !typingIn(event.target)) {
+    if (takesSlash && event.key === '/' && !event.ctrlKey && !event.metaKey && !event.altKey && !typingIn(event.target)) {
       event.preventDefault();
       box?.focus();
       box?.select();
