@@ -391,7 +391,17 @@ where it has drifted from what was recorded, and whether any AI tooling files
 are tracked in the repository.
 
 **What is being worked on** is a board of its tasks in three columns, open,
-doing and blocked, with done and dropped folded away rather than left out. Each
+doing and blocked. Above it is a search box that takes the same query as
+`loadout task list --filter`, such as `state:doing login sort:-updated`, with
+each piece of the query shown as a chip you can remove, a menu to add a filter
+and one to choose the order. Press `/` to get to the box. Done and dropped
+work is hidden to start with, by the filter `-state:done,dropped`, which shows
+as a chip like any other: remove it, or press **Show all**, and they come back
+folded under the columns. **Reset to default** puts the filter back. The filter
+is saved for the list, so it's the one the board opens with next time, and the
+one `loadout task list` starts from. A query
+the launcher can't read is refused beside the box, in the same words the
+terminal uses, and the board stays as it was. Each
 task is moved on with one press (mark it doing, say it's blocked, mark it done,
 reopen it, drop it), and a new one is recorded under the board. **Start**
 launches a session on the task, the same as `loadout launch <project> --task-id

@@ -57,6 +57,16 @@ public sealed class ListField<T>
         new(name, ListFieldType.Number, description, [], item => read(item));
 }
 
+/// <summary>A list's query as a surface draws it.</summary>
+/// <param name="Text">The query written out, as stored and as the search box shows it.</param>
+/// <param name="Parts">Its pieces, one chip each.</param>
+/// <param name="Fields">What this kind can be filtered and sorted on.</param>
+/// <param name="DefaultQuery">What resetting the view goes back to.</param>
+public sealed record ListShape(string Text, IReadOnlyList<string> Parts, IReadOnlyList<ListFieldShape> Fields, string DefaultQuery);
+
+/// <summary>One field as a surface offers it: its name, its type in lower case, and for a choice its values.</summary>
+public sealed record ListFieldShape(string Name, string Type, string Description, IReadOnlyList<string> Choices);
+
 /// <summary>
 /// What one kind of item can be filtered and sorted on, and how it is listed
 /// when nobody has said: the registry a <see cref="ListQuery"/> is checked
@@ -175,6 +185,22 @@ public sealed class ListFields<T>
         }
 
         return OperationResult<IReadOnlyList<T>>.Ok([.. ordered]);
+    }
+
+    /// <summary>
+    /// The query as applied and what it could have said, for a surface to
+    /// draw: its text, its pieces as chips, this kind's fields with their
+    /// choices, and the default to reset to.
+    /// </summary>
+    public ListShape Shape(ListQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        return new ListShape(
+            query.ToString(),
+            query.Parts(),
+            [.. Fields.Select(field => new ListFieldShape(field.Name, field.Type.ToString().ToLowerInvariant(), field.Description, field.Choices))],
+            DefaultQuery);
     }
 
     /// <summary>The fields, one line each, for help text.</summary>

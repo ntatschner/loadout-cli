@@ -1,4 +1,5 @@
 using Loadout.Core.Configuration;
+using Loadout.Core.Lists;
 using Loadout.Models.Configuration;
 
 namespace Loadout.Cli.Commands;
@@ -23,5 +24,6 @@ internal static class StudioPreferences
         layoutLens = studio?.LayoutLens,
         layoutMap = studio?.LayoutMap,
         panels = new { lens = StudioLayouts.Lens, map = StudioLayouts.Map },
+        views = ListViews.All.ToDictionary(view => view.Name, view => ListViews.Saved(studio, view.Name)),
     };
 }

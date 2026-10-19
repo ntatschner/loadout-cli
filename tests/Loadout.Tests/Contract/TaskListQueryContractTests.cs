@@ -29,6 +29,17 @@ public sealed class TaskListQueryContractTests
         Ids(await List(loadout, "--filter", "state:doing,done")).Should().Equal("a-release", "c-copy");
         Ids(await List(loadout, "--filter=-state:open")).Should().Equal("a-release", "c-copy");
 
+        // What a screen draws chips from: the query as applied, in pieces,
+        // with how much was recorded before it, and the fields it can name.
+        var shaped = await List(loadout, "--filter", "state:doing,done login", "--sort=-updated");
+        var query = shaped.GetProperty("query");
+        query.GetProperty("text").GetString().Should().Be("state:doing,done login sort:-updated");
+        query.GetProperty("parts").EnumerateArray().Select(one => one.GetString()).Should().Equal("state:doing,done", "login", "sort:-updated");
+        query.GetProperty("defaultQuery").GetString().Should().Be("-state:done,dropped");
+        query.GetProperty("fields").EnumerateArray().Single(one => one.GetProperty("name").GetString() == "state")
+            .GetProperty("choices").GetArrayLength().Should().Be(5);
+        shaped.GetProperty("recorded").GetInt32().Should().Be(3);
+
         Ids(await List(loadout, "--all", "--sort", "id")).Should().Equal("a-release", "b-login", "c-copy");
         Ids(await List(loadout, "--all", "--sort=-id")).Should().Equal("c-copy", "b-login", "a-release");
     }
@@ -56,6 +67,30 @@ public sealed class TaskListQueryContractTests
 
         said.ExitCode.Should().Be(0, said.StandardError);
         said.StandardOutput.Should().Contain("Nothing matches nothing-like-this").And.Contain("without --filter");
+    }
+
+    [BuiltCliFact]
+    public async Task A_saved_query_narrows_what_a_person_reads_and_a_script_only_when_it_asks()
+    {
+        using var loadout = await WithWorkspace();
+
+        await Declare(loadout, "b-login", "open", "Fix the login page");
+        await Declare(loadout, "a-release", "doing", "Ship the release");
+
+        // Starting with a minus, so it goes as --value=, as Studio sends it.
+        var set = await loadout.RunAsync("config", "set", "studio-query-tasks", "--value=-state:open");
+        set.ExitCode.Should().Be(0, set.StandardError);
+
+        var read = await loadout.RunAsync("task", "list", "--global");
+        read.StandardOutput.Should().Contain("Filtered by the saved query -state:open").And.Contain("a-release").And.NotContain("b-login");
+
+        Ids(await List(loadout)).Should().Equal("b-login", "a-release");
+        Ids(await List(loadout, "--saved")).Should().Equal("a-release");
+        Ids(await List(loadout, "--saved", "--filter", "login")).Should().Equal("b-login");
+
+        var refused = await loadout.RunAsync("config", "set", "studio-query-tasks", "colour:red");
+        refused.ExitCode.Should().NotBe(0);
+        refused.StandardError.Should().Contain("'colour' is not something tasks can be filtered on");
     }
 
     /// <summary>A home with a workspace in it, which registering a project makes; the tasks go on the workspace-wide list.</summary>

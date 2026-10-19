@@ -202,6 +202,21 @@ A query that starts with a minus goes as `--filter=-state:open`, and a
 descending sort as `--sort=-updated`. Given with a space, the command line
 reads the minus as the start of another option and refuses it.
 
+A filter you set in Studio is saved for that list, as the config key
+`studio-query-tasks`, and it's what the list opens with next time, in Studio
+and in the terminal. `loadout task list` uses it when it writes for a person,
+and says so on its first line. With `--json` it is left alone unless you add
+`--saved`, so a script gets the same list whoever last changed a filter on a
+screen. `--filter` or `--all` sets it aside for that run. To set it by hand:
+
+```sh
+loadout config set studio-query-tasks --value=-state:done,dropped
+```
+
+`--value=` is there for the minus, the same as `--filter=`. Setting it to an
+empty value puts the list back to its default. A cleared filter isn't
+remembered for the same reason: an empty value and no value are one setting.
+
 ## Editors
 
 VS Code keeps settings, extensions and keybindings in named profiles, and

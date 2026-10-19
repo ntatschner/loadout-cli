@@ -147,7 +147,13 @@ public sealed class ListQuery
     /// The query written out again, terms, then words, then the sort: what is
     /// stored, and what a chip's removal leaves in the search box.
     /// </summary>
-    public override string ToString()
+    public override string ToString() => string.Join(' ', Parts());
+
+    /// <summary>
+    /// The query as the pieces a person sees as chips, each written as it
+    /// would be typed: removing a chip is joining the others.
+    /// </summary>
+    public IReadOnlyList<string> Parts()
     {
         var parts = new List<string>();
 
@@ -159,7 +165,7 @@ public sealed class ListQuery
             parts.Add($"{SortKey}:{string.Join(',', Sorts.Select(sort => (sort.Descending ? "-" : string.Empty) + sort.Field))}");
         }
 
-        return string.Join(' ', parts);
+        return parts;
     }
 
     private static string Quote(string text) =>

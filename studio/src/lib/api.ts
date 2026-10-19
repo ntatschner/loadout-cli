@@ -119,6 +119,8 @@ export interface Preferences {
   layoutLens: string | null;
   layoutMap: string | null;
   panels: { lens: string[]; map: string[] };
+  /** Each list's saved query, by view; null where nothing is saved and the list opens with its default. */
+  views?: Record<string, string | null>;
 }
 
 export const preferences = {

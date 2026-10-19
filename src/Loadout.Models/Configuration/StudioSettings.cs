@@ -41,4 +41,16 @@ public sealed class StudioSettings
 
     /// <summary>Minutes a working session is quiet before Studio reads it as idle. Null is ten.</summary>
     public int? IdleAfter { get; set; }
+
+    /// <summary>
+    /// Each list's saved query, by view: "tasks" to "state:doing sort:-updated".
+    /// A view missing here has never been saved, and opens with its built-in
+    /// default.
+    /// </summary>
+    /// <remarks>
+    /// Kept with Studio's settings though not only Studio's: the TUI opens a
+    /// list with it, and 'task list --saved' applies it, so a filter set on one
+    /// screen is the one every screen starts from.
+    /// </remarks>
+    public Dictionary<string, string> Views { get; set; } = [];
 }
