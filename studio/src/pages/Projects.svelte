@@ -343,12 +343,6 @@
         </form>
       </section>
 
-      <section class="pblock" aria-labelledby="drc">
-        <h2 class="ls-zone" id="drc">Recent conversations</h2>
-        <!-- This project's, from the history Sessions keeps; the rest are there. -->
-        <ConversationList conversations={studio.conversations.filter((one) => one.project === shown!.id).slice(0, 5)} label={`Recent conversations in ${shown.id}`} onchanges={onresume} inProject />
-      </section>
-
       <section class="pblock" aria-labelledby="dhl">
         <h2 class="ls-zone" id="dhl">Health</h2>
         {#if health === null}
@@ -359,6 +353,12 @@
             <CommandAction path="drift" title={`Put right the ${fixes} that can be put right`} preset={{ PROJECT: shown.id, '--fix': true, '--yes': true }} fixed={['PROJECT']} label="Put it right" />
           {/if}
         {/if}
+      </section>
+
+      <section class="pblock" aria-labelledby="drc">
+        <h2 class="ls-zone" id="drc">Recent conversations</h2>
+        <!-- This project's, from the history Sessions keeps; the rest are there. -->
+        <ConversationList conversations={studio.conversations.filter((one) => one.project === shown!.id).slice(0, 5)} label={`Recent conversations in ${shown.id}`} onchanges={onresume} inProject />
       </section>
     </div>
 

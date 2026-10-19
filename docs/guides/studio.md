@@ -175,11 +175,15 @@ one agent or one project, and each project's own page shows its five most
 recent. Each row says what carries over if you resume it: the task, mode,
 profile and worktree it was launched with.
 
+![Sessions in Studio: a panel of the two sessions that ended when the daemon stopped, each with Resume and Not this one, and Resume all 2; then the history, newest first, filtered by agent and project, each conversation with what it carries over, one marked as looking to be running elsewhere, and Resume beside each.](../images/studio-sessions.png)
+
 **Resume** opens it in a new terminal here, running `loadout resume`, so it's
 exactly what the same command does in a terminal. **Resume with changes…**
 opens the launch sheet filled in with what would carry over. What's in the
 sheet when you press Resume is the whole of what it reopens with, so choosing
 no task or the main checkout there means that.
+
+![Resume with changes in Studio: the conversation's project and agent fixed at the top, its mode implement and its task Release 1.2 already chosen from its launch, and what the session would load beneath.](../images/studio-resume-sheet.png)
 
 Only a conversation whose launch is on record carries anything over. Loadout
 files each Claude Code conversation it launches under that launch as it starts,
@@ -199,7 +203,11 @@ A few things are asked before anything starts:
 - **Not a project**: a conversation from a folder Loadout doesn't know offers
   **Register and resume**. It names the folder first, then registers it as
   `loadout project add` would. It can only ever register the folder that
-  conversation ran in.
+  conversation ran in. The conversation carries on as itself rather than
+  becoming the new project's onboarding; the terminal reminds you the project
+  still has that to do.
+
+![Studio asking before it registers a folder: the conversation ran in a folder that isn't a Loadout project, so Register and resume shows the loadout project add command it will run, beside Cancel.](../images/studio-register.png)
 
 A team node's conversation isn't in the history. Take one over from its run's
 page, where you can see what it was doing.
