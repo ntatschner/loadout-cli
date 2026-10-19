@@ -19,7 +19,7 @@
   import { runJob } from '../lib/jobs';
   import { lineFor } from '../lib/commandLine';
   import { router } from '../lib/router.svelte';
-  import { acceptWords, sendAnswers, stateWord, type DumpItem, type Question } from '../lib/ideas';
+  import { acceptWords, gaps, needsChoice, nextStop, sendAnswers, stateWord, stopTarget, stopWords, type DumpItem, type Question } from '../lib/ideas';
   import { studio } from '../lib/state.svelte';
   import { listHref, movedSaid, whereSaid } from '../lib/tasks';
   import { toasts } from '../lib/toasts.svelte';
@@ -108,6 +108,11 @@
   let projects = $state<{ slug: string; name: string }[]>([]);
   let problem = $state<string | null>(null);
   let showing = $state<{ id: string; text: string } | null>(null);
+  // What is typed on the workbench and not sent, as the parts holding it report it.
+  let drafted = $state<string[]>([]);
+  let sentAnswers = $state<string[]>([]);
+  let reworks = $state<Record<string, boolean>>({});
+  let work = $state<HTMLElement | null>(null);
 
   // #ideas/<list>/<id>, where the list is a project's slug or '~' for the
   // workspace-wide one; #ideas/+add and #ideas/+dumps for the rest. With
@@ -160,6 +165,11 @@
   $effect(() => {
     idea = null;
     problem = null;
+    untrack(() => {
+      drafted = [];
+      sentAnswers = [];
+      reworks = {};
+    });
 
     if (id) {
       void loadIdea(id, where);
@@ -282,9 +292,56 @@
     });
   });
 
-  const undecided = $derived(idea?.plan?.layers.filter((layer) => layer.options.length && !layer.chosen && layer.verdict.toLowerCase() !== 'drop').length ?? 0);
+  const undecided = $derived(idea?.plan?.layers.filter(needsChoice).length ?? 0);
   const acceptLine = $derived(idea ? acceptWords(idea.id, where, goes === 'project' ? { project: onto || '<slug>' } : { newProject: named.trim() || '<name>' }) : []);
   const acceptReason = $derived(refused ?? (goes === 'project' ? (onto ? undefined : 'choose the project it goes on') : named.trim() ? undefined : 'name the new project'));
+
+  // Next: the next thing on the open idea that needs you, then the button that saves what is typed.
+  const drafts = $derived({ answers: drafted, sent: sentAnswers, reworks: Object.keys(reworks).filter((piece) => reworks[piece]) });
+  // Watching only, nothing typed can be sent, so the send stops are passed over.
+  const stop = $derived(idea ? nextStop(idea, refused ? { ...drafts, answers: [], reworks: [] } : drafts) : null);
+  const left = $derived(idea ? gaps(idea, drafts).length : 0);
+  const unsent = $derived(drafts.answers.length + drafts.reworks.length > 0);
+
+  function goNext() {
+    const target = stop && work?.querySelector<HTMLElement>(`[data-next="${stopTarget(stop)}"]`);
+
+    if (!target) {
+      return;
+    }
+
+    const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const focusable = target.matches('button, input, textarea, select') ? target : target.querySelector<HTMLElement>('input, textarea, select, button');
+
+    target.scrollIntoView?.({ block: 'center', behavior: still ? 'auto' : 'smooth' });
+    focusable?.focus({ preventScroll: true });
+
+    if (!still) {
+      target.classList.remove('next-here');
+      void target.offsetWidth;
+      target.classList.add('next-here');
+      setTimeout(() => target.classList.remove('next-here'), 1100);
+    }
+  }
+
+  // ] goes to the next stop, outside text fields: N is taken, and typing is when single keys are ignored.
+  function nextKey(event: KeyboardEvent) {
+    const typing = (event.target as HTMLElement | null)?.closest('input, textarea, select, [contenteditable="true"], .xterm');
+
+    if (event.key !== ']' || !stop || typing || event.ctrlKey || event.metaKey || event.altKey || !studio.keys || document.querySelector('.ls-dialog')) {
+      return;
+    }
+
+    event.preventDefault();
+    goNext();
+  }
+
+  // Leaving with answers or a rework typed and not sent loses them, so the browser asks first.
+  function leaving(event: BeforeUnloadEvent) {
+    if (unsent) {
+      event.preventDefault();
+    }
+  }
 
   // Drop an idea in.
   let text = $state('');
@@ -298,6 +355,8 @@
     }
   }
 </script>
+
+<svelte:window onkeydown={nextKey} onbeforeunload={leaving} />
 
 {#if !focused}
 <div class="head">
@@ -354,7 +413,7 @@
   </nav>
   {/if}
 
-  <section class="work" aria-label="Idea">
+  <section class={['work', stop ? 'has-next' : ''].filter(Boolean).join(' ')} aria-label="Idea" bind:this={work}>
     {#if problem}<p class="offline" role="alert">{problem}</p>{/if}
 
     {#if id && idea}
@@ -385,7 +444,7 @@
       {#if idea.questions.length && !idea.accepted}
         <section class="pblock" aria-labelledby="iq">
           <h2 class="ls-zone" id="iq">Questions for you</h2>
-          <QuestionSet id={idea.id} {where} questions={idea.questions} disabledReason={refused} onsend={(answers, refine) => sendAnswers(idea!.id, where, answers, refine, (path, words) => (path === 'idea answer' ? actToEnd(path, words) : act(path, words)))} />
+          <QuestionSet id={idea.id} {where} questions={idea.questions} disabledReason={refused} ondraft={(answers, sent) => ((drafted = answers), (sentAnswers = sent))} onsend={(answers, refine) => sendAnswers(idea!.id, where, answers, refine, (path, words) => (path === 'idea answer' ? actToEnd(path, words) : act(path, words)))} />
         </section>
       {/if}
 
@@ -396,14 +455,16 @@
             <PlanLayer idea={idea.id} {where} {layer} accepted={!!idea.accepted} disabledReason={refused}
               onchoose={(option) => void act('idea choose', [idea!.id, layer.id, option, ...where])}
               onverdict={(verdict) => void act(verdict === 'Keep' ? 'idea keep' : 'idea drop', [idea!.id, layer.id, ...where])}
-              onimprove={(request) => void act('idea improve', [idea!.id, layer.id, `--request=${request}`, ...where])} />
+              onimprove={(request) => void act('idea improve', [idea!.id, layer.id, `--request=${request}`, ...where])}
+              onrework={(pending) => untrack(() => (reworks = { ...reworks, [layer.id]: pending }))} />
           {/each}
           {#if idea.plan.additions.length}
             <h3 class="sub">Additions the agent proposes</h3>
             {#each idea.plan.additions as addition (addition.id)}
               <PlanLayer idea={idea.id} {where} {addition} accepted={!!idea.accepted} disabledReason={refused}
                 onverdict={(verdict) => void act(verdict === 'Keep' ? 'idea keep' : 'idea drop', [idea!.id, addition.id, ...where])}
-                onimprove={(request) => void act('idea improve', [idea!.id, addition.id, `--request=${request}`, ...where])} />
+                onimprove={(request) => void act('idea improve', [idea!.id, addition.id, `--request=${request}`, ...where])}
+                onrework={(pending) => untrack(() => (reworks = { ...reworks, [addition.id]: pending }))} />
             {/each}
           {/if}
         </section>
@@ -432,7 +493,7 @@
           </fieldset>
           {#if undecided}<p><span class="ls-tag needs">{undecided} layer{undecided === 1 ? ' has' : 's have'} no option chosen</span> It can still be accepted; the plan says so where it is written.</p>{/if}
           <div class="ls-answers flush">
-            <HaloButton label="Accept the plan" solid={!acceptReason} glyph="✓" size="small" cmd={lineFor('idea accept', acceptLine)} disabledReason={acceptReason} onpress={() => void act('idea accept', acceptLine)} />
+            <HaloButton label="Accept the plan" next="accept" solid={!acceptReason} glyph="✓" size="small" cmd={lineFor('idea accept', acceptLine)} disabledReason={acceptReason} onpress={() => void act('idea accept', acceptLine)} />
           </div>
         </section>
       {/if}
@@ -451,6 +512,16 @@
       {/if}
 
       <Command why="The same, in a terminal:" command={lineFor('idea show', [idea.id, ...where])} />
+
+      {#if stop}
+        <div class="ls-next">
+          {#if left}<span class="left" aria-hidden="true">{left}</span>{/if}
+          <HaloButton label={`Next: ${stopWords(stop)}`} size="small" solid glyph="↓" describedBy="ls-next-left"
+            cmd={`changes nothing · ]${left ? ` · ${left} left to decide` : ''}`}
+            disabledReason={refused && stop.kind === 'accept' ? refused : undefined} onpress={goNext} />
+          <span class="ls-sr" id="ls-next-left">{left ? `${left} left to decide on this idea` : 'nothing left to decide on this idea'}</span>
+        </div>
+      {/if}
     {:else if id}
       <p class="calm" role="status">Reading…</p>
     {:else if place === 'add'}

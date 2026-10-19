@@ -21,6 +21,8 @@
     onpress?: (event: MouseEvent) => void;
     /** For keeping focus on this button across a redraw. */
     key?: string;
+    /** Where the Ideas page's Next button finds this one. */
+    next?: string;
   }
 
   let {
@@ -35,6 +37,7 @@
     inactive = false,
     onpress = undefined,
     key = undefined,
+    next = undefined,
   }: Props = $props();
 
   const classes = $derived(['ls-halo', kind, size, solid ? 'solid' : ''].filter(Boolean).join(' '));
@@ -53,6 +56,7 @@
     aria-disabled={disabledReason || inactive ? 'true' : undefined}
     aria-describedby={describedBy}
     data-k={key}
+    data-next={next}
     onclick={press}
   ><span class="ring" aria-hidden="true">{#if glyph}<b>{glyph}</b>{/if}</span>{label}</button>
 {/snippet}

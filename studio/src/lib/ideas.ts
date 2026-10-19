@@ -202,3 +202,128 @@ export function applyWords(id: string, items: DumpItem[], picked: number[]): str
 export function acceptWords(id: string, where: string[], to: { project: string } | { newProject: string }): string[] {
   return 'project' in to ? [id, ...where, '--to', to.project] : [id, ...where, `--new-project=${to.newProject}`];
 }
+
+/** A piece of a plan as Next sees it: a layer with its options, or an addition with none. */
+export interface Piece {
+  id: string;
+  verdict: string;
+  chosen?: string | null;
+  options?: unknown[];
+}
+
+/** What is typed on the page and not sent: the questions with an answer drafted, those sent and not yet read back, and the pieces with a rework request written. */
+export interface Drafts {
+  answers: string[];
+  sent: string[];
+  reworks: string[];
+}
+
+export const NO_DRAFTS: Drafts = { answers: [], sent: [], reworks: [] };
+
+/** Where Next goes: one question, the send button, a rework's Send it back, a layer's options or a piece's verdict, or Accept. */
+export type Stop =
+  | { kind: 'question'; id: string; index: number; of: number }
+  | { kind: 'send-answers' }
+  | { kind: 'rework'; id: string }
+  | { kind: 'choose'; id: string }
+  | { kind: 'verdict'; id: string }
+  | { kind: 'accept' };
+
+const said = (verdict: string) => String(verdict || 'undecided').toLowerCase();
+
+/** A layer with options to choose from, none chosen, and not dropped: what the Accept warning counts. */
+export function needsChoice(piece: Piece): boolean {
+  return !!piece.options?.length && !piece.chosen && said(piece.verdict) !== 'drop';
+}
+
+/** A piece nobody has kept, dropped or sent back yet. */
+export function needsVerdict(piece: Piece): boolean {
+  return said(piece.verdict) === 'undecided';
+}
+
+interface Shaped {
+  questions: Question[];
+  plan: { layers: Piece[]; additions: Piece[] } | null;
+  accepted: unknown;
+}
+
+/** The questions still open: no answer saved, none sent, and nothing typed. */
+function openQuestions(idea: Shaped, drafts: Drafts): Question[] {
+  return idea.questions.filter((one) => !one.answer && !drafts.sent.includes(one.id) && !drafts.answers.includes(one.id));
+}
+
+/** Every gap on the idea, in page order: open questions, then each layer's choice and verdict, then each addition's verdict. Unsent drafts are not gaps. */
+export function gaps(idea: Shaped, drafts: Drafts = NO_DRAFTS): Stop[] {
+  if (idea.accepted) {
+    return [];
+  }
+
+  const found: Stop[] = openQuestions(idea, drafts).map((one) => ({ kind: 'question', id: one.id, index: idea.questions.indexOf(one) + 1, of: idea.questions.length }));
+
+  for (const piece of [...(idea.plan?.layers ?? []), ...(idea.plan?.additions ?? [])]) {
+    if (needsChoice(piece)) {
+      found.push({ kind: 'choose', id: piece.id });
+    }
+
+    if (needsVerdict(piece)) {
+      found.push({ kind: 'verdict', id: piece.id });
+    }
+  }
+
+  return found;
+}
+
+/**
+ * Where Next goes from here. Open questions come first; once every one has
+ * something typed, the answers are sent; then a half-written rework; then
+ * the first gap in the plan; and with nothing left, Accept. Null when there
+ * is nowhere to go: accepted already, or nothing yet to accept.
+ */
+export function nextStop(idea: Shaped, drafts: Drafts = NO_DRAFTS): Stop | null {
+  if (idea.accepted) {
+    return null;
+  }
+
+  const found = gaps(idea, drafts);
+  const question = found.find((one) => one.kind === 'question');
+
+  if (question) {
+    return question;
+  }
+
+  if (drafts.answers.length) {
+    return { kind: 'send-answers' };
+  }
+
+  const pieces = [...(idea.plan?.layers ?? []), ...(idea.plan?.additions ?? [])];
+  const rework = pieces.find((one) => drafts.reworks.includes(one.id));
+
+  if (rework) {
+    return { kind: 'rework', id: rework.id };
+  }
+
+  return found[0] ?? (idea.plan ? { kind: 'accept' } : null);
+}
+
+/** What the Next button says about where it goes. */
+export function stopWords(stop: Stop): string {
+  switch (stop.kind) {
+    case 'question':
+      return `answer ${stop.index} of ${stop.of}`;
+    case 'send-answers':
+      return 'send answers';
+    case 'rework':
+      return `send ${stop.id} back`;
+    case 'choose':
+      return `choose for ${stop.id}`;
+    case 'verdict':
+      return `keep or drop ${stop.id}`;
+    case 'accept':
+      return 'accept the plan';
+  }
+}
+
+/** The data-next value the stop's target carries on the page. */
+export function stopTarget(stop: Stop): string {
+  return 'id' in stop ? `${stop.kind}:${stop.id}` : stop.kind;
+}

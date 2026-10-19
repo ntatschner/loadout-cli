@@ -178,6 +178,13 @@ body { margin: 0; background: var(--ground); color: var(--ink); }
 .accept .opt select, .accept .opt .ls-text { width: auto; flex: 0 1 260px; min-width: 0; }
 .ls-text.big { min-height: 120px; font-family: var(--font-sans); font-size: 16px; }
 .wherebar .lab { font-size: 11.5px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-soft); }
+.work.has-next { padding-bottom: 96px; }
+/* Next: fixed to the lower right, clear of the toasts at the top. */
+.ls-next { position: fixed; right: max(24px, env(safe-area-inset-right, 0px)); bottom: max(20px, env(safe-area-inset-bottom, 0px)); z-index: 15; display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule), var(--shadow-float); max-width: calc(100% - 32px); }
+.ls-next .ls-action { min-width: 0; }
+.ls-next .left { --c: var(--needs); min-width: 22px; height: 22px; padding: 0 6px; display: inline-grid; place-items: center; font-family: var(--font-mono); font-size: 12px; color: var(--ink-strong); box-shadow: inset 0 0 0 1.5px var(--c); border-radius: var(--radius-pill); }
+.next-here { animation: lsNextHere 1s var(--ease-out, ease-out); }
+@keyframes lsNextHere { 0% { outline: 2px solid var(--focus); outline-offset: 6px; } 100% { outline: 2px solid transparent; outline-offset: 2px; } }
 pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); font-size: 13px; color: var(--ink); }
 @media (max-width: 860px) { .bench { grid-template-columns: minmax(0, 1fr); gap: 20px; } .shelf { position: static; max-height: none; } }
 
