@@ -110,9 +110,9 @@ public static partial class VoiceRendering
             {
                 text.Append("- ").Append(rule.Statement.Trim());
 
-                if (Limited(rule, guide) is { } surfaces)
+                if (Limited(rule, guide, layer) is { } surfaces)
                 {
-                    text.Append(CultureInfo.InvariantCulture, $" *({surfaces} only)*");
+                    text.Append(CultureInfo.InvariantCulture, $" *({surfaces})*");
                 }
 
                 text.Append('\n');
@@ -270,22 +270,57 @@ public static partial class VoiceRendering
         return unstamped.Insert(at, $"{StampKey}: {hash}\n");
     }
 
-    private static string? Limited(VoiceRule rule, VoiceGuide guide)
+    /// <summary>
+    /// Where a rule applies, when that is not everywhere its guide does.
+    /// </summary>
+    /// <remarks>
+    /// A rule from any layer but the person's own, on a surface the person
+    /// owns, says it gives way there. The layers are rendered into separate
+    /// files and the codebase's composes last, so without saying so its rule
+    /// would read as overriding the person's on exactly the surfaces where the
+    /// person's is meant to win.
+    /// </remarks>
+    private static string? Limited(VoiceRule rule, VoiceGuide guide, StyleLayer layer)
     {
-        var surfaces = rule.Surfaces.Where(guide.Surfaces.Contains).Distinct().ToList();
+        var surfaces = rule.Surfaces.Count == 0
+            ? guide.Surfaces
+            : rule.Surfaces.Where(guide.Surfaces.Contains).Distinct().ToList();
+
+        var owned = layer == StyleLayer.Personal
+            ? []
+            : surfaces.Where(guide.PersonalSurfaces.Contains).ToList();
+
+        if (owned.Count > 0)
+        {
+            var rest = surfaces.Except(owned).ToList();
+            var yields = $"{Names(owned)} only where your own voice sets nothing";
+
+            return rest.Count > 0 ? $"{Names(rest)}; {yields}" : yields;
+        }
 
         if (surfaces.Count == 0 || surfaces.Count >= guide.Surfaces.Count)
         {
             return null;
         }
 
-        return string.Join(" and ", surfaces.Select(s => s switch
+        return $"{Names(surfaces)} only";
+    }
+
+    private static string Names(IEnumerable<string> surfaces)
+    {
+        var names = surfaces.Select(s => s switch
         {
             VoiceGuides.Commit => "commit messages",
             VoiceGuides.PullRequest => "pull requests",
             VoiceGuides.Document => "docs",
+            VoiceGuides.Chat => "chat",
+            VoiceGuides.Ui => "interfaces",
             _ => s,
-        }));
+        }).ToList();
+
+        return names.Count <= 2
+            ? string.Join(" and ", names)
+            : $"{string.Join(", ", names[..^1])} and {names[^1]}";
     }
 
     private static string Title(StyleLayer layer, string name) => layer switch

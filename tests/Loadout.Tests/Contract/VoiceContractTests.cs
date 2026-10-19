@@ -45,7 +45,7 @@ public sealed class VoiceContractTests
         checkedRun.ExitCode.Should().Be(0, "a finding reports and never fails the command");
 
         var json = checkedRun.Json();
-        json.GetProperty("guides").EnumerateArray().Select(g => g.GetString()).Should().Equal("prose/1");
+        json.GetProperty("guides").EnumerateArray().Select(g => g.GetString()).Should().Equal("prose/1", "time/1");
         json.GetProperty("surface").GetString().Should().Be("doc");
 
         var check = json.GetProperty("checks").EnumerateArray().Single();
@@ -143,6 +143,47 @@ public sealed class VoiceContractTests
         finding.GetProperty("path").GetString().Should().Be("README.md");
         finding.GetProperty("line").GetInt32().Should().Be(3);
         finding.GetProperty("detail").GetString().Should().StartWith("british: ");
+    }
+
+    [BuiltCliFact]
+    public async Task A_time_setting_is_kept_shown_by_surface_checked_and_removed()
+    {
+        using var loadout = new LoadoutProcess();
+
+        var dry = await loadout.RunAsync("voice", "time", "set", "format.commit", "iso", "--dry-run", "--json");
+        dry.ExitCode.Should().Be(0);
+        dry.Json().GetProperty("dryRun").GetBoolean().Should().BeTrue();
+        File.Exists(dry.Json().GetProperty("path").GetString()).Should().BeFalse("a dry run writes nothing");
+
+        // No workspace here, so the setting is kept but cannot be rendered;
+        // that is said, and is not a failure.
+        (await loadout.RunAsync("voice", "time", "set", "format.commit", "ISO")).ExitCode.Should().Be(0);
+        (await loadout.RunAsync("voice", "time", "set", "estimates", "never")).ExitCode.Should().Be(0);
+
+        var shown = (await loadout.RunAsync("voice", "time", "show", "--json")).Json();
+        var commit = shown.GetProperty("surfaces").EnumerateArray().Single(s => s.GetProperty("surface").GetString() == "commit");
+        commit.GetProperty("format").GetString().Should().Be("iso", "a preset is stored by its own name");
+        commit.GetProperty("formatFrom").GetString().Should().Be("personal");
+        commit.GetProperty("estimates").GetString().Should().Be("never");
+
+        var checkedRun = (await loadout.RunAsync(
+            "voice", "check", "--message", "Fix the parser\n\nIt will take two days. Released 19/10/2026.", "--json")).Json();
+        checkedRun.GetProperty("checks").EnumerateArray().SelectMany(c => c.GetProperty("findings").EnumerateArray())
+            .Select(f => f.GetProperty("rule").GetString())
+            .Should().BeEquivalentTo(["estimates", "format.commit"]);
+
+        (await loadout.RunAsync("voice", "time", "set", "format.nope", "iso")).ExitCode.Should().NotBe(0);
+        (await loadout.RunAsync("voice", "time", "set", "format.doc", "19/10")).ExitCode.Should().NotBe(0);
+
+        var learn = await loadout.RunAsync("voice", "learn", "--guide", "time", "--dry-run");
+        learn.ExitCode.Should().NotBe(0);
+        (learn.StandardOutput + learn.StandardError).Should().Contain("voice time set");
+
+        (await loadout.RunAsync("voice", "time", "unset", "estimates")).ExitCode.Should().Be(0);
+
+        (await loadout.RunAsync("voice", "time", "show", "--json")).Json()
+            .GetProperty("surfaces").EnumerateArray().Should()
+            .OnlyContain(s => s.GetProperty("estimatesFrom").GetString() == "default");
     }
 
     [BuiltCliFact]
@@ -265,7 +306,7 @@ public sealed class VoiceContractTests
         var readme = Path.Combine(repository, "README.md");
 
         var whole = (await loadout.RunAsync("voice", "check", readme, "--json")).Json();
-        whole.GetProperty("guides").EnumerateArray().Select(g => g.GetString()).Should().Equal("prose/1", "idiolect/1");
+        whole.GetProperty("guides").EnumerateArray().Select(g => g.GetString()).Should().Equal("prose/1", "time/1", "idiolect/1");
         whole.GetProperty("checks").EnumerateArray().Single().GetProperty("findings").EnumerateArray()
             .Single().GetProperty("rule").GetString().Should().Be("british");
 

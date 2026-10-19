@@ -36,6 +36,13 @@ public sealed class VoiceGuide
     /// <summary>The surfaces its rules apply to, such as <c>doc</c>, <c>commit</c> and <c>pr</c>.</summary>
     public List<string> Surfaces { get; set; } = [];
 
+    /// <summary>
+    /// Surfaces where the person's own setting wins over the codebase's, such
+    /// as <c>chat</c>. Empty means the codebase wins everywhere, as it does for
+    /// every learned guide.
+    /// </summary>
+    public List<string> PersonalSurfaces { get; set; } = [];
+
     /// <summary>The check types a rule may carry. Anything else is a judged rule, which never gates.</summary>
     public List<string> CheckTypes { get; set; } = [];
 

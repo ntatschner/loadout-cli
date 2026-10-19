@@ -58,9 +58,24 @@ public static partial class VoiceChecker
     /// <summary>A pattern that must not match. Reports, and is never allowed to gate.</summary>
     public const string Regex = "regex";
 
-    /// <summary>The check types this version can run.</summary>
+    /// <summary>Dates written in the format a surface is set to. Reports, and never gates.</summary>
+    public const string DateFormat = "date-format";
+
+    /// <summary>Estimates of how long work will take, against the estimates policy. Reports, and never gates.</summary>
+    public const string UnownedEstimate = "unowned-estimate";
+
+    /// <summary>
+    /// The check types a learned rule may carry: the ones a guide can be
+    /// drafted with and a run can propose.
+    /// </summary>
     public static readonly IReadOnlyList<string> Types =
         [AvoidPhrase, PreferSpelling, HeadingCase, MaxSentenceWords, CommitSubject, Regex];
+
+    /// <summary>
+    /// The check types the time guide's settings carry. Kept apart from
+    /// <see cref="Types"/> because they are set, never learned.
+    /// </summary>
+    public static readonly IReadOnlyList<string> TimeTypes = [DateFormat, UnownedEstimate];
 
     /// <summary>Commit subject length when the rule names none, which is what git's own tooling wraps at.</summary>
     public const int DefaultSubjectLength = 72;
@@ -196,6 +211,14 @@ public static partial class VoiceChecker
 
                 case Regex:
                     Pattern(rule, check, lines, findings, skipped);
+                    break;
+
+                case DateFormat:
+                    VoiceTime.Dates(rule, check, lines, findings, skipped);
+                    break;
+
+                case UnownedEstimate:
+                    VoiceTime.Estimates(rule, check, lines, findings);
                     break;
 
                 default:

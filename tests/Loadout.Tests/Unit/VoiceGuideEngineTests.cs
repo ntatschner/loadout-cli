@@ -319,7 +319,7 @@ public sealed class VoiceGuideEngineTests : IDisposable
 
         var current = await _store.CurrentGuidesAsync();
 
-        current.Value!.Select(g => g.Reference).Should().Equal("prose/1", "idiolect/2");
+        current.Value!.Select(g => g.Reference).Should().Equal("prose/1", "time/1", "idiolect/2");
     }
 
     private async Task LearnedAsync()

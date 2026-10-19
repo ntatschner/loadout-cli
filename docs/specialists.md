@@ -314,6 +314,54 @@ output as your voice. Two more things are left out on purpose:
 Other text pasted without Claude marking it as pasted, and not shaped like
 terminal output, is still read as yours.
 
+### Dates, times and estimates
+
+A second guide ships beside `prose/1`: `time/1`, which says how dates are
+written and how long work is said to take. Nothing in your history says
+reliably which date format you want, and whether an agent gives estimates at
+all is a decision rather than a habit, so this one is set, not learned:
+
+```bash
+loadout voice time show                          # what's in force, surface by surface
+loadout voice time set estimates never
+loadout voice time set format.commit iso --layer codebase
+loadout voice time unset format.commit --layer codebase
+```
+
+With nothing set, an agent asked how long something will take gives a range
+and says whose time it is: agent time, your time, or waiting on CI or a
+review. That default sits in the core every session gets, because estimates
+come up in tasks that never mention time, and agent time and a person's time
+differ by an order of magnitude. `estimates never` swaps it for describing
+the size of the work instead.
+
+A format is set per surface: `doc`, `commit`, `pr`, `chat` and `ui`. It's
+one of `iso`, `long-british`, `long-american`, `short-numeric`, `relative`
+or `relative-with-absolute`, or `pattern:` followed by a format of your own.
+A pattern is passed on to agents but never checked, because Loadout can't
+tell what an arbitrary pattern allows.
+
+Which setting wins depends on the surface. The codebase decides how its own
+docs, commits and pull requests read, the way it does for every other voice
+rule. How an agent talks to you in a session, and what an interface shows you,
+is yours, so on `chat` and `ui` your setting wins over the codebase's.
+Either falls back to the other when its own layer sets nothing, and `voice
+time show` says which layer set each one.
+
+`voice check` and the docs audit check two things. A date written in a shape
+the surface's format doesn't allow is reported, as is an estimate with no
+range or nobody's time named, or any estimate at all under `never`. Both
+report and never fail anything. Spotting an estimate is a heuristic: it looks
+for a duration in a sentence that also says something will or should take
+that long, so "the suite took 8 minutes" and "a timeout of 30 seconds" are
+left alone, but an estimate put some other way is missed. `chat` and `ui`
+are guidance only, because the checker never sees that text.
+
+Separately, a task that mentions dates, time zones, durations, schedules or
+expiry loads `function.time`, which covers handling them in code. A bare
+"time" doesn't load it, because "at the same time" turns up in tasks that have
+nothing to do with clocks.
+
 Validation warns about a style that works but costs more than it should:
 
 - a core or voice over about 1,000 tokens, since both load on every launch and
@@ -408,8 +456,8 @@ loadout instructions list            # everything available to this project
 loadout instructions list --kind language
 ```
 
-The library ships 104 specialists — 5 foundations, 5 modes, 10 languages, 8
-frameworks, 4 databases, 5 platforms, 3 clouds, 22 functions, 17 skills and 25
+The library ships 105 specialists — 5 foundations, 5 modes, 10 languages, 8
+frameworks, 4 databases, 5 platforms, 3 clouds, 23 functions, 17 skills and 25
 roles. They are embedded in the binary rather than kept on disk, so the command
 is the way to read them; there is no directory to browse.
 

@@ -64,6 +64,12 @@ public sealed class VoiceCheck
 
     /// <summary>A pattern that must not match, for <c>regex</c>. Never gates.</summary>
     public string? Pattern { get; set; }
+
+    /// <summary>
+    /// The value chosen, for the checks that are settings rather than learned:
+    /// a format preset for <c>date-format</c>, a policy for <c>unowned-estimate</c>.
+    /// </summary>
+    public string? Value { get; set; }
 }
 
 /// <summary>Why a rule was accepted: one piece of the person's writing.</summary>

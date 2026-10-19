@@ -451,6 +451,10 @@
       <h4 class="gh">Read</h4>
       <CommandAction path="voice runs" title="Past learn runs, with what each cost" preset={{ '--project': slug }} fixed={['--project']} label="Show" />
       <CommandAction path="voice guide show" title="A guide's sources, checks and thresholds" label="Show" />
+      <h4 class="gh">Dates and estimates</h4>
+      <CommandAction path="voice time show" title="How dates are written and estimates given, surface by surface" preset={{ '--project': slug }} fixed={['--project']} label="Show" />
+      <CommandAction path="voice time set" title="Set an estimates policy or a surface's date format" preset={{ '--project': slug }} fixed={['--project']} label="Set it" />
+      <CommandAction path="voice time unset" title="Remove a setting, so the other layer's or the default applies" preset={{ '--project': slug }} fixed={['--project']} label="Remove it" />
     </div>
   {:else if section === 'handoff'}
     <p class="lead">A handoff is a note the next session reads first: what this one worked out, so it does not have to again.</p>

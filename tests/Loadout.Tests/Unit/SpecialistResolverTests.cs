@@ -169,6 +169,28 @@ public sealed class SpecialistResolverTests
         Ids(result).Should().NotContain("function.concurrency");
     }
 
+    [Fact]
+    public async Task A_task_about_dates_gets_the_time_specialist()
+    {
+        var result = await ResolveAsync(
+            "The expiry date is a day out for users in Sydney.",
+            mode: "investigate");
+
+        Ids(result).Should().Contain("function.time");
+    }
+
+    [Fact]
+    public async Task Words_that_merely_contain_a_time_phrase_do_not_load_it()
+    {
+        // Phrases match whole words. "date" is inside "update" and "validate",
+        // and a bare "time" is in tasks that have nothing to do with clocks,
+        // so neither may bring the specialist in.
+        var result = await ResolveAsync(
+            "Update the validation so both runs finish at the same time.");
+
+        Ids(result).Should().NotContain("function.time");
+    }
+
     // ------------------------------------------------------------- activation
 
     [Fact]
