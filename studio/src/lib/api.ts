@@ -1,5 +1,5 @@
 // The daemon's API, as Studio reads and changes it. Studio signs in with the
-// cookie 'loadout dashboard --open --studio' gives it, so requests carry no
+// cookie 'loadout dashboard --open' gives it, so requests carry no
 // token; an address printed with one still works, and the token is then kept
 // in memory only and taken out of the address bar at once.
 

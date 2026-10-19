@@ -64,14 +64,14 @@ most wants one.
 
 [Using the dashboard, step by step](docs/guides/dashboard.md)
 
-### Studio: start sessions and work in them from your browser (preview)
+### Studio: start sessions and work in them from your browser
 
-Studio is a second front end, served by the daemon at `/studio/` beside the
-dashboard. Start a session from it, with the same launch sheet the terminal
+Studio is the page the daemon serves, at `/studio/`, with the classic
+dashboard beside it at `/classic`. Start a session from it, with the same launch sheet the terminal
 gives you, and type into its live terminal. It shows everything in flight on
 one page and lets you answer what's waiting on you. The session belongs to the
-daemon, so closing the tab ends nothing. It's a preview, so the dashboard stays
-the default; `loadout dashboard --open --studio` opens it signed in.
+daemon, so closing the tab ends nothing. `loadout dashboard --open` opens it
+signed in, and `--classic` opens the classic page instead.
 
 [Using Studio, step by step](docs/guides/studio.md)
 

@@ -4,11 +4,11 @@
 from it, a question from a team run answered, and Studio set up to look the way
 you read best.
 
-Studio is a second front end for Loadout, next to the classic dashboard. The
-classic page is for watching runs. Studio is where you start sessions, work in
-them, and see everything in flight at once. It's a preview: the classic
-dashboard stays the default, and both are served by the same daemon, at the
-same address, behind the same sign-in.
+Studio is Loadout's front end in the browser, next to the classic dashboard.
+The classic page is for watching runs. Studio is where you start sessions, work
+in them, and see everything in flight at once. Studio is what the daemon's
+address opens; both are served by the same daemon, at the same address, behind
+the same sign-in.
 
 ## Before you start
 
@@ -23,7 +23,7 @@ same address, behind the same sign-in.
 ### 1. Open Studio signed in
 
 ```sh
-loadout dashboard --open --studio
+loadout dashboard --open
 ```
 
 You should see Studio's Home open in your browser. The command signs the
@@ -34,13 +34,14 @@ A browser that isn't signed in sees one page, telling it to run that command.
 There's no box to paste a token into, on purpose: the sign-in only ever comes
 from a terminal on this machine.
 
-To have the daemon's address open Studio rather than the classic page:
+To have the daemon's address open the classic page rather than Studio:
 
 ```sh
-loadout config set dashboard studio
+loadout config set dashboard classic
 ```
 
-The classic page is still at `/classic` either way.
+The classic page is at `/classic` either way, and
+`loadout dashboard --open --classic` opens it signed in.
 
 ### 2. Find your way round
 
@@ -676,8 +677,8 @@ well as the page. On **Commands**, only commands that just read run, and
 
 ## If something goes wrong
 
-- **"This browser isn't signed in to Studio"** — run `loadout dashboard --open
-  --studio` again. Somebody may have signed every browser out
+- **"This browser isn't signed in to Studio"** — run `loadout dashboard --open`
+  again. Somebody may have signed every browser out
   (`loadout dashboard sign-out`, or **Sign out every browser** in Settings).
 - **"Only the daemon hosts sessions"** — you opened Studio from
   `loadout dashboard`. Start the daemon with `loadout daemon` and open its
@@ -686,5 +687,4 @@ well as the page. On **Commands**, only commands that just read run, and
   `loadout resume --last` carries the conversation on in a terminal.
 - **Anything else** — **Report a problem**, at the foot of the rail, opens
   Studio's bug form on GitHub with the version and platform filled in. It sends
-  nothing on its own; paste `loadout doctor` into the form if you can. Studio is
-  a preview, and these reports decide when it becomes the default.
+  nothing on its own; paste `loadout doctor` into the form if you can.

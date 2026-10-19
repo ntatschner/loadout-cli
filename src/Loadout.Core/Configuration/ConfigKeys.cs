@@ -548,13 +548,13 @@ public static class ConfigKeys
             WhenUnset: view.DefaultQuery.Length > 0 ? view.DefaultQuery : "everything, in the default order")),
 
         new("dashboard",
-            "Which page the daemon's address opens: classic, or studio for the preview app",
+            "Which page the daemon's address opens: studio, or classic for the classic dashboard",
             (_, m) => m.Teams.Dashboard ?? string.Empty,
             (_, m, v) => m.Teams.Dashboard = OneOf(v, "", "classic", "studio") is { Length: > 0 } chosen ? chosen : null,
             true,
-            Sample: "studio",
+            Sample: "classic",
             Group: Groups.Machine,
-            WhenUnset: "classic. Studio is a preview, at /studio/ either way"),
+            WhenUnset: "studio. The classic page is at /classic either way"),
 
         new("discovery-roots", "Comma-separated directories scanned for repositories",
             (_, m) => string.Join(", ", m.DiscoveryRoots),

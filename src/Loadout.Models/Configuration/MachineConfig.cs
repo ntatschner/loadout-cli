@@ -214,8 +214,8 @@ public sealed class MachineTeams
     public int? DashboardPort { get; set; }
 
     /// <summary>
-    /// Which page the daemon's address opens: classic, or studio for the
-    /// preview app. Null is classic.
+    /// Which page the daemon's address opens: studio, or classic for the
+    /// classic dashboard. Null is studio.
     /// </summary>
     /// <remarks>
     /// Per machine, beside the port, because it is about what this machine's

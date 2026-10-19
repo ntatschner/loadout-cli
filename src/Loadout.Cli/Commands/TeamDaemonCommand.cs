@@ -460,10 +460,8 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
 
             // Which page the address opens, read each time so setting it is
             // seen at the next load rather than the next restart.
-            server.StudioFirst = async token => string.Equals(
-                (await _configuration.LoadMachineAsync(token).ConfigureAwait(false)).Value?.Teams.Dashboard,
-                "studio",
-                StringComparison.Ordinal);
+            server.StudioFirst = async token => DashboardServer.OpensStudio(
+                (await _configuration.LoadMachineAsync(token).ConfigureAwait(false)).Value?.Teams.Dashboard);
 
             // And Studio's memory page: read through Core, saved by typing
             // 'memory replace'.

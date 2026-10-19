@@ -151,7 +151,7 @@ covers the rest.
 
 ### 8. Studio, if you use it
 
-Studio, the preview front end at `/studio/`, reads one thing from your
+Studio, the front end at `/studio/`, reads one thing from your
 accessibility profile: with the `screen-reader` preset, a session's terminal
 switches on its own screen-reader mode. A web page can't ask your system
 whether a screen reader is running, so the preset is how it knows. Everything
