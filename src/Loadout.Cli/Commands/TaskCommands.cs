@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using Loadout.Cli.Infrastructure;
 using Loadout.Core.Git;
+using Loadout.Core.Lists;
 using Loadout.Core.Projects;
 using Loadout.Core.Tasks;
 using Loadout.Models;
@@ -90,6 +91,28 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
         [CommandOption("--all")]
         [Description("Include what is done and dropped, rather than only what is open.")]
         public bool All { get; init; }
+
+        [CommandOption("--filter <QUERY>")]
+        [Description("Keep only what the query says, such as \"state:doing,open login\". It replaces the default of hiding done and dropped work. A query starting with a minus is given as --filter=-state:done.")]
+        public string? Filter { get; init; }
+
+        [CommandOption("--sort <FIELDS>")]
+        [Description("Sort by these fields, commas between: id, title, state, kind, by, updated, note. Newest first is --sort=-updated.")]
+        public string? Sort { get; init; }
+    }
+
+    /// <summary>
+    /// The query the list is put through: what --filter says, or else the
+    /// default of hiding done and dropped work unless --all, with --sort after.
+    /// </summary>
+    internal static OperationResult<ListQuery> Query(Settings settings)
+    {
+        var filter = settings.Filter is { Length: > 0 } given
+            ? given
+            : settings.All ? string.Empty : TaskFields.DefaultQuery;
+        var sort = settings.Sort is { Length: > 0 } fields ? $" {ListQuery.SortKey}:{fields}" : string.Empty;
+
+        return ListQuery.Parse(filter + sort);
     }
 
     /// <inheritdoc />
@@ -107,6 +130,13 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
         if (resolution.Failed)
         {
             return output.Fail(resolution);
+        }
+
+        var query = Query(settings);
+
+        if (query.Failed)
+        {
+            return output.Fail(query);
         }
 
         var project = resolution.Value;
@@ -129,10 +159,14 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
             ? []
             : await CheckAsync(project, Work(listed.Value!), now, cancellationToken).ConfigureAwait(false);
 
-        var shown = settings.All
-            ? listed.Value!
-            : [.. listed.Value!.Where(item =>
-                item.State is not (TaskState.Done or TaskState.Dropped))];
+        var applied = TaskFields.All.Apply(query.Value!, listed.Value!, now);
+
+        if (applied.Failed)
+        {
+            return output.Fail(applied);
+        }
+
+        var shown = applied.Value!;
 
         // What left this list, kept apart from its tasks so nothing counting
         // them, or suggesting what to do next, ever counts one of these.
@@ -179,14 +213,16 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
         {
             output.WriteLine(listed.Value!.Count == 0
                 ? $"[dim]{Markup.Escape(TaskPaths.Describe(slug))} has no tasks recorded.[/]"
-                : $"[dim]Nothing open. {listed.Value!.Count} recorded in total; --all shows them.[/]");
+                : settings.Filter is { Length: > 0 } filter
+                    ? $"[dim]Nothing matches {Markup.Escape(filter)}. {listed.Value!.Count} recorded in total; without --filter, the open ones show.[/]"
+                    : $"[dim]Nothing open. {listed.Value!.Count} recorded in total; --all shows them.[/]");
 
             TaskTrace.Write(output, away);
 
             return CommandOutput.Success();
         }
 
-        foreach (var item in shown.OrderBy(i => i.State).ThenBy(i => i.Id, StringComparer.Ordinal))
+        foreach (var item in shown)
         {
             output.WriteLine(
                 $"{Markup.Escape(item.Id),-22} "
