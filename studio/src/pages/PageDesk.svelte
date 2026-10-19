@@ -37,9 +37,10 @@
   import { PAGE_KEYS, SCOPE_WORDS, type PureAction, type PureCommand, type PureGroup, type PureItem, type PureScope } from '../lib/pure';
   import { router } from '../lib/router.svelte';
   import { studio } from '../lib/state.svelte';
+  import type { Chosen } from '../lib/tasks';
   import { toasts } from '../lib/toasts.svelte';
 
-  let { page, rest, onlaunch = undefined }: { page: SixPage; rest: string[]; onlaunch?: () => void } = $props();
+  let { page, rest, onlaunch = undefined }: { page: SixPage; rest: string[]; onlaunch?: (chosen?: Chosen) => void } = $props();
 
   const SCOPE = 'studio-pure-scope';
 
@@ -278,7 +279,7 @@
     }
 
     if (!studio.watchOnly && onlaunch) {
-      rows.push({ kind: 'command', label: 'Start a session', cmd: '$ loadout launch <project>', run: onlaunch });
+      rows.push({ kind: 'command', label: 'Start a session', cmd: '$ loadout launch <project>', run: () => onlaunch() });
     }
 
     for (const one of studio.catalogue) {

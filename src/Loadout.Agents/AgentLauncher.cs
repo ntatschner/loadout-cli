@@ -1117,6 +1117,12 @@ public sealed class AgentLauncher : IAgentLauncher
     /// a session about one task and got a session about nothing would not find
     /// out until the agent did not know what they meant.
     /// </para>
+    /// <para>
+    /// A done task can have another session on it, and keeps its state: work
+    /// is often picked up again after it was called finished, and making
+    /// somebody reopen it first would record it as unfinished when it may not
+    /// be. A dropped task is refused, being work somebody chose not to do.
+    /// </para>
     /// </remarks>
     private async Task<OperationResult<LaunchRequest>> LinkTaskAsync(
         string slug,
@@ -1152,7 +1158,7 @@ public sealed class AgentLauncher : IAgentLauncher
                 ExitCode.InvalidArguments);
         }
 
-        if (task.State is Models.Tasks.TaskState.Done or Models.Tasks.TaskState.Dropped)
+        if (task.State is Models.Tasks.TaskState.Dropped)
         {
             return OperationResult<LaunchRequest>.Fail(
                 $"The task '{task.Id}' is {task.State.ToString().ToLowerInvariant()}. "

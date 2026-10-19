@@ -15,6 +15,7 @@
   import Ambient from './pages/Ambient.svelte';
   import Sessions from './pages/Sessions.svelte';
   import LaunchSheet from './pages/LaunchSheet.svelte';
+  import type { Chosen } from './lib/tasks';
   import Settings from './pages/Settings.svelte';
   import Appearance from './pages/Appearance.svelte';
   import Memory from './pages/Memory.svelte';
@@ -48,6 +49,7 @@
   let launching = $state(false);
   let ambient = $state(false);
   let launchTask = $state('');
+  let launchChosen = $state<Chosen | null>(null);
 
   onMount(() => {
     // The mode is this browser's own, so the layout is right before the prefs are read.
@@ -80,12 +82,13 @@
   const current = $derived(router.route.page === 'session' ? 'sessions' : router.route.page);
   const theme = $derived(((studio.prefs?.theme as Theme | null) ?? null));
 
-  function openLaunch(task = '') {
+  function openLaunch(task = '', chosen: Chosen | null = null) {
     if (ambient) {
       ambient = false;
     }
 
     launchTask = task;
+    launchChosen = chosen;
     launching = true;
   }
 
@@ -250,7 +253,7 @@
         <p class="calm" role="status">Opening the desk…</p>
       {:then desk}
         {#key page}
-          <desk.default {page} rest={router.route.rest} onlaunch={() => openLaunch()} />
+          <desk.default {page} rest={router.route.rest} onlaunch={(chosen) => openLaunch('', chosen ?? null)} />
         {/key}
       {/await}
     {:else if deckHost}
@@ -294,7 +297,7 @@
         {#if page === 'ideas'}
           <QuietIdeas rest={router.route.rest} />
         {:else if page === 'projects'}
-          <QuietProjects rest={router.route.rest} onlaunch={() => { router.go('sessions'); openLaunch(); }} />
+          <QuietProjects rest={router.route.rest} onlaunch={(chosen) => { router.go('sessions'); openLaunch('', chosen ?? null); }} />
         {:else if page === 'context'}
           <QuietContext rest={router.route.rest} />
         {:else if page === 'settings'}
@@ -328,7 +331,7 @@
     {:else if page === 'ideas'}
       <Ideas rest={router.route.rest} />
     {:else if page === 'projects'}
-      <Projects rest={router.route.rest} onlaunch={() => { router.go('sessions'); openLaunch(); }} />
+      <Projects rest={router.route.rest} onlaunch={(chosen) => { router.go('sessions'); openLaunch('', chosen ?? null); }} />
     {/if}
   {/snippet}
 
@@ -355,7 +358,7 @@
     </Dialog>
   {/if}
   {#if launching}
-    <LaunchSheet task={launchTask} onclose={() => (launching = false)} />
+    <LaunchSheet task={launchTask} chosen={launchChosen} onclose={() => (launching = false)} />
   {/if}
 {/if}
 

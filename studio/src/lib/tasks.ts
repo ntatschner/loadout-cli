@@ -15,6 +15,14 @@ export interface Task {
   moved?: { from: string | null; at: string } | null;
 }
 
+/** The task a launch sheet opens with, and the project it is on. */
+export interface Chosen {
+  project: string;
+  id: string;
+  title: string;
+  state: string;
+}
+
 /** A task that left a list, as that list shows it. It is not one of the list's tasks. */
 export interface MovedAway {
   id: string;
@@ -49,12 +57,34 @@ export const TASK_NEXT: Record<string, TaskState[]> = {
 };
 
 export const TASK_MOVE: Record<TaskState, string> = {
-  doing: 'Start it',
+  doing: 'Mark it doing',
   done: 'Mark it done',
   blocked: 'It is blocked',
   dropped: 'Drop it',
   open: 'Reopen it',
 };
+
+/**
+ * Whether a task can have a session started on it. A dropped task is
+ * abandoned work, and the launcher refuses to link a session to one.
+ */
+export function startable(state: string): boolean {
+  return state !== 'dropped';
+}
+
+/**
+ * Where starting a session on a task moves it, or null to leave it where it
+ * is: open and blocked work is under way once a session is on it, and work
+ * already doing or done keeps its state, the session being another one on it.
+ */
+export function startedState(state: string): TaskState | null {
+  return state === 'open' || state === 'blocked' ? 'doing' : null;
+}
+
+/** The words for starting a session on a task, after 'launch'. */
+export function startWords(project: string, id: string): string[] {
+  return [project, '--task-id', id];
+}
 
 /** The words for moving a task, after 'task declare'. */
 export function declareWords(id: string, state: string, where: string[]): string[] {

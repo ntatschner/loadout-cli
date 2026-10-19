@@ -272,13 +272,28 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
         result.Value.Plan.TaskId.Should().Be("ship-it");
     }
 
-    [Theory]
-    [InlineData("no-such-task", "has no task with the id")]
-    [InlineData("finished", "is done")]
-    public async Task A_task_id_the_project_cannot_be_working_on_stops_the_launch(string id, string said)
+    [Fact]
+    public async Task A_done_task_can_have_another_session_and_keeps_its_state()
     {
         await _tasks.DeclareAsync(
             ProjectSlug, "finished", Loadout.Models.Tasks.TaskState.Done, "nigel", title: "Already shipped");
+
+        var result = await _launcher.LaunchAsync(
+            new LaunchRequest(ProjectSlug, "probe", Offline: true, DryRun: true, TaskId: "finished"));
+
+        result.Succeeded.Should().BeTrue(result.Error);
+        result.Value!.Plan!.TaskId.Should().Be("finished");
+        (await _tasks.ListAsync(ProjectSlug)).Value!
+            .Single(t => t.Id == "finished").State.Should().Be(Loadout.Models.Tasks.TaskState.Done);
+    }
+
+    [Theory]
+    [InlineData("no-such-task", "has no task with the id")]
+    [InlineData("abandoned", "is dropped")]
+    public async Task A_task_id_the_project_cannot_be_working_on_stops_the_launch(string id, string said)
+    {
+        await _tasks.DeclareAsync(
+            ProjectSlug, "abandoned", Loadout.Models.Tasks.TaskState.Dropped, "nigel", title: "Not doing this");
 
         var result = await _launcher.LaunchAsync(
             new LaunchRequest(ProjectSlug, "probe", Offline: true, DryRun: true, TaskId: id));

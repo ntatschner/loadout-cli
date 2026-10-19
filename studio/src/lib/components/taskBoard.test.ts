@@ -22,9 +22,9 @@ describe('TaskBoard', () => {
   it('offers each state exactly its moves', () => {
     render(TaskBoard, { tasks: TASKS, where: ['--project', 'p'] });
 
-    expect(moves('Open one')).toEqual(['Start it', 'It is blocked', 'Drop it']);
+    expect(moves('Open one')).toEqual(['Mark it doing', 'It is blocked', 'Drop it']);
     expect(moves('Doing one')).toEqual(['Mark it done', 'It is blocked', 'Reopen it']);
-    expect(moves('Blocked one')).toEqual(['Start it', 'Drop it']);
+    expect(moves('Blocked one')).toEqual(['Mark it doing', 'Drop it']);
     expect(moves('Done one')).toEqual(['Reopen it']);
     expect(moves('Dropped one')).toEqual(['Reopen it']);
   });
@@ -43,13 +43,41 @@ describe('TaskBoard', () => {
     const declared: [string, string][] = [];
     render(TaskBoard, { tasks: TASKS, where: ['--project', 'p'], ondeclare: (task: Task, state: string) => declared.push([task.id, state]) });
 
-    const start = within(screen.getByRole('article', { name: /^Open one/ })).getByRole('button', { name: 'Start it' });
+    const start = within(screen.getByRole('article', { name: /^Open one/ })).getByRole('button', { name: 'Mark it doing' });
     expect(start.closest('.ls-action')?.querySelector('.ls-cmd')?.textContent).toBe('$ loadout task declare t-open doing --project p');
 
     await fireEvent.click(start);
 
     expect(declared).toEqual([['t-open', 'doing']]);
     expect(screen.getByRole('article', { name: 'Open one, doing' })).toBeTruthy();
+  });
+
+  it('offers no session start without a project to start it in', () => {
+    render(TaskBoard, { tasks: TASKS, where: ['--global'], onstart: () => undefined });
+
+    expect(screen.queryAllByRole('button', { name: /^Start/ })).toHaveLength(0);
+  });
+
+  it('starts a session on every task but a dropped one, at once or with options', async () => {
+    const started: [string, boolean][] = [];
+    render(TaskBoard, { tasks: TASKS, where: ['--project', 'p'], project: 'p', onstart: (task: Task, withOptions: boolean) => started.push([task.id, withOptions]) });
+
+    expect(moves('Open one').slice(0, 2)).toEqual(['Start', 'Start with options…']);
+    expect(moves('Doing one').slice(0, 2)).toEqual(['Start', 'Start with options…']);
+    expect(moves('Blocked one').slice(0, 2)).toEqual(['Start', 'Start with options…']);
+    expect(moves('Done one')).toEqual(['Start', 'Start with options…', 'Reopen it']);
+    expect(moves('Dropped one')).toEqual(['Reopen it']);
+
+    const card = within(screen.getByRole('article', { name: /^Open one/ }));
+    const start = card.getByRole('button', { name: 'Start' });
+    expect(start.closest('.ls-action')?.querySelector('.ls-cmd')?.textContent).toBe('$ loadout launch p --task-id t-open');
+
+    await fireEvent.click(start);
+    await fireEvent.click(card.getByRole('button', { name: 'Start with options…' }));
+
+    // Starting is not a move: the card stays where it is until the list is read again.
+    expect(started).toEqual([['t-open', false], ['t-open', true]]);
+    expect(screen.getByRole('article', { name: 'Open one, open' })).toBeTruthy();
   });
 
   it('lists what moved away apart from the columns, with only the way to where it is now', () => {

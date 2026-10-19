@@ -392,8 +392,14 @@ are tracked in the repository.
 
 **What is being worked on** is a board of its tasks in three columns, open,
 doing and blocked, with done and dropped folded away rather than left out. Each
-task is moved on with one press (start it, say it's blocked, mark it done,
-reopen it, drop it), and a new one is recorded under the board. A task moved
+task is moved on with one press (mark it doing, say it's blocked, mark it done,
+reopen it, drop it), and a new one is recorded under the board. **Start**
+launches a session on the task, the same as `loadout launch <project> --task-id
+<id>`, and opens it; an open or blocked task moves to doing once the session
+has started, and one already doing or done stays where it is. A launch that
+fails moves nothing. **Start with options…** opens the launch sheet with the
+task already chosen, for a different agent, mode or working tree. Every task
+but a dropped one can be started. A task moved
 here says where it came from, and one moved away is listed under **Moved
 away** with a link to where it is now, apart from the columns and counted in
 none of them. Below that is

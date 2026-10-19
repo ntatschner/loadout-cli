@@ -14,12 +14,13 @@
   import TaskBoard from '../lib/components/TaskBoard.svelte';
   import { commands, readJson, SignedOut } from '../lib/api';
   import { lineFor } from '../lib/commandLine';
-  import { declareWords, type MovedAway, type Task } from '../lib/tasks';
+  import { declareWords, startWords, type Chosen, type MovedAway, type Task } from '../lib/tasks';
+  import { router } from '../lib/router.svelte';
   import type { Finding } from '../lib/health';
   import { studio } from '../lib/state.svelte';
   import { toasts } from '../lib/toasts.svelte';
 
-  let { rest, onlaunch }: { rest: string[]; onlaunch: () => void } = $props();
+  let { rest, onlaunch }: { rest: string[]; onlaunch: (chosen?: Chosen) => void } = $props();
 
   interface Listed {
     id: string;
@@ -228,6 +229,23 @@
     }
   }
 
+  /** Starts a session on a task, at once or through the launch sheet. */
+  async function start(task: Task, withOptions: boolean) {
+    const project = shown!.id;
+
+    if (withOptions) {
+      onlaunch({ project, id: task.id, title: task.title, state: task.state });
+
+      return;
+    }
+
+    const started = await studio.startOnTask({ project, taskId: task.id }, task.state, lineFor('launch', startWords(project, task.id)));
+
+    if (started) {
+      router.go('session', started.id);
+    }
+  }
+
   // Record a task.
   let newTitle = $state('');
   let newId = $state('');
@@ -301,7 +319,7 @@
       <section class="pblock" aria-labelledby="dt">
         <h2 class="ls-zone" id="dt">What is being worked on</h2>
         {#if tasks}
-          <TaskBoard {tasks} {away} where={['--project', shown.id]} from={`$ loadout task list --project ${shown.id} --all`} disabledReason={refused} ondeclare={(task, state) => void act('task declare', declareWords(task.id, state, ['--project', shown!.id]))} />
+          <TaskBoard {tasks} {away} project={shown.id} onstart={(task, withOptions) => void start(task, withOptions)} where={['--project', shown.id]} from={`$ loadout task list --project ${shown.id} --all`} disabledReason={refused} ondeclare={(task, state) => void act('task declare', declareWords(task.id, state, ['--project', shown!.id]))} />
         {:else}
           <p class="calm" role="status">Reading…</p>
         {/if}

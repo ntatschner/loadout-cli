@@ -2,7 +2,8 @@
   // New session: everything a launch asks, filled in with the defaults. What
   // the session would load is worked out by the daemon with the same resolver
   // the terminal launch sheet and --dry-run use, and the command beneath is
-  // the one the daemon will run.
+  // the one the daemon will run. Opened from a task, it starts with that task
+  // and its project chosen; nothing else about it changes.
   import { onMount } from 'svelte';
   import Dialog from '../lib/components/Dialog.svelte';
   import Meter from '../lib/components/Meter.svelte';
@@ -13,8 +14,9 @@
   import { roving } from '../lib/roving';
   import { router } from '../lib/router.svelte';
   import { studio } from '../lib/state.svelte';
+  import type { Chosen } from '../lib/tasks';
 
-  let { task: typed = '', onclose }: { task?: string; onclose: () => void } = $props();
+  let { task: typed = '', chosen = null, onclose }: { task?: string; chosen?: Chosen | null; onclose: () => void } = $props();
 
   const MODE_WORDS: Record<string, string> = {
     '': 'chosen with the specialists for the task',
@@ -51,22 +53,26 @@
       profile = null;
       // What the project is doing now comes first; a task typed on Home
       // arrives as Other, so it is not lost.
-      taskId = typed ? OTHER : (sheet.tasks.find((one) => one.state === 'doing')?.id ?? null);
+      taskId = chosen && chosen.project === sheet.project ? chosen.id : typed ? OTHER : (sheet.tasks.find((one) => one.state === 'doing')?.id ?? null);
       other = typed;
     } catch (error) {
       problem = (error as Error).message;
     }
   }
 
-  onMount(() => void read(null, null));
+  onMount(() => void read(chosen?.project ?? null, null));
 
-  /** No task, then doing, open and blocked, then Other… */
+  /**
+   * No task, then doing, open and blocked, then Other… A done task the
+   * sheet was opened from is not one the sheet lists, so it comes first.
+   */
   function tasks(): { id: string | null; title: string; state: string }[] {
     const declared = [...(sheet?.tasks ?? [])]
       .filter((one) => one.state in STATE_ORDER)
       .sort((a, b) => STATE_ORDER[a.state] - STATE_ORDER[b.state]);
+    const from = chosen && chosen.project === sheet?.project && !declared.some((one) => one.id === chosen.id) ? [{ id: chosen.id, title: chosen.title, state: chosen.state }] : [];
 
-    return [{ id: null, title: 'No task', state: '' }, ...declared, { id: OTHER, title: 'Other…', state: '' }];
+    return [{ id: null, title: 'No task', state: '' }, ...from, ...declared, { id: OTHER, title: 'Other…', state: '' }];
   }
 
   const launch: Launch | null = $derived(
@@ -129,7 +135,8 @@
 
     const asking: Launch = quick ? { project } : launch!;
     const words = quick ? `$ loadout launch ${project}` : shown;
-    const started = await studio.startSession(asking, words);
+    const task = quick ? undefined : tasks().find((one) => one.id === asking.taskId);
+    const started = task && asking.taskId ? await studio.startOnTask({ ...asking, taskId: asking.taskId }, task.state, words) : await studio.startSession(asking, words);
 
     if (started) {
       onclose();

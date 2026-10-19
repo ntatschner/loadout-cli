@@ -3,6 +3,8 @@
 // a browser keeps for itself (single-letter keys, Ambient fullscreen).
 import * as api from './api';
 import { command } from './commands';
+import { lineFor } from './commandLine';
+import { declareWords, startedState } from './tasks';
 import { clockOf, linesOf, type Work } from './lines';
 import type { SignalFamily } from './signals';
 import { setAccent, setDensity, setMotion, setTheme, preferredTheme } from './studio';
@@ -517,6 +519,30 @@ export class Studio {
 
       return null;
     }
+  }
+
+  /**
+   * Starts a session on a recorded task, then moves the task on: open and
+   * blocked work becomes doing, once the launch has worked. A launch that
+   * fails leaves the task where it was, so a refusal is never recorded as
+   * work under way. The move is the same 'task declare' a terminal runs.
+   */
+  async startOnTask(launch: api.Launch & { taskId: string }, state: string, shown: string): Promise<api.Session | null> {
+    const started = await this.startSession(launch, shown);
+    const next = startedState(state);
+
+    if (started && next) {
+      const words = declareWords(launch.taskId, next, ['--project', launch.project]);
+
+      try {
+        await api.commands.run('task declare', words);
+        await this.loadJobs();
+      } catch (error) {
+        toasts.add({ level: 'problem', text: `The session started, but the task was not moved to ${next}: ${(error as Error).message}`, cmd: lineFor('task declare', words) });
+      }
+    }
+
+    return started;
   }
 
   endSession(session: api.Session): Promise<boolean> {
