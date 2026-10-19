@@ -171,9 +171,11 @@ same command, for a week afterwards.
 ### Pick an old conversation back up
 
 **Sessions** has a **History** of every conversation from both agents, newest
-first, whether Studio started it or you did in a terminal. You can narrow it to
-one agent or one project, and each project's own page shows its five most
-recent. Each row says what carries over if you resume it: the task, mode,
+first, whether Studio started it or you did in a terminal. Above it is the
+search box the task board has, taking the query `loadout sessions --filter`
+takes, such as `agent:codex project:alpha` or `fix sort:title`, over the newest
+100. Like the board's, it's saved for next time. Each project's own page shows
+its five most recent. Each row says what carries over if you resume it: the task, mode,
 profile and worktree it was launched with.
 
 ![Sessions in Studio: a panel of the two sessions that ended when the daemon stopped, each with Resume and Not this one, and Resume all 2; then the history, newest first, filtered by agent and project, each conversation with what it carries over, one marked as looking to be running elsewhere, and Resume beside each.](../images/studio-sessions.png)
@@ -366,8 +368,12 @@ Under each answer is the `loadout team gate` command it runs.
 Below that are the runs going, each with **Hold after this round**, **Let it
 carry on** and **Stop after this round**, and the ones that ended, with **Run it
 again** (which opens Start a run filled in, and starts nothing), **Pick it up
-where it stopped** and **Forget it**. Then the teams you can run, and the runs on
-a schedule, with whether the daemon will fire them.
+where it stopped** and **Forget it**. Above both is the task board's search
+box, taking the query `loadout team runs --filter` takes, such as
+`team:release-crew cost:>2 sort:-cost`. It narrows those two lists and never
+**Needs you**, because something waiting on you shouldn't be hidden by a
+filter you set last week. Then the teams you can run, and the runs on a
+schedule, with whether the daemon will fire them.
 
 **Start a run**, **Make a team** and **Run one on a schedule** open a sheet that
 writes its command under the form as you fill it in. Start a run asks once more,
@@ -408,7 +414,8 @@ classic dashboard, which is the one that draws the office.
 ### 12. Shape an idea
 
 **Ideas** is a shelf of every idea being shaped, by project, beside a workbench
-for the one you chose. The workbench shows where the idea stands (captured,
+for the one you chose. The shelf has the same search box, taking
+`loadout idea list --filter`'s query, such as `stage:answering unanswered:>0`. The workbench shows where the idea stands (captured,
 answering, ready, proposed or accepted), what the agent understood, and, if its
 last round failed, why, with **Try the round again** and **Clear the marker**.
 
@@ -442,7 +449,9 @@ pieces.
 
 **Projects** is a wall of tiles, one for each project Loadout knows, with what
 matters at a glance: tasks under way and blocked, what can be put right, and
-ideas. Choose one and it opens underneath: where it is, its branch, remote,
+ideas. A search box above the wall takes the query `loadout list --filter`
+takes, such as `where:here agent:codex`, and is saved like the board's. Choose
+one and it opens underneath: where it is, its branch, remote,
 agent and how often it's been launched, its working trees, and its health:
 where it has drifted from what was recorded, and whether any AI tooling files
 are tracked in the repository.

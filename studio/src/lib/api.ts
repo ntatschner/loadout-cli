@@ -2,6 +2,7 @@
 // cookie 'loadout dashboard --open' gives it, so requests carry no
 // token; an address printed with one still works, and the token is then kept
 // in memory only and taken out of the address bar at once.
+import type { ListShape } from './lists';
 
 const printed = new URLSearchParams(location.search).get('token') ?? '';
 
@@ -265,6 +266,18 @@ export const conversations = {
     const text = query.toString();
 
     return call<Conversation[]>('GET', `/api/v1/history${text ? `?${text}` : ''}`);
+  },
+  /** The history put through the query every list takes, with what its toolbar draws from. */
+  query: (q: string, filter: { project?: string; agent?: string; limit?: number } = {}) => {
+    const query = new URLSearchParams({ q });
+
+    for (const [key, value] of Object.entries(filter)) {
+      if (value !== undefined && value !== '') {
+        query.set(key, String(value));
+      }
+    }
+
+    return call<{ conversations: Conversation[]; recorded: number; query: ListShape }>('GET', `/api/v1/history/query?${query.toString()}`);
   },
   lost: () => call<LostSession[]>('GET', '/api/v1/history/lost'),
   forget: (id: string) => call<void>('DELETE', `/api/v1/history/lost/${encodeURIComponent(id)}`),

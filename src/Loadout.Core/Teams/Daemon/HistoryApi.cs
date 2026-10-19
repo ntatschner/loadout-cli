@@ -42,6 +42,7 @@ internal sealed record ResumeAsked(
 /// <para>
 /// <list type="table">
 /// <item><term>GET /api/v1/history</term><description>Conversations newest first; <c>project</c>, <c>agent</c> and <c>limit</c> narrow it.</description></item>
+/// <item><term>GET /api/v1/history/query</term><description>The same, put through <c>q</c>, the query every list takes: <c>{ conversations, recorded, query }</c>, or a 400 naming what it cannot read.</description></item>
 /// <item><term>GET /api/v1/history/lost</term><description>Sessions an earlier daemon hosted that can be resumed.</description></item>
 /// <item><term>DELETE /api/v1/history/lost/{id}</term><description>Stops offering one; 204.</description></item>
 /// </list>
@@ -86,6 +87,10 @@ internal static class HistoryApi
                 await ListAsync(context, resuming, hosted, ct).ConfigureAwait(false);
                 return;
 
+            case ["query"] when method == "GET":
+                await QueryAsync(context, resuming, hosted, ct).ConfigureAwait(false);
+                return;
+
             case ["lost"] when method == "GET":
                 await LostAsync(context, resuming, hosted, ct).ConfigureAwait(false);
                 return;
@@ -107,7 +112,7 @@ internal static class HistoryApi
 
                 return;
 
-            case [] or ["lost"] or ["lost", _]:
+            case [] or ["query"] or ["lost"] or ["lost", _]:
                 await PlainAsync(context, 405, "The history is read with GET; a lost session is let go of with DELETE.").ConfigureAwait(false);
                 return;
 
@@ -120,17 +125,7 @@ internal static class HistoryApi
     private static async Task ListAsync(
         HttpListenerContext context, Resuming resuming, HostedSessions? hosted, CancellationToken ct)
     {
-        var query = context.Request.QueryString;
-
-        var limit = int.TryParse(query["limit"], out var asked) ? Math.Clamp(asked, 1, MaximumLimit) : 50;
-
-        var listed = await resuming.Sessions.ListAsync(
-            new SessionQuery(
-                query["project"] is { Length: > 0 } project ? project : null,
-                query["agent"] is { Length: > 0 } agent ? agent : null,
-                Limit: limit),
-            HostedBy(hosted),
-            ct).ConfigureAwait(false);
+        var listed = await ReadAsync(context, resuming, hosted, ct).ConfigureAwait(false);
 
         if (listed.Failed)
         {
@@ -140,6 +135,66 @@ internal static class HistoryApi
         }
 
         await JsonAsync(context, 200, listed.Value!.Select(Shown).ToArray()).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The history put through the shared query, by the same fields
+    /// <c>loadout sessions --filter</c> uses, with what a toolbar draws from.
+    /// </summary>
+    private static async Task QueryAsync(
+        HttpListenerContext context, Resuming resuming, HostedSessions? hosted, CancellationToken ct)
+    {
+        var parsed = Lists.ListQuery.Parse(context.Request.QueryString["q"]);
+
+        if (parsed.Failed)
+        {
+            await PlainAsync(context, 400, parsed.Error!).ConfigureAwait(false);
+
+            return;
+        }
+
+        var listed = await ReadAsync(context, resuming, hosted, ct).ConfigureAwait(false);
+
+        if (listed.Failed)
+        {
+            await PlainAsync(context, 500, listed.Error ?? "The history could not be read.").ConfigureAwait(false);
+
+            return;
+        }
+
+        var applied = Lists.SessionFields.All.Apply(parsed.Value!, [.. listed.Value!.Select(r => r.Session)], DateTimeOffset.UtcNow);
+
+        if (applied.Failed)
+        {
+            await PlainAsync(context, 400, applied.Error!).ConfigureAwait(false);
+
+            return;
+        }
+
+        var bySession = listed.Value!.ToDictionary<ResumableSession, AgentSession>(r => r.Session, ReferenceEqualityComparer.Instance);
+
+        await JsonAsync(context, 200, new
+        {
+            conversations = applied.Value!.Select(session => Shown(bySession[session])).ToArray(),
+            recorded = listed.Value!.Count,
+            query = Lists.SessionFields.All.Shape(parsed.Value!),
+        }).ConfigureAwait(false);
+    }
+
+    /// <summary>The history as <c>project</c>, <c>agent</c> and <c>limit</c> narrow it.</summary>
+    private static Task<OperationResult<IReadOnlyList<ResumableSession>>> ReadAsync(
+        HttpListenerContext context, Resuming resuming, HostedSessions? hosted, CancellationToken ct)
+    {
+        var query = context.Request.QueryString;
+        var limit = int.TryParse(query["limit"], out var asked) ? Math.Clamp(asked, 1, MaximumLimit) : 50;
+
+        return resuming.Sessions.ListAsync(
+            new SessionQuery(
+                query["project"] is { Length: > 0 } project ? project : null,
+                query["agent"] is { Length: > 0 } agent ? agent : null,
+                Limit: limit),
+            HostedBy(hosted),
+            ct);
     }
 
     private static async Task LostAsync(

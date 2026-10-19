@@ -43,17 +43,20 @@ public sealed class SessionListCommand : AsyncCommand<SessionListCommand.Setting
     private readonly SessionScope _scope;
     private readonly IAnsiConsole _console;
     private readonly TimeProvider _time;
+    private readonly Core.Configuration.IConfigurationService _configuration;
 
     public SessionListCommand(
         ISessionResumption sessions,
         SessionScope scope,
         IAnsiConsole console,
-        TimeProvider time)
+        TimeProvider time,
+        Core.Configuration.IConfigurationService configuration)
     {
         _sessions = sessions;
         _scope = scope;
         _console = console;
         _time = time;
+        _configuration = configuration;
     }
 
     /// <summary>What listing takes beyond what resuming does: the query, over the sessions --limit considers.</summary>
@@ -66,6 +69,10 @@ public sealed class SessionListCommand : AsyncCommand<SessionListCommand.Setting
         [CommandOption("--sort <FIELDS>")]
         [Description("Sort by these fields, commas between: id, title, project, agent, branch, active. Reversed with a minus: --sort=-active.")]
         public string? Sort { get; init; }
+
+        [CommandOption("--saved")]
+        [Description("Use the query saved for this list in Studio. Without --json it is used anyway; --filter sets it aside.")]
+        public bool Saved { get; init; }
     }
 
     /// <inheritdoc />
@@ -84,8 +91,11 @@ public sealed class SessionListCommand : AsyncCommand<SessionListCommand.Setting
             return output.Fail(result);
         }
 
+        var config = await _configuration.LoadConfigAsync(cancellationToken).ConfigureAwait(false);
+        var (filter, fromSaved) = ListOptions.Filter(
+            settings.Filter, Core.Lists.ListViews.Saved(config.Value?.Studio, "sessions"), settings.Saved, output.IsJson);
         var queried = ListOptions.Apply(
-            Core.Lists.SessionFields.All, settings.Filter, settings.Sort, [.. result.Value!.Select(r => r.Session)], _time.GetUtcNow());
+            Core.Lists.SessionFields.All, filter, settings.Sort, [.. result.Value!.Select(r => r.Session)], _time.GetUtcNow());
 
         if (queried.Failed)
         {
@@ -128,9 +138,18 @@ public sealed class SessionListCommand : AsyncCommand<SessionListCommand.Setting
             return CommandOutput.Success();
         }
 
+        // A list someone else's filter has narrowed says so, so it never
+        // looks short for no reason.
+        if (fromSaved)
+        {
+            output.WriteLine($"[dim]Filtered by the saved query {Markup.Escape(filter!)}. --filter sets it aside.[/]");
+        }
+
         if (sessions.Count == 0)
         {
-            output.WriteLine(query.ProjectSlug is { Length: > 0 } slug
+            output.WriteLine(result.Value!.Count > 0
+                ? "[dim]Nothing matches the filter.[/]"
+                : query.ProjectSlug is { Length: > 0 } slug
                 ? $"[dim]No recorded sessions for {slug.EscapeMarkup()}.[/]"
                 : "[dim]No recorded agent sessions were found.[/]");
 

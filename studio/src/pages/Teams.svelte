@@ -10,6 +10,7 @@
   import CommandAction from '../lib/components/CommandAction.svelte';
   import Dialog from '../lib/components/Dialog.svelte';
   import HaloButton from '../lib/components/HaloButton.svelte';
+  import ListToolbar from '../lib/components/ListToolbar.svelte';
   import NeedsYou from '../lib/components/NeedsYou.svelte';
   import Picker from '../lib/components/Picker.svelte';
   import Remedy from '../lib/components/Remedy.svelte';
@@ -21,12 +22,13 @@
   import TeamPage from './TeamPage.svelte';
   import TeamRun from './TeamRun.svelte';
   import { configuration, readJson, runs as runsApi, SignedOut, teamApi, type Choices, type Run } from '../lib/api';
+  import { CommandList } from '../lib/commandList.svelte';
   import { runJob } from '../lib/jobs';
   import { router } from '../lib/router.svelte';
   import { studio } from '../lib/state.svelte';
   import { sheetPath, sheetWords, type SheetKind, type SheetTeam, type SheetValues } from '../lib/teamSheet';
   import { answerGate, carryOn, forget, hold, pickUp, runLines, stop } from '../lib/teamsAct';
-  import { boardOf, boardRunsOf, boardTeamsOf, gateOf, needsOf, summaryOf } from '../lib/teamsData';
+  import { boardOf, boardRunsOf, boardTeamsOf, gateOf, keptRuns, needsOf, summaryOf } from '../lib/teamsData';
   import type { Act, Prune } from '../lib/teams';
 
   let { rest }: { rest: string[] } = $props();
@@ -98,8 +100,30 @@
 
   /* ---------- the overview ---------- */
 
-  const running = $derived(studio.runs.filter((run) => run.running));
-  const ended = $derived(studio.runs.filter((run) => !run.running));
+  // Which runs the query keeps, as 'team runs --filter' decides, over as
+  // many runs as Studio holds. The cards still come from Studio's own runs,
+  // which are live; the command only says which and in what order.
+  const RUNS_HELD = 40;
+  const ledger = new CommandList<{ run: string }>('team runs', 'runs', 'runs');
+  const filtering = $derived(!!ledger.query && ledger.items !== null);
+  const shownRuns = $derived(keptRuns(studio.runs, filtering ? ledger.items : null));
+
+  // Read once for the toolbar's menus, and again when the runs change while
+  // a query is narrowing them, since a run's state can move it in or out.
+  let ledgerRead = false;
+  $effect(() => {
+    void studio.runs;
+
+    untrack(() => {
+      if (!ledgerRead || ledger.query) {
+        ledgerRead = true;
+        void ledger.load(['--limit', String(RUNS_HELD)]);
+      }
+    });
+  });
+
+  const running = $derived(shownRuns.filter((run) => run.running));
+  const ended = $derived(shownRuns.filter((run) => !run.running));
   const href = (run: Run) => `#teams/${encodeURIComponent(run.id)}`;
   const watch = $derived(studio.watchOnly ? 'Studio is only watching: type the command in a terminal' : undefined);
 
@@ -395,6 +419,8 @@
   {#if !place}
     <NeedsYou items={needs} />
 
+    <ListToolbar noun="runs" query={ledger.text} shape={ledger.shape} shown={filtering ? shownRuns.length : null} recorded={filtering ? studio.runs.length : null} problem={ledger.problem} onchange={(query) => void ledger.ask(query)} />
+
     <section class="tblock" aria-labelledby="tm-running">
       <h2 class="ls-zone" id="tm-running">Running</h2>
       {#if running.length}
@@ -402,7 +428,7 @@
           {#each running as run (run.id)}<RunCard run={summaryOf(run)} href={href(run)} actions={runningActs(run)} />{/each}
         </div>
       {:else}
-        <p class="calm">Nothing is running.</p>
+        <p class="calm">{filtering ? 'Nothing running matches the filter.' : 'Nothing is running.'}</p>
       {/if}
     </section>
 

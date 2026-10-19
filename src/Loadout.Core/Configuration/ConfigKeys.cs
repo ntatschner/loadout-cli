@@ -543,7 +543,7 @@ public static class ConfigKeys
                 c.Studio.Views[view.Name] = normal.Succeeded ? normal.Value! : throw new FormatException(normal.Error);
             },
             false,
-            Sample: "state:doing,open sort:-updated",
+            Sample: view.Sample,
             Group: Groups.Studio,
             WhenUnset: view.DefaultQuery.Length > 0 ? view.DefaultQuery : "everything, in the default order")),
 

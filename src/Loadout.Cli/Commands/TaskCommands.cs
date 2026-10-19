@@ -73,6 +73,7 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
     private readonly IAnsiConsole _console;
     private readonly TimeProvider _time;
     private readonly IConfigurationService _configuration;
+    private readonly ITaskActivityReader _activity;
 
     public TaskListCommand(
         ITaskService tasks,
@@ -80,7 +81,8 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
         IGitManager git,
         IAnsiConsole console,
         TimeProvider time,
-        IConfigurationService configuration)
+        IConfigurationService configuration,
+        ITaskActivityReader activity)
     {
         _tasks = tasks;
         _projects = projects;
@@ -88,6 +90,7 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
         _console = console;
         _time = time;
         _configuration = configuration;
+        _activity = activity;
     }
 
     public sealed class Settings : TaskSettings
@@ -101,7 +104,7 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
         public string? Filter { get; init; }
 
         [CommandOption("--sort <FIELDS>")]
-        [Description("Sort by these fields, commas between: id, title, state, kind, by, updated, note. Newest first is --sort=-updated.")]
+        [Description("Sort by these fields, commas between: id, title, state, kind, by, updated, note, runs, launches. Newest first is --sort=-updated.")]
         public string? Sort { get; init; }
 
         [CommandOption("--saved")]
@@ -179,7 +182,15 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
             ? []
             : await CheckAsync(project, Work(listed.Value!), now, cancellationToken).ConfigureAwait(false);
 
-        var applied = TaskFields.All.Apply(query.Value!, listed.Value!, now);
+        // Runs and launches are counted from the run journal and the launch
+        // ledger, read whole, so only for a query that names one.
+        var counted = slug is not null && TaskFields.Counts(query.Value!);
+        var activity = counted
+            ? await _activity.ReadAsync(slug!, cancellationToken).ConfigureAwait(false)
+            : TaskActivity.None;
+        var fields = TaskFields.For(activity);
+
+        var applied = fields.Apply(query.Value!, listed.Value!, now);
 
         if (applied.Failed)
         {
@@ -212,6 +223,8 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
                     declared = item.DeclaredUtc,
                     item.Note,
                     moved = TaskTrace.Json(item.Moved),
+                    runs = counted ? activity.RunsOf(item.Id) : (int?)null,
+                    launches = counted ? activity.LaunchesOf(item.Id) : (int?)null,
                 }),
                 movedAway = away.Select(one => new
                 {
@@ -222,7 +235,7 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
                     at = one.Task.Moved!.Utc,
                 }),
                 recorded = listed.Value!.Count,
-                query = TaskFields.All.Shape(query.Value!),
+                query = fields.Shape(query.Value!),
                 unsupported = disagreements.Select(d => new { task = d.TaskId, d.Detail }),
                 suggested = Suggestions.Compose(Work(shown), disagreements)
                     .Select(s => new { s.Text, source = s.Source.ToString().ToLowerInvariant() }),

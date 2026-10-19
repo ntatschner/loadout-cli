@@ -43,7 +43,8 @@ internal sealed class TasksWindow : Window
     /// <param name="query">The query it opens with: the saved one, or the default.</param>
     /// <param name="application">The running toolkit.</param>
     /// <param name="time">The clock ages are measured against.</param>
-    internal TasksWindow(string where, IReadOnlyList<TaskItem> tasks, string query, IApplication application, TimeProvider? time = null)
+    /// <param name="activity">What was started on each task, for sorting and filtering on runs and launches.</param>
+    internal TasksWindow(string where, IReadOnlyList<TaskItem> tasks, string query, IApplication application, TimeProvider? time = null, TaskActivity? activity = null)
     {
         ArgumentNullException.ThrowIfNull(tasks);
         ArgumentNullException.ThrowIfNull(application);
@@ -63,7 +64,7 @@ internal sealed class TasksWindow : Window
             BorderStyle = LauncherTheme.Inner,
         };
 
-        Tasks = new FilterableListView<TaskItem>(TaskFields.All, Row, query, time)
+        Tasks = new FilterableListView<TaskItem>(TaskFields.For(activity ?? TaskActivity.None), Row, query, time)
         {
             X = 0,
             Y = 0,

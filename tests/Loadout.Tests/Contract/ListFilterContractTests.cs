@@ -48,6 +48,36 @@ public sealed class ListFilterContractTests
         (await Ids(loadout, "projects", "list", "--saved", "--filter", "where:here")).Should().Equal(project);
     }
 
+    [BuiltCliFact]
+    public async Task Sessions_and_runs_keep_a_saved_query_checked_against_their_own_fields()
+    {
+        using var loadout = new LoadoutProcess();
+
+        await MemoryWriteContractTests.Registered(loadout);
+
+        (await loadout.RunAsync("config", "set", "studio-query-runs", "state:waiting,running")).ExitCode.Should().Be(0);
+        (await loadout.RunAsync("config", "set", "studio-query-sessions", "agent:codex")).ExitCode.Should().Be(0);
+
+        (await loadout.RunAsync("team", "runs")).StandardOutput.Should().Contain("Filtered by the saved query state:waiting,running");
+        (await loadout.RunAsync("sessions", "--all")).StandardOutput.Should().Contain("Filtered by the saved query agent:codex");
+
+        // A session field is not a run field, so the runs list refuses it.
+        var refused = await loadout.RunAsync("config", "set", "studio-query-runs", "agent:codex");
+        refused.ExitCode.Should().NotBe(0);
+        refused.StandardError.Should().Contain("'agent' is not something runs can be filtered on");
+    }
+
+    [BuiltCliFact]
+    public async Task Team_runs_refuses_a_limit_below_one()
+    {
+        using var loadout = new LoadoutProcess();
+
+        var refused = await loadout.RunAsync("team", "runs", "--limit", "0");
+
+        refused.ExitCode.Should().NotBe(0);
+        refused.StandardError.Should().Contain("--limit takes a number of runs, 1 or more.");
+    }
+
     [BuiltCliTheory]
     [InlineData("ideas", new[] { "idea", "list" })]
     [InlineData("projects", new[] { "list" })]

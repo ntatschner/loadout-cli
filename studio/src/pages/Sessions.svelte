@@ -4,9 +4,11 @@
   // ends nothing; a daemon restart ends them all, which the page says, and
   // offers each one back. Below, every past conversation from both agents,
   // to carry on: resuming is starting a session, so it is here.
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import HaloButton from '../lib/components/HaloButton.svelte';
   import ConversationList from '../lib/components/ConversationList.svelte';
+  import ListToolbar from '../lib/components/ListToolbar.svelte';
+  import { HistoryList } from '../lib/historyList.svelte';
   import Dialog from '../lib/components/Dialog.svelte';
   import type { Conversation } from '../lib/api';
   import { resumeAllWords } from '../lib/resume';
@@ -19,22 +21,24 @@
 
   let { onlaunch, onresume = undefined }: { onlaunch: () => void; onresume?: (conversation: Conversation) => void } = $props();
 
-  let agent = $state('');
-  let project = $state('');
   let resumingAll = $state(false);
   let busy = $state(false);
 
-  const agents = $derived([...new Set(studio.conversations.map((one) => one.agent))].sort());
-  const projects = $derived([...new Set(studio.conversations.map((one) => one.project).filter((one): one is string => !!one))].sort());
-  const shownHistory = $derived(
-    studio.conversations.filter((one) => (!agent || one.agent === agent) && (!project || one.project === project)),
-  );
+  // The history through the query every list takes, saved for the view.
+  const history = new HistoryList();
   const lost = $derived(studio.lost.filter((one) => one.conversation));
 
   // Read again on arrival: a conversation started in a terminal says nothing
   // on the event stream, which only hears about Studio's own sessions. A
   // failed read leaves the last one shown.
   onMount(() => void studio.loadHistory().catch(() => undefined));
+
+  // And again whenever Studio's own copy of the history changes, so a
+  // conversation resumed or ended here shows its new state in the list.
+  $effect(() => {
+    void studio.conversations;
+    untrack(() => void history.load([]));
+  });
 
   async function resumeLost(one: (typeof lost)[number]) {
     busy = true;
@@ -145,24 +149,18 @@
 </div>
 
 <section class="history" aria-labelledby="z-hist">
-  <div class="hhead">
-    <h2 class="ls-zone" id="z-hist">History</h2>
-    <span class="grow"></span>
-    <label class="filter">Agent
-      <select bind:value={agent}>
-        <option value="">every agent</option>
-        {#each agents as one (one)}<option value={one}>{one}</option>{/each}
-      </select>
-    </label>
-    <label class="filter">Project
-      <select bind:value={project}>
-        <option value="">every project</option>
-        {#each projects as one (one)}<option value={one}>{one}</option>{/each}
-      </select>
-    </label>
-  </div>
+  <h2 class="ls-zone" id="z-hist">History</h2>
   <p class="calm small">Every conversation from both agents, newest first. What it was launched for carries over only where its launch is on record; older ones carry nothing.</p>
-  <ConversationList conversations={shownHistory} label="Past conversations" onchanges={onresume} />
+  <ListToolbar noun="conversations" query={history.text} shape={history.shape} shown={history.items?.length ?? null} recorded={history.recorded} problem={history.problem} onchange={(query) => void history.ask(query)} />
+  {#if history.error}
+    <p class="offline" role="alert">{history.error}</p>
+  {:else if history.items === null}
+    <p class="calm" role="status">Reading…</p>
+  {:else if history.items.length === 0 && history.recorded}
+    <p class="calm">Nothing matches the filter.</p>
+  {:else}
+    <ConversationList conversations={history.items} label="Past conversations" onchanges={onresume} />
+  {/if}
 </section>
 
 {#if resumingAll}
@@ -181,10 +179,6 @@
   .lostrow .x { grid-column: 1; font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
   .lostrow .acts { grid-row: 1 / span 2; grid-column: 2; display: grid; justify-items: end; gap: 4px; }
   .history { margin-top: 22px; }
-  .hhead { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
-  .hhead .grow { flex: 1 1 auto; }
-  .filter { display: inline-flex; gap: 6px; align-items: center; font-size: 12.5px; color: var(--muted); }
-  .filter select { font: inherit; color: var(--ink); background: var(--surface, transparent); border: 1px solid var(--rule); padding: 3px 6px; }
   .linkish { border: 0; background: none; padding: 0; color: var(--accent); font: inherit; font-size: 12.5px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
   .linkish:disabled { color: var(--muted); cursor: default; text-decoration: none; }
   @media (max-width: 600px) {

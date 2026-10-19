@@ -6,7 +6,7 @@ import { quoted } from './commands';
 import { codeTokens, diffLines, fileKind, inline, markdown, parseCsv } from './files';
 import { sheetCommand, sheetProblem, sheetValues, type SheetTeam } from './teamSheet';
 import { depthKey, gateButtons, gateKind, pruneCommand, pruneSentence, type GateAsk } from './teams';
-import { boardRunsOf, boardTeamsOf, nodeWord } from './teamsData';
+import { boardRunsOf, boardTeamsOf, keptRuns, nodeWord } from './teamsData';
 import type { Run } from './api';
 
 const ask = (over: Partial<GateAsk>): GateAsk => ({ kind: 'question', run: '20261017-1402-ab3f', gate: 'g1', question: 'Which way?', ...over });
@@ -232,5 +232,18 @@ describe('Team Focus’s board', () => {
       { name: 'b', word: 'running', fact: '1 live' },
       { name: 'c', word: 'idle', fact: 'none live' },
     ]);
+  });
+});
+
+describe('the runs a query kept', () => {
+  const run = (id: string) => ({ id, running: false }) as unknown as Run;
+  const runs = [run('r1'), run('r2'), run('r3')];
+
+  it('are every run, as they came, while no query is in force', () => {
+    expect(keptRuns(runs, null).map((one) => one.id)).toEqual(['r1', 'r2', 'r3']);
+  });
+
+  it('are the ones the command kept, in its order, leaving out any Studio does not hold', () => {
+    expect(keptRuns(runs, [{ run: 'r3' }, { run: 'gone' }, { run: 'r1' }]).map((one) => one.id)).toEqual(['r3', 'r1']);
   });
 });

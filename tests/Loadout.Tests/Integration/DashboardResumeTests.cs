@@ -168,6 +168,30 @@ public sealed class DashboardResumeTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_history_takes_the_query_every_list_takes_and_keeps_what_each_was_launched_for()
+    {
+        var listed = await _client.GetFromJsonAsync<JsonElement>(_address + HistoryApi.Root + "/query?q=" + Uri.EscapeDataString("project:alpha sort:id"));
+
+        var ids = listed.GetProperty("conversations").EnumerateArray().Select(row => row.GetProperty("id").GetString()).ToList();
+
+        ids.Should().Equal(new[] { Mine, Elsewhere }.Order(StringComparer.Ordinal), "the stray is on no project, and sort:id orders the rest");
+        listed.GetProperty("recorded").GetInt32().Should().Be(3);
+        listed.GetProperty("query").GetProperty("text").GetString().Should().Be("project:alpha sort:id");
+
+        var mine = listed.GetProperty("conversations").EnumerateArray().Single(row => row.GetProperty("id").GetString() == Mine);
+        mine.GetProperty("launchedFor").GetProperty("task").GetString().Should().Be("fix the importer");
+    }
+
+    [Fact]
+    public async Task A_history_query_naming_a_field_it_lacks_is_refused_in_its_words()
+    {
+        using var refused = await _client.GetAsync(_address + HistoryApi.Root + "/query?q=colour:red");
+
+        refused.StatusCode.Should().Be(System.Net.HttpStatusCode.BadRequest);
+        (await refused.Content.ReadAsStringAsync()).Should().Contain("'colour' is not something sessions can be filtered on");
+    }
+
+    [Fact]
     public async Task Resuming_opens_loadout_resume_in_a_hosted_terminal_shown_as_the_session_it_reopens()
     {
         using var started = await ResumeAsync(new { agentSession = Mine });

@@ -59,6 +59,11 @@ export class CommandList<T> {
   /** What else a read carried, for a list that keeps more than its items. */
   protected took(_read: Record<string, unknown>): void {}
 
+  /** Reads the list: through its command, unless a list read another way says otherwise. */
+  protected fetch(where: string[], query: string | null): Promise<Record<string, unknown>> {
+    return readJson<Record<string, unknown>>(this.command, [...where, ...listWords(query, this.everything)]);
+  }
+
   /** Reads the list for this place again, with the query as it stands. */
   async load(where: string[] = this.#where): Promise<void> {
     this.#where = where;
@@ -72,7 +77,7 @@ export class CommandList<T> {
     const mine = ++this.#asked;
 
     try {
-      const read = await readJson<Record<string, unknown>>(this.command, [...where, ...listWords(this.query, this.everything)]);
+      const read = await this.fetch(where, this.query);
 
       if (mine !== this.#asked) {
         return;

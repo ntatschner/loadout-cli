@@ -2,6 +2,7 @@ using FluentAssertions;
 using Loadout.Core.Ideas;
 using Loadout.Core.Lists;
 using Loadout.Core.Sessions;
+using Loadout.Core.Tasks;
 using Loadout.Core.Teams;
 using Loadout.Models.Ideas;
 using Loadout.Models.Projects;
@@ -98,11 +99,55 @@ public sealed class KindFieldsTests
         Apply(RunFields.All, query, runs, run => run.RunId).Should().Equal(expected);
     }
 
+    [Theory]
+    [InlineData("sort:-runs,id", "b", "a", "c")]
+    [InlineData("sort:-launches,id", "c", "a", "b")]
+    [InlineData("runs:>0", "a", "b")]
+    [InlineData("launches:0", "b")]
+    public void Tasks_sort_and_filter_on_what_was_started_on_them(string query, params string[] expected)
+    {
+        TaskItem[] tasks = [Task("a"), Task("b"), Task("c")];
+
+        // Another project's run and a launch with no task count for nothing.
+        var activity = TaskActivity.Count(
+            "web",
+            [Run("r1", Now, null, 0, task: "a"), Run("r2", Now, null, 0, task: "b"), Run("r3", Now, null, 0, task: "B"),
+             Run("r4", Now, null, 0, task: "c", project: "api")],
+            [Launch("web", "a"), Launch("web", "c"), Launch("web", "c"), Launch("web", null), Launch("api", "b")]);
+
+        Apply(TaskFields.For(activity), query, tasks, task => task.Id).Should().Equal(expected);
+    }
+
+    [Theory]
+    [InlineData("state:open", false)]
+    [InlineData("runs:>1", true)]
+    [InlineData("-launches:0", true)]
+    [InlineData("sort:-runs", true)]
+    [InlineData("runs", false)]
+    public void Only_a_query_naming_a_count_needs_the_counts(string query, bool counts) =>
+        TaskFields.Counts(ListQuery.Parse(query).Value!).Should().Be(counts);
+
+    private static TaskItem Task(string id) => new()
+    {
+        Id = id,
+        State = TaskState.Open,
+        Title = id,
+        Kind = TaskKind.Task,
+        DeclaredBy = "nigel",
+        DeclaredUtc = Now,
+    };
+
+    private static Models.Agents.LaunchRecord Launch(string slug, string? task) =>
+        new("l", Now, slug, slug, "claude", null, null, null, null, null, [], 0, 0, TaskId: task);
+
     private static ProjectResolution Project(string slug, string agent, DateTimeOffset launched, int launches, bool local, bool pinned) =>
         new(new ProjectRegistryEntry { Slug = slug, Name = slug, DefaultAgent = agent }, local ? $"D:/{slug}" : null, launched, launches, pinned);
 
-    private static RunSummary Run(string id, DateTimeOffset started, DateTimeOffset? finished, decimal cost, bool waiting = false) =>
+    private static RunSummary Run(
+        string id, DateTimeOffset started, DateTimeOffset? finished, decimal cost, bool waiting = false, string? task = null, string project = "web") =>
         new(id, $"D:/runs/{id}", "release-crew", $"goal of {id}", "supervised", started, finished, finished is null ? null : "done",
             cost, 2, [], [], [],
-            Gates: waiting ? [new PendingAsk("g1", "lead", "lead", "gate", null, started)] : null);
+            Project: project,
+            Gates: waiting ? [new PendingAsk("g1", "lead", "lead", "gate", null, started)] : null,
+            Task: task);
 }
