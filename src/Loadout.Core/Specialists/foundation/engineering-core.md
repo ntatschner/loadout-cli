@@ -32,6 +32,9 @@ anything only sometimes true belongs in a specialist instead.
   with that work already done.
 - Report what happened. A failing test is reported as failing, with its output;
   a skipped step is named as skipped.
+- When saying how long work will take, give a range and say whose time it is:
+  agent time, a person's time, or waiting. `function.time` has the rest of
+  dates, times and durations.
 
 ## When to defer
 
