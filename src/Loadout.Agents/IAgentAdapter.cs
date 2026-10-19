@@ -82,6 +82,12 @@ namespace Loadout.Agents;
 /// launch typed at a terminal. An adapter whose agent has hooks for it has
 /// the agent report there when it is waiting (see SessionSignals).
 /// </param>
+/// <param name="LinksSession">
+/// Whether the agent should report its conversation's id when it starts, so
+/// the ledger can file it under this launch (see SessionLinks). An adapter
+/// whose agent has no way to say so ignores it, and that conversation is
+/// resumed with nothing carried over.
+/// </param>
 public sealed record AgentLaunchContext(
     ProjectResolution Project,
     string WorkingDirectory,
@@ -101,7 +107,8 @@ public sealed record AgentLaunchContext(
     Models.Configuration.AccessibilitySettings? Accessibility = null,
     IReadOnlyList<string>? ReachableDirectories = null,
     string? OpeningPrompt = null,
-    string? StudioSession = null);
+    string? StudioSession = null,
+    bool LinksSession = false);
 
 /// <summary>A fully resolved launch, ready to be handed to the process layer.</summary>
 /// <param name="Executable">Absolute path to the agent binary.</param>

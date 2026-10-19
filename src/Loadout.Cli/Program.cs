@@ -1055,6 +1055,14 @@ public static class Program
             telemetry.AddCommand<TelemetryStatusCommand>("status");
         });
 
+        TopBranch(config, "hook", hook =>
+        {
+            hook.SetDescription("Commands the agents' own hooks run. Not for a person.");
+
+            // Named for the event that runs it, as the agent's settings spell it.
+            hook.AddCommand<HookSessionStartCommand>("session-start");
+        });
+
         TopBranch(config, "statusline", statusline =>
         {
             statusline.Describe(

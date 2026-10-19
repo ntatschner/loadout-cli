@@ -46,6 +46,17 @@ public sealed record HeadlessSessionRecord(
     string? LaunchId,
     DateTimeOffset StartedAt);
 
+/// <summary>Which launch an agent conversation belongs to, as the agent's own hook reported it.</summary>
+/// <param name="SessionId">The agent's own identifier for the conversation.</param>
+/// <param name="Agent">The adapter that ran it.</param>
+/// <param name="LaunchId">The launch it was started or resumed by.</param>
+/// <param name="LinkedAt">When the hook reported it.</param>
+public sealed record SessionLink(
+    string SessionId,
+    string Agent,
+    string LaunchId,
+    DateTimeOffset LinkedAt);
+
 /// <summary>A record of every launch this machine started.</summary>
 public interface ILaunchLedger
 {
@@ -92,6 +103,24 @@ public interface ILaunchLedger
     /// </remarks>
     Task<OperationResult<IReadOnlyList<HeadlessSessionRecord>>> ReadHeadlessSessionsAsync(
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Writes down that a person's conversation belongs to a launch, so what
+    /// it was launched for is known rather than guessed when it is resumed.
+    /// </summary>
+    /// <param name="sessionId">The agent's own identifier for the conversation.</param>
+    /// <param name="agent">The adapter that ran it.</param>
+    /// <param name="launchId">The launch that started or resumed it.</param>
+    /// <param name="ct">Cancellation token.</param>
+    Task RecordLinkAsync(string sessionId, string agent, string launchId, CancellationToken ct = default);
+
+    /// <summary>Every link ever written down, oldest first.</summary>
+    /// <remarks>
+    /// A conversation resumed several times has a link for each launch, and
+    /// the newest is the one that counts: it is the launch whose task and mode
+    /// the conversation was last running under.
+    /// </remarks>
+    Task<OperationResult<IReadOnlyList<SessionLink>>> ReadLinksAsync(CancellationToken ct = default);
 
     /// <summary>Launches started on or after a moment, oldest first.</summary>
     Task<OperationResult<IReadOnlyList<LaunchRecord>>> ReadAsync(
@@ -256,6 +285,45 @@ internal sealed class LaunchLedger : ILaunchLedger
     }
 
     /// <inheritdoc />
+    public async Task RecordLinkAsync(string sessionId, string agent, string launchId, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId) || string.IsNullOrWhiteSpace(launchId))
+        {
+            return;
+        }
+
+        await AppendAsync(
+            new Row(
+                Kind: LinkKind,
+                Id: sessionId,
+                When: Moment(_time.GetUtcNow()),
+                Agent: agent,
+                Launch: launchId),
+            ct).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<OperationResult<IReadOnlyList<SessionLink>>> ReadLinksAsync(CancellationToken ct = default)
+    {
+        var links = new List<SessionLink>();
+
+        var error = await ReadRowsAsync(
+            (row, when) =>
+            {
+                if (string.Equals(row.Kind, LinkKind, StringComparison.Ordinal)
+                    && row.Launch is { Length: > 0 } launch)
+                {
+                    links.Add(new SessionLink(row.Id, row.Agent ?? string.Empty, launch, when));
+                }
+            },
+            ct).ConfigureAwait(false);
+
+        return error is null
+            ? OperationResult<IReadOnlyList<SessionLink>>.Ok(links)
+            : OperationResult<IReadOnlyList<SessionLink>>.Fail(error);
+    }
+
+    /// <inheritdoc />
     public async Task<OperationResult<IReadOnlyList<LaunchRecord>>> ReadAsync(
         DateTimeOffset since,
         CancellationToken ct = default)
@@ -398,6 +466,13 @@ internal sealed class LaunchLedger : ILaunchLedger
     private const string StartKind = "start";
     private const string EndKind = "end";
     private const string SessionKind = "session";
+
+    // A kind of its own rather than a session line with a different purpose.
+    // Every build before this one reads each session line as headless and
+    // hides it from resume, so a link written as one would make an older
+    // launcher on the same machine lose the very conversations it names.
+    // Older readers skip a kind they do not know.
+    private const string LinkKind = "link";
 
     private static string Moment(DateTimeOffset when) =>
         when.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);

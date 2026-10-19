@@ -103,44 +103,63 @@ public sealed class LaunchPathTests
         LauncherCommands.All.Should().Contain(LauncherCommands.Launch);
     }
 
+    private static SessionLink Link(string launchId, int hour, string agent = "claude") =>
+        new("abc123", agent, launchId, At(hour));
+
     [Fact]
-    public void Resuming_carries_the_most_recent_launch_of_that_project_with_that_agent()
+    public void Resuming_carries_the_launch_the_conversation_is_linked_to()
     {
-        var found = ResumeCommand.LaunchOf(
+        var found = Resumption.LaunchesByConversation(
+            [Link("1", 9)],
             [
                 Launch("1", At(9), task: "first thing", mode: "advise"),
+
+                // Newer, same project and agent, and before the session was
+                // last active: what the old inference would have chosen.
                 Launch("2", At(10), task: "second thing", mode: "implement"),
-                Launch("3", At(10), slug: "beta", task: "another project"),
-                Launch("4", At(11), agent: "codex", task: "another agent"),
-            ],
-            Session(lastActive: At(12)),
-            "alpha");
+            ]);
 
-        found.Should().NotBeNull();
-        found!.Task.Should().Be("second thing");
-        found.Mode.Should().Be("implement");
+        // Known, not guessed: the link names launch 1, so its task is the
+        // one carried, however tempting the newer launch looks.
+        found[Resumption.Key("claude", "abc123")].Task.Should().Be("first thing");
     }
 
     [Fact]
-    public void A_launch_that_began_after_the_session_was_last_active_is_not_its_launch()
+    public void A_conversation_resumed_again_carries_its_newest_launch()
     {
-        var found = ResumeCommand.LaunchOf(
-            [Launch("1", At(9), task: "old"), Launch("2", At(14), task: "later")],
-            Session(lastActive: At(12)),
-            "alpha");
+        var found = Resumption.LaunchesByConversation(
+            [Link("2", 10), Link("1", 9)],
+            [Launch("1", At(9), task: "old"), Launch("2", At(10), task: "picked up again")]);
 
-        // The later launch cannot be where this session came from, and
-        // carrying its task over would be guessing dressed as a record.
-        found!.Task.Should().Be("old");
+        // Resumed with a new task, the conversation was last running under
+        // that one, and the next resume should carry it.
+        found[Resumption.Key("claude", "abc123")].Task.Should().Be("picked up again");
     }
 
     [Fact]
-    public void A_session_with_no_recorded_launch_carries_nothing()
+    public void A_conversation_with_no_link_carries_nothing()
     {
-        ResumeCommand.LaunchOf([Launch("1", At(14))], Session(lastActive: At(12)), "alpha")
-            .Should().BeNull();
+        // The old rule would have carried launch 1 over. Known links only:
+        // a confident wrong guess is worse than nothing.
+        Resumption.LaunchesByConversation([], [Launch("1", At(9), task: "something else")])
+            .Should().BeEmpty();
+    }
 
-        ResumeCommand.LaunchOf([], Session(), "alpha").Should().BeNull();
+    [Fact]
+    public void A_link_to_a_launch_the_ledger_does_not_have_carries_nothing()
+    {
+        Resumption.LaunchesByConversation([Link("gone", 9)], [Launch("1", At(9))])
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    public void A_link_is_for_its_own_agent_only()
+    {
+        var found = Resumption.LaunchesByConversation(
+            [Link("1", 9, agent: "codex")],
+            [Launch("1", At(9), task: "codex work")]);
+
+        found.Should().NotContainKey(Resumption.Key("claude", "abc123"));
     }
 
     [Fact]

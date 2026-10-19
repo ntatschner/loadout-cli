@@ -34,7 +34,7 @@ public sealed class ResumeTests
     [Fact]
     public void A_session_id_that_matches_nothing_is_an_error_rather_than_silence()
     {
-        var found = ResumeCommand.Match([Session("abc123"), Session("def456")], "zzz");
+        var found = Resumption.Match([Session("abc123"), Session("def456")], "zzz");
 
         found.Failed.Should().BeTrue("naming a session that does not exist cannot be a success");
         found.Error.Should().Contain("zzz");
@@ -51,7 +51,7 @@ public sealed class ResumeTests
     [Fact]
     public void An_ambiguous_prefix_says_so_rather_than_picking_one()
     {
-        var found = ResumeCommand.Match([Session("abc123"), Session("abc999")], "abc");
+        var found = Resumption.Match([Session("abc123"), Session("abc999")], "abc");
 
         found.Failed.Should().BeTrue();
         found.Error.Should().Contain("more of the id");
@@ -62,7 +62,7 @@ public sealed class ResumeTests
     public void A_prefix_is_enough_when_it_names_one_session()
     {
         // Nobody types a whole UUID.
-        var found = ResumeCommand.Match([Session("abc123"), Session("def456")], "def");
+        var found = Resumption.Match([Session("abc123"), Session("def456")], "def");
 
         found.Succeeded.Should().BeTrue();
         found.Value!.SessionId.Should().Be("def456");

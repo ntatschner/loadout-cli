@@ -258,6 +258,20 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
         record.Task.Should().Be("Ship the thing");
     }
 
+    [Fact]
+    public async Task The_agent_is_given_its_launch_id_to_file_its_conversation_under()
+    {
+        var result = await _launcher.LaunchAsync(new LaunchRequest(ProjectSlug, "probe", Offline: true));
+
+        result.Succeeded.Should().BeTrue(result.Error);
+
+        var record = (await _ledger.ReadAsync(DateTimeOffset.MinValue)).Value!.Should().ContainSingle().Subject;
+
+        // The id the ledger filed the launch under, so the agent's hook links
+        // the conversation to this launch and not to some other one.
+        _processes.LastInteractive!.Environment.Should().Contain(SessionLinks.Variable, record.Id);
+    }
+
     [Theory]
     [InlineData(Loadout.Models.Tasks.TaskState.Open, Loadout.Models.Tasks.TaskState.Doing)]
     [InlineData(Loadout.Models.Tasks.TaskState.Blocked, Loadout.Models.Tasks.TaskState.Doing)]

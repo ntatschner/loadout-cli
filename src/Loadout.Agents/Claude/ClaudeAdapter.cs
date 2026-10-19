@@ -337,13 +337,25 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         // its own hooks when it is waiting for them.
         var hosted = context.StudioSession is { Length: > 0 } && context.Headless is null;
 
-        if (settingsPath is null && reading.Count == 0 && !hosted)
+        // A person's conversation, filed under its launch when it starts.
+        var links = context.LinksSession && context.Headless is null;
+
+        if (settingsPath is null && reading.Count == 0 && !hosted && !links)
         {
             return;
         }
 
         if (!descriptor.Supports(AgentCapabilities.ExternalSettings))
         {
+            // Nothing is said when the link is all there was to pass: the
+            // conversation is resumed with nothing carried over, which is
+            // what every launch before links got, and a warning on every
+            // launch for it would be noise.
+            if (settingsPath is null && reading.Count == 0 && !hosted)
+            {
+                return;
+            }
+
             warnings.Add(
                 settingsPath is null
                     ? "This build of Claude Code does not advertise --settings, so how you asked to "
@@ -445,7 +457,12 @@ public sealed class ClaudeAdapter : AgentAdapterBase
             AddStudioHooks(screened.Document, launcher);
         }
 
-        if (screened.Changed || disableHooks || reading.Count > 0 || hosted || path is null)
+        if (links)
+        {
+            AddLinkHook(screened.Document, launcher);
+        }
+
+        if (screened.Changed || disableHooks || reading.Count > 0 || hosted || links || path is null)
         {
             path = Path.Combine(context.RuntimeDirectory, "settings.json");
 
@@ -485,39 +502,56 @@ public sealed class ClaudeAdapter : AgentAdapterBase
     /// </remarks>
     internal static void AddStudioHooks(System.Text.Json.Nodes.JsonObject document, string launcher)
     {
+        AddHook(document, "Notification", "idle_prompt", $"{launcher} dashboard signal waiting");
+        AddHook(document, "Notification", "permission_prompt", $"{launcher} dashboard signal approval");
+        AddHook(document, "Stop", null, $"{launcher} dashboard signal turn");
+    }
+
+    /// <summary>
+    /// The hook that files the conversation under its launch, run by Claude
+    /// whenever a conversation starts: a new one, a resumed one, and the new
+    /// one <c>/clear</c> makes, which belongs to the same launch.
+    /// </summary>
+    /// <remarks>
+    /// Beside whatever SessionStart hooks the file already has, as the Studio
+    /// hooks are. The command prints nothing, which matters more here than
+    /// anywhere: what a session-start hook prints becomes the agent's context.
+    /// </remarks>
+    internal static void AddLinkHook(System.Text.Json.Nodes.JsonObject document, string launcher) =>
+        AddHook(document, "SessionStart", null, $"{launcher} hook session-start --agent claude");
+
+    private static void AddHook(
+        System.Text.Json.Nodes.JsonObject document,
+        string hookEvent,
+        string? matcher,
+        string command)
+    {
         if (document["hooks"] is not System.Text.Json.Nodes.JsonObject hooks)
         {
             hooks = [];
             document["hooks"] = hooks;
         }
 
-        Add("Notification", "idle_prompt", "waiting");
-        Add("Notification", "permission_prompt", "approval");
-        Add("Stop", null, "turn");
-
-        void Add(string hookEvent, string? matcher, string state)
+        if (hooks[hookEvent] is not System.Text.Json.Nodes.JsonArray list)
         {
-            if (hooks[hookEvent] is not System.Text.Json.Nodes.JsonArray list)
-            {
-                list = [];
-                hooks[hookEvent] = list;
-            }
-
-            var entry = new System.Text.Json.Nodes.JsonObject();
-
-            if (matcher is not null)
-            {
-                entry["matcher"] = matcher;
-            }
-
-            entry["hooks"] = new System.Text.Json.Nodes.JsonArray(new System.Text.Json.Nodes.JsonObject
-            {
-                ["type"] = "command",
-                ["command"] = $"{launcher} dashboard signal {state}",
-            });
-
-            list.Add(entry);
+            list = [];
+            hooks[hookEvent] = list;
         }
+
+        var entry = new System.Text.Json.Nodes.JsonObject();
+
+        if (matcher is not null)
+        {
+            entry["matcher"] = matcher;
+        }
+
+        entry["hooks"] = new System.Text.Json.Nodes.JsonArray(new System.Text.Json.Nodes.JsonObject
+        {
+            ["type"] = "command",
+            ["command"] = command,
+        });
+
+        list.Add(entry);
     }
 
     /// <summary>

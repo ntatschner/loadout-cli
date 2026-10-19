@@ -1,5 +1,5 @@
 using System.ComponentModel;
-using System.Text.Json;
+using Loadout.Core.Sessions;
 using Loadout.Cli.Infrastructure;
 using Loadout.Core.Sessions.Hosting;
 using Loadout.Platform.Abstractions;
@@ -78,7 +78,8 @@ public sealed class DashboardSignalCommand : AsyncCommand<DashboardSignalSetting
             return CommandOutput.Success();
         }
 
-        var agentSession = await AgentSessionAsync(cancellationToken).ConfigureAwait(false);
+        var agentSession = await SessionLinks.ReadSessionIdAsync(
+            Input ?? (Console.IsInputRedirected ? Console.In : null), cancellationToken).ConfigureAwait(false);
 
         try
         {
@@ -91,46 +92,5 @@ public sealed class DashboardSignalCommand : AsyncCommand<DashboardSignalSetting
         }
 
         return CommandOutput.Success();
-    }
-
-    /// <summary>The <c>session_id</c> in the hook's input, or null for none or none readable.</summary>
-    private async Task<string?> AgentSessionAsync(CancellationToken ct)
-    {
-        var reader = Input ?? (Console.IsInputRedirected ? Console.In : null);
-
-        if (reader is null)
-        {
-            return null;
-        }
-
-        var buffer = new char[SessionSignals.MaximumInput];
-        var read = 0;
-
-        while (read < buffer.Length)
-        {
-            var got = await reader.ReadAsync(buffer.AsMemory(read), ct).ConfigureAwait(false);
-
-            if (got == 0)
-            {
-                break;
-            }
-
-            read += got;
-        }
-
-        try
-        {
-            using var document = JsonDocument.Parse(buffer.AsMemory(0, read));
-
-            return document.RootElement.ValueKind == JsonValueKind.Object
-                && document.RootElement.TryGetProperty("session_id", out var session)
-                && session.ValueKind == JsonValueKind.String
-                ? session.GetString()
-                : null;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
     }
 }

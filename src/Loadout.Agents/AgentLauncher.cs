@@ -363,7 +363,7 @@ public sealed class AgentLauncher : IAgentLauncher
                     launch.Invocation.Executable,
                     launch.Invocation.Arguments,
                     launch.Context.WorkingDirectory,
-                    WithTelemetry(launch.Invocation.Environment, launch.Config.Telemetry),
+                    WithLaunch(WithTelemetry(launch.Invocation.Environment, launch.Config.Telemetry), launchId),
                     RemoveEnvironmentPrefixes: launch.Invocation.RemoveEnvironmentPrefixes),
                 ct).ConfigureAwait(false);
 
@@ -889,7 +889,12 @@ public sealed class AgentLauncher : IAgentLauncher
             headless is null && _environment?.GetVariable(Core.Sessions.Hosting.SessionSignals.Variable) is { } hosted
                 && Core.Sessions.Hosting.SessionSignals.IsSessionId(hosted)
                 ? hosted
-                : null);
+                : null,
+
+            // A person's conversation is written down against its launch, so
+            // resuming it later knows what it was for. A node's already is,
+            // through its own protocol.
+            LinksSession: headless is null);
 
         var invocationResult = await adapter.BuildInvocationAsync(context, ct).ConfigureAwait(false);
         if (invocationResult.Failed)
@@ -1081,6 +1086,22 @@ public sealed class AgentLauncher : IAgentLauncher
     /// than the launcher's default, and quietly redirecting it would be the
     /// launcher deciding it knew better.
     /// </remarks>
+    /// <summary>
+    /// The environment with this launch's id in it, for the agent's hook to
+    /// file the conversation under (see <see cref="Core.Sessions.SessionLinks"/>).
+    /// </summary>
+    /// <remarks>
+    /// Added here rather than by the adapter because the id is only minted
+    /// once the launch is recorded, after the invocation was built.
+    /// </remarks>
+    internal static IReadOnlyDictionary<string, string> WithLaunch(
+        IReadOnlyDictionary<string, string> environment,
+        string launchId) =>
+        new Dictionary<string, string>(environment, StringComparer.Ordinal)
+        {
+            [Core.Sessions.SessionLinks.Variable] = launchId,
+        };
+
     private static IReadOnlyDictionary<string, string> WithTelemetry(
         IReadOnlyDictionary<string, string> environment,
         TelemetrySettings? telemetry)

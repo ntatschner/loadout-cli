@@ -129,11 +129,16 @@ public sealed class ThrottledProcessLauncher : IProcessLauncher
         }
     }
 
+    /// <summary>The last process run with a terminal, for a test to see what it was given.</summary>
+    public ProcessRequest? LastInteractive { get; private set; }
+
     /// <inheritdoc />
     public async Task<OperationResult<int>> RunInteractiveAsync(
         ProcessRequest request,
         CancellationToken ct = default)
     {
+        LastInteractive = request;
+
         for (var attempt = 0; ; attempt++)
         {
             await EnterGateAsync(ct).ConfigureAwait(false);
