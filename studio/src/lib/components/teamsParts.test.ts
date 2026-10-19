@@ -193,6 +193,18 @@ describe('Outbox', () => {
     await fireEvent.input(screen.getByRole('searchbox', { name: 'Find a file' }), { target: { value: 'nothing-like-this' } });
     expect(screen.getByText(/No delivered file matches/)).toBeTruthy();
   });
+
+  it('takes the words the list query takes: each one, its node, and a minus to leave out', async () => {
+    render(Outbox, { run: 'r1', repository: '/repo', files, loose, read });
+
+    const leaves = () =>
+      items().filter((one) => one.getAttribute('aria-expanded') === null && one.hasAttribute('data-item')).map((one) => one.getAttribute('data-item'));
+
+    await fireEvent.input(screen.getByRole('searchbox', { name: 'Find a file' }), { target: { value: 'writer -csv' } });
+    await tick();
+
+    expect(leaves()).toEqual(['a1b2c3d:docs/README.md']);
+  });
 });
 
 describe('Bin', () => {

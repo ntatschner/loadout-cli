@@ -3,6 +3,7 @@
 // thing, built from the same pieces the other pages use, so every action
 // runs the same command it runs anywhere else.
 import type { Run } from './api';
+import { matchesWords } from './findWords';
 import type { Work } from './lines';
 import { wordFor } from './signals';
 import { runWord } from './teamsData';
@@ -135,11 +136,9 @@ export function pureGroups(lines: Work[], runs: Run[], idleAfter: number, scope:
   return scope === 'all' ? all : all.filter((group) => group.key === scope);
 }
 
-/** What the filter keeps: its words in the title or the facts beside it. */
+/** What the filter keeps: each of its words in the title or the facts beside it, as findWords reads them. */
 export function filtered(groups: PureGroup[], filter: string): PureGroup[] {
-  const q = filter.trim().toLowerCase();
-
-  return groups.map((group) => ({ ...group, items: group.items.filter((item) => !q || `${item.title} ${item.meta}`.toLowerCase().includes(q)) })).filter((group) => group.items.length);
+  return groups.map((group) => ({ ...group, items: group.items.filter((item) => matchesWords([item.title, item.meta], filter)) })).filter((group) => group.items.length);
 }
 
 /** The matches the command bar shows for what is typed. */

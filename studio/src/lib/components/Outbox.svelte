@@ -11,6 +11,7 @@
   import Markdown from './Markdown.svelte';
   import { css } from '../css';
   import { baseName, extension, fileKind, sizeOf, type OutboxRead } from '../files';
+  import { matchesWords } from '../findWords';
 
 
   interface Entry {
@@ -105,7 +106,7 @@
     ];
   }
 
-  const shown = $derived(all.filter((entry) => !filter.trim() || entry.path.toLowerCase().includes(filter.trim().toLowerCase())));
+  const shown = $derived(all.filter((entry) => matchesWords([entry.shown ?? entry.path, entry.node], filter)));
 
   const items = $derived.by((): Item[] => {
     if (grouping === 'folder') {

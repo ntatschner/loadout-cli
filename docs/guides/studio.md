@@ -628,6 +628,12 @@ Every key is printed beside what it does, and **?** lists them all:
 | **F6**, **Shift F6** | the next or previous pane |
 | **?** | every key |
 
+The filter has no fields, because the list holds every kind of thing at once,
+so it takes only the words of the query the other lists take: every word has
+to be in the title or the facts beside it, `"a phrase"` is looked for whole,
+and `-draft` leaves out what has it. The Outbox's **Find a file** works the
+same way over each file's path and the node that delivered it.
+
 Single keys work only when you're not typing. In a terminal every key goes to
 the agent, and **Ctrl ]** brings you back to the list. With single-letter
 shortcuts off, only **Escape** and the list's own arrows, **Home**, **End** and
