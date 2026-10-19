@@ -3,6 +3,7 @@
   // and against each, to be compared. Choose one, keep or drop the layer, or
   // ask for it to be reworked in a sentence. An addition is drawn the same
   // way, without options. Once the idea is accepted it offers nothing.
+  import { onDestroy } from 'svelte';
   import HaloButton from './HaloButton.svelte';
   import Glyph from './Glyph.svelte';
   import { lineFor } from '../commandLine';
@@ -26,9 +27,11 @@
     onchoose?: (option: string) => void;
     onverdict?: (verdict: 'Keep' | 'Drop') => void;
     onimprove?: (request: string) => void;
+    /** Told whether a rework request is written and not sent. */
+    onrework?: (pending: boolean) => void;
   }
 
-  let { idea, where, accepted = false, disabledReason = undefined, layer = undefined, addition = undefined, onchoose = undefined, onverdict = undefined, onimprove = undefined }: Props = $props();
+  let { idea, where, accepted = false, disabledReason = undefined, layer = undefined, addition = undefined, onchoose = undefined, onverdict = undefined, onimprove = undefined, onrework = undefined }: Props = $props();
 
   const piece = $derived(layer ?? addition!);
   const id = $derived(piece.id);
@@ -41,6 +44,14 @@
   let request = $state('');
   let said = $state('');
   const area = `rw-${Math.random().toString(36).slice(2, 7)}`;
+
+  // Written in the open box and not sent: the page's Next button goes to Send it back.
+  // A closed box is put away, so it does not count.
+  $effect(() => {
+    onrework?.(reworking && !!request.trim());
+  });
+
+  onDestroy(() => onrework?.(false));
 
   function choose(option: Option) {
     onchoose?.(option.id);
@@ -69,7 +80,7 @@
   {/if}
 
   {#if layer}
-    <div class="opts">
+    <div class="opts" data-next={`choose:${layer.id}`}>
       {#each layer.options as option (option.id)}
         {@const chosen = layer.chosen === option.id}
         <article class={['card', chosen ? 'chosen' : ''].filter(Boolean).join(' ')} aria-label={`${option.title}${chosen ? ', chosen' : ''}`}>
@@ -90,7 +101,7 @@
   {/if}
 
   {#if !accepted}
-    <div class="acts">
+    <div class="acts" data-next={`verdict:${id}`}>
       <HaloButton label="Keep it" size="small" glyph="✓" cmd={lineFor('idea keep', [idea, id, ...where])} disabledReason={disabledReason ?? (verdict === 'Keep' ? 'kept already' : undefined)} onpress={() => judge('Keep')} />
       <HaloButton label="Drop it" size="small" glyph="✕" cmd={lineFor('idea drop', [idea, id, ...where])} disabledReason={disabledReason ?? (verdict === 'Drop' ? 'dropped already' : undefined)} onpress={() => judge('Drop')} />
       <HaloButton label="Ask for it to be reworked" size="small" glyph="↻" cmd="says what should change, then sends it" {disabledReason} onpress={() => (reworking = !reworking)} />
@@ -98,7 +109,7 @@
     <div class={['rework', reworking ? 'on' : ''].filter(Boolean).join(' ')}>
       <textarea class="ls-text" id={area} rows="2" placeholder="What should change, in a sentence" aria-label={`What should change about ${id}`} bind:value={request}></textarea>
       <div>
-        <HaloButton label="Send it back" size="small" kind="needs" cmd={lineFor('idea improve', [idea, id, `--request=${request.trim() || '<what should change>'}`, ...where])} disabledReason={request.trim() ? disabledReason : 'say what should change'} onpress={sendBack} />
+        <HaloButton label="Send it back" next={`rework:${id}`} size="small" kind="needs" cmd={lineFor('idea improve', [idea, id, `--request=${request.trim() || '<what should change>'}`, ...where])} disabledReason={request.trim() ? disabledReason : 'say what should change'} onpress={sendBack} />
       </div>
     </div>
   {/if}
