@@ -1144,8 +1144,11 @@ public sealed class DashboardServer : IDisposable
     /// </summary>
     /// <param name="address">Where the dashboard is, as it was printed.</param>
     /// <param name="signIn">The sign-in to mint the link's code with.</param>
-    /// <param name="studio">Whether the browser lands on Studio rather than the classic page.</param>
-    public static string? SignInLink(string? address, SignIn? signIn, bool studio = false)
+    /// <param name="classic">
+    /// Whether the browser lands on the classic page rather than wherever the
+    /// address itself opens.
+    /// </param>
+    public static string? SignInLink(string? address, SignIn? signIn, bool classic = false)
     {
         if (signIn is null
             || !Uri.TryCreate(address, UriKind.Absolute, out var where)
@@ -1155,8 +1158,16 @@ public sealed class DashboardServer : IDisposable
         }
 
         return $"{where.Scheme}://{where.Authority}/signin?code={Uri.EscapeDataString(signIn.MintCode())}"
-            + (studio ? "&to=studio" : string.Empty);
+            + (classic ? "&to=classic" : string.Empty);
     }
+
+    /// <summary>
+    /// Whether the address opens Studio for a machine's <c>dashboard</c>
+    /// setting: it does unless the machine chose the classic page.
+    /// </summary>
+    /// <param name="dashboard">The setting as saved, null where it is unset.</param>
+    public static bool OpensStudio(string? dashboard) =>
+        !string.Equals(dashboard, "classic", StringComparison.Ordinal);
 
     /// <summary>Hands a request under /api/v1 to the part of Studio's API it names.</summary>
     /// <remarks>
@@ -1561,7 +1572,12 @@ public sealed class DashboardServer : IDisposable
         // One of two fixed places, never an address taken from the link, so
         // a sign-in link cannot be made into a way of sending somebody
         // somewhere else.
-        context.Response.Headers["Location"] = request.QueryString["to"] == "studio" ? StudioAssets.Root : "/";
+        context.Response.Headers["Location"] = request.QueryString["to"] switch
+        {
+            "classic" => "/classic",
+            "studio" => StudioAssets.Root,
+            _ => "/",
+        };
         context.Response.Close();
     }
 

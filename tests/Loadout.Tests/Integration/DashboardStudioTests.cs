@@ -144,6 +144,14 @@ public sealed partial class DashboardStudioTests : IAsyncLifetime
         printed.Headers.Location!.OriginalString.Should().Be("/studio/?token=" + _server.Token);
     }
 
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData("", true)]
+    [InlineData("studio", true)]
+    [InlineData("classic", false)]
+    public void Studio_is_what_the_address_opens_unless_the_machine_chose_classic(string? dashboard, bool studio) =>
+        DashboardServer.OpensStudio(dashboard).Should().Be(studio);
+
     [Fact]
     public async Task Where_it_is_not_the_address_opens_the_classic_page_as_before()
     {

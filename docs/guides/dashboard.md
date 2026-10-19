@@ -31,11 +31,13 @@ close the terminal. The page tells you so above the form.
 
 ### 2. Open the address
 
-Copy the whole address, token included, into your browser. Or start it with
-`--open` to have it opened for you:
+The address opens Studio unless this machine has chosen the classic page with
+`loadout config set dashboard classic`; the classic page is at `/classic`
+either way. Copy it, token included, into your browser, or start with
+`--open --classic` to have the classic page opened for you:
 
 ```sh
-loadout dashboard --open
+loadout dashboard --open --classic
 ```
 
 ![The dashboard's run list. A band of totals across the top, the Needs you rail, and the screens as a row of tabs. Then one run under "Needs you", whose card shows the question it is asking, one under "Running", and two under "Finished". Each card names its team and room and states its state as a word, with a glyph beside it.](../images/dashboard-list-rich.png)

@@ -73,7 +73,7 @@
     studio.watchOnly
       ? studio.watchOnlyReason
       : studio.about?.hostsSessions === false
-        ? 'Only the daemon hosts sessions · $ loadout dashboard --open --studio'
+        ? 'Only the daemon hosts sessions · $ loadout dashboard --open'
         : studio.about?.startsSessions === false
           ? `This machine cannot host a terminal (${studio.about.pseudoTerminal ?? 'no pseudo-terminal'})`
           : undefined,

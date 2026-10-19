@@ -230,7 +230,7 @@
     {#snippet foot()}
       <a class="ls-rl ls-report" href={reportLink(studio.about)} target="_blank" rel="noopener noreferrer">
         <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 17.5 V3 M5 3.5 H15 L12.5 7 L15 10.5 H5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
-        <span class="n">Report a problem</span><span class="f">Studio is a preview · opens GitHub</span>
+        <span class="n">Report a problem</span><span class="f">opens GitHub</span>
       </a>
       <button type="button" class="ls-rl ls-appearance" onclick={() => (appearance = true)}>
         <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3a7 7 0 1 0 0 14a3.5 3.5 0 0 1 0-7a3.5 3.5 0 0 0 0-7z M10 3a7 7 0 0 1 0 14" fill="none" stroke="currentColor" stroke-width="1.6" /></svg>

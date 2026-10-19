@@ -339,7 +339,7 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         {
             // A sign-in link rather than the address with its token, so what
             // lands in the browser's history works once and then never again.
-            var link = DashboardServer.SignInLink(daemon.Address, SignIn.ForMachine(_paths), settings.Studio) ?? daemon.Address!;
+            var link = DashboardServer.SignInLink(daemon.Address, SignIn.ForMachine(_paths), settings.Classic) ?? daemon.Address!;
 
             await _opener.OpenUrlAsync(link, ct).ConfigureAwait(false);
         }
@@ -363,9 +363,9 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         [Description("Open the page in a browser once it is listening.")]
         public bool Open { get; init; }
 
-        [CommandOption("--studio")]
-        [Description("With --open, open Studio, the preview app, rather than the classic page.")]
-        public bool Studio { get; init; }
+        [CommandOption("--classic")]
+        [Description("With --open, open the classic page rather than Studio.")]
+        public bool Classic { get; init; }
 
         [CommandOption("--watch-only")]
         [Description(
@@ -423,6 +423,11 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         server.Bin = new TeamBin(_paths);
         server.DaemonPaused = () => DaemonControl.Paused(_paths);
         server.BinDays = TeamBin.Days(machine.Value?.Teams.BinDays);
+
+        // Which page the address opens, as the daemon decides it, so one
+        // served here lands where the daemon's would.
+        server.StudioFirst = async token => DashboardServer.OpensStudio(
+            (await _configuration.LoadMachineAsync(token).ConfigureAwait(false)).Value?.Teams.Dashboard);
 
         // Which of the two pages this is. The flag wins for one run, then the
         // profile - the same order as everything else here, and the same order
@@ -577,7 +582,7 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
             // Asked for, never assumed. A command that opened a browser
             // because it felt like it is one somebody runs once.
             await _opener.OpenUrlAsync(
-                (server.Beyond ? null : DashboardServer.SignInLink(server.Address, server.SignIn, settings.Studio)) ?? server.Address,
+                (server.Beyond ? null : DashboardServer.SignInLink(server.Address, server.SignIn, settings.Classic)) ?? server.Address,
                 cancellationToken).ConfigureAwait(false);
         }
 

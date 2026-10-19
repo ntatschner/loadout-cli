@@ -299,7 +299,7 @@ What it takes goes to the bin rather than away: `loadout team bin` lists it,
 ## A dashboard for the runs
 
 ```sh
-loadout dashboard --open
+loadout dashboard --open --classic
 loadout dashboard --watch-only
 ```
 

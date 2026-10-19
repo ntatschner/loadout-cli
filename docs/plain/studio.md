@@ -3,8 +3,7 @@
 Studio is a page in your web browser where you can work with Loadout. You can
 start an AI session there, type to it, and see everything that's going on.
 
-It's new, so it's called a *preview*. The older page, the dashboard, still
-works the same way.
+The older page, the classic dashboard, still works the same way.
 
 ## What you need first
 
@@ -24,7 +23,7 @@ works the same way.
 2. Type this and press Enter:
 
    ```sh
-   loadout dashboard --open --studio
+   loadout dashboard --open
    ```
 
 3. Your browser opens on Studio's *Home* page.

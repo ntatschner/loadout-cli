@@ -52,7 +52,7 @@ export const command = {
   signOut: () => '$ loadout dashboard sign-out',
 
   /** Opening Studio signed in. */
-  open: () => '$ loadout dashboard --open --studio',
+  open: () => '$ loadout dashboard --open',
 
   /** One of Studio's settings. */
   setting: (key: string, value: string) => `$ loadout config set ${key} ${value === '' ? '""' : quoted(value)}`,
