@@ -178,7 +178,7 @@ takes, such as `agent:codex project:alpha` or `fix sort:title`, over the newest
 its five most recent. Each row says what carries over if you resume it: the task, mode,
 profile and worktree it was launched with.
 
-![Sessions in Studio: a panel of the two sessions that ended when the daemon stopped, each with Resume and Not this one, and Resume all 2; then the history, newest first, filtered by agent and project, each conversation with what it carries over, one marked as looking to be running elsewhere, and Resume beside each.](../images/studio-sessions.png)
+![Sessions in Studio: a panel of the two sessions that ended when the daemon stopped, each with Resume and Not this one, and Resume all 2; then the history, newest first, under a search box suggesting sort:-active, each conversation with what it carries over, one marked as looking to be running elsewhere, and Resume beside each.](../images/studio-sessions.png)
 
 **Resume** opens it in a new terminal here, running `loadout resume`, so it's
 exactly what the same command does in a terminal. **Resume with changes…**

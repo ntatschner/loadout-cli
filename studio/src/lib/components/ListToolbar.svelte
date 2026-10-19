@@ -5,7 +5,7 @@
   // All of them edit the one query string, so they cannot disagree. '/' puts
   // you in the box from anywhere on the page that is not already a field.
   import { onDestroy } from 'svelte';
-  import { partSaid, sortOf, withoutPart, withSort, withTerm, type ListShape } from '../lists';
+  import { exampleQuery, partSaid, sortOf, withoutPart, withSort, withTerm, type ListShape } from '../lists';
   import { typingIn } from '../pure';
 
   interface Props {
@@ -42,6 +42,7 @@
   const sort = $derived(sortOf(parts));
   const choices = $derived((shape?.fields ?? []).filter((field) => field.type === 'choice'));
   const fields = $derived(shape?.fields ?? []);
+  const example = $derived(exampleQuery(fields));
   const atDefault = $derived(query.trim() === (shape?.defaultQuery ?? '').trim());
   const hidden = $derived(shown !== null && recorded !== null ? recorded - shown : 0);
 
@@ -100,7 +101,7 @@
       class="ls-text q"
       type="search"
       value={typed}
-      placeholder={`Type to filter, or state:open sort:-updated`}
+      placeholder={example ? `Type to filter, or ${example}` : 'Type to filter'}
       autocomplete="off"
       spellcheck="false"
       aria-keyshortcuts="/"
