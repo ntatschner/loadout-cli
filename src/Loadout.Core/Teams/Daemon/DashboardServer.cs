@@ -120,6 +120,18 @@ public sealed class DashboardServer : IDisposable
     public Loadout.Core.Sessions.Hosting.HostedSessions? Sessions { get; set; }
 
     /// <summary>
+    /// Past conversations, and resuming one, or null where this dashboard
+    /// offers neither. Set with <see cref="Sessions"/> on the daemon's.
+    /// </summary>
+    public Loadout.Core.Sessions.ISessionResumption? Resumption { get; set; }
+
+    /// <summary>Registers a folder as a project and returns its slug, for 'Register and resume'.</summary>
+    public Func<string, CancellationToken, Task<Loadout.Models.Results.OperationResult<string>>>? Register { get; set; }
+
+    private Resuming? Resumable =>
+        Resumption is not null && Register is not null ? new Resuming(Resumption, Register) : null;
+
+    /// <summary>
     /// Whether this machine has chosen Studio as the page its address opens,
     /// asked per request so a change is seen without a restart. Null keeps
     /// classic there.
@@ -1183,7 +1195,22 @@ public sealed class DashboardServer : IDisposable
                 return;
             }
 
-            await SessionsApi.HandleAsync(context, Sessions, path, WatchOnly, ct).ConfigureAwait(false);
+            await SessionsApi.HandleAsync(context, Sessions, path, WatchOnly, ct, Resumable).ConfigureAwait(false);
+
+            return;
+        }
+
+        if (Under(path, HistoryApi.Root))
+        {
+            if (Resumable is null)
+            {
+                await WriteAsync(context, 404, "text/plain; charset=utf-8",
+                    "This dashboard keeps no history. The daemon's does: loadout daemon").ConfigureAwait(false);
+
+                return;
+            }
+
+            await HistoryApi.HandleAsync(context, Resumable, Sessions, path, WatchOnly, ct).ConfigureAwait(false);
 
             return;
         }

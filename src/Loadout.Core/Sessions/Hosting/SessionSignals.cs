@@ -108,6 +108,33 @@ public static partial class SessionSignals
         }
     }
 
+    /// <summary>Every session with a signal, by its id, newest first.</summary>
+    /// <remarks>
+    /// Kept a week, which makes them the record of what an earlier daemon
+    /// hosted: nothing else about a hosted session outlives the daemon.
+    /// </remarks>
+    public static IReadOnlyList<(string Id, SessionSignal Signal)> All(string directory)
+    {
+        if (!System.IO.Directory.Exists(directory))
+        {
+            return [];
+        }
+
+        var found = new List<(string Id, SessionSignal Signal)>();
+
+        foreach (var file in System.IO.Directory.EnumerateFiles(directory, "*.json"))
+        {
+            var id = Path.GetFileNameWithoutExtension(file);
+
+            if (Read(directory, id) is { } signal)
+            {
+                found.Add((id, signal));
+            }
+        }
+
+        return found.OrderByDescending(entry => entry.Signal.At).ToList();
+    }
+
     /// <summary>Forgets a session's signal, when the session itself is forgotten.</summary>
     public static void Remove(string directory, string id)
     {

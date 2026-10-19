@@ -20,7 +20,7 @@ namespace Loadout.Core.Teams.Daemon;
 /// <para>
 /// <list type="table">
 /// <item><term>GET /api/v1/sessions</term><description>Every session, oldest first.</description></item>
-/// <item><term>POST /api/v1/sessions</term><description>Starts one from the launch sheet's fields; 201 with the session.</description></item>
+/// <item><term>POST /api/v1/sessions</term><description>Starts one from the launch sheet's fields, or resumes a conversation given as <c>resume</c> (see <see cref="HistoryApi"/>); 201 with the session.</description></item>
 /// <item><term>GET /api/v1/sessions/{id}</term><description>One session; 410 with the agent's conversation id for one an earlier daemon hosted.</description></item>
 /// <item><term>DELETE /api/v1/sessions/{id}</term><description>Ends it if it is running, and forgets it; 204.</description></item>
 /// <item><term>GET /api/v1/sessions/{id}/terminal</term><description>A WebSocket carrying the terminal; see <see cref="TerminalSocket"/>.</description></item>
@@ -44,7 +44,8 @@ internal static class SessionsApi
 
     /// <summary>Answers a request whose path is <see cref="Root"/> or below it.</summary>
     public static async Task HandleAsync(
-        HttpListenerContext context, HostedSessions sessions, string path, bool watchOnly, CancellationToken ct)
+        HttpListenerContext context, HostedSessions sessions, string path, bool watchOnly, CancellationToken ct,
+        Resuming? resuming = null)
     {
         if (path.Length > Root.Length && path[Root.Length] != '/')
         {
@@ -70,7 +71,7 @@ internal static class SessionsApi
                 return;
 
             case [] when method == "POST":
-                await StartAsync(context, sessions, ct).ConfigureAwait(false);
+                await StartAsync(context, sessions, resuming, ct).ConfigureAwait(false);
                 return;
 
             case []:
@@ -133,19 +134,23 @@ internal static class SessionsApi
 
     /// <summary>The launch a request's body describes, or null where it names no project.</summary>
     /// <remarks>Shared with the launch sheet's preview, so the two read the same fields.</remarks>
-    internal static async Task<HostedLaunch?> ReadLaunchAsync(HttpListenerContext context, CancellationToken ct)
-    {
-        Asked? asked;
+    internal static async Task<HostedLaunch?> ReadLaunchAsync(HttpListenerContext context, CancellationToken ct) =>
+        Launch(await ReadAskedAsync(context, ct).ConfigureAwait(false));
 
+    private static async Task<Asked?> ReadAskedAsync(HttpListenerContext context, CancellationToken ct)
+    {
         try
         {
-            asked = await JsonSerializer.DeserializeAsync<Asked>(context.Request.InputStream, LaunchApi.Json, ct).ConfigureAwait(false);
+            return await JsonSerializer.DeserializeAsync<Asked>(context.Request.InputStream, LaunchApi.Json, ct).ConfigureAwait(false);
         }
         catch (JsonException)
         {
-            asked = null;
+            return null;
         }
+    }
 
+    private static HostedLaunch? Launch(Asked? asked)
+    {
         if (asked is { Command: { Length: > 0 } command })
         {
             return new HostedLaunch(
@@ -173,9 +178,39 @@ internal static class SessionsApi
             : null;
     }
 
-    private static async Task StartAsync(HttpListenerContext context, HostedSessions sessions, CancellationToken ct)
+    private static async Task StartAsync(
+        HttpListenerContext context, HostedSessions sessions, Resuming? resuming, CancellationToken ct)
     {
-        if (await ReadLaunchAsync(context, ct).ConfigureAwait(false) is not { } launch)
+        var asked = await ReadAskedAsync(context, ct).ConfigureAwait(false);
+
+        if (asked?.Resume is { } resume)
+        {
+            // The launch sheet's fields, where 'Resume with changes' sent
+            // them, are what the resume is to change. No project is needed:
+            // the conversation says which.
+            await HistoryApi.ResumeAsync(
+                context,
+                resuming,
+                sessions,
+                resume,
+                new HostedLaunch(
+                    asked.Project ?? string.Empty,
+                    asked.Agent,
+                    asked.Task,
+                    asked.TaskId,
+                    asked.Mode,
+                    asked.Columns ?? HostedSessions.DefaultColumns,
+                    asked.Rows ?? HostedSessions.DefaultRows,
+                    asked.Profile,
+                    asked.Worktree,
+                    asked.Offline,
+                    asked.NoSync),
+                ct).ConfigureAwait(false);
+
+            return;
+        }
+
+        if (Launch(asked) is not { } launch)
         {
             await PlainAsync(context, 400, "The body should be JSON naming a 'project', or a 'command'.").ConfigureAwait(false);
 
@@ -233,8 +268,10 @@ internal static class SessionsApi
             terminal = Address(session) + "/terminal",
             // 'command' for one of the commands that ask as they go, which has no
             // agent, mode or conversation to carry on; 'launch' for an agent.
-            kind = launch?.Command is { Length: > 0 } ? "command" : "launch",
-            project = launch?.Command is { Length: > 0 } ? null : launch?.Project,
+            // A resume runs as a command and is shown as the agent session it
+            // reopens, with what it planned to reopen with.
+            kind = launch?.Command is { Length: > 0 } && launch.Resuming is null ? "command" : "launch",
+            project = launch?.Command is { Length: > 0 } && launch.Resuming is null ? null : launch?.Project,
             agent = launch?.Agent,
             mode = launch?.Mode,
             task = launch?.Task,
@@ -246,7 +283,8 @@ internal static class SessionsApi
             // 'approval' until somebody types, and the conversation's id for
             // 'loadout resume'. Both null for an agent whose hooks say nothing.
             needs,
-            agentSession,
+            agentSession = agentSession ?? launch?.Resuming,
+            resuming = launch?.Resuming,
         };
     }
 
@@ -270,5 +308,6 @@ internal static class SessionsApi
         bool NoSync,
         bool Handoff,
         string? Command = null,
-        List<string>? Words = null);
+        List<string>? Words = null,
+        ResumeAsked? Resume = null);
 }
