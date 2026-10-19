@@ -1280,6 +1280,15 @@ public sealed class AgentLauncher : IAgentLauncher
             request.Task,
             attended);
 
+        // A resumed conversation is carrying on its own work, whatever it was
+        // launched for, so it is reminded rather than turned into the
+        // onboarding. Registering a folder to resume a conversation from it
+        // otherwise reopened that conversation as the onboarding session.
+        if (turn == Core.Projects.OnboardingTurn.Onboard && request.ResumeSessionId is { Length: > 0 })
+        {
+            turn = Core.Projects.OnboardingTurn.Remind;
+        }
+
         switch (turn)
         {
             case Core.Projects.OnboardingTurn.Onboard:
