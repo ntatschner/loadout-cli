@@ -57,7 +57,7 @@ public sealed class TaskTraceContractTests
     private static List<string?> Ids(System.Text.Json.JsonElement tasks) =>
         [.. tasks.EnumerateArray().Select(one => one.GetProperty("id").GetString())];
 
-    private static async Task<string> Registered(LoadoutProcess loadout, string name)
+    internal static async Task<string> Registered(LoadoutProcess loadout, string name)
     {
         var repository = Path.Combine(loadout.Home, name);
 

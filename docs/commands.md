@@ -82,7 +82,10 @@
 | `loadout list` | List registered projects |
 | `loadout running` | The sessions running now, and how long each has been quiet |
 | `loadout find <query>` | Search tasks, ideas, sessions, team runs and projects at once, grouped, each with the command that shows it. Takes the [list query](#filtering-and-sorting-a-list): `kind:task state:open login` searches only open tasks. A query starting with a minus goes as `--query=` |
-| `loadout task list\|declare\|remove` | Record what is being worked on, and check it against the repository. `--global` is the list for what belongs to no project yet |
+| `loadout task list\|show\|declare\|remove` | Record what is being worked on, and check it against the repository. `--global` is the list for what belongs to no project yet |
+| `loadout task declare <id> <state> --title <line> --detail <text>` | A title is one line of 72 characters at most, so a list stays readable; the full description goes in `--detail`. A longer title is shortened at a word, the whole of it is kept at the start of the detail, and you're told so |
+| `loadout task show <id>` | One task in full: its detail, note, and every change of state with who said so and when. Lists leave the detail out |
+| `loadout task shorten` | Shorten titles written before the 72-character limit, keeping each one whole in its detail and noting it in the history. `--every-list` covers every project and the workspace-wide list; `--dry-run` names what it would change |
 | `loadout task list --filter <query> --sort <fields>` | Keep and order the list with the same query syntax Studio uses, described under [Filtering and sorting a list](#filtering-and-sorting-a-list) |
 | `loadout task move <id> --to <project>` | Move a task put on the wrong project, or `--to-global` to the workspace-wide list. It keeps its id, state and note, and an accepted plan goes with it. The list it left shows where it went, and `task list` on the new one says where it came from |
 | `loadout idea move <id> --to <project>` | The same for an idea, with its questions, answers and plan. Not while a round on it is running |
@@ -589,7 +592,7 @@ Eighteen tools, each making the same call its command makes:
 | `loadout_code_map` | The map of the code as it stands now, one line per directory |
 | `loadout_remember` | Record one durable fact about the project, with a description, screened for credentials |
 | `loadout_tasks` | What the project is working on, and what the repository does not back up, as `task list` says it |
-| `loadout_task_declare` | Record where a task stands, attributed and dated, as `task declare` does |
+| `loadout_task_declare` | Record where a task stands, attributed and dated, as `task declare` does, with the same 72-character title and a `detail` for the rest |
 | `loadout_task_move` | Move a task or idea from this project to the one it belongs on, as `task move` does |
 | `loadout_idea_add` | Drop an idea in without leaving the work in hand, as `idea add` does |
 | `loadout_ideas` | Every idea and where it stands, or one in full, as `idea list` and `idea show` say it |

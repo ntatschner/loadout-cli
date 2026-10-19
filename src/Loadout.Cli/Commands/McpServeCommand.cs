@@ -998,8 +998,11 @@ public sealed class LoadoutTools
     public async Task<string> DeclareTaskAsync(
         [Description("Short identifier for the task.")] string id,
         [Description("open, doing, done, blocked or dropped.")] string state,
-        [Description("What the work is. Leave out to keep what is there.")] string? title = null,
-        [Description("Anything worth adding.")] string? note = null,
+        [Description("What the work is, in a line of 72 characters at most; a longer one is shortened. Leave out to keep what is there.")]
+        string? title = null,
+        [Description("A short aside worth adding.")] string? note = null,
+        [Description("The full description, read with `loadout task show`. Leave out to keep what is there.")]
+        string? detail = null,
         CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
@@ -1018,13 +1021,22 @@ public sealed class LoadoutTools
         }
 
         var declared = await _tasks
-            .DeclareAsync(slug, id, parsed, "agent", title, note, ct)
+            .DeclareAsync(slug, id, parsed, "agent", title, note, ct, detail: detail)
             .ConfigureAwait(false);
 
-        return declared.Succeeded
-            ? $"Recorded {declared.Value!.Id} as {parsed.ToString().ToLowerInvariant()}, "
-                + "attributed to this session and dated now."
-            : declared.Error ?? "The task could not be recorded.";
+        if (declared.Failed)
+        {
+            return declared.Error ?? "The task could not be recorded.";
+        }
+
+        var said = $"Recorded {declared.Value!.Id} as {parsed.ToString().ToLowerInvariant()}, "
+            + "attributed to this session and dated now.";
+
+        return title is { Length: > 0 } given && Core.Tasks.TaskTitles.Shortens(given)
+            ? said + $" The title was over {Core.Tasks.TaskTitles.Length} characters, so it is now "
+                + $"\"{declared.Value.Title}\" and the whole of it is at the start of the detail. "
+                + "Next time give a short title and the rest as detail."
+            : said;
     }
 
     [McpServerTool(Name = "loadout_task_move")]

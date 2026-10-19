@@ -211,6 +211,35 @@ public sealed class TaskContextTests : IDisposable
     }
 
     [Fact]
+    public async Task The_session_s_own_task_carries_its_detail_and_the_rest_point_to_theirs()
+    {
+        var ship = Task("ship-it", TaskState.Open, "Ship the thing");
+        ship.Detail = "Tag the release.\nThen watch the run until it publishes.";
+        var other = Task("other-work", TaskState.Doing, "Something else entirely");
+        other.Detail = "A long description nobody in this session needs to pay for.";
+
+        var text = await CompileAsync(tasks: true, new StubTasks([ship, other]), taskId: "ship-it");
+
+        var rest = text.IndexOf("## Open tasks", StringComparison.Ordinal);
+
+        // In full for the work the session was started for, since that is
+        // where a long description went when its title was cut.
+        text[..rest].Should().Contain("  Tag the release.").And.Contain("  Then watch the run until it publishes.");
+
+        // Pointed to for the rest, so every launch does not pay for every one.
+        text[rest..].Should().NotContain("A long description");
+        text[rest..].Should().Contain("`loadout task show other-work`");
+    }
+
+    [Fact]
+    public async Task A_task_with_no_detail_gets_no_pointer_to_one()
+    {
+        var text = await CompileAsync(tasks: true, new StubTasks([Task("other-work", TaskState.Doing, "Something")]));
+
+        text.Should().NotContain("loadout task show");
+    }
+
+    [Fact]
     public async Task The_session_task_is_carried_even_where_the_project_lists_none()
     {
         var service = new StubTasks([Task("ship-it", TaskState.Open, "Ship the thing")]);
@@ -270,7 +299,12 @@ public sealed class TaskContextTests : IDisposable
             string? title = null,
             string? note = null,
             CancellationToken ct = default,
-            TaskKind? kind = null) =>
+            TaskKind? kind = null,
+            string? detail = null) =>
+            throw new NotSupportedException();
+
+        public Task<OperationResult<IReadOnlyList<TaskShortened>>> ShortenTitlesAsync(
+            string? projectSlug, string by, bool apply, CancellationToken ct = default) =>
             throw new NotSupportedException();
 
         public Task<OperationResult> RemoveAsync(

@@ -102,7 +102,8 @@ public sealed class IdeaDumpTests : IDisposable
         var task = (await _space.Tasks.ListAsync("website")).Value!.Single();
         task.Kind.Should().Be(TaskKind.Task);
         task.Title.Should().Be("Fix the flaky login test");
-        task.Note.Should().Be("fix the flaky login test on CI", "the person's own words travel with it");
+        task.Detail.Should().Be("fix the flaky login test on CI", "the person's own words travel with it");
+        task.Note.Should().BeEmpty("the note is a short aside, and the words are the description");
 
         var ideas = (await _space.Tasks.ListAsync(null)).Value!;
         ideas.Should().OnlyContain(t => t.Kind == TaskKind.Idea);

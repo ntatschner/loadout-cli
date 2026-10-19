@@ -397,12 +397,16 @@ public sealed class TaskDeclareCommand : AsyncCommand<TaskDeclareCommand.Setting
         public string State { get; init; } = string.Empty;
 
         [CommandOption("--title <TITLE>")]
-        [Description("What the work is. Kept as it was when not given.")]
+        [Description("What the work is, in a line of 72 characters at most. A longer one is shortened and the whole of it kept in the detail. Kept as it was when not given.")]
         public string? Title { get; init; }
 
         [CommandOption("--note <NOTE>")]
-        [Description("Anything worth adding.")]
+        [Description("A short aside worth adding.")]
         public string? Note { get; init; }
+
+        [CommandOption("--detail <TEXT>")]
+        [Description("The full description, which task show prints and lists leave out. Kept as it was when not given.")]
+        public string? Detail { get; init; }
 
         [CommandOption("--by <WHO>")]
         [Description("Who is saying so. Defaults to this machine's user.")]
@@ -435,12 +439,21 @@ public sealed class TaskDeclareCommand : AsyncCommand<TaskDeclareCommand.Setting
 
         var slug = resolution.Value?.Entry.Slug;
 
+        var shortens = settings.Title is { Length: > 0 } title && TaskTitles.Shortens(title);
+
         if (settings.DryRun)
         {
             output.WriteLine(
                 $"Would record [bold]{Markup.Escape(settings.Id)}[/] as "
                 + $"{state.ToString().ToLowerInvariant()} for {Markup.Escape(TaskPaths.Describe(slug))}. "
                 + "Nothing was written.");
+
+            if (shortens)
+            {
+                output.WriteLine(
+                    $"[yellow]![/] The title would be shortened to "
+                    + $"\"{Markup.Escape(TaskTitles.Shorten(settings.Title!))}\", with the whole of it kept in the detail.");
+            }
 
             return CommandOutput.Success();
         }
@@ -452,7 +465,8 @@ public sealed class TaskDeclareCommand : AsyncCommand<TaskDeclareCommand.Setting
             settings.By is { Length: > 0 } who ? who : Environment.UserName,
             settings.Title,
             settings.Note,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken,
+            detail: settings.Detail).ConfigureAwait(false);
 
         if (declared.Failed)
         {
@@ -462,6 +476,16 @@ public sealed class TaskDeclareCommand : AsyncCommand<TaskDeclareCommand.Setting
         output.WriteLine(
             $"[green]+[/] {Markup.Escape(declared.Value!.Id)} is "
             + $"{declared.Value.State.ToString().ToLowerInvariant()}.");
+
+        // Said where the title is written, or long titles come back: the
+        // tidying pass only ever cleans up what is already there.
+        if (shortens)
+        {
+            output.WriteLine(
+                $"[yellow]![/] The title was over {TaskTitles.Length} characters, so it is now "
+                + $"\"{Markup.Escape(declared.Value.Title)}\" and the whole of it is at the start of the detail.");
+            output.WriteLine("[dim]  Give a shorter --title, and the rest as --detail, to choose the words yourself.[/]");
+        }
 
         if (slug is not null)
         {
@@ -758,6 +782,287 @@ public sealed class TaskRemoveCommand : AsyncCommand<TaskRemoveCommand.Settings>
         }
 
         output.WriteLine($"[green]+[/] Forgot {Markup.Escape(settings.Id)}.");
+
+        return CommandOutput.Success();
+    }
+}
+
+/// <summary>Everything recorded about one task.</summary>
+/// <remarks>
+/// The other half of keeping lists short: a list row carries the title, and
+/// this is where the detail, the note and every claim made about it are read.
+/// </remarks>
+[Description("Show one task in full: its detail, note and every state declared for it.")]
+[CommandMeta(CommandCategory.Workspace, Intent = "show task detail history description")]
+public sealed class TaskShowCommand : AsyncCommand<TaskShowCommand.Settings>
+{
+    private readonly ITaskService _tasks;
+    private readonly IProjectService _projects;
+    private readonly IAnsiConsole _console;
+
+    public TaskShowCommand(
+        ITaskService tasks,
+        IProjectService projects,
+        IAnsiConsole console)
+    {
+        _tasks = tasks;
+        _projects = projects;
+        _console = console;
+    }
+
+    public sealed class Settings : TaskSettings
+    {
+        [CommandArgument(0, "<id>")]
+        [Description("The task to show.")]
+        public string Id { get; init; } = string.Empty;
+    }
+
+    /// <inheritdoc />
+    public override async Task<int> ExecuteAsync(
+        CommandContext context,
+        Settings settings,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var output = new CommandOutput(_console, settings);
+
+        var resolution = await settings.ListAsync(_projects, cancellationToken).ConfigureAwait(false);
+
+        if (resolution.Failed)
+        {
+            return output.Fail(resolution);
+        }
+
+        var slug = resolution.Value?.Entry.Slug;
+
+        var listed = await _tasks.ListAsync(slug, cancellationToken).ConfigureAwait(false);
+
+        if (listed.Failed)
+        {
+            return output.Fail(listed);
+        }
+
+        if (listed.Value!.FirstOrDefault(
+                item => string.Equals(item.Id, settings.Id.Trim(), StringComparison.OrdinalIgnoreCase))
+            is not { } task)
+        {
+            return output.Fail(
+                $"'{settings.Id.Trim()}' is not a task of {TaskPaths.Describe(slug)}.",
+                ExitCode.InvalidArguments);
+        }
+
+        if (output.IsJson)
+        {
+            output.WriteJson(new
+            {
+                task.Id,
+                task.Title,
+                state = task.State.ToString().ToLowerInvariant(),
+                kind = task.Kind.ToString().ToLowerInvariant(),
+                project = slug,
+                task.DeclaredBy,
+                declared = task.DeclaredUtc,
+                task.Note,
+                task.Detail,
+                history = task.History.Select(one => new
+                {
+                    state = one.State.ToString().ToLowerInvariant(),
+                    by = one.By,
+                    at = one.Utc,
+                    reason = one.Reason.Length > 0 ? one.Reason : null,
+                }),
+                moved = TaskTrace.Json(task.Moved),
+            });
+
+            return CommandOutput.Success();
+        }
+
+        output.WriteLine(
+            $"[bold]{Markup.Escape(task.Id)}[/]  {task.State.ToString().ToLowerInvariant()}"
+            + (task.Kind == TaskKind.Idea ? "  [blue]idea[/]" : string.Empty)
+            + $"  [dim]{Markup.Escape(TaskPaths.Describe(slug))}[/]");
+        output.WriteLine(Markup.Escape(task.Title.Length > 0 ? task.Title : task.Id));
+        output.WriteLine(
+            $"[dim]{Markup.Escape(task.DeclaredBy.Length > 0 ? task.DeclaredBy : "nobody named")}"
+            + $", {task.DeclaredUtc:yyyy-MM-dd}"
+            + (task.Moved is { } came ? $" · {Markup.Escape(TaskTrace.From(came))}" : string.Empty)
+            + "[/]");
+
+        Section(output, "Note", task.Note);
+        Section(output, "Detail", task.Detail);
+
+        output.WriteBlankLine();
+        output.WriteLine("[bold]History[/]");
+
+        // A task recorded before there was a history has only its latest
+        // claim, and says so rather than looking as if it had none.
+        if (task.History.Count == 0)
+        {
+            output.WriteLine(
+                $"  {task.DeclaredUtc:yyyy-MM-dd HH:mm}  {task.State.ToString().ToLowerInvariant(),-8} "
+                + $"{Markup.Escape(task.DeclaredBy)}  [dim]the latest claim; nothing earlier was kept[/]");
+
+            return CommandOutput.Success();
+        }
+
+        foreach (var one in task.History)
+        {
+            output.WriteLine(
+                $"  {one.Utc:yyyy-MM-dd HH:mm}  {one.State.ToString().ToLowerInvariant(),-8} "
+                + Markup.Escape(one.By)
+                + (one.Reason.Length > 0 ? $"  [dim]{Markup.Escape(one.Reason)}[/]" : string.Empty));
+        }
+
+        return CommandOutput.Success();
+    }
+
+    private static void Section(CommandOutput output, string heading, string text)
+    {
+        if (text.Length == 0)
+        {
+            return;
+        }
+
+        output.WriteBlankLine();
+        output.WriteLine($"[bold]{heading}[/]");
+
+        foreach (var line in text.Split('\n'))
+        {
+            output.WriteLine($"  {Markup.Escape(line.TrimEnd())}");
+        }
+    }
+}
+
+/// <summary>Shortens the long titles written before there was a limit.</summary>
+[Description("Shorten every task title over 72 characters, keeping the whole of each in its detail.")]
+[CommandMeta(CommandCategory.Workspace,
+    Intent = "shorten long task titles tidy migrate detail", Mutates = true)]
+public sealed class TaskShortenCommand : AsyncCommand<TaskShortenCommand.Settings>
+{
+    private readonly ITaskService _tasks;
+    private readonly IProjectService _projects;
+    private readonly Core.Workspace.IWorkspaceManager _workspace;
+    private readonly IAnsiConsole _console;
+
+    public TaskShortenCommand(
+        ITaskService tasks,
+        IProjectService projects,
+        Core.Workspace.IWorkspaceManager workspace,
+        IAnsiConsole console)
+    {
+        _tasks = tasks;
+        _projects = projects;
+        _workspace = workspace;
+        _console = console;
+    }
+
+    public sealed class Settings : TaskSettings
+    {
+        [CommandOption("--every-list")]
+        [Description("Every project's list and the workspace-wide one, rather than one list.")]
+        public bool EveryList { get; init; }
+
+        [CommandOption("--by <WHO>")]
+        [Description("Who the history says did it. Defaults to this machine's user.")]
+        public string? By { get; init; }
+    }
+
+    /// <inheritdoc />
+    public override async Task<int> ExecuteAsync(
+        CommandContext context,
+        Settings settings,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var output = new CommandOutput(_console, settings);
+
+        IReadOnlyList<string?> lists;
+
+        if (settings.EveryList)
+        {
+            if (settings.Project is { Length: > 0 } || settings.Global)
+            {
+                return output.Fail(
+                    "--every-list already covers every list. Leave out --project and --global.",
+                    ExitCode.InvalidArguments);
+            }
+
+            if (!_workspace.IsAvailable())
+            {
+                return output.Fail(
+                    "There is no workspace on this machine, so there are no tasks to shorten.",
+                    ExitCode.WorkspaceSyncFailed);
+            }
+
+            lists = TaskPaths.Lists(_workspace.LocalPath);
+        }
+        else
+        {
+            var resolution = await settings.ListAsync(_projects, cancellationToken).ConfigureAwait(false);
+
+            if (resolution.Failed)
+            {
+                return output.Fail(resolution);
+            }
+
+            lists = [resolution.Value?.Entry.Slug];
+        }
+
+        var by = settings.By is { Length: > 0 } who ? who : Environment.UserName;
+        var found = new List<(string? List, TaskShortened Title)>();
+
+        foreach (var list in lists)
+        {
+            var shortened = await _tasks
+                .ShortenTitlesAsync(list, by, apply: !settings.DryRun, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (shortened.Failed)
+            {
+                return output.Fail(shortened);
+            }
+
+            found.AddRange(shortened.Value!.Select(one => (list, one)));
+        }
+
+        if (output.IsJson)
+        {
+            output.WriteJson(new
+            {
+                written = !settings.DryRun,
+                shortened = found.Select(one => new
+                {
+                    project = one.List,
+                    id = one.Title.Id,
+                    before = one.Title.Before,
+                    after = one.Title.After,
+                }),
+            });
+
+            return CommandOutput.Success();
+        }
+
+        if (found.Count == 0)
+        {
+            output.WriteLine($"[dim]No title is over {TaskTitles.Length} characters. Nothing to do.[/]");
+
+            return CommandOutput.Success();
+        }
+
+        foreach (var (list, title) in found)
+        {
+            output.WriteLine(
+                $"{Markup.Escape(TaskPaths.Describe(list))}  [bold]{Markup.Escape(title.Id)}[/]  "
+                + Markup.Escape(title.After));
+        }
+
+        output.WriteBlankLine();
+        output.WriteLine(settings.DryRun
+            ? $"Would shorten {found.Count} title(s). Nothing was written."
+            : $"[green]+[/] Shortened {found.Count} title(s). Each one's whole text is at the start of its "
+                + "detail, and its history says so.");
 
         return CommandOutput.Success();
     }

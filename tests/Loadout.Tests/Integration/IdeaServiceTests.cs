@@ -195,7 +195,8 @@ public sealed class IdeaServiceTests : IDisposable
         task.Id.Should().Be(idea.Id, "the id and the history travel with it");
         task.Kind.Should().Be(TaskKind.Task);
         task.Title.Should().Be("Status page");
-        task.Note.Should().Contain(accepted.Value.PlanPath);
+        task.Note.Should().Be($"The plan is at {accepted.Value.PlanPath}.", "the note is a short aside");
+        task.Detail.Should().Be("A page showing what is up.", "the plan's understanding is the description");
 
         var document = await File.ReadAllTextAsync(Path.Combine(_workspace.LocalPath, "projects", "homelab", "ideas", $"{idea.Id}.md"));
         document.Should().Contain("**SQLite.**").And.Contain("**Alerts.**");

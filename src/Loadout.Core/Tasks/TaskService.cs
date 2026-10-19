@@ -44,6 +44,11 @@ public interface ITaskService
     /// A kind of null leaves the task as it was, so declaring where an idea
     /// stands does not turn it into work; a new task given none is work.
     /// </para>
+    /// <para>
+    /// A title longer than <see cref="TaskTitles.Length"/> is shortened, and
+    /// the whole of it is kept at the start of the detail, so nothing given is
+    /// lost. <see cref="TaskTitles.Shortens"/> says beforehand whether it will be.
+    /// </para>
     /// </remarks>
     Task<OperationResult<TaskItem>> DeclareAsync(
         string? projectSlug,
@@ -53,7 +58,24 @@ public interface ITaskService
         string? title = null,
         string? note = null,
         CancellationToken ct = default,
-        TaskKind? kind = null);
+        TaskKind? kind = null,
+        string? detail = null);
+
+    /// <summary>
+    /// Shortens every title on a list that is longer than
+    /// <see cref="TaskTitles.Length"/>, keeping the original in the detail and
+    /// saying so in the task's history; or, without <paramref name="apply"/>,
+    /// says which it would shorten and writes nothing.
+    /// </summary>
+    /// <remarks>
+    /// For titles written before there was a limit. Running it again finds
+    /// nothing to do, since every title it leaves is within the limit.
+    /// </remarks>
+    Task<OperationResult<IReadOnlyList<TaskShortened>>> ShortenTitlesAsync(
+        string? projectSlug,
+        string by,
+        bool apply,
+        CancellationToken ct = default);
 
     /// <summary>Forgets a task.</summary>
     Task<OperationResult> RemoveAsync(
@@ -81,6 +103,12 @@ public interface ITaskService
     /// </remarks>
     Task<OperationResult<IReadOnlyList<TaskMoved>>> MovedAsync(CancellationToken ct = default);
 }
+
+/// <summary>A title the tidying pass shortened, or would.</summary>
+/// <param name="Id">The task.</param>
+/// <param name="Before">The title as it was.</param>
+/// <param name="After">The title as it is kept.</param>
+public sealed record TaskShortened(string Id, string Before, string After);
 
 /// <summary>A task that was moved, and the list it is on now.</summary>
 /// <param name="Task">The task, with where it came from in <see cref="TaskItem.Moved"/>.</param>
@@ -148,7 +176,8 @@ internal sealed class TaskService : ITaskService
         string? title = null,
         string? note = null,
         CancellationToken ct = default,
-        TaskKind? kind = null)
+        TaskKind? kind = null,
+        string? detail = null)
     {
         if (TaskIds.Rejection(id) is { } rejected)
         {
@@ -171,7 +200,8 @@ internal sealed class TaskService : ITaskService
         // The pattern is named, never the value: a refusal that quoted what it
         // found would put the credential into terminal scrollback and logs,
         // which is the whole problem.
-        var patterns = SecretScanner.Match(string.Join(' ', title ?? string.Empty, note ?? string.Empty));
+        var patterns = SecretScanner.Match(
+            string.Join(' ', title ?? string.Empty, note ?? string.Empty, detail ?? string.Empty));
 
         if (patterns.Count > 0)
         {
@@ -196,11 +226,18 @@ internal sealed class TaskService : ITaskService
                 var existing = list.Items.FirstOrDefault(
                     item => string.Equals(item.Id, trimmed, StringComparison.OrdinalIgnoreCase));
 
+                var added = existing is null;
+
                 if (existing is null)
                 {
                     existing = new TaskItem { Id = trimmed };
                     list.Items.Add(existing);
                 }
+
+                Remember(existing);
+
+                var changed = added || existing.State != state;
+                var reason = string.Empty;
 
                 existing.State = state;
 
@@ -212,16 +249,44 @@ internal sealed class TaskService : ITaskService
                 existing.DeclaredBy = declaredBy.Trim();
                 existing.DeclaredUtc = _time.GetUtcNow();
 
+                if (detail is not null)
+                {
+                    existing.Detail = detail.Trim();
+                }
+
                 // A title is only replaced when one is given. Declaring a state
                 // should not blank the description of the thing.
                 if (title is { Length: > 0 })
                 {
-                    existing.Title = title.Trim();
+                    existing.Title = TaskTitles.Shorten(title);
+
+                    // Said once, when the original first goes into the detail,
+                    // rather than every time the same long title is given again.
+                    if (TaskTitles.Shortens(title) && TaskTitles.Keep(title, existing.Detail) is var kept
+                        && kept != existing.Detail)
+                    {
+                        existing.Detail = kept;
+                        reason = TaskTitles.ShortenedReason;
+                    }
                 }
 
                 if (note is not null)
                 {
                     existing.Note = note.Trim();
+                }
+
+                // A state said again is not a change, or a task a launcher
+                // marks as doing on every launch would fill its history with
+                // the same line. What did change is always recorded.
+                if (changed || reason.Length > 0)
+                {
+                    existing.History.Add(new TaskEvent
+                    {
+                        State = state,
+                        By = existing.DeclaredBy,
+                        Utc = existing.DeclaredUtc,
+                        Reason = reason,
+                    });
                 }
 
                 declared = existing;
@@ -379,19 +444,9 @@ internal sealed class TaskService : ITaskService
         }
 
         var moved = new List<TaskMoved>();
-        var projects = Path.Combine(_workspace.LocalPath, "projects");
 
-        IEnumerable<string?> lists = Directory.Exists(projects)
-            ? [null, .. Directory.EnumerateDirectories(projects).Select(Path.GetFileName).Order(StringComparer.Ordinal)]
-            : [null];
-
-        foreach (var list in lists)
+        foreach (var list in TaskPaths.Lists(_workspace.LocalPath))
         {
-            if (!File.Exists(PathFor(list)))
-            {
-                continue;
-            }
-
             // A list that cannot be read is left out rather than failing every
             // other list's trace: the trace is a convenience, and reading the
             // list itself says what is wrong with it.
@@ -408,6 +463,80 @@ internal sealed class TaskService : ITaskService
         return OperationResult<IReadOnlyList<TaskMoved>>.Ok(moved);
     }
 
+    /// <inheritdoc />
+    public async Task<OperationResult<IReadOnlyList<TaskShortened>>> ShortenTitlesAsync(
+        string? projectSlug,
+        string by,
+        bool apply,
+        CancellationToken ct = default)
+    {
+        var listed = await ListAsync(projectSlug, ct).ConfigureAwait(false);
+
+        if (listed.Failed)
+        {
+            return OperationResult<IReadOnlyList<TaskShortened>>.Fail(listed.Error!, listed.ExitCode);
+        }
+
+        IReadOnlyList<TaskShortened> found =
+            [.. listed.Value!.Where(item => TaskTitles.Shortens(item.Title)).Select(Shortened)];
+
+        // Not written when nothing needs it: a list rewritten for no change is
+        // a diff in the workspace somebody has to read for nothing.
+        if (!apply || found.Count == 0)
+        {
+            return OperationResult<IReadOnlyList<TaskShortened>>.Ok(found);
+        }
+
+        var shortened = new List<TaskShortened>();
+
+        var written = await _yaml.UpdateAsync<TaskList>(
+            PathFor(projectSlug),
+            () => new TaskList(),
+            list =>
+            {
+                foreach (var item in list.Items.Where(item => item.Id.Length > 0 && TaskTitles.Shortens(item.Title)))
+                {
+                    shortened.Add(Shortened(item));
+                    Remember(item);
+
+                    item.Detail = TaskTitles.Keep(item.Title, item.Detail);
+                    item.Title = TaskTitles.Shorten(item.Title);
+
+                    // The state and who last declared it are left alone: this
+                    // changes how the task is written down, not where it stands.
+                    item.History.Add(new TaskEvent
+                    {
+                        State = item.State,
+                        By = by.Trim(),
+                        Utc = _time.GetUtcNow(),
+                        Reason = TaskTitles.ShortenedReason,
+                    });
+                }
+            },
+            true,
+            ct).ConfigureAwait(false);
+
+        return written.Succeeded
+            ? OperationResult<IReadOnlyList<TaskShortened>>.Ok(shortened)
+            : OperationResult<IReadOnlyList<TaskShortened>>.Fail(
+                written.Error ?? "The titles could not be shortened.", written.ExitCode);
+    }
+
+    private static TaskShortened Shortened(TaskItem item) =>
+        new(item.Id, item.Title, TaskTitles.Shorten(item.Title));
+
+    /// <summary>
+    /// Gives a task recorded before there was a history its last claim as the
+    /// first entry, so the claim is not lost when the next one is added.
+    /// </summary>
+    private static void Remember(TaskItem item)
+    {
+        if (item.History.Count == 0 && item.DeclaredUtc != default)
+        {
+            item.History.Add(new TaskEvent { State = item.State, By = item.DeclaredBy, Utc = item.DeclaredUtc });
+        }
+    }
+
     private static bool Same(string left, string right) =>
         string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
 }
@@ -419,6 +548,21 @@ public static class TaskPaths
     public static string List(string workspace, string? slug) => slug is { Length: > 0 }
         ? Path.Combine(workspace, "projects", slug, "tasks.yaml")
         : Path.Combine(workspace, "tasks.yaml");
+
+    /// <summary>
+    /// Every list that has been written: null for the workspace-wide one first,
+    /// then each project's by slug.
+    /// </summary>
+    public static IReadOnlyList<string?> Lists(string workspace)
+    {
+        var projects = Path.Combine(workspace, "projects");
+
+        IEnumerable<string?> lists = Directory.Exists(projects)
+            ? [null, .. Directory.EnumerateDirectories(projects).Select(Path.GetFileName).Order(StringComparer.Ordinal)]
+            : [null];
+
+        return [.. lists.Where(slug => File.Exists(List(workspace, slug)))];
+    }
 
     /// <summary>The directory ideas' working records are kept in, beside their list.</summary>
     public static string Ideas(string workspace, string? slug) => slug is { Length: > 0 }

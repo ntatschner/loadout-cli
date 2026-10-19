@@ -589,9 +589,10 @@ internal sealed class IdeaDumps : IIdeaDumps
         var declared = await _tasks.DeclareAsync(
             list, id, TaskState.Open, by,
             item.Title.Length > 0 ? item.Title : IdeaService.TitleFrom(item.Excerpt),
-            item.Excerpt,
+            null,
             ct,
-            TaskKind.Task).ConfigureAwait(false);
+            TaskKind.Task,
+            item.Excerpt).ConfigureAwait(false);
 
         return declared.Succeeded
             ? OperationResult<string>.Ok(id)

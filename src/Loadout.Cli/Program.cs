@@ -726,7 +726,9 @@ public static class Program
                 CommandCategory.Workspace,
                 "tasks backlog todo status where were we open work");
             task.AddCommand<TaskListCommand>("list");
+            task.AddCommand<TaskShowCommand>("show");
             task.AddCommand<TaskDeclareCommand>("declare");
+            task.AddCommand<TaskShortenCommand>("shorten");
             task.AddCommand<TaskMoveCommand>("move");
             task.AddCommand<TaskRemoveCommand>("remove");
         });
