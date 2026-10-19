@@ -642,6 +642,61 @@ public sealed class TerminalLauncher : ILauncherTui
         }
     }
 
+    /// <summary>
+    /// A project's tasks, and a session started on the one chosen: the launch
+    /// command with its id, at once, or after the launch sheet opened on it.
+    /// Returns the session's exit code, as a launch from the list does, or
+    /// null to go back to the launcher with nothing started.
+    /// </summary>
+    /// <remarks>
+    /// The list opens with the query saved for it, in Studio or anywhere
+    /// else, so a filter set there is the one shown here. Changing it here
+    /// does not save it: this screen reads what the record and the settings
+    /// say, and changing either is a command's to do.
+    /// </remarks>
+    private async Task<int?> ShowTasksAsync(ProjectResolution project, CancellationToken ct)
+    {
+        var listed = await _tasks.ListAsync(project.Entry.Slug, ct).ConfigureAwait(false);
+
+        if (listed.Failed)
+        {
+            _console.MarkupLine($"[red]{Shown.Safely(listed.Error!)}[/]");
+            Pause();
+
+            return null;
+        }
+
+        var config = await _configuration.LoadConfigAsync(ct).ConfigureAwait(false);
+        var query = Loadout.Core.Lists.ListViews.Saved(config.Value?.Studio, "tasks")
+            ?? Loadout.Core.Tasks.TaskFields.DefaultQuery;
+
+        TaskStart? chosen;
+
+        using (IApplication application = Application.Create())
+        {
+            application.InitLegibly(_reading.Profile);
+
+            using var window = new TasksWindow(project.Entry.Name, listed.Value!, query, application);
+
+            await application.RunAsync(window, ct).ConfigureAwait(false);
+
+            chosen = window.Chosen;
+        }
+
+        if (chosen is null)
+        {
+            return null;
+        }
+
+        var task = chosen.Task;
+        var options = chosen.WithOptions
+            ? await AskAsync(project, ct, new DeclaredTask(task.Id, task.Title, task.State)).ConfigureAwait(false)
+            : new LaunchOptions(TaskId: task.Id);
+
+        // Dismissed means dismissed, as it does from the list.
+        return options is null ? null : await LaunchAsync(project, null, options, ct).ConfigureAwait(false);
+    }
+
     private async Task<IReadOnlyList<(Loadout.Core.Ideas.DumpPlace Place, Loadout.Models.Ideas.IdeaDump Dump)>> DumpsAsync(
         CancellationToken ct)
     {
@@ -749,6 +804,9 @@ public sealed class TerminalLauncher : ILauncherTui
             case LauncherAction.Ideas:
                 await ShowIdeasAsync(intent.Project, ct).ConfigureAwait(false);
                 return null;
+
+            case LauncherAction.Tasks when intent.Project is { } working:
+                return await ShowTasksAsync(working, ct).ConfigureAwait(false);
 
             case LauncherAction.Command when intent.CommandPath is { Length: > 0 } path:
                 // Run against the project on screen. The launcher knew which
@@ -1416,7 +1474,7 @@ public sealed class TerminalLauncher : ILauncherTui
     /// which are what Enter on the sheet would have given.
     /// </para>
     /// </remarks>
-    private async Task<LaunchOptions?> AskAsync(ProjectResolution project, CancellationToken ct)
+    private async Task<LaunchOptions?> AskAsync(ProjectResolution project, CancellationToken ct, DeclaredTask? chosen = null)
     {
         if (!Watching)
         {
@@ -1431,7 +1489,8 @@ public sealed class TerminalLauncher : ILauncherTui
             project,
             _installed,
             application,
-            new LaunchSheetSources(ChoicesAsync, PreviewAsync));
+            new LaunchSheetSources(ChoicesAsync, PreviewAsync),
+            chosen: chosen);
 
         await application.RunAsync(sheet, ct).ConfigureAwait(false);
 

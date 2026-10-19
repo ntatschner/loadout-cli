@@ -129,6 +129,9 @@ internal sealed class LaunchOptionsDialog : Window
 
     private LaunchChoices _choices = LaunchChoices.None;
 
+    /// <summary>The task the sheet was opened on, or null.</summary>
+    private readonly DeclaredTask? _chosenTask;
+
     /// <summary>
     /// Whether somebody has moved the task list. Until they have, choices that
     /// arrive late may set its default; once they have, nothing overrides it.
@@ -163,12 +166,18 @@ internal sealed class LaunchOptionsDialog : Window
     /// How long to wait after typing before re-resolving; the default unless a
     /// test needs it to be nothing.
     /// </param>
+    /// <param name="chosen">
+    /// The task the sheet opens on, when it was opened from one: Start with
+    /// options. Offered even when the record would not list it, such as a done
+    /// task, since that is the one somebody asked to start.
+    /// </param>
     internal LaunchOptionsDialog(
         ProjectResolution project,
         IReadOnlyList<string> agents,
         IApplication application,
         LaunchSheetSources? sources = null,
-        TimeSpan? previewDelay = null)
+        TimeSpan? previewDelay = null,
+        DeclaredTask? chosen = null)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(agents);
@@ -177,6 +186,12 @@ internal sealed class LaunchOptionsDialog : Window
         _project = project;
         _application = application;
         _sources = sources;
+        _chosenTask = chosen;
+
+        if (chosen is not null)
+        {
+            _choices = LaunchChoices.None with { Declared = [chosen] };
+        }
         _previewDelay = previewDelay ?? DefaultPreviewDelay;
 
         // The project's own agent first, whatever order the machine reports
@@ -210,6 +225,11 @@ internal sealed class LaunchOptionsDialog : Window
 
         Add(_taskList);
         ShowTasks();
+
+        if (chosen is not null)
+        {
+            _taskList.SelectedItem = 1;
+        }
 
         // Four pickers side by side, each a short list, so the whole sheet
         // fits an 80x24 terminal with the preview still visible beneath.
@@ -492,6 +512,11 @@ internal sealed class LaunchOptionsDialog : Window
         var picked = CurrentDeclared?.Id;
         var other = IsOther(_taskList.SelectedItem);
 
+        if (_chosenTask is { } from && !choices.Declared.Any(d => string.Equals(d.Id, from.Id, StringComparison.Ordinal)))
+        {
+            choices = choices with { Declared = [from, .. choices.Declared] };
+        }
+
         _choices = choices;
 
         _offeringTasks = true;
@@ -507,7 +532,7 @@ internal sealed class LaunchOptionsDialog : Window
             ShowTasks();
 
             _taskList.SelectedItem = !_taskChosen
-                ? DefaultTask(choices.Declared)
+                ? _chosenTask is { } wanted ? IndexOf(choices.Declared, wanted.Id) : DefaultTask(choices.Declared)
                 : other
                     ? choices.Declared.Count + 1
                     : picked is null

@@ -93,6 +93,12 @@ internal enum LauncherAction
     /// accept, each step run as its command and the screen opened again after.
     /// </summary>
     Ideas,
+
+    /// <summary>
+    /// The selected project's tasks, filtered with the shared query, and a
+    /// session started on one, at once or through the launch sheet.
+    /// </summary>
+    Tasks,
 }
 
 /// <summary>

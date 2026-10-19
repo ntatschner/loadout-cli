@@ -72,15 +72,6 @@ export function startable(state: string): boolean {
   return state !== 'dropped';
 }
 
-/**
- * Where starting a session on a task moves it, or null to leave it where it
- * is: open and blocked work is under way once a session is on it, and work
- * already doing or done keeps its state, the session being another one on it.
- */
-export function startedState(state: string): TaskState | null {
-  return state === 'open' || state === 'blocked' ? 'doing' : null;
-}
-
 /** The words for starting a session on a task, after 'launch'. */
 export function startWords(project: string, id: string): string[] {
   return [project, '--task-id', id];

@@ -135,8 +135,7 @@
 
     const asking: Launch = quick ? { project } : launch!;
     const words = quick ? `$ loadout launch ${project}` : shown;
-    const task = quick ? undefined : tasks().find((one) => one.id === asking.taskId);
-    const started = task && asking.taskId ? await studio.startOnTask({ ...asking, taskId: asking.taskId }, task.state, words) : await studio.startSession(asking, words);
+    const started = await studio.startSession(asking, words);
 
     if (started) {
       onclose();

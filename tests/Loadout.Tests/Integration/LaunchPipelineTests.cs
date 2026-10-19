@@ -258,6 +258,40 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
         record.Task.Should().Be("Ship the thing");
     }
 
+    [Theory]
+    [InlineData(Loadout.Models.Tasks.TaskState.Open, Loadout.Models.Tasks.TaskState.Doing)]
+    [InlineData(Loadout.Models.Tasks.TaskState.Blocked, Loadout.Models.Tasks.TaskState.Doing)]
+    [InlineData(Loadout.Models.Tasks.TaskState.Doing, Loadout.Models.Tasks.TaskState.Doing)]
+    [InlineData(Loadout.Models.Tasks.TaskState.Done, Loadout.Models.Tasks.TaskState.Done)]
+    public async Task A_session_started_on_a_task_puts_work_not_yet_under_way_under_way(
+        Loadout.Models.Tasks.TaskState before, Loadout.Models.Tasks.TaskState after)
+    {
+        // Here rather than in each screen, so Studio, the TUI and a terminal
+        // move a started task alike, and a terminal launch, which returns only
+        // when the agent exits, does not move it once the work has stopped.
+        await _tasks.DeclareAsync(ProjectSlug, "ship-it", before, "nigel", title: "Ship the thing");
+
+        var result = await _launcher.LaunchAsync(
+            new LaunchRequest(ProjectSlug, "probe", Offline: true, TaskId: "ship-it"));
+
+        result.Succeeded.Should().BeTrue(result.Error);
+        (await _tasks.ListAsync(ProjectSlug)).Value!.Single(t => t.Id == "ship-it").State.Should().Be(after);
+    }
+
+    [Fact]
+    public async Task A_dry_run_or_a_refused_launch_moves_nothing()
+    {
+        await _tasks.DeclareAsync(ProjectSlug, "ship-it", Loadout.Models.Tasks.TaskState.Open, "nigel", title: "Ship the thing");
+
+        (await _launcher.LaunchAsync(new LaunchRequest(ProjectSlug, "probe", Offline: true, DryRun: true, TaskId: "ship-it")))
+            .Succeeded.Should().BeTrue();
+        (await _launcher.LaunchAsync(new LaunchRequest(ProjectSlug, "no-such-agent", Offline: true, TaskId: "ship-it")))
+            .Succeeded.Should().BeFalse("the agent does not exist, so no session started");
+
+        (await _tasks.ListAsync(ProjectSlug)).Value!.Single(t => t.Id == "ship-it").State
+            .Should().Be(Loadout.Models.Tasks.TaskState.Open);
+    }
+
     [Fact]
     public async Task A_task_given_in_words_as_well_chooses_the_specialists_and_the_link_stands()
     {

@@ -240,7 +240,9 @@
       return;
     }
 
-    const started = await studio.startOnTask({ project, taskId: task.id }, task.state, lineFor('launch', startWords(project, task.id)));
+    // The launch moves open or blocked work to doing itself, as it does
+    // from a terminal, so nothing is declared from here.
+    const started = await studio.startSession({ project, taskId: task.id }, lineFor('launch', startWords(project, task.id)));
 
     if (started) {
       router.go('session', started.id);
