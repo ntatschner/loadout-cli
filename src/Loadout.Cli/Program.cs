@@ -1030,6 +1030,15 @@ public static class Program
                 guide.AddCommand<VoiceGuideShowCommand>("show");
                 guide.AddCommand<VoiceGuideDraftCommand>("draft");
             });
+
+            // Settings, not learning: the time guide's rules are typed in.
+            voice.AddBranch("time", time =>
+            {
+                time.SetDescription("How dates are written and estimates given on each surface: show, set or unset.");
+                time.AddCommand<VoiceTimeShowCommand>("show");
+                time.AddCommand<VoiceTimeSetCommand>("set");
+                time.AddCommand<VoiceTimeUnsetCommand>("unset");
+            });
         });
 
         TopBranch(config, "docs", docs =>

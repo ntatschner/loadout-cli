@@ -112,6 +112,14 @@ public sealed class VoiceLearnCommand : VoiceCommandBase<VoiceLearnSettings>
 
         var (guide, project, _) = resolved.Value!;
 
+        if (VoiceGuides.IsSet(guide))
+        {
+            return output.Fail(
+                $"{guide.Reference} is set, not learned: there is nothing in your writing to learn it from. "
+                + "Use 'loadout voice time set'.",
+                ExitCode.InvalidArguments);
+        }
+
         StyleLayer layer;
         string name;
 

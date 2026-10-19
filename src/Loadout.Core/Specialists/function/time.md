@@ -62,8 +62,8 @@ or a calendar date. Most time bugs are one of these stored as another.
 ## Estimates
 
 When saying how long something will take, give a range and say whose time it
-is: "about ten minutes of agent time, then an hour of your review", not "two
-days". Agent time and a person's time differ by an order of magnitude, and
+is: "ten to twenty minutes of agent time, then an hour or two of your review",
+not "two days". Agent time and a person's time differ by an order of magnitude, and
 waiting on CI or a reviewer is neither. Where a configured voice says
 otherwise, follow it.
 

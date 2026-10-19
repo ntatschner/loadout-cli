@@ -54,12 +54,15 @@ public abstract class VoiceCommandBase<TSettings> : InstructionsCommandBase<TSet
 
     protected VoiceStore Store { get; }
 
+    /// <summary>The guide a command works on: the one named, or prose.</summary>
+    protected virtual string GuideOf(TSettings settings) => settings.Guide ?? VoiceGuides.Prose().Id;
+
     /// <summary>The guide, the project if any, and the layers in force.</summary>
     protected async Task<Loadout.Models.Results.OperationResult<VoiceContext>> ResolveAsync(
         TSettings settings,
         CancellationToken ct)
     {
-        var found = await Store.FindGuideAsync(settings.Guide ?? VoiceGuides.Prose().Id, ct).ConfigureAwait(false);
+        var found = await Store.FindGuideAsync(GuideOf(settings), ct).ConfigureAwait(false);
 
         if (found.Failed)
         {
