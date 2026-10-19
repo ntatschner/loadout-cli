@@ -21,7 +21,7 @@ namespace Loadout.Core.Tasks;
 /// <param name="Op">add, declare, remove or move.</param>
 /// <param name="Project">The list the task is on, or null for the workspace-wide one.</param>
 /// <param name="Id">The task. For add, an id to use, or null for one made from the title.</param>
-/// <param name="State">For declare, the state to record. For add, open unless given.</param>
+/// <param name="State">The state to record. Left as it was when null; a new task is open.</param>
 /// <param name="Title">What the task is. Left as it was when null or empty.</param>
 /// <param name="Note">A note. Left as it was when null; an empty one clears it.</param>
 /// <param name="Kind">Task or idea. Left as it was when null; a new task given none is work.</param>
@@ -58,6 +58,7 @@ public sealed record TaskOperation(
 /// <param name="Code">The exit code a command making this change alone would have ended with.</param>
 /// <param name="Task">The task as it now stands, or as it stood before a remove; null when it was not applied.</param>
 /// <param name="To">For a move, the list it went to.</param>
+/// <param name="HeldBack">Whether it was refused only because another operation on its list was.</param>
 public sealed record TaskOutcome(
     int Index,
     string Op,
@@ -66,7 +67,8 @@ public sealed record TaskOutcome(
     string? Error,
     ExitCode Code,
     TaskItem? Task,
-    string? To = null)
+    string? To = null,
+    bool HeldBack = false)
 {
     public bool Applied => Error is null;
 }
@@ -182,6 +184,7 @@ public static class TaskOperations
             project = outcome.Project,
             id = outcome.Id,
             applied = outcome.Applied,
+            heldBack = outcome.HeldBack,
             error = outcome.Error,
             code = (int)outcome.Code,
             to = outcome.Op == TaskOperation.Move && outcome.Applied ? Named(outcome.To) : null,

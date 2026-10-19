@@ -160,6 +160,28 @@ public sealed class DashboardServer : IDisposable
     /// <summary>What Studio's memory page reads and saves, or null where nothing gave this server one.</summary>
     public IStudioMemory? Memory { get; set; }
 
+    /// <summary>
+    /// The task lists, read and changed one list or one task at a time, or
+    /// null where nothing gave this server them.
+    /// </summary>
+    /// <remarks>
+    /// The service itself rather than a shape of it, unlike <see cref="TasksFor"/>:
+    /// the command line and the agents' tools change tasks through the same
+    /// one, so a change from the page is the same change, checked the same way.
+    /// </remarks>
+    public Tasks.ITaskService? Tasks
+    {
+        get => _tasks;
+        set
+        {
+            _tasks = value;
+            _taskStamps = value is null ? null : new SharedPoll<IReadOnlyList<Tasks.TaskListStamp>>(value.StampsAsync, Interval - TimeSpan.FromMilliseconds(100));
+        }
+    }
+
+    private Tasks.ITaskService? _tasks;
+    private SharedPoll<IReadOnlyList<Tasks.TaskListStamp>>? _taskStamps;
+
     /// <summary>The commands Studio can run and the ones it has, or null where this server runs none.</summary>
     public CommandJobs? Jobs { get; set; }
 
@@ -1295,6 +1317,15 @@ public sealed class DashboardServer : IDisposable
             return;
         }
 
+        if (Under(path, MemoryApi.Root) && Tasks is not null
+            && path[MemoryApi.Root.Length..].Split('/', StringSplitOptions.RemoveEmptyEntries).Select(Uri.UnescapeDataString).ToArray()
+                is var parts && TasksApi.Handles(parts))
+        {
+            await TasksApi.HandleAsync(context, Tasks, parts, WatchOnly, Environment.UserName, ct).ConfigureAwait(false);
+
+            return;
+        }
+
         if (Under(path, MemoryApi.Root) && Memory is not null)
         {
             if (WatchOnly && request.HttpMethod != "GET")
@@ -1447,8 +1478,15 @@ public sealed class DashboardServer : IDisposable
     /// A server-sent event stream, which a page reconnects to by itself, and
     /// which says only what changed, not the change: the page asks the
     /// routes it already reads, so the stream and the routes cannot disagree.
-    /// Ideas and tasks are read again on a slower clock by the page itself;
-    /// they are written by commands this server does not see.
+    /// Ideas are read again on a slower clock by the page itself.
+    /// </para>
+    /// <para>
+    /// Tasks are watched by their files, because they are written from
+    /// terminals, by agents and by a pull as often as from here. A list whose
+    /// file changed is said as <c>tasks</c>, and as its own <c>tasks</c> event
+    /// naming the list and its new revision, for a page or a script that
+    /// reads one list rather than all of them. The stamps are read once for
+    /// every stream open, however many tabs there are.
     /// </para>
     /// <para>
     /// A run's stamp is the one the summaries are cached by, so nothing here
@@ -1467,6 +1505,7 @@ public sealed class DashboardServer : IDisposable
 
         string? sessions = null, runs = null;
         int? jobs = null;
+        Dictionary<string, string>? lists = null;
         var quiet = DateTimeOffset.UtcNow;
 
         try
@@ -1499,6 +1538,43 @@ public sealed class DashboardServer : IDisposable
                 {
                     said.Add("jobs");
                     jobs = Jobs.Stamp;
+                }
+
+                var moved = new List<object>();
+
+                if (_taskStamps is { } polled && Tasks is { } tasks)
+                {
+                    var now = (await polled.GetAsync(ct).ConfigureAwait(false))
+                        .ToDictionary(one => Loadout.Core.Tasks.TaskOperations.Named(one.Project), one => one.Stamp, StringComparer.Ordinal);
+
+                    // The first look says only that tasks may have changed, as
+                    // it does for sessions and runs: a stream reconnecting after
+                    // the daemon restarted has missed whatever happened while it
+                    // was gone, and has no stamps to say which lists.
+                    if (lists is null)
+                    {
+                        said.Add("tasks");
+                    }
+                    else
+                    {
+                        foreach (var (named, stamp) in now.Where(one => !lists.TryGetValue(one.Key, out var was) || was != one.Value)
+                            .Concat(lists.Where(one => !now.ContainsKey(one.Key))))
+                        {
+                            var project = Loadout.Core.Tasks.TaskOperations.List(named);
+                            var read = await tasks.ReadAsync(project, ct).ConfigureAwait(false);
+
+                            moved.Add(new { project, revision = read.Value?.Revision });
+                        }
+                    }
+
+                    lists = now;
+                }
+
+                if (moved.Count > 0)
+                {
+                    said.Add("tasks");
+                    await StudioEventAsync(response, "event: tasks\ndata: " + JsonSerializer.Serialize(moved, Json) + "\n\n", ct)
+                        .ConfigureAwait(false);
                 }
 
                 if (said.Count > 0)
@@ -2150,8 +2226,7 @@ public sealed class DashboardServer : IDisposable
                 ? new { lists = Array.Empty<object>(), team = (string?)null }
                 : await TasksFor(ct).ConfigureAwait(false);
 
-            await WriteAsync(context, 200, "application/json; charset=utf-8", JsonSerializer.Serialize(tasks, Json))
-                .ConfigureAwait(false);
+            await WriteTaggedAsync(context, JsonSerializer.Serialize(tasks, Json)).ConfigureAwait(false);
 
             return;
         }
@@ -2162,8 +2237,7 @@ public sealed class DashboardServer : IDisposable
                 ? new { ideas = Array.Empty<object>(), dumps = Array.Empty<object>(), busy = Array.Empty<string>() }
                 : await IdeasFor(ct).ConfigureAwait(false);
 
-            await WriteAsync(context, 200, "application/json; charset=utf-8", JsonSerializer.Serialize(ideas, Json))
-                .ConfigureAwait(false);
+            await WriteTaggedAsync(context, JsonSerializer.Serialize(ideas, Json)).ConfigureAwait(false);
 
             return;
         }
@@ -4179,6 +4253,29 @@ public sealed class DashboardServer : IDisposable
         "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'>"
         + "<rect width='16' height='16' rx='3' fill='#7a3b00'/>"
         + "<circle cx='8' cy='8' r='3' fill='#fff'/></svg>";
+
+    /// <summary>
+    /// Writes JSON with an ETag of its own text, or 304 when the page already
+    /// has exactly that.
+    /// </summary>
+    /// <remarks>
+    /// For the routes that answer with everything, which a page and a script
+    /// ask for over and over and which are mostly unchanged: the answer is
+    /// still made each time, from lists kept parsed, but not sent again.
+    /// </remarks>
+    private static Task WriteTaggedAsync(HttpListenerContext context, string json)
+    {
+        var revision = Loadout.Core.Configuration.YamlStore.Revision(json);
+
+        if (TasksApi.Unchanged(context, revision))
+        {
+            return Task.CompletedTask;
+        }
+
+        TasksApi.Tag(context, revision);
+
+        return WriteAsync(context, 200, "application/json; charset=utf-8", json);
+    }
 
     internal static async Task WriteAsync(HttpListenerContext context, int status, string type, string body)
     {

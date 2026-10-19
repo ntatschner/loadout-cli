@@ -124,6 +124,21 @@ public sealed class TaskBatchTests : IDisposable
     }
 
     [Fact]
+    public async Task A_batch_will_not_move_a_task_whose_plan_would_be_left_behind()
+    {
+        await _space.ProjectAsync("homelab");
+        (await _space.Tasks.DeclareAsync(null, "planned", TaskState.Open, "nigel", "Has a plan")).Succeeded.Should().BeTrue();
+        var plans = TaskPaths.Ideas(_space.Workspace.LocalPath, null);
+        Directory.CreateDirectory(plans);
+        await File.WriteAllTextAsync(Path.Combine(plans, "planned.md"), "# The plan");
+
+        var batch = await ApplyAsync(new TaskOperation(TaskOperation.Move, null, "planned", To: "homelab"));
+
+        batch.Outcomes[0].Error.Should().Contain("loadout task move");
+        (await _space.Tasks.ListAsync(null)).Value!.Should().ContainSingle(one => one.Id == "planned");
+    }
+
+    [Fact]
     public async Task A_move_onto_a_list_that_already_has_the_id_moves_nothing()
     {
         await _space.ProjectAsync("homelab");
@@ -255,10 +270,13 @@ public sealed class TaskBatchTests : IDisposable
     {
         var batch = (await ApplyAsync(
             new TaskOperation(TaskOperation.Declare, "nowhere", "a", TaskState.Open, Title: "A", By: "nigel"),
-            new TaskOperation(TaskOperation.Declare, "../escape", "b", TaskState.Open, Title: "B", By: "nigel")));
+            new TaskOperation(TaskOperation.Declare, "../escape", "b", TaskState.Open, Title: "B", By: "nigel"),
+            new TaskOperation(TaskOperation.Move, null, "c", To: "../escape")));
 
         batch.Outcomes[0].Code.Should().Be(ExitCode.ProjectNotFound);
         batch.Outcomes[1].Code.Should().Be(ExitCode.InvalidArguments);
+        batch.Outcomes[2].Code.Should().Be(ExitCode.InvalidArguments);
+        batch.Lists.Select(one => one.Project).Should().Equal(["nowhere"], "a name that cannot be a list names no file to read");
         Directory.Exists(Path.Combine(_space.Workspace.LocalPath, "projects", "nowhere")).Should().BeFalse();
         File.Exists(Path.Combine(_space.Workspace.LocalPath, "escape", "tasks.yaml")).Should().BeFalse();
     }

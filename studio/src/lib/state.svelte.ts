@@ -9,6 +9,7 @@ import { setAccent, setDensity, setMotion, setTheme, preferredTheme } from './st
 import { toasts } from './toasts.svelte';
 import { isMode, morph, nextMode, type StudioMode } from './modes';
 import { resumeConversation, type ResumeAsk, type ResumeOutcome } from './resume';
+import { reloadsFor, type Reload } from './reloads';
 import { resumeCommand } from './terminal';
 
 export interface FeedEntry {
@@ -124,27 +125,27 @@ export class Studio {
       return;
     }
 
+    const loads: Record<Reload, () => Promise<void>> = {
+      sessions: () => this.loadSessions(),
+      history: () => this.loadHistory(),
+      runs: () => this.loadRuns(),
+      jobs: () => this.loadJobs(),
+      tasks: () => this.loadTasks(),
+    };
+
     this.#stop = api.listen((what) => {
-      if (what.includes('sessions')) {
-        // The history too: a session starting or ending is what changes
-        // which conversation is running, and what a restart left behind.
-        void this.#guard(() => Promise.all([this.loadSessions(), this.loadHistory()]).then(() => undefined));
-      }
+      const reloads = reloadsFor(what);
 
-      if (what.includes('runs')) {
-        void this.#guard(() => this.loadRuns());
-      }
-
-      if (what.includes('jobs')) {
-        void this.#guard(() => this.loadJobs());
+      if (reloads.length > 0) {
+        void this.#guard(() => Promise.all(reloads.map((reload) => loads[reload]())).then(() => undefined));
       }
     });
 
-    // Ideas and tasks are not on the event stream: they change from a
-    // terminal as often as from here, and the files say nothing when they do.
+    // Ideas are not on the event stream yet, so they are read again on a
+    // clock.
     setInterval(() => {
       this.now = Date.now();
-      void this.#guard(() => Promise.all([this.loadIdeas(), this.loadTasks()]).then(() => undefined));
+      void this.#guard(() => this.loadIdeas());
     }, 15000);
 
     matchMedia?.('(prefers-color-scheme: light)').addEventListener?.('change', () => this.applyPrefs());

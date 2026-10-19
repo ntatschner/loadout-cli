@@ -365,12 +365,14 @@ internal sealed class TaskService : ITaskService
 
     /// <summary>
     /// The batch itself. Single changes come here as a batch of one, without
-    /// the check that a project exists, which they never had: a project's list
-    /// has always been made by the first task declared on it.
+    /// the checks a batch from outside gets, which they never had: a project's
+    /// list has always been made by the first task declared on it, and the
+    /// idea service moves a task's record and plan itself before calling the
+    /// single move.
     /// </summary>
     private async Task<OperationResult<TaskBatch>> ApplyCoreAsync(
         IReadOnlyList<TaskOperation> operations,
-        bool projectsMustExist,
+        bool fromOutside,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(operations);
@@ -412,18 +414,33 @@ internal sealed class TaskService : ITaskService
             }
         }
 
-        if (projectsMustExist)
+        if (fromOutside)
         {
             for (var index = 0; index < operations.Count; index++)
             {
                 var operation = operations[index];
 
-                if (outcomes[index] is null
-                    && Touches(operation).FirstOrDefault(list => list is not null && !Directory.Exists(
+                if (outcomes[index] is not null)
+                {
+                    continue;
+                }
+
+                if (Touches(operation).FirstOrDefault(list => list is not null && !Directory.Exists(
                         Path.Combine(_workspace.LocalPath, "projects", list))) is { } missing)
                 {
                     outcomes[index] = Failed(
                         index, operation, $"'{missing}' is not a project this workspace has.", ExitCode.ProjectNotFound);
+                }
+                else if (operation.Op == TaskOperation.Move && Carried(operation))
+                {
+                    // Moved here, the record and the plan would stay behind
+                    // on the list it left, answering to nothing.
+                    outcomes[index] = Failed(
+                        index,
+                        operation,
+                        $"'{operation.Id!.Trim()}' has an idea record or a plan beside it, which a batch does not carry. "
+                        + "Move it on its own with 'loadout task move', which takes them with it.",
+                        ExitCode.InvalidArguments);
                 }
             }
         }
@@ -447,7 +464,9 @@ internal sealed class TaskService : ITaskService
 
         for (var index = 0; index < operations.Count; index++)
         {
-            if (outcomes[index] is { Code: ExitCode.InvalidArguments } && TaskPaths.Rejection(operations[index].Project) is not null)
+            // A name that cannot be a list names no file, so nothing is
+            // locked or read for it, and its refusal stands alone.
+            if (Touches(operations[index]).Any(list => TaskPaths.Rejection(list) is not null))
             {
                 continue;
             }
@@ -572,7 +591,7 @@ internal sealed class TaskService : ITaskService
                     operations[index],
                     $"Not applied, because operation {cause} could not be ({outcome.Error}) and "
                     + $"{TaskPaths.Describe(fallen.Slug)} is changed all or nothing.",
-                    outcome.Code);
+                    outcome.Code) with { HeldBack = true };
             }
         }
 
@@ -622,6 +641,15 @@ internal sealed class TaskService : ITaskService
             [.. lists.Values
                 .Where(group => group.Revision is not null)
                 .Select(group => new TaskListRevision(group.Slug, group.Revision!, written.Contains(group)))]));
+    }
+
+    /// <summary>Whether a task being moved has an idea's working record or a plan kept beside its list.</summary>
+    private bool Carried(TaskOperation operation)
+    {
+        var ideas = TaskPaths.Ideas(_workspace.LocalPath, operation.Project);
+        var id = operation.Id!.Trim();
+
+        return File.Exists(Path.Combine(ideas, id + ".yaml")) || File.Exists(Path.Combine(ideas, id + ".md"));
     }
 
     /// <summary>The lists an operation changes: its own, and for a move, where it goes.</summary>
@@ -788,7 +816,12 @@ internal sealed class TaskService : ITaskService
             list.Items.Add(existing);
         }
 
-        existing.State = operation.State ?? TaskState.Open;
+        // No state leaves the one it has, so a change of title from the page
+        // says nothing about where the work stands; a new task is open.
+        if (operation.State is { } state)
+        {
+            existing.State = state;
+        }
 
         if (operation.Kind is { } given)
         {

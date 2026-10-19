@@ -1027,6 +1027,68 @@ public sealed class LoadoutTools
             : declared.Error ?? "The task could not be recorded.";
     }
 
+    [McpServerTool(Name = "loadout_task_show")]
+    [Description(
+        "One task on this project's list, as JSON: its state, title, note, who said so and when, and "
+        + "the revision of the list. Cheaper than loadout_tasks when you know which task you want, "
+        + "and the revision is what loadout_task_apply takes to refuse a change made from an older read.")]
+    public async Task<string> ShowTaskAsync(
+        [Description("The task's id on this project's list.")] string id,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(id);
+
+        var slug = await SlugAsync(ct).ConfigureAwait(false);
+
+        if (slug is null)
+        {
+            return "No project could be worked out from here.";
+        }
+
+        var read = await _tasks.ReadAsync(slug, ct).ConfigureAwait(false);
+
+        if (read.Failed)
+        {
+            return read.Error ?? "The tasks could not be read.";
+        }
+
+        return read.Value!.Items.FirstOrDefault(one => string.Equals(one.Id, id.Trim(), StringComparison.OrdinalIgnoreCase)) is { } task
+            ? JsonSerializer.Serialize(new { project = slug, revision = read.Value.Revision, task = Core.Tasks.TaskOperations.Json(task) })
+            : $"'{id.Trim()}' is not a task of {slug}.";
+    }
+
+    [McpServerTool(Name = "loadout_task_apply")]
+    [Description(
+        "Make several task changes at once, the same JSON array 'loadout task apply' takes. Each is "
+        + "{\"op\":\"add|declare|remove|move\", \"id\", \"state\", \"title\", \"note\", \"kind\", \"project\", \"to\", \"revision\"}; "
+        + "one naming no project is made on this project's list, and '-' is the workspace-wide list. "
+        + "The changes to one list are made together or not at all, and every one gets a result saying "
+        + "whether it was made and, if not, why. Only for what the person has asked for or agreed to.")]
+    public async Task<string> ApplyTasksAsync(
+        [Description("A JSON array of operations.")] string operations,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(operations);
+
+        var slug = await SlugAsync(ct).ConfigureAwait(false);
+
+        if (slug is null)
+        {
+            return "No project could be worked out from here.";
+        }
+
+        var parsed = Core.Tasks.TaskOperations.Parse(operations, slug, "agent");
+
+        if (parsed.Failed)
+        {
+            return parsed.Error!;
+        }
+
+        var applied = await _tasks.ApplyAsync(parsed.Value!, ct).ConfigureAwait(false);
+
+        return JsonSerializer.Serialize(Core.Tasks.TaskOperations.Json(applied.Value!));
+    }
+
     [McpServerTool(Name = "loadout_task_move")]
     [Description(
         "Move a task or an idea from this project's list to the project it belongs on, or to the "

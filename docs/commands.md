@@ -82,9 +82,10 @@
 | `loadout list` | List registered projects |
 | `loadout running` | The sessions running now, and how long each has been quiet |
 | `loadout find <query>` | Search tasks, ideas, sessions, team runs and projects at once, grouped, each with the command that shows it. Takes the [list query](#filtering-and-sorting-a-list): `kind:task state:open login` searches only open tasks. A query starting with a minus goes as `--query=` |
-| `loadout task list\|declare\|remove` | Record what is being worked on, and check it against the repository. `--global` is the list for what belongs to no project yet |
+| `loadout task list\|show\|declare\|remove` | Record what is being worked on, and check it against the repository. `--global` is the list for what belongs to no project yet |
 | `loadout task list --filter <query> --sort <fields>` | Keep and order the list with the same query syntax Studio uses, described under [Filtering and sorting a list](#filtering-and-sorting-a-list) |
 | `loadout task move <id> --to <project>` | Move a task put on the wrong project, or `--to-global` to the workspace-wide list. It keeps its id, state and note, and an accepted plan goes with it. The list it left shows where it went, and `task list` on the new one says where it came from |
+| `loadout task apply <file>` | Make several changes at once from a JSON array, or `-` for standard input. Each list is changed all or nothing, and every change says whether it was made. Described under [Changing several tasks at once](#changing-several-tasks-at-once) |
 | `loadout idea move <id> --to <project>` | The same for an idea, with its questions, answers and plan. Not while a round on it is running |
 | `loadout idea add\|list\|show\|remove` | Drop an idea in, on a project or the workspace-wide list, to be fleshed out later |
 | `loadout idea refine <id>` | Have an agent take an idea one round further: ask its questions, propose a plan with options for each layer, or revise it. It asks the agent and model the last round that came back used, unless you give `--agent` or `--model`, and says which before it starts. One round per idea at a time on this machine |
@@ -238,6 +239,49 @@ loadout config set studio-query-tasks --value=-state:done,dropped
 `--value=` is there for the minus, the same as `--filter=`. Setting it to an
 empty value puts the list back to its default. A cleared filter isn't
 remembered for the same reason: an empty value and no value are one setting.
+
+## Changing several tasks at once
+
+`loadout task apply` takes a JSON array of changes and makes them together:
+
+```sh
+loadout task apply - --project website <<'JSON'
+[
+  {"op": "declare", "id": "fix-login", "state": "done"},
+  {"op": "add", "title": "Write the release notes"},
+  {"op": "move", "id": "dns", "to": "homelab"}
+]
+JSON
+```
+
+There are four ops. `add` names a new task from its title, `declare` says where
+one stands (and adds it if the id is new), `remove` forgets one and `move` sends
+one to another list. Each can also carry `title`, `note`, `kind`, `project` and
+`by`. A change that names no project is made on the list the command names, the
+same as every other `task` command, and `"project": "-"` is the workspace-wide
+list.
+
+The changes to one list are made together or not at all. If the third change
+to a list is refused, the first two aren't made either, and each of them says
+which change stopped it. A list is one file, and one file is the only thing
+that can honestly be changed all at once. A move changes two lists, so a
+refusal on either one holds back both. Lists with nothing in common go their
+own way, and the output says which were changed. With `--json`, every change
+gets a result with its reason and the task as it now stands.
+
+A list has a revision, a hash of its text, which `task show <id> --json` gives
+you. A change carrying `"revision"` is refused if the list has changed since you
+read it, so a script working from an old read can't overwrite something newer.
+A move refuses a task that has an idea record or a plan beside it, because only
+`task move` takes those with it.
+
+`loadout_task_show` and `loadout_task_apply` are the same two things over MCP.
+Studio has the same changes under `/api/v1/projects/{project}/tasks`, with `-`
+for the workspace-wide list: GET for the list or for one task, POST to add one,
+PATCH and DELETE on a task, and `POST .../tasks:batch` for the array. The list's
+revision comes back as an ETag, a change carrying `If-Match` is refused with 409
+if the list has moved on since, and a change made anywhere, from a terminal, by
+an agent or by a pull, reaches Studio within a second.
 
 ## Editors
 
@@ -578,7 +622,7 @@ Every launch declares Loadout itself as an MCP server, so the handoff runs both
 ways: a session can ask the launcher things rather than parse console output
 written for a person.
 
-Eighteen tools, each making the same call its command makes:
+Twenty tools, each making the same call its command makes:
 
 | | |
 |---|---|
@@ -590,6 +634,8 @@ Eighteen tools, each making the same call its command makes:
 | `loadout_remember` | Record one durable fact about the project, with a description, screened for credentials |
 | `loadout_tasks` | What the project is working on, and what the repository does not back up, as `task list` says it |
 | `loadout_task_declare` | Record where a task stands, attributed and dated, as `task declare` does |
+| `loadout_task_show` | One task and the revision of its list, as `task show --json` gives it |
+| `loadout_task_apply` | Several task changes at once, each list all or nothing, as `task apply` makes them |
 | `loadout_task_move` | Move a task or idea from this project to the one it belongs on, as `task move` does |
 | `loadout_idea_add` | Drop an idea in without leaving the work in hand, as `idea add` does |
 | `loadout_ideas` | Every idea and where it stands, or one in full, as `idea list` and `idea show` say it |

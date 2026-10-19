@@ -25,27 +25,21 @@ namespace Loadout.Tests.Contract;
 [Collection(ContractCollection.Name)]
 public sealed class McpServerContractTests
 {
-    private sealed class Session : IDisposable
+    internal sealed class Session : IDisposable
     {
         private readonly Process _process;
         private readonly System.Text.StringBuilder _errors = new();
         private int _id;
 
         internal Session(string executable)
+            : this(Serving(executable))
         {
-            _process = new Process
-            {
-                StartInfo = new ProcessStartInfo(executable)
-                {
-                    RedirectStandardInput = true,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                },
-            };
+        }
 
-            _process.StartInfo.ArgumentList.Add("mcp");
-            _process.StartInfo.ArgumentList.Add("serve");
+        /// <summary>A session started as the caller says, such as inside a contract run's own home.</summary>
+        internal Session(ProcessStartInfo start)
+        {
+            _process = new Process { StartInfo = start };
 
             _process.Start();
 
@@ -61,6 +55,22 @@ public sealed class McpServerContractTests
             };
 
             _process.BeginErrorReadLine();
+        }
+
+        private static ProcessStartInfo Serving(string executable)
+        {
+            var start = new ProcessStartInfo(executable)
+            {
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            };
+
+            start.ArgumentList.Add("mcp");
+            start.ArgumentList.Add("serve");
+
+            return start;
         }
 
         /// <summary>
@@ -161,13 +171,13 @@ public sealed class McpServerContractTests
         }
     }
 
-    private static async Task<Session> StartAsync()
+    internal static async Task<Session> StartAsync(ProcessStartInfo? start = null)
     {
         var executable = LoadoutProcess.Executable;
 
         executable.Should().NotBeNull("the command line has to be built");
 
-        var session = new Session(executable!);
+        var session = start is null ? new Session(executable!) : new Session(start);
 
         var initialize = await session.RequestAsync("initialize", new
         {

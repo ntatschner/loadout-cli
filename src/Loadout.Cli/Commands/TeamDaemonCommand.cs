@@ -421,6 +421,11 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             server.TasksFor = tasks.ReadAsync;
             server.Tend = tasks.DoAsync;
 
+            // And one list or one task at a time, through the service itself, so a
+            // change from the page is the change 'task apply' makes. Watching only
+            // is the routes' own to refuse.
+            server.Tasks = _tasks;
+
             // What there is to start, read per request like the waiting area:
             // a team written a moment ago, from the page or from a terminal,
             // belongs in the next answer rather than the next restart.

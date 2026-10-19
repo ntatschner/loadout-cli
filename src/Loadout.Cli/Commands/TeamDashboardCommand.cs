@@ -463,6 +463,11 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         var tasks = new DashboardTasks(_commands, _tasks, _projects, _configuration, _time, output);
         server.TasksFor = tasks.ReadAsync;
 
+        // And one list or one task at a time, through the service itself, so a
+        // change from the page is the change 'task apply' makes. Watching only
+        // is the routes' own to refuse.
+        server.Tasks = _tasks;
+
         // Said outright as well, for Studio, which shows every change as the
         // command to type when it cannot make it.
         server.WatchOnly = settings.WatchOnly;
