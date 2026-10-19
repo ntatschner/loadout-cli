@@ -258,6 +258,42 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
         record.Task.Should().Be("Ship the thing");
     }
 
+    [Fact]
+    public async Task A_resumed_conversation_is_not_turned_into_the_projects_onboarding()
+    {
+        // Found in Windows Sandbox driving Studio's 'Register and resume': a
+        // conversation from a folder registered a moment ago was reopened
+        // with the onboarding task, its mode and its skill, because the
+        // project was waiting to be onboarded and the resume named no task.
+        // It is carrying on its own work; it is reminded instead.
+        await _tasks.DeclareAsync(
+            ProjectSlug, ProjectOnboardingTask.Id, Loadout.Models.Tasks.TaskState.Open, "loadout project add");
+
+        var result = await _launcher.LaunchAsync(
+            new LaunchRequest(ProjectSlug, "probe", Offline: true, DryRun: true, ResumeSessionId: "0f1e2d3c-resumed"));
+
+        result.Succeeded.Should().BeTrue(result.Error);
+
+        result.Value!.Plan!.Task.Should().BeNull();
+        result.Value.Plan.Instructions!.Selected.Select(s => s.Specialist.Id)
+            .Should().NotContain(ProjectOnboardingTask.Skill);
+        result.Value.Warnings.Should().Contain(w => w.Contains("has not been onboarded yet"));
+    }
+
+    [Fact]
+    public async Task The_agent_is_given_its_launch_id_to_file_its_conversation_under()
+    {
+        var result = await _launcher.LaunchAsync(new LaunchRequest(ProjectSlug, "probe", Offline: true));
+
+        result.Succeeded.Should().BeTrue(result.Error);
+
+        var record = (await _ledger.ReadAsync(DateTimeOffset.MinValue)).Value!.Should().ContainSingle().Subject;
+
+        // The id the ledger filed the launch under, so the agent's hook links
+        // the conversation to this launch and not to some other one.
+        _processes.LastInteractive!.Environment.Should().Contain(SessionLinks.Variable, record.Id);
+    }
+
     [Theory]
     [InlineData(Loadout.Models.Tasks.TaskState.Open, Loadout.Models.Tasks.TaskState.Doing)]
     [InlineData(Loadout.Models.Tasks.TaskState.Blocked, Loadout.Models.Tasks.TaskState.Doing)]

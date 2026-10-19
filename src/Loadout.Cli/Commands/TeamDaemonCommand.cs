@@ -105,6 +105,9 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     /// </remarks>
     private readonly InFlight _inFlight;
 
+    /// <summary>Past conversations and resuming them; null in a daemon the tests build without it.</summary>
+    private readonly Loadout.Core.Sessions.ISessionResumption? _resumption;
+
     public TeamDaemonCommand(
         ISecretProvider secrets,
         HttpClient client,
@@ -133,8 +136,10 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         IChildLifetime lifetime,
         Loadout.Core.Instructions.IMemoryService memory,
         Loadout.Core.Instructions.IMemoryImporter importer,
-        Loadout.Core.Sessions.LaunchSheet sheet)
+        Loadout.Core.Sessions.LaunchSheet sheet,
+        Loadout.Core.Sessions.ISessionResumption? resumption = null)
     {
+        _resumption = resumption;
         _bin = bin;
         _sheet = sheet;
         _memory = memory;
@@ -441,6 +446,12 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             server.Sessions = _sessions;
             server.PseudoTerminal = Loadout.Platform.PlatformServices.PseudoTerminalName;
 
+            // The history Studio resumes from, through the same service as
+            // 'loadout resume', and registering the folder an unregistered
+            // conversation ran in through 'project add' itself.
+            server.Resumption = _resumption;
+            server.Register = RegisterAsync;
+
             // What earlier daemons' sessions left: kept a week, so a page
             // opened after a restart can still offer to resume one.
             Loadout.Core.Sessions.Hosting.SessionSignals.Prune(
@@ -595,6 +606,32 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     }
 
     private readonly Loadout.Core.Sessions.Hosting.HostedSessions _sessions;
+
+    /// <summary>
+    /// Registers a folder for 'Register and resume', returning its slug.
+    /// </summary>
+    /// <remarks>
+    /// Through 'project add', so Studio registers a folder exactly as a
+    /// terminal does. The command reports only its exit code back, so the
+    /// slug is read from the registry afterwards rather than parsed from
+    /// what it printed.
+    /// </remarks>
+    private async Task<OperationResult<string>> RegisterAsync(string directory, CancellationToken ct)
+    {
+        var exit = await _commands.RunAsync("project add", [directory], ct).ConfigureAwait(false);
+
+        if (exit != 0)
+        {
+            return OperationResult<string>.Fail(
+                $"'loadout project add' did not register {directory} (exit code {exit}). Run it in a terminal to see why.");
+        }
+
+        var resolved = await _projects.ResolveFromDirectoryAsync(directory, ct).ConfigureAwait(false);
+
+        return resolved.Succeeded
+            ? OperationResult<string>.Ok(resolved.Value!.Entry.Slug)
+            : OperationResult<string>.Fail(resolved.Error!, resolved.ExitCode);
+    }
 
     /// <summary>Where hosted sessions' hooks report, or null for a daemon built without paths.</summary>
     private static string? SignalsOf(IPlatformPaths? paths) =>

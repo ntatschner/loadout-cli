@@ -144,6 +144,12 @@ public sealed class HeadlessSessionFilterTests
             DateTimeOffset since, CancellationToken ct = default) =>
             throw new NotSupportedException("listing sessions reads no launches");
 
+        public Task RecordLinkAsync(string sessionId, string agent, string launchId, CancellationToken ct = default) =>
+            throw new NotSupportedException("listing sessions writes nothing");
+
+        public Task<OperationResult<IReadOnlyList<SessionLink>>> ReadLinksAsync(CancellationToken ct = default) =>
+            throw new NotSupportedException("listing sessions reads no links");
+
         public Task<OperationResult<IReadOnlyList<HeadlessSessionRecord>>> ReadHeadlessSessionsAsync(
             CancellationToken ct = default) =>
             Task.FromResult(_failing

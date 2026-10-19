@@ -128,6 +128,7 @@ public static class ServiceRegistration
         });
 
         services.AddSingleton<Sessions.ISessionHistoryService, Sessions.SessionHistoryService>();
+        services.AddSingleton<Sessions.ISessionResumption, Sessions.SessionResumption>();
 
         // What the launcher gave a session, which the transcripts cannot say.
         // Written by the launcher rather than reconstructed afterwards, because

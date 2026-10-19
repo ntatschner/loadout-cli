@@ -26,6 +26,11 @@ namespace Loadout.Core.Sessions.Hosting;
 /// be run this way is the caller's to decide; the launch fields are unused.
 /// </param>
 /// <param name="Words">Everything after the command's name.</param>
+/// <param name="Resuming">
+/// The agent's id for the conversation a 'resume' command carries on, or
+/// null. It runs as the command, and is shown as the session it reopens:
+/// the project, agent, task and mode fields hold what the resume planned.
+/// </param>
 public sealed record HostedLaunch(
     string Project,
     string? Agent = null,
@@ -40,7 +45,8 @@ public sealed record HostedLaunch(
     bool NoSync = false,
     bool Handoff = false,
     string? Command = null,
-    IReadOnlyList<string>? Words = null);
+    IReadOnlyList<string>? Words = null,
+    string? Resuming = null);
 
 /// <summary>
 /// The sessions the daemon is hosting for the browser, and the one way of
@@ -123,6 +129,48 @@ public sealed class HostedSessions : IAsyncDisposable
         _signals is null || Find(id) is not null ? null : SessionSignals.Read(_signals, id)?.AgentSession;
 
     /// <summary>
+    /// The sessions an earlier daemon hosted that left a conversation to
+    /// resume, newest first, as the id the page knew them by.
+    /// </summary>
+    /// <remarks>
+    /// A session that ended before its first turn left no signal, and so is
+    /// not here: there was nothing to resume.
+    /// </remarks>
+    public IReadOnlyList<(string Id, SessionSignal Signal)> Lost() =>
+        _signals is null
+            ? []
+            : SessionSignals.All(_signals)
+                .Where(entry => entry.Signal.AgentSession is { Length: > 0 } && Find(entry.Id) is null)
+                .ToList();
+
+    /// <summary>Stops offering a lost session, once it is resumed or somebody says no.</summary>
+    /// <returns>False for an id this daemon hosts, which is not lost and is ended with DELETE.</returns>
+    public bool ForgetLost(string id)
+    {
+        if (_signals is null || Find(id) is not null)
+        {
+            return false;
+        }
+
+        SessionSignals.Remove(_signals, id);
+
+        return true;
+    }
+
+    /// <summary>The running session carrying that conversation, by its id here, or null.</summary>
+    /// <remarks>
+    /// A resume is matched by the conversation it was started for as well as
+    /// by what its agent has said, so a second Resume pressed before the
+    /// first turn goes to the terminal already opening rather than a third.
+    /// </remarks>
+    public string? Hosting(string agentSession) =>
+        string.IsNullOrEmpty(agentSession)
+            ? null
+            : All.FirstOrDefault(session => !session.HasEnded
+                && (SignalOf(session).AgentSession == agentSession
+                    || LaunchOf(session.Id)?.Resuming == agentSession))?.Id;
+
+    /// <summary>
     /// The resident memory of each running session's processes, the launch
     /// and the agent it started, by session id; a session that could not be
     /// measured is left out.
@@ -201,7 +249,9 @@ public sealed class HostedSessions : IAsyncDisposable
             return OperationResult<HostedSession>.Fail(arguments.Error!);
         }
 
-        var title = launch.Command is { Length: > 0 } asked ? $"loadout {asked}"
+        var title = launch.Resuming is { Length: > 0 } && launch.Agent is { Length: > 0 } resumed
+                ? $"{launch.Project} ({resumed}), resumed"
+            : launch.Command is { Length: > 0 } asked ? $"loadout {asked}"
             : launch.Agent is { Length: > 0 } agent ? $"{launch.Project} ({agent})"
             : launch.Project;
 

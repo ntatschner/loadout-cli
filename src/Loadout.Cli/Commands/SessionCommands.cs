@@ -39,12 +39,12 @@ public class SessionSettings : GlobalSettings
 [CommandMeta(CommandCategory.Start, Intent = "history recent previous what was i doing")]
 public sealed class SessionListCommand : AsyncCommand<SessionSettings>
 {
-    private readonly ISessionHistoryService _sessions;
+    private readonly ISessionResumption _sessions;
     private readonly SessionScope _scope;
     private readonly IAnsiConsole _console;
 
     public SessionListCommand(
-        ISessionHistoryService sessions,
+        ISessionResumption sessions,
         SessionScope scope,
         IAnsiConsole console)
     {
@@ -60,27 +60,42 @@ public sealed class SessionListCommand : AsyncCommand<SessionSettings>
 
         var query = await _scope.QueryAsync(settings).ConfigureAwait(false);
 
-        var result = await _sessions.ListAsync(query).ConfigureAwait(false);
+        var result = await _sessions.ListAsync(query, ct: cancellationToken).ConfigureAwait(false);
 
         if (result.Failed)
         {
             return output.Fail(result);
         }
 
-        var sessions = result.Value!;
+        var resumable = result.Value!;
+        var sessions = resumable.Select(r => r.Session).ToList();
 
         if (output.IsJson)
         {
-            output.WriteJson(sessions.Select(s => new
+            // launchedFor and running as Studio's history has them, so a
+            // script sees what the page does.
+            output.WriteJson(resumable.Select(r => new
             {
-                agent = s.Agent,
-                id = s.SessionId,
-                title = s.Title,
-                project = s.ProjectSlug,
-                directory = s.Directory,
-                branch = s.Branch,
-                lastActive = s.LastActive,
-                transcript = s.TranscriptPath,
+                agent = r.Session.Agent,
+                id = r.Session.SessionId,
+                title = r.Session.Title,
+                project = r.Session.ProjectSlug,
+                directory = r.Session.Directory,
+                branch = r.Session.Branch,
+                lastActive = r.Session.LastActive,
+                transcript = r.Session.TranscriptPath,
+                launchedFor = r.LaunchedFor is { } launch
+                    ? new
+                    {
+                        launch = launch.Id,
+                        task = launch.Task,
+                        taskId = launch.TaskId,
+                        mode = launch.Mode,
+                        profile = launch.Profile,
+                        worktree = launch.Worktree,
+                    }
+                    : null,
+                running = r.Running.Wire,
             }));
 
             return CommandOutput.Success();
@@ -141,6 +156,14 @@ public sealed class ResumeSettings : SessionSettings
     [CommandOption("--mode <MODE>")]
     [Description("Posture: advise, investigate, implement or review. Otherwise carried over.")]
     public string? Mode { get; init; }
+
+    [CommandOption("--worktree <NAME>")]
+    [Description("The worktree to reopen it in. Otherwise carried over.")]
+    public string? Worktree { get; init; }
+
+    [CommandOption("--fresh")]
+    [Description("Carry nothing over from its launch: no task, mode, profile or worktree but those given here.")]
+    public bool Fresh { get; init; }
 }
 
 /// <summary>
@@ -152,33 +175,39 @@ public sealed class ResumeSettings : SessionSettings
 /// the launcher instead, so the workspace is synchronised, the context is
 /// recompiled and the session reopens with the project it belonged to.
 /// </para>
+/// <para>
+/// Choosing, carry-over and the running check are
+/// <see cref="ISessionResumption"/>'s, which Studio asks too, so the two
+/// cannot describe one conversation differently. This keeps the picker and
+/// what is said.
+/// </para>
 /// </summary>
 [Description("Resume a previous agent session.")]
 [CommandMeta(CommandCategory.Start, Intent = "continue carry on last session again")]
 public sealed class ResumeCommand : AsyncCommand<ResumeSettings>
 {
-    private readonly ISessionHistoryService _sessions;
+    /// <summary>How many conversations a named id is looked for among: as many as the history reads.</summary>
+    private const int NamedLookup = 500;
+
+    private readonly ISessionResumption _resumption;
     private readonly SessionScope _scope;
     private readonly IAgentLauncher _launcher;
-    private readonly ILaunchLedger _ledger;
     private readonly IHeadlessTranscripts _transcripts;
     private readonly IAnsiConsole _console;
 
     private readonly ReadingProfile _reading;
 
     public ResumeCommand(
-        ISessionHistoryService sessions,
+        ISessionResumption resumption,
         SessionScope scope,
         IAgentLauncher launcher,
-        ILaunchLedger ledger,
         IHeadlessTranscripts transcripts,
         IAnsiConsole console,
         ReadingProfile reading)
     {
-        _sessions = sessions;
+        _resumption = resumption;
         _scope = scope;
         _launcher = launcher;
-        _ledger = ledger;
         _transcripts = transcripts;
         _console = console;
         _reading = reading;
@@ -190,6 +219,8 @@ public sealed class ResumeCommand : AsyncCommand<ResumeSettings>
         var output = new CommandOutput(_console, settings);
 
         var query = await _scope.QueryAsync(settings).ConfigureAwait(false);
+
+        ResumableSession? chosen;
 
         if (settings.Session is { Length: > 0 } named)
         {
@@ -205,46 +236,43 @@ public sealed class ResumeCommand : AsyncCommand<ResumeSettings>
                 _transcripts.Restore("claude", named);
             }
 
-            query = query with { IncludeHeadless = true };
-        }
-
-        var result = await _sessions.ListAsync(query).ConfigureAwait(false);
-
-        if (result.Failed)
-        {
-            return output.Fail(result);
-        }
-
-        var sessions = result.Value!;
-
-        if (sessions.Count == 0)
-        {
-            return output.Fail(
-                "No recorded agent sessions were found to resume.",
-                ExitCode.ProjectNotFound);
-        }
-
-        AgentSession? chosen;
-
-        if (settings.Session is { Length: > 0 } wanted)
-        {
             // Asked for by name, so a name that matches nothing is an error
             // and not a shrug. This used to fall in with the picker's null,
             // which means "changed my mind" — so 'resume nonsense' printed
             // nothing, exited zero, and looked exactly like success. It is
             // how the launcher's Resume button appeared to do nothing at all.
-            var match = Match(sessions, wanted);
+            //
+            // Looked for as far back as the history reads, not only among the
+            // newest twenty a list shows: an id somebody has is one they mean.
+            var found = await _resumption.FindAsync(
+                query with { IncludeHeadless = true, Limit = Math.Max(query.Limit, NamedLookup) },
+                named,
+                ct: cancellationToken).ConfigureAwait(false);
 
-            if (match.Failed)
+            if (found.Failed)
             {
-                return output.Fail(match);
+                return output.Fail(found);
             }
 
-            chosen = match.Value!;
+            chosen = found.Value!;
         }
         else
         {
-            chosen = await ChooseAsync(sessions, settings, output).ConfigureAwait(false);
+            var listed = await _resumption.ListAsync(query, ct: cancellationToken).ConfigureAwait(false);
+
+            if (listed.Failed)
+            {
+                return output.Fail(listed);
+            }
+
+            if (listed.Value!.Count == 0)
+            {
+                return output.Fail(
+                    "No recorded agent sessions were found to resume.",
+                    ExitCode.ProjectNotFound);
+            }
+
+            chosen = Choose(listed.Value!, settings, output);
 
             if (chosen is null)
             {
@@ -253,59 +281,59 @@ public sealed class ResumeCommand : AsyncCommand<ResumeSettings>
             }
         }
 
-        if (chosen.ProjectSlug is not { Length: > 0 } slug)
+        var overrides = new ResumeOverrides(
+            settings.Task, settings.TaskId, settings.Mode, settings.Profile, settings.Worktree, settings.Fresh);
+
+        var planned = await _resumption.PlanAsync(chosen, overrides, cancellationToken).ConfigureAwait(false);
+
+        if (planned.Failed)
         {
-            // Resuming goes through the project pipeline, so a session from an
-            // unregistered directory has nothing to hang off. Say what would
-            // fix it rather than just refusing.
-            return output.Fail(
-                $"That session ran in {chosen.Directory}, which is not a registered project. "
-                + $"Register it with 'loadout project add \"{chosen.Directory}\"' and try again.",
-                ExitCode.ProjectNotFound);
+            return output.Fail(planned);
         }
 
+        var values = planned.Value!;
+
         output.WriteLine(
-            $"Resuming [cyan]{slug.EscapeMarkup()}[/] with {chosen.Agent.EscapeMarkup()}: "
-            + $"{chosen.Label.EscapeMarkup()}");
+            $"Resuming [cyan]{values.ProjectSlug.EscapeMarkup()}[/] with {values.Agent.EscapeMarkup()}: "
+            + $"{chosen.Session.Label.EscapeMarkup()}");
+
+        if (chosen.Running.Kind != RunningKind.None)
+        {
+            // Said, not refused: the check can be wrong, and the person may
+            // mean to have it open twice. Studio asks first; a terminal is
+            // where somebody typed the id on purpose.
+            output.WriteLine(
+                "[yellow]It looks to be running already. A second copy writes to the same conversation.[/]");
+        }
 
         // What the session was launched for, so it reopens with the same
         // specialists. Resuming recompiles the context, and until this was
         // read back a resumed session got the no-task, no-mode set — a
         // different one from the session it claimed to be continuing.
-        var carried = await CarriedOverAsync(chosen, slug, cancellationToken).ConfigureAwait(false);
-
-        if (carried is not null && settings.Task is null && settings.TaskId is null && settings.Mode is null)
+        if (values.Carried.Count > 0 && !overrides.ChangesPurpose)
         {
-            var what = string.Join(", ", new[]
-            {
-                carried.Task is { Length: > 0 } task ? $"task '{task}'" : null,
-                carried.Mode is { Length: > 0 } mode ? $"mode {mode}" : null,
-                carried.Profile is { Length: > 0 } profile ? $"profile {profile}" : null,
-                carried.Worktree is { Length: > 0 } worktree ? $"worktree {worktree}" : null,
-            }.Where(part => part is not null));
+            output.WriteLine(
+                $"[dim]Carrying over from its launch: {string.Join(", ", values.Carried).EscapeMarkup()}[/]");
+        }
 
-            if (what.Length > 0)
-            {
-                output.WriteLine($"[dim]Carrying over from its launch: {what.EscapeMarkup()}[/]");
-            }
+        foreach (var notice in values.Notices)
+        {
+            output.WriteLine($"[yellow]{notice.EscapeMarkup()}[/]");
         }
 
         var launch = await _launcher.LaunchAsync(new LaunchRequest(
-            slug,
-            chosen.Agent,
+            values.ProjectSlug,
+            values.Agent,
             Offline: settings.Offline,
             NoSync: settings.NoSync,
-            Worktree: carried?.Worktree,
-            Profile: settings.Profile ?? carried?.Profile,
+            Worktree: values.Worktree,
+            Profile: values.Profile,
             Environment: settings.Environment,
-            ResumeSessionId: chosen.SessionId,
-            // A task named by id replaces the carried one rather than sitting
-            // beside it: the carried words would otherwise choose the
-            // specialists for a session now said to be about something else.
-            Task: settings.Task ?? (settings.TaskId is null ? carried?.Task : null),
-            Mode: settings.Mode ?? carried?.Mode,
+            ResumeSessionId: values.SessionId,
+            Task: values.Task,
+            Mode: values.Mode,
             DryRun: settings.DryRun,
-            TaskId: settings.TaskId)).ConfigureAwait(false);
+            TaskId: values.TaskId)).ConfigureAwait(false);
 
         if (launch.Failed)
         {
@@ -322,91 +350,11 @@ public sealed class ResumeCommand : AsyncCommand<ResumeSettings>
     }
 
     /// <summary>
-    /// The launch this session came from, as far as the ledger can say.
-    /// </summary>
-    /// <remarks>
-    /// The ledger cannot read it: a launch record has no session id, because
-    /// the agent chooses that after it starts. Tolerated when the ledger
-    /// cannot be read at all — resuming without the task is what happened
-    /// before, and it is no reason to refuse.
-    /// </remarks>
-    private async Task<LaunchRecord?> CarriedOverAsync(
-        AgentSession session,
-        string slug,
-        CancellationToken ct)
-    {
-        var launches = await _ledger.ReadAsync(DateTimeOffset.UnixEpoch, ct).ConfigureAwait(false);
-
-        return launches.Succeeded ? LaunchOf(launches.Value!, session, slug) : null;
-    }
-
-    /// <summary>
-    /// The most recent launch of this project with this agent that had begun
-    /// by the time the session was last active, or null when there is none.
-    /// </summary>
-    /// <remarks>
-    /// Inferred rather than known, and deliberately narrow: same project, same
-    /// agent, started no later than the session's last activity. A session
-    /// that was active before any recorded launch of its project gets nothing
-    /// carried over, which is the right answer for one this launcher did not
-    /// start.
-    /// </remarks>
-    internal static LaunchRecord? LaunchOf(
-        IReadOnlyList<LaunchRecord> launches,
-        AgentSession session,
-        string slug)
-    {
-        ArgumentNullException.ThrowIfNull(launches);
-        ArgumentNullException.ThrowIfNull(session);
-
-        return launches
-            .Where(launch => string.Equals(launch.ProjectSlug, slug, StringComparison.OrdinalIgnoreCase)
-                && string.Equals(launch.Agent, session.Agent, StringComparison.OrdinalIgnoreCase)
-                && launch.StartedAt <= session.LastActive)
-            .OrderByDescending(launch => launch.StartedAt)
-            .FirstOrDefault();
-    }
-
-    /// <summary>
-    /// The one session whose id starts with what was asked for.
-    /// </summary>
-    /// <remarks>
-    /// Prefixes are accepted because nobody types a whole UUID. Separated out
-    /// so that "no such session" and "more than one" can be said, which they
-    /// could not while this returned the same null the picker returns when
-    /// somebody backs out of it.
-    /// </remarks>
-    internal static OperationResult<AgentSession> Match(
-        IReadOnlyList<AgentSession> sessions,
-        string wanted)
-    {
-        ArgumentNullException.ThrowIfNull(sessions);
-
-        var matches = sessions
-            .Where(s => s.SessionId.StartsWith(wanted, StringComparison.OrdinalIgnoreCase))
-            .ToList();
-
-        return matches switch
-        {
-            [var only] => OperationResult<AgentSession>.Ok(only),
-
-            [] => OperationResult<AgentSession>.Fail(
-                $"No recorded session starts with '{wanted}'. "
-                + "Run 'loadout sessions' to see what there is.",
-                ExitCode.ProjectNotFound),
-
-            _ => OperationResult<AgentSession>.Fail(
-                $"{matches.Count} sessions start with '{wanted}'. Give more of the id.",
-                ExitCode.InvalidArguments),
-        };
-    }
-
-    /// <summary>
     /// Works out which session was meant: the most recent, or whichever one is
     /// picked from the list.
     /// </summary>
-    private async Task<AgentSession?> ChooseAsync(
-        IReadOnlyList<AgentSession> sessions,
+    private ResumableSession? Choose(
+        IReadOnlyList<ResumableSession> sessions,
         ResumeSettings settings,
         CommandOutput output)
     {
@@ -427,7 +375,7 @@ public sealed class ResumeCommand : AsyncCommand<ResumeSettings>
         // The picker leaves room for the selection marker it draws itself.
         var width = Math.Max(40, _console.Profile.Width - 4);
 
-        var choices = new List<SessionChoice>(sessions.Select(s => new SessionChoice(s)))
+        var choices = new List<SessionChoice>(sessions.Select(s => new SessionChoice(s.Session)))
         {
             SessionChoice.Cancel,
         };
@@ -435,7 +383,9 @@ public sealed class ResumeCommand : AsyncCommand<ResumeSettings>
         var chosen = _reading.Ask(
             _console, "Which session?", choices, choice => choice.Render(width), pageSize: 15);
 
-        return await Task.FromResult(chosen.Session).ConfigureAwait(false);
+        return chosen.Session is null
+            ? null
+            : sessions.First(s => ReferenceEquals(s.Session, chosen.Session));
     }
 }
 

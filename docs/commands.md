@@ -115,6 +115,7 @@
 | `loadout dashboard` | Every run at once, live, on a page: the daemon's if one is serving, otherwise a new one here |
 | `loadout dashboard sign-out` | Sign every browser out of the dashboard on this machine, including in a daemon that is already running |
 | `loadout dashboard signal <state>` | Not for typing: a Claude Code session Studio started runs it from its own hooks to say it is waiting for you or asking for approval |
+| `loadout hook session-start --agent <agent>` | Not for typing: a Claude Code session Loadout launched runs it from its own hook as a conversation starts, so that resuming it later knows what it was launched for |
 | `loadout team office check <set>` | Whether an office set's kit (with its rules) or tile scene can be used, and each thing wrong with it by name. A kit may lack parts: it lists which, and those are drawn in the built-in kit's shapes meanwhile |
 | `loadout team schedule add\|list\|remove` | Runs that should happen again and again on this machine |
 | `loadout daemon` | Stay running: fire the scheduled runs and serve the dashboard |
@@ -272,12 +273,36 @@ attributes them:
 `loadout resume` opens a picker, or takes a session id or `--last`. Resuming
 goes through the launcher rather than straight to the agent, so the workspace
 syncs and the context recompiles instead of just reopening a bare transcript.
-The task, mode, profile and worktree the session launched with are read back
-from the launch ledger and carried over, so it reopens with the specialists it
-had. `--task` and `--mode` replace them when the work has changed shape, and
+The task, mode, profile and worktree the session launched with are carried
+over, so it reopens with the specialists it had. `--task`, `--mode`,
+`--profile` and `--worktree` replace them when the work has changed shape,
 `--task-id` links the resumed session to a recorded task, as it does on
-`loadout launch`. The
-interactive launcher offers the same picker per project.
+`loadout launch`, and `--fresh` carries nothing over at all. The interactive
+launcher offers the same picker per project.
+
+What carries over is known, not guessed. A Claude Code session Loadout launches
+runs `loadout hook session-start` from its own hook as each conversation starts,
+which files the conversation under its launch in the ledger. Resuming reads that
+link and nothing else. Before this, resume picked the newest launch of the same
+project and agent, and it was wrong whenever two sessions overlapped: one
+conversation quietly took the other's task, and with it the other's
+specialists. So a conversation from before links, or one Loadout didn't launch,
+now carries nothing over. That's a deliberate trade: a blank you can see beats
+a confident wrong answer you can't, and conversations without a link age out
+within weeks. Codex conversations aren't linked yet, so they carry nothing over
+either.
+
+Resume also says when a conversation looks to be running already: its launch is
+still going, or, for one with no link, its transcript was written in the last
+five minutes. It's a warning rather than a refusal, because the check can be
+wrong, and a second copy is sometimes what you want. If a worktree it ran in
+has since been removed, it reopens in the main checkout and says so, rather
+than failing inside the launch.
+
+`loadout sessions --json` gives each conversation's `launchedFor`, which is the
+launch it's filed under (task, mode, profile and worktree), and `running`,
+which is `none`, `elsewhere` or `hosted:<id>` when Studio has it open. These are
+the same values Studio's history shows.
 
 Neither storage format is a published contract, so both readers are best-effort
 by design: a transcript nobody can make sense of costs you that one session,

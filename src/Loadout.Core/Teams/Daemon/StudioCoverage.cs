@@ -191,6 +191,7 @@ public static class StudioCoverage
         ["dashboard"] = Terminal("serves a dashboard page, and this is one"),
         ["dashboard sign-out"] = new("settings", StudioEffect.Changes),
         ["dashboard signal"] = Terminal("is run by the agent's own hook inside a session, to say it is waiting"),
+        ["hook session-start"] = Terminal("is run by the agent's own hook as a conversation starts, to file it under its launch"),
         ["daemon"] = Terminal("is the daemon serving this page"),
         ["daemon stop"] = new("settings", StudioEffect.Changes),
         ["daemon restart"] = new("settings", StudioEffect.Changes),

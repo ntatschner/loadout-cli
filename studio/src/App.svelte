@@ -17,6 +17,7 @@
   import LaunchSheet from './pages/LaunchSheet.svelte';
   import { search } from './lib/search';
   import type { Chosen } from './lib/tasks';
+  import type { Conversation } from './lib/api';
   import Settings from './pages/Settings.svelte';
   import Appearance from './pages/Appearance.svelte';
   import Memory from './pages/Memory.svelte';
@@ -51,6 +52,8 @@
   let ambient = $state(false);
   let launchTask = $state('');
   let launchChosen = $state<Chosen | null>(null);
+  /** The conversation the sheet is resuming, for 'Resume with changes'; null for a new session. */
+  let launchResuming = $state<Conversation | null>(null);
 
   onMount(() => {
     // The mode is this browser's own, so the layout is right before the prefs are read.
@@ -90,6 +93,18 @@
 
     launchTask = task;
     launchChosen = chosen;
+    launchResuming = null;
+    launching = true;
+  }
+
+  function openResume(conversation: Conversation) {
+    if (ambient) {
+      ambient = false;
+    }
+
+    launchTask = '';
+    launchChosen = null;
+    launchResuming = conversation;
     launching = true;
   }
 
@@ -279,7 +294,7 @@
     {:else if router.route.page === 'home'}
       <Home onambient={() => (ambient = true)} onlaunch={openLaunch} />
     {:else if router.route.page === 'sessions'}
-      <Sessions onlaunch={() => openLaunch()} />
+      <Sessions onlaunch={() => openLaunch()} onresume={openResume} />
     {:else if router.route.page === 'session'}
       <!-- Loaded when first needed: the terminal and its renderer are most of
            Studio's size, and only a session's page uses them. -->
@@ -332,7 +347,7 @@
     {:else if page === 'ideas'}
       <Ideas rest={router.route.rest} />
     {:else if page === 'projects'}
-      <Projects rest={router.route.rest} onlaunch={(chosen) => { router.go('sessions'); openLaunch('', chosen ?? null); }} />
+      <Projects rest={router.route.rest} onlaunch={(chosen) => { router.go('sessions'); openLaunch('', chosen ?? null); }} onresume={openResume} />
     {/if}
   {/snippet}
 
@@ -359,7 +374,25 @@
     </Dialog>
   {/if}
   {#if launching}
-    <LaunchSheet task={launchTask} chosen={launchChosen} onclose={() => (launching = false)} />
+    <LaunchSheet task={launchTask} chosen={launchChosen} resuming={launchResuming} onclose={() => (launching = false)} />
+  {/if}
+  {#if studio.resumeAsk}
+    {@const asking = studio.resumeAsk}
+    {#if asking.question.kind === 'elsewhere'}
+      <Dialog
+        title="It looks to be running already"
+        why={`‘${asking.question.conversation.title}’ was written to a moment ago, or its launch is still running, somewhere other than Studio. A second copy writes to the same conversation, and the two will not see each other's turns.`}
+        actions={[{ label: 'Resume it anyway', cmd: 'opens a second copy here', onpress: () => asking.answer(true) }]}
+        onclose={() => asking.answer(false)}
+      />
+    {:else}
+      <Dialog
+        title="Register this folder?"
+        why={`That conversation ran in ${asking.question.directory}, which is not a Loadout project. Resuming it registers that folder first, as ‘loadout project add’ would, and then carries it on there.`}
+        actions={[{ label: 'Register and resume', solid: true, cmd: `$ loadout project add "${asking.question.directory}"`, onpress: () => asking.answer(true) }]}
+        onclose={() => asking.answer(false)}
+      />
+    {/if}
   {/if}
 {/if}
 
