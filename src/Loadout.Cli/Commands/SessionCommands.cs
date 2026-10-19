@@ -37,25 +37,49 @@ public class SessionSettings : GlobalSettings
 /// </summary>
 [Description("List recent agent sessions, newest first.")]
 [CommandMeta(CommandCategory.Start, Intent = "history recent previous what was i doing")]
-public sealed class SessionListCommand : AsyncCommand<SessionSettings>
+public sealed class SessionListCommand : AsyncCommand<SessionListCommand.Settings>
 {
     private readonly ISessionResumption _sessions;
     private readonly SessionScope _scope;
     private readonly IAnsiConsole _console;
+    private readonly TimeProvider _time;
+    private readonly Core.Configuration.IConfigurationService _configuration;
 
     public SessionListCommand(
         ISessionResumption sessions,
         SessionScope scope,
-        IAnsiConsole console)
+        IAnsiConsole console,
+        TimeProvider time,
+        Core.Configuration.IConfigurationService configuration)
     {
         _sessions = sessions;
         _scope = scope;
         _console = console;
+        _time = time;
+        _configuration = configuration;
+    }
+
+    /// <summary>What listing takes beyond what resuming does: the query, over the sessions --limit considers.</summary>
+    public sealed class Settings : SessionSettings
+    {
+        [CommandOption("--filter <QUERY>")]
+        [Description("Keep only what the query says, the query every list takes, such as \"agent:codex login\". One starting with a minus goes as --filter=-agent:claude.")]
+        public string? Filter { get; init; }
+
+        [CommandOption("--sort <FIELDS>")]
+        [Description("Sort by these fields, commas between: id, title, project, agent, branch, active. Reversed with a minus: --sort=-active.")]
+        public string? Sort { get; init; }
+
+        [CommandOption("--saved")]
+        [Description("Use the query saved for this list in Studio. Without --json it is used anyway; --filter sets it aside.")]
+        public bool Saved { get; init; }
     }
 
     /// <inheritdoc />
-    public override async Task<int> ExecuteAsync(CommandContext context, SessionSettings settings, CancellationToken cancellationToken)
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(settings);
+
         var output = new CommandOutput(_console, settings);
 
         var query = await _scope.QueryAsync(settings).ConfigureAwait(false);
@@ -67,8 +91,21 @@ public sealed class SessionListCommand : AsyncCommand<SessionSettings>
             return output.Fail(result);
         }
 
-        var resumable = result.Value!;
-        var sessions = resumable.Select(r => r.Session).ToList();
+        var config = await _configuration.LoadConfigAsync(cancellationToken).ConfigureAwait(false);
+        var (filter, fromSaved) = ListOptions.Filter(
+            settings.Filter, Core.Lists.ListViews.Saved(config.Value?.Studio, "sessions"), settings.Saved, output.IsJson);
+        var queried = ListOptions.Apply(
+            Core.Lists.SessionFields.All, filter, settings.Sort, [.. result.Value!.Select(r => r.Session)], _time.GetUtcNow());
+
+        if (queried.Failed)
+        {
+            return output.Fail(queried);
+        }
+
+        // Back to what each kept session was launched for, in the query's order.
+        var launches = result.Value!.ToDictionary<ResumableSession, AgentSession>(r => r.Session, ReferenceEqualityComparer.Instance);
+        var resumable = queried.Value!.Select(session => launches[session]).ToList();
+        var sessions = queried.Value!;
 
         if (output.IsJson)
         {
@@ -101,9 +138,18 @@ public sealed class SessionListCommand : AsyncCommand<SessionSettings>
             return CommandOutput.Success();
         }
 
+        // A list someone else's filter has narrowed says so, so it never
+        // looks short for no reason.
+        if (fromSaved)
+        {
+            output.WriteLine($"[dim]Filtered by the saved query {Markup.Escape(filter!)}. --filter sets it aside.[/]");
+        }
+
         if (sessions.Count == 0)
         {
-            output.WriteLine(query.ProjectSlug is { Length: > 0 } slug
+            output.WriteLine(result.Value!.Count > 0
+                ? "[dim]Nothing matches the filter.[/]"
+                : query.ProjectSlug is { Length: > 0 } slug
                 ? $"[dim]No recorded sessions for {slug.EscapeMarkup()}.[/]"
                 : "[dim]No recorded agent sessions were found.[/]");
 

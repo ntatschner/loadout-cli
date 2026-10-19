@@ -261,3 +261,18 @@ export function criteriaOf(outcomes: Outcome[]) {
     cited: one.unfound,
   }));
 }
+
+/**
+ * The runs a query kept, in the order it kept them: Studio's own live runs,
+ * picked out by the ids 'team runs --filter' returned. With no query in force
+ * every run is kept, as it came.
+ */
+export function keptRuns(runs: Run[], kept: { run: string }[] | null): Run[] {
+  if (kept === null) {
+    return runs;
+  }
+
+  const byId = new Map(runs.map((run) => [run.id, run]));
+
+  return kept.map((one) => byId.get(one.run)).filter((run): run is Run => !!run);
+}

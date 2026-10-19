@@ -80,6 +80,7 @@ public sealed class TerminalLauncher : ILauncherTui
     private readonly Loadout.Core.Tasks.ITaskService _tasks;
     private readonly Loadout.Core.Ideas.IIdeaDumps _dumps;
     private readonly Loadout.Core.Ideas.IIdeaService _ideas;
+    private readonly Loadout.Core.Tasks.ITaskActivityReader _activity;
 
     /// <summary>Agents detected on this machine, once the first screen has asked.</summary>
     private IReadOnlyList<string> _installed = [];
@@ -114,8 +115,10 @@ public sealed class TerminalLauncher : ILauncherTui
         IUpdateNotice updates,
         ReadingProfile reading,
         Loadout.Core.Ideas.IIdeaDumps dumps,
-        Loadout.Core.Ideas.IIdeaService ideas)
+        Loadout.Core.Ideas.IIdeaService ideas,
+        Loadout.Core.Tasks.ITaskActivityReader activity)
     {
+        _activity = activity;
         _dumps = dumps;
         _ideas = ideas;
         _reading = reading;
@@ -677,13 +680,17 @@ public sealed class TerminalLauncher : ILauncherTui
         var query = Loadout.Core.Lists.ListViews.Saved(config.Value?.Studio, "tasks")
             ?? Loadout.Core.Tasks.TaskFields.DefaultQuery;
 
+        // Counted whatever the query, because the screen can be sorted on
+        // runs after it opens and has nowhere to read them from then.
+        var activity = await _activity.ReadAsync(project.Entry.Slug, ct).ConfigureAwait(false);
+
         TaskStart? chosen;
 
         using (IApplication application = Application.Create())
         {
             application.InitLegibly(_reading.Profile);
 
-            using var window = new TasksWindow(project.Entry.Name, listed.Value!, query, application);
+            using var window = new TasksWindow(project.Entry.Name, listed.Value!, query, application, activity: activity);
 
             await application.RunAsync(window, ct).ConfigureAwait(false);
 

@@ -14,6 +14,7 @@
   import ListToolbar from '../lib/components/ListToolbar.svelte';
   import ConversationList from '../lib/components/ConversationList.svelte';
   import TaskBoard from '../lib/components/TaskBoard.svelte';
+  import { CommandList } from '../lib/commandList.svelte';
   import { TaskListView } from '../lib/taskList.svelte';
   import { commands, readJson, SignedOut, type Conversation } from '../lib/api';
   import { lineFor } from '../lib/commandLine';
@@ -77,7 +78,9 @@
     projects: number;
   }
 
-  let projects = $state<Listed[] | null>(null);
+  // The wall, through 'project list' with the shared query.
+  const wall = new CommandList<Listed>('project list', 'projects', 'projects');
+  const projects = $derived(wall.items);
   let shown = $state<Shown | null>(null);
   let worktrees = $state<{ path: string; branch: string; primary: boolean }[] | null>(null);
   let health = $state<Drifted['findings'] | null>(null);
@@ -107,15 +110,11 @@
   }
 
   async function loadList() {
-    try {
-      projects = (await readJson<{ projects: Listed[] }>('project list')).projects;
-    } catch (error) {
-      fail(error);
+    await untrack(() => wall.load([]));
 
-      return;
+    if (wall.items) {
+      loadCounts(wall.items);
     }
-
-    loadCounts(projects);
   }
 
   function loadCounts(all: Listed[]) {
@@ -291,9 +290,12 @@
   const extras = $derived(shown ? Object.entries(shown.context).filter(([, on]) => on).map(([key]) => key) : []);
 </script>
 
-<div class="head"><div><h1>Projects</h1><span class="fact">{projects ? `${projects.length} known · ${projects.filter((one) => one.available).length} on this machine` : 'the projects Loadout knows'}</span></div></div>
+<div class="head"><div><h1>Projects</h1><span class="fact">{projects ? (wall.recorded !== null && wall.recorded !== projects.length ? `${wall.recorded} known · ${projects.length} shown` : `${projects.length} known · ${projects.filter((one) => one.available).length} on this machine`) : 'the projects Loadout knows'}</span></div></div>
 
 {#if problem}<p class="offline" role="alert">{problem}</p>{/if}
+{#if wall.error}<p class="offline" role="alert">{wall.error}</p>{/if}
+
+<ListToolbar noun="projects" slash={!slug && place !== 'tasks'} query={wall.text} shape={wall.shape} shown={projects?.length ?? null} recorded={wall.recorded} problem={wall.problem} onchange={(query) => void wall.ask(query).then(() => wall.items && loadCounts(wall.items))} />
 
 <nav aria-label="Projects">
   <div class={['ls-pwall', picked ? 'compact' : ''].filter(Boolean).join(' ')}>

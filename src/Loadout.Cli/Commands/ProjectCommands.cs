@@ -14,20 +14,41 @@ namespace Loadout.Cli.Commands;
 /// <summary>Lists registered projects and whether each is available here (spec section 75).</summary>
 [Description("List registered projects.")]
 [CommandMeta(CommandCategory.Projects, Intent = "show all registered repositories")]
-public sealed class ProjectListCommand : AsyncCommand<GlobalSettings>
+public sealed class ProjectListCommand : AsyncCommand<ProjectListCommand.Settings>
 {
     private readonly IProjectService _projects;
     private readonly IAnsiConsole _console;
+    private readonly TimeProvider _time;
+    private readonly IConfigurationService _configuration;
 
-    public ProjectListCommand(IProjectService projects, IAnsiConsole console)
+    public ProjectListCommand(IProjectService projects, IAnsiConsole console, TimeProvider time, IConfigurationService configuration)
     {
         _projects = projects;
         _console = console;
+        _time = time;
+        _configuration = configuration;
+    }
+
+    public sealed class Settings : GlobalSettings
+    {
+        [CommandOption("--filter <QUERY>")]
+        [Description("Keep only what the query says, the query every list takes, such as \"where:here agent:codex\". One starting with a minus goes as --filter=-where:elsewhere.")]
+        public string? Filter { get; init; }
+
+        [CommandOption("--sort <FIELDS>")]
+        [Description("Sort by these fields, commas between: id, name, agent, where, pinned, launched, launches. Reversed with a minus: --sort=-launches.")]
+        public string? Sort { get; init; }
+
+        [CommandOption("--saved")]
+        [Description("Use the query saved for this list in Studio. Without --json it is used anyway; --filter sets it aside.")]
+        public bool Saved { get; init; }
     }
 
     /// <inheritdoc />
-    public override async Task<int> ExecuteAsync(CommandContext context, GlobalSettings settings, CancellationToken cancellationToken)
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(settings);
+
         var output = new CommandOutput(_console, settings);
 
         var result = await _projects.ListAsync().ConfigureAwait(false);
@@ -36,7 +57,17 @@ public sealed class ProjectListCommand : AsyncCommand<GlobalSettings>
             return output.Fail(result);
         }
 
-        var projects = result.Value!;
+        var config = await _configuration.LoadConfigAsync(cancellationToken).ConfigureAwait(false);
+        var (filter, fromSaved) = ListOptions.Filter(
+            settings.Filter, Core.Lists.ListViews.Saved(config.Value?.Studio, "projects"), settings.Saved, output.IsJson);
+        var queried = ListOptions.Apply(Core.Lists.ProjectFields.All, filter, settings.Sort, result.Value!, _time.GetUtcNow());
+
+        if (queried.Failed)
+        {
+            return output.Fail(queried);
+        }
+
+        var projects = queried.Value!;
 
         if (output.IsJson)
         {
@@ -55,14 +86,25 @@ public sealed class ProjectListCommand : AsyncCommand<GlobalSettings>
                     pinned = p.Pinned,
                     lastLaunched = p.LastLaunchedUtc,
                 }),
+                recorded = result.Value!.Count,
+                query = ListOptions.Shape(Core.Lists.ProjectFields.All, filter, settings.Sort),
             });
 
             return CommandOutput.Success();
         }
 
+        // A list someone else's filter has narrowed says so, so it never
+        // looks short for no reason.
+        if (fromSaved && !output.IsJson)
+        {
+            output.WriteLine($"[dim]Filtered by the saved query {Markup.Escape(filter!)}. --filter sets it aside.[/]");
+        }
+
         if (projects.Count == 0)
         {
-            output.WriteLine("[dim]No projects are registered. Add one with: loadout project add <path>[/]");
+            output.WriteLine(result.Value!.Count > 0
+                ? "[dim]Nothing matches the filter.[/]"
+                : "[dim]No projects are registered. Add one with: loadout project add <path>[/]");
             return CommandOutput.Success();
         }
 

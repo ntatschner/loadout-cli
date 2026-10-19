@@ -3,7 +3,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import ListToolbar from './ListToolbar.svelte';
-import { partSaid, sortOf, withoutPart, withSort, withTerm, type ListShape } from '../lists';
+import { exampleQuery, partSaid, sortOf, withoutPart, withSort, withTerm, type ListShape } from '../lists';
 import { queryWords } from '../taskList.svelte';
 
 const SHAPE: ListShape = {
@@ -35,6 +35,12 @@ describe('list query helpers', () => {
     expect(partSaid('sort:-updated,id')).toBe('sorted by updated, descending, then id');
   });
 
+  it("offer an example from the list's own fields, never one it would refuse", () => {
+    expect(exampleQuery(SHAPE.fields)).toBe('state:open sort:-updated');
+    expect(exampleQuery([{ name: 'agent', type: 'text', description: 'which agent', choices: [] }, { name: 'active', type: 'date', description: 'when', choices: [] }])).toBe('sort:-active');
+    expect(exampleQuery([])).toBe('');
+  });
+
   it('send the default, everything and a query as the command spells them', () => {
     expect(queryWords(null)).toEqual([]);
     expect(queryWords('')).toEqual(['--all']);
@@ -43,6 +49,17 @@ describe('list query helpers', () => {
 });
 
 describe('ListToolbar', () => {
+  it("suggests a query in the list's own fields", () => {
+    render(ListToolbar, {
+      noun: 'conversations',
+      query: '',
+      shape: { text: '', parts: [], defaultQuery: '', fields: [{ name: 'active', type: 'date', description: 'when', choices: [] }] },
+      onchange: () => undefined,
+    });
+
+    expect(screen.getByRole('searchbox').getAttribute('placeholder')).toBe('Type to filter, or sort:-active');
+  });
+
   it('shows each piece as a chip, and removing one sends the rest', async () => {
     const sent = toolbar();
 

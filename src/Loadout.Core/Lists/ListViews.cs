@@ -19,7 +19,8 @@ public static class ListViews
     /// <param name="Name">The view's name, as stored and as its config key ends.</param>
     /// <param name="DefaultQuery">What it shows when nothing is saved.</param>
     /// <param name="Check">Whether a query names only fields this list has.</param>
-    public sealed record View(string Name, string DefaultQuery, Func<ListQuery, OperationResult> Check)
+    /// <param name="Sample">A query this list takes, for showing what its setting looks like.</param>
+    public sealed record View(string Name, string DefaultQuery, Func<ListQuery, OperationResult> Check, string Sample)
     {
         /// <summary>The config key its saved query is set with.</summary>
         public string Key => $"studio-query-{Name}";
@@ -27,7 +28,11 @@ public static class ListViews
 
     public static readonly IReadOnlyList<View> All =
     [
-        new("tasks", TaskFields.DefaultQuery, TaskFields.All.Check),
+        new("tasks", TaskFields.DefaultQuery, TaskFields.All.Check, "state:doing,open sort:-updated"),
+        new("projects", string.Empty, ProjectFields.All.Check, "where:here sort:-launched"),
+        new("ideas", string.Empty, IdeaFields.All.Check, "stage:answering,ready sort:-updated"),
+        new("sessions", string.Empty, SessionFields.All.Check, "agent:claude sort:-active"),
+        new("runs", string.Empty, RunFields.All.Check, "state:waiting,running sort:-started"),
     ];
 
     /// <summary>The view with this name, or null.</summary>

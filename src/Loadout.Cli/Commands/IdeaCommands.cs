@@ -204,11 +204,15 @@ public sealed class IdeaListCommand : AsyncCommand<IdeaListCommand.Settings>
 {
     private readonly IIdeaService _ideas;
     private readonly IAnsiConsole _console;
+    private readonly TimeProvider _time;
+    private readonly Core.Configuration.IConfigurationService _configuration;
 
-    public IdeaListCommand(IIdeaService ideas, IAnsiConsole console)
+    public IdeaListCommand(IIdeaService ideas, IAnsiConsole console, TimeProvider time, Core.Configuration.IConfigurationService configuration)
     {
         _ideas = ideas;
         _console = console;
+        _time = time;
+        _configuration = configuration;
     }
 
     public sealed class Settings : GlobalSettings
@@ -220,6 +224,18 @@ public sealed class IdeaListCommand : AsyncCommand<IdeaListCommand.Settings>
         [CommandOption("--global")]
         [Description("Only the workspace-wide list.")]
         public bool Global { get; init; }
+
+        [CommandOption("--filter <QUERY>")]
+        [Description("Keep only what the query says, the query every list takes, such as \"stage:answering login\". One starting with a minus goes as --filter=-stage:accepted.")]
+        public string? Filter { get; init; }
+
+        [CommandOption("--sort <FIELDS>")]
+        [Description("Sort by these fields, commas between: id, title, project, stage, by, updated, unanswered. Reversed with a minus: --sort=-updated.")]
+        public string? Sort { get; init; }
+
+        [CommandOption("--saved")]
+        [Description("Use the query saved for this list in Studio. Without --json it is used anyway; --filter sets it aside.")]
+        public bool Saved { get; init; }
     }
 
     /// <inheritdoc />
@@ -238,11 +254,23 @@ public sealed class IdeaListCommand : AsyncCommand<IdeaListCommand.Settings>
             return output.Fail(listed);
         }
 
-        var shown = listed.Value!
+        var placed = listed.Value!
             .Where(idea => !settings.Global || idea.Place.Project is null)
             .Where(idea => settings.Project is not { Length: > 0 } only
                 || string.Equals(idea.Place.Project, only, StringComparison.OrdinalIgnoreCase))
             .ToList();
+
+        var config = await _configuration.LoadConfigAsync(cancellationToken).ConfigureAwait(false);
+        var (filter, fromSaved) = ListOptions.Filter(
+            settings.Filter, Core.Lists.ListViews.Saved(config.Value?.Studio, "ideas"), settings.Saved, output.IsJson);
+        var queried = ListOptions.Apply(Core.Lists.IdeaFields.All, filter, settings.Sort, placed, _time.GetUtcNow());
+
+        if (queried.Failed)
+        {
+            return output.Fail(queried);
+        }
+
+        var shown = queried.Value!.ToList();
 
         // Ideas that are work on another list now, shown under the list they
         // left: that is where somebody would look for one and not find it.
@@ -273,14 +301,25 @@ public sealed class IdeaListCommand : AsyncCommand<IdeaListCommand.Settings>
                     moved = TaskTrace.Json(idea.Moved),
                 }),
                 movedOn = gone.Select(one => new { id = one.Id, title = one.Title, from = one.From, to = one.Where, at = one.Utc }),
+                recorded = placed.Count,
+                query = ListOptions.Shape(Core.Lists.IdeaFields.All, filter, settings.Sort),
             });
 
             return CommandOutput.Success();
         }
 
+        // A list someone else's filter has narrowed says so, so it never
+        // looks short for no reason.
+        if (fromSaved && !output.IsJson)
+        {
+            output.WriteLine($"[dim]Filtered by the saved query {Markup.Escape(filter!)}. --filter sets it aside.[/]");
+        }
+
         if (shown.Count == 0 && gone.Count == 0)
         {
-            output.WriteLine("[dim]No ideas yet. Drop one in with: loadout idea add \"...\"[/]");
+            output.WriteLine(placed.Count > 0
+                ? "[dim]Nothing matches the filter.[/]"
+                : "[dim]No ideas yet. Drop one in with: loadout idea add \"...\"[/]");
 
             return CommandOutput.Success();
         }

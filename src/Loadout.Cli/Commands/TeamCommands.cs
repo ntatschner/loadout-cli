@@ -378,32 +378,72 @@ public sealed class TeamShowCommand : AsyncCommand<TeamShowCommand.Settings>
 /// <summary>What the runs on this machine did.</summary>
 [Description("List the team runs on this machine, newest first.")]
 [CommandMeta(CommandCategory.Start, Intent = "team runs history what did the team do")]
-public sealed class TeamRunsCommand : AsyncCommand<GlobalSettings>
+public sealed class TeamRunsCommand : AsyncCommand<TeamRunsCommand.Settings>
 {
     private readonly IRunJournal _journal;
     private readonly IAnsiConsole _console;
+    private readonly TimeProvider _time;
+    private readonly Core.Configuration.IConfigurationService _configuration;
 
-    public TeamRunsCommand(IRunJournal journal, IAnsiConsole console)
+    public TeamRunsCommand(IRunJournal journal, IAnsiConsole console, TimeProvider time, Core.Configuration.IConfigurationService configuration)
     {
         _journal = journal;
         _console = console;
+        _time = time;
+        _configuration = configuration;
+    }
+
+    public sealed class Settings : GlobalSettings
+    {
+        [CommandOption("--filter <QUERY>")]
+        [Description("Keep only what the query says, the query every list takes, such as \"state:waiting,running team:release-crew\". One starting with a minus goes as --filter=-state:ended.")]
+        public string? Filter { get; init; }
+
+        [CommandOption("--sort <FIELDS>")]
+        [Description("Sort by these fields, commas between: id, team, project, state, goal, ended, started, cost, rounds. Reversed with a minus: --sort=-cost.")]
+        public string? Sort { get; init; }
+
+        [CommandOption("--limit <COUNT>")]
+        [Description("How many of the newest runs to read, before any filter. Defaults to 20.")]
+        public int Limit { get; init; } = 20;
+
+        [CommandOption("--saved")]
+        [Description("Use the query saved for this list in Studio. Without --json it is used anyway; --filter sets it aside.")]
+        public bool Saved { get; init; }
     }
 
     /// <inheritdoc />
-    public override Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
-        GlobalSettings settings,
+        Settings settings,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(_console, settings);
 
-        var runs = _journal.List()
+        if (settings.Limit < 1)
+        {
+            return output.Fail("--limit takes a number of runs, 1 or more.", ExitCode.InvalidArguments);
+        }
+
+        var listed = _journal.List(settings.Limit)
             .Select(_journal.Summarise)
             .Where(result => result.Succeeded)
             .Select(result => result.Value!)
             .ToList();
+
+        var config = await _configuration.LoadConfigAsync(cancellationToken).ConfigureAwait(false);
+        var (filter, fromSaved) = ListOptions.Filter(
+            settings.Filter, Core.Lists.ListViews.Saved(config.Value?.Studio, "runs"), settings.Saved, output.IsJson);
+        var queried = ListOptions.Apply(Core.Lists.RunFields.All, filter, settings.Sort, listed, _time.GetUtcNow());
+
+        if (queried.Failed)
+        {
+            return output.Fail(queried);
+        }
+
+        var runs = queried.Value!;
 
         if (output.IsJson)
         {
@@ -423,9 +463,25 @@ public sealed class TeamRunsCommand : AsyncCommand<GlobalSettings>
                     nodes = run.Nodes.Count,
                     run.Merged,
                 }),
+                recorded = listed.Count,
+                query = ListOptions.Shape(Core.Lists.RunFields.All, filter, settings.Sort),
             });
 
-            return Task.FromResult(CommandOutput.Success());
+            return CommandOutput.Success();
+        }
+
+        // A list someone else's filter has narrowed says so, so it never
+        // looks short for no reason.
+        if (fromSaved)
+        {
+            output.WriteLine($"[dim]Filtered by the saved query {Markup.Escape(filter!)}. --filter sets it aside.[/]");
+        }
+
+        if (runs.Count == 0 && listed.Count > 0)
+        {
+            output.WriteLine("[dim]Nothing matches the filter.[/]");
+
+            return CommandOutput.Success();
         }
 
         if (runs.Count == 0)
@@ -433,7 +489,7 @@ public sealed class TeamRunsCommand : AsyncCommand<GlobalSettings>
             output.WriteLine("[dim]No team has run on this machine yet.[/]");
             output.WriteLine("[dim]Start one with:[/] loadout team run <team> \"<goal>\"");
 
-            return Task.FromResult(CommandOutput.Success());
+            return CommandOutput.Success();
         }
 
         foreach (var run in runs)
@@ -461,7 +517,7 @@ public sealed class TeamRunsCommand : AsyncCommand<GlobalSettings>
         output.WriteLine("[dim]One in full with:[/] loadout team status [[<run>]]");
         output.WriteLine("[dim]Clear out the old ones with:[/] loadout team runs prune --keep 20");
 
-        return Task.FromResult(CommandOutput.Success());
+        return CommandOutput.Success();
     }
 
     private static string Shorten(string text) => text.Length > 90 ? text[..90] + "…" : text;

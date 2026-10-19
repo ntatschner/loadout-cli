@@ -52,3 +52,14 @@ export function partSaid(part: string): string {
 
   return part;
 }
+
+/**
+ * What the box offers as an example: one of this list's own choices and a
+ * sort on its first date, so it never suggests a field the list would refuse.
+ */
+export function exampleQuery(fields: ListField[]): string {
+  const choice = fields.find((field) => field.type === 'choice' && field.choices.length > 0);
+  const date = fields.find((field) => field.type === 'date');
+
+  return [choice ? `${choice.name}:${choice.choices[0]}` : null, date ? `sort:-${date.name}` : null].filter(Boolean).join(' ');
+}

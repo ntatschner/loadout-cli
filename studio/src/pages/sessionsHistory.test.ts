@@ -7,6 +7,12 @@ import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import type { Conversation, LostSession } from '../lib/api';
 
 const resumed: unknown[] = [];
+const queried: string[] = [];
+
+const SHAPE = {
+  fields: [{ name: 'agent', type: 'choice', description: 'which agent it was', choices: ['claude', 'codex'] }],
+  defaultQuery: '',
+};
 
 function conversation(over: Partial<Conversation>): Conversation {
   return {
@@ -49,6 +55,18 @@ vi.mock('../lib/api', async (original) => {
     sessions: { ...real.sessions, list: vi.fn(async () => []) },
     conversations: {
       list: vi.fn(async () => history),
+      // The daemon applies the query; this stands in for it on the one field
+      // the tests use, so what matters here is what the page sends.
+      query: vi.fn(async (q: string) => {
+        queried.push(q);
+        const agent = /agent:(\w+)/.exec(q)?.[1];
+
+        return {
+          conversations: history.filter((one) => !agent || one.agent === agent),
+          recorded: history.length,
+          query: { ...SHAPE, text: q, parts: q ? q.split(' ') : [] },
+        };
+      }),
       lost: vi.fn(async () => lost),
       forget: vi.fn(async () => undefined),
       resume: vi.fn(async (resume: unknown) => {
@@ -66,45 +84,48 @@ const { default: Sessions } = await import('./Sessions.svelte');
 describe('the history on Sessions', () => {
   beforeEach(() => {
     resumed.length = 0;
+    queried.length = 0;
     studio.conversations = history;
     studio.lost = lost;
   });
 
-  it('offers each conversation back with what it carries over, and says when nothing does', () => {
+  it('offers each conversation back with what it carries over, and says when nothing does', async () => {
     render(Sessions, { onlaunch: () => undefined });
 
-    const list = screen.getByRole('list', { name: 'Past conversations' });
+    const list = await screen.findByRole('list', { name: 'Past conversations' });
 
     expect(within(list).getByText('carries over task ‘fix the importer’, mode implement')).toBeTruthy();
     expect(within(list).getAllByText(/nothing carried over: no launch on record/).length).toBe(3);
   });
 
-  it('goes to a conversation already open in Studio rather than starting it again', () => {
+  it('goes to a conversation already open in Studio rather than starting it again', async () => {
     render(Sessions, { onlaunch: () => undefined });
 
-    const row = screen.getByText('Open already').closest('li')!;
+    const row = (await screen.findByText('Open already')).closest('li')!;
 
     expect(within(row).getByRole('button', { name: /^Open/ })).toBeTruthy();
     expect(within(row).queryByRole('button', { name: /^Resume/ })).toBeNull();
   });
 
-  it('says that resuming a conversation from a folder that is not a project registers it', () => {
+  it('says that resuming a conversation from a folder that is not a project registers it', async () => {
     render(Sessions, { onlaunch: () => undefined });
 
-    const row = screen.getByText('Somewhere else').closest('li')!;
+    const row = (await screen.findByText('Somewhere else')).closest('li')!;
 
     expect(within(row).getByRole('button', { name: /Register and resume/ })).toBeTruthy();
   });
 
-  it('narrows to one agent', async () => {
+  it('narrows with the query every list takes, applied by the daemon', async () => {
     render(Sessions, { onlaunch: () => undefined });
 
-    await fireEvent.change(screen.getByLabelText('Agent'), { target: { value: 'codex' } });
+    await screen.findByRole('list', { name: 'Past conversations' });
+    await fireEvent.change(screen.getByRole('combobox', { name: 'Add a filter' }), { target: { value: 'agent:codex' } });
 
-    const list = screen.getByRole('list', { name: 'Past conversations' });
-
-    expect(within(list).getByText('With Codex')).toBeTruthy();
-    expect(within(list).queryByText('Fix the importer')).toBeNull();
+    await vi.waitFor(() =>
+      expect(within(screen.getByRole('list', { name: 'Past conversations' })).queryByText('Fix the importer')).toBeNull(),
+    );
+    expect(queried.at(-1)).toBe('agent:codex');
+    expect(within(screen.getByRole('list', { name: 'Past conversations' })).getByText('With Codex')).toBeTruthy();
   });
 
   it('lists what a restart ended, leaving out one that never said its conversation', () => {
