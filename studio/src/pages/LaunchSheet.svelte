@@ -3,20 +3,29 @@
   // the session would load is worked out by the daemon with the same resolver
   // the terminal launch sheet and --dry-run use, and the command beneath is
   // the one the daemon will run. Opened from a task, it starts with that task
-  // and its project chosen; nothing else about it changes.
+  // and its project chosen; nothing else about it changes. Opened to resume a
+  // conversation ('Resume with changes'), it starts with what would carry
+  // over, and what it holds when Resume is pressed is the whole of what the
+  // session reopens with.
   import { onMount } from 'svelte';
   import Dialog from '../lib/components/Dialog.svelte';
   import Meter from '../lib/components/Meter.svelte';
   import ModePicker from '../lib/components/ModePicker.svelte';
   import Picker from '../lib/components/Picker.svelte';
   import Switch from '../lib/components/Switch.svelte';
-  import { launchSheet, type Launch, type Preview, type Sheet } from '../lib/api';
+  import { launchSheet, type Conversation, type Launch, type Preview, type Sheet } from '../lib/api';
+  import { resumeWords } from '../lib/resume';
   import { roving } from '../lib/roving';
   import { router } from '../lib/router.svelte';
   import { studio } from '../lib/state.svelte';
   import type { Chosen } from '../lib/tasks';
 
-  let { task: typed = '', chosen = null, onclose }: { task?: string; chosen?: Chosen | null; onclose: () => void } = $props();
+  let {
+    task: typed = '',
+    chosen = null,
+    resuming = null,
+    onclose,
+  }: { task?: string; chosen?: Chosen | null; resuming?: Conversation | null; onclose: () => void } = $props();
 
   const MODE_WORDS: Record<string, string> = {
     '': 'chosen with the specialists for the task',
@@ -55,12 +64,26 @@
       // arrives as Other, so it is not lost.
       taskId = chosen && chosen.project === sheet.project ? chosen.id : typed ? OTHER : (sheet.tasks.find((one) => one.state === 'doing')?.id ?? null);
       other = typed;
+
+      if (resuming) {
+        // What would carry over, so changing one thing leaves the rest as
+        // it was. A conversation with no launch on record starts empty.
+        const was = resuming.launchedFor;
+        const known = !!was?.taskId && sheet.tasks.some((one) => one.id === was.taskId);
+
+        agent = resuming.agent;
+        mode = was?.mode ?? '';
+        profile = was?.profile ?? null;
+        worktree = was?.worktree ?? null;
+        taskId = known ? was!.taskId : was?.task ? OTHER : null;
+        other = known ? '' : (was?.task ?? '');
+      }
     } catch (error) {
       problem = (error as Error).message;
     }
   }
 
-  onMount(() => void read(chosen?.project ?? null, null));
+  onMount(() => void read(resuming?.project ?? chosen?.project ?? null, null));
 
   /**
    * No task, then doing, open and blocked, then Other… A done task the
@@ -113,7 +136,20 @@
     return () => clearTimeout(timer);
   });
 
-  const shown = $derived(preview?.command ? `$ ${preview.command}` : '');
+  /** The sheet's fields as a resume's options: all of them, since a resume from here carries nothing over. */
+  const resumeFields: Partial<Launch> = $derived({
+    taskId: taskId && taskId !== OTHER ? taskId : undefined,
+    task: taskId === OTHER && other.trim() ? other.trim() : undefined,
+    mode: mode || undefined,
+    profile: profile ?? undefined,
+    worktree: worktree ?? undefined,
+    offline: offline || undefined,
+    noSync: noSync || undefined,
+  });
+
+  const shown = $derived(
+    resuming ? resumeWords(resuming, resumeFields, true) : preview?.command ? `$ ${preview.command}` : '',
+  );
   const budget = $derived(preview?.budget ?? (sheet ? { estimatedTokens: 0, tokenBudget: sheet.budget.tokenBudget, warnAtPercent: sheet.budget.warnAtPercent } : null));
 
   const unable = $derived(
@@ -145,6 +181,21 @@
     return true;
   }
 
+  async function resumeIt() {
+    if (!resuming) {
+      return true;
+    }
+
+    const id = await studio.resume(resuming, resumeFields, undefined, true);
+
+    if (id) {
+      onclose();
+      router.go('session', id);
+    }
+
+    return true;
+  }
+
   function pickTask(index: number) {
     taskId = tasks()[index].id;
 
@@ -155,13 +206,17 @@
 </script>
 
 <Dialog
-  title="New session"
-  why="Everything a launch asks is here, filled in with the defaults. The command below is the launch; Studio runs it for you, and the session keeps running if you close this tab."
+  title={resuming ? 'Resume with changes' : 'New session'}
+  why={resuming
+    ? `Carries on ‘${resuming.title}’ with ${resuming.agent}, starting from what it was launched for. What is here when you press Resume is what it reopens with; nothing else carries over.`
+    : 'Everything a launch asks is here, filled in with the defaults. The command below is the launch; Studio runs it for you, and the session keeps running if you close this tab.'}
   extraClass="wide"
-  actions={[
-    { label: 'Launch', solid: true, glyph: '▶', cmd: unable ?? 'runs the command above', disabledReason: unable, onpress: () => start(false) },
-    { label: 'Quick session', cmd: project ? `$ loadout launch ${project} · no task, the defaults` : 'needs a project', disabledReason: studio.watchOnly ? studio.watchOnlyReason : undefined, onpress: () => start(true) },
-  ]}
+  actions={resuming
+    ? [{ label: 'Resume', solid: true, glyph: '▶', cmd: unable ?? 'runs the command above', disabledReason: unable, onpress: () => resumeIt() }]
+    : [
+        { label: 'Launch', solid: true, glyph: '▶', cmd: unable ?? 'runs the command above', disabledReason: unable, onpress: () => start(false) },
+        { label: 'Quick session', cmd: project ? `$ loadout launch ${project} · no task, the defaults` : 'needs a project', disabledReason: studio.watchOnly ? studio.watchOnlyReason : undefined, onpress: () => start(true) },
+      ]}
   {onclose}
 >
   {#if problem}
@@ -173,19 +228,27 @@
   {:else}
     <div class="sheet">
       <div class="grid2">
+        {#if resuming}
+          <!-- The conversation's own project and agent: resuming elsewhere is a new session. -->
+          <p class="fixed"><span class="lab sheetlab">Project and agent</span>{project} · {resuming.agent}</p>
+        {:else}
+          {#key sheet.project}
+            <Picker
+              label="Project"
+              selected={Math.max(0, sheet.projects.findIndex((one) => one.slug === project))}
+              options={sheet.projects.map((one) => ({ name: one.slug, sub: one.here ? (one.path ?? '') : 'not on this machine' }))}
+              onpick={(option) => void read(option.name, null)}
+            />
+          {/key}
+        {/if}
         {#key sheet.project}
           <Picker
-            label="Project"
-            selected={Math.max(0, sheet.projects.findIndex((one) => one.slug === project))}
-            options={sheet.projects.map((one) => ({ name: one.slug, sub: one.here ? (one.path ?? '') : 'not on this machine' }))}
-            onpick={(option) => void read(option.name, null)}
+            label="Mode"
+            selected={mode ? sheet.modes.indexOf(mode) + 1 : 0}
+            options={['', ...sheet.modes].map((one) => ({ name: one || '(let the task decide)', sub: MODE_WORDS[one] ?? '' }))}
+            onpick={(_, index) => (mode = index === 0 ? '' : sheet!.modes[index - 1])}
           />
         {/key}
-        <Picker
-          label="Mode"
-          options={['', ...sheet.modes].map((one) => ({ name: one || '(let the task decide)', sub: MODE_WORDS[one] ?? '' }))}
-          onpick={(_, index) => (mode = index === 0 ? '' : sheet!.modes[index - 1])}
-        />
       </div>
 
       <div class="ls-field taskfield">
@@ -211,6 +274,7 @@
       </div>
 
       <div class="grid2">
+        {#if !resuming}
         <div>
           <span class="lab sheetlab">Agent</span>
           {#key sheet.project}
@@ -222,20 +286,25 @@
             />
           {/key}
         </div>
+        {/if}
         <div class="stack">
-          {#if sheet.worktrees.length > 1}
-            <Picker label="Worktree" options={sheet.worktrees.map((one) => ({ name: one.label, sub: one.value ?? 'the project’s own checkout' }))} onpick={(_, index) => (worktree = sheet!.worktrees[index].value)} />
-          {/if}
-          {#if sheet.profiles.length > 1}
-            <Picker label="Profile" options={sheet.profiles.map((one) => ({ name: one.label, sub: one.value ?? 'the project’s default' }))} onpick={(_, index) => (profile = sheet!.profiles[index].value)} />
-          {/if}
+          {#key sheet.project}
+            {#if sheet.worktrees.length > 1}
+              <Picker label="Worktree" selected={Math.max(0, sheet.worktrees.findIndex((one) => one.value === worktree))} options={sheet.worktrees.map((one) => ({ name: one.label, sub: one.value ?? 'the project’s own checkout' }))} onpick={(_, index) => (worktree = sheet!.worktrees[index].value)} />
+            {/if}
+            {#if sheet.profiles.length > 1}
+              <Picker label="Profile" selected={Math.max(0, sheet.profiles.findIndex((one) => one.value === profile))} options={sheet.profiles.map((one) => ({ name: one.label, sub: one.value ?? 'the project’s default' }))} onpick={(_, index) => (profile = sheet!.profiles[index].value)} />
+            {/if}
+          {/key}
         </div>
       </div>
 
       <div class="optsw">
         <Switch label="Work offline" sub="--offline" bind:checked={offline} />
         <Switch label="Skip workspace sync" sub="--no-sync" bind:checked={noSync} />
-        <Switch label="Append last handoff" sub="--handoff" bind:checked={handoff} />
+        {#if !resuming}
+          <Switch label="Append last handoff" sub="--handoff" bind:checked={handoff} />
+        {/if}
       </div>
 
       <div class="loads">

@@ -8,6 +8,8 @@ import type { SignalFamily } from './signals';
 import { setAccent, setDensity, setMotion, setTheme, preferredTheme } from './studio';
 import { toasts } from './toasts.svelte';
 import { isMode, morph, nextMode, type StudioMode } from './modes';
+import { resumeConversation, type ResumeAsk, type ResumeOutcome } from './resume';
+import { resumeCommand } from './terminal';
 
 export interface FeedEntry {
   t: string;
@@ -60,6 +62,12 @@ export class Studio {
   prefs = $state<api.Preferences | null>(null);
   runs = $state<api.Run[]>([]);
   sessions = $state<api.Session[]>([]);
+  /** Past conversations from both agents, newest first: the history Sessions resumes from. */
+  conversations = $state<api.Conversation[]>([]);
+  /** Sessions an earlier daemon hosted, ended when it stopped, that can be carried on. */
+  lost = $state<api.LostSession[]>([]);
+  /** The question a resume is waiting on, for the one dialog that asks it. */
+  resumeAsk = $state<{ question: ResumeAsk; answer: (yes: boolean) => void } | null>(null);
   ideas = $state<api.Idea[]>([]);
   busy = $state<string[]>([]);
   tasks = $state<api.TaskList[]>([]);
@@ -106,7 +114,7 @@ export class Studio {
 
       this.about = await api.about();
       await this.loadPrefs();
-      await Promise.all([this.loadRuns(), this.loadSessions(), this.loadIdeas(), this.loadTasks(), this.loadJobs()]);
+      await Promise.all([this.loadRuns(), this.loadSessions(), this.loadIdeas(), this.loadTasks(), this.loadJobs(), this.loadHistory()]);
     });
 
     this.loaded = true;
@@ -118,7 +126,9 @@ export class Studio {
 
     this.#stop = api.listen((what) => {
       if (what.includes('sessions')) {
-        void this.#guard(() => this.loadSessions());
+        // The history too: a session starting or ending is what changes
+        // which conversation is running, and what a restart left behind.
+        void this.#guard(() => Promise.all([this.loadSessions(), this.loadHistory()]).then(() => undefined));
       }
 
       if (what.includes('runs')) {
@@ -517,6 +527,80 @@ export class Studio {
 
       return null;
     }
+  }
+
+  /** The history and what a restart left, from the daemon that keeps them; nothing anywhere else. */
+  async loadHistory(): Promise<void> {
+    if (this.about?.hostsSessions === false) {
+      this.conversations = [];
+      this.lost = [];
+
+      return;
+    }
+
+    const [conversations, lost] = await Promise.all([api.conversations.list({ limit: 100 }), api.conversations.lost()]);
+    this.conversations = conversations;
+    this.lost = lost;
+  }
+
+  /**
+   * Resumes a conversation in one of the daemon's terminals, asking first
+   * where it has to. Returns the session to go to, or null for none.
+   */
+  async resume(conversation: api.Conversation, sheet: Partial<api.Launch> = {}, lost?: string, fresh = false): Promise<string | null> {
+    let outcome: ResumeOutcome;
+
+    try {
+      outcome = await resumeConversation(
+        conversation,
+        {
+          resume: (resume, asked) => api.conversations.resume(resume, asked),
+          ask: (question) =>
+            new Promise<boolean>((answer) => {
+              // Cleared as it is answered, so the dialog closes then and not
+              // when the resume it let through has finished starting.
+              this.resumeAsk = {
+                question,
+                answer: (yes) => {
+                  this.resumeAsk = null;
+                  answer(yes);
+                },
+              };
+            }),
+        },
+        sheet,
+        lost,
+        fresh,
+      );
+    } catch (error) {
+      if (error instanceof api.SignedOut) {
+        this.signedOut = true;
+      } else {
+        toasts.add({ level: 'problem', text: (error as Error).message, cmd: resumeCommand(conversation.id, conversation.project) });
+      }
+
+      return null;
+    } finally {
+      this.resumeAsk = null;
+    }
+
+    if ('declined' in outcome) {
+      return null;
+    }
+
+    if ('goTo' in outcome) {
+      return outcome.goTo;
+    }
+
+    toasts.add({ level: 'done', text: `Resumed in ${conversation.project ?? 'a new project'}`, cmd: resumeCommand(conversation.id, conversation.project) });
+    await Promise.all([this.loadSessions(), this.loadHistory()]);
+
+    return outcome.started.id;
+  }
+
+  /** Stops offering a session a restart ended, without resuming it. */
+  forgetLost(lost: api.LostSession): Promise<boolean> {
+    return this.#act(() => api.conversations.forget(lost.id), 'No longer offered', resumeCommand(lost.agentSession, lost.conversation?.project ?? null), () => this.loadHistory());
   }
 
   endSession(session: api.Session): Promise<boolean> {

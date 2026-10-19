@@ -4,7 +4,7 @@
   // on, its health, and what can be done to it, each through its own
   // command. Read with the commands a terminal uses, so the page and
   // 'loadout project show' cannot disagree.
-  import { untrack } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import Command from '../lib/components/Command.svelte';
   import CommandAction from '../lib/components/CommandAction.svelte';
   import ForgetDialog from '../lib/components/ForgetDialog.svelte';
@@ -12,9 +12,10 @@
   import HealthList from '../lib/components/HealthList.svelte';
   import ProjectTile from '../lib/components/ProjectTile.svelte';
   import ListToolbar from '../lib/components/ListToolbar.svelte';
+  import ConversationList from '../lib/components/ConversationList.svelte';
   import TaskBoard from '../lib/components/TaskBoard.svelte';
   import { TaskListView } from '../lib/taskList.svelte';
-  import { commands, readJson, SignedOut } from '../lib/api';
+  import { commands, readJson, SignedOut, type Conversation } from '../lib/api';
   import { lineFor } from '../lib/commandLine';
   import { declareWords, startWords, type Chosen, type Task } from '../lib/tasks';
   import { router } from '../lib/router.svelte';
@@ -22,7 +23,15 @@
   import { studio } from '../lib/state.svelte';
   import { toasts } from '../lib/toasts.svelte';
 
-  let { rest, onlaunch }: { rest: string[]; onlaunch: (chosen?: Chosen) => void } = $props();
+  let {
+    rest,
+    onlaunch,
+    onresume = undefined,
+  }: { rest: string[]; onlaunch: (chosen?: Chosen) => void; onresume?: (conversation: Conversation) => void } = $props();
+
+  // The history is read again on arrival, for conversations started in a
+  // terminal, which the event stream does not hear about.
+  onMount(() => void studio.loadHistory().catch(() => undefined));
 
   interface Listed {
     id: string;
@@ -332,6 +341,12 @@
           <div class="ls-field"><label class="lab" for="tn-id">Its id</label><input id="tn-id" class="ls-text" placeholder="a-short-id" bind:value={newId} autocomplete="off" spellcheck="false" /></div>
           <HaloButton label="Record it" size="small" solid={!refused && !!newTitle.trim() && !!newId.trim()} cmd={lineFor('task declare', recordWords)} disabledReason={refused ?? (!newTitle.trim() ? 'say what needs doing' : !newId.trim() ? 'give it an id' : undefined)} onpress={() => void record()} />
         </form>
+      </section>
+
+      <section class="pblock" aria-labelledby="drc">
+        <h2 class="ls-zone" id="drc">Recent conversations</h2>
+        <!-- This project's, from the history Sessions keeps; the rest are there. -->
+        <ConversationList conversations={studio.conversations.filter((one) => one.project === shown!.id).slice(0, 5)} label={`Recent conversations in ${shown.id}`} onchanges={onresume} inProject />
       </section>
 
       <section class="pblock" aria-labelledby="dhl">

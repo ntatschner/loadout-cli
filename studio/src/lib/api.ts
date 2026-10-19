@@ -197,6 +197,93 @@ export const sessions = {
   },
 };
 
+/* ---------- past conversations, and resuming one ---------- */
+
+/** What a conversation's launch was given, where the agent's hook filed it under one. */
+export interface LaunchedFor {
+  launch: string;
+  task: string | null;
+  taskId: string | null;
+  mode: string | null;
+  profile: string | null;
+  worktree: string | null;
+}
+
+/** A conversation from either agent's own history, as 'loadout sessions' lists it. */
+export interface Conversation {
+  agent: string;
+  id: string;
+  title: string;
+  project: string | null;
+  registered: boolean;
+  directory: string;
+  branch: string | null;
+  lastActive: string;
+  /** Null where there is no link: nothing is carried over, and nothing is guessed. */
+  launchedFor: LaunchedFor | null;
+  /** none, elsewhere, or hosted:<session id>. */
+  running: string;
+}
+
+/** A session an earlier daemon hosted, ended when it stopped. */
+export interface LostSession {
+  id: string;
+  endedAt: string;
+  agentSession: string;
+  conversation: Conversation | null;
+}
+
+export interface Resume {
+  agentSession: string;
+  agent?: string;
+  /** The conversation's own folder, to register first; the daemon refuses any other. */
+  registerFolder?: string;
+  confirmRunning?: boolean;
+  /** The lost session this carries on, to stop offering once it starts. */
+  lost?: string;
+  /** Carry nothing over: the sheet's fields are the whole of what it reopens with. */
+  fresh?: boolean;
+}
+
+/** What a resume came to: started, or a question the page asks before trying again. */
+export type Resumed =
+  | { started: Session }
+  | { conflict: 'hosted'; session: string }
+  | { conflict: 'elsewhere' }
+  | { conflict: 'unregistered'; directory: string };
+
+export const conversations = {
+  list: (filter: { project?: string; agent?: string; limit?: number } = {}) => {
+    const query = new URLSearchParams();
+
+    for (const [key, value] of Object.entries(filter)) {
+      if (value !== undefined && value !== '') {
+        query.set(key, String(value));
+      }
+    }
+
+    const text = query.toString();
+
+    return call<Conversation[]>('GET', `/api/v1/history${text ? `?${text}` : ''}`);
+  },
+  lost: () => call<LostSession[]>('GET', '/api/v1/history/lost'),
+  forget: (id: string) => call<void>('DELETE', `/api/v1/history/lost/${encodeURIComponent(id)}`),
+  /** Starts a hosted 'loadout resume'. The launch sheet's fields, where sent, are what it changes. */
+  async resume(resume: Resume, sheet: Partial<Launch> = {}): Promise<Resumed> {
+    const response = await send('POST', '/api/v1/sessions', { ...sheet, resume });
+
+    if (response.status === 409) {
+      return (await response.json()) as Resumed;
+    }
+
+    if (!response.ok) {
+      throw new Refused(reasonOf(await response.text()) || `Resuming answered ${response.status}.`, response.status);
+    }
+
+    return { started: (await response.json()) as Session };
+  },
+};
+
 /** The WebSocket address of a session's terminal, on this page's own host. */
 export function terminalAddress(session: Session): string {
   const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';

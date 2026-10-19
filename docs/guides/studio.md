@@ -167,6 +167,51 @@ loadout resume --last --project <project>
 A session that was running when the daemon stopped shows as **lost**, with the
 same command, for a week afterwards.
 
+### Pick an old conversation back up
+
+**Sessions** has a **History** of every conversation from both agents, newest
+first, whether Studio started it or you did in a terminal. You can narrow it to
+one agent or one project, and each project's own page shows its five most
+recent. Each row says what carries over if you resume it: the task, mode,
+profile and worktree it was launched with.
+
+**Resume** opens it in a new terminal here, running `loadout resume`, so it's
+exactly what the same command does in a terminal. **Resume with changes…**
+opens the launch sheet filled in with what would carry over. What's in the
+sheet when you press Resume is the whole of what it reopens with, so choosing
+no task or the main checkout there means that.
+
+Only a conversation whose launch is on record carries anything over. Loadout
+files each Claude Code conversation it launches under that launch as it starts,
+and older conversations, ones you started outside Loadout, and Codex ones say
+**nothing carried over** rather than having a guess made for them. A guess is
+what resume used to do, and when two sessions overlapped it gave one the
+other's task.
+
+A few things are asked before anything starts:
+
+- **Already open in Studio**: the row says **Open** and takes you to its
+  terminal rather than starting a second copy.
+- **Looks to be running elsewhere**: its launch is still going, or it was
+  written to in the last five minutes. Studio asks before resuming it, because
+  a second copy writes to the same conversation without seeing the first's
+  turns.
+- **Not a project**: a conversation from a folder Loadout doesn't know offers
+  **Register and resume**. It names the folder first, then registers it as
+  `loadout project add` would. It can only ever register the folder that
+  conversation ran in.
+
+A team node's conversation isn't in the history. Take one over from its run's
+page, where you can see what it was doing.
+
+When the daemon restarts, the sessions it was hosting end with it. The next
+time you open Sessions, a panel lists the ones you can carry on, each with
+**Resume** and **Not this one**. **Resume all** says how many agents it will
+start, and which ones, before it starts any. Nothing restarts by itself,
+because each one starts an agent, and an agent costs money. You may not want
+them all back. A session that ended before its agent's first reply isn't
+offered, because there was nothing to carry on.
+
 ### 7. Make it yours
 
 **Settings → Appearance** has four themes, four accents, three densities and
