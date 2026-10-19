@@ -80,7 +80,9 @@
 | `loadout commands` | List everything the launcher can do, grouped by what it is for |
 | `loadout list` | List registered projects |
 | `loadout running` | The sessions running now, and how long each has been quiet |
+| `loadout find <query>` | Search tasks, ideas, sessions, team runs and projects at once, grouped, each with the command that shows it. Takes the [list query](#filtering-and-sorting-a-list): `kind:task state:open login` searches only open tasks. A query starting with a minus goes as `--query=` |
 | `loadout task list\|declare\|remove` | Record what is being worked on, and check it against the repository. `--global` is the list for what belongs to no project yet |
+| `loadout task list --filter <query> --sort <fields>` | Keep and order the list with the same query syntax Studio uses, described under [Filtering and sorting a list](#filtering-and-sorting-a-list) |
 | `loadout task move <id> --to <project>` | Move a task put on the wrong project, or `--to-global` to the workspace-wide list. It keeps its id, state and note, and an accepted plan goes with it. The list it left shows where it went, and `task list` on the new one says where it came from |
 | `loadout idea move <id> --to <project>` | The same for an idea, with its questions, answers and plan. Not while a round on it is running |
 | `loadout idea add\|list\|show\|remove` | Drop an idea in, on a project or the workspace-wide list, to be fleshed out later |
@@ -169,6 +171,52 @@ you script against it: `loadout` with no arguments and nowhere to draw exits
 It used to exit 11. Nothing had gone wrong, though, and package validators,
 which run exactly that, read the 11 as a broken install. A command asked to do
 something only a person can, such as a manual team run, still exits 11.
+
+## Filtering and sorting a list
+
+Every list takes one query, written on one line:
+
+```sh
+loadout task list --filter "state:doing,open login" --sort=-updated
+```
+
+`state:doing,open` is a field term, and the commas mean any of them. A minus in
+front leaves those out instead, so `-state:done,dropped` hides finished work.
+Words without a colon are looked for in every text field, and a quoted phrase
+is looked for whole. Quote a word with a colon in it, such as a URL, to search
+for it as text. `sort:updated` sorts oldest first and `sort:-updated` newest
+first. Several fields, with commas between, break ties in turn.
+
+Dates take an age or a day. `updated:<7d` is under a week old, `updated:>7d`
+older than that, and a bare `updated:7d` means within the week. `h`, `d` and
+`w` count hours, days and weeks. `updated:>=2026-10-01` is that day or after,
+and a bare day is that day only, in UTC.
+
+A task can be filtered on `id`, `title`, `state`, `kind`, `by`, `updated` and
+`note`. A field it doesn't have is refused, and the refusal names the ones it
+does, the same words in Studio and the terminal. Without `--filter`, done and
+dropped tasks are hidden, as they always were, and `--all` shows them. A
+`--filter` replaces that default rather than adding to it, so a filter that
+names done work finds it.
+
+A query that starts with a minus goes as `--filter=-state:open`, and a
+descending sort as `--sort=-updated`. Given with a space, the command line
+reads the minus as the start of another option and refuses it.
+
+A filter you set in Studio is saved for that list, as the config key
+`studio-query-tasks`, and it's what the list opens with next time, in Studio
+and in the terminal. `loadout task list` uses it when it writes for a person,
+and says so on its first line. With `--json` it is left alone unless you add
+`--saved`, so a script gets the same list whoever last changed a filter on a
+screen. `--filter` or `--all` sets it aside for that run. To set it by hand:
+
+```sh
+loadout config set studio-query-tasks --value=-state:done,dropped
+```
+
+`--value=` is there for the minus, the same as `--filter=`. Setting it to an
+empty value puts the list back to its default. A cleared filter isn't
+remembered for the same reason: an empty value and no value are one setting.
 
 ## Editors
 

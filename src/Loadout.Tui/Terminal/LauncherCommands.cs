@@ -25,6 +25,9 @@ internal static class LauncherCommands
     /// <summary>Reopens a previous conversation.</summary>
     internal const string Resume = "resume";
 
+    /// <summary>Searches tasks, ideas, sessions, team runs and projects at once.</summary>
+    internal const string Find = "find";
+
     /// <summary>
     /// Starts a session. The sheet collects; the command launches, so a screen
     /// launch and a typed one are the same launch.

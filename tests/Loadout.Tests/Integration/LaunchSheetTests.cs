@@ -277,6 +277,27 @@ public sealed class LaunchSheetTests
         Built.Chosen.TaskId.Should().Be("flaky-release");
     }
 
+    [Theory]
+    [InlineData("prune-memory", TaskState.Open)]
+    [InlineData("shipped", TaskState.Done)]
+    public void Opened_from_a_task_the_sheet_opens_on_it_even_one_the_record_would_not_offer(string id, TaskState state)
+    {
+        // Done work is left off the sheet's list, but Start with options on a
+        // done task is somebody asking for another session on it.
+        var choices = WithTasks(
+            Declared("flaky-release", "fix the flaky release check", TaskState.Doing),
+            Declared("prune-memory", "prune the narrative memory topics", TaskState.Open));
+        var chosen = Declared(id, id == "shipped" ? "shipped the thing" : "prune the narrative memory topics", state);
+
+        using var session = TuiSession.Start(app => Built = new LaunchOptionsDialog(
+            Project(), ["claude"], app, Sources(choices: choices), TimeSpan.Zero, chosen));
+
+        Press(ButtonNamed(Built, "Launch"), Key.Enter);
+
+        Built.Chosen!.TaskId.Should().Be(id, "the task it was opened from, not what is being worked on");
+        Rows(TaskList(Built)).Count(row => row.Contains(chosen.Title)).Should().Be(1, "offered once, whether or not the record lists it");
+    }
+
     [Fact]
     public void With_nothing_being_worked_on_the_sheet_opens_on_no_task()
     {

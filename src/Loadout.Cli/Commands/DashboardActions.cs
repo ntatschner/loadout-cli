@@ -1,6 +1,7 @@
 using System.Globalization;
 using Loadout.Cli.Infrastructure;
 using Loadout.Core.Instructions;
+using Loadout.Core.Lists;
 using Loadout.Core.Projects;
 using Loadout.Core.Teams;
 using Loadout.Core.Teams.Daemon;
@@ -96,6 +97,11 @@ internal static partial class DashboardActions
             "studio-halo" or "studio-layout-lens" or "studio-layout-map" or "studio-theme" or "studio-accent"
                 or "studio-density" or "studio-motion" or "studio-idle-after"
                 => ("config set", [change.What, change.Value ?? string.Empty]),
+
+            // A list's saved query, which can start with a minus, so it goes
+            // as --value= where the command line cannot take it for an option.
+            _ when ListViews.All.Any(view => view.Key == change.What)
+                => ("config set", [change.What, $"--value={change.Value ?? string.Empty}"]),
 
             // A remedy is one team's, and the command refuses a name without
             // the team it belongs to. Left out when the page sent none, so the

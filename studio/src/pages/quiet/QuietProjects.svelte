@@ -14,10 +14,10 @@
   import type { Finding } from '../../lib/health';
   import type { QuietItem } from '../../lib/modes';
   import { studio } from '../../lib/state.svelte';
-  import { declareWords, type Task } from '../../lib/tasks';
+  import { declareWords, type Chosen, type Task } from '../../lib/tasks';
   import { toasts } from '../../lib/toasts.svelte';
 
-  let { rest, onlaunch }: { rest: string[]; onlaunch: () => void } = $props();
+  let { rest, onlaunch }: { rest: string[]; onlaunch: (chosen?: Chosen) => void } = $props();
 
   interface Drifted {
     project: string;

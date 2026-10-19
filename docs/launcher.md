@@ -177,6 +177,11 @@ it, and a test asserts the two agree. Commands are grouped by what they're for,
 and the ones that change files say so — a palette that looks identical for
 reading settings and rewriting them is asking you to remember which is which.
 
+Type two characters or more and the last row searches everything for them:
+tasks, ideas, sessions, team runs and projects, as `loadout find` does. It's
+last so that typing a command's name still lands on the command, and a word no
+command matches still finds something.
+
 The few that can't work from a menu are listed with the reason rather than
 hidden: `completion` writes a script you pipe somewhere, `statusline` gets run
 by the agent several times a minute. Something you can't find looks exactly like
@@ -262,6 +267,30 @@ way.
 A run starting while you're watching arrives at the top and pushes the rest
 down. The cursor stays on the run it was on, by identifier rather than by
 position, so the list moving doesn't move you onto something else.
+
+## Working on a project's tasks
+
+*Work on its tasks…* in the Project menu lists the selected project's tasks,
+open first, then doing and blocked, and starts a session on one.
+
+| Key | Does |
+|---|---|
+| **Enter** | Start a session on the task, the same as `loadout launch <project> --task-id <id>` |
+| **o** | Start with options: the launch sheet, opened on this task |
+| **/** | Filter, with the query `task list --filter` takes, such as `state:open login` |
+| **s** | Change the order: newest first, by id, by title, then back to the default |
+| **a** | Show everything, done and dropped included |
+| **r** | Back to the default, which hides done and dropped work |
+
+An open or blocked task moves to doing as the session starts. One already doing
+or done keeps its state, and a dropped one can't be started at all, so **Enter**
+on it does nothing. The line under the list says what the filter is and how
+many tasks it's hiding, and a filter the list can't take is refused there in
+the same words Studio and the terminal use.
+
+The list opens with the filter saved for it, which is the one you last set in
+Studio. Changing it here doesn't save it. To change the saved one from a
+terminal, use `loadout config set studio-query-tasks --value=<query>`.
 
 ## Working on ideas
 

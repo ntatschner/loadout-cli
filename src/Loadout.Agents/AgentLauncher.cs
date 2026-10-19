@@ -353,7 +353,7 @@ public sealed class AgentLauncher : IAgentLauncher
 
             var startedAt = DateTimeOffset.UtcNow;
 
-            launchId = await RecordStartAsync(launch, request, ct).ConfigureAwait(false);
+            launchId = await RecordStartAsync(launch, request, warnings, ct).ConfigureAwait(false);
 
             // The agent inherits this process's terminal, so Ctrl+C, resize and
             // signals reach it directly and its exit code comes back unaltered
@@ -461,7 +461,7 @@ public sealed class AgentLauncher : IAgentLauncher
 
         RestoreTranscript(launch, request);
 
-        var launchId = await RecordStartAsync(launch, request, ct).ConfigureAwait(false);
+        var launchId = await RecordStartAsync(launch, request, warnings, ct).ConfigureAwait(false);
 
         var started = await _processes.StartPipedAsync(
             new ProcessRequest(
@@ -965,8 +965,9 @@ public sealed class AgentLauncher : IAgentLauncher
     }
 
     /// <summary>
-    /// Writes the three records a starting session leaves: the ledger line,
-    /// the loaded specialists for the status line, and the running entry.
+    /// Writes the records a starting session leaves: the ledger line, the
+    /// loaded specialists for the status line, the running entry, and, for a
+    /// session on a recorded task not yet under way, the task moved to doing.
     /// </summary>
     /// <remarks>
     /// Written before the agent starts rather than after it exits. A session
@@ -974,7 +975,7 @@ public sealed class AgentLauncher : IAgentLauncher
     /// the one worth having a record of, and after the fact there is nothing
     /// left to write one from.
     /// </remarks>
-    private async Task<string> RecordStartAsync(Prepared launch, LaunchRequest request, CancellationToken ct)
+    private async Task<string> RecordStartAsync(Prepared launch, LaunchRequest request, List<string> warnings, CancellationToken ct)
     {
         var launchId = await _ledger.RecordStartAsync(
             new Core.Sessions.NewLaunch(
@@ -1016,7 +1017,59 @@ public sealed class AgentLauncher : IAgentLauncher
                 launch.Context.WorkingDirectory),
             ct).ConfigureAwait(false);
 
+        if (launch.Plan.TaskId is { Length: > 0 } taskId
+            && await StartTaskAsync(launch.Project.Entry.Slug, taskId, ct).ConfigureAwait(false) is { } unmoved)
+        {
+            warnings.Add(unmoved);
+        }
+
         return launchId;
+    }
+
+    /// <summary>
+    /// Moves a task a session is starting on to doing, when it was open or
+    /// blocked. Work already doing, or done, keeps its state: the session is
+    /// another one on it. Returns why it could not be moved, or null.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Here, where every surface's launch passes, rather than in each screen.
+    /// Studio and the TUI both start a session as this command, so a task
+    /// started from either, or from a terminal, moves the same way, and none
+    /// of them can do it in a different order. In a terminal the launch
+    /// returns only when the agent exits, so a screen moving it afterwards
+    /// would record work as starting once it had stopped.
+    /// </para>
+    /// <para>
+    /// After the checks that refuse a launch, so a launch turned down for a
+    /// wrong id, a dropped task or anything else before this point moves
+    /// nothing. An agent that then fails to start leaves it doing, as it
+    /// leaves the ledger saying a session began.
+    /// </para>
+    /// </remarks>
+    private async Task<string?> StartTaskAsync(string slug, string taskId, CancellationToken ct)
+    {
+        if (_tasks is null)
+        {
+            return null;
+        }
+
+        var listed = await _tasks.ListAsync(slug, ct).ConfigureAwait(false);
+        var task = listed.Succeeded
+            ? listed.Value!.FirstOrDefault(t => string.Equals(t.Id, taskId, StringComparison.OrdinalIgnoreCase))
+            : null;
+
+        if (task is not { State: Models.Tasks.TaskState.Open or Models.Tasks.TaskState.Blocked })
+        {
+            return null;
+        }
+
+        var moved = await _tasks.DeclareAsync(slug, task.Id, Models.Tasks.TaskState.Doing, Environment.UserName, ct: ct)
+            .ConfigureAwait(false);
+
+        return moved.Succeeded
+            ? null
+            : $"The session started, but '{task.Id}' was not moved to doing: {moved.Error}";
     }
 
     /// <summary>
@@ -1117,6 +1170,12 @@ public sealed class AgentLauncher : IAgentLauncher
     /// a session about one task and got a session about nothing would not find
     /// out until the agent did not know what they meant.
     /// </para>
+    /// <para>
+    /// A done task can have another session on it, and keeps its state: work
+    /// is often picked up again after it was called finished, and making
+    /// somebody reopen it first would record it as unfinished when it may not
+    /// be. A dropped task is refused, being work somebody chose not to do.
+    /// </para>
     /// </remarks>
     private async Task<OperationResult<LaunchRequest>> LinkTaskAsync(
         string slug,
@@ -1152,7 +1211,7 @@ public sealed class AgentLauncher : IAgentLauncher
                 ExitCode.InvalidArguments);
         }
 
-        if (task.State is Models.Tasks.TaskState.Done or Models.Tasks.TaskState.Dropped)
+        if (task.State is Models.Tasks.TaskState.Dropped)
         {
             return OperationResult<LaunchRequest>.Fail(
                 $"The task '{task.Id}' is {task.State.ToString().ToLowerInvariant()}. "

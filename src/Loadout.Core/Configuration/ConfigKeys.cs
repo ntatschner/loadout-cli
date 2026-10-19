@@ -523,6 +523,30 @@ public static class ConfigKeys
             Group: Groups.Studio,
             WhenUnset: "10"),
 
+        // One per list that keeps its query. Checked against that list's
+        // fields before it is kept, since the key can be set by hand, and
+        // stored written out the way the list writes it.
+        .. Lists.ListViews.All.Select(view => new Entry(
+            view.Key,
+            $"The query the {view.Name} list opens with, in Studio, the TUI and with --saved",
+            (c, _) => Lists.ListViews.Saved(c.Studio, view.Name) ?? string.Empty,
+            (c, _, v) =>
+            {
+                if (v.Trim().Length == 0)
+                {
+                    c.Studio.Views.Remove(view.Name);
+
+                    return;
+                }
+
+                var normal = Lists.ListViews.Normalise(view, v);
+                c.Studio.Views[view.Name] = normal.Succeeded ? normal.Value! : throw new FormatException(normal.Error);
+            },
+            false,
+            Sample: "state:doing,open sort:-updated",
+            Group: Groups.Studio,
+            WhenUnset: view.DefaultQuery.Length > 0 ? view.DefaultQuery : "everything, in the default order")),
+
         new("dashboard",
             "Which page the daemon's address opens: classic, or studio for the preview app",
             (_, m) => m.Teams.Dashboard ?? string.Empty,

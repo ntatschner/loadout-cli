@@ -83,8 +83,15 @@ A recorded task goes by its id, which `loadout task list` shows:
 loadout starstats --task-id upload-retries --mode investigate
 ```
 
-An id the project doesn't have, or one that's done or dropped, stops the launch
-rather than starting a session about nothing.
+An open or blocked task moves to doing as the session starts, so the list says
+what's being worked on without you declaring it as well. One already doing
+stays where it is. An id the project doesn't have, or one that's dropped, stops
+the launch rather than starting a session about nothing, and moves nothing. A
+done task can have another session on it, and stays done: work often comes back
+after it was called finished, and reopening it just to look again would record
+it as unfinished when it may not be. The same happens however the session is
+started: from here, from Studio's **Start**, or from **Work on its tasks…** in
+the launcher's Project menu.
 
 To see the whole launch described without starting anything:
 

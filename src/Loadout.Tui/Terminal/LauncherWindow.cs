@@ -363,6 +363,11 @@ internal sealed class LauncherWindow : Window
                 new MenuItem { Title = "_Launch...", Action = LaunchSelected },
                 new MenuItem
                 {
+                    Title = "_Work on its tasks...",
+                    Action = () => WithSelected(p => Close(new LauncherIntent(LauncherAction.Tasks, p))),
+                },
+                new MenuItem
+                {
                     Title = "_Resume a session",
                     Action = () => WithSelected(p => Close(new LauncherIntent(LauncherAction.Resume, p))),
                 },

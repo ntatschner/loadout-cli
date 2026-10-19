@@ -234,9 +234,24 @@ public sealed class ConfigSetCommand : AsyncCommand<ConfigSetCommand.Settings>
         [Description("Setting name, for example default-agent.")]
         public string Key { get; init; } = string.Empty;
 
-        [CommandArgument(1, "<value>")]
+        [CommandArgument(1, "[value]")]
         [Description("New value.")]
-        public string Value { get; init; } = string.Empty;
+        public string? Given { get; init; }
+
+        [CommandOption("--value <VALUE>")]
+        [Description("The new value as an option, for one starting with a minus, which the command line would otherwise read as an option: --value=-state:done.")]
+        public string? Option { get; init; }
+
+        /// <summary>The value, whichever way it was given.</summary>
+        public string Value => Option ?? Given ?? string.Empty;
+
+        /// <inheritdoc />
+        public override ValidationResult Validate() =>
+            Given is not null && Option is not null
+                ? ValidationResult.Error("Give the value once: after the key, or as --value, not both.")
+                : Given is null && Option is null
+                    ? ValidationResult.Error("Command 'set' is missing required argument 'value'.")
+                    : base.Validate();
     }
 
     /// <inheritdoc />
