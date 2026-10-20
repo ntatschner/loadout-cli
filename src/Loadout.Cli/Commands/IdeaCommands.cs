@@ -236,6 +236,14 @@ public sealed class IdeaListCommand : AsyncCommand<IdeaListCommand.Settings>
         [CommandOption("--saved")]
         [Description("Use the query saved for this list in Studio. Without --json it is used anyway; --filter sets it aside.")]
         public bool Saved { get; init; }
+
+        [CommandOption("--limit <COUNT>")]
+        [Description("How many ideas a page holds. Without it the whole list is one page.")]
+        public int? Limit { get; init; }
+
+        [CommandOption("--page <NUMBER>")]
+        [Description("Which page to show, counted from 1. Needs --limit.")]
+        public int Page { get; init; } = 1;
     }
 
     /// <inheritdoc />
@@ -270,7 +278,15 @@ public sealed class IdeaListCommand : AsyncCommand<IdeaListCommand.Settings>
             return output.Fail(queried);
         }
 
-        var shown = queried.Value!.ToList();
+        var paged = Core.Lists.ListPages.Of(queried.Value!, settings.Page, settings.Limit);
+
+        if (paged.Failed)
+        {
+            return output.Fail(paged);
+        }
+
+        var page = paged.Value!;
+        var shown = page.Items.ToList();
 
         // Ideas that are work on another list now, shown under the list they
         // left: that is where somebody would look for one and not find it.
@@ -302,6 +318,10 @@ public sealed class IdeaListCommand : AsyncCommand<IdeaListCommand.Settings>
                 }),
                 movedOn = gone.Select(one => new { id = one.Id, title = one.Title, from = one.From, to = one.Where, at = one.Utc }),
                 recorded = placed.Count,
+                total = page.Total,
+                page = page.Page,
+                pages = page.Pages,
+                limit = page.Limit,
                 query = ListOptions.Shape(Core.Lists.IdeaFields.All, filter, settings.Sort),
             });
 
@@ -350,6 +370,13 @@ public sealed class IdeaListCommand : AsyncCommand<IdeaListCommand.Settings>
             }
         }
 
+        if (page.Limit is not null)
+        {
+            output.WriteLine(
+                $"[dim]Page {page.Page} of {page.Pages}, {page.Total} in all."
+                + (page.More ? $" --page {page.Page + 1} for the next.[/]" : "[/]"));
+        }
+
         return CommandOutput.Success();
     }
 }
@@ -357,8 +384,15 @@ public sealed class IdeaListCommand : AsyncCommand<IdeaListCommand.Settings>
 /// <summary>Shows one idea in full.</summary>
 [Description("Show an idea: the questions, the answers, the plan and what you made of each piece.")]
 [CommandMeta(CommandCategory.Workspace, Intent = "idea show plan questions options layers")]
-public sealed class IdeaShowCommand : AsyncCommand<IdeaSettings>
+public sealed class IdeaShowCommand : AsyncCommand<IdeaShowCommand.Settings>
 {
+    public sealed class Settings : IdeaSettings
+    {
+        [CommandOption("--full")]
+        [Description("Every option's detail, pros and cons, not only the chosen option's detail.")]
+        public bool Full { get; init; }
+    }
+
     private readonly IIdeaService _ideas;
     private readonly IProjectService _projects;
     private readonly IAnsiConsole _console;
@@ -373,7 +407,7 @@ public sealed class IdeaShowCommand : AsyncCommand<IdeaSettings>
     /// <inheritdoc />
     public override async Task<int> ExecuteAsync(
         CommandContext context,
-        IdeaSettings settings,
+        Settings settings,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(settings);
@@ -393,13 +427,14 @@ public sealed class IdeaShowCommand : AsyncCommand<IdeaSettings>
             return output.Fail(read);
         }
 
+        // JSON carries every option in full already; --full is for reading.
         if (output.IsJson)
         {
             output.WriteJson(IdeaView.Of(place.Value!, read.Value!));
         }
         else
         {
-            IdeaView.Write(output, place.Value!, read.Value!);
+            IdeaView.Write(output, place.Value!, read.Value!, settings.Full);
         }
 
         return CommandOutput.Success();

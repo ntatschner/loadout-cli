@@ -246,6 +246,7 @@ public sealed class TaskBatchTests : IDisposable
                 var type when type == typeof(TaskKind) => TaskKind.Idea,
                 var type when type == typeof(DateTimeOffset) => DateTimeOffset.UnixEpoch.AddDays(3),
                 var type when type == typeof(TaskMove) => new TaskMove { From = "elsewhere", Utc = DateTimeOffset.UnixEpoch },
+                var type when type == typeof(List<TaskEvent>) => new List<TaskEvent> { new() { State = TaskState.Doing, By = "someone", Utc = DateTimeOffset.UnixEpoch, Reason = "why" } },
                 var type => throw new InvalidOperationException($"TaskItem.{property.Name} is a {type.Name}, which this test does not know how to set."),
             });
         }
@@ -254,6 +255,8 @@ public sealed class TaskBatchTests : IDisposable
 
         copy.Should().BeEquivalentTo(item);
         copy.Moved.Should().NotBeSameAs(item.Moved);
+        copy.History.Should().NotBeSameAs(item.History);
+        copy.History[0].Should().NotBeSameAs(item.History[0]);
     }
 
     [Fact]

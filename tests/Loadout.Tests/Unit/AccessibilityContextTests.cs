@@ -93,8 +93,13 @@ public sealed class AccessibilityContextTests : IDisposable
             string? title = null,
             string? note = null,
             CancellationToken ct = default,
-            Loadout.Models.Tasks.TaskKind? kind = null) =>
+            Loadout.Models.Tasks.TaskKind? kind = null,
+            string? detail = null) =>
             throw new NotSupportedException("compiling a context declares nothing");
+
+        public Task<OperationResult<IReadOnlyList<Loadout.Core.Tasks.TaskShortened>>> ShortenTitlesAsync(
+            string? projectSlug, string by, bool apply, CancellationToken ct = default) =>
+            throw new NotSupportedException("compiling a context shortens nothing");
 
         public Task<OperationResult> RemoveAsync(string? projectSlug, string id, CancellationToken ct = default) =>
             throw new NotSupportedException("compiling a context removes nothing");

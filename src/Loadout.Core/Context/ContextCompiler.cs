@@ -461,6 +461,18 @@ internal sealed class ContextCompiler : IContextCompiler
             }
         }
 
+        // In full, because this is the work the session was started for, and
+        // the detail is where a long description went when its title was cut.
+        if (task.Detail is { Length: > 0 } detail)
+        {
+            section.AppendLine();
+
+            foreach (var line in detail.Split('\n'))
+            {
+                section.AppendLine($"  {line.TrimEnd()}".TrimEnd());
+            }
+        }
+
         builder.AppendLine();
         builder.AppendLine("## This session's task");
         builder.AppendLine();
@@ -559,6 +571,15 @@ internal sealed class ContextCompiler : IContextCompiler
                 {
                     section.AppendLine($"  {line.TrimEnd()}");
                 }
+            }
+
+            // Pointed to rather than copied. Every open task's full
+            // description, on every launch, is the cost the split into title
+            // and detail exists to avoid; the session can ask for the one it
+            // needs.
+            if (task.Detail.Length > 0)
+            {
+                section.AppendLine($"  The full description: `loadout task show {task.Id}`.");
             }
         }
 

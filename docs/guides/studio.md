@@ -439,7 +439,14 @@ chosen.
 An idea moved from another list says where from. One that became a task on
 another project, by accepting it or moving it later, is listed under **Became
 tasks elsewhere** with a link to it, so an accepted idea doesn't just vanish
-from the shelf.
+from the shelf. An accepted idea's workbench links to the board its task is on,
+and that task's **Details and history** links back to the idea, worked out
+from the id the two share.
+
+Dropped ideas fold away under a count at the foot of the shelf, as done and
+dropped tasks do on a board. The shelf reads up to 200 ideas, the newest
+first, and says so if there are more; narrow it with the search box, or read
+them all a page at a time with `loadout idea list --limit`.
 
 **Notes kept elsewhere** takes notes you've pasted from somewhere else and has an
 agent split them into ideas and tasks. Nothing is recorded until you apply the
@@ -478,7 +485,29 @@ task already chosen, for a different agent, mode or working tree. Every task
 but a dropped one can be started. A task moved
 here says where it came from, and one moved away is listed under **Moved
 away** with a link to where it is now, apart from the columns and counted in
-none of them. Below that is
+none of them.
+
+A card is kept to its title, two lines at most, and a line about it, so a
+column stays readable however much was written about a task. **History**, or
+**Details and history** when there's a full description, opens the task in
+full: its detail, its note, and every change of state with who said so and
+when, the same as `loadout task show <id>`. A task recorded before there was a
+history shows only its latest claim, and says so. The dialog puts the task in the page's address,
+so a reload reopens it and the address can be shared on this machine, even
+for a task on a later page of a board.
+
+**Every task, across projects**, linked under the wall, is one board of every
+project's list and the workspace-wide one, the same as `loadout task list
+--every-list`. Each card names its project, and its moves and **Start** are on
+that project's list. Narrow it with `project:` and a slug, or `project:global`.
+It's read 50 tasks at a time, with **Previous page** and **Next page** at the
+foot, and goes back to the first page if the one you were on has gone. Open
+work fills the first pages, so a column with nothing in it says *None on this
+page*: what's doing or blocked may be on the next. Its
+query isn't saved, because a filter naming one project would empty every
+other project's board.
+
+Below the board is
 everything else you can do to it, each folded until you open it: open it in the
 editor or its folder, onboard it, change what every session gets, relocate it,
 link it. Each shows the command it runs, and what's shown is read again once it

@@ -728,6 +728,7 @@ public static class Program
             task.AddCommand<TaskListCommand>("list");
             task.AddCommand<TaskShowCommand>("show");
             task.AddCommand<TaskDeclareCommand>("declare");
+            task.AddCommand<TaskShortenCommand>("shorten");
             task.AddCommand<TaskMoveCommand>("move");
             task.AddCommand<TaskRemoveCommand>("remove");
             task.AddCommand<TaskApplyCommand>("apply");

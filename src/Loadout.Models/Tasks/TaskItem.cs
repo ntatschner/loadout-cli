@@ -77,8 +77,26 @@ public sealed class TaskItem
     /// <summary>When they said it.</summary>
     public DateTimeOffset DeclaredUtc { get; set; }
 
-    /// <summary>Anything worth adding. Empty is normal.</summary>
+    /// <summary>Anything worth adding, as a short aside. Empty is normal.</summary>
     public string Note { get; set; } = string.Empty;
+
+    /// <summary>The full description, opened on demand. Empty is normal.</summary>
+    /// <remarks>
+    /// Apart from the title so that a list can be read at a glance. A title
+    /// that is really a paragraph swamps every row it appears in, and cutting
+    /// it on screen loses the end of it; here nothing is lost and nothing has
+    /// to be cut.
+    /// </remarks>
+    public string Detail { get; set; } = string.Empty;
+
+    /// <summary>Every state declared for it, oldest first, added to and never rewritten.</summary>
+    /// <remarks>
+    /// <see cref="DeclaredBy"/> and <see cref="DeclaredUtc"/> stay as the latest
+    /// claim, so whatever reads only those keeps working. A task recorded before
+    /// this existed starts with none, and gains its last claim as the first
+    /// entry when it is next declared.
+    /// </remarks>
+    public List<TaskEvent> History { get; set; } = [];
 
     /// <summary>The list it was on before it was last moved, or null when it never has been.</summary>
     /// <remarks>
@@ -88,6 +106,21 @@ public sealed class TaskItem
     /// old list shows is worked out from this, and lasts as long as the task.
     /// </remarks>
     public TaskMove? Moved { get; set; }
+}
+
+/// <summary>One dated, attributed claim about where a task stood.</summary>
+public sealed class TaskEvent
+{
+    public TaskState State { get; set; } = TaskState.Open;
+
+    /// <summary>Who said so.</summary>
+    public string By { get; set; } = string.Empty;
+
+    /// <summary>When they said it.</summary>
+    public DateTimeOffset Utc { get; set; }
+
+    /// <summary>What else changed, when something did. Empty is normal.</summary>
+    public string Reason { get; set; } = string.Empty;
 }
 
 /// <summary>Where a task came from, and when it left.</summary>

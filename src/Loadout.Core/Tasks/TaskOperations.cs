@@ -28,6 +28,7 @@ namespace Loadout.Core.Tasks;
 /// <param name="By">Who is saying so.</param>
 /// <param name="To">For move, the project it goes to, or null for the workspace-wide list.</param>
 /// <param name="Revision">The revision of the list this was made from, or null to not check.</param>
+/// <param name="Detail">The full description. Left as it was when null; an empty one clears it.</param>
 public sealed record TaskOperation(
     string Op,
     string? Project = null,
@@ -38,7 +39,8 @@ public sealed record TaskOperation(
     TaskKind? Kind = null,
     string By = "",
     string? To = null,
-    string? Revision = null)
+    string? Revision = null,
+    string? Detail = null)
 {
     public const string Add = "add";
     public const string Declare = "declare";
@@ -113,7 +115,7 @@ public static class TaskOperations
 
     /// <summary>
     /// Reads a JSON array of operations, each as
-    /// <c>{"op", "project", "id", "state", "title", "note", "kind", "to", "revision"}</c>.
+    /// <c>{"op", "project", "id", "state", "title", "note", "detail", "kind", "to", "revision"}</c>.
     /// </summary>
     /// <param name="json">The array.</param>
     /// <param name="project">The list an operation naming none is made on, or null for the workspace-wide one.</param>
@@ -219,6 +221,14 @@ public static class TaskOperations
             by = task.DeclaredBy,
             declared = task.DeclaredUtc,
             note = task.Note,
+            detail = task.Detail,
+            history = task.History.Select(one => new
+            {
+                state = one.State.ToString().ToLowerInvariant(),
+                by = one.By,
+                at = one.Utc,
+                reason = one.Reason.Length > 0 ? one.Reason : null,
+            }),
             moved = task.Moved is { } moved
                 ? new { from = moved.From.Length > 0 ? moved.From : null, at = moved.Utc }
                 : null,
@@ -313,10 +323,11 @@ public static class TaskOperations
             kind,
             Text("by") is { Length: > 0 } named ? named : by,
             List(Text("to")),
-            Text("revision") is { Length: > 0 } revision ? revision : null));
+            Text("revision") is { Length: > 0 } revision ? revision : null,
+            Text("detail")));
     }
 
-    private static readonly string[] Known = ["op", "project", "id", "state", "title", "note", "kind", "by", "to", "revision"];
+    private static readonly string[] Known = ["op", "project", "id", "state", "title", "note", "detail", "kind", "by", "to", "revision"];
 
     private static OperationResult<IReadOnlyList<TaskOperation>> Refused(string why) =>
         OperationResult<IReadOnlyList<TaskOperation>>.Fail(why, ExitCode.InvalidArguments);

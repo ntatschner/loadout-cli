@@ -22,7 +22,7 @@
   import { router } from '../lib/router.svelte';
   import { acceptWords, gaps, needsChoice, nextStop, sendAnswers, stateWord, stopTarget, stopWords, type DumpItem, type Question } from '../lib/ideas';
   import { studio } from '../lib/state.svelte';
-  import { listHref, movedSaid, whereSaid } from '../lib/tasks';
+  import { ideaHref, listHref, movedSaid, whereSaid } from '../lib/tasks';
   import { toasts } from '../lib/toasts.svelte';
 
   /** focused: just the workbench, for an idea opened on its own in Minimal. */
@@ -102,9 +102,14 @@
     items: DumpItem[];
   }
 
-  // The shelf, through 'idea list' with the shared query.
+  // The shelf, through 'idea list' with the shared query. Read whole up to a
+  // limit no workspace is near, rather than a page at a time, because the
+  // counts above it and each idea's failure card are worked out from what it
+  // holds; past the limit it says so and the search box narrows it.
+  const SHELF_LIMIT = 200;
   const shelf = new CommandList<Listed>('idea list', 'ideas', 'ideas');
   const ideas = $derived(shelf.items);
+  const beyond = $derived(((shelf.read?.total as number | undefined) ?? 0) - (ideas?.length ?? 0));
   const movedOn = $derived((shelf.read?.movedOn as MovedOn[] | undefined) ?? []);
   let idea = $state<Idea | null>(null);
   let dumps = $state<Dump[] | null>(null);
@@ -139,7 +144,7 @@
   }
 
   async function loadList() {
-    await untrack(() => shelf.load([]));
+    await untrack(() => shelf.load(['--limit', String(SHELF_LIMIT)]));
   }
 
   async function loadIdea(name: string, words: string[]) {
@@ -263,10 +268,14 @@
     }
   }
 
+  // Dropped ideas fold away under the groups, as done and dropped tasks do
+  // on a board: kept, and out of the way.
+  const dropped = $derived((ideas ?? []).filter((one) => one.state === 'dropped'));
+
   const groups = $derived.by(() => {
     const by = new Map<string, Listed[]>();
 
-    for (const one of ideas ?? []) {
+    for (const one of (ideas ?? []).filter((idea) => idea.state !== 'dropped')) {
       const key = one.project ?? '~';
       by.set(key, [...(by.get(key) ?? []), one]);
     }
@@ -274,7 +283,7 @@
     return [...by.entries()];
   });
 
-  const href = (one: Listed) => `#ideas/${encodeURIComponent(one.project ?? '~')}/${encodeURIComponent(one.id)}`;
+  const href = (one: Listed) => ideaHref(one.project, one.id);
   const listFixed = $derived<Record<string, string | boolean>>(project ? { '--project': project } : { '--global': true });
   const waiting = $derived((ideas ?? []).filter((one) => stateWord(one) === 'waiting for you').length);
   const shaping = $derived((ideas ?? []).filter((one) => one.stage !== 'accepted').length);
@@ -395,6 +404,26 @@
       </ul>
     {/each}
 
+    {#if dropped.length}
+      <details class="dropped">
+        <summary>{dropped.length} dropped</summary>
+        <ul>
+          {#each dropped as one (`${one.project ?? '~'}/${one.id}`)}
+            <li>
+              <a href={href(one)} aria-current={!place && id === one.id && (one.project ?? null) === project ? 'page' : undefined}>
+                <span class="t">{one.title}</span>
+                <span class="x">{whereSaid(one.project)} · dropped</span>
+              </a>
+            </li>
+          {/each}
+        </ul>
+      </details>
+    {/if}
+
+    {#if beyond > 0}
+      <p class="calm">The newest {ideas?.length} are shown and {beyond} more are not. Narrow the shelf with the search box, or see them all with <code>loadout idea list</code>.</p>
+    {/if}
+
     {#if movedOn.length}
       <h2 class="gh">Became tasks elsewhere</h2>
       <ul class="gone">
@@ -432,7 +461,7 @@
       <details class="asked"><summary>What was asked</summary><p>{idea.ask}</p></details>
 
       {#if idea.accepted}
-        <p class="accepted">Accepted onto <strong>{idea.accepted.project}</strong> by {idea.accepted.by}. The plan is at <code>{idea.accepted.plan}</code>.</p>
+        <p class="accepted">Accepted onto <strong>{idea.accepted.project}</strong> by {idea.accepted.by}. The plan is at <code>{idea.accepted.plan}</code>. <a href={listHref(idea.accepted.project)}>Its task is on {whereSaid(idea.accepted.project)}'s board</a>.</p>
       {/if}
 
       {#if listed?.failure}

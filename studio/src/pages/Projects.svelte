@@ -14,11 +14,12 @@
   import ListToolbar from '../lib/components/ListToolbar.svelte';
   import ConversationList from '../lib/components/ConversationList.svelte';
   import TaskBoard from '../lib/components/TaskBoard.svelte';
+  import TaskDetail from '../lib/components/TaskDetail.svelte';
   import { CommandList } from '../lib/commandList.svelte';
-  import { TaskListView } from '../lib/taskList.svelte';
+  import { pageWords, TaskListView } from '../lib/taskList.svelte';
   import { commands, readJson, SignedOut, type Conversation } from '../lib/api';
   import { lineFor } from '../lib/commandLine';
-  import { declareWords, startWords, type Chosen, type Task } from '../lib/tasks';
+  import { declareWords, startWords, taskAt, taskParts, whereOf, type Chosen, type Task } from '../lib/tasks';
   import { router } from '../lib/router.svelte';
   import type { Finding } from '../lib/health';
   import { studio } from '../lib/state.svelte';
@@ -90,6 +91,12 @@
   // from its tasks, so no count includes one.
   const projectList = new TaskListView();
   const globalList = new TaskListView();
+  // Every list as one board, a page at a time. It keeps no saved query: one
+  // naming a project, saved for the shared view, would empty every other
+  // project's board.
+  const everyList = new TaskListView(null);
+  const EVERY_LIMIT = 50;
+  let everyPage = $state(1);
   let problem = $state<string | null>(null);
 
   // The tiles' counts, read once the wall is drawn: a tile without them shows none.
@@ -98,6 +105,17 @@
   let ideaCounts = $state<Record<string, number> | null>(null);
 
   const slug = $derived(rest[0] && !rest[0].startsWith('+') ? rest[0] : null);
+  // One task open over the place, from the address, so a reload or a link
+  // reopens it whichever page of a board it is on.
+  const reading = $derived(taskAt(rest));
+
+  function read(task: Task) {
+    router.replace('projects', ...taskParts(rest[0], { project: task.project ?? null, id: task.id }));
+  }
+
+  function closeRead() {
+    router.replace('projects', rest[0]);
+  }
   const place = $derived(rest[0]?.startsWith('+') ? rest[0].slice(1) : null);
   const refused = $derived(studio.watchOnly ? studio.watchOnlyReason : undefined);
 
@@ -168,6 +186,33 @@
     untrack(() => void globalList.load(['--global']));
   }
 
+  const everyWhere = (page: number) => ['--every-list', ...pageWords(page, EVERY_LIMIT)];
+
+  let everyAsked = 0;
+
+  async function loadEvery(page = untrack(() => everyPage)) {
+    const mine = ++everyAsked;
+
+    await untrack(() => everyList.load(everyWhere(page)));
+
+    // A later press has read since; what it read is what is shown.
+    if (mine !== everyAsked) {
+      return;
+    }
+
+    // A page that has gone, because tasks were finished or the list
+    // narrowed since it was read, is refused; the first page always exists.
+    if (everyList.error && page > 1) {
+      await loadEvery(1);
+
+      return;
+    }
+
+    // Only once the page has arrived, so the pager never names a page the
+    // board is not showing.
+    everyPage = page;
+  }
+
   $effect(() => {
     void loadList();
   });
@@ -188,6 +233,8 @@
   $effect(() => {
     if (place === 'tasks') {
       loadGlobal();
+    } else if (place === 'every') {
+      void loadEvery();
     } else if (place === 'workspace') {
       readJson<Workspace>('workspace status').then((read) => (workspace = read), fail);
     }
@@ -214,6 +261,8 @@
 
       if (place === 'tasks') {
         loadGlobal();
+      } else if (place === 'every') {
+        void loadEvery();
       }
     });
   });
@@ -260,9 +309,7 @@
   }
 
   /** Starts a session on a task, at once or through the launch sheet. */
-  async function start(task: Task, withOptions: boolean) {
-    const project = shown!.id;
-
+  async function start(task: Task, withOptions: boolean, project = shown!.id) {
     if (withOptions) {
       onlaunch({ project, id: task.id, title: task.title, state: task.state });
 
@@ -316,7 +363,7 @@
 {#if problem}<p class="offline" role="alert">{problem}</p>{/if}
 {#if wall.error}<p class="offline" role="alert">{wall.error}</p>{/if}
 
-<ListToolbar noun="projects" slash={!slug && place !== 'tasks'} query={wall.text} shape={wall.shape} shown={projects?.length ?? null} recorded={wall.recorded} problem={wall.problem} onchange={(query) => void wall.ask(query).then(() => wall.items && loadCounts(wall.items))} />
+<ListToolbar noun="projects" slash={!slug && place !== 'tasks' && place !== 'every'} query={wall.text} shape={wall.shape} shown={projects?.length ?? null} recorded={wall.recorded} problem={wall.problem} onchange={(query) => void wall.ask(query).then(() => wall.items && loadCounts(wall.items))} />
 
 <nav aria-label="Projects">
   <div class={['ls-pwall', picked ? 'compact' : ''].filter(Boolean).join(' ')}>
@@ -331,7 +378,7 @@
       <ProjectTile place={one.label} sub={one.sub} href={`#projects/+${one.key}`} picked={place === one.key} />
     {/each}
   </div>
-  <p class="ls-from">The same as <code>$ loadout project list</code> or <code>loadout list</code>. Also <a href="#projects/+tasks" aria-current={place === 'tasks' ? 'page' : undefined}>tasks for no project yet</a> and <a href="#projects/+workspace" aria-current={place === 'workspace' ? 'page' : undefined}>the workspace</a>.</p>
+  <p class="ls-from">The same as <code>$ loadout project list</code> or <code>loadout list</code>. Also <a href="#projects/+every" aria-current={place === 'every' ? 'page' : undefined}>every task, across projects</a>, <a href="#projects/+tasks" aria-current={place === 'tasks' ? 'page' : undefined}>tasks for no project yet</a> and <a href="#projects/+workspace" aria-current={place === 'workspace' ? 'page' : undefined}>the workspace</a>.</p>
 </nav>
 
 {#if slug && shown}
@@ -355,7 +402,7 @@
         <h2 class="ls-zone" id="dt">What is being worked on</h2>
         <ListToolbar noun="tasks" query={projectList.text} shape={projectList.shape} shown={projectList.tasks?.length ?? null} recorded={projectList.recorded} problem={projectList.problem} onchange={(query) => void projectList.ask(query)} />
         {#if projectList.tasks}
-          <TaskBoard tasks={projectList.tasks} away={projectList.away} project={shown.id} onstart={(task, withOptions) => void start(task, withOptions)} where={['--project', shown.id]} from={projectList.from} disabledReason={refused} ondeclare={(task, state) => void declare(projectList, task, state, ['--project', shown!.id])} />
+          <TaskBoard tasks={projectList.tasks} away={projectList.away} project={shown.id} onstart={(task, withOptions) => void start(task, withOptions)} where={['--project', shown.id]} onread={read} from={projectList.from} disabledReason={refused} ondeclare={(task, state) => void declare(projectList, task, state, ['--project', shown!.id])} />
         {:else}
           <p class="calm" role="status">Reading…</p>
         {/if}
@@ -442,7 +489,7 @@
       <p class="lead">The workspace-wide list, for work that does not belong to a project yet.</p>
       <ListToolbar noun="tasks" query={globalList.text} shape={globalList.shape} shown={globalList.tasks?.length ?? null} recorded={globalList.recorded} problem={globalList.problem} onchange={(query) => void globalList.ask(query)} />
       {#if globalList.tasks}
-        <TaskBoard tasks={globalList.tasks} away={globalList.away} where={['--global']} from={globalList.from} disabledReason={refused} ondeclare={(task, state) => void declare(globalList, task, state, ['--global'])} />
+        <TaskBoard tasks={globalList.tasks} away={globalList.away} where={['--global']} onread={read} from={globalList.from} disabledReason={refused} ondeclare={(task, state) => void declare(globalList, task, state, ['--global'])} />
       {:else}
         <p class="calm" role="status">Reading…</p>
       {/if}
@@ -450,6 +497,23 @@
         <CommandAction path="task declare" title="Record one" preset={{ '--global': true }} fixed={['--project', '--global']} label="Record it" />
         <CommandAction path="task move" title="Move one onto the project it belongs to" preset={{ '--global': true }} fixed={['--project', '--global', '--to-global']} label="Move it" />
       </div>
+    {:else if place === 'every'}
+      <div class="dhead"><h2>Every task, across projects</h2></div>
+      <p class="lead">Every project's list and the workspace-wide one, as one board. Narrow it to one with <code>project:</code> and its slug, or <code>project:global</code>.</p>
+      {#if everyList.error}<p class="offline" role="alert">{everyList.error}</p>{/if}
+      <ListToolbar noun="tasks" query={everyList.text} shape={everyList.shape} shown={everyList.total} recorded={everyList.recorded} problem={everyList.problem} onchange={(query) => { everyPage = 1; void everyList.ask(query, everyWhere(1)); }} />
+      {#if everyList.tasks}
+        <TaskBoard tasks={everyList.tasks} mixed paged={everyList.pages > 1} where={[]} onread={read} from={everyList.from} disabledReason={refused} onstart={(task, withOptions) => task.project && void start(task, withOptions, task.project)} ondeclare={(task, state) => void act('task declare', declareWords(task.id, state, whereOf(task.project)))} />
+        {#if everyList.pages > 1}
+          <nav class="ls-pager" aria-label="Pages of tasks">
+            <span role="status">Page {everyPage} of {everyList.pages}, {everyList.total} in all.</span>
+            <HaloButton label="Previous page" size="small" disabledReason={everyPage <= 1 ? 'This is the first page.' : undefined} onpress={() => void loadEvery(everyPage - 1)} />
+            <HaloButton label="Next page" size="small" disabledReason={everyPage >= everyList.pages ? 'This is the last page.' : undefined} onpress={() => void loadEvery(everyPage + 1)} />
+          </nav>
+        {/if}
+      {:else if !everyList.error}
+        <p class="calm" role="status">Reading…</p>
+      {/if}
     {:else if place === 'workspace'}
       <div class="dhead"><h2>The workspace</h2></div>
       <p class="lead">Where projects, memory, specialists and tasks are kept, and synced between your machines.</p>
@@ -468,6 +532,12 @@
       </div>
     {/if}
   </section>
+{/if}
+
+{#if reading}
+  {#key `${reading.project ?? '~'}/${reading.id}`}
+    <TaskDetail task={{ id: reading.id, title: '', state: '', project: reading.project }} onclose={closeRead} />
+  {/key}
 {/if}
 
 {#if forgetting && shown}

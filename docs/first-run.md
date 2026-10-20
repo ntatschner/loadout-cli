@@ -362,8 +362,24 @@ calls itself an index rather than an authority.
 loadout task declare add-the-widget doing --title "the widget nobody has added"
 loadout task list
 loadout task list --all
+loadout task show add-the-widget
 loadout task remove add-the-widget
 ```
+
+A title is one line, 72 characters at most, the same as a git subject line,
+because it's what every list shows and a paragraph in it swamps the rest. The
+description goes in `--detail`, which `task show` prints and lists leave out. A
+title over the limit is shortened at a word with the whole of it kept at the
+start of the detail, so nothing you wrote is lost, and you're told so at the
+time. `loadout task shorten --every-list` does the same once for titles written
+before the limit; try it with `--dry-run` first.
+
+`task show` also prints the task's history: every change of state, with who
+said it and when. A task recorded before the history existed starts with its
+latest claim, because nothing earlier was kept. One thing to know if you run
+more than one version of Loadout: a launcher older than this one reads the new
+fields without trouble, but if it writes the list, by declaring a task on it,
+it saves the list without them.
 
 Kept apart from memory because the two answer different questions. A memory is
 something that **stays** true — how this machine behaves, what broke last time.

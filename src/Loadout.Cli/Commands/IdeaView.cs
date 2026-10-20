@@ -80,7 +80,15 @@ internal static class IdeaView
 
     public static object Of(IdeaPlace place, IdeaRecord record) => IdeaJson.Of(place, record);
 
-    public static void Write(CommandOutput output, IdeaPlace place, IdeaRecord record)
+    /// <param name="output">Where it is written.</param>
+    /// <param name="place">Which idea, on which list.</param>
+    /// <param name="record">The idea.</param>
+    /// <param name="full">
+    /// Every option's detail, pros and cons, rather than the chosen option's
+    /// detail only: what Studio shows, at the length a terminal can make
+    /// hard to read.
+    /// </param>
+    public static void Write(CommandOutput output, IdeaPlace place, IdeaRecord record, bool full = false)
     {
         var stage = IdeaWork.StageOf(record);
 
@@ -157,11 +165,34 @@ internal static class IdeaView
                         $"     {(chosen ? "[green]>[/]" : " ")} {option.Id,-4} {Markup.Escape(option.Title)}"
                         + (option.Recommended ? " [dim](recommended)[/]" : string.Empty));
 
-                    if (chosen && option.Detail.Length > 0)
+                    if ((chosen || full) && option.Detail.Length > 0)
                     {
                         output.WriteLine($"            [dim]{Markup.Escape(option.Detail)}[/]");
                     }
+
+                    if (full)
+                    {
+                        foreach (var pro in option.Pros)
+                        {
+                            output.WriteLine($"            [green]+[/] {Markup.Escape(pro)}");
+                        }
+
+                        foreach (var con in option.Cons)
+                        {
+                            output.WriteLine($"            [red]-[/] {Markup.Escape(con)}");
+                        }
+                    }
                 }
+            }
+
+            // Said only when there is something --full would add, so a plan
+            // with nothing more to it does not point at an empty flag.
+            if (!full && plan.Layers.Any(layer => layer.Options.Any(option =>
+                    option.Pros.Count > 0 || option.Cons.Count > 0 || (option.Detail.Length > 0 && option.Id != layer.Chosen))))
+            {
+                output.WriteBlankLine();
+                output.WriteLine(
+                    $"[dim]Every option's detail, pros and cons: loadout idea show {Markup.Escape(place.Id)} --full[/]");
             }
 
             if (plan.Additions.Count > 0)

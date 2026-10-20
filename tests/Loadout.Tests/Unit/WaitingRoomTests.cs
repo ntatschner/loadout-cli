@@ -227,7 +227,12 @@ public sealed class WaitingRoomTests
 
         public Task<OperationResult<TaskItem>> DeclareAsync(
             string? projectSlug, string id, TaskState state, string declaredBy,
-            string? title = null, string? note = null, CancellationToken ct = default, TaskKind? kind = null) =>
+            string? title = null, string? note = null, CancellationToken ct = default, TaskKind? kind = null,
+            string? detail = null) =>
+            throw new NotSupportedException("Nothing here writes.");
+
+        public Task<OperationResult<IReadOnlyList<TaskShortened>>> ShortenTitlesAsync(
+            string? projectSlug, string by, bool apply, CancellationToken ct = default) =>
             throw new NotSupportedException("Nothing here writes.");
 
         public Task<OperationResult> RemoveAsync(

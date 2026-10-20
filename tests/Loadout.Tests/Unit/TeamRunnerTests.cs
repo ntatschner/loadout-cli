@@ -3776,12 +3776,17 @@ public sealed partial class TeamRunnerTests : IDisposable
 
         public Task<OperationResult<TaskItem>> DeclareAsync(
             string? projectSlug, string id, TaskState state, string declaredBy,
-            string? title = null, string? note = null, CancellationToken ct = default, TaskKind? kind = null)
+            string? title = null, string? note = null, CancellationToken ct = default, TaskKind? kind = null,
+            string? detail = null)
         {
             Declared.Add((projectSlug, id, state, declaredBy, title, note));
 
             return Task.FromResult(OperationResult<TaskItem>.Ok(new TaskItem { Id = id, State = state }));
         }
+
+        public Task<OperationResult<IReadOnlyList<Loadout.Core.Tasks.TaskShortened>>> ShortenTitlesAsync(
+            string? projectSlug, string by, bool apply, CancellationToken ct = default) =>
+            throw new NotSupportedException("a team run shortens no title");
 
         public Task<OperationResult<IReadOnlyList<TaskItem>>> ListAsync(string? projectSlug, CancellationToken ct = default) =>
             Task.FromResult(OperationResult<IReadOnlyList<TaskItem>>.Ok([]));

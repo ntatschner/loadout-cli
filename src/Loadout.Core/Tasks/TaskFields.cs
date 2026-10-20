@@ -21,10 +21,39 @@ public static class TaskFields
     /// <summary>The fields with nothing counted, so runs and launches read zero: for checking a query, not applying one that counts.</summary>
     public static readonly ListFields<TaskItem> All = For(TaskActivity.None);
 
-    /// <summary>The fields, with runs and launches read from what was counted.</summary>
-    public static ListFields<TaskItem> For(TaskActivity activity)
+    /// <summary>What the project field reads for the workspace-wide list, which has no slug.</summary>
+    public const string WorkspaceWide = "global";
+
+    /// <summary>The fields for one list, with runs and launches read from what was counted.</summary>
+    /// <param name="activity">What was started on the list's tasks.</param>
+    /// <param name="project">The list's project, by slug, or null for the workspace-wide list.</param>
+    public static ListFields<TaskItem> For(TaskActivity activity, string? project = null)
     {
         ArgumentNullException.ThrowIfNull(activity);
+
+        return For(task => activity.RunsOf(task.Id), task => activity.LaunchesOf(task.Id), _ => project);
+    }
+
+    /// <summary>
+    /// The fields, for tasks that may come from more than one list: each
+    /// task's counts and project read by what is given.
+    /// </summary>
+    /// <param name="runs">Team runs started for a task.</param>
+    /// <param name="launches">Sessions launched on a task.</param>
+    /// <param name="project">The list a task is on, by slug, or null for the workspace-wide list.</param>
+    /// <remarks>
+    /// Counts are read through the task rather than by its id alone, because
+    /// two projects can each have a task with the same id, and a run on one
+    /// is no run on the other.
+    /// </remarks>
+    public static ListFields<TaskItem> For(
+        Func<TaskItem, int> runs,
+        Func<TaskItem, int> launches,
+        Func<TaskItem, string?> project)
+    {
+        ArgumentNullException.ThrowIfNull(runs);
+        ArgumentNullException.ThrowIfNull(launches);
+        ArgumentNullException.ThrowIfNull(project);
 
         return new(
             "tasks",
@@ -33,13 +62,15 @@ public static class TaskFields
                 ListField<TaskItem>.Text("title", "what the task is", task => task.Title),
                 ListField<TaskItem>.Choice("state", "where it stands", States, task => task.State.ToString().ToLowerInvariant()),
                 ListField<TaskItem>.Choice("kind", "work, or an idea", ["task", "idea"], task => task.Kind.ToString().ToLowerInvariant()),
+                ListField<TaskItem>.Text("project", $"the project whose list it is on, or {WorkspaceWide} for the workspace-wide one", task => project(task) ?? WorkspaceWide),
                 ListField<TaskItem>.Text("by", "who declared it last", task => task.DeclaredBy),
                 ListField<TaskItem>.Date("updated", "when it was last declared", task => task.DeclaredUtc),
                 ListField<TaskItem>.Text("note", "the note beside it", task => task.Note),
-                ListField<TaskItem>.Number("runs", "team runs started for it", task => activity.RunsOf(task.Id)),
-                ListField<TaskItem>.Number("launches", "sessions launched on it", task => activity.LaunchesOf(task.Id)),
+                ListField<TaskItem>.Text("detail", "the full description", task => task.Detail),
+                ListField<TaskItem>.Number("runs", "team runs started for it", task => runs(task)),
+                ListField<TaskItem>.Number("launches", "sessions launched on it", task => launches(task)),
             ],
-            [new ListSort("state", false), new ListSort("id", false)],
+            [new ListSort("state", false), new ListSort("project", false), new ListSort("id", false)],
             DefaultQuery);
     }
 

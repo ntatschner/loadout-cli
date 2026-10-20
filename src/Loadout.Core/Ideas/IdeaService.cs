@@ -209,7 +209,7 @@ internal sealed partial class IdeaService : IIdeaService
     /// <summary>The piece that names the whole plan rather than one part of it.</summary>
     public const string WholePlan = IdeaWork.WholePlan;
 
-    private const int TitleLength = 80;
+    private const int TitleLength = TaskTitles.Length;
 
     private readonly IWorkspaceManager _workspace;
     private readonly ITaskService _tasks;
@@ -752,9 +752,10 @@ internal sealed partial class IdeaService : IIdeaService
             TaskState.Open,
             by,
             record.Plan!.Title is { Length: > 0 } title ? Shorten(title) : null,
-            $"{Shorten(record.Plan.Understanding, 400)} The plan is at {planPath}.",
+            $"The plan is at {planPath}.",
             ct,
-            TaskKind.Task).ConfigureAwait(false);
+            TaskKind.Task,
+            record.Plan.Understanding.Trim()).ConfigureAwait(false);
 
         if (declared.Failed)
         {
