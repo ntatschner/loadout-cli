@@ -45,6 +45,22 @@ public sealed class TaskListQueryContractTests
     }
 
     [BuiltCliFact]
+    public async Task The_list_carries_the_revision_a_change_from_it_names_and_a_change_moves_it()
+    {
+        using var loadout = await WithWorkspace();
+        await Declare(loadout, "a", "open", "A");
+
+        var listed = (await List(loadout)).GetProperty("revision").GetString();
+        var shown = await loadout.RunAsync("task", "show", "a", "--global", "--json");
+
+        listed.Should().NotBeNullOrEmpty();
+        shown.Json().GetProperty("revision").GetString().Should().Be(listed, "one list, one revision, however it is read");
+
+        await Declare(loadout, "a", "doing", "A");
+        (await List(loadout)).GetProperty("revision").GetString().Should().NotBe(listed);
+    }
+
+    [BuiltCliFact]
     public async Task A_field_tasks_do_not_have_is_refused_naming_the_ones_they_do()
     {
         using var loadout = await WithWorkspace();

@@ -29,8 +29,8 @@ export class Refused extends Error {
   }
 }
 
-async function send(method: string, path: string, body?: unknown): Promise<Response> {
-  const headers: Record<string, string> = {};
+async function send(method: string, path: string, body?: unknown, extra: Record<string, string> = {}): Promise<Response> {
+  const headers: Record<string, string> = { ...extra };
 
   if (printed) {
     headers['X-Loadout-Token'] = printed;
@@ -68,8 +68,8 @@ function reasonOf(body: string): string {
   }
 }
 
-async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const response = await send(method, path, body);
+async function call<T>(method: string, path: string, body?: unknown, headers: Record<string, string> = {}): Promise<T> {
+  const response = await send(method, path, body, headers);
 
   if (!response.ok) {
     throw new Refused(reasonOf(await response.text()) || `${method} ${path} answered ${response.status}.`, response.status);
@@ -471,7 +471,31 @@ export interface TaskList {
 export const tasks = {
   list: () => call<{ lists: TaskList[]; team: string }>('GET', '/api/tasks'),
   act: (body: Record<string, unknown>) => call<string>('POST', '/api/tasks', body),
+  /**
+   * PATCH /api/v1/projects/{list}/tasks/{id}: changes what the body names and
+   * answers with the task as it now stands. Given the list's revision, it is
+   * refused with 409 when the list has changed since that read.
+   */
+  change: (list: string, id: string, body: Record<string, string>, revision: string | null) =>
+    call<{ project: string | null; revision: string | null; task: WireTask }>(
+      'PATCH',
+      `/api/v1/projects/${encodeURIComponent(list)}/tasks/${encodeURIComponent(id)}`,
+      body,
+      revision ? { 'If-Match': `"${revision}"` } : {},
+    ),
 };
+
+/** A task as the routes write it. */
+export interface WireTask {
+  id: string;
+  title: string;
+  state: string;
+  kind: string;
+  by: string;
+  declared: string;
+  note: string;
+  moved: { from: string | null; at: string } | null;
+}
 
 /* ---------- memory ---------- */
 

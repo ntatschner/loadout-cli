@@ -165,13 +165,16 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
         var project = resolution.Value;
         var slug = project?.Entry.Slug;
 
-        var listed = await _tasks
-            .ListAsync(slug, cancellationToken).ConfigureAwait(false);
+        // Read with its revision, which the JSON carries so a page or a
+        // script changing a task from this read can say which read it was.
+        var read = await _tasks.ReadAsync(slug, cancellationToken).ConfigureAwait(false);
 
-        if (listed.Failed)
+        if (read.Failed)
         {
-            return output.Fail(listed);
+            return output.Fail(read);
         }
+
+        var listed = OperationResult<IReadOnlyList<TaskItem>>.Ok(read.Value!.Items);
 
         var now = _time.GetUtcNow();
 
@@ -235,6 +238,7 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
                     at = one.Task.Moved!.Utc,
                 }),
                 recorded = listed.Value!.Count,
+                revision = read.Value.Revision,
                 query = fields.Shape(query.Value!),
                 unsupported = disagreements.Select(d => new { task = d.TaskId, d.Detail }),
                 suggested = Suggestions.Compose(Work(shown), disagreements)
