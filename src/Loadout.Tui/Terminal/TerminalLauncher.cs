@@ -690,7 +690,7 @@ public sealed class TerminalLauncher : ILauncherTui
         {
             application.InitLegibly(_reading.Profile);
 
-            using var window = new TasksWindow(project.Entry.Name, listed.Value!, query, application, activity: activity);
+            using var window = new TasksWindow(project.Entry.Name, listed.Value!, query, application, activity: activity, project: project.Entry.Slug);
 
             await application.RunAsync(window, ct).ConfigureAwait(false);
 

@@ -74,6 +74,7 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
     private readonly TimeProvider _time;
     private readonly IConfigurationService _configuration;
     private readonly ITaskActivityReader _activity;
+    private readonly Core.Workspace.IWorkspaceManager _workspace;
 
     public TaskListCommand(
         ITaskService tasks,
@@ -82,7 +83,8 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
         IAnsiConsole console,
         TimeProvider time,
         IConfigurationService configuration,
-        ITaskActivityReader activity)
+        ITaskActivityReader activity,
+        Core.Workspace.IWorkspaceManager workspace)
     {
         _tasks = tasks;
         _projects = projects;
@@ -91,6 +93,7 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
         _time = time;
         _configuration = configuration;
         _activity = activity;
+        _workspace = workspace;
     }
 
     public sealed class Settings : TaskSettings
@@ -110,6 +113,18 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
         [CommandOption("--saved")]
         [Description("Use the query saved for the task list in Studio or the TUI. Without --json it is used anyway; --filter or --all set it aside.")]
         public bool Saved { get; init; }
+
+        [CommandOption("--every-list")]
+        [Description("Every project's tasks and the workspace-wide list's, as one list. Narrow it with --filter project:<slug>.")]
+        public bool EveryList { get; init; }
+
+        [CommandOption("--limit <COUNT>")]
+        [Description("How many tasks a page holds. Without it the whole list is one page.")]
+        public int? Limit { get; init; }
+
+        [CommandOption("--page <NUMBER>")]
+        [Description("Which page to show, counted from 1. Needs --limit.")]
+        public int Page { get; init; } = 1;
     }
 
     /// <summary>
@@ -146,11 +161,11 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
 
         var output = new CommandOutput(_console, settings);
 
-        var resolution = await settings.ListAsync(_projects, cancellationToken).ConfigureAwait(false);
+        var lists = await ListsAsync(settings, cancellationToken).ConfigureAwait(false);
 
-        if (resolution.Failed)
+        if (lists.Failed)
         {
-            return output.Fail(resolution);
+            return output.Fail(lists);
         }
 
         var saved = ListViews.Saved(
@@ -162,17 +177,31 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
             return output.Fail(query);
         }
 
-        var project = resolution.Value;
+        // One project, when the list is one project's: only then is there a
+        // repository to check claims against, or a list for tasks to have left.
+        var project = lists.Value!.Project;
         var slug = project?.Entry.Slug;
 
-        var listed = await _tasks
-            .ListAsync(slug, cancellationToken).ConfigureAwait(false);
+        // Which list each task came from, by the task itself rather than its
+        // id, since two projects can each have a task by the same id.
+        var where = new Dictionary<TaskItem, string?>(ReferenceEqualityComparer.Instance);
 
-        if (listed.Failed)
+        foreach (var list in lists.Value.Slugs)
         {
-            return output.Fail(listed);
+            var read = await _tasks.ListAsync(list, cancellationToken).ConfigureAwait(false);
+
+            if (read.Failed)
+            {
+                return output.Fail(read);
+            }
+
+            foreach (var item in read.Value!)
+            {
+                where[item] = list;
+            }
         }
 
+        var recorded = where.Keys.ToList();
         var now = _time.GetUtcNow();
 
         // Only work is checked against the repository and turned into
@@ -180,29 +209,52 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
         // something to start, so both would be noise about it.
         var disagreements = project is null
             ? []
-            : await CheckAsync(project, Work(listed.Value!), now, cancellationToken).ConfigureAwait(false);
+            : await CheckAsync(project, Work(recorded), now, cancellationToken).ConfigureAwait(false);
 
         // Runs and launches are counted from the run journal and the launch
         // ledger, read whole, so only for a query that names one.
-        var counted = slug is not null && TaskFields.Counts(query.Value!);
-        var activity = counted
-            ? await _activity.ReadAsync(slug!, cancellationToken).ConfigureAwait(false)
-            : TaskActivity.None;
-        var fields = TaskFields.For(activity);
+        var counted = TaskFields.Counts(query.Value!);
+        var activity = new Dictionary<string, TaskActivity>(StringComparer.OrdinalIgnoreCase);
 
-        var applied = fields.Apply(query.Value!, listed.Value!, now);
+        if (counted)
+        {
+            foreach (var list in lists.Value.Slugs.OfType<string>())
+            {
+                activity[list] = await _activity.ReadAsync(list, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        TaskActivity ActivityOf(TaskItem item) =>
+            where[item] is { } list && activity.TryGetValue(list, out var found) ? found : TaskActivity.None;
+
+        var fields = TaskFields.For(
+            item => ActivityOf(item).RunsOf(item.Id),
+            item => ActivityOf(item).LaunchesOf(item.Id),
+            item => where[item]);
+
+        var applied = fields.Apply(query.Value!, recorded, now);
 
         if (applied.Failed)
         {
             return output.Fail(applied);
         }
 
-        var shown = applied.Value!;
+        var paged = ListPages.Of(applied.Value!, settings.Page, settings.Limit);
+
+        if (paged.Failed)
+        {
+            return output.Fail(paged);
+        }
+
+        var page = paged.Value!;
+        var shown = page.Items;
+        var every = settings.EveryList;
 
         // What left this list, kept apart from its tasks so nothing counting
-        // them, or suggesting what to do next, ever counts one of these.
-        var moved = await _tasks.MovedAsync(cancellationToken).ConfigureAwait(false);
-        var away = moved.Succeeded
+        // them, or suggesting what to do next, ever counts one of these. Not
+        // for every list at once, where each task is shown on the list it is on.
+        var moved = every ? null : await _tasks.MovedAsync(cancellationToken).ConfigureAwait(false);
+        var away = moved is { Succeeded: true }
             ? [.. moved.Value!
                 .Where(one => one.Left(slug))
                 .Where(one => settings.All || one.Task.State is not (TaskState.Done or TaskState.Dropped))
@@ -219,12 +271,14 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
                     item.Title,
                     state = item.State.ToString().ToLowerInvariant(),
                     kind = item.Kind.ToString().ToLowerInvariant(),
+                    project = where[item],
                     item.DeclaredBy,
                     declared = item.DeclaredUtc,
                     item.Note,
+                    hasDetail = item.Detail.Length > 0,
                     moved = TaskTrace.Json(item.Moved),
-                    runs = counted ? activity.RunsOf(item.Id) : (int?)null,
-                    launches = counted ? activity.LaunchesOf(item.Id) : (int?)null,
+                    runs = counted ? ActivityOf(item).RunsOf(item.Id) : (int?)null,
+                    launches = counted ? ActivityOf(item).LaunchesOf(item.Id) : (int?)null,
                 }),
                 movedAway = away.Select(one => new
                 {
@@ -234,10 +288,14 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
                     to = one.Where,
                     at = one.Task.Moved!.Utc,
                 }),
-                recorded = listed.Value!.Count,
+                recorded = recorded.Count,
+                total = page.Total,
+                page = page.Page,
+                pages = page.Pages,
+                limit = page.Limit,
                 query = fields.Shape(query.Value!),
                 unsupported = disagreements.Select(d => new { task = d.TaskId, d.Detail }),
-                suggested = Suggestions.Compose(Work(shown), disagreements)
+                suggested = Suggestions.Compose(Work(applied.Value!), disagreements)
                     .Select(s => new { s.Text, source = s.Source.ToString().ToLowerInvariant() }),
             });
 
@@ -251,32 +309,42 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
             output.WriteLine($"[dim]Filtered by the saved query {Markup.Escape(saved)}. --all or --filter sets it aside.[/]");
         }
 
+        var described = every ? "No list" : TaskPaths.Describe(slug);
+
         if (shown.Count == 0)
         {
-            output.WriteLine(listed.Value!.Count == 0
-                ? $"[dim]{Markup.Escape(TaskPaths.Describe(slug))} has no tasks recorded.[/]"
+            output.WriteLine(recorded.Count == 0
+                ? $"[dim]{Markup.Escape(described)} has no tasks recorded.[/]"
                 : settings.Filter is { Length: > 0 } filter
-                    ? $"[dim]Nothing matches {Markup.Escape(filter)}. {listed.Value!.Count} recorded in total; without --filter, the open ones show.[/]"
-                    : $"[dim]Nothing open. {listed.Value!.Count} recorded in total; --all shows them.[/]");
+                    ? $"[dim]Nothing matches {Markup.Escape(filter)}. {recorded.Count} recorded in total; without --filter, the open ones show.[/]"
+                    : $"[dim]Nothing open. {recorded.Count} recorded in total; --all shows them.[/]");
 
             TaskTrace.Write(output, away);
 
             return CommandOutput.Success();
         }
 
+        var rows = new TaskRows(
+            _console.Profile.Out.IsTerminal ? _console.Profile.Width : null,
+            every ? shown.Select(item => where[item]) : null);
+
         foreach (var item in shown)
         {
-            output.WriteLine(
-                $"{Markup.Escape(item.Id),-22} "
-                + $"{State(item.State),-9} "
-                + (item.Kind == TaskKind.Idea ? "[blue]idea[/] " : string.Empty)
-                + $"{Markup.Escape(item.Title)}");
+            output.WriteLine(rows.Line(item, where[item]));
 
             output.WriteLine(
                 $"  [dim]{Markup.Escape(item.DeclaredBy.Length > 0 ? item.DeclaredBy : "nobody named")}"
                 + $", {item.DeclaredUtc:yyyy-MM-dd}"
                 + (item.Moved is { } came ? $" · {Markup.Escape(TaskTrace.From(came))}" : string.Empty)
+                + (item.Detail.Length > 0 ? " · more with task show" : string.Empty)
                 + "[/]");
+        }
+
+        if (page.Limit is not null)
+        {
+            output.WriteLine(
+                $"[dim]Page {page.Page} of {page.Pages}, {page.Total} in all."
+                + (page.More ? $" --page {page.Page + 1} for the next.[/]" : "[/]"));
         }
 
         TaskTrace.Write(output, away);
@@ -301,7 +369,7 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
                 + "unsupported; it can never say one is wrong.[/]");
         }
 
-        var suggested = Suggestions.Compose(Work(shown), disagreements);
+        var suggested = Suggestions.Compose(Work(applied.Value!), disagreements);
 
         if (suggested.Count > 0)
         {
@@ -320,14 +388,39 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
     private static List<TaskItem> Work(IEnumerable<TaskItem> items) =>
         [.. items.Where(item => item.Kind == TaskKind.Task)];
 
-    private static string State(TaskState state) => state switch
+    /// <summary>The lists to read: every one with --every-list, or the one the settings name.</summary>
+    private async Task<OperationResult<(Models.Projects.ProjectResolution? Project, IReadOnlyList<string?> Slugs)>> ListsAsync(
+        Settings settings,
+        CancellationToken ct)
     {
-        TaskState.Doing => "[green]doing[/]",
-        TaskState.Blocked => "[yellow]blocked[/]",
-        TaskState.Done => "[dim]done[/]",
-        TaskState.Dropped => "[dim]dropped[/]",
-        _ => "open",
-    };
+        if (!settings.EveryList)
+        {
+            var resolution = await settings.ListAsync(_projects, ct).ConfigureAwait(false);
+
+            return resolution.Succeeded
+                ? OperationResult<(Models.Projects.ProjectResolution?, IReadOnlyList<string?>)>.Ok(
+                    (resolution.Value, [resolution.Value?.Entry.Slug]))
+                : OperationResult<(Models.Projects.ProjectResolution?, IReadOnlyList<string?>)>.Fail(
+                    resolution.Error!, resolution.ExitCode);
+        }
+
+        if (settings.Project is { Length: > 0 } || settings.Global)
+        {
+            return OperationResult<(Models.Projects.ProjectResolution?, IReadOnlyList<string?>)>.Fail(
+                "--every-list already covers every list. Leave out --project and --global, or narrow it with --filter project:<slug>.",
+                ExitCode.InvalidArguments);
+        }
+
+        if (!_workspace.IsAvailable())
+        {
+            return OperationResult<(Models.Projects.ProjectResolution?, IReadOnlyList<string?>)>.Fail(
+                "There is no workspace on this machine, so there is nowhere to keep tasks.",
+                ExitCode.WorkspaceSyncFailed);
+        }
+
+        return OperationResult<(Models.Projects.ProjectResolution?, IReadOnlyList<string?>)>.Ok(
+            (null, TaskPaths.Lists(_workspace.LocalPath)));
+    }
 
     /// <summary>
     /// What the repository has to say about the claims.
@@ -361,6 +454,76 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
             ? TaskCorroboration.Check(tasks, commits.Value!, now)
             : [];
     }
+}
+
+/// <summary>A task list's first line per task, laid out to fit the terminal.</summary>
+/// <remarks>
+/// Columns are padded by what shows, not by the markup that colours it, so
+/// they line up. The title is cut only on a terminal: output going to a file
+/// or another program has no width to fit, and a cut title there would be
+/// text a script then reads as the title.
+/// </remarks>
+internal sealed class TaskRows
+{
+    private const int IdWidth = 22;
+    private const int StateWidth = 7;
+    private const int ProjectLimit = 16;
+
+    private readonly int? _width;
+    private readonly int _project;
+
+    /// <param name="width">The terminal's width, or null when there is no terminal.</param>
+    /// <param name="projects">Each row's project, when rows come from more than one list, or null for one list.</param>
+    public TaskRows(int? width, IEnumerable<string?>? projects)
+    {
+        _width = width;
+        _project = projects is null
+            ? 0
+            : Math.Min(ProjectLimit, projects.Select(one => (one ?? TaskFields.WorkspaceWide).Length).DefaultIfEmpty(0).Max());
+    }
+
+    /// <summary>The line for one task, as markup.</summary>
+    public string Line(TaskItem item, string? project)
+    {
+        var state = item.State.ToString().ToLowerInvariant();
+        var line = new System.Text.StringBuilder();
+
+        line.Append(Markup.Escape(item.Id.PadRight(IdWidth))).Append(' ');
+        line.Append(Coloured(item.State, state)).Append(new string(' ', Math.Max(0, StateWidth - state.Length))).Append(' ');
+
+        var used = Math.Max(IdWidth, item.Id.Length) + 1 + Math.Max(StateWidth, state.Length) + 1;
+
+        if (_project > 0)
+        {
+            var named = Fit(project ?? TaskFields.WorkspaceWide, _project).PadRight(_project);
+
+            line.Append("[dim]").Append(Markup.Escape(named)).Append("[/] ");
+            used += _project + 1;
+        }
+
+        if (item.Kind == TaskKind.Idea)
+        {
+            line.Append("[blue]idea[/] ");
+            used += 5;
+        }
+
+        // Less room than this and the title is left to wrap rather than cut
+        // to a word or two, which would say nothing.
+        var title = _width is { } width && width - used >= 20 ? Fit(item.Title, width - used) : item.Title;
+
+        return line.Append(Markup.Escape(title)).ToString();
+    }
+
+    private static string Fit(string text, int room) =>
+        text.Length <= room ? text : text[..(room - 1)].TrimEnd() + "…";
+
+    private static string Coloured(TaskState state, string said) => state switch
+    {
+        TaskState.Doing => $"[green]{said}[/]",
+        TaskState.Blocked => $"[yellow]{said}[/]",
+        TaskState.Done or TaskState.Dropped => $"[dim]{said}[/]",
+        _ => said,
+    };
 }
 
 /// <summary>Records where a task stands.</summary>

@@ -87,6 +87,8 @@
 | `loadout task show <id>` | One task in full: its detail, note, and every change of state with who said so and when. Lists leave the detail out |
 | `loadout task shorten` | Shorten titles written before the 72-character limit, keeping each one whole in its detail and noting it in the history. `--every-list` covers every project and the workspace-wide list; `--dry-run` names what it would change |
 | `loadout task list --filter <query> --sort <fields>` | Keep and order the list with the same query syntax Studio uses, described under [Filtering and sorting a list](#filtering-and-sorting-a-list) |
+| `loadout task list --every-list` | Every project's tasks and the workspace-wide list's, as one list, each row naming its project. Narrow it with `--filter project:<slug>`, or `project:global` for the workspace-wide list |
+| `loadout task list --limit <count> --page <number>` | Read a long list a page at a time. `--json` says how many there are in all and how many pages. On a terminal each row is cut to fit its width; output going to a file or a program is left whole |
 | `loadout task move <id> --to <project>` | Move a task put on the wrong project, or `--to-global` to the workspace-wide list. It keeps its id, state and note, and an accepted plan goes with it. The list it left shows where it went, and `task list` on the new one says where it came from |
 | `loadout idea move <id> --to <project>` | The same for an idea, with its questions, answers and plan. Not while a round on it is running |
 | `loadout idea add\|list\|show\|remove` | Drop an idea in, on a project or the workspace-wide list, to be fleshed out later |
@@ -197,8 +199,10 @@ older than that, and a bare `updated:7d` means within the week. `h`, `d` and
 `w` count hours, days and weeks. `updated:>=2026-10-01` is that day or after,
 and a bare day is that day only, in UTC.
 
-A task can be filtered on `id`, `title`, `state`, `kind`, `by`, `updated`,
-`note`, `runs` and `launches`. `runs` counts the team runs started for it and
+A task can be filtered on `id`, `title`, `state`, `kind`, `project`, `by`,
+`updated`, `note`, `detail`, `runs` and `launches`. A word with no field is
+looked for in the detail too, so a task is found by its full description and
+not only its title. `runs` counts the team runs started for it and
 `launches` the sessions started on it, so `sort:-launches` puts what you keep
 coming back to first. Counting them means reading every run and the whole
 launch ledger, so the list only does it when a query names one. A field it doesn't have is refused, and the refusal names the ones it
