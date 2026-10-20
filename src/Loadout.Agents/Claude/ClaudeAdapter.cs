@@ -490,21 +490,32 @@ public sealed class ClaudeAdapter : AgentAdapterBase
     /// <c>idle_prompt</c> notification (it finished about a minute ago and
     /// nobody has typed since) and <c>permission_prompt</c> (it has been
     /// asking for approval for a few seconds), and <c>Stop</c>, which only
-    /// records the conversation's id for 'loadout resume'.
+    /// records the conversation's id for 'loadout resume'; and the two that
+    /// say it is working again, <c>UserPromptSubmit</c> and <c>PreToolUse</c>.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Added after screening, being the launcher's own, and beside whatever
     /// hooks the file already has: Claude merges hook lists rather than
     /// replacing them. Each runs 'loadout dashboard signal', which writes a
     /// file and prints nothing, so none of them decides anything for Claude.
     /// Nothing reads the screen: a hook says that a question is waiting and
     /// never what its choices are.
+    /// </para>
+    /// <para>
+    /// The working hooks are what clear an idle session that carries on by
+    /// itself, when background work it was waiting on reports back and nobody
+    /// typed. They run on every tool call, and starting the launcher takes
+    /// about a second, so they are async: Claude does not wait for them.
+    /// </para>
     /// </remarks>
     internal static void AddStudioHooks(System.Text.Json.Nodes.JsonObject document, string launcher)
     {
         AddHook(document, "Notification", "idle_prompt", $"{launcher} dashboard signal waiting");
         AddHook(document, "Notification", "permission_prompt", $"{launcher} dashboard signal approval");
         AddHook(document, "Stop", null, $"{launcher} dashboard signal turn");
+        AddHook(document, "UserPromptSubmit", null, $"{launcher} dashboard signal working", background: true);
+        AddHook(document, "PreToolUse", null, $"{launcher} dashboard signal working", background: true);
     }
 
     /// <summary>
@@ -524,7 +535,8 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         System.Text.Json.Nodes.JsonObject document,
         string hookEvent,
         string? matcher,
-        string command)
+        string command,
+        bool background = false)
     {
         if (document["hooks"] is not System.Text.Json.Nodes.JsonObject hooks)
         {
@@ -545,11 +557,19 @@ public sealed class ClaudeAdapter : AgentAdapterBase
             entry["matcher"] = matcher;
         }
 
-        entry["hooks"] = new System.Text.Json.Nodes.JsonArray(new System.Text.Json.Nodes.JsonObject
+        var hook = new System.Text.Json.Nodes.JsonObject
         {
             ["type"] = "command",
             ["command"] = command,
-        });
+        };
+
+        if (background)
+        {
+            // Claude starts it and carries on; it cannot decide anything.
+            hook["async"] = true;
+        }
+
+        entry["hooks"] = new System.Text.Json.Nodes.JsonArray(hook);
 
         list.Add(entry);
     }

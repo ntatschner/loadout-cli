@@ -153,6 +153,8 @@ export interface Session {
   lastInputAt?: string | null;
   /** What the agent's own hooks say it needs, until somebody types: never read off the screen. */
   needs?: 'waiting' | 'approval' | null;
+  /** Stopped to wait on background work of its own: quiet, and not needing you, until that goes silent past its time. */
+  background?: boolean;
   /** The agent's own id for the conversation, which 'loadout resume' takes. */
   agentSession?: string | null;
   /** 'command' for a command that asks as it goes, 'launch' for an agent session. */

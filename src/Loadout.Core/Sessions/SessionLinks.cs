@@ -42,11 +42,25 @@ public static partial class SessionLinks
     /// The id alone, and nothing else in the input is kept: an agent's hook
     /// input can quote what it was about to run.
     /// </remarks>
-    public static async Task<string?> ReadSessionIdAsync(TextReader? reader, CancellationToken ct = default)
+    public static async Task<string?> ReadSessionIdAsync(TextReader? reader, CancellationToken ct = default) =>
+        (await ReadHookInputAsync(reader, ct).ConfigureAwait(false)).SessionId;
+
+    /// <summary>
+    /// The <c>session_id</c> and <c>transcript_path</c> in a hook's input,
+    /// each null for none or none readable.
+    /// </summary>
+    /// <remarks>
+    /// Those two alone, as with <see cref="ReadSessionIdAsync"/>. Input past
+    /// <see cref="MaximumInput"/>, which a tool call writing a large file can
+    /// make, reads as neither.
+    /// </remarks>
+    public static async Task<(string? SessionId, string? TranscriptPath)> ReadHookInputAsync(
+        TextReader? reader,
+        CancellationToken ct = default)
     {
         if (reader is null)
         {
-            return null;
+            return (null, null);
         }
 
         var buffer = new char[MaximumInput];
@@ -69,15 +83,16 @@ public static partial class SessionLinks
             using var document = JsonDocument.Parse(buffer.AsMemory(0, read));
 
             return document.RootElement.ValueKind == JsonValueKind.Object
-                && document.RootElement.TryGetProperty("session_id", out var session)
-                && session.ValueKind == JsonValueKind.String
-                ? session.GetString()
-                : null;
+                ? (Text(document.RootElement, "session_id"), Text(document.RootElement, "transcript_path"))
+                : (null, null);
         }
         catch (JsonException)
         {
-            return null;
+            return (null, null);
         }
+
+        static string? Text(JsonElement input, string name) =>
+            input.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
     }
 
     [GeneratedRegex("^[0-9a-f]{32}$")]

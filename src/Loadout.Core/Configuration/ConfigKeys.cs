@@ -523,6 +523,17 @@ public static class ConfigKeys
             Group: Groups.Studio,
             WhenUnset: "10"),
 
+        new("studio-background-limit",
+            "Minutes a session waiting on its own background work may go with nothing reporting back before Studio says it is waiting for you",
+            (c, _) => c.Studio.BackgroundLimit is { } minutes
+                ? minutes.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                : string.Empty,
+            (c, _, v) => c.Studio.BackgroundLimit = v.Trim().Length == 0 ? null : Minutes(v),
+            false,
+            Sample: "60",
+            Group: Groups.Studio,
+            WhenUnset: "30. A scheduled wakeup goes by its own time instead"),
+
         // One per list that keeps its query. Checked against that list's
         // fields before it is kept, since the key can be set by hand, and
         // stored written out the way the list writes it.

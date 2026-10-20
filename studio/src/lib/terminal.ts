@@ -11,6 +11,7 @@ export type TerminalState =
   | 'unknown'
   | 'waiting'
   | 'approval'
+  | 'background'
   | 'ended'
   | 'error'
   | 'reconnecting'
@@ -38,6 +39,9 @@ export const TERMINAL_STATES: Record<TerminalState, { word: string; typing: bool
     typing: true,
     ask: { family: 'needs', text: 'It is asking for approval. The choices are in the terminal; answer them there.', button: 'Go to the question' },
   },
+  // Quiet on purpose: no ask, so no badge, sound or count. It turns into
+  // 'waiting for you' by itself if the work goes silent past its time.
+  background: { word: 'waiting on background work', typing: true },
   ended: { word: 'ended', typing: false, ask: { family: 'good', text: 'Ended. Its transcript is kept.', resume: true } },
   error: { word: 'exited with an error', typing: false, ask: { family: 'bad', text: 'Exited with an error (exit code {code}). Its transcript is kept.', resume: true } },
   reconnecting: { word: 'reconnecting', typing: false, ask: { family: 'rest', text: 'Lost touch with the daemon. Reconnecting; the output so far is kept.', button: 'Try now' } },
@@ -101,6 +105,10 @@ export function terminalState(facts: TerminalFacts): TerminalState {
 
   if (session.needs === 'waiting') {
     return 'waiting';
+  }
+
+  if (session.background) {
+    return 'background';
   }
 
   // Quiet is Infinity before anything has been written.

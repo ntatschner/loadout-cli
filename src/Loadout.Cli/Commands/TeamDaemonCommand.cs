@@ -156,7 +156,11 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             // Read here only to name the directory; a daemon built without
             // paths, as the tests that drive its work build one, hosts
             // sessions whose hooks have nowhere to report.
-            SignalsOf(paths));
+            SignalsOf(paths),
+            time,
+            // How often idle turned out to be background work, and how often
+            // that went quiet past its time: counts only, for the log.
+            line => console.WriteLine(line));
         _ideas = ideas;
         _dumps = dumps;
         _launcher = launcher;

@@ -43,6 +43,13 @@ public sealed class StudioSettings
     public int? IdleAfter { get; set; }
 
     /// <summary>
+    /// Minutes a hosted session waiting on its own background work may go
+    /// with nothing reporting back before Studio reads it as waiting for you.
+    /// Null is thirty.
+    /// </summary>
+    public int? BackgroundLimit { get; set; }
+
+    /// <summary>
     /// Each list's saved query, by view: "tasks" to "state:doing sort:-updated".
     /// A view missing here has never been saved, and opens with its built-in
     /// default.

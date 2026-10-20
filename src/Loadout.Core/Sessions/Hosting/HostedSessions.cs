@@ -79,6 +79,11 @@ public sealed class HostedSessions : IAsyncDisposable
     private readonly IChildLifetime? _lifetime;
     private readonly IProcessTree? _tree;
     private readonly string? _signals;
+    private readonly TimeProvider _time;
+    private readonly Action<string>? _noted;
+    private readonly Dictionary<string, (DateTimeOffset At, bool Escalated)> _backgrounds = new(StringComparer.Ordinal);
+    private int _backgroundCount;
+    private int _escalatedCount;
     private readonly object _gate = new();
     private readonly List<HostedSession> _sessions = [];
     private readonly Dictionary<string, HostedLaunch> _launches = new(StringComparer.Ordinal);
@@ -92,32 +97,93 @@ public sealed class HostedSessions : IAsyncDisposable
     /// Where agents' hooks report a session waiting (<see cref="SessionSignals"/>),
     /// or null where nothing reads them, and no session is told where to write.
     /// </param>
+    /// <param name="time">The clock a background signal's time is checked against; the system's unless a test says.</param>
+    /// <param name="noted">
+    /// Told a line for the daemon's log each time a session is first read as
+    /// waiting on background work, and each time such a session goes on to
+    /// read as waiting for you, with the counts so far and nothing else.
+    /// </param>
     public HostedSessions(
         Func<IPseudoTerminal> terminals,
         Func<(string Command, IReadOnlyList<string> Prefix)?> launcher,
         IChildLifetime? lifetime = null,
         IProcessTree? tree = null,
-        string? signals = null)
+        string? signals = null,
+        TimeProvider? time = null,
+        Action<string>? noted = null)
     {
         _terminals = terminals;
         _launcher = launcher;
         _lifetime = lifetime;
         _tree = tree;
         _signals = signals;
+        _time = time ?? TimeProvider.System;
+        _noted = noted;
     }
 
     /// <summary>
     /// What a running session needs, as its agent's hooks said and nobody has
-    /// answered since (<c>waiting</c> or <c>approval</c>), and the agent's own
-    /// id for its conversation; both null where nothing was said.
+    /// answered since (<c>waiting</c> or <c>approval</c>), whether it is
+    /// instead waiting on background work of its own, which does not need
+    /// you, and the agent's own id for its conversation; null and false where
+    /// nothing was said.
     /// </summary>
-    public (string? Needs, string? AgentSession) SignalOf(HostedSession session)
+    public (string? Needs, bool Background, string? AgentSession) SignalOf(HostedSession session)
     {
         ArgumentNullException.ThrowIfNull(session);
 
         var signal = _signals is null ? null : SessionSignals.Read(_signals, session.Id);
+        var status = SessionSignals.Status(signal, session.LastInputAt, session.HasEnded, _time.GetUtcNow());
 
-        return (SessionSignals.Needs(signal, session.LastInputAt, session.HasEnded), signal?.AgentSession);
+        if (signal is { State: "background" })
+        {
+            Note(session.Id, signal.At, status);
+        }
+
+        return (status is "background" ? null : status, status is "background", signal?.AgentSession);
+    }
+
+    /// <summary>
+    /// Counts a background signal once when it is first read, and once more
+    /// if it goes on to read as waiting for you. Every open page asks, so the
+    /// signal's own time is what makes each count once.
+    /// </summary>
+    private void Note(string id, DateTimeOffset at, string? status)
+    {
+        if (_noted is null)
+        {
+            return;
+        }
+
+        string? line = null;
+
+        lock (_gate)
+        {
+            _backgrounds.TryGetValue(id, out var seen);
+
+            if (seen.At != at)
+            {
+                _backgroundCount++;
+                seen = (at, false);
+                line = $"Session {id} is waiting on background work of its own, not on you "
+                    + $"({_backgroundCount} so far, {_escalatedCount} of them silent long enough to read as waiting for you).";
+            }
+
+            if (status == "waiting" && !seen.Escalated)
+            {
+                _escalatedCount++;
+                seen = (at, true);
+                line = $"Session {id}'s background work has gone quiet past its time, so it now reads as waiting for you "
+                    + $"({_escalatedCount} of {_backgroundCount} so far).";
+            }
+
+            _backgrounds[id] = seen;
+        }
+
+        if (line is not null)
+        {
+            _noted(line);
+        }
     }
 
     /// <summary>
