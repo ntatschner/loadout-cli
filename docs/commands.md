@@ -92,6 +92,7 @@
 | `loadout task move <id> --to <project>` | Move a task put on the wrong project, or `--to-global` to the workspace-wide list. It keeps its id, state and note, and an accepted plan goes with it. The list it left shows where it went, and `task list` on the new one says where it came from |
 | `loadout idea move <id> --to <project>` | The same for an idea, with its questions, answers and plan. Not while a round on it is running |
 | `loadout idea add\|list\|show\|remove` | Drop an idea in, on a project or the workspace-wide list, to be fleshed out later |
+| `loadout idea show <id> --full` | Every option's detail, pros and cons, as Studio shows them. Without it you see the chosen option's detail only, and a line saying `--full` has more when it does |
 | `loadout idea refine <id>` | Have an agent take an idea one round further: ask its questions, propose a plan with options for each layer, or revise it. It asks the agent and model the last round that came back used, unless you give `--agent` or `--model`, and says which before it starts. One round per idea at a time on this machine |
 | `loadout idea dismiss <id>` | Clear the "last round failed" marker on an idea you have stopped refining, without paying for another round. Answers and the plan stay |
 | `loadout idea answer\|choose\|keep\|drop\|improve` | Answer the agent's questions, pick an option for a layer, keep or drop a piece, or ask for one to be reworked. An answer or request that starts with a dash goes as `--answer=` or `--request=` |

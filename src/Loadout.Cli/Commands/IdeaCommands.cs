@@ -357,8 +357,15 @@ public sealed class IdeaListCommand : AsyncCommand<IdeaListCommand.Settings>
 /// <summary>Shows one idea in full.</summary>
 [Description("Show an idea: the questions, the answers, the plan and what you made of each piece.")]
 [CommandMeta(CommandCategory.Workspace, Intent = "idea show plan questions options layers")]
-public sealed class IdeaShowCommand : AsyncCommand<IdeaSettings>
+public sealed class IdeaShowCommand : AsyncCommand<IdeaShowCommand.Settings>
 {
+    public sealed class Settings : IdeaSettings
+    {
+        [CommandOption("--full")]
+        [Description("Every option's detail, pros and cons, not only the chosen option's detail.")]
+        public bool Full { get; init; }
+    }
+
     private readonly IIdeaService _ideas;
     private readonly IProjectService _projects;
     private readonly IAnsiConsole _console;
@@ -373,7 +380,7 @@ public sealed class IdeaShowCommand : AsyncCommand<IdeaSettings>
     /// <inheritdoc />
     public override async Task<int> ExecuteAsync(
         CommandContext context,
-        IdeaSettings settings,
+        Settings settings,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(settings);
@@ -393,13 +400,14 @@ public sealed class IdeaShowCommand : AsyncCommand<IdeaSettings>
             return output.Fail(read);
         }
 
+        // JSON carries every option in full already; --full is for reading.
         if (output.IsJson)
         {
             output.WriteJson(IdeaView.Of(place.Value!, read.Value!));
         }
         else
         {
-            IdeaView.Write(output, place.Value!, read.Value!);
+            IdeaView.Write(output, place.Value!, read.Value!, settings.Full);
         }
 
         return CommandOutput.Success();
