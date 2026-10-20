@@ -1026,6 +1026,8 @@ html[data-vt="fade"]::view-transition-group(*) { animation-duration: 0s; }
 .ls-deck .pane > * { min-width: 0; }
 .ls-deck .pane .ls-term { height: 100%; min-height: 0; }
 .ls-deck .find { flex: 1 1 220px; min-width: 0; } .ls-deck .find input { flex: 1 1 auto; width: auto; min-width: 0; max-width: 260px; }
+.ls-deck .pane:has(> .gone) { grid-template-rows: auto minmax(0, 1fr); }
+.ls-deck .pane .gone { margin: 0; padding: 6px 10px; font-size: 12.5px; color: var(--muted); background: var(--surface-2); box-shadow: inset 2px 0 0 var(--subtle); }
 .ls-deck .pane.on { box-shadow: 0 0 0 2px var(--accent), 0 0 24px -6px var(--cgf); }
 .ls-deck .pane mark { background: var(--needs); color: var(--on-signal); }
 [data-motion="reduced"] .ls-deck .pane, [data-motion="none"] .ls-deck .pane { animation: none; }

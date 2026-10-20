@@ -2,7 +2,7 @@
 // Terminal Focus's keys, Ctrl+Shift+M, how morph() moves under each motion
 // setting, and the mode kept in this browser across a reload.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { deckKey, isModeKey, morph, nextMode, shownPanes } from './modes';
+import { deckKey, isModeKey, morph, nextMode, placeSlots } from './modes';
 import { Studio } from './state.svelte';
 
 const key = (over: Partial<KeyboardEvent>) => ({ ctrlKey: false, shiftKey: false, altKey: false, metaKey: false, key: '', code: '', ...over });
@@ -27,11 +27,41 @@ describe('the modes', () => {
 describe('Terminal Focus', () => {
   const order = ['a', 'b', 'c', 'd', 'e'];
 
-  it('shows the picked session first, then the others in tab order until the panes are full', () => {
-    expect(shownPanes(order, 'd', 1)).toEqual(['d']);
-    expect(shownPanes(order, 'd', 2)).toEqual(['d', 'a']);
-    expect(shownPanes(order, 'b', 4)).toEqual(['b', 'a', 'c', 'd']);
-    expect(shownPanes(order, 'gone', 2)).toEqual(['a', 'b']);
+  it('fills empty panes in tab order, around a session placed first', () => {
+    expect(placeSlots([], { order, layout: 1, pick: 'd' })).toEqual(['d']);
+    expect(placeSlots([], { order, layout: 2, pick: 'd' })).toEqual(['d', 'a']);
+    expect(placeSlots([], { order, layout: 4 })).toEqual(['a', 'b', 'c', 'd']);
+    expect(placeSlots([], { order: ['a'], layout: 2 })).toEqual(['a', null]);
+  });
+
+  it('changes nothing when the pick is already in a pane', () => {
+    expect(placeSlots(['a', 'b', 'c', 'd'], { order, layout: 4, pick: 'c', at: 0 })).toEqual(['a', 'b', 'c', 'd']);
+  });
+
+  it('puts a pick from off the screen in the highlighted pane, moving no other', () => {
+    expect(placeSlots(['a', 'b', 'c', 'd'], { order, layout: 4, pick: 'e', at: 2 })).toEqual(['a', 'b', 'e', 'd']);
+    // With nothing highlighted, the first empty pane, or else the first.
+    expect(placeSlots(['a', null], { order: ['a'], layout: 2, pick: 'x' })).toEqual(['a', 'x']);
+    expect(placeSlots(['a', 'b'], { order, layout: 2, pick: 'e' })).toEqual(['e', 'b']);
+  });
+
+  it('keeps a session that has ended or gone in its pane', () => {
+    expect(placeSlots(['a', 'old'], { order: ['a', 'b'], layout: 2 })).toEqual(['a', 'old']);
+    expect(placeSlots(['a', 'old'], { order: ['a', 'b'], layout: 2, pick: 'a', at: 0 })).toEqual(['a', 'old']);
+  });
+
+  it('drops panes from the end when the layout shrinks, though the pick keeps the last', () => {
+    expect(placeSlots(['a', 'b', 'c', 'd'], { order, layout: 2, pick: 'a', at: 0 })).toEqual(['a', 'b']);
+    expect(placeSlots(['a', 'b', 'c', 'd'], { order, layout: 2, pick: 'd', at: 3 })).toEqual(['a', 'd']);
+    expect(placeSlots(['a', 'b', 'c', 'd'], { order, layout: 1, pick: 'c', at: 2 })).toEqual(['c']);
+  });
+
+  it('adds panes in tab order when the layout grows, leaving the others where they are', () => {
+    expect(placeSlots(['d', 'b'], { order, layout: 4 })).toEqual(['d', 'b', 'a', 'c']);
+  });
+
+  it('reads a damaged arrangement as empty where it repeats itself', () => {
+    expect(placeSlots(['a', 'a'], { order, layout: 2 })).toEqual(['a', 'b']);
   });
 
   it('picks a session by its tab number on Ctrl+Alt, read from the physical key too', () => {

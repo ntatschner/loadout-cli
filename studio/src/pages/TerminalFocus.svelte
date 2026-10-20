@@ -2,24 +2,38 @@
   // Terminal Focus: Home, Sessions and a session's own page become the
   // deck, every hosted session a tab and the picked ones live in panes.
   // Loaded only when first needed, like the session page, since the
-  // terminal is most of Studio's size. The layout, the last session picked,
-  // and how the tabs are arranged, hidden and cleared are kept in this
-  // browser; a tab's name is the daemon's, so every browser shows it.
+  // terminal is most of Studio's size. The layout, the session in each pane,
+  // the last session picked, and how the tabs are arranged, hidden and
+  // cleared are kept in this browser; a tab's name is the daemon's, so every
+  // browser shows it.
   import { untrack } from 'svelte';
   import SessionPane from '../lib/components/SessionPane.svelte';
   import TermDeck from '../lib/components/TermDeck.svelte';
   import { studio } from '../lib/state.svelte';
   import { wordFor } from '../lib/signals';
   import { TABS_KEY, arrange, clear, hide, prune, readTabs, unhide, withOrder, type TabState } from '../lib/tabs';
-  import type { DeckLayout, DeckSession } from '../lib/modes';
+  import type { DeckLayout, DeckSession, DeckSlots } from '../lib/modes';
 
   let { id = null, onlaunch = undefined }: { id?: string | null; onlaunch?: () => void } = $props();
 
   const LAYOUT = 'studio-deck-layout';
   const LAST = 'studio-deck-session';
+  const SLOTS = 'studio-deck-slots';
 
   const kept = Number(studio.kept(LAYOUT, '2'));
   const layout: DeckLayout = kept === 1 || kept === 4 ? kept : 2;
+  const slots = keptSlots();
+
+  /** The panes as they were; anything unreadable is no arrangement at all. Never more than four, the most a layout shows. */
+  function keptSlots(): DeckSlots {
+    try {
+      const read: unknown = JSON.parse(studio.kept(SLOTS, '[]'));
+
+      return Array.isArray(read) ? read.slice(0, 4).map((one) => (typeof one === 'string' && one ? one : null)) : [];
+    } catch {
+      return [];
+    }
+  }
 
   // When each session's output was last on the screen, for the new-output dot.
   let seen = $state<Record<string, number>>({});
@@ -113,8 +127,11 @@
     changes={!studio.watchOnly}
     current={id ?? (start || null)}
     {layout}
+    {slots}
+    listed={studio.loaded}
     onpick={picked}
     onlayout={(next) => studio.keep(LAYOUT, String(next))}
+    onslots={(next) => studio.keep(SLOTS, JSON.stringify(next))}
     onnew={studio.watchOnly ? undefined : onlaunch}
     onmove={(order) => keepTabs(withOrder(tabs, order))}
     onrename={(one, name) => { const session = hosted(one); return session && studio.renameSession(session, name); }}

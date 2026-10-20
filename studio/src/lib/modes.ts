@@ -129,26 +129,39 @@ export interface DeckSession {
 
 export type DeckLayout = 1 | 2 | 4;
 
-/** Which sessions a layout shows: the picked one first, then the others in tab order until the panes are full. */
-export function shownPanes(order: string[], current: string | null, layout: DeckLayout): string[] {
-  const out = current && order.includes(current) ? [current] : [];
+/** The session in each pane of a layout, in reading order; null where a pane has nothing yet. */
+export type DeckSlots = (string | null)[];
 
-  for (const id of order) {
-    if (out.length >= layout) {
-      break;
-    }
+/**
+ * Which session each pane shows. Panes keep their sessions: a pick already
+ * in a pane changes nothing, and one that is not takes the pane at `at`, the
+ * highlighted one, or else the first empty one, moving no other. A layout
+ * that grows fills its new panes in tab order; one that shrinks drops panes
+ * from the end, though a pick in one of them keeps the last pane. A session
+ * that has ended, or gone from the list, stays until something takes its place.
+ */
+export function placeSlots(slots: DeckSlots, o: { order: string[]; layout: DeckLayout; pick?: string | null; at?: number }): DeckSlots {
+  const out = slots.slice(0, o.layout).map((id, i, all) => (id && all.indexOf(id) === i ? id : null));
 
-    if (!out.includes(id)) {
-      out.push(id);
-    }
+  while (out.length < o.layout) {
+    out.push(null);
   }
 
-  return out;
+  if (o.pick && !out.includes(o.pick)) {
+    const at = o.at ?? -1;
+    const empty = out.indexOf(null);
+    out[at >= 0 ? Math.min(at, o.layout - 1) : Math.max(0, empty)] = o.pick;
+  }
+
+  const spare = o.order.filter((id) => !out.includes(id));
+
+  return out.map((id) => id ?? spare.shift() ?? null);
 }
 
 /**
  * Terminal Focus's own keys: Ctrl+Alt+1–9 picks a session by its tab, and
- * Ctrl+Alt+arrows move between the panes shown. Null where the key is not one of them.
+ * Ctrl+Alt+arrows move between the panes shown, in the order they sit. Null
+ * where the key is not one of them.
  */
 export function deckKey(event: Pick<KeyboardEvent, 'ctrlKey' | 'altKey' | 'key' | 'code'>, order: string[], shown: string[], current: string | null): string | null {
   if (!(event.ctrlKey && event.altKey)) {
