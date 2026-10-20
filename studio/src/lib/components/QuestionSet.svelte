@@ -2,10 +2,12 @@
   // The questions an agent asked about an idea, answered in the page: an
   // option as a large chip, or your own words. Nothing is sent until one of
   // the two buttons at the foot is pressed; then each changed answer goes as
-  // its own idea answer, and a refine after them when asked for.
-  import { onDestroy, untrack } from 'svelte';
+  // its own idea answer, and a refine after them when asked for. Answered
+  // questions fold to a line, and what you are looking at stays where it is.
+  import { onDestroy, tick, untrack } from 'svelte';
   import HaloButton from './HaloButton.svelte';
   import { lineFor } from '../commandLine';
+  import { holdPlace } from '../holdPlace';
   import { acceptRecommendations, changedAnswers, offeredChoices, settledDrafts, type Answer, type Question } from '../ideas';
 
   interface Props {
@@ -27,6 +29,7 @@
   let sent = $state<Record<string, string>>({});
   let said = $state('');
   let sending = $state(false);
+  let root = $state<HTMLElement | null>(null);
   const name = `q-${Math.random().toString(36).slice(2, 7)}`;
 
   // A reload brings the saved answers: drafts equal to them are dropped, and so is what was sent.
@@ -84,6 +87,7 @@
     sending = false;
 
     if (ok) {
+      const held = root ? holdPlace(root) : null;
       const next = { ...sent };
       const left = { ...drafts };
       const open = { ...editing };
@@ -98,11 +102,13 @@
       drafts = left;
       editing = open;
       said = `✓ ${going.length} answer${going.length === 1 ? '' : 's'} saved${refine ? '. The next round has started: it runs on the daemon, and a toast says when it ends.' : '.'}`;
+      await tick();
+      held?.();
     }
   }
 </script>
 
-<div class="ls-qset">
+<div class="ls-qset" bind:this={root}>
   <div class="qs">
     {#each questions as question (question.id)}
       {@const answer = answerOf(question)}
@@ -110,7 +116,7 @@
       {@const typed = (drafts[question.id] ?? '').trim()}
       {@const offered = offeredChoices(question)}
       {@const own = typed && !offered.choices.includes(typed) ? (drafts[question.id] ?? '') : ''}
-      <section class={['q', answered ? 'answered' : typed ? 'drafted' : ''].filter(Boolean).join(' ')} aria-labelledby={`${name}-${question.id}`} data-next={`question:${question.id}`}>
+      <section class={['q', answered ? 'answered' : typed ? 'drafted' : ''].filter(Boolean).join(' ')} aria-labelledby={`${name}-${question.id}`} data-next={`question:${question.id}`} data-anchor={`question:${question.id}`}>
         <span class="who">{[question.id, answered ? 'answered' : typed ? 'your answer, not sent yet' : 'the agent asks'].join(' · ')}</span>
         {#if answered}
           <p class="qt" id={`${name}-${question.id}`}>{question.question}</p>
@@ -139,7 +145,7 @@
     {/each}
   </div>
 
-  <div class="send">
+  <div class="send" data-anchor="send-answers">
     <p class="count">{count ? `${count} answer${count === 1 ? '' : 's'} ready to send.` : 'Answer what you can. Nothing is sent until you press a button.'}</p>
     <div class="ls-answers flush">
       <HaloButton label={sending ? 'Sending…' : 'Send answers and refine'} next="send-answers" kind="needs" solid={!reason} glyph="✓" cmd={`${count} × loadout idea answer, then ${lineFor('idea refine', [id, ...where])}`} disabledReason={reason} onpress={() => void send(true)} />
@@ -152,6 +158,6 @@
         {#each changed as one (one.question)}<code>{one.line}</code>{/each}
       </details>
     {/if}
-    <p class="ls-said" role="status">{said}</p>
+    <p class="ls-said held" role="status">{said}</p>
   </div>
 </div>

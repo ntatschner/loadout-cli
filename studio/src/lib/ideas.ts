@@ -332,3 +332,60 @@ export function stopWords(stop: Stop): string {
 export function stopTarget(stop: Stop): string {
   return 'id' in stop ? `${stop.kind}:${stop.id}` : stop.kind;
 }
+
+/**
+ * The fresh read of an idea, with every part that did not change kept as the
+ * object already on the page, so what draws it is left alone. Lists of
+ * things with ids are matched by id, so a reordered or lengthened list keeps
+ * the parts it still holds.
+ */
+export function keepUnchanged<T>(was: T, now: T): T {
+  if (was === now || JSON.stringify(was) === JSON.stringify(now)) {
+    return was;
+  }
+
+  if (Array.isArray(was) && Array.isArray(now)) {
+    const byId = new Map(was.filter((one) => one && typeof one === 'object' && 'id' in one).map((one) => [(one as { id: unknown }).id, one]));
+
+    return now.map((one, index) => {
+      const same = one && typeof one === 'object' && 'id' in one ? byId.get((one as { id: unknown }).id) : was[index];
+
+      return same === undefined ? one : keepUnchanged(same, one);
+    }) as T;
+  }
+
+  if (was && now && typeof was === 'object' && typeof now === 'object' && !Array.isArray(was) && !Array.isArray(now)) {
+    const kept: Record<string, unknown> = {};
+
+    for (const [key, value] of Object.entries(now)) {
+      kept[key] = key in was ? keepUnchanged((was as Record<string, unknown>)[key], value) : value;
+    }
+
+    return kept as T;
+  }
+
+  return now;
+}
+
+/** Something a round brought that the page takes you to: questions not asked before, or a later revision of the plan. */
+export type Arrival = 'questions' | 'revision';
+
+/**
+ * What a fresh read of the same idea brought that is new. A choice, an
+ * answer or a verdict being recorded is not: only questions with ids that
+ * were not there before, or a plan whose revision went up. Questions come
+ * first, as they do on the page.
+ */
+export function arrivalIn(was: { questions: { id: string }[]; plan: { revision: number } | null }, now: { questions: { id: string }[]; plan: { revision: number } | null }): Arrival | null {
+  const asked = new Set(was.questions.map((one) => one.id));
+
+  if (now.questions.some((one) => !asked.has(one.id))) {
+    return 'questions';
+  }
+
+  if (now.plan && now.plan.revision > (was.plan?.revision ?? 0)) {
+    return 'revision';
+  }
+
+  return null;
+}

@@ -1307,7 +1307,7 @@ html[data-vt="fade"]::view-transition-group(*) { animation-duration: 0s; }
 .ls-istages li.now .dot { background: var(--ground); box-shadow: inset 0 0 0 4px var(--accent), 0 0 14px -2px var(--cg); }
 .ls-istages li.now.needs .dot { box-shadow: inset 0 0 0 4px var(--needs); }
 .ls-istages li.now.bad .dot { box-shadow: inset 0 0 0 4px var(--bad); }
-.ls-istages li .w { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0; text-transform: none; font-weight: 400; color: var(--muted); }
+.ls-istages li .w { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0; text-transform: none; font-weight: 400; color: var(--muted); }
 .ls-istages li.now .w { color: var(--ink-soft); }
 .ls-istages-wrap { display: grid; gap: 8px; min-width: 0; }
 .ls-istages-wrap .cap { display: none; margin: 0; font-size: 13px; color: var(--ink-soft); }
@@ -1362,6 +1362,12 @@ html[data-vt="fade"]::view-transition-group(*) { animation-duration: 0s; }
 .ls-layer .card li.pro i { color: var(--good); }
 .ls-layer .card li.con i { color: var(--bad-text); }
 .ls-layer .card .ls-action { margin-top: 2px; }
+.ls-layer .card .slot { display: grid; align-items: center; margin-top: 2px; }
+.ls-layer .card .slot > * { grid-area: 1 / 1; min-width: 0; }
+.ls-layer .card .slot .off { visibility: hidden; }
+.ls-layer .card .mark { margin: 0; }
+/* The status line under a layer or the answers keeps its height when empty, so saying something moves nothing below it. */
+.ls-said.held:empty { display: block; min-height: 1lh; }
 .ls-layer .acts { display: flex; flex-wrap: wrap; gap: 6px 26px; }
 .ls-layer .rework { display: none; gap: 8px; max-width: 640px; }
 .ls-layer .rework.on { display: grid; }
