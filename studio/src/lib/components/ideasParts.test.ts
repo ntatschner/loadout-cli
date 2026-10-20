@@ -194,7 +194,7 @@ describe('PlanLayer', () => {
 
     const keep = screen.getByRole('button', { name: 'Keep it' });
     expect(keep.getAttribute('aria-disabled')).toBe('true');
-    expect(said(keep)).toBe('kept already');
+    expect(said(keep)).toBe('$ loadout idea keep i L2 --global');
     expect(screen.getByText('verdict: keep').classList.contains('good')).toBe(true);
   });
 
@@ -207,7 +207,7 @@ describe('PlanLayer', () => {
 
   it('keeps Send it back disabled until there is a request', async () => {
     const asked: string[] = [];
-    render(PlanLayer, { idea: 'i', where: ['--project', 'p'], layer: LAYER, onimprove: (request: string) => asked.push(request) });
+    render(PlanLayer, { idea: 'i', where: ['--project', 'p'], layer: LAYER, onimprove: async (request: string) => (asked.push(request), true) });
 
     await fireEvent.click(screen.getByRole('button', { name: 'Ask for it to be reworked' }));
     const send = screen.getByRole('button', { name: 'Send it back' });
@@ -221,6 +221,64 @@ describe('PlanLayer', () => {
     expect(said(ready)).toBe("$ loadout idea improve i L2 '--request=Serve it from both' --project p");
     await fireEvent.click(ready);
     expect(asked).toEqual(['Serve it from both']);
+  });
+});
+
+describe('PlanLayer, while a change is recorded', () => {
+  const card = (title: string) => screen.getByRole('article', { name: new RegExp(`^${title}`) });
+
+  it('shows a choice at once, holds the other choices, and puts the old one back when it fails', async () => {
+    let answer: (ok: boolean) => void = () => undefined;
+    render(PlanLayer, { idea: 'i', where: ['--global'], layer: { ...LAYER, options: [...LAYER.options, { id: 'o3', title: 'Both' }] }, onchoose: () => new Promise<boolean>((resolve) => (answer = resolve)) });
+
+    await fireEvent.click(within(card('Its own server')).getByRole('button', { name: 'Choose this' }));
+    await settle();
+
+    expect(card('Its own server').getAttribute('aria-label')).toBe('Its own server, chosen');
+    expect(card('From the daemon').getAttribute('aria-label')).toBe('From the daemon');
+    const other = within(card('Both')).getByRole('button', { name: 'Choose this' });
+    // Held, with its command still written under it, so the card keeps its height.
+    expect(other.getAttribute('aria-disabled')).toBe('true');
+    expect(said(other)).toBe('$ loadout idea choose i L2 o3 --global');
+    await fireEvent.click(other);
+
+    answer(false);
+    await settle();
+
+    expect(card('From the daemon').getAttribute('aria-label')).toBe('From the daemon, chosen');
+    expect(card('Its own server').getAttribute('aria-label')).toBe('Its own server');
+    expect(screen.getByText('✕ o2 was not recorded for L2').classList.contains('no')).toBe(true);
+  });
+
+  it('keeps the button and the chosen marker in one slot on every card, so choosing changes no card size', () => {
+    render(PlanLayer, { idea: 'i', where: ['--global'], layer: LAYER });
+
+    for (const one of screen.getAllByRole('article')) {
+      const slot = one.querySelector('.slot')!;
+
+      expect(slot.querySelector('.ls-halo')).toBeTruthy();
+      expect(slot.querySelector('.mark')).toBeTruthy();
+      expect(slot.querySelectorAll('.off')).toHaveLength(1);
+    }
+  });
+
+  it('shows a verdict at once and puts it back when it fails', async () => {
+    let answer: (ok: boolean) => void = () => undefined;
+    render(PlanLayer, { idea: 'i', where: ['--global'], layer: LAYER, onverdict: () => new Promise<boolean>((resolve) => (answer = resolve)) });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Keep it' }));
+    await settle();
+
+    expect(screen.getByText('verdict: keep')).toBeTruthy();
+    const drop = screen.getByRole('button', { name: 'Drop it' });
+    expect(drop.getAttribute('aria-disabled')).toBe('true');
+    expect(said(drop)).toBe('$ loadout idea drop i L2 --global');
+    expect(said(screen.getByRole('button', { name: 'Keep it' }))).toBe('$ loadout idea keep i L2 --global');
+
+    answer(false);
+    await settle();
+
+    expect(screen.getByText('verdict: undecided')).toBeTruthy();
   });
 });
 

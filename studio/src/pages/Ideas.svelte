@@ -5,7 +5,12 @@
   // the plan goes when it is accepted. Every step is the command a terminal
   // would type, run on the daemon, so a round outlives the page that started
   // it. Notes kept elsewhere come in as dumps.
-  import { untrack } from 'svelte';
+  //
+  // When a step ends the idea is read again, and only what changed is drawn
+  // again; what you are looking at stays where it is on screen. A round that
+  // brings new questions or a new revision of the plan takes you to them,
+  // unless you have scrolled or typed since it started: then it offers to.
+  import { tick, untrack } from 'svelte';
   import Command from '../lib/components/Command.svelte';
   import CommandAction from '../lib/components/CommandAction.svelte';
   import Dialog from '../lib/components/Dialog.svelte';
@@ -19,8 +24,10 @@
   import ListToolbar from '../lib/components/ListToolbar.svelte';
   import { CommandList } from '../lib/commandList.svelte';
   import { lineFor } from '../lib/commandLine';
+  import { holdPlace } from '../lib/holdPlace';
+  import { runJob } from '../lib/jobs';
   import { router } from '../lib/router.svelte';
-  import { acceptWords, gaps, needsChoice, nextStop, sendAnswers, stateWord, stopTarget, stopWords, type DumpItem, type Question } from '../lib/ideas';
+  import { acceptWords, arrivalIn, gaps, keepUnchanged, needsChoice, nextStop, sendAnswers, stateWord, stopTarget, stopWords, type Arrival, type DumpItem, type Question } from '../lib/ideas';
   import { studio } from '../lib/state.svelte';
   import { ideaHref, listHref, movedSaid, whereSaid } from '../lib/tasks';
   import { toasts } from '../lib/toasts.svelte';
@@ -121,6 +128,11 @@
   let sentAnswers = $state<string[]>([]);
   let reworks = $state<Record<string, boolean>>({});
   let work = $state<HTMLElement | null>(null);
+  // Something a round brought while you were busy elsewhere on the page, offered rather than gone to.
+  let arrived = $state<Arrival | null>(null);
+  // When a round was last seen starting, and when you last scrolled or typed: a round that ends after you have moved does not move you.
+  let roundAt = 0;
+  let stirredAt = 0;
 
   // #ideas/<list>/<id>, where the list is a project's slug or '~' for the
   // workspace-wide one; #ideas/+add and #ideas/+dumps for the rest. With
@@ -164,6 +176,79 @@
     memory.projects().then((all) => (projects = all), () => (projects = []));
   });
 
+  /**
+   * Reads the open idea again, with the shelf when asked, and draws only what
+   * changed. What you are looking at is held in place, unless the read
+   * brought new questions or a new revision and you have not moved since the
+   * round started: then the page goes to the top of them.
+   */
+  async function reread(withShelf = false) {
+    const name = id;
+    const words = where;
+    const held = work ? holdPlace(work) : null;
+    let fresh: Idea | null = null;
+
+    try {
+      [fresh] = await Promise.all([name ? readJson<Idea>('idea show', [name, ...words]) : Promise.resolve(null), withShelf ? loadList() : Promise.resolve()]);
+    } catch (error) {
+      fail(error);
+    }
+
+    if (name !== id || words.join(' ') !== where.join(' ')) {
+      return;
+    }
+
+    const was = idea;
+    const news = fresh && was && was.id === fresh.id ? arrivalIn(was, fresh) : null;
+
+    if (fresh) {
+      idea = was && was.id === fresh.id ? keepUnchanged(was, fresh) : fresh;
+    }
+
+    await tick();
+
+    if (news && stirredAt <= roundAt) {
+      arrived = null;
+      goTo(news);
+    } else {
+      held?.();
+
+      if (news) {
+        arrived = news;
+      }
+    }
+  }
+
+  // The top of what a round brought, scrolled to and focused, so a keyboard or a screen reader lands there too.
+  function goTo(news: Arrival) {
+    const heading = work?.querySelector<HTMLElement>(news === 'questions' ? '#iq' : '#ip') ?? work?.querySelector<HTMLElement>('.ihead h2');
+
+    if (!heading) {
+      return;
+    }
+
+    const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    arrived = null;
+    heading.scrollIntoView?.({ block: 'start', behavior: still ? 'auto' : 'smooth' });
+    heading.focus({ preventScroll: true });
+  }
+
+  // Scrolling by hand or typing: what a round that ends afterwards must not take away from you.
+  function stirred() {
+    stirredAt = Date.now();
+  }
+
+  // A round seen running on the shelf counts as started then, wherever it was
+  // started from. A boolean, because the shelf is rebuilt on every read.
+  const running = $derived(!!listed?.running);
+
+  $effect(() => {
+    if (running) {
+      untrack(() => (roundAt = Date.now()));
+    }
+  });
+
   $effect(() => {
     idea = null;
     problem = null;
@@ -171,6 +256,8 @@
       drafted = [];
       sentAnswers = [];
       reworks = {};
+      arrived = null;
+      roundAt = Date.now();
     });
 
     if (id) {
@@ -196,11 +283,7 @@
     seen = settled;
 
     untrack(() => {
-      void loadList();
-
-      if (id) {
-        void loadIdea(id, where);
-      }
+      void reread(true);
 
       if (place === 'dumps') {
         loadDumps();
@@ -216,6 +299,10 @@
       return false;
     }
 
+    if (path === 'idea refine') {
+      roundAt = Date.now();
+    }
+
     try {
       await commands.run(path, words);
       await studio.loadJobs();
@@ -226,6 +313,46 @@
 
       return false;
     }
+  }
+
+  /**
+   * Runs one quick change to a piece of the plan and waits for it, then reads
+   * the idea again: true once the change is on the page. When it fails the
+   * piece goes back to what it was, and a toast says so and why.
+   */
+  async function record(path: string, words: string[], undone: string): Promise<boolean> {
+    if (studio.watchOnly) {
+      toasts.add({ level: 'info', text: 'Studio is only watching, so nothing was changed.', cmd: lineFor(path, words) });
+
+      return false;
+    }
+
+    try {
+      await runJob(path, words);
+    } catch (error) {
+      if (error instanceof SignedOut) {
+        studio.signedOut = true;
+      } else {
+        toasts.add({ level: 'problem', text: `${undone} ${(error as Error).message}`, cmd: lineFor(path, words) });
+      }
+
+      return false;
+    } finally {
+      void studio.loadJobs().catch(() => undefined);
+    }
+
+    await reread();
+
+    return true;
+  }
+
+  /** What a piece goes back to when a change to it was not recorded, in words. */
+  function chooseUndone(layer: Layer, option: string): string {
+    return `Choosing ${option} for ${layer.id} was not recorded, so ${layer.chosen ? `${layer.chosen} is chosen again` : 'nothing is chosen'}.`;
+  }
+
+  function verdictUndone(piece: Layer | Addition, to: string): string {
+    return `${to} for ${piece.id} was not recorded, so its verdict is ${String(piece.verdict || 'undecided').toLowerCase()} again.`;
   }
 
   /**
@@ -248,7 +375,7 @@
         toasts.add({ level: 'problem', text: `None of them were recorded. ${refused?.error ?? 'One was refused.'}` });
       }
 
-      await loadIdea(id, where);
+      await reread();
 
       return done.applied;
     } catch (error) {
@@ -367,7 +494,7 @@
   }
 </script>
 
-<svelte:window onkeydown={nextKey} onbeforeunload={leaving} />
+<svelte:window onkeydown={(event) => (stirred(), nextKey(event))} onwheel={stirred} ontouchmove={stirred} onbeforeunload={leaving} />
 
 {#if !focused}
 <div class="head">
@@ -451,8 +578,8 @@
     {#if problem}<p class="offline" role="alert">{problem}</p>{/if}
 
     {#if id && idea}
-      <div class="ihead">
-        <h2>{idea.plan?.title ?? idea.ask}</h2>
+      <div class="ihead" data-anchor="head">
+        <h2 tabindex="-1">{idea.plan?.title ?? idea.ask}</h2>
         <p class="slug">{idea.id} · {project ?? 'workspace-wide'}{idea.plan ? ` · plan revision ${idea.plan.revision}` : ''}</p>
         {#if listed?.moved}<p class="slug">Moved here {movedSaid(listed.moved)}</p>{/if}
       </div>
@@ -465,7 +592,7 @@
       {/if}
 
       {#if listed?.failure}
-        <div class="waitcard problem" role="alert">
+        <div class="waitcard problem" role="alert" data-anchor="failure">
           <span class="w">last round failed{listed.failure.agent ? ` · ${listed.failure.agent}${listed.failure.model ? `, model ${listed.failure.model}` : ''}` : ''}{listed.failure.when ? ` · ${new Date(listed.failure.when).toLocaleString()}` : ''}</span>
           <p class="q">{listed.failure.error}</p>
           <div class="ls-answers flush">
@@ -477,27 +604,27 @@
 
       {#if idea.questions.length && !idea.accepted}
         <section class="pblock" aria-labelledby="iq">
-          <h2 class="ls-zone" id="iq">Questions for you</h2>
+          <h2 class="ls-zone" id="iq" tabindex="-1" data-anchor="zone:questions">Questions for you</h2>
           <QuestionSet id={idea.id} {where} questions={idea.questions} disabledReason={refused} ondraft={(answers, sent) => ((drafted = answers), (sentAnswers = sent))} onsend={(answers, refine) => sendAnswers(idea!.id, where, answers, refine, (operations) => batch(idea!.id, where, operations), act)} />
         </section>
       {/if}
 
       {#if idea.plan && (idea.plan.layers.length || idea.plan.additions.length)}
         <section class="pblock" aria-labelledby="ip">
-          <h2 class="ls-zone" id="ip">The plan · revision {idea.plan.revision}</h2>
+          <h2 class="ls-zone" id="ip" tabindex="-1" data-anchor="zone:plan">The plan · revision {idea.plan.revision}</h2>
           {#each idea.plan.layers as layer (layer.id)}
             <PlanLayer idea={idea.id} {where} {layer} accepted={!!idea.accepted} disabledReason={refused}
-              onchoose={(option) => void act('idea choose', [idea!.id, layer.id, option, ...where])}
-              onverdict={(verdict) => void act(verdict === 'Keep' ? 'idea keep' : 'idea drop', [idea!.id, layer.id, ...where])}
-              onimprove={(request) => void act('idea improve', [idea!.id, layer.id, `--request=${request}`, ...where])}
+              onchoose={(option) => record('idea choose', [idea!.id, layer.id, option, ...where], chooseUndone(layer, option))}
+              onverdict={(verdict) => record(verdict === 'Keep' ? 'idea keep' : 'idea drop', [idea!.id, layer.id, ...where], verdictUndone(layer, verdict))}
+              onimprove={(request) => record('idea improve', [idea!.id, layer.id, `--request=${request}`, ...where], verdictUndone(layer, 'Sending it back'))}
               onrework={(pending) => untrack(() => (reworks = { ...reworks, [layer.id]: pending }))} />
           {/each}
           {#if idea.plan.additions.length}
-            <h3 class="sub">Additions the agent proposes</h3>
+            <h3 class="sub" data-anchor="zone:additions">Additions the agent proposes</h3>
             {#each idea.plan.additions as addition (addition.id)}
               <PlanLayer idea={idea.id} {where} {addition} accepted={!!idea.accepted} disabledReason={refused}
-                onverdict={(verdict) => void act(verdict === 'Keep' ? 'idea keep' : 'idea drop', [idea!.id, addition.id, ...where])}
-                onimprove={(request) => void act('idea improve', [idea!.id, addition.id, `--request=${request}`, ...where])}
+                onverdict={(verdict) => record(verdict === 'Keep' ? 'idea keep' : 'idea drop', [idea!.id, addition.id, ...where], verdictUndone(addition, verdict))}
+                onimprove={(request) => record('idea improve', [idea!.id, addition.id, `--request=${request}`, ...where], verdictUndone(addition, 'Sending it back'))}
                 onrework={(pending) => untrack(() => (reworks = { ...reworks, [addition.id]: pending }))} />
             {/each}
           {/if}
@@ -506,7 +633,7 @@
 
       {#if idea.plan && !idea.accepted}
         <section class="accept" aria-labelledby="ia">
-          <h2 class="ls-zone" id="ia">Accept it</h2>
+          <h2 class="ls-zone" id="ia" data-anchor="zone:accept">Accept it</h2>
           {#if idea.plan.placement}
             <p class="place">The agent would put it on <strong>{idea.plan.placement.name}</strong>{idea.plan.placement.isNew ? ', a new project' : ''}: {idea.plan.placement.reason}</p>
           {/if}
@@ -534,7 +661,7 @@
 
       {#if !idea.accepted}
         <section class="pblock" aria-labelledby="im">
-          <h2 class="ls-zone" id="im">More</h2>
+          <h2 class="ls-zone" id="im" data-anchor="zone:more">More</h2>
           <div class="ls-drawers">
             <CommandAction path="idea refine" title="Take it one round further" preset={{ id: idea.id, ...listFixed }} fixed={['id', '--project', '--global']} label="Refine" open={!idea.questions.length && !idea.plan && !listed?.failure} />
             <CommandAction path="idea improve" title="Ask for the whole plan to be reworked" preset={{ id: idea.id, piece: 'plan', ...listFixed }} fixed={['id', 'piece', '--project', '--global']} label="Ask for it" />
@@ -547,13 +674,18 @@
 
       <Command why="The same, in a terminal:" command={lineFor('idea show', [idea.id, ...where])} />
 
-      {#if stop}
+      {#if stop || arrived}
         <div class="ls-next">
+          {#if arrived}
+            <HaloButton label={arrived === 'questions' ? 'New questions: go to them' : `New revision ${idea.plan?.revision ?? ''}: go to it`} size="small" kind="needs" glyph="↑" cmd="changes nothing" onpress={() => goTo(arrived!)} />
+          {/if}
+          {#if stop}
           {#if left}<span class="left" aria-hidden="true">{left}</span>{/if}
           <HaloButton label={`Next: ${stopWords(stop)}`} size="small" solid glyph="↓" describedBy="ls-next-left"
             cmd={`changes nothing · ]${left ? ` · ${left} left to decide` : ''}`}
             disabledReason={refused && stop.kind === 'accept' ? refused : undefined} onpress={goNext} />
           <span class="ls-sr" id="ls-next-left">{left ? `${left} left to decide on this idea` : 'nothing left to decide on this idea'}</span>
+          {/if}
         </div>
       {/if}
     {:else if id}
