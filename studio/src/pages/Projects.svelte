@@ -15,10 +15,10 @@
   import ConversationList from '../lib/components/ConversationList.svelte';
   import TaskBoard from '../lib/components/TaskBoard.svelte';
   import { CommandList } from '../lib/commandList.svelte';
-  import { TaskListView } from '../lib/taskList.svelte';
+  import { pageWords, TaskListView } from '../lib/taskList.svelte';
   import { commands, readJson, SignedOut, type Conversation } from '../lib/api';
   import { lineFor } from '../lib/commandLine';
-  import { declareWords, startWords, type Chosen, type Task } from '../lib/tasks';
+  import { declareWords, startWords, whereOf, type Chosen, type Task } from '../lib/tasks';
   import { router } from '../lib/router.svelte';
   import type { Finding } from '../lib/health';
   import { studio } from '../lib/state.svelte';
@@ -90,6 +90,12 @@
   // from its tasks, so no count includes one.
   const projectList = new TaskListView();
   const globalList = new TaskListView();
+  // Every list as one board, a page at a time. It keeps no saved query: one
+  // naming a project, saved for the shared view, would empty every other
+  // project's board.
+  const everyList = new TaskListView(null);
+  const EVERY_LIMIT = 50;
+  let everyPage = $state(1);
   let problem = $state<string | null>(null);
 
   // The tiles' counts, read once the wall is drawn: a tile without them shows none.
@@ -168,6 +174,19 @@
     untrack(() => void globalList.load(['--global']));
   }
 
+  const everyWhere = (page: number) => ['--every-list', ...pageWords(page, EVERY_LIMIT)];
+
+  async function loadEvery(page = untrack(() => everyPage)) {
+    everyPage = page;
+    await untrack(() => everyList.load(everyWhere(page)));
+
+    // A page that has gone, because tasks were finished or the list
+    // narrowed since it was read, is refused; the first page always exists.
+    if (everyList.error && page > 1) {
+      await loadEvery(1);
+    }
+  }
+
   $effect(() => {
     void loadList();
   });
@@ -188,6 +207,8 @@
   $effect(() => {
     if (place === 'tasks') {
       loadGlobal();
+    } else if (place === 'every') {
+      void loadEvery();
     } else if (place === 'workspace') {
       readJson<Workspace>('workspace status').then((read) => (workspace = read), fail);
     }
@@ -214,6 +235,8 @@
 
       if (place === 'tasks') {
         loadGlobal();
+      } else if (place === 'every') {
+        void loadEvery();
       }
     });
   });
@@ -239,9 +262,7 @@
   }
 
   /** Starts a session on a task, at once or through the launch sheet. */
-  async function start(task: Task, withOptions: boolean) {
-    const project = shown!.id;
-
+  async function start(task: Task, withOptions: boolean, project = shown!.id) {
     if (withOptions) {
       onlaunch({ project, id: task.id, title: task.title, state: task.state });
 
@@ -295,7 +316,7 @@
 {#if problem}<p class="offline" role="alert">{problem}</p>{/if}
 {#if wall.error}<p class="offline" role="alert">{wall.error}</p>{/if}
 
-<ListToolbar noun="projects" slash={!slug && place !== 'tasks'} query={wall.text} shape={wall.shape} shown={projects?.length ?? null} recorded={wall.recorded} problem={wall.problem} onchange={(query) => void wall.ask(query).then(() => wall.items && loadCounts(wall.items))} />
+<ListToolbar noun="projects" slash={!slug && place !== 'tasks' && place !== 'every'} query={wall.text} shape={wall.shape} shown={projects?.length ?? null} recorded={wall.recorded} problem={wall.problem} onchange={(query) => void wall.ask(query).then(() => wall.items && loadCounts(wall.items))} />
 
 <nav aria-label="Projects">
   <div class={['ls-pwall', picked ? 'compact' : ''].filter(Boolean).join(' ')}>
@@ -310,7 +331,7 @@
       <ProjectTile place={one.label} sub={one.sub} href={`#projects/+${one.key}`} picked={place === one.key} />
     {/each}
   </div>
-  <p class="ls-from">The same as <code>$ loadout project list</code> or <code>loadout list</code>. Also <a href="#projects/+tasks" aria-current={place === 'tasks' ? 'page' : undefined}>tasks for no project yet</a> and <a href="#projects/+workspace" aria-current={place === 'workspace' ? 'page' : undefined}>the workspace</a>.</p>
+  <p class="ls-from">The same as <code>$ loadout project list</code> or <code>loadout list</code>. Also <a href="#projects/+every" aria-current={place === 'every' ? 'page' : undefined}>every task, across projects</a>, <a href="#projects/+tasks" aria-current={place === 'tasks' ? 'page' : undefined}>tasks for no project yet</a> and <a href="#projects/+workspace" aria-current={place === 'workspace' ? 'page' : undefined}>the workspace</a>.</p>
 </nav>
 
 {#if slug && shown}
@@ -429,6 +450,23 @@
         <CommandAction path="task declare" title="Record one" preset={{ '--global': true }} fixed={['--project', '--global']} label="Record it" />
         <CommandAction path="task move" title="Move one onto the project it belongs to" preset={{ '--global': true }} fixed={['--project', '--global', '--to-global']} label="Move it" />
       </div>
+    {:else if place === 'every'}
+      <div class="dhead"><h2>Every task, across projects</h2></div>
+      <p class="lead">Every project's list and the workspace-wide one, as one board. Narrow it to one with <code>project:</code> and its slug, or <code>project:global</code>.</p>
+      {#if everyList.error}<p class="offline" role="alert">{everyList.error}</p>{/if}
+      <ListToolbar noun="tasks" query={everyList.text} shape={everyList.shape} shown={everyList.total} recorded={everyList.recorded} problem={everyList.problem} onchange={(query) => { everyPage = 1; void everyList.ask(query, everyWhere(1)); }} />
+      {#if everyList.tasks}
+        <TaskBoard tasks={everyList.tasks} mixed where={[]} from={everyList.from} disabledReason={refused} onstart={(task, withOptions) => task.project && void start(task, withOptions, task.project)} ondeclare={(task, state) => void act('task declare', declareWords(task.id, state, whereOf(task.project)))} />
+        {#if everyList.pages > 1}
+          <nav class="ls-pager" aria-label="Pages of tasks">
+            <span role="status">Page {everyPage} of {everyList.pages}, {everyList.total} in all.</span>
+            <HaloButton label="Previous page" size="small" disabledReason={everyPage <= 1 ? 'This is the first page.' : undefined} onpress={() => void loadEvery(everyPage - 1)} />
+            <HaloButton label="Next page" size="small" disabledReason={everyPage >= everyList.pages ? 'This is the last page.' : undefined} onpress={() => void loadEvery(everyPage + 1)} />
+          </nav>
+        {/if}
+      {:else if !everyList.error}
+        <p class="calm" role="status">Reading…</p>
+      {/if}
     {:else if place === 'workspace'}
       <div class="dhead"><h2>The workspace</h2></div>
       <p class="lead">Where projects, memory, specialists and tasks are kept, and synced between your machines.</p>

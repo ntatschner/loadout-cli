@@ -478,7 +478,25 @@ task already chosen, for a different agent, mode or working tree. Every task
 but a dropped one can be started. A task moved
 here says where it came from, and one moved away is listed under **Moved
 away** with a link to where it is now, apart from the columns and counted in
-none of them. Below that is
+none of them.
+
+A card is kept to its title, two lines at most, and a line about it, so a
+column stays readable however much was written about a task. **History**, or
+**Details and history** when there's a full description, opens the task in
+full: its detail, its note, and every change of state with who said so and
+when, the same as `loadout task show <id>`. A task recorded before there was a
+history shows only its latest claim, and says so.
+
+**Every task, across projects**, linked under the wall, is one board of every
+project's list and the workspace-wide one, the same as `loadout task list
+--every-list`. Each card names its project, and its moves and **Start** are on
+that project's list. Narrow it with `project:` and a slug, or `project:global`.
+It's read 50 tasks at a time, with **Previous page** and **Next page** at the
+foot, and goes back to the first page if the one you were on has gone. Its
+query isn't saved, because a filter naming one project would empty every
+other project's board.
+
+Below the board is
 everything else you can do to it, each folded until you open it: open it in the
 editor or its folder, onboard it, change what every session gets, relocate it,
 link it. Each shows the command it runs, and what's shown is read again once it

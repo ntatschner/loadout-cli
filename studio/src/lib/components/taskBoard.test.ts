@@ -22,11 +22,11 @@ describe('TaskBoard', () => {
   it('offers each state exactly its moves', () => {
     render(TaskBoard, { tasks: TASKS, where: ['--project', 'p'] });
 
-    expect(moves('Open one')).toEqual(['Mark it doing', 'It is blocked', 'Drop it']);
-    expect(moves('Doing one')).toEqual(['Mark it done', 'It is blocked', 'Reopen it']);
-    expect(moves('Blocked one')).toEqual(['Mark it doing', 'Drop it']);
-    expect(moves('Done one')).toEqual(['Reopen it']);
-    expect(moves('Dropped one')).toEqual(['Reopen it']);
+    expect(moves('Open one')).toEqual(['Mark it doing', 'It is blocked', 'Drop it', 'History']);
+    expect(moves('Doing one')).toEqual(['Mark it done', 'It is blocked', 'Reopen it', 'History']);
+    expect(moves('Blocked one')).toEqual(['Mark it doing', 'Drop it', 'History']);
+    expect(moves('Done one')).toEqual(['Reopen it', 'History']);
+    expect(moves('Dropped one')).toEqual(['Reopen it', 'History']);
   });
 
   it('folds done and dropped away under a count', () => {
@@ -65,8 +65,8 @@ describe('TaskBoard', () => {
     expect(moves('Open one').slice(0, 2)).toEqual(['Start', 'Start with options…']);
     expect(moves('Doing one').slice(0, 2)).toEqual(['Start', 'Start with options…']);
     expect(moves('Blocked one').slice(0, 2)).toEqual(['Start', 'Start with options…']);
-    expect(moves('Done one')).toEqual(['Start', 'Start with options…', 'Reopen it']);
-    expect(moves('Dropped one')).toEqual(['Reopen it']);
+    expect(moves('Done one')).toEqual(['Start', 'Start with options…', 'Reopen it', 'History']);
+    expect(moves('Dropped one')).toEqual(['Reopen it', 'History']);
 
     const card = within(screen.getByRole('article', { name: /^Open one/ }));
     const start = card.getByRole('button', { name: 'Start' });

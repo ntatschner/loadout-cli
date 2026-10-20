@@ -1,5 +1,6 @@
 // One task list as a page shows it: the shared list, with what moved away
-// from it kept apart from its tasks, so no count includes one.
+// from it kept apart from its tasks, so no count includes one. A list read a
+// page at a time says how many there are in all and how many pages.
 import { CommandList, listWords } from './commandList.svelte';
 import type { MovedAway, Task } from './tasks';
 
@@ -12,8 +13,17 @@ export function queryWords(query: string | null): string[] {
   return listWords(query, ['--all']);
 }
 
+/** The words that read one page of a list, after the words naming it. */
+export function pageWords(page: number, limit: number): string[] {
+  return ['--limit', String(limit), '--page', String(page)];
+}
+
 export class TaskListView extends CommandList<Task> {
   away = $state<MovedAway[]>([]);
+  /** How many the query kept on every page, or null before the first read. */
+  total = $state<number | null>(null);
+  /** How many pages there are; 1 for a list not read in pages. */
+  pages = $state(1);
 
   /** @param view The view whose query is saved, or null for one that keeps none. */
   constructor(view: string | null = 'tasks') {
@@ -27,10 +37,14 @@ export class TaskListView extends CommandList<Task> {
 
   protected override took(read: Record<string, unknown>): void {
     this.away = (read.movedAway as MovedAway[] | undefined) ?? [];
+    this.total = (read.total as number | undefined) ?? this.items?.length ?? null;
+    this.pages = (read.pages as number | undefined) ?? 1;
   }
 
   override clear(): void {
     super.clear();
     this.away = [];
+    this.total = null;
+    this.pages = 1;
   }
 }

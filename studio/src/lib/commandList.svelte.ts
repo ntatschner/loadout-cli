@@ -116,10 +116,11 @@ export class CommandList<T> {
    * Asks for the list again with this query, and keeps it for the view. The
    * default and an empty query are kept as nothing, which the view opens
    * with as its default.
+   * @param where The words naming the list, when they change with the query: a list read in pages goes back to its first.
    */
-  async ask(query: string): Promise<void> {
+  async ask(query: string, where?: string[]): Promise<void> {
     this.query = query;
-    await this.load();
+    await this.load(where);
 
     if (this.view && !this.problem && !studio.watchOnly) {
       const kept = query === this.shape?.defaultQuery ? '' : query;

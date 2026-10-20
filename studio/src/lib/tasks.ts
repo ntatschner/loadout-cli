@@ -13,6 +13,40 @@ export interface Task {
   note?: string | null;
   /** Where it was moved from, when it was: a project's slug, or null for the workspace-wide list. */
   moved?: { from: string | null; at: string } | null;
+  /** The list it is on: a project's slug, or null for the workspace-wide one. */
+  project?: string | null;
+  /** Whether it has a full description beyond its title, which 'task show' reads. */
+  hasDetail?: boolean;
+}
+
+/** One change of state, as 'task show' gives it. */
+export interface TaskEvent {
+  state: string;
+  by: string;
+  at: string;
+  /** What else changed with it, or null. */
+  reason?: string | null;
+}
+
+/** One task in full, as 'task show --json' gives it. */
+export interface TaskShown extends Task {
+  detail: string;
+  history: TaskEvent[];
+}
+
+/** The words naming a task's list: its project, or the workspace-wide list. */
+export function whereOf(project: string | null | undefined): string[] {
+  return project ? ['--project', project] : ['--global'];
+}
+
+/** The words for reading one task in full, after 'task show'. */
+export function showWords(id: string, project: string | null | undefined): string[] {
+  return [id, ...whereOf(project)];
+}
+
+/** The key a task is known by on a board that may hold more than one list, where ids can repeat. */
+export function taskKey(task: Task): string {
+  return `${task.project ?? ''}/${task.id}`;
 }
 
 /** The task a launch sheet opens with, and the project it is on. */
