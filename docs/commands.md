@@ -270,8 +270,8 @@ refusal on either one holds back both. Lists with nothing in common go their
 own way, and the output says which were changed. With `--json`, every change
 gets a result with its reason and the task as it now stands.
 
-A list has a revision, a hash of its text, which `task show <id> --json` gives
-you. A change carrying `"revision"` is refused if the list has changed since you
+A list has a revision, a hash of its text, which `task list --json` and
+`task show <id> --json` give you. A change carrying `"revision"` is refused if the list has changed since you
 read it, so a script working from an old read can't overwrite something newer.
 A move refuses a task that has an idea record or a plan beside it, because only
 `task move` takes those with it.

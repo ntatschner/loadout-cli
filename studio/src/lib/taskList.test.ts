@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const asked: string[][] = [];
 const saved: [string, string][] = [];
+const changed: unknown[][] = [];
+let stale = false;
 
 vi.mock('./api', async (original) => {
   const real = await original<typeof import('./api')>();
@@ -18,8 +20,20 @@ vi.mock('./api', async (original) => {
         throw new real.Refused("'colour' is not something tasks can be filtered on.", 400);
       }
 
-      return { tasks: [], recorded: 0, query: { text: '', parts: [], fields: [], defaultQuery: '-state:done,dropped' } };
+      return { tasks: [{ id: 'a', title: 'A', state: 'open' }, { id: 'b', title: 'B', state: 'open' }], recorded: 2, revision: 'r1', query: { text: '', parts: [], fields: [], defaultQuery: '-state:done,dropped' } };
     }),
+    tasks: {
+      ...real.tasks,
+      change: vi.fn(async (...given: unknown[]) => {
+        changed.push(given);
+
+        if (stale) {
+          throw new real.Refused('website has changed since it was read', 409);
+        }
+
+        return { project: 'p', revision: 'r2', task: { id: 'a', title: 'A', state: 'done', kind: 'task', by: 'nigel', declared: '', note: '', moved: null } };
+      }),
+    },
   };
 });
 
@@ -78,5 +92,42 @@ describe('TaskListView', () => {
 
     expect(asked[0]).toEqual(['--global']);
     expect(saved).toEqual([]);
+  });
+
+  it('changes a task through the route, from the revision it read, and reads the list again', async () => {
+    changed.length = 0;
+    const list = new TaskListView();
+    await list.load(['--project', 'p']);
+    asked.length = 0;
+
+    expect(await list.change({ id: 'a', title: 'A', state: 'open' }, 'done', ['--project', 'p'])).toBe('changed');
+
+    expect(changed).toEqual([['p', 'a', { state: 'done' }, 'r1']]);
+    expect(asked.length).toBe(1);
+  });
+
+  it('says a change from a stale read was refused, and reads the list again', async () => {
+    stale = true;
+    const list = new TaskListView();
+    await list.load(['--global']);
+    asked.length = 0;
+
+    expect(await list.change({ id: 'a', title: 'A', state: 'open' }, 'done', ['--global'])).toBe('stale');
+
+    expect(asked.length).toBe(1);
+    expect(changed.at(-1)?.[0]).toBe('-');
+    stale = false;
+  });
+
+  it('keeps the revision it read, and shows a change as it was answered with the revision it left', async () => {
+    const list = new TaskListView();
+    await list.load(['--project', 'p']);
+
+    expect(list.revision).toBe('r1');
+
+    list.applied({ id: 'A', title: 'A', state: 'done' }, 'r2');
+
+    expect(list.tasks?.map((one) => `${one.id} ${one.state}`)).toEqual(['A done', 'b open']);
+    expect(list.revision).toBe('r2');
   });
 });

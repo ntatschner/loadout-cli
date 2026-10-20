@@ -77,6 +77,16 @@ export function startWords(project: string, id: string): string[] {
   return [project, '--task-id', id];
 }
 
+/** A task as the routes write it, in the shape the task list's JSON gives the page. */
+export function fromRoute(task: { id: string; title: string; state: string; kind?: string; by?: string; declared?: string; note?: string | null; moved?: Task['moved'] }): Task {
+  return { id: task.id, title: task.title, state: task.state, kind: task.kind, declaredBy: task.by, declared: task.declared, note: task.note, moved: task.moved ?? null };
+}
+
+/** The list with one task put in place of the one with its id, which it keeps the place of. */
+export function withTask(tasks: Task[], changed: Task): Task[] {
+  return tasks.map((one) => (one.id.toLowerCase() === changed.id.toLowerCase() ? changed : one));
+}
+
 /** The words for moving a task, after 'task declare'. */
 export function declareWords(id: string, state: string, where: string[]): string[] {
   return [id, state, ...where];
