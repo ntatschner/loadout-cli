@@ -492,7 +492,9 @@ column stays readable however much was written about a task. **History**, or
 **Details and history** when there's a full description, opens the task in
 full: its detail, its note, and every change of state with who said so and
 when, the same as `loadout task show <id>`. A task recorded before there was a
-history shows only its latest claim, and says so.
+history shows only its latest claim, and says so. The dialog puts the task in the page's address,
+so a reload reopens it and the address can be shared on this machine, even
+for a task on a later page of a board.
 
 **Every task, across projects**, linked under the wall, is one board of every
 project's list and the workspace-wide one, the same as `loadout task list

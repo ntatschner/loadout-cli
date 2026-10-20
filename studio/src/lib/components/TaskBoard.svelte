@@ -39,9 +39,14 @@
      * says so of this page only: what it is missing may be on another.
      */
     paged?: boolean;
+    /**
+     * Opens a task in full somewhere else, such as the page's address. Without
+     * it the board opens the task's dialog itself.
+     */
+    onread?: (task: Task) => void;
   }
 
-  let { tasks, where, from = undefined, disabledReason = undefined, ondeclare = undefined, away = [], project = undefined, onstart = undefined, mixed = false, paged = false }: Props = $props();
+  let { tasks, where, from = undefined, disabledReason = undefined, ondeclare = undefined, away = [], project = undefined, onstart = undefined, mixed = false, paged = false, onread = undefined }: Props = $props();
 
   /** The list a task is on, by slug, or null for the workspace-wide one. */
   const listOf = (task: Task) => (mixed ? (task.project ?? null) : where[0] === '--project' ? where[1] : null);
@@ -92,7 +97,7 @@
       {#each TASK_NEXT[task.state] ?? [] as state (state)}
         <HaloButton label={TASK_MOVE[state]} size="small" kind={state === 'dropped' ? 'danger' : ''} cmd={lineFor('task declare', declareWords(task.id, state, whereFor(task)))} {disabledReason} onpress={() => move(task, state)} />
       {/each}
-      <HaloButton label={task.hasDetail ? 'Details and history' : 'History'} size="small" cmd={lineFor('task show', showWords(task.id, listOf(task)))} onpress={() => (reading = { ...task, project: listOf(task) })} />
+      <HaloButton label={task.hasDetail ? 'Details and history' : 'History'} size="small" cmd={lineFor('task show', showWords(task.id, listOf(task)))} onpress={() => (onread ? onread({ ...task, project: listOf(task) }) : (reading = { ...task, project: listOf(task) }))} />
     </div>
   </article>
 {/snippet}

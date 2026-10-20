@@ -41,9 +41,10 @@
   });
 </script>
 
-<Dialog title={task.title || task.id} extraClass="ls-tdetail" initialFocus=".close button" {onclose}>
+<!-- Opened from an address, the task is known only by its id and list until it is read. -->
+<Dialog title={full?.title || task.title || task.id} extraClass="ls-tdetail" initialFocus=".close button" {onclose}>
   <p class="chips">
-    <span class="ls-tag"><Signal word={task.state} /></span>
+    {#if full?.state || task.state}<span class="ls-tag"><Signal word={full?.state || task.state} /></span>{/if}
     <span class="ls-tag">{task.id}</span>
     {#if task.project !== undefined}<span class="ls-tag">{whereSaid(task.project)}</span>{/if}
   </p>

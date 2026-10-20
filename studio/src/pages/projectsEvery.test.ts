@@ -2,10 +2,11 @@
 // --every-list' a page at a time, moved between pages with the pager, and
 // back to the first page when the one being read has gone.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import type { Task } from '../lib/tasks';
 
 const listed: string[][] = [];
+const shown: string[][] = [];
 let pages = 3;
 let gone = 0;
 // A read held back until the test lets it go, to see the page while it waits.
@@ -22,6 +23,12 @@ vi.mock('../lib/api', async (original) => {
   return {
     ...real,
     readJson: vi.fn(async (path: string, words: string[] = []) => {
+      if (path === 'task show') {
+        shown.push(words);
+
+        return { id: words[0], title: 'Belongs nowhere yet', state: 'open', detail: '', history: [] };
+      }
+
       if (path !== 'task list') {
         // The page's other reads, as empty as the commands would give them.
         return path === 'project list' ? { projects: [], recorded: 0 } : path === 'idea list' ? { ideas: [] } : path === 'drift' ? [] : {};
@@ -92,6 +99,27 @@ describe('every task across projects', () => {
 
     expect(screen.getAllByText('None on this page.')).toHaveLength(2);
     expect(screen.queryByText('Nothing under way.')).toBeNull();
+  });
+
+  it('opens a task from the address, on whichever list it names', async () => {
+    shown.length = 0;
+    render(Projects, { rest: ['+every', 'task', '~', 'loose-end'], onlaunch: () => undefined });
+
+    const dialog = await screen.findByRole('dialog');
+
+    expect(dialog).toBeTruthy();
+    await vi.waitFor(() => expect(shown).toEqual([['loose-end', '--global']]));
+  });
+
+  it('writes the task it opens into the address, without leaving the page', async () => {
+    history.replaceState(null, '', '#projects/+every');
+    render(Projects, { rest: ['+every'], onlaunch: () => undefined });
+
+    const card = await screen.findByRole('article', { name: 'On page 1, open' });
+    await fireEvent.click(within(card).getByRole('button', { name: 'History' }));
+
+    // The router writes '+' as %2B, as it does for every place, and reads it back.
+    expect(decodeURIComponent(location.hash)).toBe('#projects/+every/task/website/task-1');
   });
 
   it('goes back to the first page when the one being read has gone', async () => {

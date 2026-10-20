@@ -36,6 +36,34 @@ export interface TaskShown extends Task {
   idea?: { plan: string; accepted: string; by: string } | null;
 }
 
+/** A task opened over the Projects page: which list it is on, and its id. */
+export interface TaskAt {
+  project: string | null;
+  id: string;
+}
+
+/**
+ * The parts of the Projects address that open one task over a place, after
+ * the place itself: 'task' and its id, and on the board of every list, the
+ * list first, '~' for the workspace-wide one.
+ */
+export function taskParts(place: string, task: TaskAt): string[] {
+  return place === '+every' ? [place, 'task', task.project ?? '~', task.id] : [place, 'task', task.id];
+}
+
+/** The task a Projects address opens, or null when it opens none. */
+export function taskAt(rest: string[]): TaskAt | null {
+  if (rest[1] !== 'task') {
+    return null;
+  }
+
+  if (rest[0] === '+every') {
+    return rest[2] && rest[3] ? { project: rest[2] === '~' ? null : rest[2], id: rest[3] } : null;
+  }
+
+  return rest[2] ? { project: rest[0].startsWith('+') ? null : rest[0], id: rest[2] } : null;
+}
+
 /** Where Studio shows an idea, by the list it is on and its id. */
 export function ideaHref(project: string | null | undefined, id: string): string {
   return `#ideas/${encodeURIComponent(project ?? '~')}/${encodeURIComponent(id)}`;

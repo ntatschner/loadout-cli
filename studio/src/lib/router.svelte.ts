@@ -36,6 +36,18 @@ class Router {
     }
   }
 
+  /**
+   * Changes the address without leaving the place: no history entry, no
+   * scroll to the top. For something opened over a page, such as one task's
+   * dialog, which a reload should reopen but which is not a page of its own.
+   */
+  replace(...parts: string[]): void {
+    const hash = `#${parts.map(encodeURIComponent).join('/')}`;
+
+    history.replaceState(history.state, '', hash);
+    this.route = parse(hash);
+  }
+
   go(...parts: string[]): void {
     const hash = `#${parts.map(encodeURIComponent).join('/')}`;
 
