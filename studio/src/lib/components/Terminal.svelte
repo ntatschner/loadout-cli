@@ -13,7 +13,7 @@
   import Command from './Command.svelte';
   import HaloButton from './HaloButton.svelte';
   import Signal from './Signal.svelte';
-  import { TERMINAL_STATES, fitFontSize, resumeCommand, type TerminalState } from '../terminal';
+  import { TERMINAL_STATES, largestFitting, resumeCommand, type TerminalState } from '../terminal';
 
   interface Props {
     title: string;
@@ -149,15 +149,40 @@
     }
 
     if (fit) {
-      terminal.options.fontSize = fitFontSize(host.clientWidth);
+      const xterm = terminal;
+      const measure = fitter;
+      // Each size asked about is measured there and then, so the answer is
+      // xterm's own cell at that size rather than a guess at it.
+      const best = largestFitting((trial) => {
+        xterm.options.fontSize = trial;
+
+        return (measure.proposeDimensions()?.cols ?? 0) >= 80;
+      });
+      terminal.options.fontSize = best;
       const proposed = fitter.proposeDimensions();
 
       if (proposed && proposed.rows > 0) {
         terminal.resize(80, proposed.rows);
+        clearSideways(proposed.rows);
       }
     } else {
       terminal.options.fontSize = size;
       fitter.fit();
+    }
+  }
+
+  /** At Fit's smallest size 80 columns can still be wider than the box, and the sideways scrollbar then takes a strip off the bottom: the rows give way, so the last one is never drawn under it. */
+  function clearSideways(fitted: number) {
+    if (!terminal || !host || host.scrollWidth <= host.clientWidth) {
+      return;
+    }
+
+    const lost = host.offsetHeight - host.clientHeight;
+    const drawn = host.querySelector<HTMLElement>('.xterm-screen');
+    const row = drawn && terminal.rows > 0 ? drawn.offsetHeight / terminal.rows : 0;
+
+    if (lost > 0 && row > 0) {
+      terminal.resize(80, Math.max(1, fitted - Math.ceil(lost / row)));
     }
   }
 
@@ -276,7 +301,13 @@
     rows = terminal.rows;
     onresize?.(terminal.cols, terminal.rows);
 
-    const watcher = new ResizeObserver(() => layout());
+    // Once a frame at most: under Fit a layout tries several sizes, and a
+    // dragged divider reports a new size on every frame it moves.
+    let pending = 0;
+    const watcher = new ResizeObserver(() => {
+      cancelAnimationFrame(pending);
+      pending = requestAnimationFrame(() => layout());
+    });
     watcher.observe(box);
 
     const looks = new MutationObserver(() => {
@@ -291,6 +322,7 @@
     return () => {
       looks.disconnect();
       watcher.disconnect();
+      cancelAnimationFrame(pending);
       typing.dispose();
       resizing.dispose();
       terminal?.dispose();
@@ -310,7 +342,7 @@
     <button type="button" class="tbtn" aria-label="Larger text" onclick={() => zoom(1)}>A+</button>
     <button type="button" class="tbtn" aria-pressed={fit ? 'true' : 'false'} title="Fit 80 columns to the width" onclick={toggleFit}>Fit</button>
   </div>
-  <div class="screen" bind:this={host}></div>
+  <div class="screen"><div class="mount" bind:this={host}></div></div>
   <div class={`ask ${ask?.family ?? ''}`} role="status" hidden={!ask}>
     {#if ask}
       <p>{ask.text.replace('{code}', String(code ?? 1))}</p>

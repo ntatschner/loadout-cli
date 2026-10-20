@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Session } from './api';
 import { signalOf } from './signals';
-import { TERMINAL_STATES, fitFontSize, resumeCommand, terminalState, type TerminalFacts } from './terminal';
+import { TERMINAL_STATES, largestFitting, resumeCommand, terminalState, type TerminalFacts } from './terminal';
 
 const session: Session = {
   id: 'a1b2c3d4',
@@ -103,11 +103,27 @@ describe('resumeCommand', () => {
   });
 });
 
-describe('fitFontSize', () => {
-  it('scales 80 columns to the width, within the text sizes the bar allows', () => {
-    expect(fitFontSize(1000)).toBeCloseTo(20.2, 1);
-    expect(fitFontSize(320)).toBe(6);
-    expect(fitFontSize(100)).toBe(5);
-    expect(fitFontSize(4000)).toBe(22);
+describe('largestFitting', () => {
+  // A cell as xterm makes one at a device pixel ratio of 1: whole pixels,
+  // about 0.6em, so several sizes share a width.
+  const cell = (size: number) => Math.floor(size * 0.6);
+  const fitsIn = (width: number) => (size: number) => Math.floor(width / cell(size)) >= 80;
+
+  it('picks the largest size whose 80 columns still go in, to a tenth of a pixel', () => {
+    expect(largestFitting(fitsIn(605))).toBe(13.3);
+    expect(cell(13.3) * 80).toBeLessThanOrEqual(605);
+    expect(cell(13.4) * 80).toBeGreaterThan(605);
+  });
+
+  it('stays within the text sizes the bar allows', () => {
+    expect(largestFitting(fitsIn(4000))).toBe(22);
+    expect(largestFitting(fitsIn(100))).toBe(5);
+  });
+
+  it('asks only a handful of times', () => {
+    let asked = 0;
+    largestFitting((size) => (asked++, fitsIn(900)(size)));
+
+    expect(asked).toBeLessThanOrEqual(8);
   });
 });
