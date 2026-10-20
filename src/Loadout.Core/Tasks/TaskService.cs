@@ -314,10 +314,12 @@ internal sealed class TaskService : ITaskService
 
     /// <inheritdoc />
     /// <remarks>
-    /// A file that changed in the last couple of seconds is stamped with its
-    /// revision as well, read through the cache, for the reason the cache
-    /// reads one again: two writes inside one tick of a coarse clock, with the
-    /// same length, have the same time and length and different text.
+    /// With each list's revision as well as its time and length, because two
+    /// writes inside one tick of a coarse clock, with the same length, have
+    /// the same time and length. Always, rather than only while a file is
+    /// settling, or the stamp would change again when it settled and say twice
+    /// that one write happened. A settled list's revision comes from what is
+    /// kept, without reading it.
     /// </remarks>
     public async Task<IReadOnlyList<TaskListStamp>> StampsAsync(CancellationToken ct = default)
     {
@@ -331,11 +333,9 @@ internal sealed class TaskService : ITaskService
         foreach (var list in Lists())
         {
             var path = PathFor(list);
-            var file = FileStamp.Of(path);
-            var stamp = file.Text;
+            var stamp = FileStamp.Of(path).Text;
 
-            if (file.Exists && !file.Settled
-                && await LoadAsync(path, ct).ConfigureAwait(false) is { Succeeded: true, Value: { } read })
+            if (stamp.Length > 0 && await LoadAsync(path, ct).ConfigureAwait(false) is { Succeeded: true, Value: { } read })
             {
                 stamp += "#" + read.Revision;
             }

@@ -1,5 +1,5 @@
 /** Something the page reads again from the daemon. */
-export type Reload = 'sessions' | 'history' | 'runs' | 'jobs' | 'tasks';
+export type Reload = 'sessions' | 'history' | 'runs' | 'jobs' | 'tasks' | 'ideas';
 
 /**
  * What the page reads again when the daemon says what has changed.
@@ -10,6 +10,10 @@ export type Reload = 'sessions' | 'history' | 'runs' | 'jobs' | 'tasks';
  * Tasks are said when a list's file changed, from a terminal, an agent or a
  * pull as well as from here. Every list is read again rather than the one
  * named, because what moved away from a list is drawn on the list it left.
+ * The ideas go with them: an idea is a row on a list, so capturing, removing
+ * or accepting one changes the list as well as its record.
+ *
+ * Ideas are said when a record changed, or a round started or finished.
  */
 export function reloadsFor(what: readonly string[]): Reload[] {
   const reloads: Reload[] = [];
@@ -28,6 +32,10 @@ export function reloadsFor(what: readonly string[]): Reload[] {
 
   if (what.includes('tasks')) {
     reloads.push('tasks');
+  }
+
+  if (what.includes('tasks') || what.includes('ideas')) {
+    reloads.push('ideas');
   }
 
   return reloads;

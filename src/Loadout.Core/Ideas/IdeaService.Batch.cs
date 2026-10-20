@@ -71,16 +71,25 @@ internal sealed partial class IdeaService
             foreach (var path in Directory.EnumerateFiles(directory, "*.yaml").Order(StringComparer.Ordinal))
             {
                 var place = new IdeaPlace(list, Path.GetFileNameWithoutExtension(path));
-                var file = FileStamp.Of(path);
-                var stamp = file.Text;
+                var stamp = FileStamp.Of(path).Text;
 
-                // Two writes inside one tick of a coarse clock, with the same
-                // length, have the same stamp, so a record changed in the
-                // last couple of seconds is stamped with its revision too.
-                if (file.Exists && !file.Settled
-                    && await _kept.ReadAsync(path, ct).ConfigureAwait(false) is { Succeeded: true, Value: { } read })
+                // With the revision as well, because two writes inside one
+                // tick of a coarse clock, with the same length, have the same
+                // time and length. Always, rather than only while the file is
+                // settling, or the stamp would change again when it settled
+                // and say twice that one write happened. A settled file's
+                // revision comes from what is kept, without reading it.
+                if (await _kept.ReadAsync(path, ct).ConfigureAwait(false) is { Succeeded: true, Value: { } read })
                 {
                     stamp += "#" + read.Revision;
+                }
+
+                // A round starting or ending changes what the idea shows
+                // before it changes the record, so whether one is running is
+                // part of the stamp.
+                if (_locks.Held(place))
+                {
+                    stamp += "+running";
                 }
 
                 stamps.Add(new IdeaStamp(place, stamp));

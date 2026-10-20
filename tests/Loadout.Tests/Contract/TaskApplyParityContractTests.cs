@@ -36,12 +36,34 @@ public sealed class TaskApplyParityContractTests
         ]
         """;
 
+    /// <summary>A capture, then a change to it that is refused, so the second says why.</summary>
+    private const string Ideas = """
+        [
+          {"op": "capture", "text": "Look at the fonts", "title": "Fonts"},
+          {"op": "dismiss", "id": "fonts"}
+        ]
+        """;
+
+    [BuiltCliFact]
+    public async Task The_command_line_the_tool_and_the_route_say_the_same_about_one_batch_of_idea_changes()
+    {
+        var command = await ByCommandAsync("idea", Ideas);
+        var tool = await ByToolAsync("loadout_idea_apply", Ideas);
+        var route = await ByRouteAsync("ideas", Ideas);
+
+        Said(tool).Should().Equal(Said(command), "the agents' tool and the command line take one batch alike");
+        Said(route).Should().Equal(Said(command), "Studio's route and the command line take one batch alike");
+
+        Said(command).Select(one => one.Applied).Should().Equal(true, false);
+        Said(command)[0].Id.Should().Be("fonts");
+    }
+
     [BuiltCliFact]
     public async Task The_command_line_the_tool_and_the_route_say_the_same_about_one_batch()
     {
-        var command = await ByCommandAsync();
-        var tool = await ByToolAsync();
-        var route = await ByRouteAsync();
+        var command = await ByCommandAsync("task", Batch);
+        var tool = await ByToolAsync("loadout_task_apply", Batch);
+        var route = await ByRouteAsync("tasks", Batch);
 
         Said(tool).Should().Equal(Said(command), "the agents' tool and the command line take one batch alike");
         Said(route).Should().Equal(Said(command), "Studio's route and the command line take one batch alike");
@@ -50,22 +72,23 @@ public sealed class TaskApplyParityContractTests
         Said(command)[2].HeldBack.Should().BeTrue();
     }
 
-    private static async Task<JsonElement> ByCommandAsync()
+    private static async Task<JsonElement> ByCommandAsync(string kind, string batch)
     {
         using var loadout = new LoadoutProcess();
         var slug = await RegisteredAsync(loadout);
         var file = Path.Combine(loadout.Home, "batch.json");
 
-        await File.WriteAllTextAsync(file, Batch);
+        await File.WriteAllTextAsync(file, batch);
 
-        var applied = await loadout.RunAsync("task", "apply", file, "--project", slug, "--json");
+        var applied = await loadout.RunAsync(kind, "apply", file, "--project", slug, "--json");
 
         applied.ExitCode.Should().Be(2, "a change was refused, and the exit code is the refusal's: " + applied.StandardError);
+
 
         return applied.Json();
     }
 
-    private static async Task<JsonElement> ByToolAsync()
+    private static async Task<JsonElement> ByToolAsync(string tool, string batch)
     {
         using var loadout = new LoadoutProcess();
         var slug = await RegisteredAsync(loadout);
@@ -73,8 +96,8 @@ public sealed class TaskApplyParityContractTests
 
         var answer = await session.RequestAsync("tools/call", new
         {
-            name = "loadout_task_apply",
-            arguments = new { operations = Batch },
+            name = tool,
+            arguments = new { operations = batch },
         });
 
         var text = answer.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString()!;
@@ -87,13 +110,13 @@ public sealed class TaskApplyParityContractTests
     /// as a command waits for its person. The project is named as the
     /// command line's registration names it, so every reason reads the same.
     /// </remarks>
-    private static async Task<JsonElement> ByRouteAsync()
+    private static async Task<JsonElement> ByRouteAsync(string kind, string batch)
     {
         using var space = new TemporaryWorkspace();
         await space.ProjectAsync(Name);
 
         using var stopping = new CancellationTokenSource();
-        using var server = new DashboardServer(new Unrun()) { Tasks = space.Tasks };
+        using var server = new DashboardServer(new Unrun()) { Tasks = space.Tasks, Ideas = space.Ideas };
 
         server.Start(0).Succeeded.Should().BeTrue();
         _ = server.ListenAsync(stopping.Token);
@@ -102,8 +125,8 @@ public sealed class TaskApplyParityContractTests
         client.DefaultRequestHeaders.Add("X-Loadout-Token", server.Token);
 
         using var answered = await client.PostAsync(
-            $"http://127.0.0.1:{server.Port}{MemoryApi.Root}/{Name}/tasks:batch",
-            new StringContent(Batch, Encoding.UTF8, "application/json"));
+            $"http://127.0.0.1:{server.Port}{MemoryApi.Root}/{Name}/{kind}:batch",
+            new StringContent(batch, Encoding.UTF8, "application/json"));
 
         var body = await answered.Content.ReadFromJsonAsync<JsonElement>();
         await stopping.CancelAsync();
@@ -128,7 +151,9 @@ public sealed class TaskApplyParityContractTests
             one.GetProperty("code").GetInt32(),
             one.TryGetProperty("task", out var task) && task.ValueKind == JsonValueKind.Object
                 ? $"{Text(task, "state")} {Text(task, "title")} {Text(task, "note")}"
-                : null))];
+                : one.TryGetProperty("idea", out var idea) && idea.ValueKind == JsonValueKind.Object
+                    ? $"{Text(idea, "stage")} {Text(idea, "ask")}"
+                    : null))];
 
     private static string? Text(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;

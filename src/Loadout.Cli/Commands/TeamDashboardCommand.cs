@@ -467,6 +467,8 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         // change from the page is the change 'task apply' makes. Watching only
         // is the routes' own to refuse.
         server.Tasks = _tasks;
+        server.Ideas = _ideas;
+        server.IdeasBusy = () => ideas.Marked;
 
         // Said outright as well, for Studio, which shows every change as the
         // command to type when it cannot make it.

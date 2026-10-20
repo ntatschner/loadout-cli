@@ -263,6 +263,37 @@ public sealed class DashboardTasksApiTests : IAsyncLifetime
         poll.Reads.Should().Be(1);
     }
 
+    [Fact]
+    public async Task One_write_is_said_once_and_not_again_when_the_file_settles()
+    {
+        using var patience = new CancellationTokenSource(Patience);
+        using var events = await _client.GetAsync($"{_root}/api/v1/events", HttpCompletionOption.ResponseHeadersRead, patience.Token);
+        using var reader = new StreamReader(await events.Content.ReadAsStreamAsync(patience.Token));
+
+        await NextAsync(reader, "changed", patience.Token);
+        (await _space.Tasks.DeclareAsync("website", "a", TaskState.Open, "nigel", "A")).Succeeded.Should().BeTrue();
+        await NextAsync(reader, "tasks", patience.Token);
+
+        // Past the two seconds a file takes to settle, when its stamp would
+        // change form if it carried its revision only while settling.
+        (await QuietAsync(reader, "tasks", TimeSpan.FromSeconds(4))).Should().BeTrue("one write is one change");
+    }
+
+    /// <summary>Whether nothing named is said for a while, which a cancelled read means here.</summary>
+    private static async Task<bool> QuietAsync(StreamReader reader, string named, TimeSpan wait)
+    {
+        using var waiting = new CancellationTokenSource(wait);
+
+        try
+        {
+            return (await NextAsync(reader, named, waiting.Token)).Length == 0;
+        }
+        catch (OperationCanceledException)
+        {
+            return true;
+        }
+    }
+
     private static async Task<string> NextAsync(StreamReader reader, string named, CancellationToken ct)
     {
         string? current = null;

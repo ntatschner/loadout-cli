@@ -1089,6 +1089,39 @@ public sealed class LoadoutTools
         return JsonSerializer.Serialize(Core.Tasks.TaskOperations.Json(applied.Value!));
     }
 
+    [McpServerTool(Name = "loadout_idea_apply")]
+    [Description(
+        "Make several idea changes at once, the same JSON array 'loadout idea apply' takes: "
+        + "{\"op\":\"capture|answer|choose|judge|dismiss|remove\", \"id\", \"text\", \"title\", \"question\", \"answer\", "
+        + "\"layer\", \"option\", \"piece\", \"verdict\", \"request\", \"project\", \"revision\"}. One naming no project is on "
+        + "this project's list, and '-' is the workspace-wide list. An idea's answers, choices and verdicts are made "
+        + "together or not at all, and every change gets a result. Only for what the person has said; an answer you "
+        + "make up for them is not theirs.")]
+    public async Task<string> ApplyIdeasAsync(
+        [Description("A JSON array of operations.")] string operations,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(operations);
+
+        var slug = await SlugAsync(ct).ConfigureAwait(false);
+
+        if (slug is null)
+        {
+            return "No project could be worked out from here.";
+        }
+
+        var parsed = Core.Ideas.IdeaOperations.Parse(operations, slug, "agent");
+
+        if (parsed.Failed)
+        {
+            return parsed.Error!;
+        }
+
+        var applied = await _ideas.ApplyAsync(parsed.Value!, ct).ConfigureAwait(false);
+
+        return JsonSerializer.Serialize(Core.Ideas.IdeaOperations.Json(applied.Value!));
+    }
+
     [McpServerTool(Name = "loadout_task_move")]
     [Description(
         "Move a task or an idea from this project's list to the project it belongs on, or to the "

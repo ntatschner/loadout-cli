@@ -182,6 +182,36 @@ public sealed class DashboardServer : IDisposable
     private Tasks.ITaskService? _tasks;
     private SharedPoll<IReadOnlyList<Tasks.TaskListStamp>>? _taskStamps;
 
+    /// <summary>
+    /// The ideas, read one list or one idea at a time and changed in batches,
+    /// or null where nothing gave this server them.
+    /// </summary>
+    /// <remarks>The service itself, as <see cref="Tasks"/> is, for the same reason.</remarks>
+    public Ideas.IIdeaService? Ideas
+    {
+        get => _ideas;
+        set
+        {
+            _ideas = value;
+            _ideaStamps = value is null ? null : new SharedPoll<IReadOnlyList<Ideas.IdeaStamp>>(value.StampsAsync, Interval - TimeSpan.FromMilliseconds(100));
+        }
+    }
+
+    private Ideas.IIdeaService? _ideas;
+    private SharedPoll<IReadOnlyList<Ideas.IdeaStamp>>? _ideaStamps;
+
+    /// <summary>
+    /// A count that moves whenever the page starts or finishes an idea round of
+    /// its own, or null where nothing here starts one.
+    /// </summary>
+    /// <remarks>
+    /// The page marks a round busy before the command takes the idea's lock and
+    /// clears it after the lock is let go, so neither file says when the mark
+    /// goes. Without this the page would show a finished round as running
+    /// until something else changed.
+    /// </remarks>
+    public Func<int>? IdeasBusy { get; set; }
+
     /// <summary>The commands Studio can run and the ones it has, or null where this server runs none.</summary>
     public CommandJobs? Jobs { get; set; }
 
@@ -1317,13 +1347,23 @@ public sealed class DashboardServer : IDisposable
             return;
         }
 
-        if (Under(path, MemoryApi.Root) && Tasks is not null
+        if (Under(path, MemoryApi.Root)
             && path[MemoryApi.Root.Length..].Split('/', StringSplitOptions.RemoveEmptyEntries).Select(Uri.UnescapeDataString).ToArray()
-                is var parts && TasksApi.Handles(parts))
+                is var parts)
         {
-            await TasksApi.HandleAsync(context, Tasks, parts, WatchOnly, Environment.UserName, ct).ConfigureAwait(false);
+            if (Tasks is not null && TasksApi.Handles(parts))
+            {
+                await TasksApi.HandleAsync(context, Tasks, parts, WatchOnly, Environment.UserName, ct).ConfigureAwait(false);
 
-            return;
+                return;
+            }
+
+            if (Ideas is not null && IdeasApi.Handles(parts))
+            {
+                await IdeasApi.HandleAsync(context, Ideas, parts, WatchOnly, Environment.UserName, ct).ConfigureAwait(false);
+
+                return;
+            }
         }
 
         if (Under(path, MemoryApi.Root) && Memory is not null)
@@ -1478,15 +1518,16 @@ public sealed class DashboardServer : IDisposable
     /// A server-sent event stream, which a page reconnects to by itself, and
     /// which says only what changed, not the change: the page asks the
     /// routes it already reads, so the stream and the routes cannot disagree.
-    /// Ideas are read again on a slower clock by the page itself.
     /// </para>
     /// <para>
     /// Tasks are watched by their files, because they are written from
     /// terminals, by agents and by a pull as often as from here. A list whose
     /// file changed is said as <c>tasks</c>, and as its own <c>tasks</c> event
     /// naming the list and its new revision, for a page or a script that
-    /// reads one list rather than all of them. The stamps are read once for
-    /// every stream open, however many tabs there are.
+    /// reads one list rather than all of them. Ideas are watched the same way,
+    /// one record each, said as <c>ideas</c> and an <c>ideas</c> event naming
+    /// the idea and its revision. The stamps are read once for every stream
+    /// open, however many tabs there are.
     /// </para>
     /// <para>
     /// A run's stamp is the one the summaries are cached by, so nothing here
@@ -1506,6 +1547,8 @@ public sealed class DashboardServer : IDisposable
         string? sessions = null, runs = null;
         int? jobs = null;
         Dictionary<string, string>? lists = null;
+        Dictionary<string, (Ideas.IdeaPlace Place, string Stamp)>? records = null;
+        int? busy = null;
         var quiet = DateTimeOffset.UtcNow;
 
         try
@@ -1576,6 +1619,48 @@ public sealed class DashboardServer : IDisposable
                     await StudioEventAsync(response, "event: tasks\ndata: " + JsonSerializer.Serialize(moved, Json) + "\n\n", ct)
                         .ConfigureAwait(false);
                 }
+
+                // The ideas the same way, one record each, with a round
+                // starting or ending part of each idea's stamp.
+                var changed = new List<object>();
+
+                if (_ideaStamps is { } ideaPoll && Ideas is { } ideas)
+                {
+                    var now = (await ideaPoll.GetAsync(ct).ConfigureAwait(false))
+                        .ToDictionary(
+                            one => Loadout.Core.Tasks.TaskOperations.Named(one.Place.Project) + "/" + one.Place.Id,
+                            one => (one.Place, one.Stamp),
+                            StringComparer.Ordinal);
+                    var marked = IdeasBusy?.Invoke() ?? 0;
+
+                    if (records is null || marked != busy)
+                    {
+                        said.Add("ideas");
+                    }
+
+                    if (records is not null)
+                    {
+                        foreach (var (_, (place, _)) in now.Where(one => !records.TryGetValue(one.Key, out var was) || was.Stamp != one.Value.Stamp)
+                            .Concat(records.Where(one => !now.ContainsKey(one.Key))))
+                        {
+                            var read = await ideas.ReadWithRevisionAsync(place, ct).ConfigureAwait(false);
+
+                            changed.Add(new { project = place.Project, id = place.Id, revision = read.Value?.Revision });
+                        }
+                    }
+
+                    records = now;
+                    busy = marked;
+                }
+
+                if (changed.Count > 0)
+                {
+                    said.Add("ideas");
+                    await StudioEventAsync(response, "event: ideas\ndata: " + JsonSerializer.Serialize(changed, Json) + "\n\n", ct)
+                        .ConfigureAwait(false);
+                }
+
+                said = [.. said.Distinct()];
 
                 if (said.Count > 0)
                 {

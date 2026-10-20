@@ -88,6 +88,7 @@
 | `loadout task apply <file>` | Make several changes at once from a JSON array, or `-` for standard input. Each list is changed all or nothing, and every change says whether it was made. Described under [Changing several tasks at once](#changing-several-tasks-at-once) |
 | `loadout idea move <id> --to <project>` | The same for an idea, with its questions, answers and plan. Not while a round on it is running |
 | `loadout idea add\|list\|show\|remove` | Drop an idea in, on a project or the workspace-wide list, to be fleshed out later |
+| `loadout idea apply <file>` | Several answers, choices and verdicts at once from a JSON array, each idea's all or nothing. Described under [Ideas the same way](#ideas-the-same-way) |
 | `loadout idea refine <id>` | Have an agent take an idea one round further: ask its questions, propose a plan with options for each layer, or revise it. It asks the agent and model the last round that came back used, unless you give `--agent` or `--model`, and says which before it starts. One round per idea at a time on this machine |
 | `loadout idea dismiss <id>` | Clear the "last round failed" marker on an idea you have stopped refining, without paying for another round. Answers and the plan stay |
 | `loadout idea answer\|choose\|keep\|drop\|improve` | Answer the agent's questions, pick an option for a layer, keep or drop a piece, or ask for one to be reworked. An answer or request that starts with a dash goes as `--answer=` or `--request=` |
@@ -282,6 +283,39 @@ PATCH and DELETE on a task, and `POST .../tasks:batch` for the array. The list's
 revision comes back as an ETag, a change carrying `If-Match` is refused with 409
 if the list has moved on since, and a change made anywhere, from a terminal, by
 an agent or by a pull, reaches Studio within a second.
+
+### Ideas the same way
+
+`loadout idea apply` takes the same kind of array for ideas, with six ops.
+`capture` drops a new one in from its `text` (and an optional `title` or `id`).
+`answer` takes a `question` and an `answer`, `choose` a `layer` and an `option`,
+and `judge` a `piece`, a `verdict` (`keep`, `drop` or `improve`) and, for
+`improve`, a `request`. `dismiss` clears a failed round and `remove` forgets the
+idea.
+
+```sh
+loadout idea apply - --global <<'JSON'
+[
+  {"op": "answer", "id": "status-page", "question": "Q1", "answer": "Just me"},
+  {"op": "answer", "id": "status-page", "question": "Q2", "answer": "Email"},
+  {"op": "choose", "id": "status-page", "layer": "L1", "option": "b"}
+]
+JSON
+```
+
+The changes to one idea are made together or not at all, for the reason a
+list's are: an idea's record is one file. A capture or a remove changes the
+idea's list as well as its record, so each one stands on its own. Refining
+isn't one of the ops. A round takes minutes and starts an agent, and a batch
+waiting on one would hold that idea's changes open the whole time. Run
+`idea refine` for that.
+
+An idea's record has a revision too, and `"revision"` refuses a change made
+from an older read. `loadout_idea_apply` is the same thing over MCP, and Studio
+has the ideas under `/api/v1/projects/{project}/ideas`: GET for the list or one
+idea, POST to capture one, DELETE to forget one, and `POST .../ideas:batch` for
+the array. A change to a record, and a round starting or ending, reaches Studio
+within a second.
 
 ## Editors
 
@@ -622,7 +656,7 @@ Every launch declares Loadout itself as an MCP server, so the handoff runs both
 ways: a session can ask the launcher things rather than parse console output
 written for a person.
 
-Twenty tools, each making the same call its command makes:
+Twenty-one tools, each making the same call its command makes:
 
 | | |
 |---|---|
@@ -639,6 +673,7 @@ Twenty tools, each making the same call its command makes:
 | `loadout_task_move` | Move a task or idea from this project to the one it belongs on, as `task move` does |
 | `loadout_idea_add` | Drop an idea in without leaving the work in hand, as `idea add` does |
 | `loadout_ideas` | Every idea and where it stands, or one in full, as `idea list` and `idea show` say it |
+| `loadout_idea_apply` | Several idea changes at once, each idea's all or nothing, as `idea apply` makes them |
 | `loadout_mode` | Change the posture for the rest of the session, and get what that changes |
 | `loadout_progress` | For a node of a team run: say what you are doing, in your own words |
 | `loadout_teams` | What the team runs on this machine are doing, and which have stopped to ask |

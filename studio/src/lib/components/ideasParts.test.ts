@@ -60,19 +60,22 @@ describe('QuestionSet', () => {
     expect(said(send)).toBe('answer a question first');
   });
 
-  it('runs the refine after the answers, and not after one fails', async () => {
+  it('sends the answers as one batch, runs the refine after it, and not after it is refused', async () => {
+    const sent: Record<string, string>[][] = [];
     const ran: string[][] = [];
     const answers: Answer[] = [
       { question: 'Q1', answer: 'a', words: ['i', 'Q1', '--answer=a', '--global'], line: '' },
       { question: 'Q2', answer: 'b', words: ['i', 'Q2', '--answer=b', '--global'], line: '' },
     ];
+    const act = async (path: string, words: string[]) => (ran.push([path, ...words]), true);
 
-    expect(await sendAnswers('i', ['--global'], answers, true, async (path, words) => (ran.push([path, ...words]), true))).toBe(true);
-    expect(ran.map((one) => one.slice(0, 3))).toEqual([['idea answer', 'i', 'Q1'], ['idea answer', 'i', 'Q2'], ['idea refine', 'i', '--global']]);
+    expect(await sendAnswers('i', ['--global'], answers, true, async (batch) => (sent.push(batch), true), act)).toBe(true);
+    expect(sent).toEqual([[{ op: 'answer', id: 'i', question: 'Q1', answer: 'a' }, { op: 'answer', id: 'i', question: 'Q2', answer: 'b' }]]);
+    expect(ran).toEqual([['idea refine', 'i', '--global']]);
 
     ran.length = 0;
-    expect(await sendAnswers('i', ['--global'], answers, true, async (path, words) => (ran.push([path, ...words]), words[1] !== 'Q1'))).toBe(false);
-    expect(ran.map((one) => one[0])).toEqual(['idea answer']);
+    expect(await sendAnswers('i', ['--global'], answers, true, async () => false, act)).toBe(false);
+    expect(ran).toEqual([]);
   });
 
   it('offers a recommendation that is not an option as a chip, with its reason under the matched one', async () => {

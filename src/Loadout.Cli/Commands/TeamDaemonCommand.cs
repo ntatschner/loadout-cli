@@ -425,6 +425,8 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             // change from the page is the change 'task apply' makes. Watching only
             // is the routes' own to refuse.
             server.Tasks = _tasks;
+            server.Ideas = _ideas;
+            server.IdeasBusy = () => ideas.Marked;
 
             // What there is to start, read per request like the waiting area:
             // a team written a moment ago, from the page or from a terminal,

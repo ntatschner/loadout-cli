@@ -131,6 +131,7 @@ export class Studio {
       runs: () => this.loadRuns(),
       jobs: () => this.loadJobs(),
       tasks: () => this.loadTasks(),
+      ideas: () => this.loadIdeas(),
     };
 
     this.#stop = api.listen((what) => {
@@ -141,11 +142,16 @@ export class Studio {
       }
     });
 
-    // Ideas are not on the event stream yet, so they are read again on a
-    // clock.
+    // The clock moves every so often for the ages the page shows. The ideas
+    // are read again with it, slowly, for what no file says: notes being
+    // split into ideas, and a round whose process died without letting go.
+    let ticks = 0;
     setInterval(() => {
       this.now = Date.now();
-      void this.#guard(() => this.loadIdeas());
+
+      if (++ticks % 4 === 0) {
+        void this.#guard(() => this.loadIdeas());
+      }
     }, 15000);
 
     matchMedia?.('(prefers-color-scheme: light)').addEventListener?.('change', () => this.applyPrefs());

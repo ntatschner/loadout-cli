@@ -4,8 +4,12 @@ import { describe, expect, it } from 'vitest';
 import { reloadsFor } from './reloads';
 
 describe('what the page reads again', () => {
-  it('reads the task lists when the daemon says a list changed', () => {
-    expect(reloadsFor(['tasks'])).toEqual(['tasks']);
+  it('reads the task lists, and the ideas on them, when the daemon says a list changed', () => {
+    expect(reloadsFor(['tasks'])).toEqual(['tasks', 'ideas']);
+  });
+
+  it('reads the ideas when the daemon says an idea changed', () => {
+    expect(reloadsFor(['ideas'])).toEqual(['ideas']);
   });
 
   it('reads the history with the sessions', () => {
@@ -13,7 +17,7 @@ describe('what the page reads again', () => {
   });
 
   it('reads each thing named, once, and nothing it did not name', () => {
-    expect(reloadsFor(['runs', 'jobs', 'tasks'])).toEqual(['runs', 'jobs', 'tasks']);
+    expect(reloadsFor(['runs', 'jobs', 'tasks', 'ideas'])).toEqual(['runs', 'jobs', 'tasks', 'ideas']);
     expect(reloadsFor([])).toEqual([]);
     expect(reloadsFor(['something new'])).toEqual([]);
   });
