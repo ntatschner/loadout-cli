@@ -176,15 +176,29 @@
 
   const everyWhere = (page: number) => ['--every-list', ...pageWords(page, EVERY_LIMIT)];
 
+  let everyAsked = 0;
+
   async function loadEvery(page = untrack(() => everyPage)) {
-    everyPage = page;
+    const mine = ++everyAsked;
+
     await untrack(() => everyList.load(everyWhere(page)));
+
+    // A later press has read since; what it read is what is shown.
+    if (mine !== everyAsked) {
+      return;
+    }
 
     // A page that has gone, because tasks were finished or the list
     // narrowed since it was read, is refused; the first page always exists.
     if (everyList.error && page > 1) {
       await loadEvery(1);
+
+      return;
     }
+
+    // Only once the page has arrived, so the pager never names a page the
+    // board is not showing.
+    everyPage = page;
   }
 
   $effect(() => {
@@ -456,7 +470,7 @@
       {#if everyList.error}<p class="offline" role="alert">{everyList.error}</p>{/if}
       <ListToolbar noun="tasks" query={everyList.text} shape={everyList.shape} shown={everyList.total} recorded={everyList.recorded} problem={everyList.problem} onchange={(query) => { everyPage = 1; void everyList.ask(query, everyWhere(1)); }} />
       {#if everyList.tasks}
-        <TaskBoard tasks={everyList.tasks} mixed where={[]} from={everyList.from} disabledReason={refused} onstart={(task, withOptions) => task.project && void start(task, withOptions, task.project)} ondeclare={(task, state) => void act('task declare', declareWords(task.id, state, whereOf(task.project)))} />
+        <TaskBoard tasks={everyList.tasks} mixed paged={everyList.pages > 1} where={[]} from={everyList.from} disabledReason={refused} onstart={(task, withOptions) => task.project && void start(task, withOptions, task.project)} ondeclare={(task, state) => void act('task declare', declareWords(task.id, state, whereOf(task.project)))} />
         {#if everyList.pages > 1}
           <nav class="ls-pager" aria-label="Pages of tasks">
             <span role="status">Page {everyPage} of {everyList.pages}, {everyList.total} in all.</span>

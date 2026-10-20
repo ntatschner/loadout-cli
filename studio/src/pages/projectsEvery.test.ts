@@ -8,6 +8,9 @@ import type { Task } from '../lib/tasks';
 const listed: string[][] = [];
 let pages = 3;
 let gone = 0;
+// A read held back until the test lets it go, to see the page while it waits.
+let held = false;
+let release: () => void = () => undefined;
 
 function page(n: number): Task[] {
   return [{ id: `task-${n}`, title: `On page ${n}`, state: 'open', project: n % 2 ? 'website' : null }];
@@ -27,6 +30,11 @@ vi.mock('../lib/api', async (original) => {
       listed.push(words);
       const n = Number(words[words.indexOf('--page') + 1] ?? 1);
 
+      if (held) {
+        held = false;
+        await new Promise<void>((resolve) => (release = resolve));
+      }
+
       if (n > pages - gone) {
         throw new real.Refused(`There are ${pages - gone} pages of 50, so there is no page ${n}.`, 400);
       }
@@ -43,6 +51,7 @@ describe('every task across projects', () => {
     listed.length = 0;
     pages = 3;
     gone = 0;
+    held = false;
   });
 
   it('reads the first page of every list, and the pager moves through the rest', async () => {
@@ -56,6 +65,33 @@ describe('every task across projects', () => {
 
     expect(await screen.findByRole('article', { name: 'On page 2, open' })).toBeTruthy();
     expect(listed.at(-1)).toEqual(['--every-list', '--limit', '50', '--page', '2']);
+    expect(screen.getByText('Page 2 of 3, 120 in all.')).toBeTruthy();
+  });
+
+  it('names the page only once the board shows it', async () => {
+    render(Projects, { rest: ['+every'], onlaunch: () => undefined });
+
+    await screen.findByRole('article', { name: 'On page 1, open' });
+    held = true;
+    await fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+
+    // The read of page 2 has not come back: the board and the pager both
+    // still say page 1.
+    expect(screen.getByRole('article', { name: 'On page 1, open' })).toBeTruthy();
+    expect(screen.getByText('Page 1 of 3, 120 in all.')).toBeTruthy();
+
+    release();
+    expect(await screen.findByText('Page 2 of 3, 120 in all.')).toBeTruthy();
+    expect(screen.getByRole('article', { name: 'On page 2, open' })).toBeTruthy();
+  });
+
+  it('says an empty column is empty on this page only, since the rest may be on another', async () => {
+    render(Projects, { rest: ['+every'], onlaunch: () => undefined });
+
+    await screen.findByRole('article', { name: 'On page 1, open' });
+
+    expect(screen.getAllByText('None on this page.')).toHaveLength(2);
+    expect(screen.queryByText('Nothing under way.')).toBeNull();
   });
 
   it('goes back to the first page when the one being read has gone', async () => {

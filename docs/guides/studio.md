@@ -492,7 +492,9 @@ project's list and the workspace-wide one, the same as `loadout task list
 --every-list`. Each card names its project, and its moves and **Start** are on
 that project's list. Narrow it with `project:` and a slug, or `project:global`.
 It's read 50 tasks at a time, with **Previous page** and **Next page** at the
-foot, and goes back to the first page if the one you were on has gone. Its
+foot, and goes back to the first page if the one you were on has gone. Open
+work fills the first pages, so a column with nothing in it says *None on this
+page*: what's doing or blocked may be on the next. Its
 query isn't saved, because a filter naming one project would empty every
 other project's board.
 

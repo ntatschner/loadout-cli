@@ -34,9 +34,14 @@
      * its project, and its moves and its start are on that project's list.
      */
     mixed?: boolean;
+    /**
+     * Whether the tasks are one page of a longer list. An empty column then
+     * says so of this page only: what it is missing may be on another.
+     */
+    paged?: boolean;
   }
 
-  let { tasks, where, from = undefined, disabledReason = undefined, ondeclare = undefined, away = [], project = undefined, onstart = undefined, mixed = false }: Props = $props();
+  let { tasks, where, from = undefined, disabledReason = undefined, ondeclare = undefined, away = [], project = undefined, onstart = undefined, mixed = false, paged = false }: Props = $props();
 
   /** The list a task is on, by slug, or null for the workspace-wide one. */
   const listOf = (task: Task) => (mixed ? (task.project ?? null) : where[0] === '--project' ? where[1] : null);
@@ -98,7 +103,7 @@
       {@const ones = shown.filter((task) => task.state === state)}
       <section class="col" aria-labelledby={`${name}-${state}`}>
         <h4 id={`${name}-${state}`}><Signal word={state} />{title}<span class="n">{ones.length}</span></h4>
-        {#each ones as task (taskKey(task))}{@render card(task)}{:else}<p class="empty">{empty}</p>{/each}
+        {#each ones as task (taskKey(task))}{@render card(task)}{:else}<p class="empty">{paged ? 'None on this page.' : empty}</p>{/each}
       </section>
     {/each}
   </div>

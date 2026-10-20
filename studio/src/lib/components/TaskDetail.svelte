@@ -43,7 +43,7 @@
 
 <Dialog title={task.title || task.id} extraClass="ls-tdetail" initialFocus=".close button" {onclose}>
   <p class="chips">
-    <span class="ls-tag"><Signal word={task.state} />{task.state}</span>
+    <span class="ls-tag"><Signal word={task.state} /></span>
     <span class="ls-tag">{task.id}</span>
     {#if task.project !== undefined}<span class="ls-tag">{whereSaid(task.project)}</span>{/if}
   </p>
@@ -70,7 +70,7 @@
       {#if full.history.length}
         <ol class="history">
           {#each full.history as one, n (n)}
-            <li><Signal word={one.state} /><span class="st">{one.state}</span> <span class="by">{one.by || 'nobody named'}</span> <time datetime={one.at}>{when(one.at)}</time>{#if one.reason}<span class="why">{one.reason}</span>{/if}</li>
+            <li><span class="st"><Signal word={one.state} /></span> <span class="by">{one.by || 'nobody named'}</span> <time datetime={one.at}>{when(one.at)}</time>{#if one.reason}<span class="why">{one.reason}</span>{/if}</li>
           {/each}
         </ol>
       {:else}
