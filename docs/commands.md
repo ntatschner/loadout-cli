@@ -81,6 +81,9 @@
 | `loadout commands` | List everything the launcher can do, grouped by what it is for |
 | `loadout list` | List registered projects |
 | `loadout running` | The sessions running now, and how long each has been quiet |
+| `loadout session list` | The sessions the daemon hosts for Studio, with the ids the next two take |
+| `loadout session rename <session> <name>` | Rename one, as renaming its tab in Studio does. `--reset` gives it back the name it was launched as |
+| `loadout session end <session>` | End one, as Studio's End session does. It stays listed, ended. Asks first unless `--yes` |
 | `loadout find <query>` | Search tasks, ideas, sessions, team runs and projects at once, grouped, each with the command that shows it. Takes the [list query](#filtering-and-sorting-a-list): `kind:task state:open login` searches only open tasks. A query starting with a minus goes as `--query=` |
 | `loadout task list\|show\|declare\|remove` | Record what is being worked on, and check it against the repository. `--global` is the list for what belongs to no project yet |
 | `loadout task declare <id> <state> --title <line> --detail <text>` | A title is one line of 72 characters at most, so a list stays readable; the full description goes in `--detail`. A longer title is shortened at a word, the whole of it is kept at the start of the detail, and you're told so |
@@ -378,6 +381,14 @@ attributes them:
 2 days ago     codex  storefront-api     Tidy the deploy script
 ```
 
+The sessions Studio runs in its Terminals mode are hosted by the daemon, and
+`loadout session` reaches them from any terminal. `session list` shows each with
+its id, `session rename` and `session end` take an id, the start of one, or the
+name, and a name two sessions share is refused with both ids listed rather than
+guessed at. Both go through the same routes as Studio, so every browser shows a
+new name at once, and a session ended here stays on Studio's Sessions page,
+ended. With no daemon running they say so and fail.
+
 `loadout resume` opens a picker, or takes a session id or `--last`. Resuming
 goes through the launcher rather than straight to the agent, so the workspace
 syncs and the context recompiles instead of just reopening a bare transcript.
@@ -430,8 +441,8 @@ Nor is it anything Loadout started with nobody at a terminal. Every team node,
 idea round and dump split leaves a transcript like any other, in the project it
 worked in, and a few runs were enough to bury your own sessions under them. The
 launch ledger now notes each one's session id the moment the agent names it, and
-every list you resume from leaves those out: `session list`, `resume` and the
-launcher's recent sessions. `session running` still shows a live node, marked
+every list you resume from leaves those out: `loadout sessions`, `resume` and the
+launcher's recent sessions. `loadout running` still shows a live node, marked
 headless, because a team at work is worth seeing.
 
 Claude Code's own `/resume` picker reads its projects folder directly, so the

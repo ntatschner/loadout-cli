@@ -238,6 +238,9 @@ public static class StudioCoverage
         ["commands"] = new("settings", StudioEffect.Reads),
         ["sessions"] = new("spend", StudioEffect.Reads),
         ["running"] = new("spend", StudioEffect.Reads),
+        ["session list"] = new("sessions", StudioEffect.Reads),
+        ["session rename"] = new("sessions", StudioEffect.Changes),
+        ["session end"] = new("sessions", StudioEffect.Changes),
         ["resume"] = new("spend", StudioEffect.Session),
 
         // The palette's search, on every page. Placed with Home, where the

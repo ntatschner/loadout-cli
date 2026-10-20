@@ -115,6 +115,16 @@ export interface DeckSession {
   where?: string | null;
   agent?: string | null;
   unread?: boolean;
+  /** Whether it has ended: closing its tab then clears it rather than asking. */
+  ended?: boolean;
+  /** What it was launched as, for going back to after a rename. */
+  launchTitle?: string;
+  /** Whether its agent is known to be given its name as well. */
+  namesAgent?: boolean;
+  /** 'launch' for an agent session, 'command' for a command that asks as it goes. */
+  kind?: 'launch' | 'command';
+  /** The project it runs in, for saying what ending it ends. */
+  project?: string | null;
 }
 
 export type DeckLayout = 1 | 2 | 4;

@@ -41,9 +41,18 @@ export const command = {
   /** Another round of an idea: POST /api/ideas with verb "refine". */
   refine: (id: string) => `$ loadout idea refine ${id}`,
 
-  /** Ending a hosted session: DELETE /api/v1/sessions/{id}. */
-  // No loadout command ends a session, so say what it does instead.
+  /** Ending and forgetting a hosted session: DELETE /api/v1/sessions/{id}. */
+  // No loadout command forgets a session, so say what it does instead.
   endSession: () => 'stops the agent in this terminal',
+
+  /** Ending a hosted session and keeping it listed: POST /api/v1/sessions/{id}/end. */
+  endHosted: (id: string) => `$ loadout session end ${id} --yes`,
+
+  /** Renaming a hosted session, or giving it its launch name back: PATCH /api/v1/sessions/{id}. */
+  renameSession: (id: string, name: string | null) => `$ loadout session rename ${id} ${name === null ? '--reset' : quoted(name)}`,
+
+  /** The hosted sessions with their ids, for a terminal. */
+  hostedSessions: () => '$ loadout session list',
 
   /** Carrying a conversation on in a terminal. */
   resumeLast: () => '$ loadout resume --last',

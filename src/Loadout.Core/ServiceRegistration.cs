@@ -226,6 +226,13 @@ public static class ServiceRegistration
             Timeout = TimeSpan.FromMinutes(5),
         });
 
+        // The daemon's hosted sessions, for 'loadout session' to rename and
+        // end through the same routes Studio uses.
+        services.AddSingleton<Teams.Daemon.IDaemonSessions>(provider => new Teams.Daemon.DaemonSessions(
+            provider.GetRequiredService<HttpClient>(),
+            provider.GetRequiredService<Platform.Abstractions.IPlatformPaths>(),
+            provider.GetRequiredService<Platform.Abstractions.IProcessInspector>()));
+
         services.AddSingleton<IUpdateService>(provider => new UpdateService(
             provider.GetRequiredService<IConfigurationService>(),
             provider.GetRequiredService<Platform.Abstractions.IPlatformPaths>(),
