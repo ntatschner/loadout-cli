@@ -118,9 +118,11 @@ public sealed class DashboardSignalCommand : AsyncCommand<DashboardSignalSetting
             }
         }
 
+        // The hook names its own agent with the global --agent, which is how
+        // the daemon knows whose command passes a new name on.
         try
         {
-            SessionSignals.Write(SessionSignals.Directory(_paths.Paths.State), id!, state, agentSession, at, until);
+            SessionSignals.Write(SessionSignals.Directory(_paths.Paths.State), id!, state, agentSession, at, until, settings.Agent);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

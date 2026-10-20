@@ -56,6 +56,10 @@ public sealed class ClaudeAdapter : AgentAdapterBase
     public override IHeadlessProtocol HeadlessProtocol => ClaudeHeadlessProtocol.Instance;
 
     /// <inheritdoc />
+    /// <remarks>Claude's own <c>/rename</c>, so the name is the one a resume shows.</remarks>
+    public override string? RenameInput(string name) => "/rename " + name;
+
+    /// <inheritdoc />
     protected override IReadOnlyDictionary<string, string[]> CapabilityMarkers =>
         new Dictionary<string, string[]>
         {
@@ -511,11 +515,13 @@ public sealed class ClaudeAdapter : AgentAdapterBase
     /// </remarks>
     internal static void AddStudioHooks(System.Text.Json.Nodes.JsonObject document, string launcher)
     {
-        AddHook(document, "Notification", "idle_prompt", $"{launcher} dashboard signal waiting");
-        AddHook(document, "Notification", "permission_prompt", $"{launcher} dashboard signal approval");
-        AddHook(document, "Stop", null, $"{launcher} dashboard signal turn");
-        AddHook(document, "UserPromptSubmit", null, $"{launcher} dashboard signal working", background: true);
-        AddHook(document, "PreToolUse", null, $"{launcher} dashboard signal working", background: true);
+        // Each says which agent it is, so the daemon knows whose command
+        // gives the conversation a new name.
+        AddHook(document, "Notification", "idle_prompt", $"{launcher} dashboard signal waiting --agent=claude");
+        AddHook(document, "Notification", "permission_prompt", $"{launcher} dashboard signal approval --agent=claude");
+        AddHook(document, "Stop", null, $"{launcher} dashboard signal turn --agent=claude");
+        AddHook(document, "UserPromptSubmit", null, $"{launcher} dashboard signal working --agent=claude", background: true);
+        AddHook(document, "PreToolUse", null, $"{launcher} dashboard signal working --agent=claude", background: true);
     }
 
     /// <summary>

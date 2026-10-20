@@ -175,4 +175,12 @@ public interface IAgentAdapter
     /// driven without a terminal.
     /// </summary>
     IHeadlessProtocol? HeadlessProtocol { get; }
+
+    /// <summary>
+    /// What to type into this agent's prompt to give its conversation a name,
+    /// without the Enter that sends it, or null where the agent has no such
+    /// command. Typed only while the agent says it is waiting.
+    /// </summary>
+    /// <param name="name">The name, already free of control characters.</param>
+    string? RenameInput(string name);
 }

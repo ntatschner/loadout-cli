@@ -74,6 +74,9 @@ public sealed class HostedSessions : IAsyncDisposable
     /// <summary>Height a session starts at when the page does not say.</summary>
     public const int DefaultRows = 32;
 
+    /// <summary>The longest name a session may be given.</summary>
+    public const int LongestName = 80;
+
     private readonly Func<IPseudoTerminal> _terminals;
     private readonly Func<(string Command, IReadOnlyList<string> Prefix)?> _launcher;
     private readonly IChildLifetime? _lifetime;
@@ -81,6 +84,8 @@ public sealed class HostedSessions : IAsyncDisposable
     private readonly string? _signals;
     private readonly TimeProvider _time;
     private readonly Action<string>? _noted;
+    private readonly Func<string, string, string?>? _renaming;
+    private readonly Dictionary<string, string> _names = new(StringComparer.Ordinal);
     private readonly Dictionary<string, (DateTimeOffset At, bool Escalated)> _backgrounds = new(StringComparer.Ordinal);
     private int _backgroundCount;
     private int _escalatedCount;
@@ -103,6 +108,11 @@ public sealed class HostedSessions : IAsyncDisposable
     /// waiting on background work, and each time such a session goes on to
     /// read as waiting for you, with the counts so far and nothing else.
     /// </param>
+    /// <param name="renaming">
+    /// Given an agent's name, as its hooks say it, and a session's new name:
+    /// what to type into that agent's prompt to name its conversation, or
+    /// null where it cannot be. Null for nothing passed to any agent.
+    /// </param>
     public HostedSessions(
         Func<IPseudoTerminal> terminals,
         Func<(string Command, IReadOnlyList<string> Prefix)?> launcher,
@@ -110,7 +120,8 @@ public sealed class HostedSessions : IAsyncDisposable
         IProcessTree? tree = null,
         string? signals = null,
         TimeProvider? time = null,
-        Action<string>? noted = null)
+        Action<string>? noted = null,
+        Func<string, string, string?>? renaming = null)
     {
         _terminals = terminals;
         _launcher = launcher;
@@ -119,6 +130,7 @@ public sealed class HostedSessions : IAsyncDisposable
         _signals = signals;
         _time = time ?? TimeProvider.System;
         _noted = noted;
+        _renaming = renaming;
     }
 
     /// <summary>
@@ -138,6 +150,13 @@ public sealed class HostedSessions : IAsyncDisposable
         if (signal is { State: "background" })
         {
             Note(session.Id, signal.At, status);
+        }
+
+        // The raw signal as well as what it reads as: background work gone
+        // quiet reads as waiting, but its agent is not at its prompt.
+        if (signal is { State: "waiting", Agent: { } agent } && status == "waiting")
+        {
+            PassName(session, agent);
         }
 
         return (status is "background" ? null : status, status is "background", signal?.AgentSession);
@@ -364,6 +383,134 @@ public sealed class HostedSessions : IAsyncDisposable
         return OperationResult<HostedSession>.Fail("The daemon is stopping.");
     }
 
+    /// <summary>
+    /// Gives a session a new name, or its launch name back for a null or
+    /// empty one. An agent session's agent is given it too, where its adapter
+    /// can be, the next time it says it is waiting.
+    /// </summary>
+    /// <returns>The session, or why it could not be renamed.</returns>
+    public OperationResult<HostedSession> Rename(string id, string? name)
+    {
+        var given = name?.Trim();
+
+        if (given is { Length: > LongestName })
+        {
+            return OperationResult<HostedSession>.Fail($"A session's name can be at most {LongestName} characters.");
+        }
+
+        if (given is not null && given.Any(char.IsControl))
+        {
+            return OperationResult<HostedSession>.Fail("A session's name cannot hold control characters.");
+        }
+
+        if (Find(id) is not { } session)
+        {
+            return OperationResult<HostedSession>.Fail("There is no session with that id.");
+        }
+
+        session.Label = given is { Length: > 0 } ? given : null;
+
+        // Only the newest name is passed on: one given while the agent was
+        // busy replaces any still waiting to go.
+        if (_renaming is not null && !session.HasEnded && IsAgent(session.Id))
+        {
+            lock (_gate)
+            {
+                _names[id] = session.Name;
+            }
+        }
+
+        // Passed at once if the agent is already waiting.
+        SignalOf(session);
+        Changed?.Invoke();
+
+        return OperationResult<HostedSession>.Ok(session);
+    }
+
+    /// <summary>
+    /// Whether a session's agent is known to take its name: its hooks have
+    /// said which agent it is, and that agent's adapter can be told.
+    /// </summary>
+    public bool PassesNames(HostedSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+
+        return _renaming is not null
+            && _signals is not null
+            && IsAgent(session.Id)
+            && SessionSignals.Read(_signals, session.Id)?.Agent is { } agent
+            && _renaming(agent, session.Name) is not null;
+    }
+
+    /// <summary>An agent's session, or a resume of one, rather than a command that asks as it goes.</summary>
+    private bool IsAgent(string id) =>
+        LaunchOf(id) is { } launch && (launch.Command is not { Length: > 0 } || launch.Resuming is not null);
+
+    /// <summary>Types a waiting name into the agent, once.</summary>
+    private void PassName(HostedSession session, string agent)
+    {
+        string? name;
+
+        lock (_gate)
+        {
+            if (!_names.Remove(session.Id, out name))
+            {
+                return;
+            }
+        }
+
+        if (_renaming?.Invoke(agent, name) is not { Length: > 0 } input)
+        {
+            return;
+        }
+
+        _ = TypeNameAsync(session, input);
+    }
+
+    /// <remarks>
+    /// The Enter goes on its own, a moment after the words: a terminal
+    /// application can read text and Enter arriving together as a paste,
+    /// which it shows rather than sends.
+    /// </remarks>
+    private static async Task TypeNameAsync(HostedSession session, string input)
+    {
+        try
+        {
+            if ((await session.TypeAsync(System.Text.Encoding.UTF8.GetBytes(input), CancellationToken.None).ConfigureAwait(false)).Succeeded)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(150)).ConfigureAwait(false);
+                await session.TypeAsync("\r"u8.ToArray(), CancellationToken.None).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or ObjectDisposedException)
+        {
+            // Ended meanwhile: the name stays Loadout's own.
+        }
+    }
+
+    /// <summary>
+    /// Ends a session if it is still running and keeps it listed, ended, so
+    /// every page still shows it and how it ended.
+    /// </summary>
+    /// <returns>The session, or null where there was none with that id.</returns>
+    public async Task<HostedSession?> EndAsync(string id)
+    {
+        if (Find(id) is not { } session)
+        {
+            return null;
+        }
+
+        lock (_gate)
+        {
+            _names.Remove(id);
+        }
+
+        await session.DisposeAsync().ConfigureAwait(false);
+        Changed?.Invoke();
+
+        return session;
+    }
+
     /// <summary>Ends a session if it is still running and forgets it.</summary>
     /// <returns>False where there was no session with that id.</returns>
     public async Task<bool> RemoveAsync(string id)
@@ -378,6 +525,7 @@ public sealed class HostedSessions : IAsyncDisposable
             {
                 _sessions.Remove(found);
                 _launches.Remove(found.Id);
+                _names.Remove(found.Id);
             }
         }
 

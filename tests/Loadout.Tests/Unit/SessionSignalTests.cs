@@ -245,16 +245,16 @@ public sealed class SessionSignalTests : IDisposable
         var notification = hooks["Notification"]!.AsArray();
 
         notification.Select(one => (string?)one!["matcher"]).Should().Equal("idle_prompt", "permission_prompt");
-        Command(notification[0]!).Should().EndWith(" dashboard signal waiting");
-        Command(notification[1]!).Should().EndWith(" dashboard signal approval");
-        Command(hooks["Stop"]![0]!).Should().EndWith(" dashboard signal turn");
+        Command(notification[0]!).Should().EndWith(" dashboard signal waiting --agent=claude");
+        Command(notification[1]!).Should().EndWith(" dashboard signal approval --agent=claude");
+        Command(hooks["Stop"]![0]!).Should().EndWith(" dashboard signal turn --agent=claude");
         Async(notification[0]!).Should().BeFalse();
 
         // Working again, typed or not: on every tool call, so Claude does not wait for them.
         foreach (var working in new[] { "UserPromptSubmit", "PreToolUse" })
         {
             var entry = hooks[working]!.AsArray().Should().ContainSingle().Subject!;
-            Command(entry).Should().EndWith(" dashboard signal working");
+            Command(entry).Should().EndWith(" dashboard signal working --agent=claude");
             entry["matcher"].Should().BeNull("every tool");
             Async(entry).Should().BeTrue();
         }
