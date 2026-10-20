@@ -726,9 +726,11 @@ public static class Program
                 CommandCategory.Workspace,
                 "tasks backlog todo status where were we open work");
             task.AddCommand<TaskListCommand>("list");
+            task.AddCommand<TaskShowCommand>("show");
             task.AddCommand<TaskDeclareCommand>("declare");
             task.AddCommand<TaskMoveCommand>("move");
             task.AddCommand<TaskRemoveCommand>("remove");
+            task.AddCommand<TaskApplyCommand>("apply");
         });
 
         TopBranch(config, "idea", idea =>
@@ -750,6 +752,7 @@ public static class Program
             idea.AddCommand<IdeaDismissCommand>("dismiss");
             idea.AddCommand<IdeaMoveCommand>("move");
             idea.AddCommand<IdeaRemoveCommand>("remove");
+            idea.AddCommand<IdeaApplyCommand>("apply");
             idea.AddBranch("dump", dump =>
             {
                 dump.SetDescription("Notes kept elsewhere, dropped in whole and split by an agent into ideas and tasks.");

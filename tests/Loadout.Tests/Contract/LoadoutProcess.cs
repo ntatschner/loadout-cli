@@ -274,6 +274,41 @@ public sealed class LoadoutProcess : IDisposable
     }
 
     /// <summary>
+    /// How to start a command that is talked to over its standard streams,
+    /// such as the MCP server, isolated as RunAsync isolates it. The caller
+    /// starts it, reads it and ends it.
+    /// </summary>
+    public ProcessStartInfo Talking(params string[] arguments)
+    {
+        var executable = Executable
+            ?? throw new InvalidOperationException(
+                "The command line has not been built. Run: dotnet build src/Loadout.Cli");
+
+        var start = new ProcessStartInfo(executable)
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            RedirectStandardInput = true,
+            UseShellExecute = false,
+            WorkingDirectory = _home,
+        };
+
+        foreach (var argument in arguments)
+        {
+            start.ArgumentList.Add(argument);
+        }
+
+        Isolate(start);
+
+        foreach (var (name, value) in Environment)
+        {
+            start.Environment[name] = value;
+        }
+
+        return start;
+    }
+
+    /// <summary>
     /// Starts a command and returns it running, isolated as RunAsync isolates
     /// it, for a test that watches one which waits for a person. Its output is
     /// read and dropped; the caller ends it.

@@ -9,6 +9,7 @@ import { setAccent, setDensity, setMotion, setTheme, preferredTheme } from './st
 import { toasts } from './toasts.svelte';
 import { isMode, morph, nextMode, type StudioMode } from './modes';
 import { resumeConversation, type ResumeAsk, type ResumeOutcome } from './resume';
+import { reloadsFor, type Reload } from './reloads';
 import { resumeCommand } from './terminal';
 
 export interface FeedEntry {
@@ -124,27 +125,33 @@ export class Studio {
       return;
     }
 
+    const loads: Record<Reload, () => Promise<void>> = {
+      sessions: () => this.loadSessions(),
+      history: () => this.loadHistory(),
+      runs: () => this.loadRuns(),
+      jobs: () => this.loadJobs(),
+      tasks: () => this.loadTasks(),
+      ideas: () => this.loadIdeas(),
+    };
+
     this.#stop = api.listen((what) => {
-      if (what.includes('sessions')) {
-        // The history too: a session starting or ending is what changes
-        // which conversation is running, and what a restart left behind.
-        void this.#guard(() => Promise.all([this.loadSessions(), this.loadHistory()]).then(() => undefined));
-      }
+      const reloads = reloadsFor(what);
 
-      if (what.includes('runs')) {
-        void this.#guard(() => this.loadRuns());
-      }
-
-      if (what.includes('jobs')) {
-        void this.#guard(() => this.loadJobs());
+      if (reloads.length > 0) {
+        void this.#guard(() => Promise.all(reloads.map((reload) => loads[reload]())).then(() => undefined));
       }
     });
 
-    // Ideas and tasks are not on the event stream: they change from a
-    // terminal as often as from here, and the files say nothing when they do.
+    // The clock moves every so often for the ages the page shows. The ideas
+    // are read again with it, slowly, for what no file says: notes being
+    // split into ideas, and a round whose process died without letting go.
+    let ticks = 0;
     setInterval(() => {
       this.now = Date.now();
-      void this.#guard(() => Promise.all([this.loadIdeas(), this.loadTasks()]).then(() => undefined));
+
+      if (++ticks % 4 === 0) {
+        void this.#guard(() => this.loadIdeas());
+      }
     }, 15000);
 
     matchMedia?.('(prefers-color-scheme: light)').addEventListener?.('change', () => this.applyPrefs());

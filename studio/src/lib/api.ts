@@ -445,7 +445,23 @@ export interface Idea {
 export const ideas = {
   list: () => call<{ ideas: Idea[]; busy: string[] }>('GET', '/api/ideas'),
   act: (body: Record<string, unknown>) => call<string>('POST', '/api/ideas', body),
+  /** POST /api/v1/projects/{list}/ideas:batch: several changes, each idea's all or nothing, one result each. */
+  batch: (list: string, operations: Record<string, string>[]) =>
+    call<IdeaBatch>('POST', `/api/v1/projects/${encodeURIComponent(list)}/ideas:batch`, operations),
 };
+
+/** What a batch of idea changes did, one result for each change in the order sent. */
+export interface IdeaBatch {
+  applied: boolean;
+  results: { op: string; id: string; applied: boolean; heldBack: boolean; error: string | null }[];
+}
+
+/** The list a command's words name, as the routes name it: a project's slug, or '-' for the workspace-wide list. */
+export function listOf(where: string[]): string {
+  const at = where.indexOf('--project');
+
+  return at >= 0 && where[at + 1] ? where[at + 1] : '-';
+}
 
 export interface TaskList {
   project: string | null;

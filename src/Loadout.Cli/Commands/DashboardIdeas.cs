@@ -38,6 +38,10 @@ internal sealed class DashboardIdeas
     private readonly TimeProvider _time;
     private readonly CommandOutput _output;
     private readonly ConcurrentDictionary<string, bool> _busy = new(StringComparer.Ordinal);
+    private int _marked;
+
+    /// <summary>A count that moves whenever a round from the page starts or finishes, for the event stream.</summary>
+    public int Marked => Volatile.Read(ref _marked);
 
     public DashboardIdeas(
         ICommandCatalogue commands,
@@ -148,6 +152,8 @@ internal sealed class DashboardIdeas
                 ExitCode.InvalidArguments);
         }
 
+        Interlocked.Increment(ref _marked);
+
         // Not tied to the request's token: the request ends when this returns,
         // and the round has to outlive it. The server stopping ends the process.
         _ = Task.Run(async () =>
@@ -171,6 +177,7 @@ internal sealed class DashboardIdeas
             finally
             {
                 _busy.TryRemove(key, out _);
+                Interlocked.Increment(ref _marked);
             }
         }, CancellationToken.None);
 

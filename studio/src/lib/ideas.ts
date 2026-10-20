@@ -69,21 +69,26 @@ export function changedAnswers(id: string, where: string[], questions: Question[
     });
 }
 
+/** The answers as one batch for the idea, in the shape 'idea apply' takes. */
+export function answerBatch(id: string, answers: Answer[]): Record<string, string>[] {
+  return answers.map((one) => ({ op: 'answer', id, question: one.question, answer: one.answer }));
+}
+
 /**
- * Sends the answers one at a time, then a refine when asked for. It stops at
- * the first that fails, so a refine never runs on half the answers.
+ * Sends the answers together, then a refine when asked for. They are made
+ * together or not at all, so a refine never runs on half of them, and one
+ * refused leaves none of them recorded rather than the ones before it.
  */
 export async function sendAnswers(
   id: string,
   where: string[],
   answers: Answer[],
   refine: boolean,
+  answerAll: (operations: Record<string, string>[]) => Promise<boolean>,
   act: (path: string, words: string[]) => Promise<boolean>,
 ): Promise<boolean> {
-  for (const one of answers) {
-    if (!(await act('idea answer', one.words))) {
-      return false;
-    }
+  if (answers.length > 0 && !(await answerAll(answerBatch(id, answers)))) {
+    return false;
   }
 
   return refine ? act('idea refine', [id, ...where]) : true;

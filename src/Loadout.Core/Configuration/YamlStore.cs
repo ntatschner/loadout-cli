@@ -7,6 +7,57 @@ using YamlDotNet.Serialization.NamingConventions;
 
 namespace Loadout.Core.Configuration;
 
+/// <summary>What a file parsed to, and the revision of the text it was read from.</summary>
+public sealed record YamlRead<T>(T Value, string Revision);
+
+/// <summary>
+/// The write locks for a set of files, held until this is disposed.
+/// </summary>
+/// <remarks>
+/// Writing goes through here rather than through the store's own save, which
+/// would try to take a lock this already holds and wait out its timeout on
+/// itself. Only a file this holds can be written, so a change cannot reach a
+/// file somebody else may be in the middle of changing.
+/// </remarks>
+public sealed class YamlHold : IDisposable
+{
+    private readonly YamlStore _store;
+    private readonly HashSet<string> _locks;
+    private readonly List<FileStream> _streams;
+
+    internal YamlHold(YamlStore store, IReadOnlyCollection<string> locks, List<FileStream> streams)
+    {
+        _store = store;
+        _locks = new HashSet<string>(locks, StringComparer.Ordinal);
+        _streams = streams;
+    }
+
+    /// <summary>Writes a held file, and says the revision it now has.</summary>
+    public Task<OperationResult<string>> WriteAsync<T>(
+        string path,
+        T value,
+        bool restrictPermissions = true,
+        CancellationToken ct = default)
+    {
+        if (!_locks.Contains(YamlStore.LockOf(path)))
+        {
+            throw new InvalidOperationException($"'{path}' is not one of the files this holds.");
+        }
+
+        return _store.WriteHeldAsync(path, value, restrictPermissions, ct);
+    }
+
+    public void Dispose()
+    {
+        foreach (var stream in _streams)
+        {
+            stream.Dispose();
+        }
+
+        _streams.Clear();
+    }
+}
+
 /// <summary>
 /// Reads and writes the launcher's YAML files.
 /// <para>
@@ -182,6 +233,123 @@ public sealed class YamlStore
             ? OperationResult<T>.Ok(value)
             : OperationResult<T>.Fail(written.Error!, written.ExitCode);
     }
+
+    /// <summary>
+    /// What a file's text stands for, so a change made from an older read can
+    /// be told apart from one made from the current one.
+    /// </summary>
+    /// <remarks>
+    /// A hash of the text rather than a time or a counter, so an unchanged file
+    /// keeps its revision across a restart, a copy and a <c>git pull</c> that
+    /// brought nothing new. A file that is missing reads as an empty one, as it
+    /// does everywhere else here.
+    /// </remarks>
+    public static string Revision(string? text) =>
+        Convert.ToHexStringLower(
+            System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes(text ?? string.Empty)))[..16];
+
+    /// <summary>
+    /// Reads a file's text and what it parses to, or the default when it is
+    /// missing or empty.
+    /// </summary>
+    public async Task<OperationResult<YamlRead<T>>> ReadAsync<T>(
+        string path,
+        Func<T> createDefault,
+        CancellationToken ct = default)
+        where T : class
+    {
+        ArgumentNullException.ThrowIfNull(createDefault);
+
+        string text;
+
+        try
+        {
+            text = File.Exists(path) ? await File.ReadAllTextAsync(path, ct).ConfigureAwait(false) : string.Empty;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return OperationResult<YamlRead<T>>.Fail($"Could not read '{path}': {ex.Message}", ExitCode.ConfigurationInvalid);
+        }
+
+        try
+        {
+            var value = string.IsNullOrWhiteSpace(text) ? null : _deserializer.Deserialize<T>(text);
+
+            return OperationResult<YamlRead<T>>.Ok(new YamlRead<T>(value ?? createDefault(), Revision(text)));
+        }
+        catch (YamlException ex)
+        {
+            return OperationResult<YamlRead<T>>.Fail(
+                $"'{path}' is not valid YAML at line {ex.Start.Line}, column {ex.Start.Column}: {ex.Message}",
+                ExitCode.ConfigurationInvalid);
+        }
+    }
+
+    /// <summary>
+    /// Takes the write lock for every one of several files, so they can be
+    /// read, checked and written as one change.
+    /// </summary>
+    /// <remarks>
+    /// Taken in one fixed order, by the lock's own name, so two processes
+    /// holding overlapping sets can never each be waiting on the other. Every
+    /// other writer takes one lock at a time and lets it go, so it cannot be
+    /// part of a cycle either.
+    /// </remarks>
+    public async Task<OperationResult<YamlHold>> HoldAsync(IEnumerable<string> paths, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+
+        var held = new List<FileStream>();
+        var named = paths
+            .Select(path => (Path: Path.GetFullPath(path), Lock: LockPathFor(path)))
+            .DistinctBy(one => one.Lock, StringComparer.Ordinal)
+            .OrderBy(one => one.Lock, StringComparer.Ordinal)
+            .ToList();
+
+        try
+        {
+            foreach (var one in named)
+            {
+                if (await LockAsync(one.Path, ct).ConfigureAwait(false) is not { } stream)
+                {
+                    return OperationResult<YamlHold>.Fail(
+                        $"Could not update '{one.Path}': another process has been holding it for longer than "
+                        + $"{LockWait.TotalSeconds:0.#}s.");
+                }
+
+                held.Add(stream);
+            }
+
+            var hold = new YamlHold(this, [.. named.Select(one => one.Lock)], held);
+            held = [];
+
+            return OperationResult<YamlHold>.Ok(hold);
+        }
+        finally
+        {
+            foreach (var stream in held)
+            {
+                await stream.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+    }
+
+    /// <summary>Writes a file this store holds the lock for, and says the revision it now has.</summary>
+    internal async Task<OperationResult<string>> WriteHeldAsync<T>(
+        string path,
+        T value,
+        bool restrictPermissions,
+        CancellationToken ct)
+    {
+        var written = await WriteAsync(path, value, restrictPermissions, ct).ConfigureAwait(false);
+
+        return written.Succeeded
+            ? OperationResult<string>.Ok(Revision(_serializer.Serialize(value)))
+            : OperationResult<string>.Fail(written.Error!, written.ExitCode);
+    }
+
+    internal static string LockOf(string path) => LockPathFor(path);
 
     /// <summary>How long to wait for another process to finish writing.</summary>
     /// <remarks>
