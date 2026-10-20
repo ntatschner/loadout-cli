@@ -18,6 +18,8 @@ export interface Work extends TubeLine {
   askedAt?: number;
   /** A session whose agent is asking to be allowed something, rather than waiting for a message. */
   approval?: boolean;
+  /** A session waiting on background work of its own: quiet, and not needing you. */
+  background?: boolean;
   /** A failure that wants acknowledging, which ranks above a question. */
   problem?: boolean;
   mins?: number;
@@ -107,6 +109,7 @@ export function fromSession(session: Session, now: number): Work {
       ? 'It is asking for approval. The choices are in its terminal; answer them there.'
       : session.needs === 'waiting' ? 'It has finished and is waiting for your next message.' : undefined,
     approval: !session.ended && session.needs === 'approval',
+    background: !session.ended && !session.needs && !!session.background,
     quiet,
     note: [session.mode, session.agent].filter(Boolean).join(' · '),
     mins: minutesOf(session.startedAt, now),

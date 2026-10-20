@@ -37,6 +37,7 @@ export const SIGNAL_STATES: Record<string, [SignalFamily, string, string]> = {
   met: ['good', 'done', 'settle'],
   accepted: ['good', 'done', 'settle'],
   idle: ['rest', 'idle', 'dim'],
+  'waiting on background work': ['rest', 'round', 'dim'],
   open: ['rest', 'open', 'still'],
   captured: ['rest', 'open', 'still'],
   shaping: ['rest', 'shaping', 'still'],
@@ -97,6 +98,8 @@ export interface WorkLike {
   failed?: boolean | string;
   held?: boolean;
   quiet?: number;
+  /** A session waiting on background work of its own, which is not waiting for you. */
+  background?: boolean;
 }
 
 /**
@@ -126,6 +129,10 @@ export function wordFor(item: WorkLike, idleAfter = 10): string {
 
   if (item.stage === 2) {
     if (item.kind === 'session') {
+      if (item.background) {
+        return 'waiting on background work';
+      }
+
       return (item.quiet ?? 0) >= idleAfter ? 'idle' : 'working';
     }
 

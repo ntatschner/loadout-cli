@@ -3,6 +3,7 @@
 // agent's own hooks (needs), never from what is on the screen.
 import { describe, expect, it } from 'vitest';
 import type { Session } from './api';
+import { signalOf } from './signals';
 import { TERMINAL_STATES, fitFontSize, resumeCommand, terminalState, type TerminalFacts } from './terminal';
 
 const session: Session = {
@@ -53,6 +54,13 @@ describe('terminalState', () => {
     expect(terminalState(facts({ session: { ...session, needs: null } }))).toBe('working');
   });
 
+  it('is quiet while the agent waits on its own background work, and a question still comes first', () => {
+    expect(terminalState(facts({ quiet: 30, session: { ...session, background: true } }))).toBe('background');
+    expect(terminalState(facts({ session: { ...session, background: true, needs: 'approval' } }))).toBe('approval');
+    expect(TERMINAL_STATES.background.ask).toBeUndefined();
+    expect(signalOf(TERMINAL_STATES.background.word).family).toBe('rest');
+  });
+
   it('tells a clean end from an error by the exit code', () => {
     expect(terminalState(facts({ exited: 0 }))).toBe('ended');
     expect(terminalState(facts({ exited: null }))).toBe('ended');
@@ -77,7 +85,7 @@ describe('TERMINAL_STATES', () => {
   it('lets you type only in a live session', () => {
     const typing = Object.entries(TERMINAL_STATES).filter(([, one]) => one.typing).map(([name]) => name);
 
-    expect(typing.sort()).toEqual(['approval', 'idle', 'unknown', 'waiting', 'working']);
+    expect(typing.sort()).toEqual(['approval', 'background', 'idle', 'unknown', 'waiting', 'working']);
   });
 
   it('offers resume wherever the session has stopped, and puts no choice on a button', () => {

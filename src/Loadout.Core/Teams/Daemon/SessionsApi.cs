@@ -251,7 +251,7 @@ internal static class SessionsApi
     internal static object Shown(HostedSessions sessions, HostedSession session, long? memory)
     {
         var launch = sessions.LaunchOf(session.Id);
-        var (needs, agentSession) = sessions.SignalOf(session);
+        var (needs, background, agentSession) = sessions.SignalOf(session);
 
         return new
         {
@@ -282,7 +282,10 @@ internal static class SessionsApi
             // From the agent's own hooks, never from the screen: 'waiting' or
             // 'approval' until somebody types, and the conversation's id for
             // 'loadout resume'. Both null for an agent whose hooks say nothing.
+            // Background is the quiet state between: stopped to wait on work
+            // of its own, which is not needing you.
             needs,
+            background,
             agentSession = agentSession ?? launch?.Resuming,
             resuming = launch?.Resuming,
         };

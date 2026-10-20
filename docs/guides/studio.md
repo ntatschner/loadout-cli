@@ -129,6 +129,10 @@ The bar under the screen says what the session needs, in words:
 - **Waiting for you**: it has finished and wants your next message.
 - **Needs approval**: it's asking to be allowed to do something. The choices
   are in the terminal, and you answer them there.
+- **Waiting on background work**: it has stopped to wait on something of its
+  own it left running, a test run, a subagent, a Monitor or a `/loop` wakeup,
+  and will carry on by itself when that reports back. It's shown quietly, like
+  idle, with no badge or sound, because it doesn't need you.
 - **Ended**, **exited with an error** or **lost**, with the
   `loadout resume` command that carries the conversation on in a terminal.
 
@@ -142,6 +146,28 @@ A Codex session shows only working, idle or unknown, because its own
 notifications haven't been checked against OpenAI's documentation yet. The
 question clears as soon as you type into the session. Clicking into the
 terminal or scrolling back through it doesn't count as an answer.
+
+Claude Code says it's idle a minute after every turn, including one that ended
+on "I'll pick this up when the tests finish". So when it does, Loadout looks at
+the end of the conversation's transcript for background work that hasn't
+reported back. It keeps only the answer, yes or no, and when a wakeup is due;
+nothing from the conversation itself is kept. The quiet state then lasts until
+the wakeup's time, or until the work has been silent for 30 minutes, after
+which it reads as **waiting for you** after all: a subagent that's gone quiet
+for half an hour usually means something wants looking at. Work that was
+already silent that long when Claude stopped doesn't count at all, because
+that's far more often a server it started for you to look at than something
+it's waiting on. A transcript Loadout can't read leaves the session as waiting
+for you, which is the side to be wrong on. As soon as Claude carries on, typed
+or not, the session goes back to working.
+
+It was checked against real Claude Code transcripts as well as invented ones,
+because the invented ones only test what was already expected: run over every
+moment Claude went idle, it caught nearly every one where the agent really was
+waiting on its own work, and the few it missed showed as waiting for you,
+which is what they showed before. It's tied to how Claude Code writes its
+transcripts, which can change; if it stops recognising them, sessions go back
+to showing waiting for you rather than hiding anything.
 
 With the mouse over the terminal, the wheel scrolls the terminal and never the
 page. If the agent tracks the mouse, as Claude Code does, the wheel goes to
@@ -240,6 +266,7 @@ loadout config set studio-density roomy
 loadout config set studio-motion reduced
 loadout config set studio-halo gyroscope
 loadout config set studio-idle-after 20
+loadout config set studio-background-limit 60
 ```
 
 The things kept in the browser are the single-letter shortcuts (**A** for

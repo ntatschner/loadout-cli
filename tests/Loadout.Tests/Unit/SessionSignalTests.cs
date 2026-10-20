@@ -79,11 +79,82 @@ public sealed class SessionSignalTests : IDisposable
     {
         var asked = new SessionSignal("waiting", null, Noon);
 
-        SessionSignals.Needs(asked, lastInput: null, ended: false).Should().Be("waiting");
-        SessionSignals.Needs(asked, lastInput: Noon.AddSeconds(-5), ended: false).Should().Be("waiting");
-        SessionSignals.Needs(asked, lastInput: Noon.AddSeconds(5), ended: false).Should().BeNull();
-        SessionSignals.Needs(asked, lastInput: null, ended: true).Should().BeNull();
-        SessionSignals.Needs(asked with { State = "turn" }, null, false).Should().BeNull("a reply ending says nothing about waiting");
+        SessionSignals.Needs(asked, lastInput: null, ended: false, Noon).Should().Be("waiting");
+        SessionSignals.Needs(asked, lastInput: Noon.AddSeconds(-5), ended: false, Noon).Should().Be("waiting");
+        SessionSignals.Needs(asked, lastInput: Noon.AddSeconds(5), ended: false, Noon).Should().BeNull();
+        SessionSignals.Needs(asked, lastInput: null, ended: true, Noon).Should().BeNull();
+        SessionSignals.Needs(asked with { State = "turn" }, null, false, Noon).Should().BeNull("a reply ending says nothing about waiting");
+        SessionSignals.Needs(asked with { State = "working" }, null, false, Noon).Should().BeNull("it has started again");
+    }
+
+    [Fact]
+    public void Waiting_on_background_work_is_quiet_until_its_time_and_then_needs_you()
+    {
+        var quiet = new SessionSignal("background", null, Noon, Until: Noon.AddMinutes(30));
+
+        SessionSignals.Status(quiet, null, false, Noon.AddMinutes(29)).Should().Be("background");
+        SessionSignals.Needs(quiet, null, false, Noon.AddMinutes(29)).Should().BeNull("work of its own is not needing you");
+        SessionSignals.Needs(quiet, null, false, Noon.AddMinutes(30)).Should().Be("waiting", "it has been silent past its time");
+        SessionSignals.Needs(quiet with { Until = null }, null, false, Noon).Should().Be("waiting", "with no time on it, it is never hidden");
+        SessionSignals.Status(quiet, Noon.AddMinutes(1), false, Noon.AddMinutes(40)).Should().BeNull("somebody typed after it");
+        SessionSignals.Status(quiet, null, true, Noon).Should().BeNull();
+    }
+
+    [Fact]
+    public void A_signal_is_never_replaced_by_one_that_started_before_it()
+    {
+        // The working hooks run in the background and can finish after a
+        // question the agent asked later.
+        SessionSignals.Write(Signals, "a1b2c3d4", "approval", null, Noon.AddSeconds(5)).Should().BeTrue();
+        SessionSignals.Write(Signals, "a1b2c3d4", "working", null, Noon).Should().BeFalse();
+
+        SessionSignals.Read(Signals, "a1b2c3d4")!.State.Should().Be("approval");
+
+        SessionSignals.Write(Signals, "a1b2c3d4", "working", null, Noon.AddSeconds(10)).Should().BeTrue("the next tool call is after it");
+        SessionSignals.Write(Signals, "a1b2c3d4", "working", null, Noon.AddSeconds(11)).Should().BeFalse("working over working writes nothing");
+        SessionSignals.Read(Signals, "a1b2c3d4")!.At.Should().Be(Noon.AddSeconds(10));
+    }
+
+    [Fact]
+    public void Only_a_background_signal_keeps_a_time()
+    {
+        SessionSignals.Write(Signals, "a1b2c3d4", "background", null, Noon, until: Noon.AddMinutes(30));
+        SessionSignals.Read(Signals, "a1b2c3d4")!.Until.Should().Be(Noon.AddMinutes(30));
+
+        SessionSignals.Write(Signals, "a1b2c3d4", "waiting", null, Noon.AddMinutes(1), until: Noon.AddMinutes(30));
+        SessionSignals.Read(Signals, "a1b2c3d4")!.Until.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task The_daemon_counts_background_signals_once_however_often_they_are_read()
+    {
+        var clock = new Clock { Now = Noon };
+        var lines = new List<string>();
+        var terminal = new ScriptedTerminal();
+        await using var sessions = new HostedSessions(
+            () => terminal, () => ("loadout-host", ["loadout.dll"]), signals: Signals, time: clock, noted: lines.Add);
+        var session = (await sessions.StartAsync(new HostedLaunch("starstats"))).Value!;
+
+        SessionSignals.Write(Signals, session.Id, "background", null, Noon, until: Noon.AddMinutes(30));
+
+        // Every open page asks on every poll.
+        sessions.SignalOf(session).Should().Be(((string?)null, true, (string?)null));
+        sessions.SignalOf(session);
+        clock.Now = Noon.AddMinutes(31);
+        sessions.SignalOf(session).Should().Be(("waiting", false, (string?)null));
+        sessions.SignalOf(session);
+
+        lines.Should().HaveCount(2);
+        lines[0].Should().Contain("1 so far");
+        lines[1].Should().Contain("1 of 1");
+        string.Concat(lines).Should().NotContain("starstats", "counts only");
+    }
+
+    private sealed class Clock : TimeProvider
+    {
+        public DateTimeOffset Now { get; set; }
+
+        public override DateTimeOffset GetUtcNow() => Now;
     }
 
     [Fact]
@@ -177,8 +248,57 @@ public sealed class SessionSignalTests : IDisposable
         Command(notification[0]!).Should().EndWith(" dashboard signal waiting");
         Command(notification[1]!).Should().EndWith(" dashboard signal approval");
         Command(hooks["Stop"]![0]!).Should().EndWith(" dashboard signal turn");
+        Async(notification[0]!).Should().BeFalse();
+
+        // Working again, typed or not: on every tool call, so Claude does not wait for them.
+        foreach (var working in new[] { "UserPromptSubmit", "PreToolUse" })
+        {
+            var entry = hooks[working]!.AsArray().Should().ContainSingle().Subject!;
+            Command(entry).Should().EndWith(" dashboard signal working");
+            entry["matcher"].Should().BeNull("every tool");
+            Async(entry).Should().BeTrue();
+        }
 
         static string Command(JsonNode entry) => (string)entry["hooks"]![0]!["command"]!;
+        static bool Async(JsonNode entry) => (bool?)entry["hooks"]![0]!["async"] ?? false;
+    }
+
+    [Fact]
+    public async Task Idle_while_background_work_is_out_is_recorded_as_background_with_its_limit_and_nothing_from_the_transcript()
+    {
+        var transcript = Path.Combine(_root, "transcript.jsonl");
+        Directory.CreateDirectory(_root);
+        File.WriteAllLines(transcript,
+        [
+            """{"type":"assistant","timestamp":"2026-10-17T11:59:00Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"Bash","input":{"command":"dotnet test secret-project"}}]}}""",
+            """{"type":"user","timestamp":"2026-10-17T11:59:01Z","toolUseResult":{"backgroundTaskId":"b1shell01"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"Command running in background"}]}}""",
+        ]);
+
+        var (command, console, paths) = Command(
+            new Dictionary<string, string> { [SessionSignals.Variable] = "a1b2c3d4" },
+            JsonSerializer.Serialize(new { session_id = "5f0c1e2a", transcript_path = transcript, notification_type = "idle_prompt" }),
+            new Clock { Now = Noon });
+
+        await command.ExecuteAsync(null!, new DashboardSignalSettings { State = "waiting" }, CancellationToken.None);
+
+        console.Output.Should().BeEmpty();
+        SessionSignals.Read(SessionSignals.Directory(paths.Paths.State), "a1b2c3d4")
+            .Should().Be(new SessionSignal("background", "5f0c1e2a", Noon, Noon.AddMinutes(30)));
+        File.ReadAllText(Path.Combine(SessionSignals.Directory(paths.Paths.State), "a1b2c3d4.json"))
+            .Should().NotContain("secret-project").And.NotContain("b1shell01");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("missing.jsonl")]
+    public async Task Idle_with_no_transcript_to_read_stays_waiting_for_you(string? transcript)
+    {
+        var input = JsonSerializer.Serialize(new { session_id = "5f0c1e2a", transcript_path = transcript is null ? null : Path.Combine(_root, transcript) });
+        var (command, _, paths) = Command(new Dictionary<string, string> { [SessionSignals.Variable] = "a1b2c3d4" }, input);
+
+        await command.ExecuteAsync(null!, new DashboardSignalSettings { State = "waiting" }, CancellationToken.None);
+
+        SessionSignals.Read(SessionSignals.Directory(paths.Paths.State), "a1b2c3d4")!.State.Should().Be("waiting");
     }
 
     [Fact]
@@ -191,7 +311,7 @@ public sealed class SessionSignalTests : IDisposable
     }
 
     private (DashboardSignalCommand Command, TestConsole Console, IPlatformPaths Paths) Command(
-        Dictionary<string, string> variables, string input)
+        Dictionary<string, string> variables, string input, TimeProvider? time = null)
     {
         variables["XDG_STATE_HOME"] = Path.Combine(_root, "state");
         variables["XDG_CONFIG_HOME"] = Path.Combine(_root, "config");
@@ -204,8 +324,10 @@ public sealed class SessionSignalTests : IDisposable
             new NoOpFilePermissions(),
             new HostPlatform(HostOperatingSystem.Linux, System.Runtime.InteropServices.Architecture.X64, "test", "TEST"));
         var console = new TestConsole();
+        var configuration = new Loadout.Core.Configuration.ConfigurationService(
+            paths, environment, new Loadout.Core.Configuration.YamlStore(new NoOpFilePermissions()));
 
-        return (new DashboardSignalCommand(paths, environment, console, TimeProvider.System) { Input = new StringReader(input) }, console, paths);
+        return (new DashboardSignalCommand(paths, environment, console, time ?? TimeProvider.System, configuration) { Input = new StringReader(input) }, console, paths);
     }
 
     /// <summary>The settings Claude is handed, or null where it is handed none.</summary>
