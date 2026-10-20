@@ -115,6 +115,30 @@ describe('One task in full', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
+  it('links a task accepted from an idea back to the idea', async () => {
+    answer = {
+      id: 'fix-login', title: 'Fix the NAS login', state: 'open', detail: '', history: [],
+      idea: { plan: 'projects/homelab/ideas/fix-login.md', accepted: '2026-10-19T10:00:00Z', by: 'nigel' },
+    };
+    render(TaskBoard, { tasks: MIXED, where: [], mixed: true });
+
+    await fireEvent.click(card('Fix the NAS login').getByRole('button', { name: 'Details and history' }));
+
+    const link = await within(await screen.findByRole('dialog')).findByRole('link', { name: 'Open the idea' });
+    expect(link.getAttribute('href')).toBe('#ideas/homelab/fix-login');
+    expect(screen.getByText('projects/homelab/ideas/fix-login.md')).toBeTruthy();
+  });
+
+  it('names no idea for a task that never was one', async () => {
+    answer = { id: 'fix-login', title: 'Fix the login', state: 'open', detail: '', history: [], idea: null };
+    render(TaskBoard, { tasks: MIXED, where: [], mixed: true });
+
+    await fireEvent.click(card('Fix the login').getByRole('button', { name: 'History' }));
+    await within(await screen.findByRole('dialog')).findByRole('heading', { name: 'History' });
+
+    expect(screen.queryByRole('link', { name: 'Open the idea' })).toBeNull();
+  });
+
   it('reads a one-list board s task on that list', async () => {
     reads.length = 0;
     answer = { id: 't', title: 'One', state: 'open', detail: '', history: [] };

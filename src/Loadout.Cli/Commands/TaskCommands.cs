@@ -961,15 +961,18 @@ public sealed class TaskShowCommand : AsyncCommand<TaskShowCommand.Settings>
 {
     private readonly ITaskService _tasks;
     private readonly IProjectService _projects;
+    private readonly Core.Ideas.IIdeaService _ideas;
     private readonly IAnsiConsole _console;
 
     public TaskShowCommand(
         ITaskService tasks,
         IProjectService projects,
+        Core.Ideas.IIdeaService ideas,
         IAnsiConsole console)
     {
         _tasks = tasks;
         _projects = projects;
+        _ideas = ideas;
         _console = console;
     }
 
@@ -1015,6 +1018,15 @@ public sealed class TaskShowCommand : AsyncCommand<TaskShowCommand.Settings>
                 ExitCode.InvalidArguments);
         }
 
+        // The idea it came from, worked out from the id they share rather than
+        // kept on the task, where a second copy could drift from the record.
+        // A record that cannot be read is no idea, not a failure: most tasks
+        // never were one.
+        var record = task.Kind == TaskKind.Task
+            ? await _ideas.ReadAsync(new Core.Ideas.IdeaPlace(slug, task.Id), cancellationToken).ConfigureAwait(false)
+            : null;
+        var accepted = record is { Succeeded: true } ? record.Value!.Accepted : null;
+
         if (output.IsJson)
         {
             output.WriteJson(new
@@ -1024,6 +1036,7 @@ public sealed class TaskShowCommand : AsyncCommand<TaskShowCommand.Settings>
                 state = task.State.ToString().ToLowerInvariant(),
                 kind = task.Kind.ToString().ToLowerInvariant(),
                 project = slug,
+                idea = accepted is null ? null : new { plan = accepted.PlanPath, accepted = accepted.AcceptedUtc, by = accepted.AcceptedBy },
                 task.DeclaredBy,
                 declared = task.DeclaredUtc,
                 task.Note,
@@ -1051,6 +1064,14 @@ public sealed class TaskShowCommand : AsyncCommand<TaskShowCommand.Settings>
             + $", {task.DeclaredUtc:yyyy-MM-dd}"
             + (task.Moved is { } came ? $" · {Markup.Escape(TaskTrace.From(came))}" : string.Empty)
             + "[/]");
+
+        if (accepted is not null)
+        {
+            output.WriteLine(
+                $"[dim]From the idea {Markup.Escape(task.Id)}, accepted {accepted.AcceptedUtc:yyyy-MM-dd}. "
+                + $"The plan is at {Markup.Escape(accepted.PlanPath)}; "
+                + $"loadout idea show {Markup.Escape(task.Id)} {(slug is null ? "--global" : $"--project {Markup.Escape(slug)}")} --full shows it.[/]");
+        }
 
         Section(output, "Note", task.Note);
         Section(output, "Detail", task.Detail);

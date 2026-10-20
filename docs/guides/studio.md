@@ -439,7 +439,14 @@ chosen.
 An idea moved from another list says where from. One that became a task on
 another project, by accepting it or moving it later, is listed under **Became
 tasks elsewhere** with a link to it, so an accepted idea doesn't just vanish
-from the shelf.
+from the shelf. An accepted idea's workbench links to the board its task is on,
+and that task's **Details and history** links back to the idea, worked out
+from the id the two share.
+
+Dropped ideas fold away under a count at the foot of the shelf, as done and
+dropped tasks do on a board. The shelf reads up to 200 ideas, the newest
+first, and says so if there are more; narrow it with the search box, or read
+them all a page at a time with `loadout idea list --limit`.
 
 **Notes kept elsewhere** takes notes you've pasted from somewhere else and has an
 agent split them into ideas and tasks. Nothing is recorded until you apply the

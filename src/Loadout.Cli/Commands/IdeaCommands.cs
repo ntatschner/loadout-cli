@@ -236,6 +236,14 @@ public sealed class IdeaListCommand : AsyncCommand<IdeaListCommand.Settings>
         [CommandOption("--saved")]
         [Description("Use the query saved for this list in Studio. Without --json it is used anyway; --filter sets it aside.")]
         public bool Saved { get; init; }
+
+        [CommandOption("--limit <COUNT>")]
+        [Description("How many ideas a page holds. Without it the whole list is one page.")]
+        public int? Limit { get; init; }
+
+        [CommandOption("--page <NUMBER>")]
+        [Description("Which page to show, counted from 1. Needs --limit.")]
+        public int Page { get; init; } = 1;
     }
 
     /// <inheritdoc />
@@ -270,7 +278,15 @@ public sealed class IdeaListCommand : AsyncCommand<IdeaListCommand.Settings>
             return output.Fail(queried);
         }
 
-        var shown = queried.Value!.ToList();
+        var paged = Core.Lists.ListPages.Of(queried.Value!, settings.Page, settings.Limit);
+
+        if (paged.Failed)
+        {
+            return output.Fail(paged);
+        }
+
+        var page = paged.Value!;
+        var shown = page.Items.ToList();
 
         // Ideas that are work on another list now, shown under the list they
         // left: that is where somebody would look for one and not find it.
@@ -302,6 +318,10 @@ public sealed class IdeaListCommand : AsyncCommand<IdeaListCommand.Settings>
                 }),
                 movedOn = gone.Select(one => new { id = one.Id, title = one.Title, from = one.From, to = one.Where, at = one.Utc }),
                 recorded = placed.Count,
+                total = page.Total,
+                page = page.Page,
+                pages = page.Pages,
+                limit = page.Limit,
                 query = ListOptions.Shape(Core.Lists.IdeaFields.All, filter, settings.Sort),
             });
 
@@ -348,6 +368,13 @@ public sealed class IdeaListCommand : AsyncCommand<IdeaListCommand.Settings>
                     $"  [dim]{Markup.Escape(one.Id),-28} {"moved on",-24} {Markup.Escape(one.Title)}, "
                     + $"a task on {Markup.Escape(Core.Tasks.TaskPaths.Describe(one.Where))} now[/]");
             }
+        }
+
+        if (page.Limit is not null)
+        {
+            output.WriteLine(
+                $"[dim]Page {page.Page} of {page.Pages}, {page.Total} in all."
+                + (page.More ? $" --page {page.Page + 1} for the next.[/]" : "[/]"));
         }
 
         return CommandOutput.Success();

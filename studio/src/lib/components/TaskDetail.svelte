@@ -11,7 +11,7 @@
   import { readJson, SignedOut } from '../api';
   import { lineFor } from '../commandLine';
   import { studio } from '../state.svelte';
-  import { showWords, whereSaid, type Task, type TaskShown } from '../tasks';
+  import { ideaHref, showWords, whereSaid, type Task, type TaskShown } from '../tasks';
 
   interface Props {
     /** The task as the card has it, shown until the full one is read. */
@@ -53,6 +53,10 @@
   {:else if !full}
     <p class="calm" role="status">Reading…</p>
   {:else}
+    {#if full.idea}
+      <!-- Linked by the id the idea and its task share, as 'task show' works it out. -->
+      <p class="from">From an idea accepted {when(full.idea.accepted)}: the plan is at <code>{full.idea.plan}</code>. <a href={ideaHref(task.project, task.id)} onclick={onclose}>Open the idea</a></p>
+    {/if}
     {#if full.note}
       <section aria-labelledby="td-note">
         <h3 id="td-note">Note</h3>

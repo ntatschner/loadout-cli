@@ -32,6 +32,13 @@ export interface TaskEvent {
 export interface TaskShown extends Task {
   detail: string;
   history: TaskEvent[];
+  /** The idea it was accepted from, worked out from the id they share, or null. */
+  idea?: { plan: string; accepted: string; by: string } | null;
+}
+
+/** Where Studio shows an idea, by the list it is on and its id. */
+export function ideaHref(project: string | null | undefined, id: string): string {
+  return `#ideas/${encodeURIComponent(project ?? '~')}/${encodeURIComponent(id)}`;
 }
 
 /** The words naming a task's list: its project, or the workspace-wide list. */
