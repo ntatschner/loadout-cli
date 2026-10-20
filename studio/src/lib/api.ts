@@ -134,7 +134,12 @@ export const preferences = {
 
 export interface Session {
   id: string;
+  /** What it is called now: the name somebody gave it, or what it was launched as. */
   title: string;
+  /** What it was launched as. */
+  launchTitle?: string;
+  /** Whether its agent is known to be given its name as well. */
+  namesAgent?: boolean;
   startedAt: string;
   ended: boolean;
   exitCode: number | null;
@@ -182,7 +187,12 @@ export interface Launch {
 export const sessions = {
   list: () => call<Session[]>('GET', '/api/v1/sessions'),
   start: (launch: Launch) => call<Session>('POST', '/api/v1/sessions', launch),
+  /** Ends it and forgets it. */
   end: (id: string) => call<void>('DELETE', `/api/v1/sessions/${encodeURIComponent(id)}`),
+  /** Ends it and keeps it listed, ended. */
+  stop: (id: string) => call<Session>('POST', `/api/v1/sessions/${encodeURIComponent(id)}/end`),
+  /** A new name, or null for the one it was launched as. */
+  rename: (id: string, title: string | null) => call<Session>('PATCH', `/api/v1/sessions/${encodeURIComponent(id)}`, { title }),
   /**
    * For a session this daemon does not host: whether an earlier daemon did,
    * and the agent's conversation id it left, for 'loadout resume'.

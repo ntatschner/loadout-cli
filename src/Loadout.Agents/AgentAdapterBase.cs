@@ -49,6 +49,10 @@ public abstract class AgentAdapterBase : IAgentAdapter
     /// <remarks>None until an adapter says otherwise. An agent that cannot be driven headlessly is the ordinary case.</remarks>
     public virtual IHeadlessProtocol? HeadlessProtocol => null;
 
+    /// <inheritdoc />
+    /// <remarks>None until an adapter says otherwise: the name stays Loadout's own.</remarks>
+    public virtual string? RenameInput(string name) => null;
+
     /// <summary>
     /// Help-text markers that indicate each capability. The key is a capability
     /// name from <see cref="AgentCapabilities"/>; the value is the set of

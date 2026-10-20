@@ -32,7 +32,9 @@ public sealed class DashboardSessionSignalsTests : IAsyncLifetime
 
     public Task InitializeAsync()
     {
-        _sessions = new HostedSessions(Made, () => ("loadout-host", []), signals: _signals);
+        _sessions = new HostedSessions(
+            Made, () => ("loadout-host", []), signals: _signals,
+            renaming: (agent, name) => agent == "claude" ? "/rename " + name : null);
         _server = new DashboardServer(new EmptyJournal()) { Sessions = _sessions };
 
         var started = _server.Start(0);
@@ -111,6 +113,108 @@ public sealed class DashboardSessionSignalsTests : IAsyncLifetime
         SessionSignals.Write(_signals, id, "waiting", null, DateTimeOffset.UtcNow);
 
         (await NextChangeAsync(reader, patience.Token)).Should().Contain("sessions");
+    }
+
+    [Fact]
+    public async Task Every_open_page_hears_when_a_session_is_renamed()
+    {
+        var id = await StartAsync();
+
+        using var patience = new CancellationTokenSource(Patience);
+        using var events = await _client.GetAsync($"{_root}/api/v1/events", HttpCompletionOption.ResponseHeadersRead, patience.Token);
+        using var reader = new StreamReader(await events.Content.ReadAsStreamAsync(patience.Token));
+
+        await NextChangeAsync(reader, patience.Token);
+        await RenameAsync(id, "release notes");
+
+        (await NextChangeAsync(reader, patience.Token)).Should().Contain("sessions");
+    }
+
+    [Fact]
+    public async Task A_new_name_is_typed_into_the_agent_only_once_it_says_it_is_waiting()
+    {
+        var id = await StartAsync();
+        var terminal = _terminals.Single();
+
+        await RenameAsync(id, "first try");
+        await RenameAsync(id, "release notes");
+        SessionSignals.Write(_signals, id, "working", "5f0c1e2a", DateTimeOffset.UtcNow.AddSeconds(-10), agent: "claude");
+        await OneAsync(id);
+        await Task.Delay(300);
+
+        terminal.Typed.Should().BeEmpty("nothing is typed into a turn that is running");
+
+        SessionSignals.Write(_signals, id, "waiting", null, DateTimeOffset.UtcNow.AddSeconds(-5));
+        var shown = await OneAsync(id);
+
+        shown.GetProperty("namesAgent").GetBoolean().Should().BeTrue();
+        await UntilTypedAsync(terminal, "/rename release notes\r");
+        terminal.Typed.Should().Be("/rename release notes\r", "only the newest name goes, and only once");
+        (await OneAsync(id)).GetProperty("needs").GetString().Should().Be("waiting", "the daemon typing is not somebody answering");
+
+        await Task.Delay(300);
+        terminal.Typed.Should().Be("/rename release notes\r");
+    }
+
+    [Fact]
+    public async Task A_rename_while_the_agent_is_waiting_is_typed_at_once()
+    {
+        var id = await StartAsync();
+        SessionSignals.Write(_signals, id, "waiting", "5f0c1e2a", DateTimeOffset.UtcNow, agent: "claude");
+
+        await RenameAsync(id, "docs");
+
+        await UntilTypedAsync(_terminals.Single(), "/rename docs\r");
+    }
+
+    [Theory]
+    [InlineData("codex")]
+    [InlineData(null)]
+    public async Task An_agent_that_cannot_take_a_name_keeps_it_as_Loadouts_own(string? agent)
+    {
+        var id = await StartAsync();
+        SessionSignals.Write(_signals, id, "waiting", "5f0c1e2a", DateTimeOffset.UtcNow, agent: agent);
+
+        var shown = await RenameAsync(id, "docs");
+        await Task.Delay(300);
+
+        shown.GetProperty("title").GetString().Should().Be("docs");
+        shown.GetProperty("namesAgent").GetBoolean().Should().BeFalse();
+        _terminals.Single().Typed.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_name_waiting_for_an_agent_that_has_ended_is_never_typed()
+    {
+        var id = await StartAsync();
+        await RenameAsync(id, "docs");
+
+        using var ended = await _client.PostAsync($"{_root}{SessionsApi.Root}/{id}/end", null);
+        SessionSignals.Write(_signals, id, "waiting", null, DateTimeOffset.UtcNow, agent: "claude");
+        await OneAsync(id);
+        await Task.Delay(300);
+
+        ended.StatusCode.Should().Be(HttpStatusCode.OK);
+        _terminals.Single().Typed.Should().BeEmpty();
+    }
+
+    private async Task<JsonElement> RenameAsync(string id, string name)
+    {
+        using var content = new StringContent(JsonSerializer.Serialize(new { title = name }), Encoding.UTF8, "application/json");
+        using var renamed = await _client.PatchAsync($"{_root}{SessionsApi.Root}/{id}", content);
+        renamed.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        return await renamed.Content.ReadFromJsonAsync<JsonElement>();
+    }
+
+    private static async Task UntilTypedAsync(ScriptedTerminal terminal, string wanted)
+    {
+        using var patience = new CancellationTokenSource(Patience);
+
+        while (terminal.Typed != wanted)
+        {
+            await Task.Delay(20, patience.Token);
+        }
     }
 
     private static async Task<string> NextChangeAsync(StreamReader reader, CancellationToken ct)

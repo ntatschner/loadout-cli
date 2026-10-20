@@ -18,7 +18,11 @@ namespace Loadout.Core.Sessions.Hosting;
 /// waiting for you: a scheduled wakeup's time, or the limit for work that has
 /// gone silent. Null for every other state.
 /// </param>
-public sealed record SessionSignal(string State, string? AgentSession, DateTimeOffset At, DateTimeOffset? Until = null);
+/// <param name="Agent">
+/// Which agent's hook wrote it, as the launcher names agents, or null where
+/// the hook did not say, as one installed by an older launcher does not.
+/// </param>
+public sealed record SessionSignal(string State, string? AgentSession, DateTimeOffset At, DateTimeOffset? Until = null, string? Agent = null);
 
 /// <summary>
 /// Where an agent running in a hosted session reports that it is waiting,
@@ -77,8 +81,8 @@ public static partial class SessionSignals
     public static bool IsSessionId(string? id) => id is not null && SessionId().IsMatch(id);
 
     /// <summary>
-    /// Records what a hook said, keeping the agent's id from before when this
-    /// one has none, with <c>until</c> for a <c>background</c> signal only.
+    /// Records what a hook said, keeping the agent's id and name from before
+    /// when this one has none, with <c>until</c> for a <c>background</c> signal only.
     /// </summary>
     /// <returns>
     /// False where the id or the state is not one this writes, or where
@@ -91,7 +95,8 @@ public static partial class SessionSignals
     /// itself, which keeps that question in front of you. And <c>working</c>
     /// over <c>working</c> writes nothing, since it is said on every tool call.
     /// </remarks>
-    public static bool Write(string directory, string id, string state, string? agentSession, DateTimeOffset at, DateTimeOffset? until = null)
+    public static bool Write(
+        string directory, string id, string state, string? agentSession, DateTimeOffset at, DateTimeOffset? until = null, string? agent = null)
     {
         if (!IsSessionId(id) || !States.Contains(state, StringComparer.Ordinal))
         {
@@ -105,6 +110,11 @@ public static partial class SessionSignals
             agentSession = null;
         }
 
+        if (agent is not null && !AgentName().IsMatch(agent))
+        {
+            agent = null;
+        }
+
         var before = Read(directory, id);
 
         if (before is not null
@@ -115,6 +125,7 @@ public static partial class SessionSignals
         }
 
         agentSession ??= before?.AgentSession;
+        agent ??= before?.Agent;
 
         System.IO.Directory.CreateDirectory(directory);
 
@@ -125,7 +136,7 @@ public static partial class SessionSignals
         // writer has its own aside, since the background hooks can overlap.
         File.WriteAllText(
             temporary,
-            JsonSerializer.Serialize(new SessionSignal(state, agentSession, at, state == "background" ? until : null), Json));
+            JsonSerializer.Serialize(new SessionSignal(state, agentSession, at, state == "background" ? until : null, agent), Json));
         File.Move(temporary, path, overwrite: true);
 
         return true;
@@ -271,4 +282,7 @@ public static partial class SessionSignals
 
     [GeneratedRegex("^[A-Za-z0-9-]{1,64}$")]
     private static partial Regex AgentSessionId();
+
+    [GeneratedRegex("^[a-z0-9][a-z0-9_-]{0,31}$")]
+    private static partial Regex AgentName();
 }

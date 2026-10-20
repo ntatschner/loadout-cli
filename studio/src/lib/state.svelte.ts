@@ -613,6 +613,25 @@ export class Studio {
   endSession(session: api.Session): Promise<boolean> {
     return this.#act(() => api.sessions.end(session.id), `Ended ${session.title}`, command.endSession(), () => this.loadSessions());
   }
+
+  /**
+   * Ends a session and leaves it listed, ended, as closing its tab does.
+   * Quiet when it works: the session ending is announced like any other
+   * that ends, and saying it twice is noise. A refusal still says so.
+   */
+  stopSession(session: api.Session): Promise<boolean> {
+    return this.#act(() => api.sessions.stop(session.id), `Ended ${session.title}`, command.endHosted(session.id), () => this.loadSessions(), { quiet: true });
+  }
+
+  /** Renames a session for every browser, or gives it its launch name back for null. */
+  renameSession(session: api.Session, name: string | null): Promise<boolean> {
+    return this.#act(
+      () => api.sessions.rename(session.id, name),
+      name === null ? `Back to ${session.launchTitle ?? 'its launch name'}` : `Renamed to ${name}`,
+      command.renameSession(session.id, name),
+      () => this.loadSessions(),
+    );
+  }
 }
 
 export const studio = new Studio();

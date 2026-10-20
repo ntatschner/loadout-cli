@@ -1511,7 +1511,7 @@ public sealed class DashboardServer : IDisposable
 
     /// <summary>
     /// Says, as it happens, that something Studio shows has changed: a hosted
-    /// session started or ended, or a team run moved.
+    /// session started, ended or was renamed, or a team run moved.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -1563,6 +1563,7 @@ public sealed class DashboardServer : IDisposable
                     ? string.Empty
                     : string.Join(';', Sessions.All.Select(one => Sessions.SignalOf(one) is var signal
                         ? one.Id + (one.HasEnded ? "!" : string.Empty) + "?" + signal.Needs + (signal.Background ? "~" : string.Empty)
+                            + "=" + one.Label
                         : string.Empty));
                 var runsNow = string.Join(';', _journal.List(40).Select(run => run + "=" + RunStamp(run)));
                 var said = new List<string>();

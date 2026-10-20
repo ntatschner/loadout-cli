@@ -143,6 +143,16 @@ describe('TermDeck', () => {
     expect(shown()).toEqual(['b']);
   });
 
+  it('numbers the tabs in the order it is given, so Ctrl+Alt+1 is the first tab as arranged', async () => {
+    const onpick = vi.fn();
+    deck({ sessions: [sessions[2], sessions[0], sessions[1]], onpick });
+
+    expect(screen.getByRole('tab', { name: /release/ }).getAttribute('aria-keyshortcuts')).toBe('Control+Alt+1');
+
+    await fireEvent.keyDown(screen.getByRole('region', { name: 'Terminals' }), { key: '1', code: 'Digit1', ctrlKey: true, altKey: true });
+    expect(onpick).toHaveBeenCalledWith('c');
+  });
+
   it('numbers the tabs with their keys and marks new output', () => {
     deck({ sessions: [{ ...sessions[0] }, { ...sessions[1], unread: true }] });
 

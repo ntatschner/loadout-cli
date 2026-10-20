@@ -63,7 +63,11 @@ to the next one. Your browser remembers which you picked.
 
 - *Default* is Studio as this page describes it.
 - *Terminals* shows your sessions as tabs, with up to four on the screen at
-  once, so you can watch and type into several.
+  once, so you can watch and type into several. Drag a tab to move it. Press
+  **F2** to rename it. Press its **×** to close it. Closing a session that is
+  still running asks first. *Hide* takes the tab away but keeps the session
+  going. *End session* stops it, and asks you to make sure. Only this browser
+  remembers the order of your tabs and which ones you hid.
 - *Teams* shows every team's run as one line on a board. You can answer a
   question in its line.
 - *Minimal* shows one quiet list of what's happening. Pick one and it fills the

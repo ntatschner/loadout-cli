@@ -979,6 +979,17 @@ public static class Program
         Top<CommandsCommand>(config, "commands");
         Top<SessionListCommand>(config, "sessions");
         Top<SessionRunningCommand>(config, "running");
+
+        TopBranch(config, "session", session =>
+        {
+            session.Describe(
+                "List, rename and end the sessions the daemon hosts for Studio.",
+                CommandCategory.Start,
+                "studio hosted sessions terminals tabs");
+            session.AddCommand<HostedSessionListCommand>("list");
+            session.AddCommand<HostedSessionRenameCommand>("rename");
+            session.AddCommand<HostedSessionEndCommand>("end");
+        });
         Top<ResumeCommand>(config, "resume");
         Top<FindCommand>(config, "find");
         Top<UsageCommand>(config, "usage");

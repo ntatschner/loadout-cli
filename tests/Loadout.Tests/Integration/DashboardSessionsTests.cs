@@ -142,6 +142,91 @@ public sealed class DashboardSessionsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Renaming_one_changes_what_every_page_reads_and_null_gives_its_launch_name_back()
+    {
+        var id = await StartAsync();
+
+        using var renamed = await PatchAsync(id, """{"title":"  release notes  "}""");
+
+        renamed.StatusCode.Should().Be(HttpStatusCode.OK, await renamed.Content.ReadAsStringAsync());
+        var shown = await renamed.Content.ReadFromJsonAsync<JsonElement>();
+        shown.GetProperty("title").GetString().Should().Be("release notes", "a name is trimmed");
+        shown.GetProperty("launchTitle").GetString().Should().Be("starstats");
+
+        var listed = await _client.GetFromJsonAsync<JsonElement>(_root + SessionsApi.Root);
+        listed[0].GetProperty("title").GetString().Should().Be("release notes");
+
+        using var reset = await PatchAsync(id, """{"title":null}""");
+
+        (await reset.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("title").GetString().Should().Be("starstats");
+    }
+
+    [Theory]
+    [InlineData("""{}""")]
+    [InlineData("""{"title":3}""")]
+    [InlineData("not json")]
+    [InlineData("""{"title":"two\nlines"}""")]
+    public async Task A_rename_without_a_usable_name_is_refused_and_changes_nothing(string body)
+    {
+        var id = await StartAsync();
+
+        using var refused = await PatchAsync(id, body);
+
+        refused.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await OneAsync(id)).GetProperty("title").GetString().Should().Be("starstats");
+    }
+
+    [Fact]
+    public async Task A_name_longer_than_the_limit_is_refused()
+    {
+        var id = await StartAsync();
+
+        using var refused = await PatchAsync(id, JsonSerializer.Serialize(new { title = new string('x', HostedSessions.LongestName + 1) }));
+        using var kept = await PatchAsync(id, JsonSerializer.Serialize(new { title = new string('x', HostedSessions.LongestName) }));
+
+        refused.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await refused.Content.ReadAsStringAsync()).Should().Contain($"{HostedSessions.LongestName} characters");
+        kept.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Ending_one_stops_it_and_keeps_it_listed_as_ended()
+    {
+        var id = await StartAsync();
+
+        using var ended = await _client.PostAsync($"{_root}{SessionsApi.Root}/{id}/end", null);
+        using var again = await _client.PostAsync($"{_root}{SessionsApi.Root}/{id}/end", null);
+
+        ended.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await ended.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("ended").GetBoolean().Should().BeTrue();
+        again.StatusCode.Should().Be(HttpStatusCode.OK, "ending one already ended is no change");
+        _terminals.Single().Disposed.Should().BeTrue();
+
+        var listed = await _client.GetFromJsonAsync<JsonElement>(_root + SessionsApi.Root);
+        listed.EnumerateArray().Select(one => one.GetProperty("id").GetString()).Should().Equal(id);
+        listed[0].GetProperty("ended").GetBoolean().Should().BeTrue();
+
+        using var forgotten = await _client.DeleteAsync($"{_root}{SessionsApi.Root}/{id}");
+        forgotten.StatusCode.Should().Be(HttpStatusCode.NoContent, "an ended session can still be forgotten");
+    }
+
+    [Fact]
+    public async Task A_watch_only_dashboard_refuses_to_rename_or_end_one()
+    {
+        var id = await StartAsync();
+        _server.WatchOnly = true;
+
+        using var renamed = await PatchAsync(id, """{"title":"mine"}""");
+        using var ended = await _client.PostAsync($"{_root}{SessionsApi.Root}/{id}/end", null);
+
+        renamed.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        ended.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await ended.Content.ReadAsStringAsync()).Should().Contain("only watching");
+        _terminals.Single().Disposed.Should().BeFalse();
+        (await OneAsync(id)).GetProperty("title").GetString().Should().Be("starstats");
+    }
+
+    [Fact]
     public async Task A_session_that_is_not_there_is_not_found()
     {
         using var one = await _client.GetAsync($"{_root}{SessionsApi.Root}/nothing");
@@ -194,9 +279,11 @@ public sealed class DashboardSessionsTests : IAsyncLifetime
 
         using var list = await _client.DeleteAsync(_root + SessionsApi.Root);
         using var one = await _client.PostAsync($"{_root}{SessionsApi.Root}/{id}", null);
+        using var end = await _client.GetAsync($"{_root}{SessionsApi.Root}/{id}/end");
 
         list.StatusCode.Should().Be(HttpStatusCode.MethodNotAllowed);
         one.StatusCode.Should().Be(HttpStatusCode.MethodNotAllowed);
+        end.StatusCode.Should().Be(HttpStatusCode.MethodNotAllowed);
     }
 
     [Fact]
@@ -235,6 +322,16 @@ public sealed class DashboardSessionsTests : IAsyncLifetime
 
         return (await started.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString()!;
     }
+
+    private async Task<HttpResponseMessage> PatchAsync(string id, string body)
+    {
+        using var content = new StringContent(body, Encoding.UTF8, "application/json");
+
+        return await _client.PatchAsync($"{_root}{SessionsApi.Root}/{id}", content);
+    }
+
+    private async Task<JsonElement> OneAsync(string id) =>
+        await _client.GetFromJsonAsync<JsonElement>($"{_root}{SessionsApi.Root}/{id}");
 
     private ScriptedTerminal Made()
     {

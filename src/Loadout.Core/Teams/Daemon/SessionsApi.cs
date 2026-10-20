@@ -6,7 +6,7 @@ namespace Loadout.Core.Teams.Daemon;
 
 /// <summary>
 /// The hosted sessions under <c>/api/v1/sessions</c>: listing them, starting
-/// one, ending one, and the terminal a window opens on it.
+/// one, naming one, ending one, and the terminal a window opens on it.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -22,14 +22,16 @@ namespace Loadout.Core.Teams.Daemon;
 /// <item><term>GET /api/v1/sessions</term><description>Every session, oldest first.</description></item>
 /// <item><term>POST /api/v1/sessions</term><description>Starts one from the launch sheet's fields, or resumes a conversation given as <c>resume</c> (see <see cref="HistoryApi"/>); 201 with the session.</description></item>
 /// <item><term>GET /api/v1/sessions/{id}</term><description>One session; 410 with the agent's conversation id for one an earlier daemon hosted.</description></item>
+/// <item><term>PATCH /api/v1/sessions/{id}</term><description>Renames it from <c>{"title": "..."}</c>, or gives it its launch name back for <c>{"title": null}</c>; 200 with the session.</description></item>
+/// <item><term>POST /api/v1/sessions/{id}/end</term><description>Ends it if it is running and keeps it listed, ended; 200 with the session.</description></item>
 /// <item><term>DELETE /api/v1/sessions/{id}</term><description>Ends it if it is running, and forgets it; 204.</description></item>
 /// <item><term>GET /api/v1/sessions/{id}/terminal</term><description>A WebSocket carrying the terminal; see <see cref="TerminalSocket"/>.</description></item>
 /// </list>
 /// </para>
 /// <para>
 /// A dashboard that is only watching lists and shows sessions, and opens a
-/// terminal that cannot type, but refuses to start or end one, in words
-/// that say so, as the classic page does for its own changes.
+/// terminal that cannot type, but refuses to start, rename or end one, in
+/// words that say so, as the classic page does for its own changes.
 /// </para>
 /// </remarks>
 internal static class SessionsApi
@@ -39,7 +41,7 @@ internal static class SessionsApi
 
     /// <summary>What a watch-only dashboard says when asked to change something here.</summary>
     internal const string WatchOnlyRefusal =
-        "This dashboard is only watching, so it cannot start, end or type into a session. "
+        "This dashboard is only watching, so it cannot start, rename, end or type into a session. "
         + "Run the command in a terminal instead.";
 
     /// <summary>Answers a request whose path is <see cref="Root"/> or below it.</summary>
@@ -103,8 +105,22 @@ internal static class SessionsApi
                 await JsonAsync(context, 200, Shown(sessions, session, null)).ConfigureAwait(false);
                 return;
 
-            case [_] when method == "DELETE" && watchOnly:
+            case [_] when method is "DELETE" or "PATCH" && watchOnly:
+            case [_, "end"] when method == "POST" && watchOnly:
                 await PlainAsync(context, 403, WatchOnlyRefusal).ConfigureAwait(false);
+                return;
+
+            case [_] when method == "PATCH":
+                await RenameAsync(context, sessions, session, ct).ConfigureAwait(false);
+                return;
+
+            case [_, "end"] when method == "POST":
+                await sessions.EndAsync(session.Id).ConfigureAwait(false);
+                await JsonAsync(context, 200, Shown(sessions, session, null)).ConfigureAwait(false);
+                return;
+
+            case [_, "end"]:
+                await PlainAsync(context, 405, "A session is ended with POST.").ConfigureAwait(false);
                 return;
 
             case [_] when method == "DELETE":
@@ -114,7 +130,7 @@ internal static class SessionsApi
                 return;
 
             case [_]:
-                await PlainAsync(context, 405, "A session is read with GET and ended with DELETE.").ConfigureAwait(false);
+                await PlainAsync(context, 405, "A session is read with GET, renamed with PATCH and ended with DELETE.").ConfigureAwait(false);
                 return;
 
             case [_, "terminal"] when context.Request.IsWebSocketRequest:
@@ -242,6 +258,48 @@ internal static class SessionsApi
         await JsonAsync(context, 201, Shown(sessions, started.Value!, null)).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Renames a session from a body naming <c>title</c>: a string for the new
+    /// name, or null for the one it was launched as. A body without it is
+    /// refused rather than read as a reset.
+    /// </summary>
+    private static async Task RenameAsync(HttpListenerContext context, HostedSessions sessions, HostedSession session, CancellationToken ct)
+    {
+        JsonElement title;
+
+        try
+        {
+            using var body = await JsonDocument.ParseAsync(context.Request.InputStream, cancellationToken: ct).ConfigureAwait(false);
+
+            if (body.RootElement.ValueKind != JsonValueKind.Object
+                || !body.RootElement.TryGetProperty("title", out var named)
+                || named.ValueKind is not (JsonValueKind.String or JsonValueKind.Null))
+            {
+                throw new JsonException();
+            }
+
+            title = named.Clone();
+        }
+        catch (JsonException)
+        {
+            await PlainAsync(context, 400,
+                "The body should be JSON giving the new name as 'title', or null for the name it was launched as.").ConfigureAwait(false);
+
+            return;
+        }
+
+        var renamed = sessions.Rename(session.Id, title.ValueKind == JsonValueKind.String ? title.GetString() : null);
+
+        if (renamed.Failed)
+        {
+            await PlainAsync(context, 400, renamed.Error!).ConfigureAwait(false);
+
+            return;
+        }
+
+        await JsonAsync(context, 200, Shown(sessions, renamed.Value!, null)).ConfigureAwait(false);
+    }
+
     private static string Address(HostedSession session) => $"{Root}/{Uri.EscapeDataString(session.Id)}";
 
     /// <summary>A session as the page reads it, with what it was launched as.</summary>
@@ -257,7 +315,11 @@ internal static class SessionsApi
         {
             memory,
             id = session.Id,
-            title = session.Title,
+            title = session.Name,
+            // What it was launched as, for going back to; and whether its
+            // agent is known to be given its name as well.
+            launchTitle = session.Title,
+            namesAgent = sessions.PassesNames(session),
             startedAt = session.StartedAt,
             lastOutputAt = session.LastOutputAt,
             ended = session.HasEnded,

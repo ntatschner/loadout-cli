@@ -11,17 +11,44 @@
   import { deckKey, morph, shownPanes, type DeckLayout, type DeckSession, type PaneHandle } from '../modes';
 
   interface Props {
+    /** The tabs on the strip, in this browser's order. */
     sessions: DeckSession[];
     current?: string | null;
     layout?: DeckLayout;
     /** One pane's terminal: given the session and a way to hand its handle back. */
     pane: Snippet<[string, (handle: PaneHandle | null) => void]>;
+    /** Running sessions this browser took off the strip. */
+    hidden?: DeckSession[];
+    /** Whether names can be changed and sessions ended: false where Studio is only watching. */
+    changes?: boolean;
     onpick?: (id: string) => void;
     onlayout?: (layout: DeckLayout) => void;
     onnew?: () => void;
+    onmove?: (order: string[]) => void;
+    onrename?: (id: string, name: string | null) => unknown;
+    onhide?: (id: string) => void;
+    onunhide?: (id: string) => void;
+    onclear?: (id: string) => void;
+    onend?: (id: string) => unknown;
   }
 
-  let { sessions, current = null, layout = 1, pane, onpick = undefined, onlayout = undefined, onnew = undefined }: Props = $props();
+  let {
+    sessions,
+    current = null,
+    layout = 1,
+    pane,
+    hidden = [],
+    changes = true,
+    onpick = undefined,
+    onlayout = undefined,
+    onnew = undefined,
+    onmove = undefined,
+    onrename = undefined,
+    onhide = undefined,
+    onunhide = undefined,
+    onclear = undefined,
+    onend = undefined,
+  }: Props = $props();
 
   const LAYOUTS: [DeckLayout, string, string][] = [
     [1, 'One', 'M2 2h16v12H2z'],
@@ -129,7 +156,22 @@
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <section bind:this={host} class="ls-deck" aria-label="Terminals" onkeydowncapture={keys} onleaveterminal={() => host?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')?.focus()}>
   <div class="dtop">
-    <SessionTabs {sessions} current={on} controls={panesId} onpick={(id) => pick(id, false)} onmaximise={(id) => { pick(id); setLayout(1); }} {onnew} />
+    <SessionTabs
+      {sessions}
+      {hidden}
+      {changes}
+      current={on}
+      controls={panesId}
+      onpick={(id) => pick(id, false)}
+      onmaximise={(id) => { pick(id); setLayout(1); }}
+      {onnew}
+      {onmove}
+      {onrename}
+      {onhide}
+      {onunhide}
+      {onclear}
+      {onend}
+    />
     <div class="lay" role="radiogroup" aria-label="Panes">
       {#each LAYOUTS as [count, name, icon] (count)}
         <button type="button" role="radio" aria-checked={count === panes ? 'true' : 'false'} aria-label={name} title={name} onclick={() => setLayout(count)}>
@@ -156,7 +198,7 @@
       <span role="status">{found}</span>
     </div>
     <span class="grow"></span>
-    <span class="keys">Ctrl Alt 1–9 picks · Ctrl Alt arrows move · Ctrl ] leaves a terminal</span>
+    <span class="keys">Ctrl Alt 1–9 picks · Ctrl Alt arrows move · Ctrl ] leaves a terminal · F2 renames a tab · Ctrl Shift arrows move it</span>
   </div>
   <div class={`panes l${narrow ? 1 : panes}`} id={panesId}>
     {#each shown as id (id)}

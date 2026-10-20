@@ -2,12 +2,15 @@
   // Terminal Focus: Home, Sessions and a session's own page become the
   // deck, every hosted session a tab and the picked ones live in panes.
   // Loaded only when first needed, like the session page, since the
-  // terminal is most of Studio's size. The layout and the last session
-  // picked are kept in this browser.
+  // terminal is most of Studio's size. The layout, the last session picked,
+  // and how the tabs are arranged, hidden and cleared are kept in this
+  // browser; a tab's name is the daemon's, so every browser shows it.
+  import { untrack } from 'svelte';
   import SessionPane from '../lib/components/SessionPane.svelte';
   import TermDeck from '../lib/components/TermDeck.svelte';
   import { studio } from '../lib/state.svelte';
   import { wordFor } from '../lib/signals';
+  import { TABS_KEY, arrange, clear, hide, prune, readTabs, unhide, withOrder, type TabState } from '../lib/tabs';
   import type { DeckLayout, DeckSession } from '../lib/modes';
 
   let { id = null, onlaunch = undefined }: { id?: string | null; onlaunch?: () => void } = $props();
@@ -24,7 +27,7 @@
   const openedAt = Date.now();
 
   const lines = $derived(studio.lines.filter((line) => line.kind === 'session'));
-  const sessions: DeckSession[] = $derived(
+  const all: DeckSession[] = $derived(
     lines.map((line) => {
       const wrote = line.session?.lastOutputAt ? Date.parse(line.session.lastOutputAt) : 0;
 
@@ -35,9 +38,53 @@
         where: line.session?.project ?? null,
         agent: line.session?.kind === 'command' ? 'loadout' : (line.session?.agent ?? null),
         unread: line.ref !== shownNow && wrote > (seen[line.ref] ?? openedAt),
+        ended: line.stage === 4 || !!line.session?.ended,
+        launchTitle: line.session?.launchTitle ?? line.title,
+        namesAgent: !!line.session?.namesAgent,
+        kind: line.session?.kind ?? 'launch',
+        project: line.session?.project ?? null,
       };
     }),
   );
+
+  let tabs = $state<TabState>(readTabs(studio.kept(TABS_KEY, '')));
+  const arranged = $derived(arrange(all, tabs));
+
+  function keepTabs(next: TabState) {
+    tabs = next;
+    studio.keep(TABS_KEY, JSON.stringify(next));
+  }
+
+  // A session the address names is shown, even one hidden here before, and
+  // stays shown.
+  $effect(() => {
+    const named = id;
+
+    untrack(() => {
+      if (named && tabs.hidden.includes(named)) {
+        keepTabs(unhide(tabs, named));
+      }
+    });
+  });
+
+  // Once the daemon has said what it hosts, ids it no longer has are let go.
+  $effect(() => {
+    const present = studio.loaded ? studio.sessions.map((one) => one.id) : null;
+
+    untrack(() => {
+      if (!present) {
+        return;
+      }
+
+      const pruned = prune(tabs, present);
+
+      if (JSON.stringify(pruned) !== JSON.stringify(tabs)) {
+        keepTabs(pruned);
+      }
+    });
+  });
+
+  const hosted = (one: string) => studio.sessions.find((session) => session.id === one);
 
   // svelte-ignore state_referenced_locally
   const start = id ?? studio.kept(LAST, '');
@@ -61,12 +108,20 @@
 <h1 class="ls-vh">Terminals</h1>
 <div class="deckwrap">
   <TermDeck
-    {sessions}
+    sessions={arranged.shown}
+    hidden={arranged.hidden}
+    changes={!studio.watchOnly}
     current={id ?? (start || null)}
     {layout}
     onpick={picked}
     onlayout={(next) => studio.keep(LAYOUT, String(next))}
     onnew={studio.watchOnly ? undefined : onlaunch}
+    onmove={(order) => keepTabs(withOrder(tabs, order))}
+    onrename={(one, name) => { const session = hosted(one); return session && studio.renameSession(session, name); }}
+    onhide={(one) => keepTabs(hide(tabs, one))}
+    onunhide={(one) => keepTabs(unhide(tabs, one))}
+    onclear={(one) => keepTabs(clear(tabs, one))}
+    onend={(one) => { const session = hosted(one); return session && studio.stopSession(session); }}
   >
     {#snippet pane(one, register)}
       <SessionPane id={one} onready={register} onoutput={() => looked(one)} />

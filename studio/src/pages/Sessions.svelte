@@ -18,6 +18,7 @@
   import { wordFor } from '../lib/signals';
   import { studio } from '../lib/state.svelte';
   import { command } from '../lib/commands';
+  import { TABS_KEY, readTabs, unhide } from '../lib/tabs';
 
   let { onlaunch, onresume = undefined }: { onlaunch: () => void; onresume?: (conversation: Conversation) => void } = $props();
 
@@ -70,6 +71,18 @@
   }
 
   const all = $derived(studio.lines.filter((line) => line.kind === 'session'));
+
+  // Hidden from Terminals in this browser only; read when the page is.
+  let hiddenHere = $state(readTabs(studio.kept(TABS_KEY, '')).hidden);
+
+  /** Shows one in Terminals mode, bringing its tab back if it was hidden here. */
+  function openInTerminals(ref: string) {
+    const tabs = unhide(readTabs(studio.kept(TABS_KEY, '')), ref);
+    studio.keep(TABS_KEY, JSON.stringify(tabs));
+    hiddenHere = tabs.hidden;
+    studio.setMode('terminals');
+    router.go('session', ref);
+  }
   const live = $derived(all.filter((line) => line.stage !== 4));
   const ended = $derived(all.filter((line) => line.stage === 4));
 
@@ -121,8 +134,11 @@
     {#if live.length}
       <ul class="slist" aria-label="Running and waiting">
         {#each live as line (line.id)}
-          <li>
+          <li class="liverow">
             <a class="srow" href={`#session/${encodeURIComponent(line.ref)}`}><span class="t">{line.title}</span><Signal word={wordFor(line, studio.idleAfter)} /><span class="x">{line.where} · {line.session?.agent ?? 'agent'} · {line.session?.mode ?? 'mode by the task'} · {line.mins ?? 0} min</span></a>
+            <button type="button" class="linkish" aria-label={`Open ${line.title} in Terminals`} onclick={() => openInTerminals(line.ref)}>
+              {hiddenHere.includes(line.ref) ? 'Hidden from Terminals here · show it' : 'Open in Terminals'}
+            </button>
           </li>
         {/each}
       </ul>
@@ -130,6 +146,7 @@
       <p class="calm">No session is running here.</p>
     {/if}
     <p class="calm small">These run in the daemon, not in this tab: closing it ends nothing. Restarting the daemon ends every one of them.</p>
+    <Command why="The same sessions with their ids, to rename or end one from a terminal:" command={command.hostedSessions()} />
   </section>
   <section aria-labelledby="z-rec">
     <h2 class="ls-zone" id="z-rec">Recent</h2>
@@ -179,6 +196,8 @@
   .lostrow .x { grid-column: 1; font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
   .lostrow .acts { grid-row: 1 / span 2; grid-column: 2; display: grid; justify-items: end; gap: 4px; }
   .history { margin-top: 22px; }
+  .liverow { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0 10px; }
+  .liverow .linkish { justify-self: end; padding-right: 12px; }
   .linkish { border: 0; background: none; padding: 0; color: var(--accent); font: inherit; font-size: 12.5px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
   .linkish:disabled { color: var(--muted); cursor: default; text-decoration: none; }
   @media (max-width: 600px) {

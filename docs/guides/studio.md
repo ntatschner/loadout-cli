@@ -179,9 +179,11 @@ The session belongs to the daemon, not the tab. Close the tab, reload, or open
 the same session in a second window, and it's still there. Only one window
 types at a time; another shows **Type here instead**.
 
-Two things do end it: **End the session**, which asks first, and stopping or
+Three things do end it: **End the session** on its page, which asks first;
+**End session** on its tab in Terminals, which asks twice; and stopping or
 restarting the daemon, which ends every session it hosts. `loadout daemon stop`
-warns you when there are any.
+warns you when there are any. From a terminal, `loadout session end` does what
+the tab does.
 
 To carry a conversation on in a terminal instead, use the command the session
 page shows. Once Claude Code has finished its first reply, that names the
@@ -650,6 +652,32 @@ Each pane in Terminals is its own connection to the session. A pane you stop
 showing closes its connection; show it again and the daemon replays what the
 session has written, so nothing is missed. Typing goes only to the pane that
 has the keyboard, and **Ctrl ]** gives the keyboard back to its tab.
+
+The tabs themselves can be closed, renamed and moved. Each has a **×**, and a
+menu on right-click, the context-menu key or **Shift F10**.
+
+- **Closing** an ended tab clears it at once. Closing a running one asks
+  whether to **Hide** the tab or **End session**. Hiding leaves the session
+  running and still on the Sessions page; the count at the end of the strip,
+  or **Open in Terminals** on the Sessions page, brings it back. Ending asks a
+  second time, naming the session and its project, because it's the one thing
+  here you can't undo. An ended session stays listed, so you can see how it
+  ended. **Delete** closes the tab you're on.
+- **Renaming** happens in the tab: **F2**, type, **Enter** to keep it,
+  **Escape** to leave it. Emptied, it goes back to the name it was launched
+  with, and the menu offers that too. The name is held by the daemon, so every
+  browser and `loadout session list` show it. Claude Code is given it as well,
+  through its own `/rename`, so a resumed conversation carries the same name.
+  Loadout types that only while Claude is waiting for you, never into a reply
+  it's writing, and it shows in the terminal when it does. An agent that has
+  no such command keeps the name in Loadout only, and the rename box says so.
+- **Moving** is by dragging a tab along the strip, or **Ctrl Shift** with the
+  arrows. **Ctrl Alt 1** to **9** follow the order you set.
+
+The order, what you hid and what you cleared belong to this browser, so
+arranging tabs here never changes what another screen shows. Only a name or
+an end reaches the daemon. A Studio that's only watching can move, hide and
+clear tabs, but can't rename or end a session.
 
 ### 17. Pure Focus
 

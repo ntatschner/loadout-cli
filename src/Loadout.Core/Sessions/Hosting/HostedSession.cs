@@ -66,7 +66,9 @@ public sealed class HostedSession : IAsyncDisposable
     private DateTimeOffset? _lastOutput;
     private DateTimeOffset? _lastInput;
     private bool _ended;
+    private int _disposed;
     private int? _exitCode;
+    private string? _label;
     private int _columns;
     private int _rows;
 
@@ -85,8 +87,21 @@ public sealed class HostedSession : IAsyncDisposable
     /// <summary>The name the daemon knows this session by.</summary>
     public string Id { get; }
 
-    /// <summary>What the session is, as a person would call it.</summary>
+    /// <summary>What the session was launched as, as a person would call it.</summary>
     public string Title { get; }
+
+    /// <summary>
+    /// The name somebody gave it since, or null for none. Held only as long as
+    /// the session is, which is no longer than the daemon.
+    /// </summary>
+    public string? Label
+    {
+        get { lock (_gate) { return _label; } }
+        internal set { lock (_gate) { _label = value; } }
+    }
+
+    /// <summary>What to call it now: the name it was given, or what it was launched as.</summary>
+    public string Name => Label ?? Title;
 
     /// <summary>When it started.</summary>
     public DateTimeOffset StartedAt { get; }
@@ -263,6 +278,21 @@ public sealed class HostedSession : IAsyncDisposable
         return await _terminal.WriteAsync(data, ct).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Writes to the child as the daemon rather than as a window: not held to
+    /// the input lease, and not counted as somebody typing, so an agent's
+    /// report that it is waiting still stands afterwards.
+    /// </summary>
+    internal async Task<OperationResult> TypeAsync(ReadOnlyMemory<byte> data, CancellationToken ct)
+    {
+        if (HasEnded)
+        {
+            return OperationResult.Fail("The session has ended.");
+        }
+
+        return await _terminal.WriteAsync(data, ct).ConfigureAwait(false);
+    }
+
     /// <summary>Applies a window's size, if that window holds the input.</summary>
     internal OperationResult ResizeFrom(TerminalAttachment attachment, int columns, int rows)
     {
@@ -424,10 +454,19 @@ public sealed class HostedSession : IAsyncDisposable
     }
 
     /// <summary>Ends the session: the pseudo-terminal closes, which tells the child its terminal has gone.</summary>
+    /// <remarks>
+    /// Safe to call again: a session ended and kept on the list is disposed a
+    /// second time when it is forgotten, and the second call only waits.
+    /// </remarks>
     public async ValueTask DisposeAsync()
     {
-        await _stopping.CancelAsync().ConfigureAwait(false);
-        _terminal.Dispose();
+        var first = Interlocked.Exchange(ref _disposed, 1) == 0;
+
+        if (first)
+        {
+            await _stopping.CancelAsync().ConfigureAwait(false);
+            _terminal.Dispose();
+        }
 
         try
         {
@@ -438,7 +477,10 @@ public sealed class HostedSession : IAsyncDisposable
             // The terminal was closed under the reader, which is how it stops.
         }
 
-        _stopping.Dispose();
+        if (first)
+        {
+            _stopping.Dispose();
+        }
     }
 }
 

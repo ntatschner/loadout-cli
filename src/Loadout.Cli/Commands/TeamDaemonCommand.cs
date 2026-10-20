@@ -160,7 +160,10 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             time,
             // How often idle turned out to be background work, and how often
             // that went quiet past its time: counts only, for the log.
-            line => console.WriteLine(line));
+            line => console.WriteLine(line),
+            // A tab renamed in Studio names the agent's own conversation
+            // too, through whatever command its adapter says does that.
+            (agent, name) => agents.Resolve(agent) is { Succeeded: true, Value: { } adapter } ? adapter.RenameInput(name) : null);
         _ideas = ideas;
         _dumps = dumps;
         _launcher = launcher;
