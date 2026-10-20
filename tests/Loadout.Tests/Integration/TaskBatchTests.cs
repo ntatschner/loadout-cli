@@ -309,6 +309,20 @@ public sealed class TaskBatchTests : IDisposable
     }
 
     [Fact]
+    public async Task A_recent_change_moves_the_stamp_even_when_the_time_and_length_do_not()
+    {
+        (await _space.Tasks.DeclareAsync(null, "a", TaskState.Open, "nigel", "AAAA")).Succeeded.Should().BeTrue();
+        var stamp = File.GetLastWriteTimeUtc(ListPath(null));
+        var before = (await _space.Tasks.StampsAsync()).Single(one => one.Project is null).Stamp;
+
+        var text = await File.ReadAllTextAsync(ListPath(null));
+        await File.WriteAllTextAsync(ListPath(null), text.Replace("AAAA", "BBBB", StringComparison.Ordinal));
+        File.SetLastWriteTimeUtc(ListPath(null), stamp);
+
+        (await _space.Tasks.StampsAsync()).Single(one => one.Project is null).Stamp.Should().NotBe(before);
+    }
+
+    [Fact]
     public void A_batch_is_read_from_the_json_every_surface_takes()
     {
         var read = TaskOperations.Parse(

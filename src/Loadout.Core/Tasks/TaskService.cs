@@ -1,5 +1,3 @@
-using System.Collections.Concurrent;
-using System.Globalization;
 using Loadout.Core.Configuration;
 using Loadout.Core.Security;
 using Loadout.Core.Workspace;
@@ -185,31 +183,25 @@ public sealed record TaskMoved(TaskItem Task, string? Where)
 /// two can never come to disagree about what a change does.
 /// </para>
 /// <para>
-/// Lists are kept parsed between reads, keyed by path and checked against the
-/// file's modification time and length on every read, so a file changed by
-/// another process, by hand or by a pull is read again the next time it is
-/// asked for whether or not anything noticed it change. A file changed in the
-/// last couple of seconds is always read again: a clock that ticks coarser
-/// than two writes would otherwise give both the same stamp.
+/// Lists are kept parsed between reads by <see cref="KeptFiles{T}"/>, which
+/// reads one again whenever its file says it has changed.
 /// </para>
 /// </remarks>
 internal sealed class TaskService : ITaskService
 {
     private const string NoWorkspace = "There is no workspace on this machine, so there is nowhere to keep tasks.";
 
-    /// <summary>How recently a file must have changed for its stamp not to be trusted alone.</summary>
-    private static readonly TimeSpan Settling = TimeSpan.FromSeconds(2);
-
     private readonly IWorkspaceManager _workspace;
     private readonly YamlStore _yaml;
     private readonly TimeProvider _time;
-    private readonly ConcurrentDictionary<string, Cached> _cache = new(StringComparer.Ordinal);
+    private readonly KeptFiles<TaskList> _kept;
 
     public TaskService(IWorkspaceManager workspace, YamlStore yaml, TimeProvider time)
     {
         _workspace = workspace;
         _yaml = yaml;
         _time = time;
+        _kept = new KeptFiles<TaskList>(yaml, () => new TaskList(), Copy);
     }
 
     private string PathFor(string? slug) => TaskPaths.List(_workspace.LocalPath, slug);
@@ -339,9 +331,10 @@ internal sealed class TaskService : ITaskService
         foreach (var list in Lists())
         {
             var path = PathFor(list);
-            var (stamp, settled) = StampOf(path);
+            var file = FileStamp.Of(path);
+            var stamp = file.Text;
 
-            if (stamp.Length > 0 && !settled
+            if (file.Exists && !file.Settled
                 && await LoadAsync(path, ct).ConfigureAwait(false) is { Succeeded: true, Value: { } read })
             {
                 stamp += "#" + read.Revision;
@@ -633,7 +626,7 @@ internal sealed class TaskService : ITaskService
 
             group.Revision = saved.Value!;
             written.Add(group);
-            Remember(group.Path, group.List!, saved.Value!);
+            _kept.Remember(group.Path, group.List!, saved.Value!);
         }
 
         return OperationResult<TaskBatch>.Ok(new TaskBatch(
@@ -847,54 +840,7 @@ internal sealed class TaskService : ITaskService
     }
 
     /// <summary>A list as it stands, from what was kept when the file has not changed since.</summary>
-    private async Task<OperationResult<YamlRead<TaskList>>> LoadAsync(string path, CancellationToken ct)
-    {
-        var (stamp, settled) = StampOf(path);
-
-        if (settled && _cache.TryGetValue(path, out var kept) && kept.Stamp == stamp)
-        {
-            return OperationResult<YamlRead<TaskList>>.Ok(new YamlRead<TaskList>(Copy(kept.List), kept.Revision));
-        }
-
-        var read = await _yaml.ReadAsync(path, () => new TaskList(), ct).ConfigureAwait(false);
-
-        // Kept only when the file is as it was before it was read, so a write
-        // landing in between is never remembered under the older stamp.
-        if (read.Succeeded && stamp.Length > 0 && StampOf(path).Stamp == stamp)
-        {
-            _cache[path] = new Cached(stamp, read.Value!.Revision, Copy(read.Value.Value));
-        }
-
-        return read;
-    }
-
-    /// <summary>Keeps a list this service has just written, so the next read need not parse it.</summary>
-    private void Remember(string path, TaskList list, string revision)
-    {
-        var (stamp, _) = StampOf(path);
-
-        if (stamp.Length > 0)
-        {
-            _cache[path] = new Cached(stamp, revision, Copy(list));
-        }
-    }
-
-    /// <summary>A file's modification time and length, and whether it last changed long enough ago to go by them.</summary>
-    private (string Stamp, bool Settled) StampOf(string path)
-    {
-        var file = new FileInfo(path);
-
-        if (!file.Exists)
-        {
-            return (string.Empty, false);
-        }
-
-        var written = file.LastWriteTimeUtc;
-
-        return (
-            written.Ticks.ToString(CultureInfo.InvariantCulture) + ":" + file.Length.ToString(CultureInfo.InvariantCulture),
-            DateTime.UtcNow - written > Settling);
-    }
+    private Task<OperationResult<YamlRead<TaskList>>> LoadAsync(string path, CancellationToken ct) => _kept.ReadAsync(path, ct);
 
     /// <summary>A list nothing else holds, so a caller changing what it was given changes nothing kept.</summary>
     internal static TaskList Copy(TaskList list) =>
@@ -932,9 +878,6 @@ internal sealed class TaskService : ITaskService
 
     private static bool Same(string left, string right) =>
         string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>A list as it was last read or written, and the file it was read from.</summary>
-    private sealed record Cached(string Stamp, string Revision, TaskList List);
 
     /// <summary>One list a batch touches, and what the batch has done to it so far.</summary>
     private sealed class Group(string? slug, string path)
