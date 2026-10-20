@@ -11,7 +11,7 @@
   import { readJson, SignedOut } from '../api';
   import { lineFor } from '../commandLine';
   import { studio } from '../state.svelte';
-  import { ideaHref, showWords, whereSaid, type Task, type TaskShown } from '../tasks';
+  import { fromShow, ideaHref, showWords, whereSaid, type Task, type TaskShowRead, type TaskShown } from '../tasks';
 
   interface Props {
     /** The task as the card has it, shown until the full one is read. */
@@ -28,8 +28,8 @@
   const when = (at: string) => new Date(at).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
   onMount(() => {
-    readJson<TaskShown>('task show', words).then(
-      (read) => (full = read),
+    readJson<TaskShowRead>('task show', words).then(
+      (read) => (full = fromShow(read)),
       (error) => {
         if (error instanceof SignedOut) {
           studio.signedOut = true;

@@ -268,6 +268,27 @@
   });
 
   /** Runs one step as a job; the page reads again when it ends. */
+  /**
+   * Moves a task to another state through the task route. A change made
+   * from a board somebody else has changed since is refused, and the board
+   * read again, rather than made over theirs.
+   */
+  async function declare(view: TaskListView, task: Task, state: string, where: string[]) {
+    if (studio.watchOnly) {
+      toasts.add({ level: 'info', text: 'Studio is only watching, so nothing was changed.', cmd: lineFor('task declare', declareWords(task.id, state, where)) });
+
+      return;
+    }
+
+    try {
+      if ((await view.change(task, state, where)) === 'stale') {
+        toasts.add({ level: 'problem', text: `${task.id} was not changed: the list changed since this page read it, so it has been read again.` });
+      }
+    } catch (error) {
+      fail(error);
+    }
+  }
+
   async function act(path: string, words: string[]): Promise<boolean> {
     if (studio.watchOnly) {
       toasts.add({ level: 'info', text: 'Studio is only watching, so nothing was changed.', cmd: lineFor(path, words) });
@@ -381,7 +402,7 @@
         <h2 class="ls-zone" id="dt">What is being worked on</h2>
         <ListToolbar noun="tasks" query={projectList.text} shape={projectList.shape} shown={projectList.tasks?.length ?? null} recorded={projectList.recorded} problem={projectList.problem} onchange={(query) => void projectList.ask(query)} />
         {#if projectList.tasks}
-          <TaskBoard tasks={projectList.tasks} away={projectList.away} project={shown.id} onstart={(task, withOptions) => void start(task, withOptions)} where={['--project', shown.id]} onread={read} from={projectList.from} disabledReason={refused} ondeclare={(task, state) => void act('task declare', declareWords(task.id, state, ['--project', shown!.id]))} />
+          <TaskBoard tasks={projectList.tasks} away={projectList.away} project={shown.id} onstart={(task, withOptions) => void start(task, withOptions)} where={['--project', shown.id]} onread={read} from={projectList.from} disabledReason={refused} ondeclare={(task, state) => void declare(projectList, task, state, ['--project', shown!.id])} />
         {:else}
           <p class="calm" role="status">Reading…</p>
         {/if}
@@ -468,7 +489,7 @@
       <p class="lead">The workspace-wide list, for work that does not belong to a project yet.</p>
       <ListToolbar noun="tasks" query={globalList.text} shape={globalList.shape} shown={globalList.tasks?.length ?? null} recorded={globalList.recorded} problem={globalList.problem} onchange={(query) => void globalList.ask(query)} />
       {#if globalList.tasks}
-        <TaskBoard tasks={globalList.tasks} away={globalList.away} where={['--global']} onread={read} from={globalList.from} disabledReason={refused} ondeclare={(task, state) => void act('task declare', declareWords(task.id, state, ['--global']))} />
+        <TaskBoard tasks={globalList.tasks} away={globalList.away} where={['--global']} onread={read} from={globalList.from} disabledReason={refused} ondeclare={(task, state) => void declare(globalList, task, state, ['--global'])} />
       {:else}
         <p class="calm" role="status">Reading…</p>
       {/if}

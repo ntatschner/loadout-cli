@@ -183,19 +183,25 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
         var slug = project?.Entry.Slug;
 
         // Which list each task came from, by the task itself rather than its
-        // id, since two projects can each have a task by the same id.
+        // id, since two projects can each have a task by the same id. Each
+        // list is read with its revision; the JSON carries it for one list,
+        // so a page or a script changing a task from this read can say which
+        // read it was. Several lists have no one revision to give.
         var where = new Dictionary<TaskItem, string?>(ReferenceEqualityComparer.Instance);
+        string? revision = null;
 
         foreach (var list in lists.Value.Slugs)
         {
-            var read = await _tasks.ListAsync(list, cancellationToken).ConfigureAwait(false);
+            var read = await _tasks.ReadAsync(list, cancellationToken).ConfigureAwait(false);
 
             if (read.Failed)
             {
                 return output.Fail(read);
             }
 
-            foreach (var item in read.Value!)
+            revision = lists.Value.Slugs.Count == 1 ? read.Value!.Revision : null;
+
+            foreach (var item in read.Value!.Items)
             {
                 where[item] = list;
             }
@@ -289,6 +295,7 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
                     at = one.Task.Moved!.Utc,
                 }),
                 recorded = recorded.Count,
+                revision,
                 total = page.Total,
                 page = page.Page,
                 pages = page.Pages,
@@ -1002,14 +1009,16 @@ public sealed class TaskShowCommand : AsyncCommand<TaskShowCommand.Settings>
 
         var slug = resolution.Value?.Entry.Slug;
 
-        var listed = await _tasks.ListAsync(slug, cancellationToken).ConfigureAwait(false);
+        // Read with the list's revision, which 'task apply' takes to refuse a
+        // change made from an older read.
+        var read = await _tasks.ReadAsync(slug, cancellationToken).ConfigureAwait(false);
 
-        if (listed.Failed)
+        if (read.Failed)
         {
-            return output.Fail(listed);
+            return output.Fail(read);
         }
 
-        if (listed.Value!.FirstOrDefault(
+        if (read.Value!.Items.FirstOrDefault(
                 item => string.Equals(item.Id, settings.Id.Trim(), StringComparison.OrdinalIgnoreCase))
             is not { } task)
         {
@@ -1029,26 +1038,14 @@ public sealed class TaskShowCommand : AsyncCommand<TaskShowCommand.Settings>
 
         if (output.IsJson)
         {
+            // The task as every surface writes it, beside the list's revision,
+            // and the idea it came from, which is a fact about the pair.
             output.WriteJson(new
             {
-                task.Id,
-                task.Title,
-                state = task.State.ToString().ToLowerInvariant(),
-                kind = task.Kind.ToString().ToLowerInvariant(),
                 project = slug,
+                revision = read.Value.Revision,
+                task = TaskOperations.Json(task),
                 idea = accepted is null ? null : new { plan = accepted.PlanPath, accepted = accepted.AcceptedUtc, by = accepted.AcceptedBy },
-                task.DeclaredBy,
-                declared = task.DeclaredUtc,
-                task.Note,
-                task.Detail,
-                history = task.History.Select(one => new
-                {
-                    state = one.State.ToString().ToLowerInvariant(),
-                    by = one.By,
-                    at = one.Utc,
-                    reason = one.Reason.Length > 0 ? one.Reason : null,
-                }),
-                moved = TaskTrace.Json(task.Moved),
             });
 
             return CommandOutput.Success();
@@ -1063,6 +1060,7 @@ public sealed class TaskShowCommand : AsyncCommand<TaskShowCommand.Settings>
             $"[dim]{Markup.Escape(task.DeclaredBy.Length > 0 ? task.DeclaredBy : "nobody named")}"
             + $", {task.DeclaredUtc:yyyy-MM-dd}"
             + (task.Moved is { } came ? $" · {Markup.Escape(TaskTrace.From(came))}" : string.Empty)
+            + (read.Value.Revision is { } revision ? $" · revision {revision}" : string.Empty)
             + "[/]");
 
         if (accepted is not null)

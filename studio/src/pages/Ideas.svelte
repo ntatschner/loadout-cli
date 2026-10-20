@@ -15,10 +15,9 @@
   import PlanLayer from '../lib/components/PlanLayer.svelte';
   import QuestionSet from '../lib/components/QuestionSet.svelte';
   import Signal from '../lib/components/Signal.svelte';
-  import { commands, memory, readJson, SignedOut } from '../lib/api';
+  import { commands, ideas as ideaRoutes, listOf, memory, readJson, SignedOut } from '../lib/api';
   import ListToolbar from '../lib/components/ListToolbar.svelte';
   import { CommandList } from '../lib/commandList.svelte';
-  import { runJob } from '../lib/jobs';
   import { lineFor } from '../lib/commandLine';
   import { router } from '../lib/router.svelte';
   import { acceptWords, gaps, needsChoice, nextStop, sendAnswers, stateWord, stopTarget, stopWords, type DumpItem, type Question } from '../lib/ideas';
@@ -230,23 +229,28 @@
   }
 
   /**
-   * Runs one step and waits for it to end, true only if it succeeded: how
-   * each answer is sent, so the next one, and the refine after them, start
-   * only once it is recorded. Started without waiting, a refine ran before
-   * its answers were in and was refused for the questions they answered.
+   * Sends several changes to one idea as one batch, made together or not at
+   * all, and says the reason when one was refused rather than an exit code.
    */
-  async function actToEnd(path: string, words: string[]): Promise<boolean> {
+  async function batch(id: string, where: string[], operations: Record<string, string>[]): Promise<boolean> {
     if (studio.watchOnly) {
-      toasts.add({ level: 'info', text: 'Studio is only watching, so nothing was changed.', cmd: lineFor(path, words) });
+      toasts.add({ level: 'info', text: 'Studio is only watching, so nothing was changed.', cmd: `loadout idea apply - ${where.join(' ')}` });
 
       return false;
     }
 
     try {
-      await runJob(path, words);
-      await studio.loadJobs();
+      const done = await ideaRoutes.batch(listOf(where), operations);
 
-      return true;
+      if (!done.applied) {
+        const refused = done.results.find((one) => !one.applied && !one.heldBack);
+
+        toasts.add({ level: 'problem', text: `None of them were recorded. ${refused?.error ?? 'One was refused.'}` });
+      }
+
+      await loadIdea(id, where);
+
+      return done.applied;
     } catch (error) {
       fail(error);
 
@@ -474,7 +478,7 @@
       {#if idea.questions.length && !idea.accepted}
         <section class="pblock" aria-labelledby="iq">
           <h2 class="ls-zone" id="iq">Questions for you</h2>
-          <QuestionSet id={idea.id} {where} questions={idea.questions} disabledReason={refused} ondraft={(answers, sent) => ((drafted = answers), (sentAnswers = sent))} onsend={(answers, refine) => sendAnswers(idea!.id, where, answers, refine, (path, words) => (path === 'idea answer' ? actToEnd(path, words) : act(path, words)))} />
+          <QuestionSet id={idea.id} {where} questions={idea.questions} disabledReason={refused} ondraft={(answers, sent) => ((drafted = answers), (sentAnswers = sent))} onsend={(answers, refine) => sendAnswers(idea!.id, where, answers, refine, (operations) => batch(idea!.id, where, operations), act)} />
         </section>
       {/if}
 

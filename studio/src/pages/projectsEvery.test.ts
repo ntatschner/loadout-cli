@@ -26,7 +26,7 @@ vi.mock('../lib/api', async (original) => {
       if (path === 'task show') {
         shown.push(words);
 
-        return { id: words[0], title: 'Belongs nowhere yet', state: 'open', detail: '', history: [] };
+        return { project: null, revision: 'r1', task: { id: words[0], title: 'Belongs nowhere yet', state: 'open', detail: '', history: [] }, idea: null };
       }
 
       if (path !== 'task list') {

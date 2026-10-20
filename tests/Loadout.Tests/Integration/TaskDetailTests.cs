@@ -192,6 +192,35 @@ public sealed class TaskDetailTests : IDisposable
     }
 
     [Fact]
+    public async Task A_batch_carries_a_detail_and_shortens_a_long_title_as_a_declare_does()
+    {
+        await _space.ProjectAsync("website");
+
+        var applied = await _space.Tasks.ApplyAsync(
+        [
+            new TaskOperation(TaskOperation.Add, "website", "scan", Title: Long, By: "agent"),
+            new TaskOperation(TaskOperation.Declare, "website", "login", TaskState.Open, "Fix the login", By: "agent", Detail: "It fails after a reboot."),
+        ]);
+
+        applied.Value!.Applied.Should().BeTrue();
+
+        var tasks = (await _space.Tasks.ListAsync("website")).Value!;
+        tasks.Single(t => t.Id == "scan").Detail.Should().Be(Long);
+        tasks.Single(t => t.Id == "scan").Title.Length.Should().BeLessThanOrEqualTo(TaskTitles.Length);
+        tasks.Single(t => t.Id == "login").Detail.Should().Be("It fails after a reboot.");
+    }
+
+    [Fact]
+    public void A_batch_read_from_JSON_carries_its_detail()
+    {
+        var read = TaskOperations.Parse(
+            """[{"op": "declare", "id": "login", "state": "open", "detail": "It fails after a reboot."}]""", "website", "studio");
+
+        read.Succeeded.Should().BeTrue(read.Error);
+        read.Value!.Single().Detail.Should().Be("It fails after a reboot.");
+    }
+
+    [Fact]
     public async Task Every_list_is_found_the_workspace_wide_one_first()
     {
         await _space.ProjectAsync("website");

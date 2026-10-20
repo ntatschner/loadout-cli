@@ -146,6 +146,43 @@ export function startWords(project: string, id: string): string[] {
   return [project, '--task-id', id];
 }
 
+/** A task as the routes write it, in the shape the task list's JSON gives the page. */
+export function fromRoute(task: RouteTask): Task {
+  return { id: task.id, title: task.title, state: task.state, kind: task.kind, declaredBy: task.by, declared: task.declared, note: task.note, moved: task.moved ?? null, hasDetail: !!task.detail };
+}
+
+/** A task as the routes and 'task show --json' write it. */
+export interface RouteTask {
+  id: string;
+  title: string;
+  state: string;
+  kind?: string;
+  by?: string;
+  declared?: string;
+  note?: string | null;
+  detail?: string;
+  history?: TaskEvent[];
+  moved?: Task['moved'];
+}
+
+/** What 'task show --json' says: the task, its list's revision, and the idea it came from. */
+export interface TaskShowRead {
+  project: string | null;
+  revision: string | null;
+  task: RouteTask;
+  idea?: TaskShown['idea'];
+}
+
+/** One task in full, from what 'task show --json' says. */
+export function fromShow(read: TaskShowRead): TaskShown {
+  return { ...fromRoute(read.task), project: read.project, detail: read.task.detail ?? '', history: read.task.history ?? [], idea: read.idea ?? null };
+}
+
+/** The list with one task put in place of the one with its id, which it keeps the place of. */
+export function withTask(tasks: Task[], changed: Task): Task[] {
+  return tasks.map((one) => (one.id.toLowerCase() === changed.id.toLowerCase() ? changed : one));
+}
+
 /** The words for moving a task, after 'task declare'. */
 export function declareWords(id: string, state: string, where: string[]): string[] {
   return [id, state, ...where];

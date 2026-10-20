@@ -189,6 +189,18 @@ public interface IIdeaService
         string? to,
         string id,
         CancellationToken ct = default);
+
+    /// <summary>An idea's working record, with the revision a change made from it should name.</summary>
+    Task<OperationResult<IdeaRead>> ReadWithRevisionAsync(IdeaPlace place, CancellationToken ct = default);
+
+    /// <summary>
+    /// Makes several changes to ideas, each idea's all or nothing, and says
+    /// what became of every one.
+    /// </summary>
+    Task<OperationResult<IdeaBatch>> ApplyAsync(IReadOnlyList<IdeaOperation> operations, CancellationToken ct = default);
+
+    /// <summary>Every idea's record as it stands on disk, cheap enough to ask for twice a second.</summary>
+    Task<IReadOnlyList<IdeaStamp>> StampsAsync(CancellationToken ct = default);
 }
 
 /// <inheritdoc />
@@ -204,6 +216,7 @@ internal sealed partial class IdeaService : IIdeaService
     private readonly YamlStore _yaml;
     private readonly TimeProvider _time;
     private readonly IIdeaLocks _locks;
+    private readonly KeptFiles<IdeaRecord> _kept;
 
     public IdeaService(
         IWorkspaceManager workspace,
@@ -217,6 +230,7 @@ internal sealed partial class IdeaService : IIdeaService
         _yaml = yaml;
         _time = time;
         _locks = locks;
+        _kept = new KeptFiles<IdeaRecord>(yaml, () => new IdeaRecord(), Copy);
     }
 
     private string RecordPath(IdeaPlace place) =>
@@ -440,15 +454,31 @@ internal sealed partial class IdeaService : IIdeaService
         IdeaPlace place,
         string question,
         string answer,
-        CancellationToken ct = default)
-    {
-        if (string.IsNullOrWhiteSpace(answer))
-        {
-            return Task.FromResult(OperationResult<IdeaRecord>.Fail(
-                "An answer cannot be empty.", ExitCode.InvalidArguments));
-        }
+        CancellationToken ct = default) =>
+        EditAsync(place, [Answer(place, question, answer)], null, ct);
 
-        return ChangeAsync(place, answer, record =>
+    /// <inheritdoc />
+    public Task<OperationResult<IdeaRecord>> ChooseAsync(
+        IdeaPlace place,
+        string layer,
+        string option,
+        CancellationToken ct = default) =>
+        EditAsync(place, [Choose(layer, option)], null, ct);
+
+    /// <inheritdoc />
+    public Task<OperationResult<IdeaRecord>> JudgeAsync(
+        IdeaPlace place,
+        string piece,
+        IdeaVerdict verdict,
+        string? request = null,
+        CancellationToken ct = default) =>
+        EditAsync(place, [Judge(piece, verdict, request)], null, ct);
+
+    /// <summary>Answering one of the agent's questions, replacing any earlier answer.</summary>
+    private static IdeaEdit Answer(IdeaPlace place, string question, string answer) => new(
+        string.IsNullOrWhiteSpace(answer) ? "An answer cannot be empty." : null,
+        answer,
+        record =>
         {
             if (record.Accepted is not null)
             {
@@ -466,16 +496,13 @@ internal sealed partial class IdeaService : IIdeaService
             asked.Answer = answer.Trim();
 
             return null;
-        }, ct);
-    }
+        });
 
-    /// <inheritdoc />
-    public Task<OperationResult<IdeaRecord>> ChooseAsync(
-        IdeaPlace place,
-        string layer,
-        string option,
-        CancellationToken ct = default) =>
-        ChangeAsync(place, null, record =>
+    /// <summary>Picking one of a layer's options.</summary>
+    private static IdeaEdit Choose(string layer, string option) => new(
+        null,
+        null,
+        record =>
         {
             if (Proposal(record) is { } refused)
             {
@@ -506,24 +533,15 @@ internal sealed partial class IdeaService : IIdeaService
             found.Chosen = picked.Id;
 
             return null;
-        }, ct);
+        });
 
-    /// <inheritdoc />
-    public Task<OperationResult<IdeaRecord>> JudgeAsync(
-        IdeaPlace place,
-        string piece,
-        IdeaVerdict verdict,
-        string? request = null,
-        CancellationToken ct = default)
-    {
-        if (verdict == IdeaVerdict.Improve && string.IsNullOrWhiteSpace(request))
-        {
-            return Task.FromResult(OperationResult<IdeaRecord>.Fail(
-                "Say what to improve: an improvement with no request gives the agent nothing to act on.",
-                ExitCode.InvalidArguments));
-        }
-
-        return ChangeAsync(place, request, record =>
+    /// <summary>Keeping, dropping or asking for a piece of the plan to be reworked.</summary>
+    private static IdeaEdit Judge(string piece, IdeaVerdict verdict, string? request) => new(
+        verdict == IdeaVerdict.Improve && string.IsNullOrWhiteSpace(request)
+            ? "Say what to improve: an improvement with no request gives the agent nothing to act on."
+            : null,
+        request,
+        record =>
         {
             if (Proposal(record) is { } refused)
             {
@@ -564,8 +582,7 @@ internal sealed partial class IdeaService : IIdeaService
             }
 
             return $"'{piece}' is not a piece of the plan. {Pieces(record.Plan)}";
-        }, ct);
-    }
+        });
 
     /// <inheritdoc />
     public async Task<OperationResult<IdeaRecord>> RecordReplyAsync(
@@ -628,7 +645,13 @@ internal sealed partial class IdeaService : IIdeaService
 
     /// <inheritdoc />
     public Task<OperationResult<IdeaRecord>> DismissFailureAsync(IdeaPlace place, CancellationToken ct = default) =>
-        ChangeAsync(place, null, record =>
+        EditAsync(place, [Dismiss(place)], null, ct);
+
+    /// <summary>Forgetting the latest failure without running another round.</summary>
+    private static IdeaEdit Dismiss(IdeaPlace place) => new(
+        null,
+        null,
+        record =>
         {
             if (IdeaWork.FailureOf(record) is null)
             {
@@ -638,7 +661,7 @@ internal sealed partial class IdeaService : IIdeaService
             IdeaWork.ClearFailure(record);
 
             return null;
-        }, ct);
+        });
 
     /// <inheritdoc />
     public async Task<OperationResult<IdeaAccepted>> AcceptAsync(
@@ -981,52 +1004,12 @@ internal sealed partial class IdeaService : IIdeaService
     private static bool Same(string left, string right) =>
         string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
 
-    private async Task<OperationResult<IdeaRecord>> ChangeAsync(
+    private Task<OperationResult<IdeaRecord>> ChangeAsync(
         IdeaPlace place,
         string? screen,
         Func<IdeaRecord, string?> change,
-        CancellationToken ct)
-    {
-        ArgumentNullException.ThrowIfNull(place);
-
-        if (Screened(screen) is { } refusedText)
-        {
-            return OperationResult<IdeaRecord>.Fail(refusedText, ExitCode.PolicyViolation);
-        }
-
-        if (Unavailable() is { } missing)
-        {
-            return OperationResult<IdeaRecord>.Fail(missing, ExitCode.WorkspaceSyncFailed);
-        }
-
-        var path = RecordPath(place);
-
-        if (!File.Exists(path))
-        {
-            return OperationResult<IdeaRecord>.Fail(NotFound(place), ExitCode.InvalidArguments);
-        }
-
-        string? refused = null;
-
-        var written = await _yaml.UpdateAsync<IdeaRecord>(
-            path,
-            () => new IdeaRecord { Id = place.Id },
-            record => refused = change(record),
-            true,
-            ct).ConfigureAwait(false);
-
-        if (written.Failed)
-        {
-            return OperationResult<IdeaRecord>.Fail(written.Error!, written.ExitCode);
-        }
-
-        // The change is applied to the loaded copy and written whether or not
-        // it was refused. A refusal changes nothing before returning, so what
-        // is written is what was read.
-        return refused is null
-            ? OperationResult<IdeaRecord>.Ok(written.Value!)
-            : OperationResult<IdeaRecord>.Fail(refused, ExitCode.InvalidArguments);
-    }
+        CancellationToken ct) =>
+        EditAsync(place, [new IdeaEdit(null, screen, change)], null, ct);
 
     private async Task<IdeaRecord?> LoadAsync(IdeaPlace place, CancellationToken ct)
     {
@@ -1037,9 +1020,9 @@ internal sealed partial class IdeaService : IIdeaService
             return null;
         }
 
-        var loaded = await _yaml.LoadAsync(path, () => new IdeaRecord(), ct).ConfigureAwait(false);
+        var loaded = await _kept.ReadAsync(path, ct).ConfigureAwait(false);
 
-        return loaded.Succeeded ? loaded.Value : null;
+        return loaded.Succeeded ? loaded.Value!.Value : null;
     }
 
     /// <summary>Every list: the workspace-wide one, then each project's that has a directory.</summary>

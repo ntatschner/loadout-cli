@@ -731,6 +731,7 @@ public static class Program
             task.AddCommand<TaskShortenCommand>("shorten");
             task.AddCommand<TaskMoveCommand>("move");
             task.AddCommand<TaskRemoveCommand>("remove");
+            task.AddCommand<TaskApplyCommand>("apply");
         });
 
         TopBranch(config, "idea", idea =>
@@ -752,6 +753,7 @@ public static class Program
             idea.AddCommand<IdeaDismissCommand>("dismiss");
             idea.AddCommand<IdeaMoveCommand>("move");
             idea.AddCommand<IdeaRemoveCommand>("remove");
+            idea.AddCommand<IdeaApplyCommand>("apply");
             idea.AddBranch("dump", dump =>
             {
                 dump.SetDescription("Notes kept elsewhere, dropped in whole and split by an agent into ideas and tasks.");

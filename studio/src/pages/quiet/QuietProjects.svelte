@@ -9,7 +9,8 @@
   import QuietPage from '../../lib/components/QuietPage.svelte';
   import TaskBoard from '../../lib/components/TaskBoard.svelte';
   import Projects from '../Projects.svelte';
-  import { commands, readJson } from '../../lib/api';
+  import { readJson } from '../../lib/api';
+  import * as api from '../../lib/api';
   import { lineFor } from '../../lib/commandLine';
   import type { Finding } from '../../lib/health';
   import type { QuietItem } from '../../lib/modes';
@@ -65,8 +66,13 @@
       return;
     }
 
-    await commands.run('task declare', words);
-    await studio.loadJobs();
+    // Through the task route, which answers with the reason when it refuses.
+    // The daemon says the list changed, and the page reads it again from that.
+    try {
+      await api.tasks.change(api.listOf(whereOf(project)), task.id, { state }, null);
+    } catch (error) {
+      toasts.add({ level: 'problem', text: error instanceof Error ? error.message : String(error), cmd: lineFor('task declare', words) });
+    }
   }
 </script>
 

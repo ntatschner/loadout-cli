@@ -31,7 +31,9 @@ public sealed class TaskDetailContractTests
         var shown = await loadout.RunAsync("task", "show", "scan", "--project", project, "--json");
 
         shown.ExitCode.Should().Be(0, shown.StandardError);
-        var task = shown.Json();
+        var read = shown.Json();
+        read.GetProperty("revision").GetString().Should().NotBeNullOrEmpty("task apply takes it to refuse a change made from an older read");
+        var task = read.GetProperty("task");
         task.GetProperty("title").GetString()!.Length.Should().BeLessThanOrEqualTo(72);
         task.GetProperty("detail").GetString().Should().Be(Long);
         task.GetProperty("history").EnumerateArray()

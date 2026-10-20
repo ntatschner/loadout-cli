@@ -21,7 +21,11 @@ vi.mock('../api', async (original) => {
         throw answer;
       }
 
-      return answer;
+      // As 'task show --json' writes it: the task in the routes' shape, the
+      // list's revision, and the idea beside them.
+      const { idea, declaredBy, ...task } = answer;
+
+      return { project: words.includes('--project') ? words[words.indexOf('--project') + 1] : null, revision: 'r1', task: { ...task, by: declaredBy }, idea: idea ?? null };
     }),
   };
 });
