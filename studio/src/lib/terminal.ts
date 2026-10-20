@@ -131,7 +131,27 @@ export function resumeCommand(agentSession: string | null | undefined, project?:
   return agentSession ? `$ loadout resume ${agentSession} ${where}` : `$ loadout resume --last ${where}`;
 }
 
-/** The size that fits 80 columns into a width, for Fit; the advance of a monospace cell is about 0.6em. */
-export function fitFontSize(width: number, columns = 80): number {
-  return Math.max(5, Math.min(22, Math.floor(((width - 28) / (columns * 0.6)) * 10) / 10));
+/**
+ * The largest text size, to a tenth of a pixel within 5–22, at which `fits`
+ * says 80 columns go in; 5 where none does. xterm rounds its cells to whole
+ * device pixels, so the size is found by asking it rather than worked out
+ * from the font: a cell is not a fixed share of an em.
+ */
+export function largestFitting(fits: (size: number) => boolean, low = 5, high = 22): number {
+  let best = low * 10;
+  let lo = low * 10;
+  let hi = high * 10;
+
+  while (lo <= hi) {
+    const middle = Math.floor((lo + hi) / 2);
+
+    if (fits(middle / 10)) {
+      best = middle;
+      lo = middle + 1;
+    } else {
+      hi = middle - 1;
+    }
+  }
+
+  return best / 10;
 }

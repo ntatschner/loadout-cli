@@ -4,8 +4,9 @@
 // xterm.js cannot draw in a document without layout, so it is replaced by a
 // recorder that keeps what Terminal asked of it.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen } from '@testing-library/svelte';
 import { tick } from 'svelte';
+import { readFileSync } from 'node:fs';
 
 const made: FakeTerminal[] = [];
 
@@ -16,14 +17,18 @@ class FakeTerminal {
   textarea = document.createElement('textarea');
   keys: ((event: KeyboardEvent) => boolean) | null = null;
   focused = 0;
+  host: HTMLElement | null = null;
 
   constructor(options: Record<string, unknown>) {
     this.options = { ...options };
     made.push(this);
   }
 
-  loadAddon() {}
+  loadAddon(addon: { recordTerminal?: (terminal: FakeTerminal) => void }) {
+    addon.recordTerminal?.(this);
+  }
   open(host: HTMLElement) {
+    this.host = host;
     host.appendChild(this.textarea);
   }
   attachCustomKeyEventHandler(handler: (event: KeyboardEvent) => boolean) {
@@ -48,7 +53,22 @@ class FakeTerminal {
 }
 
 vi.mock('@xterm/xterm', () => ({ Terminal: FakeTerminal }));
-vi.mock('@xterm/addon-fit', () => ({ FitAddon: class { fit() {} proposeDimensions() { return { cols: 80, rows: 24 }; } } }));
+// Proposes as xterm does: as many whole-pixel cells, about 0.6em each, as go
+// into 605 pixels at the text size the terminal has now.
+vi.mock('@xterm/addon-fit', () => ({
+  FitAddon: class {
+    terminal: { options: Record<string, unknown> } | null = null;
+    recordTerminal(terminal: { options: Record<string, unknown> }) {
+      this.terminal = terminal;
+    }
+    fit() {}
+    proposeDimensions() {
+      const size = Number(this.terminal?.options.fontSize ?? 13);
+
+      return { cols: Math.floor(605 / Math.floor(size * 0.6)), rows: 24 };
+    }
+  },
+}));
 vi.mock('@xterm/addon-webgl', () => ({ WebglAddon: class { onContextLoss() {} dispose() {} } }));
 vi.mock('@xterm/xterm/css/xterm.css', () => ({}));
 
@@ -128,5 +148,34 @@ describe('Terminal', () => {
   it('turns on the screen-reader mode only when a screen reader is in use', () => {
     render(Terminal, { title: 'starstats', status: 'working', screenReader: true });
     expect(made[0].options.screenReaderMode).toBe(true);
+  });
+
+  // FitAddon takes the box xterm is opened in as the room it has. Padding on
+  // that box (every element in Studio is border-box) made it ask for more
+  // than there was, and the screen drew scrollbars beside xterm's own.
+  it('opens xterm in a box of its own inside the screen, and pads only the screen', () => {
+    render(Terminal, { title: 'starstats', status: 'working' });
+
+    const host = made[0].host!;
+    expect(host.classList.contains('mount')).toBe(true);
+    expect(host.parentElement!.classList.contains('screen')).toBe(true);
+
+    const css = (readFileSync('src/styles/components.css', 'utf-8') + readFileSync('src/styles/studio.css', 'utf-8')).replace(/\/\*[\s\S]*?\*\//g, '');
+    const rules = (selector: RegExp) => [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)].filter(([, s]) => selector.test(s)).map(([, , body]) => body);
+    expect(rules(/\.mount\b/).join(' ')).not.toMatch(/padding/);
+    expect(rules(/\.mount\b/).join(' ')).toMatch(/overflow-y: hidden/);
+    expect(rules(/^\s*\.ls-term \.screen\s*$/).join(' ')).toMatch(/padding: 8px 10px/);
+    expect(rules(/\.screen\s*$/).join(' ')).not.toMatch(/overflow: auto/);
+  });
+
+  it('under Fit takes the largest text size at which xterm says 80 columns go in', async () => {
+    render(Terminal, { title: 'starstats', status: 'working' });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Fit' }));
+
+    // 13.3px makes 7-pixel cells, 560 of the 605; 13.4px would make 8, 640.
+    expect(made[0].options.fontSize).toBe(13.3);
+    expect(made[0].cols).toBe(80);
+    expect(made[0].rows).toBe(24);
   });
 });

@@ -243,10 +243,6 @@ main.page:has(> .ls-session:not(.lost)) > .ls-session { flex: 1 1 auto; min-heig
   main.page:has(> .ls-session:not(.lost)) { display: block; height: auto; padding-bottom: 56px; overflow: visible; }
   .ls-session .ls-term { height: clamp(320px, 70dvh, 720px); }
 }
-/* xterm fills the screen box. Its own viewport scrolls the history; at the top or bottom of it the wheel stops there rather than carrying on to the page. At Fit's smallest size the 80 columns scroll inside the box, never the page. */
-.ls-term .screen { padding: 8px 10px; min-height: 0; white-space: normal; overscroll-behavior: contain; }
-.ls-term .screen .xterm { height: 100%; }
-.ls-term .xterm-viewport { overscroll-behavior: contain; }
 .ls-term .ask .ls-sig, .ls-term .tbar .ls-sig { flex: none; }
 /* A lost session has no terminal to fill the window with. */
 .ls-session.lost { grid-template-columns: minmax(0, 1fr); }
