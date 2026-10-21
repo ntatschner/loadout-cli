@@ -3,9 +3,10 @@
 // them further, Home and End go to its limits, Enter and a double click put
 // it back; a drag moves it by the distance over the length it shares, held
 // to its limits; and letting go, or a key, tells the terminals to send
-// their size.
+// their size. Where two cross, a drag moves both.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
+import SplitCross from './SplitCross.svelte';
 import Splitter from './Splitter.svelte';
 import { SPLIT_SETTLED } from '../splits';
 
@@ -145,6 +146,45 @@ describe('Splitter', () => {
     await fireEvent.dblClick(node);
     expect(onchange).toHaveBeenLastCalledWith(0.5);
     expect(settled).toHaveBeenCalledTimes(2);
+    document.removeEventListener(SPLIT_SETTLED, settled);
+  });
+});
+
+describe('SplitCross', () => {
+  /** Inside a box 1000 pixels wide and 500 high. */
+  function crossing(props: Record<string, unknown> = {}) {
+    const host = document.body.appendChild(document.createElement('div'));
+    host.getBoundingClientRect = () => ({ width: 1000, height: 500, top: 0, left: 0, right: 1000, bottom: 500, x: 0, y: 0, toJSON: () => ({}) });
+    const onchange = vi.fn();
+    render(SplitCross, { target: host, props: { column: 0.5, row: 0.5, colMin: 0.2, colMax: 0.8, rowMin: 0.3, rowMax: 0.7, reset: [0.5, 0.5], onchange, ...props } });
+
+    return { onchange, node: host.querySelector<HTMLElement>('.ls-cross')! };
+  }
+
+  it('moves both dividers by a drag, each by its own length and held to its own limits', async () => {
+    const { node, onchange } = crossing();
+
+    await fireEvent.pointerDown(node, { button: 0, pointerId: 1, clientX: 500, clientY: 250 });
+    await fireEvent.pointerMove(node, { pointerId: 1, clientX: 600, clientY: 300 });
+    expect(onchange).toHaveBeenLastCalledWith(0.6, 0.6);
+    await fireEvent.pointerMove(node, { pointerId: 1, clientX: 0, clientY: 500 });
+    expect(onchange).toHaveBeenLastCalledWith(0.2, 0.7);
+  });
+
+  it('settles when let go, puts both back on a double click, and is not offered to a screen reader twice', async () => {
+    const { node, onchange } = crossing({ column: 0.3, row: 0.6 });
+    const settled = vi.fn();
+    document.addEventListener(SPLIT_SETTLED, settled);
+
+    await fireEvent.pointerDown(node, { button: 0, pointerId: 1, clientX: 300, clientY: 300 });
+    await fireEvent.pointerUp(node, { pointerId: 1 });
+    expect(settled).toHaveBeenCalledOnce();
+
+    await fireEvent.dblClick(node);
+    expect(onchange).toHaveBeenLastCalledWith(0.5, 0.5);
+    expect(settled).toHaveBeenCalledTimes(2);
+    expect(node.getAttribute('aria-hidden')).toBe('true');
+    expect(node.hasAttribute('tabindex')).toBe(false);
     document.removeEventListener(SPLIT_SETTLED, settled);
   });
 });

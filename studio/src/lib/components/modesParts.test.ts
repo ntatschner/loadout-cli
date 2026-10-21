@@ -245,6 +245,7 @@ describe('TermDeck', () => {
       await fireEvent.click(screen.getByRole('radio', { name: 'Two side by side' }));
       expect(width()).toBeTruthy();
       expect(height()).toBeNull();
+      expect(document.querySelector('.ls-deck .keys')!.textContent).toContain('move it · drag a divider');
 
       await fireEvent.click(screen.getByRole('radio', { name: 'Four' }));
       expect(screen.getAllByRole('separator')).toHaveLength(2);
@@ -263,7 +264,7 @@ describe('TermDeck', () => {
 
       const children = [...panesOf().children];
       expect(children.slice(0, 4).every((one) => one.classList.contains('pane'))).toBe(true);
-      expect(children.slice(4).every((one) => one.getAttribute('role') === 'separator')).toBe(true);
+      expect(children.slice(4).map((one) => one.getAttribute('role') ?? one.className)).toEqual(['separator', 'separator', expect.stringContaining('ls-cross')]);
     });
 
     it('sizes the grid from where they were left, and reports a move for the layout showing', async () => {
@@ -285,6 +286,19 @@ describe('TermDeck', () => {
       expect(panesOf().style.getPropertyValue('--deck-rows')).toBe('');
       await fireEvent.keyDown(width()!, { key: 'Enter' });
       expect(onsplit).toHaveBeenLastCalledWith(2, [0.5]);
+    });
+
+    it('has a crossing that moves both only in four, and reports both', async () => {
+      const onsplit = vi.fn();
+      deck({ layout: 2, onsplit, sessions: [...sessions, { id: 'd', title: 'four', word: 'working' }] });
+      expect(document.querySelector('.ls-cross')).toBeNull();
+
+      await fireEvent.click(screen.getByRole('radio', { name: 'Four' }));
+      const cross = document.querySelector<HTMLElement>('.ls-cross')!;
+      expect([...panesOf().children].slice(0, 4).every((one) => one.classList.contains('pane'))).toBe(true);
+
+      await fireEvent.dblClick(cross);
+      expect(onsplit).toHaveBeenLastCalledWith(4, [0.5, 0.5]);
     });
 
     it('lets Ctrl+Alt with the arrows still move between the panes from a divider', async () => {

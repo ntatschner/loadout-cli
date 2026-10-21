@@ -207,7 +207,7 @@ describe('Terminal', () => {
     }
   });
 
-  it('tells the session at once when a divider is let go', async () => {
+  it('tells the session as soon as a divider is let go and the screen has taken its last size', async () => {
     vi.useFakeTimers();
 
     try {
@@ -217,7 +217,12 @@ describe('Terminal', () => {
 
       made[0].resize(100, 30);
       document.dispatchEvent(new CustomEvent(SPLIT_SETTLED));
-      expect(onresize).toHaveBeenCalledWith(100, 30);
+      // The resize the release caused, fitted in the frame after.
+      vi.advanceTimersByTime(16);
+      made[0].resize(101, 30);
+      vi.advanceTimersByTime(40);
+      expect(onresize).toHaveBeenCalledOnce();
+      expect(onresize).toHaveBeenCalledWith(101, 30);
 
       // Nothing waits behind it, and a divider let go with no change says nothing.
       vi.advanceTimersByTime(500);

@@ -1023,6 +1023,7 @@ html[data-vt="fade"]::view-transition-group(*) { animation-duration: 0s; }
 .ls-deck .panes > .ls-split { --split-gap: 10px; }
 .ls-deck .panes > .ls-split.cols { grid-column: 2; }
 .ls-deck .panes > .ls-split.rows { grid-row: 2; }
+.ls-deck .panes > .ls-cross { grid-column: 2; grid-row: 2; }
 .ls-deck .pane { position: relative; display: grid; min-height: 0; min-width: 0; transition: box-shadow var(--dur-quick); animation: lsPaneIn .45s var(--ease-out) both; }
 .ls-deck .pane:nth-child(2) { animation-delay: .06s; } .ls-deck .pane:nth-child(3) { animation-delay: .12s; } .ls-deck .pane:nth-child(4) { animation-delay: .18s; }
 @keyframes lsPaneIn { from { opacity: 0; transform: scale(.97); } }
@@ -1726,6 +1727,11 @@ a.ls-ptile:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px;
 .ls-split:hover .grip::after, .ls-split.dragging .grip::after { background: var(--accent); }
 .ls-split:focus-visible .grip, .ls-split:focus-visible .grip::after { background: var(--focus); }
 .ls-split:focus-visible { box-shadow: 0 0 0 2px var(--focus); }
+
+/* Where two dividers cross: a square over both that moves them together. */
+.ls-cross { --split-gap: 10px; position: absolute; z-index: 3; top: 0; left: 0; width: 20px; height: 20px; margin: calc(var(--split-gap) / -2 - 10px) 0 0 calc(var(--split-gap) / -2 - 10px); cursor: move; touch-action: none; }
+.ls-cross::after { content: ""; position: absolute; inset: 6px; box-shadow: inset 0 0 0 2px var(--control-edge); transition: box-shadow var(--dur-quick); }
+.ls-cross:hover::after, .ls-cross.dragging::after { box-shadow: inset 0 0 0 2px var(--accent); background: var(--accent); }
 
 /* ---------- QuietPage: one calm column, what matters now first, everything else behind one button ---------- */
 .ls-qpage { display: grid; gap: 18px; max-width: 760px; margin: 5vh auto 0; min-width: 0; }

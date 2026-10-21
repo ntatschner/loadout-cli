@@ -9,6 +9,7 @@
   import { untrack, type Snippet } from 'svelte';
   import HaloButton from './HaloButton.svelte';
   import SessionTabs from './SessionTabs.svelte';
+  import SplitCross from './SplitCross.svelte';
   import Splitter from './Splitter.svelte';
   import { signalOf } from '../signals';
   import { clampSplit, floorOf, terminalFloor, tracks } from '../splits';
@@ -118,6 +119,11 @@
 
   function setRow(to: number) {
     split4 = [split4[0], to];
+    onsplit?.(4, split4);
+  }
+
+  function setBoth(toColumn: number, toRow: number) {
+    split4 = [toColumn, toRow];
     onsplit?.(4, split4);
   }
 
@@ -286,7 +292,7 @@
       <span role="status">{found}</span>
     </div>
     <span class="grow"></span>
-    <span class="keys">Ctrl Alt 1–9 picks · Ctrl Alt arrows move · Ctrl ] leaves a terminal · F2 renames a tab · Ctrl Shift arrows move it{#if split} · drag a divider, or arrow it; Enter puts it back{/if}</span>
+    <span class="keys">Ctrl Alt 1–9 picks · Ctrl Alt arrows move · Ctrl ] leaves a terminal · F2 renames a tab · Ctrl Shift arrows move it{#if split}{' · drag a divider, or arrow it; Enter puts it back'}{/if}</span>
   </div>
   <div
     class={`panes l${narrow ? 1 : panes}`}
@@ -312,6 +318,8 @@
       <Splitter class="cols" label="Width of the panes" controls={panesId} value={column} min={colMin} max={1 - colMin} reset={0.5} onchange={setColumn} />
       {#if panes === 4}
         <Splitter class="rows" orientation="horizontal" label="Height of the panes" controls={panesId} value={row} min={rowMin} max={1 - rowMin} reset={0.5} onchange={setRow} />
+        <!-- Where they cross, over both, so a drag there moves the two together. -->
+        <SplitCross {column} {row} {colMin} colMax={1 - colMin} {rowMin} rowMax={1 - rowMin} reset={[0.5, 0.5]} onchange={setBoth} />
       {/if}
     {/if}
   </div>

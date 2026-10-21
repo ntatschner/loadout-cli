@@ -318,7 +318,15 @@
 
       held = setTimeout(tell, RESIZE_HOLD);
     });
-    document.addEventListener(SPLIT_SETTLED, tell);
+    // A divider let go says so before the screen has taken its last size: the
+    // resize it caused is seen at the end of this frame and fitted in the
+    // next, so the session is told after both, once, with the size it ends at.
+    let settling = 0;
+    const settled = () => {
+      cancelAnimationFrame(settling);
+      settling = requestAnimationFrame(() => (settling = requestAnimationFrame(tell)));
+    };
+    document.addEventListener(SPLIT_SETTLED, settled);
 
     columns = terminal.cols;
     rows = terminal.rows;
@@ -343,7 +351,8 @@
     looks.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-accent', 'data-motion'] });
 
     return () => {
-      document.removeEventListener(SPLIT_SETTLED, tell);
+      document.removeEventListener(SPLIT_SETTLED, settled);
+      cancelAnimationFrame(settling);
 
       if (held) {
         clearTimeout(held);

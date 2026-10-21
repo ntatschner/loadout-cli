@@ -19,6 +19,7 @@ const LOCAL: Record<string, number> = {
   '.ls-load .bar .seg:focus-visible': 1,
   '.tfocus .bpanel .pclose': 2,
   '.ls-split': 2,
+  '.ls-cross': 3,
 };
 
 const strip = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, '');

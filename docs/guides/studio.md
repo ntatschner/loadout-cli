@@ -636,6 +636,7 @@ Loadout's config.
   colour. With two or four panes, drag the divider between them to give one
   more room. Four stay a grid: one divider runs the full height and one the
   full width, so **Ctrl Alt** with the arrows still goes where you'd expect.
+  Drag the small square where they cross to move both at once.
   A pane never gets narrower than about 40 columns or shorter than about 8
   rows, because an agent squeezed below that can't draw its screen. While you
   drag, the panes follow the mouse but the session is only told its new size
