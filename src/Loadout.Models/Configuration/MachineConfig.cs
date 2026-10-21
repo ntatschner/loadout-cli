@@ -281,6 +281,16 @@ public sealed class MachineTeams
     /// about any team.
     /// </remarks>
     public int? BinDays { get; set; }
+
+    /// <summary>
+    /// How many days the event history keeps what needed you and what you
+    /// did, or null for the default of thirty.
+    /// </summary>
+    /// <remarks>
+    /// Here with the daemon's other settings because the daemon is what
+    /// records the history and prunes it, each time it starts.
+    /// </remarks>
+    public int? EventsDays { get; set; }
 }
 
 /// <summary>This machine's view of one project.</summary>

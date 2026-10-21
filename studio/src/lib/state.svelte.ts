@@ -95,6 +95,10 @@ export class Studio {
   feed = $state<FeedEntry[]>([]);
   /** Tokens billed as input over the last 30 days, once Spend has read them: the rail's Spend fact. */
   spentMonth = $state<number | null>(null);
+  /** Unread events said to you that need you or went wrong, for the rail; null where the daemon keeps no history. */
+  unreadEvents = $state<number | null>(null);
+  /** Moved each time the history changes, so the Events page knows to read it again. */
+  eventsChanged = $state(0);
 
   lines: Work[] = $derived(linesOf({ runs: this.runs, sessions: this.sessions, ideas: this.ideas, busy: this.busy, tasks: this.tasks }, this.now));
   waiting: Work[] = $derived(this.lines.filter((line) => line.waiting));
@@ -115,7 +119,7 @@ export class Studio {
 
       this.about = await api.about();
       await this.loadPrefs();
-      await Promise.all([this.loadRuns(), this.loadSessions(), this.loadIdeas(), this.loadTasks(), this.loadJobs(), this.loadHistory()]);
+      await Promise.all([this.loadRuns(), this.loadSessions(), this.loadIdeas(), this.loadTasks(), this.loadJobs(), this.loadHistory(), this.loadEvents()]);
     });
 
     this.loaded = true;
@@ -132,6 +136,7 @@ export class Studio {
       jobs: () => this.loadJobs(),
       tasks: () => this.loadTasks(),
       ideas: () => this.loadIdeas(),
+      eventlog: () => this.loadEvents(),
     };
 
     this.#stop = api.listen((what) => {
@@ -321,6 +326,25 @@ export class Studio {
             },
           })),
     }));
+  }
+
+  /**
+   * The unread count, and a nudge to the Events page. A daemon that keeps
+   * no history, as a plain dashboard does not, leaves the count off rather
+   * than saying Studio cannot reach it.
+   */
+  async loadEvents(): Promise<void> {
+    try {
+      this.unreadEvents = (await api.eventlog.unread()).unread;
+    } catch (error) {
+      if (error instanceof api.SignedOut) {
+        throw error;
+      }
+
+      this.unreadEvents = null;
+    }
+
+    this.eventsChanged++;
   }
 
   async loadIdeas(): Promise<void> {

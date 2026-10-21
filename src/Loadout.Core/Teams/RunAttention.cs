@@ -20,7 +20,14 @@ public enum AttentionKind
 /// <param name="Kind">Which reason.</param>
 /// <param name="Detail">What to show, as a sentence somebody can act on.</param>
 /// <param name="Clears">What would take it out of the rail, said plainly.</param>
-public sealed record Attention(AttentionKind Kind, string Detail, string Clears);
+/// <param name="About">
+/// What in the run it is about, where that is narrower than the run: the
+/// question's id for a question, the node's name for a silence. Steady while
+/// the reason stays true, unlike <paramref name="Detail"/>, which says how long
+/// a node has been quiet and so changes every minute; the event history keys
+/// on this so that one silence is one event.
+/// </param>
+public sealed record Attention(AttentionKind Kind, string Detail, string Clears, string? About = null);
 
 /// <summary>
 /// What the person running these teams needs to look at.
@@ -112,7 +119,8 @@ public static class RunAttention
             reasons.Add(new Attention(
                 AttentionKind.Asking,
                 gate.Asking,
-                "you answer it"));
+                "you answer it",
+                gate.Id));
         }
 
         // One round that asked for nothing. Two ends the run, so this is the
@@ -197,7 +205,8 @@ public static class RunAttention
             : new Attention(
                 AttentionKind.Quiet,
                 $"{node.Node} has said nothing for {Said(silent)}, and its turns usually take {Said(average)}.",
-                "it says anything at all");
+                "it says anything at all",
+                node.Node);
     }
 
     /// <summary>

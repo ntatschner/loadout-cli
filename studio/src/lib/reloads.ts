@@ -1,5 +1,5 @@
 /** Something the page reads again from the daemon. */
-export type Reload = 'sessions' | 'history' | 'runs' | 'jobs' | 'tasks' | 'ideas';
+export type Reload = 'sessions' | 'history' | 'runs' | 'jobs' | 'tasks' | 'ideas' | 'eventlog';
 
 /**
  * What the page reads again when the daemon says what has changed.
@@ -14,6 +14,9 @@ export type Reload = 'sessions' | 'history' | 'runs' | 'jobs' | 'tasks' | 'ideas
  * or accepting one changes the list as well as its record.
  *
  * Ideas are said when a record changed, or a round started or finished.
+ *
+ * The event history is said when an event is recorded or one is marked
+ * read, here or by 'loadout events --mark-read'.
  */
 export function reloadsFor(what: readonly string[]): Reload[] {
   const reloads: Reload[] = [];
@@ -36,6 +39,10 @@ export function reloadsFor(what: readonly string[]): Reload[] {
 
   if (what.includes('tasks') || what.includes('ideas')) {
     reloads.push('ideas');
+  }
+
+  if (what.includes('eventlog')) {
+    reloads.push('eventlog');
   }
 
   return reloads;

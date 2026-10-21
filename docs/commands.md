@@ -10,6 +10,7 @@
 | `loadout launch <project>` | Launch an agent against a project, which is what naming one on its own does |
 | `loadout doctor` | Platform, Git, workspace, secret and agent diagnostics |
 | `loadout status` | Summary of workspace, projects and agents |
+| `loadout events` | What needed you over the last month and what you did about it, with the filters Studio's Events page uses; `--mark-read` marks what it shows as read |
 | `loadout project add\|list\|show\|remove\|discover\|open` | Manage project registration. A directory with no repository yet is registered, and discovered, as one still to be set up |
 | `loadout project new <name>` | Create a project, optionally from an existing one as a template |
 | `loadout project clone\|relocate <project>` | Get a registered project onto this machine |

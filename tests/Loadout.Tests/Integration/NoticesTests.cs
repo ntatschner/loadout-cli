@@ -290,6 +290,25 @@ public sealed class NoticesTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Each_notice_tried_is_reported_with_whether_it_landed()
+    {
+        // What the event history writes "told Slack" or "could not tell
+        // Slack" from, so a refusal has to be reported as one.
+        _refuse = 1;
+
+        var notices = Made();
+        var run = Waiting("dotnet test");
+        var told = new List<(string Run, bool Landed)>();
+
+        for (var look = 0; look < 3; look++)
+        {
+            await notices.SayAsync([run], NoticeKind.Slack, null, _address, _ => "link", Noon, default, (one, _, landed) => told.Add((one.RunId, landed)));
+        }
+
+        told.Should().Equal((run.RunId, false), (run.RunId, true));
+    }
+
+    [Fact]
     public async Task A_run_wanting_nothing_says_nothing()
     {
         (await SayAsync(Waiting())).Should().Be(0);

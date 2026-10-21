@@ -1580,7 +1580,9 @@ Four reasons put a run there, and **each one clears itself**:
 Nothing is remembered and nothing is dismissed by hand: every reason is
 recomputed on each read, so one that has gone is gone. A list that only grows
 is worse than no list — it teaches you to skim the one thing meant to be
-unskimmable.
+unskimmable. When a reason appeared and when it went is kept elsewhere, in the
+[event history](#looking-back-at-what-needed-you), which is for reading later
+rather than for acting on now.
 
 Quiet is measured against each node's **own** average turn, not a fixed time,
 because a reviewer reading one diff and an implementer running a suite have
@@ -1712,6 +1714,60 @@ again. The reason it was about is still true, so it would never have been new
 again: one restarting chat service, or a minute without network, lost the
 notice for the rest of the run and left it waiting for somebody who was never
 told.
+
+### Looking back at what needed you
+
+The rail says what wants you now. The event history says what wanted you over
+the last month, and what you did about it: a question a run asked and when it
+was answered, a node that went quiet and when it spoke again, a session left
+waiting, a run finishing or failing, a notice that went out or could not.
+
+```sh
+loadout events                          # what was said to you, newest first
+loadout events --since 1d --level needs # what asked for you today
+loadout events --direction by-me        # your answers, merges and sessions started
+loadout events --unread --mark-read     # catch up, and say you have
+```
+
+Studio's **Events** page shows the same thing, with the same filters, and the
+rail counts what is unread there. The filter is kept in the page's address —
+`#events?level=needs&since=1d` — in exactly the form `--filter` takes, so a
+view you use often can be bookmarked, and one copied from the page works here.
+
+Each event says where it happened, and that is where you act on it. The page
+and the command only read, apart from marking things read: answering a question
+from a list of history would be a second place to answer it, without the
+context the run's own page has.
+
+**It is recorded by the daemon, while the daemon runs.** It looks every twenty
+seconds, so a reason is dated to within that, and a question asked and answered
+between two looks is not recorded at all. Nothing is recorded while no daemon
+is running; its starting and stopping are recorded, so a quiet stretch reads as
+a gap rather than as nothing having happened. What runs wrote in their own
+journals — starting, finishing, your answers, your merge decisions — is copied
+across whenever the daemon next looks, so those are there for the days it was
+not running too. A merge an autonomous run decided for itself is not counted as
+yours.
+
+A reason is recorded once when it appears and once when it clears, keyed on
+what it is about rather than on its wording: a node quiet for seven minutes and
+then for eight is one silence, not two. A daemon that restarts reads back what
+was outstanding, so a question still open is not recorded again. The first time
+the daemon records anything it copies in what the journals already held, and
+counts all of that as read, so the count starts at what is new.
+
+It is kept for 30 days, or what `loadout config set events-days <days>` says,
+and pruned each time the daemon starts. `0` keeps it until the file reaches its
+size limit, 8 MB, past which the oldest go whatever their age: a run stuck in a
+loop can say a great deal inside a month, and every read goes through the whole
+file. It lives in `events/` under Loadout's state directory, readable only by
+you.
+
+**Not built yet.** The count is not in the agent's status line, which runs on
+every prompt and would read the whole history each time to say it. Saved views
+in the palette, and choosing which events go out as notices, are designed for
+— the filter is one value with one spelling so that both can take it — but
+neither exists.
 
 ### Asking a Claude session what the teams are doing
 

@@ -619,6 +619,51 @@ export async function readJson<T>(path: string, words: string[] = []): Promise<T
   return JSON.parse(read.output ?? 'null') as T;
 }
 
+/* ---------- what needed you, and what you did ---------- */
+
+/** One event, as 'loadout events --json' and the daemon both give it. */
+export interface UserEvent {
+  id: string;
+  at: string;
+  level: 'needs' | 'problem' | 'done' | 'info';
+  source: 'run' | 'session' | 'daemon' | 'notice';
+  direction: 'to-me' | 'by-me';
+  kind: string;
+  title: string;
+  detail?: string;
+  project?: string;
+  run?: string;
+  session?: string;
+}
+
+export interface FeedItem {
+  event: UserEvent;
+  /** When it stopped being true, or null while it still is. */
+  cleared: string | null;
+  read: boolean;
+}
+
+export interface FeedPage {
+  items: FeedItem[];
+  matched: number;
+  unread: number;
+  /** The filter as the daemon read it, canonical: what the address should hold. */
+  filter: string;
+  /** How many days the history keeps. */
+  days: number;
+}
+
+/**
+ * The event history. Not '/api/v1/events', which is the change stream every
+ * page listens to: this is what that stream's changes were, kept for a month.
+ */
+export const eventlog = {
+  list: (filter: string, limit = 200) => call<FeedPage>('GET', `/api/v1/eventlog?${filter ? `${filter}&` : ''}limit=${limit}`),
+  unread: () => call<{ unread: number }>('GET', '/api/v1/eventlog/unread'),
+  read: (ids: string[]) => call<{ unread: number }>('POST', '/api/v1/eventlog/read', { ids }),
+  readAll: () => call<{ unread: number }>('POST', '/api/v1/eventlog/read', { all: true }),
+};
+
 /* ---------- Loadout's own settings ---------- */
 
 export interface ConfigSetting {

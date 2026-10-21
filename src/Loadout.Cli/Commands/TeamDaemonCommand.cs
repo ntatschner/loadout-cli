@@ -317,6 +317,10 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
 
         _started = settings;
 
+        // What needed you, kept: the daemon is the one thing running long
+        // enough to watch for it. Read by the page and by 'loadout events'.
+        var events = new Loadout.Core.Events.EventStore(_paths.Paths.State);
+
         using var stopping = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var server = settings.NoDashboard ? null : new DashboardServer(_journal, _git);
 
@@ -359,6 +363,8 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             server.IsDaemon = true;
             server.DaemonPaused = () => DaemonControl.Paused(_paths);
             server.BinDays = TeamBin.Days(teams?.BinDays);
+            server.Events = events;
+            server.EventsDays = Loadout.Core.Events.EventStore.Days(teams?.EventsDays);
 
             // The same page the dashboard command would serve. Two dashboards
             // that looked different depending on which command started them
@@ -519,6 +525,11 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
 
         _notices = new Notices(_secrets, _client);
 
+        var kept = (await _configuration.LoadMachineAsync(cancellationToken).ConfigureAwait(false)).Value?.Teams.EventsDays;
+
+        _watch = new Loadout.Core.Events.EventWatch(events, _journal, _sessions, _time);
+        _watch.Start(Loadout.Core.Events.EventStore.Days(kept));
+
         _sendTo = await _notices.AddressAsync(cancellationToken).ConfigureAwait(false);
 
         if (_sendTo is { Length: > 0 })
@@ -555,6 +566,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         // input and nothing that closing it would mean.
         var ending = settings.Log is null ? TeamDashboardCommand.Ends(stopping) : Task.CompletedTask;
         var watching = WatchAsync(stopping, output);
+        var recording = _watch?.WatchAsync(stopping.Token) ?? Task.CompletedTask;
 
         try
         {
@@ -584,6 +596,11 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
                 + $"{_inFlight.Running} run(s) had not finished ending after {Unwinding.TotalSeconds:0} seconds, "
                 + "and go with the daemon.");
         }
+
+        // A last look while the sessions are still there to be looked at,
+        // and the history told that nothing is watched from here.
+        await recording.ConfigureAwait(false);
+        _watch?.Stop();
 
         // After the listener, so no page can start one while the rest end,
         // and with the note closed first, so ending them does not write it.
@@ -1294,8 +1311,11 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             }
         }
 
+        var where = teams!.NotifyKind;
         var sent = await _notices!
-            .SayAsync(runs, kind, teams!.NotifyChat, address, Link, _time.GetUtcNow(), ct)
+            .SayAsync(
+                runs, kind, teams.NotifyChat, address, Link, _time.GetUtcNow(), ct,
+                _watch is { } watch ? (run, reason, landed) => watch.Told(where, run, reason, landed) : null)
             .ConfigureAwait(false);
 
         if (sent > 0)
@@ -1360,6 +1380,9 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
 
     private Notices? _notices;
     private string? _address;
+
+    /// <summary>What records the event history, or null for a daemon with nowhere to keep it.</summary>
+    private Loadout.Core.Events.EventWatch? _watch;
 
     /// <summary>Where notices go, read once when the daemon starts.</summary>
     /// <remarks>
