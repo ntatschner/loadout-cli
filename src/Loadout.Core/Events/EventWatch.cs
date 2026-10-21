@@ -215,7 +215,7 @@ public sealed class EventWatch
         ArgumentNullException.ThrowIfNull(run);
         ArgumentNullException.ThrowIfNull(reason);
 
-        var key = $"{run.RunId}/{reason.Kind}/{reason.About ?? reason.Detail}";
+        var key = RunAttention.Key(run, reason);
 
         // The notice's own title, which is what went out, or did not.
         var title = Teams.Daemon.Notifier.Title(run, reason);

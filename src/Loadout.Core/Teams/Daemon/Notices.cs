@@ -28,11 +28,13 @@ public sealed class Notices
     private readonly ISecretProvider _secrets;
     private readonly HttpClient _client;
 
-    /// <summary>What has already gone out, by run, kind and words.</summary>
+    /// <summary>What has already gone out, by <see cref="RunAttention.Key"/>.</summary>
     /// <remarks>
-    /// Keyed on what the reason says as well as its kind, because one run can
-    /// be waiting on three different questions at once and every one of them
-    /// is kind "asking".
+    /// Keyed on what the reason is about as well as its kind, because one run
+    /// can be waiting on three different questions at once and every one of
+    /// them is kind "asking". Never on its words: a silence's words say how
+    /// long it has lasted, and keyed on them one quiet node was news again
+    /// every minute.
     /// </remarks>
     private HashSet<string> _said = new(StringComparer.Ordinal);
 
@@ -90,7 +92,7 @@ public sealed class Notices
         {
             foreach (var reason in RunAttention.For(run, now))
             {
-                wanted.Add((run, reason, $"{run.RunId}/{reason.Kind}/{reason.Detail}"));
+                wanted.Add((run, reason, RunAttention.Key(run, reason)));
             }
         }
 
