@@ -96,7 +96,7 @@
 | `loadout task move <id> --to <project>` | Move a task put on the wrong project, or `--to-global` to the workspace-wide list. It keeps its id, state and note, and an accepted plan goes with it. The list it left shows where it went, and `task list` on the new one says where it came from |
 | `loadout task apply <file>` | Make several changes at once from a JSON array, or `-` for standard input. Each list is changed all or nothing, and every change says whether it was made. Described under [Changing several tasks at once](#changing-several-tasks-at-once) |
 | `loadout idea move <id> --to <project>` | The same for an idea, with its questions, answers and plan. Not while a round on it is running |
-| `loadout idea add\|list\|show\|remove` | Drop an idea in, on a project or the workspace-wide list, to be fleshed out later |
+| `loadout idea add\|list\|show\|remove` | Drop an idea in, on a project or the workspace-wide list, to be fleshed out later. `idea add --to <id>` adds more of your own words to one already there, kept as you wrote them with your name and the time, and the next refine reads what was added |
 | `loadout idea show <id> --full` | Every option's detail, pros and cons, as Studio shows them. Without it you see the chosen option's detail only, and a line saying `--full` has more when it does |
 | `loadout idea list --limit <count> --page <number>` | Read a long idea list a page at a time, as `task list` does. `--json` says how many there are in all |
 | `loadout idea apply <file>` | Several answers, choices and verdicts at once from a JSON array, each idea's all or nothing. Described under [Ideas the same way](#ideas-the-same-way) |
