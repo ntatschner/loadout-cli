@@ -317,6 +317,19 @@ public sealed class IdeaWorkTests
     }
 
     [Fact]
+    public void A_round_that_only_asks_questions_leaves_the_notes_it_saw_unread()
+    {
+        var record = Fresh();
+        IdeaWork.Merge(record, Plan(), Now);
+        record.Notes.Add(Note("N1", "It should work on a phone too"));
+
+        IdeaWork.Merge(record, Questions("Which phones?"), Now.AddMinutes(5), ["N1"]);
+
+        record.Notes.Single().TakenUtc.Should().BeNull("no plan has taken it in yet");
+        IdeaWork.StageOf(record).Should().NotBe(IdeaStage.Proposed);
+    }
+
+    [Fact]
     public void The_prompt_gives_unread_notes_verbatim_and_keeps_giving_them_once_taken()
     {
         var record = Fresh();
@@ -329,7 +342,7 @@ public sealed class IdeaWorkTests
         since.Should().BeGreaterThan(-1);
         before.IndexOf("N1 (by nigel, 2026-09-26): - also on mobile\n- and dark mode", since, StringComparison.Ordinal)
             .Should().BeGreaterThan(since);
-        before.Should().Contain("take in what they have added since");
+        before.Should().Contain("take in anything under What they have added since");
 
         IdeaWork.Merge(record, Plan(), Now.AddMinutes(5), ["N1"]);
 

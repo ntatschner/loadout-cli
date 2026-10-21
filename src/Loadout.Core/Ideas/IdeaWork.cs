@@ -309,8 +309,9 @@ public static class IdeaWork
     /// Folds an agent's answer into the record: new questions become a round,
     /// a plan replaces the last one, carrying over what the person decided
     /// about each piece that is still there. The notes named in
-    /// <paramref name="seen"/> are marked taken in, whatever the reply was:
-    /// the agent read them.
+    /// <paramref name="seen"/> are marked taken in only when the reply
+    /// carries a plan: a round that only asked questions has not put them in
+    /// a plan, so the next plan round must still be given them as unread.
     /// </summary>
     /// <remarks>
     /// Only those named, because a round reads the record when it starts and
@@ -432,14 +433,14 @@ public static class IdeaWork
 
             // Answered by this plan, so no longer outstanding.
             record.Request = string.Empty;
-        }
 
-        if (seen is { Count: > 0 })
-        {
-            foreach (var note in record.Notes.Where(note =>
-                         note.TakenUtc is null && seen.Contains(note.Id, StringComparer.OrdinalIgnoreCase)))
+            if (seen is { Count: > 0 })
             {
-                note.TakenUtc = now;
+                foreach (var note in record.Notes.Where(note =>
+                             note.TakenUtc is null && seen.Contains(note.Id, StringComparer.OrdinalIgnoreCase)))
+                {
+                    note.TakenUtc = now;
+                }
             }
         }
 
@@ -544,7 +545,7 @@ public static class IdeaWork
 
         return "Revise the plan. Keep what they marked keep as it is, leave out what they dropped, "
             + "rework what they asked to improve as they asked, and apply any request about the "
-            + "whole plan, and take in what they have added since. Keep a layer's name the same where the layer itself is unchanged, so "
+            + "whole plan, and take in anything under What they have added since. Keep a layer's name the same where the layer itself is unchanged, so "
             + "their decisions about it carry over.";
     }
 
