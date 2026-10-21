@@ -477,6 +477,38 @@ public sealed partial class TeamRunnerTests : IDisposable
         (await JournalAsync(outcome)).Should().NotContain(line => line.Contains("\"by\":\"team\""));
     }
 
+    /// <summary>
+    /// A lead that sends requests is mid-round whatever status it wrote. A
+    /// lead once said done on its first turn while asking a copywriter for the
+    /// draft, with every criterion not attempted; the run ended there, the
+    /// request was never sent, and the run was recorded as failed.
+    /// </summary>
+    [Fact]
+    public async Task A_lead_that_says_done_while_sending_requests_gets_its_round()
+    {
+        var doneButAsking = new Report(
+            "lead", ReportStatus.Done, "Round one: the implementer is briefed; nothing is attempted yet.",
+            [], [], [],
+            Requests: [AskImplementer()],
+            Coverage: [new ReportCoverage("the suite passes", CoverageVerdict.NotAttempted, "no draft exists yet")],
+            GoalUnderstood: "a --since option on loadout usage, with a test",
+            Readings: Readings("the suite passes"));
+
+        _launcher.Script("role.project-lead", Init("lead-1"),
+            Result(doneButAsking, 0.05m),
+            Result(LeadDoneCovering("the suite passes"), 0.09m), Result(LeadDoneCovering("the suite passes"), 0.09m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.03m));
+
+        var outcome = (await RunAsync(criteria: ["the suite passes"])).Value!;
+
+        _launcher.Requests.Should().HaveCount(2, "the lead's request is a round, not a report of being finished");
+        var (workerRequest, _) = _launcher.Requests[1];
+        workerRequest.Specialists.Should().Equal("role.implementer");
+        outcome.Ended.Should().Be("done");
+        (await JournalAsync(outcome)).Should().NotContain(line => line.Contains("\"kind\":\"goal.unmet\""));
+    }
+
     [Fact]
     public async Task The_lead_is_asked_what_it_took_the_goal_and_each_criterion_to_mean()
     {

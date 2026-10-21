@@ -123,13 +123,22 @@ internal sealed class LeadReportStep
             run.LastReadings = new Dictionary<string, string>(readings, StringComparer.OrdinalIgnoreCase);
         }
 
+        // A lead that has requests is mid-round whatever status it
+        // wrote: blocked on its own requests is how a round is asked
+        // for, and a done that still asks for work is not finished.
+        // A lead once said done while briefing its first worker, and
+        // the run ended with the request never sent. Blocked with
+        // nothing requested is blocked; failed is failed either way.
+        var hasRequests = report.Requests is { Count: > 0 };
+        var finishing = report.Status == ReportStatus.Done && !hasRequests;
+
         // A lead that says done while the team's gate has not been
         // consulted is told once, because its role says to route
         // every change through those nodes and a model that skipped
         // them will otherwise end the run with the work stranded on
         // a branch nobody looked at. Once: the second answer is the
         // lead's to give.
-        if (report.Status == ReportStatus.Done && !run.AskedAboutTheGate
+        if (finishing && !run.AskedAboutTheGate
             && MergeStep.Ungated(team, run.Branches, run.Decisions) is { Count: > 0 } pending)
         {
             run.AskedAboutTheGate = true;
@@ -146,12 +155,8 @@ internal sealed class LeadReportStep
             return new LeadTurn(null, true, null);
         }
 
-        // A lead that has requests is mid-round whatever status it
-        // wrote: blocked on its own requests is how a round is asked
-        // for. Blocked with nothing requested is blocked.
-        var hasRequests = report.Requests is { Count: > 0 };
-
-        if (report.Status is ReportStatus.Done or ReportStatus.Failed
+        if (finishing
+            || report.Status == ReportStatus.Failed
             || (report.Status == ReportStatus.Blocked && !hasRequests))
         {
             /*

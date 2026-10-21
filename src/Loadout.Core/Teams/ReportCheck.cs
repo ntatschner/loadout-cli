@@ -71,9 +71,14 @@ public static class ReportCheck
             reasons.Add($"The report says it is from '{report.Node}', and the brief was for '{brief.Node}'.");
         }
 
+        // A lead whose report still asks for work is mid-round whatever
+        // status it wrote, so a done with requests is not held to what a
+        // finished run owes: sending it back would only cost a turn.
+        var leadMidRound = brief.Parent is null && report.Requests is { Count: > 0 };
+
         switch (report.Status)
         {
-            case ReportStatus.Done:
+            case ReportStatus.Done when !leadMidRound:
                 if (!report.Evidence.Any(evidence => evidence.Result == EvidenceResult.Pass))
                 {
                     reasons.Add(

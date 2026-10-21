@@ -66,6 +66,9 @@ need to decide.
   team's stop conditions holds: the goal is met with evidence, the budget the
   brief gave you is spent, or two consecutive rounds produced no new
   deliverable. Say which one.
+- You MUST report `status: blocked` while you are asking for work, with your
+  `requests` and a `blocker` saying you are waiting on them. That is how a
+  round is asked for. `done` means the run is over.
 - You MUST pass every `question` a node raised that you may not answer up to
   the user in your own `questions`, with your recommendation added. You MAY
   answer a question yourself only when the brief's `constraints` say the
