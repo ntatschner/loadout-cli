@@ -6,11 +6,11 @@
 :root[data-theme="light"], :root[data-theme="hc-light"] { color-scheme: light; }
 html, body { min-height: 100%; }
 body { margin: 0; background: var(--ground); color: var(--ink); }
-.skip { position: absolute; left: -999px; top: 8px; z-index: 50; padding: 8px 14px; background: var(--surface); color: var(--ink-strong); }
+.skip { position: absolute; left: -999px; top: 8px; z-index: var(--z-skip); padding: 8px 14px; background: var(--surface); color: var(--ink-strong); }
 .skip:focus { left: max(16px, env(safe-area-inset-left, 0px)); }
-#nav { position: fixed; left: 0; top: 0; bottom: 0; z-index: 40; }
-#nav .ls-slidescrim, #nav .ls-slide { position: fixed; }
-#nav .ls-pagestab { position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); }
+/* The slide-in and its tab stay put while the page scrolls. The .ls-nav wrapper itself is left unpositioned: a z-index on it would trap the rail's open layer beneath the mode bar. */
+.ls-nav .ls-slidescrim, .ls-nav .ls-slide { position: fixed; }
+.ls-nav .ls-pagestab { position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); }
 .page { min-height: 100%; padding-block: 18px 56px; padding-left: max(calc(var(--rail-width) + 28px), env(safe-area-inset-left, 0px)); padding-right: max(28px, env(safe-area-inset-right, 0px)); }
 @media (max-width: 599px) { .page { padding-left: max(52px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); } }
 .ls-report { margin-top: auto; }
@@ -109,7 +109,7 @@ body { margin: 0; background: var(--ground); color: var(--ink); }
 .seg label:has(input:checked) { background: var(--accent); color: var(--on-accent); box-shadow: none; }
 .seg label:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
 /* Ambient */
-.amb { position: fixed; inset: 0; z-index: 60; overflow: auto; background: var(--ground); padding: max(18px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(18px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.amb { position: fixed; inset: 0; z-index: var(--z-ambient); overflow: auto; background: var(--ground); padding: max(18px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(18px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
 .amb .bar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 14px 28px; align-items: flex-start; }
 .kpis { display: flex; flex-wrap: wrap; gap: 14px 30px; }
 .kpis div { display: grid; }
@@ -187,7 +187,7 @@ body { margin: 0; background: var(--ground); color: var(--ink); }
 .wherebar .lab { font-size: 11.5px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-soft); }
 .work.has-next { padding-bottom: 96px; }
 /* Next: fixed to the lower right, clear of the toasts at the top. */
-.ls-next { position: fixed; right: max(24px, env(safe-area-inset-right, 0px)); bottom: max(20px, env(safe-area-inset-bottom, 0px)); z-index: 15; display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule), var(--shadow-float); max-width: calc(100% - 32px); }
+.ls-next { position: fixed; right: max(24px, env(safe-area-inset-right, 0px)); bottom: max(20px, env(safe-area-inset-bottom, 0px)); z-index: var(--z-page); display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule), var(--shadow-float); max-width: calc(100% - 32px); }
 .ls-next .ls-action { min-width: 0; }
 .ls-next .left { --c: var(--needs); min-width: 22px; height: 22px; padding: 0 6px; display: inline-grid; place-items: center; font-family: var(--font-mono); font-size: 12px; color: var(--ink-strong); box-shadow: inset 0 0 0 1.5px var(--c); border-radius: var(--radius-pill); }
 .next-here { animation: lsNextHere 1s var(--ease-out, ease-out); }
