@@ -284,6 +284,15 @@ public sealed class DashboardServer : IDisposable
     /// <summary>How many days the bin keeps things, from team-bin-days, so the page can say when each goes.</summary>
     public int BinDays { get; set; } = TeamBin.DefaultDays;
 
+    /// <summary>
+    /// The event history, which only the daemon keeps: a dashboard on its own
+    /// watches nothing while nobody has it open, so it has nothing to show.
+    /// </summary>
+    public Events.EventStore? Events { get; set; }
+
+    /// <summary>How many days the history keeps, from events-days, so the page can say.</summary>
+    public int EventsDays { get; set; } = Loadout.Core.Events.EventStore.DefaultDays;
+
     /// <summary>How large the office may be drawn, from team-office-scale; the default when unset or unreadable.</summary>
     public OfficeScale OfficeScale { get; set; } = OfficeScale.Default;
 
@@ -1278,6 +1287,21 @@ public sealed class DashboardServer : IDisposable
             return;
         }
 
+        if (Under(path, EventLogApi.Root))
+        {
+            if (Events is null)
+            {
+                await WriteAsync(context, 404, "text/plain; charset=utf-8",
+                    "This dashboard keeps no event history. The daemon's does: loadout daemon").ConfigureAwait(false);
+
+                return;
+            }
+
+            await EventLogApi.HandleAsync(context, Events, path, WatchOnly, EventsDays, DateTimeOffset.UtcNow, ct).ConfigureAwait(false);
+
+            return;
+        }
+
         if (Under(path, LaunchApi.Root))
         {
             if (Launch is null)
@@ -1544,7 +1568,7 @@ public sealed class DashboardServer : IDisposable
         response.Headers["X-Content-Type-Options"] = "nosniff";
         response.SendChunked = true;
 
-        string? sessions = null, runs = null;
+        string? sessions = null, runs = null, eventlog = null;
         int? jobs = null;
         Dictionary<string, string>? lists = null;
         Dictionary<string, (Ideas.IdeaPlace Place, string Stamp)>? records = null;
@@ -1584,6 +1608,14 @@ public sealed class DashboardServer : IDisposable
                 {
                     said.Add("jobs");
                     jobs = Jobs.Stamp;
+                }
+
+                // An event recorded, or one marked read here or from a
+                // terminal: the rail's count and an open Events page both move.
+                if (Events?.Stamp() is { } logged && logged != eventlog)
+                {
+                    said.Add("eventlog");
+                    eventlog = logged;
                 }
 
                 var moved = new List<object>();

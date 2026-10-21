@@ -25,6 +25,7 @@
   import Projects from './pages/Projects.svelte';
   import Ideas from './pages/Ideas.svelte';
   import Teams from './pages/Teams.svelte';
+  import Events from './pages/Events.svelte';
   import Context from './pages/Context.svelte';
   import Spend from './pages/Spend.svelte';
   import Elsewhere from './pages/Elsewhere.svelte';
@@ -75,6 +76,7 @@
     { key: 'sessions', name: 'Sessions', fact: `${running} running`, need: false },
     { key: 'ideas', name: 'Ideas', fact: ideaWaiting ? `${ideaWaiting} waiting on you` : `${ideaCount} being shaped`, need: ideaWaiting > 0 },
     { key: 'teams', name: 'Teams', fact: teamWaiting ? `${teamWaiting} waiting on you` : `${teamRunning} running`, need: teamWaiting > 0 },
+    { key: 'events', name: 'Events', fact: studio.unreadEvents ? `${studio.unreadEvents} unread` : 'what needed you', need: !!studio.unreadEvents },
     { key: 'memory', name: 'Memory', fact: 'by topic' },
     { key: 'context', name: 'Context', fact: 'what a session reads' },
     { key: 'spend', name: 'Spend', fact: studio.spentMonth === null ? 'tokens and cost' : `${tokens(studio.spentMonth)} tokens this month` },
@@ -328,6 +330,8 @@
       {@render sixPage()}
     {:else if router.route.page === 'teams'}
       <Teams rest={router.route.rest} />
+    {:else if router.route.page === 'events'}
+      <Events query={router.route.query ?? ''} />
     {:else if router.route.page === 'commands'}
       <Commands rest={router.route.rest} onlaunch={() => { router.go('sessions'); openLaunch(); }} />
     {:else}

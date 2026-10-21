@@ -685,6 +685,7 @@ public static class Program
         Top<DesktopCommand>(config, "desktop");
         Top<UpdateCommand>(config, "update");
         Top<MigrateCommand>(config, "migrate");
+        Top<EventsCommand>(config, "events");
 
         TopBranch(config, "backup", backup =>
         {

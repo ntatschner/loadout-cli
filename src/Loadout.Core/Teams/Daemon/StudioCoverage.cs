@@ -95,6 +95,7 @@ public static class StudioCoverage
         ["start"] = new("projects", StudioEffect.Session),
         ["doctor"] = new("settings", StudioEffect.Changes, ChangesOnlyWith: ["--fix"]),
         ["status"] = new("spend", StudioEffect.Reads),
+        ["events"] = new("events", StudioEffect.Changes, ChangesOnlyWith: ["--mark-read"]),
         ["launch"] = new("sessions", StudioEffect.Session),
         ["here"] = Terminal("launches the agent for the directory a terminal is in, and a page has no current directory"),
         ["completion"] = Terminal("writes a shell completion script for a shell to read"),

@@ -45,8 +45,8 @@ The classic page is at `/classic` either way, and
 
 ### 2. Find your way round
 
-Down the left is the rail: Home, Sessions, Ideas, Teams, Memory, Context,
-Spend, Projects, Commands and Settings, each with a live count. Hover or tab onto it and
+Down the left is the rail: Home, Sessions, Ideas, Teams, Events, Memory,
+Context, Spend, Projects, Commands and Settings, each with a live count. Hover or tab onto it and
 it widens over the page without pushing it. Below 600px wide it becomes a
 **Pages** tab.
 
@@ -92,6 +92,29 @@ loadout team gate <run> --gate <gate> --answer Approve --by dashboard
 ```
 
 From the keyboard: **Ctrl K**, type a word from the answer, **Enter**.
+
+### Look back at what needed you
+
+**Events** keeps the last month of what needed you: each question a run asked
+and how long it stayed open, a node that went quiet, a session left waiting, a
+run that finished or failed. Answered ones are greyed, with *resolved 4m later*
+beside them; one still open says so. **Go to it** opens the run or session it
+happened in, which is where you answer, and marks it read. The rail counts what
+is unread and needed you or went wrong.
+
+The filters along the top (how much it wanted you, which way, how far back,
+from what, the project and words in the title) go into the address, so a view
+you use often can be bookmarked. *Which way* defaults to what was said to you;
+**Done by you** shows your own answers, merge decisions and the sessions you
+started. The same view in a terminal:
+
+```sh
+loadout events --filter "level=needs&since=1d"
+```
+
+The daemon records all of this while it runs, and only then. [Looking back at
+what needed you](../teams.md#looking-back-at-what-needed-you) says what that
+leaves out.
 
 ### 5. Start a session
 

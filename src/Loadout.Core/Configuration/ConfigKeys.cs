@@ -411,6 +411,17 @@ public static class ConfigKeys
             Group: Groups.Machine,
             WhenUnset: "thirty days, then the daemon deletes it"),
 
+        new("events-days",
+            "Days the event history keeps what needed you and what you did. 0 keeps it until it reaches its size limit",
+            (_, m) => m.Teams.EventsDays is { } days
+                ? days.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                : string.Empty,
+            (_, m, v) => m.Teams.EventsDays = v.Trim().Length == 0 ? null : Count(v),
+            true,
+            Sample: "30",
+            Group: Groups.Machine,
+            WhenUnset: "thirty days, pruned each time the daemon starts"),
+
         new("team-webhook-teams",
             "Comma-separated teams something outside this machine may start",
             (_, m) => string.Join(", ", m.Teams.WebhookTeams),

@@ -11,6 +11,7 @@ const PAGES: [string, string][] = [
   ['sessions', 'Sessions'],
   ['ideas', 'Ideas'],
   ['teams', 'Teams'],
+  ['events', 'Events'],
   ['memory', 'Memory'],
   ['context', 'Context'],
   ['spend', 'Spend'],

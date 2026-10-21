@@ -66,6 +66,10 @@ public sealed class Notices
     /// Says anything newly worth saying about these runs, and nothing it has
     /// said before.
     /// </summary>
+    /// <remarks>
+    /// <c>told</c> hears each notice tried and whether it landed, so the
+    /// event history can say a channel was told, or could not be.
+    /// </remarks>
     /// <returns>How many notices went out.</returns>
     public async Task<int> SayAsync(
         IReadOnlyList<RunSummary> runs,
@@ -74,7 +78,8 @@ public sealed class Notices
         string address,
         Func<RunSummary, string> linkTo,
         DateTimeOffset now,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        Action<RunSummary, Attention, bool>? told = null)
     {
         ArgumentNullException.ThrowIfNull(runs);
         ArgumentNullException.ThrowIfNull(linkTo);
@@ -99,14 +104,18 @@ public sealed class Notices
 
         foreach (var (run, reason, key) in fresh)
         {
-            if (await PostAsync(
+            var landed = await PostAsync(
                     kind,
                     Notifier.Title(run, reason),
                     reason.Detail,
                     linkTo(run),
                     chat,
                     address,
-                    ct).ConfigureAwait(false))
+                    ct).ConfigureAwait(false);
+
+            told?.Invoke(run, reason, landed);
+
+            if (landed)
             {
                 sent++;
             }
