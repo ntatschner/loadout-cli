@@ -57,6 +57,14 @@ public static class IdeaJson
                 recommendation = q.Recommendation,
                 answer = q.Answer.Length > 0 ? q.Answer : null,
             }),
+            notes = record.Notes.Select(note => new
+            {
+                id = note.Id,
+                text = note.Text,
+                by = note.By,
+                added = note.AddedUtc,
+                taken = note.TakenUtc,
+            }),
             request = record.Request.Length > 0 ? record.Request : null,
             plan = record.Plan is not { } plan ? null : new
             {

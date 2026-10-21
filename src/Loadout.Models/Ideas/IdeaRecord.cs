@@ -31,6 +31,13 @@ public sealed class IdeaRecord
     /// <summary>When it was dropped in.</summary>
     public DateTimeOffset CapturedUtc { get; set; }
 
+    /// <summary>
+    /// What the person has said about the idea since dropping it in, oldest
+    /// first, kept verbatim like <see cref="Ask"/>. Not the plan's additions,
+    /// which are the agent's.
+    /// </summary>
+    public List<IdeaNote> Notes { get; set; } = [];
+
     /// <summary>Every round of questions, oldest first.</summary>
     public List<IdeaRound> Rounds { get; set; } = [];
 
@@ -63,6 +70,26 @@ public sealed class IdeaRecord
     /// <see cref="Failure"/> is written.
     /// </summary>
     public string LastError { get; set; } = string.Empty;
+}
+
+/// <summary>Something the person added to an idea after dropping it in.</summary>
+public sealed class IdeaNote
+{
+    /// <summary><c>N1</c>, <c>N2</c> and on, counted over the whole list and never reused.</summary>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>What they wrote, trimmed and otherwise verbatim.</summary>
+    public string Text { get; set; } = string.Empty;
+
+    public string By { get; set; } = string.Empty;
+
+    public DateTimeOffset AddedUtc { get; set; }
+
+    /// <summary>
+    /// When a round that was shown it came back, or null while no round has
+    /// read it. An unread note is something the plan has not taken in.
+    /// </summary>
+    public DateTimeOffset? TakenUtc { get; set; }
 }
 
 /// <summary>A round of refinement, as it was asked for and how it ended.</summary>
@@ -248,7 +275,10 @@ public enum IdeaStage
     /// <summary>Questions are waiting on the person.</summary>
     Answering,
 
-    /// <summary>The person has said something the agent has not seen yet: the next round can run.</summary>
+    /// <summary>
+    /// The person has said something the agent has not seen yet, an answer, a
+    /// request or a note: the next round can run.
+    /// </summary>
     Ready,
 
     /// <summary>A plan is there and the person has asked for nothing more.</summary>

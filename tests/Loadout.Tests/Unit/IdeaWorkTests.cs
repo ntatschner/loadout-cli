@@ -283,6 +283,80 @@ public sealed class IdeaWorkTests
                 "making a project is the person's to decide");
     }
 
+    private static IdeaNote Note(string id, string text) =>
+        new() { Id = id, Text = text, By = "nigel", AddedUtc = Now.AddMinutes(1) };
+
+    [Fact]
+    public void A_note_on_a_proposed_plan_makes_it_ready_and_a_round_that_saw_it_takes_it_in()
+    {
+        var record = Fresh();
+        IdeaWork.Merge(record, Plan(), Now);
+        record.Notes.Add(Note("N1", "It should work on a phone too"));
+
+        IdeaWork.StageOf(record).Should().Be(IdeaStage.Ready, "the plan has not read the note");
+
+        IdeaWork.Merge(record, Plan(), Now.AddMinutes(5), ["N1"]);
+
+        record.Notes.Single().TakenUtc.Should().Be(Now.AddMinutes(5));
+        IdeaWork.StageOf(record).Should().Be(IdeaStage.Proposed);
+    }
+
+    [Fact]
+    public void A_note_the_round_was_not_shown_stays_unread()
+    {
+        var record = Fresh();
+        IdeaWork.Merge(record, Plan(), Now);
+        record.Notes.Add(Note("N1", "It should work on a phone too"));
+        record.Notes.Add(Note("N2", "Added while the round was running"));
+
+        IdeaWork.Merge(record, Plan(), Now.AddMinutes(5), ["N1"]);
+
+        record.Notes[0].TakenUtc.Should().NotBeNull();
+        record.Notes[1].TakenUtc.Should().BeNull("the agent never saw it");
+        IdeaWork.StageOf(record).Should().Be(IdeaStage.Ready);
+    }
+
+    [Fact]
+    public void The_prompt_gives_unread_notes_verbatim_and_keeps_giving_them_once_taken()
+    {
+        var record = Fresh();
+        IdeaWork.Merge(record, Plan(), Now);
+        record.Notes.Add(Note("N1", "- also on mobile\n- and dark mode"));
+
+        var before = IdeaWork.Prompt(record, [], null);
+        var since = before.IndexOf("## What they have added since", StringComparison.Ordinal);
+
+        since.Should().BeGreaterThan(-1);
+        before.IndexOf("N1 (by nigel, 2026-09-26): - also on mobile\n- and dark mode", since, StringComparison.Ordinal)
+            .Should().BeGreaterThan(since);
+        before.Should().Contain("take in what they have added since");
+
+        IdeaWork.Merge(record, Plan(), Now.AddMinutes(5), ["N1"]);
+
+        var after = IdeaWork.Prompt(record, [], null);
+        var earlier = after.IndexOf("## What they added earlier", StringComparison.Ordinal);
+
+        after.Should().NotContain("## What they have added since");
+        earlier.Should().BeGreaterThan(-1);
+        after.IndexOf("- also on mobile\n- and dark mode", earlier, StringComparison.Ordinal)
+            .Should().BeGreaterThan(earlier, "every round is a fresh agent, so a note it is not shown is lost");
+    }
+
+    [Fact]
+    public void The_document_carries_what_the_person_added_later()
+    {
+        var record = Fresh();
+        IdeaWork.Merge(record, Plan(), Now);
+        record.Notes.Add(Note("N1", "It should work on a phone too"));
+        IdeaWork.Merge(record, Plan(), Now.AddMinutes(5), ["N1"]);
+
+        var document = IdeaWork.Document(record);
+        var asked = document.IndexOf("## What was asked", StringComparison.Ordinal);
+
+        document.IndexOf("Added later", asked, StringComparison.Ordinal).Should().BeGreaterThan(asked);
+        document.Should().Contain("It should work on a phone too");
+    }
+
     private sealed record RecommendationCase(string Name, string[] Options, string? Recommendation, string[] Choices, int? Recommended, string? Note);
 
     // The same table the Studio Ideas page is tested against, so the two rules agree.
