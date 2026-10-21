@@ -252,14 +252,30 @@ public sealed class IdeaRefinerTests : IDisposable
         var idea = (await _space.Ideas.CaptureAsync(null, "A status page", "me")).Value!;
         var place = new IdeaPlace(null, idea.Id);
         (await _space.Ideas.AddToAsync(place, "It must also show the backup jobs.", "me")).Succeeded.Should().BeTrue();
-        var launcher = new ScriptedDetachedLauncher(ScriptedDetachedLauncher.Result(Questions));
+        var launcher = new ScriptedDetachedLauncher(ScriptedDetachedLauncher.Result(APlan));
 
         var refined = await Refiner(launcher, _space.Scratch("r")).RefineAsync(new RefineRequest(place));
 
         refined.Succeeded.Should().BeTrue(refined.Error);
         launcher.Pipe!.Written.ToString().Should().Contain("It must also show the backup jobs.");
         (await _space.Ideas.ReadAsync(place)).Value!.Notes.Single().TakenUtc.Should().NotBeNull(
-            "the round was shown the note, so it has been taken in");
+            "the round was shown the note and returned a plan, so it has been taken in");
+    }
+
+    [Fact]
+    public async Task A_note_shown_to_a_round_that_only_asks_questions_stays_unread()
+    {
+        var idea = (await _space.Ideas.CaptureAsync(null, "A status page", "me")).Value!;
+        var place = new IdeaPlace(null, idea.Id);
+        (await _space.Ideas.AddToAsync(place, "It must also show the backup jobs.", "me")).Succeeded.Should().BeTrue();
+        var launcher = new ScriptedDetachedLauncher(ScriptedDetachedLauncher.Result(Questions));
+
+        var refined = await Refiner(launcher, _space.Scratch("r")).RefineAsync(new RefineRequest(place));
+
+        refined.Succeeded.Should().BeTrue(refined.Error);
+        launcher.Pipe!.Written.ToString().Should().Contain("It must also show the backup jobs.");
+        (await _space.Ideas.ReadAsync(place)).Value!.Notes.Single().TakenUtc.Should().BeNull(
+            "no plan has taken it in yet, so the next round must be given it again");
     }
 
     [Fact]
@@ -269,7 +285,7 @@ public sealed class IdeaRefinerTests : IDisposable
         var place = new IdeaPlace(null, idea.Id);
         (await _space.Ideas.AddToAsync(place, "Shown to the round.", "me")).Succeeded.Should().BeTrue();
         var launcher = new AddingWhileRunning(
-            new ScriptedDetachedLauncher(ScriptedDetachedLauncher.Result(Questions)),
+            new ScriptedDetachedLauncher(ScriptedDetachedLauncher.Result(APlan)),
             () => _space.Ideas.AddToAsync(place, "Added while it ran.", "me"));
 
         var refined = await new IdeaRefiner(_space.Ideas, new FakeProjects("homelab", _space.Scratch("r")), launcher, _space.Paths, _space.Locks)
