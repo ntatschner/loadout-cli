@@ -97,6 +97,24 @@ public static class RunAttention
     /// </remarks>
     public const decimal Overrun = 1.1m;
 
+    /// <summary>
+    /// What makes a reason the same reason from one look to the next: the
+    /// run, the kind and what it is about.
+    /// </summary>
+    /// <remarks>
+    /// Never the words. A silence's words say how long it has lasted and an
+    /// overspend's say how far over it is projected to go, so both change
+    /// while the reason stays true, and anything that keyed on them told
+    /// somebody the same thing every minute.
+    /// </remarks>
+    public static string Key(RunSummary run, Attention reason)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        ArgumentNullException.ThrowIfNull(reason);
+
+        return $"{run.RunId}/{reason.Kind}/{reason.About}";
+    }
+
     /// <summary>Why this run wants somebody, or nothing at all.</summary>
     /// <param name="run">The run, as its journal reads back.</param>
     /// <param name="now">The clock, so this can be argued with in a test.</param>

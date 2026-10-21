@@ -290,6 +290,34 @@ public sealed class NoticesTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_node_that_stays_quiet_is_said_once_however_long_it_stays_so()
+    {
+        // The reason's words say how long the node has been quiet, so they
+        // change every minute. Said by its words, one silence went out again
+        // every minute the daemon looked.
+        var notices = Made();
+        var node = new RunNode("implementer/1", "role.implementer", RunAttention.Working, 2, 0.1m, Noon.AddMinutes(-20), Started: Noon.AddMinutes(-30));
+        var run = Waiting() with { Nodes = [node] };
+
+        (await notices.SayAsync([run], NoticeKind.Slack, null, _address, _ => "link", Noon)).Should().Be(1);
+        (await notices.SayAsync([run], NoticeKind.Slack, null, _address, _ => "link", Noon.AddMinutes(1))).Should().Be(0);
+        (await notices.SayAsync([run], NoticeKind.Slack, null, _address, _ => "link", Noon.AddMinutes(7))).Should().Be(0);
+
+        Received().Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task A_run_overspending_is_said_once_as_its_spending_moves()
+    {
+        var notices = Made();
+        var run = Waiting() with { BudgetUsd = 1m, CostUsd = 1.20m };
+
+        (await notices.SayAsync([run], NoticeKind.Slack, null, _address, _ => "link", Noon)).Should().Be(1);
+        (await notices.SayAsync([run with { CostUsd = 1.35m }], NoticeKind.Slack, null, _address, _ => "link", Noon.AddMinutes(1)))
+            .Should().Be(0, "it is the same run overspending, with a bigger number");
+    }
+
+    [Fact]
     public async Task Each_notice_tried_is_reported_with_whether_it_landed()
     {
         // What the event history writes "told Slack" or "could not tell
