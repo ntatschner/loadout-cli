@@ -177,6 +177,18 @@ edit it. So it may ask for things and it may never grant them.
   is exact: agreeing to `git push` does not agree to `git push --force`.
 - **Each node's permissions come from its role**, not from the team file. They
   are written out before the run starts, and deny wins.
+- **A role starts from its mode's defaults** and lists only how it differs.
+  Every mode may read the tree and its history, and none may push, rebase,
+  reset, amend or delete a branch or tag. `investigate`, `implement` and
+  `review` may also build and test, with dotnet, npm, cargo, go or pytest.
+  `implement` may edit, `advise` may write a new document, and `review` and
+  `coordinate` change nothing. A role whose deliverable is a commit may commit.
+  A role's own `allowed` and `denied` beat its mode's in either direction, and
+  `defaults: false` under `tools` turns the defaults off. The roles that guard
+  the tool catalogue and the remedies do that, because a shell command is not
+  held to the directories a node is given. Every role used to carry a copy of
+  the whole list, and the copies drifted: four roles could not run the tests
+  their own checks look for.
 - **No node can start a subagent.** Work a node wants done is asked for in its
   report, so that it gets a node, a branch, a review and a line in the journal.
   Claude Code starts a subagent without asking, so being left off a role's

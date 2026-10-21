@@ -6,24 +6,10 @@ deliverable: file
 contract: report/1
 tools:
   allowed:
-    - 'Read'
-    - 'Grep'
-    - 'Glob'
-    - 'Bash(git diff:*)'
-    - 'Bash(git log:*)'
-    - 'Bash(git status:*)'
-    - 'Bash(git show:*)'
     - 'Write'
   denied:
     - 'Edit'
     - 'MultiEdit'
-    - 'Bash(git push:*)'
-    - 'Bash(git rebase:*)'
-    - 'Bash(git reset:*)'
-    - 'Bash(git commit --amend:*)'
-    - 'Bash(git branch -D:*)'
-    - 'Bash(git tag -d:*)'
-    - 'Bash(git push --force:*)'
 title: Reproducer
 summary: Turns a bug report into something that fails on demand, without a person watching.
 requires:

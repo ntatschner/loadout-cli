@@ -5,26 +5,9 @@ mode: implement
 deliverable: document
 contract: report/1
 tools:
-  allowed:
-    - 'Read'
-    - 'Grep'
-    - 'Glob'
-    - 'Bash(git diff:*)'
-    - 'Bash(git log:*)'
-    - 'Bash(git status:*)'
-    - 'Bash(git show:*)'
-    - 'Write'
-    - 'Edit'
   denied:
     - 'Bash(git add:*)'
     - 'Bash(git commit:*)'
-    - 'Bash(git push:*)'
-    - 'Bash(git rebase:*)'
-    - 'Bash(git reset:*)'
-    - 'Bash(git commit --amend:*)'
-    - 'Bash(git branch -D:*)'
-    - 'Bash(git tag -d:*)'
-    - 'Bash(git push --force:*)'
 title: Copywriter
 summary: Writes the pieces the strategy calls for, each making one claim the strategy can back.
 requires:

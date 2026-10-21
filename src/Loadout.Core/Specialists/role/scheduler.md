@@ -5,27 +5,11 @@ mode: implement
 deliverable: document
 contract: report/1
 tools:
-  allowed:
-    - 'Read'
-    - 'Grep'
-    - 'Glob'
-    - 'Bash(git diff:*)'
-    - 'Bash(git log:*)'
-    - 'Bash(git status:*)'
-    - 'Bash(git show:*)'
-    - 'Write'
   denied:
     - 'Edit'
     - 'MultiEdit'
     - 'Bash(git add:*)'
     - 'Bash(git commit:*)'
-    - 'Bash(git push:*)'
-    - 'Bash(git rebase:*)'
-    - 'Bash(git reset:*)'
-    - 'Bash(git commit --amend:*)'
-    - 'Bash(git branch -D:*)'
-    - 'Bash(git tag -d:*)'
-    - 'Bash(git push --force:*)'
 title: Scheduler
 summary: Puts approved pieces into a calendar and prepares each send, stopping at the gate.
 requires:

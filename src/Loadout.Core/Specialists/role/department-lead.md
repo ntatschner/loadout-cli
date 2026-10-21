@@ -4,26 +4,6 @@ kind: role
 mode: coordinate
 deliverable: answer
 contract: report/1
-tools:
-  allowed:
-    - 'Read'
-    - 'Grep'
-    - 'Glob'
-    - 'Bash(git diff:*)'
-    - 'Bash(git log:*)'
-    - 'Bash(git status:*)'
-    - 'Bash(git show:*)'
-  denied:
-    - 'Edit'
-    - 'Write'
-    - 'MultiEdit'
-    - 'Bash(git push:*)'
-    - 'Bash(git rebase:*)'
-    - 'Bash(git reset:*)'
-    - 'Bash(git commit --amend:*)'
-    - 'Bash(git branch -D:*)'
-    - 'Bash(git tag -d:*)'
-    - 'Bash(git push --force:*)'
 title: Department lead
 summary: Leads one department's workers toward the part of the goal the executive lead gave it; one role, instantiated per department.
 requires:

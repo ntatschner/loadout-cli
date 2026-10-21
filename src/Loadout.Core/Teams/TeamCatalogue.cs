@@ -199,19 +199,35 @@ public sealed class TeamCatalogue : ITeamCatalogue
     /// matches a call to run a script, so it never reaches the remedy branch
     /// at all - which is how the whole harness once came to gate something
     /// nothing could attempt.
+    /// <para>
+    /// Asked of the gate itself rather than of how the rules are spelt. A
+    /// rule's first word is not what it allows: <c>Bash(python -m pytest:*)</c>
+    /// starts like a way to run a script and runs only the tests, and reading
+    /// it as the former took every role that can test for a remediator.
+    /// </para>
     /// </remarks>
     private static bool CanRunAScript(TeamNode node, SpecialistCatalogue specialists)
     {
-        var allowed = specialists.Find(node.Role)?.Role?.AllowedTools ?? [];
+        if (specialists.Find(node.Role)?.Role is not { } role)
+        {
+            return false;
+        }
 
-        return allowed.Any(one =>
-            string.Equals(one, "Bash", StringComparison.Ordinal)
-            || one.StartsWith("Bash(pwsh", StringComparison.Ordinal)
-            || one.StartsWith("Bash(powershell", StringComparison.Ordinal)
-            || one.StartsWith("Bash(bash", StringComparison.Ordinal)
-            || one.StartsWith("Bash(sh", StringComparison.Ordinal)
-            || one.StartsWith("Bash(python", StringComparison.Ordinal));
+        var policy = new NodePolicy("check", node.Role, node.Role, role.AllowedTools, role.DeniedTools);
+
+        return ScriptCalls.Any(command => NodePermissions.Decide(
+            policy, "Bash", System.Text.Json.JsonSerializer.Serialize(new { command })).Allowed);
     }
+
+    /// <summary>One way of running a registered script in each language a remedy is written in.</summary>
+    private static readonly string[] ScriptCalls =
+    [
+        "pwsh -NoProfile -File remedy.ps1",
+        "powershell -NoProfile -File remedy.ps1",
+        "bash remedy.sh",
+        "sh remedy.sh",
+        "python remedy.py",
+    ];
 
     /// <summary>Reads one team from its text, or says why the text is not one.</summary>
     public static TeamDefinition? Parse(string text, string path, List<RuleFinding> findings)
