@@ -37,6 +37,7 @@
   import { PAGE_KEYS, SCOPE_WORDS, type PureAction, type PureCommand, type PureGroup, type PureItem, type PureScope } from '../lib/pure';
   import { router } from '../lib/router.svelte';
   import { studio } from '../lib/state.svelte';
+  import { readSplit, SPLIT_KEYS } from '../lib/splits';
   import type { Chosen } from '../lib/tasks';
   import { toasts } from '../lib/toasts.svelte';
 
@@ -303,11 +304,19 @@
   }
 
   const label = $derived(page === 'context' || page === 'memory' ? `${PAGE_TITLES[page]} of ${slug ?? '…'}` : PAGE_TITLES[page]);
+
+  /** How wide the desk's list and actions were left, in this browser; every desk shares it. */
+  let deskSplit = $state(readSplit(studio.kept(SPLIT_KEYS.desk, ''), 2, true));
+
+  function keepDesk(fractions: number[]) {
+    deskSplit = fractions;
+    studio.keep(SPLIT_KEYS.desk, JSON.stringify(fractions));
+  }
 </script>
 
 <h1 class="ls-vh">{PAGE_TITLES[page]}, as a desk</h1>
 <div class="deskwrap">
-  <WorkDesk {groups} selected={routed} keys={studio.keys} {label} {actions} commands={bar} ongo={go} onpage={(where) => router.go(where)} onselect={picked}>
+  <WorkDesk {groups} selected={routed} keys={studio.keys} {label} {actions} commands={bar} ongo={go} onpage={(where) => router.go(where)} onselect={picked} split={deskSplit} onsplit={keepDesk}>
     {#snippet view(item)}
       {#if page === 'ideas'}
         <Ideas rest={[item.id.slice(0, item.id.indexOf('/')), item.id.slice(item.id.indexOf('/') + 1)]} />

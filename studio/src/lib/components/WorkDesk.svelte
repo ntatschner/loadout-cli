@@ -5,13 +5,16 @@
   // agent, and Ctrl+] leaves it. With Studio's single-letter shortcuts off,
   // only Escape and the list's own arrows, Home, End and Enter work; F6,
   // the buttons and the command bar still do. The keys are bound while
-  // this is on the page and gone when it is not.
+  // this is on the page and gone when it is not. The dividers between the
+  // panes set how wide each is; below 1024px the panes stack and they go.
   import { onMount, tick, type Snippet } from 'svelte';
   import ActionPane from './ActionPane.svelte';
   import CommandBar from './CommandBar.svelte';
   import KeyHelp from './KeyHelp.svelte';
   import Signal from './Signal.svelte';
+  import Splitter from './Splitter.svelte';
   import { signalOf } from '../signals';
+  import { clampSplit, floorOf, terminalFloor } from '../splits';
   import { filtered, GO_KEYS, PAGE_KEYS, typingIn, type PureAction, type PureCommand, type PureGroup, type PureItem, type PureScope } from '../pure';
 
   interface Props {
@@ -28,9 +31,12 @@
     /** G then I, P, C, M, U or O: a page, as its own desk. */
     onpage?: (page: string) => void;
     onselect?: (id: string) => void;
+    /** How much of the width the list and the actions were left with, kept by the page; null for the default. */
+    split?: number[] | null;
+    onsplit?: (fractions: number[]) => void;
   }
 
-  let { groups, selected = null, keys = true, label = 'Everything live', view, actions, commands, ongo = undefined, onpage = undefined, onselect = undefined }: Props = $props();
+  let { groups, selected = null, keys = true, label = 'Everything live', view, actions, commands, ongo = undefined, onpage = undefined, onselect = undefined, split = null, onsplit = undefined }: Props = $props();
 
   const listId = `ls-wd-${Math.random().toString(36).slice(2, 7)}`;
   // svelte-ignore state_referenced_locally
@@ -47,6 +53,29 @@
   let bar = $state<ReturnType<typeof CommandBar> | undefined>();
   let going = false;
   let goTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // The list and the actions keep the floors they always had; the view, which
+  // may hold a terminal, a terminal's. Until a divider is moved the panes
+  // are as the stylesheet draws them, and the dividers say where that is;
+  // putting one back gives its pane the width the stylesheet would.
+  let wide = $state(0);
+  let listWide = $state(0);
+  let actsWide = $state(0);
+  const floor = terminalFloor().width;
+  const listMin = $derived(floorOf(250, wide));
+  const actsMin = $derived(floorOf(230, wide));
+  const viewMin = $derived(floorOf(floor, wide));
+  const listAt = $derived(split?.[0] ?? (wide > 0 ? listWide / wide : 0.25));
+  const actsAt = $derived(split?.[1] ?? (wide > 0 ? actsWide / wide : 0.2));
+  const columns = $derived(split ? `minmax(250px, ${listAt.toFixed(4)}fr) minmax(0, ${(1 - listAt - actsAt).toFixed(4)}fr) minmax(230px, ${actsAt.toFixed(4)}fr)` : undefined);
+
+  function setList(to: number) {
+    onsplit?.([to, actsAt]);
+  }
+
+  function setActs(boundary: number) {
+    onsplit?.([listAt, 1 - boundary]);
+  }
 
   const shownGroups = $derived(filtered(groups, filter));
   const visible = $derived(shownGroups.flatMap((group) => group.items));
@@ -232,8 +261,8 @@
   });
 </script>
 
-<div bind:this={desk} class="ls-desk" class:viewing role="application" aria-roledescription="Pure Focus" aria-label="Pure Focus" onleaveterminal={closeView}>
-  <section class="list" aria-label="List">
+<div bind:this={desk} class="ls-desk" class:viewing bind:clientWidth={wide} style:--desk-cols={columns} role="application" aria-roledescription="Pure Focus" aria-label="Pure Focus" onleaveterminal={closeView}>
+  <section class="list" aria-label="List" bind:offsetWidth={listWide}>
     <div class="ph"><span>List</span><span class="grow"></span><span class="hint" aria-hidden="true"><kbd class="ls-kbd">J</kbd><kbd class="ls-kbd">K</kbd>move</span></div>
     <div class="lwrap">
       <div class="filter">
@@ -290,7 +319,7 @@
     </div>
   </section>
 
-  <section bind:this={actPane} class="acts" aria-label="Actions">
+  <section bind:this={actPane} class="acts" aria-label="Actions" bind:offsetWidth={actsWide}>
     <div class="ph"><span>Actions</span><span class="grow"></span><span class="hint" aria-hidden="true"><kbd class="ls-kbd">1</kbd>–<kbd class="ls-kbd">9</kbd></span></div>
     <div class="apwrap">
       <ActionPane bind:this={pane} actions={itemActions} owner={current?.id ?? null} emptyText={current ? 'Nothing to do with this one.' : 'Pick something in the list.'} />
@@ -300,6 +329,10 @@
   <div class="cbar">
     <CommandBar bind:this={bar} source={(typed) => commands(typed, current)} ondone={() => list?.focus()} />
   </div>
+
+  <!-- After the panes, so the panes' own order is untouched. -->
+  <Splitter class="first" label="Width of the list" value={clampSplit(listAt, listMin, 1 - actsAt - viewMin)} min={listMin} max={1 - actsAt - viewMin} reset={floorOf(320, wide)} onchange={setList} />
+  <Splitter class="second" label="Width of the actions" value={clampSplit(1 - actsAt, listAt + viewMin, 1 - actsMin)} min={listAt + viewMin} max={1 - actsMin} reset={1 - floorOf(280, wide)} onchange={setActs} />
 </div>
 
 {#if help}

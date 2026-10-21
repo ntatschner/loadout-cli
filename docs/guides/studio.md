@@ -633,8 +633,20 @@ Loadout's config.
   it away, so its pane goes to the next tab along. A dot on a tab means output since you looked. **Go
   to the one waiting** appears when a session needs you, and *Find in this
   terminal* searches the one you're in, highlighting matches in the needs
-  colour. Below 900px it's one pane and the tabs. The layout, which session is
-  in each pane and the last session you picked are remembered in this browser.
+  colour. With two or four panes, drag the divider between them to give one
+  more room. Four stay a grid: one divider runs the full height and one the
+  full width, so **Ctrl Alt** with the arrows still goes where you'd expect.
+  Drag the small square where they cross to move both at once.
+  A pane never gets narrower than about 40 columns or shorter than about 8
+  rows, because an agent squeezed below that can't draw its screen. While you
+  drag, the panes follow the mouse but the session is only told its new size
+  when you let go or stop for a moment, so a full-screen agent redraws once
+  rather than on every pixel. A divider takes the keyboard too: the arrows
+  move it, **Shift** with them further, and **Enter** or a double click puts
+  it back in the middle. Below 900px it's one pane and the tabs. The
+  layout, where the dividers are (one set for two panes and another for four),
+  which session is in each pane and the last session you picked are
+  remembered in this browser.
 - **Teams** turns Home and the Teams page into a board: each run one row with
   its goal, a small line of its rounds and nodes, its state and its spend, the
   one that needs you first, with its question answered in the row. The teams
@@ -655,7 +667,9 @@ the same addresses:
   which stay live: you can still type into a session or answer a run while a
   page is open. **Close** or **Escape** goes back to where you were, but Escape
   is left alone while you're typing in a field or a terminal, or in a dialog.
-  Below 1100px the page takes the width. Opening or closing a page beside the
+  Drag the divider between them to give the page or the terminals more room;
+  the page keeps at least the width it always had. Below 1100px the page
+  takes the width and the divider goes. Opening or closing a page beside the
   terminals never reconnects them, so their scrollback stays.
 
   ![Memory opened beside the terminals in Terminal Focus: the deck on the left, and on the right a panel headed Memory, beside your terminals, holding the page laid out as one column, with Close and Esc.](../images/studio-beside.png)
@@ -724,6 +738,11 @@ over a command bar:
 - **Actions**, on the right: up to nine, numbered, each with the command it
   runs. They're the same actions, with the same commands, as anywhere else.
 
+Drag the dividers between the panes to change how wide each is. The list and
+the actions keep the widths they always had at the least, and the view never
+gets too narrow for a terminal. Below 1024px the actions move under the
+other two and the dividers go.
+
 Every key is printed beside what it does, and **?** lists them all:
 
 | Key | Does |
@@ -738,6 +757,7 @@ Every key is printed beside what it does, and **?** lists them all:
 | **G** then **H**, **S**, **T**, **K** or **N** | the list: everything, sessions, team runs, tasks, what needs you |
 | **G** then **I**, **P**, **C**, **M**, **U** or **O** | a page's desk: Ideas, Projects, Context, Memory, Spend (usage), Settings (options) |
 | **F6**, **Shift F6** | the next or previous pane |
+| On a divider: the arrows, **Shift** with them, **Home**, **End**, **Enter** | move it, further, as far as it goes, back where it was |
 | **?** | every key |
 
 The filter has no fields, because the list holds every kind of thing at once,

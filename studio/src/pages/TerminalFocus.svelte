@@ -3,15 +3,16 @@
   // deck, every hosted session a tab and the picked ones live in panes.
   // Loaded only when first needed, like the session page, since the
   // terminal is most of Studio's size. The layout, the session in each pane,
-  // the last session picked, and how the tabs are arranged, hidden and
-  // cleared are kept in this browser; a tab's name is the daemon's, so every
-  // browser shows it.
+  // where the dividers sit, the last session picked, and how the tabs are
+  // arranged, hidden and cleared are kept in this browser; a tab's name is
+  // the daemon's, so every browser shows it.
   import { untrack } from 'svelte';
   import SessionPane from '../lib/components/SessionPane.svelte';
   import TermDeck from '../lib/components/TermDeck.svelte';
   import { studio } from '../lib/state.svelte';
   import { wordFor } from '../lib/signals';
   import { TABS_KEY, arrange, clear, hide, prune, readTabs, unhide, withOrder, type TabState } from '../lib/tabs';
+  import { readSplit, SPLIT_KEYS } from '../lib/splits';
   import type { DeckLayout, DeckSession, DeckSlots } from '../lib/modes';
 
   let { id = null, onlaunch = undefined }: { id?: string | null; onlaunch?: () => void } = $props();
@@ -19,6 +20,7 @@
   const LAYOUT = 'studio-deck-layout';
   const LAST = 'studio-deck-session';
   const SLOTS = 'studio-deck-slots';
+  const splits = { 2: readSplit(studio.kept(SPLIT_KEYS.deck2, ''), 1), 4: readSplit(studio.kept(SPLIT_KEYS.deck4, ''), 2) };
 
   const kept = Number(studio.kept(LAYOUT, '2'));
   const layout: DeckLayout = kept === 1 || kept === 4 ? kept : 2;
@@ -132,6 +134,8 @@
     onpick={picked}
     onlayout={(next) => studio.keep(LAYOUT, String(next))}
     onslots={(next) => studio.keep(SLOTS, JSON.stringify(next))}
+    {splits}
+    onsplit={(count, fractions) => studio.keep(count === 2 ? SPLIT_KEYS.deck2 : SPLIT_KEYS.deck4, JSON.stringify(fractions))}
     onnew={studio.watchOnly ? undefined : onlaunch}
     onmove={(order) => keepTabs(withOrder(tabs, order))}
     onrename={(one, name) => { const session = hosted(one); return session && studio.renameSession(session, name); }}

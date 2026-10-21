@@ -72,6 +72,7 @@ export const PURE_KEYS: [string, [string[], string][]][] = [
   ['Open and act', [[['Enter'], 'open the picked one in the view'], [['Esc'], 'back to the list'], [['1'], 'to 9: run that action'], [['Ctrl', ']'], 'leave a terminal']]],
   ['Go', [[['G', 'H'], 'Home: everything'], [['G', 'S'], 'sessions'], [['G', 'T'], 'team runs'], [['G', 'K'], 'tasks'], [['G', 'N'], 'what needs you']]],
   ['Go to a page', [[['G', 'I'], 'Ideas'], [['G', 'P'], 'Projects'], [['G', 'C'], 'Context'], [['G', 'M'], 'Memory'], [['G', 'U'], 'Spend (usage)'], [['G', 'O'], 'Settings (options)']]],
+  ['On a divider', [[['←', '→'], 'move it'], [['Shift', '←'], 'or Shift →: further'], [['Home'], 'or End: as far as it goes'], [['Enter'], 'put it back']]],
   ['Everywhere', [[[':'], 'the command bar'], [['F6'], 'the next pane'], [['?'], 'this list'], [['Ctrl', 'Shift', 'M'], 'change mode'], [['Ctrl', 'K'], 'the palette']]],
 ];
 

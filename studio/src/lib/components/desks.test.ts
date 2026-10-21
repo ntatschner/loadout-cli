@@ -2,7 +2,7 @@
 // Signal; G then I, P, C, M, U or O goes to a page's desk while G then H,
 // S, T, K or N still scopes Home's list; and each desk offers, for a sample
 // item, the actions the brief lists, each with its command.
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { createRawSnippet } from 'svelte';
 import WorkDesk from './WorkDesk.svelte';
@@ -21,6 +21,9 @@ import {
   spendActions,
   type DeskContext,
 } from '../desks';
+
+// The dividers watch their grid's size, which jsdom has no layout to give.
+globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver;
 
 const view = createRawSnippet(() => ({ render: () => '<div>the page</div>' }));
 
@@ -140,5 +143,32 @@ describe('the desks', () => {
     expect(actions[0]).toEqual(['Over the last day', '$ loadout usage --by project --days 1 · reads only']);
     expect(actions[4]).toEqual(['By project', 'shown now']);
     expect(actions[8]).toEqual(['Work out where spending stands', '$ loadout spend refresh']);
+  });
+});
+
+describe('WorkDesk dividers', () => {
+  const columns = () => document.querySelector<HTMLElement>('.ls-desk')!.style.getPropertyValue('--desk-cols');
+
+  it('has one between the list and the view and one between the view and the actions, and leaves the stylesheet alone until one moves', () => {
+    render(WorkDesk, { groups: settingsGroups(), view, actions: () => [], commands: () => [] });
+
+    expect(screen.getByRole('separator', { name: 'Width of the list' })).toBeTruthy();
+    expect(screen.getByRole('separator', { name: 'Width of the actions' })).toBeTruthy();
+    expect(columns()).toBe('');
+  });
+
+  it('sizes the panes from where they were left, keeping the floors, and moves only the panes either side', async () => {
+    const onsplit = vi.fn();
+    render(WorkDesk, { groups: settingsGroups(), view, actions: () => [], commands: () => [], split: [0.3, 0.2], onsplit });
+
+    expect(columns()).toBe('minmax(250px, 0.3000fr) minmax(0, 0.5000fr) minmax(230px, 0.2000fr)');
+
+    await fireEvent.keyDown(screen.getByRole('separator', { name: 'Width of the list' }), { key: 'ArrowRight' });
+    expect(onsplit.mock.lastCall![0][0]).toBeCloseTo(0.32);
+    expect(onsplit.mock.lastCall![0][1]).toBe(0.2);
+
+    await fireEvent.keyDown(screen.getByRole('separator', { name: 'Width of the actions' }), { key: 'ArrowLeft' });
+    expect(onsplit.mock.lastCall![0][0]).toBe(0.3);
+    expect(onsplit.mock.lastCall![0][1]).toBeCloseTo(0.22);
   });
 });

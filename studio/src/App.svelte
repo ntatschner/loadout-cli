@@ -46,6 +46,7 @@
   import QuietMemory from './pages/quiet/QuietMemory.svelte';
   import QuietSpend from './pages/quiet/QuietSpend.svelte';
   import { besideReturn, isModeKey, isSixPage, PAGE_TITLES, type Waiting } from './lib/modes';
+  import { readSplit, SPLIT_KEYS } from './lib/splits';
 
   let palette = $state(false);
   let appearance = $state(false);
@@ -55,6 +56,13 @@
   let launchChosen = $state<Chosen | null>(null);
   /** The conversation the sheet is resuming, for 'Resume with changes'; null for a new session. */
   let launchResuming = $state<Conversation | null>(null);
+  /** How much of the width a page beside the terminals or the board was left with, in this browser. */
+  let besideSplit = $state(readSplit(studio.kept(SPLIT_KEYS.beside, ''), 1)?.[0] ?? null);
+
+  function keepBeside(to: number) {
+    besideSplit = to;
+    studio.keep(SPLIT_KEYS.beside, JSON.stringify([to]));
+  }
 
   onMount(() => {
     // The mode is this browser's own, so the layout is right before the prefs are read.
@@ -278,7 +286,7 @@
       <!-- One deck for Home, Sessions, a session's page and any of the six
            pages beside it, so moving between them keeps its panes and their
            connections. -->
-      <BesideGrid beside={six ? besidePage : undefined}>
+      <BesideGrid beside={six ? besidePage : undefined} split={besideSplit} onsplit={keepBeside}>
         {#snippet focus()}
           {#await import('./pages/TerminalFocus.svelte')}
             <p class="calm" role="status">Opening the terminals…</p>
@@ -288,7 +296,7 @@
         {/snippet}
       </BesideGrid>
     {:else if boardHost}
-      <BesideGrid beside={six ? besidePage : undefined}>
+      <BesideGrid beside={six ? besidePage : undefined} split={besideSplit} onsplit={keepBeside}>
         {#snippet focus()}<Teams rest={[]} />{/snippet}
       </BesideGrid>
     {:else if quiet}

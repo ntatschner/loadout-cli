@@ -11,6 +11,9 @@ import { pureGroups, type PureAction, type PureGroup, type PureItem } from '../p
 import type { Work } from '../lines';
 import type { Run } from '../api';
 
+// The dividers watch their grid's size, which jsdom has no layout to give.
+globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver;
+
 const items: PureItem[] = [
   { id: 's1', ref: 's1', kind: 'session', title: 'fix-tests', meta: 'starstats · claude', word: 'working' },
   { id: 's2', ref: 's2', kind: 'session', title: 'docs', meta: 'loadout · claude', word: 'working' },

@@ -17,6 +17,7 @@
   import { command } from '../lib/commands';
   import { router } from '../lib/router.svelte';
   import { studio } from '../lib/state.svelte';
+  import { readSplit, SPLIT_KEYS } from '../lib/splits';
   import { resumeCommand } from '../lib/terminal';
   import { gateButtons } from '../lib/teams';
   import { answerGate, carryOn, hold, runLines, stop } from '../lib/teamsAct';
@@ -214,6 +215,14 @@
 
   // svelte-ignore state_referenced_locally
   const start = routed ?? studio.kept(PICKED, '');
+
+  /** How wide the desk's list and actions were left, in this browser; every desk shares it. */
+  let deskSplit = $state(readSplit(studio.kept(SPLIT_KEYS.desk, ''), 2, true));
+
+  function keepDesk(fractions: number[]) {
+    deskSplit = fractions;
+    studio.keep(SPLIT_KEYS.desk, JSON.stringify(fractions));
+  }
 </script>
 
 <h1 class="ls-vh">Pure Focus</h1>
@@ -229,6 +238,8 @@
     ongo={go}
     onpage={(where) => router.go(where)}
     onselect={picked}
+    split={deskSplit}
+    onsplit={keepDesk}
   >
     {#snippet view(item)}
       {#if item.kind === 'session'}

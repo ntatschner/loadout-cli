@@ -1016,10 +1016,14 @@ html[data-vt="fade"]::view-transition-group(*) { animation-duration: 0s; }
 .ls-deck .find input { min-height: 36px; }
 .ls-deck .find span { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); white-space: nowrap; }
 .ls-deck .keys { font-family: var(--font-mono); font-size: 11px; color: var(--subtle); }
-.ls-deck .panes { display: grid; gap: 10px; min-height: 0; }
+.ls-deck .panes { position: relative; display: grid; gap: 10px; min-height: 0; }
 .ls-deck .panes.l1 { grid-template-columns: minmax(0, 1fr); }
-.ls-deck .panes.l2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.ls-deck .panes.l4 { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); }
+.ls-deck .panes.l2 { grid-template-columns: var(--deck-cols, repeat(2, minmax(0, 1fr))); }
+.ls-deck .panes.l4 { grid-template-columns: var(--deck-cols, repeat(2, minmax(0, 1fr))); grid-template-rows: var(--deck-rows, repeat(2, minmax(0, 1fr))); }
+.ls-deck .panes > .ls-split { --split-gap: 10px; }
+.ls-deck .panes > .ls-split.cols { grid-column: 2; }
+.ls-deck .panes > .ls-split.rows { grid-row: 2; }
+.ls-deck .panes > .ls-cross { grid-column: 2; grid-row: 2; }
 .ls-deck .pane { position: relative; display: grid; min-height: 0; min-width: 0; transition: box-shadow var(--dur-quick); animation: lsPaneIn .45s var(--ease-out) both; }
 .ls-deck .pane:nth-child(2) { animation-delay: .06s; } .ls-deck .pane:nth-child(3) { animation-delay: .12s; } .ls-deck .pane:nth-child(4) { animation-delay: .18s; }
 @keyframes lsPaneIn { from { opacity: 0; transform: scale(.97); } }
@@ -1137,7 +1141,7 @@ html[data-vt="fade"]::view-transition-group(*) { animation-duration: 0s; }
 [data-motion="none"] .ls-ack { animation: none; }
 
 /* ---------- WorkDesk: list, view and actions, with the command bar under them ---------- */
-.ls-desk { --c: var(--accent); display: grid; grid-template-columns: minmax(250px, 320px) minmax(0, 1fr) minmax(230px, 280px); grid-template-rows: minmax(0, 1fr) auto; height: 100%; min-height: 0; background: var(--ground); box-shadow: inset 0 0 0 1px var(--rule); }
+.ls-desk { --c: var(--accent); position: relative; display: grid; grid-template-columns: var(--desk-cols, minmax(250px, 320px) minmax(0, 1fr) minmax(230px, 280px)); grid-template-rows: minmax(0, 1fr) auto; height: 100%; min-height: 0; background: var(--ground); box-shadow: inset 0 0 0 1px var(--rule); }
 .ls-desk > section { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; min-width: 0; outline: none; }
 .ls-desk > section + section { box-shadow: inset 1px 0 0 var(--rule); }
 .ls-desk > section:focus-within > .ph { box-shadow: inset 0 -1px 0 var(--rule), inset 0 2px 0 var(--accent); }
@@ -1175,7 +1179,10 @@ html[data-vt="fade"]::view-transition-group(*) { animation-duration: 0s; }
 .ls-desk .vtitle span { font-family: var(--font-mono); font-size: 11px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--muted); }
 .ls-desk .back { display: none; }
 .ls-desk .cbar { grid-column: 1 / -1; position: relative; display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 12px; box-shadow: inset 0 1px 0 var(--rule); background: var(--surface); }
-@media (max-width: 1023px) { .ls-desk { grid-template-columns: minmax(230px, 300px) minmax(0, 1fr); } .ls-desk > section.acts { grid-column: 1 / -1; grid-row: 2; box-shadow: inset 0 1px 0 var(--rule); } .ls-desk .cbar { grid-row: 3; } .ls-desk { grid-template-rows: minmax(0, 1fr) auto auto; } }
+.ls-desk > .ls-split { grid-row: 1 / 2; }
+.ls-desk > .ls-split.first { grid-column: 2; }
+.ls-desk > .ls-split.second { grid-column: 3; }
+@media (max-width: 1023px) { .ls-desk > .ls-split { display: none; } .ls-desk { grid-template-columns: minmax(230px, 300px) minmax(0, 1fr); } .ls-desk > section.acts { grid-column: 1 / -1; grid-row: 2; box-shadow: inset 0 1px 0 var(--rule); } .ls-desk .cbar { grid-row: 3; } .ls-desk { grid-template-rows: minmax(0, 1fr) auto auto; } }
 @media (max-width: 699px) {
   .ls-desk { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto auto; }
   .ls-desk.viewing > section.list, .ls-desk:not(.viewing) > section.view { display: none; }
@@ -1678,7 +1685,8 @@ a.ls-ptile:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px;
 .ls-forget .lab { margin: 0 0 6px; font-size: 11.5px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-soft); }
 
 /* ---------- PageBeside: a page opened next to what you are watching, which stays live ---------- */
-.ls-besidegrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(460px, 52%); gap: 18px; align-items: start; min-width: 0; }
+.ls-besidegrid { position: relative; display: grid; grid-template-columns: var(--beside-cols, minmax(0, 1fr) minmax(460px, 52%)); gap: 18px; align-items: start; min-width: 0; }
+.ls-besidegrid > .ls-split { --split-gap: 18px; grid-column: 2; }
 .ls-besidegrid > .focusarea { min-width: 0; overflow-x: clip; }
 /* A page in a WorkDesk view lays out by the pane's width too. */
 [data-mode="pure"] .ls-desk .vbody:not(.term) { container-type: inline-size; container-name: page; }
@@ -1700,11 +1708,30 @@ a.ls-ptile:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px;
 .ls-beside > .body { min-height: 0; overflow: auto; padding: 14px 18px 28px; container-type: inline-size; container-name: page; }
 @media (max-width: 1099px) {
   .ls-besidegrid { grid-template-columns: minmax(0, 1fr); }
-  .ls-besidegrid > .focusarea { display: none; }
+  .ls-besidegrid > .focusarea, .ls-besidegrid > .ls-split { display: none; }
   .ls-beside { position: static; max-height: none; box-shadow: inset 0 0 0 1px var(--rule); }
   .ls-beside > .body { overflow: visible; }
 }
 .ls-besidegrid.solo { grid-template-columns: minmax(0, 1fr); }
+
+/* ---------- Splitter: the divider between two panes, laid over the gap its grid leaves; the grid places it by column or row ---------- */
+.ls-split { position: absolute; z-index: 2; display: grid; place-items: center; touch-action: none; outline: none; }
+.ls-split.vertical { top: 0; bottom: 0; left: 0; width: 12px; margin-left: calc(var(--split-gap, 0px) / -2 - 6px); cursor: col-resize; }
+.ls-split.horizontal { left: 0; right: 0; top: 0; height: 12px; margin-top: calc(var(--split-gap, 0px) / -2 - 6px); cursor: row-resize; }
+.ls-split .grip { position: relative; width: 2px; height: 100%; transition: background var(--dur-quick); }
+.ls-split.horizontal .grip { width: 100%; height: 2px; }
+/* A short handle at rest, so the divider can be found; the full line while it is in use. */
+.ls-split .grip::after { content: ""; position: absolute; top: 50%; left: 50%; width: 4px; height: 28px; transform: translate(-50%, -50%); background: var(--control-edge); }
+.ls-split.horizontal .grip::after { width: 28px; height: 4px; }
+.ls-split:hover .grip, .ls-split.dragging .grip { background: var(--accent); }
+.ls-split:hover .grip::after, .ls-split.dragging .grip::after { background: var(--accent); }
+.ls-split:focus-visible .grip, .ls-split:focus-visible .grip::after { background: var(--focus); }
+.ls-split:focus-visible { box-shadow: 0 0 0 2px var(--focus); }
+
+/* Where two dividers cross: a square over both that moves them together. */
+.ls-cross { --split-gap: 10px; position: absolute; z-index: 3; top: 0; left: 0; width: 20px; height: 20px; margin: calc(var(--split-gap) / -2 - 10px) 0 0 calc(var(--split-gap) / -2 - 10px); cursor: move; touch-action: none; }
+.ls-cross::after { content: ""; position: absolute; inset: 6px; box-shadow: inset 0 0 0 2px var(--control-edge); transition: box-shadow var(--dur-quick); }
+.ls-cross:hover::after, .ls-cross.dragging::after { box-shadow: inset 0 0 0 2px var(--accent); background: var(--accent); }
 
 /* ---------- QuietPage: one calm column, what matters now first, everything else behind one button ---------- */
 .ls-qpage { display: grid; gap: 18px; max-width: 760px; margin: 5vh auto 0; min-width: 0; }
