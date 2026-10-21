@@ -226,6 +226,108 @@ public sealed class IdeaServiceTests : IDisposable
         (await _tasks.ListAsync("homelab")).Value!.Single().Kind.Should().Be(TaskKind.Idea);
     }
 
+    private async Task<IdeaPlace> ProposedAsync(string project)
+    {
+        await ProjectAsync(project);
+        var idea = (await _ideas.CaptureAsync(project, "Status page", "me")).Value!;
+        var place = new IdeaPlace(project, idea.Id);
+        (await _ideas.RecordReplyAsync(place, Plan())).Succeeded.Should().BeTrue();
+
+        return place;
+    }
+
+    private string RecordFile(IdeaPlace place) =>
+        Path.Combine(TaskPaths.Ideas(_workspace.LocalPath, place.Project), $"{place.Id}.yaml");
+
+    [Fact]
+    public async Task A_note_is_kept_verbatim_with_who_wrote_it_and_when()
+    {
+        var place = await ProposedAsync("homelab");
+        var before = DateTimeOffset.UtcNow;
+
+        var added = await _ideas.AddToAsync(place, "  - also on mobile  ", "nigel");
+        (await _ideas.AddToAsync(place, "and dark mode", "sam")).Succeeded.Should().BeTrue();
+
+        added.Succeeded.Should().BeTrue(added.Error);
+
+        // A fresh service, so nothing kept in memory can answer for the file.
+        var fresh = new IdeaService(_workspace, _tasks, _space.Yaml, TimeProvider.System, _space.Locks);
+        var notes = (await fresh.ReadAsync(place)).Value!.Notes;
+
+        notes.Select(n => n.Id).Should().Equal("N1", "N2");
+        notes[0].Text.Should().Be("- also on mobile");
+        notes[0].By.Should().Be("nigel");
+        notes[0].AddedUtc.Should().BeOnOrAfter(before).And.BeOnOrBefore(DateTimeOffset.UtcNow);
+        notes[0].TakenUtc.Should().BeNull();
+        notes[1].By.Should().Be("sam");
+    }
+
+    [Fact]
+    public async Task An_accepted_idea_takes_no_notes_and_its_record_is_not_touched()
+    {
+        var place = await ProposedAsync("homelab");
+        (await _ideas.AcceptAsync(place, "homelab", "me")).Succeeded.Should().BeTrue();
+        var before = await File.ReadAllBytesAsync(RecordFile(place));
+
+        var added = await _ideas.AddToAsync(place, "One more thing", "nigel");
+
+        added.Failed.Should().BeTrue();
+        added.ExitCode.Should().Be(ExitCode.InvalidArguments);
+        added.Error.Should().Contain("accepted, onto homelab").And.Contain("Nothing was added");
+        (await File.ReadAllBytesAsync(RecordFile(place))).Should().Equal(before);
+    }
+
+    [Fact]
+    public async Task An_unread_note_holds_back_accepting_until_a_round_has_seen_it()
+    {
+        var place = await ProposedAsync("homelab");
+        (await _ideas.AddToAsync(place, "It should work on a phone too", "nigel")).Succeeded.Should().BeTrue();
+
+        var refused = await _ideas.AcceptAsync(place, "homelab", "me");
+
+        refused.Failed.Should().BeTrue();
+        refused.Error.Should().Contain("something you added");
+
+        (await _ideas.RecordReplyAsync(place, Plan(), seen: ["N1"])).Succeeded.Should().BeTrue();
+
+        var accepted = await _ideas.AcceptAsync(place, "homelab", "me");
+        accepted.Succeeded.Should().BeTrue(accepted.Error);
+    }
+
+    [Fact]
+    public async Task A_preview_of_a_note_says_what_it_would_be_and_writes_nothing()
+    {
+        var place = await ProposedAsync("homelab");
+        var before = await File.ReadAllBytesAsync(RecordFile(place));
+
+        var preview = await _ideas.PreviewAddToAsync(place, "Also on a phone", "nigel");
+
+        preview.Succeeded.Should().BeTrue(preview.Error);
+        preview.Value!.Notes.Single().Id.Should().Be("N1");
+        (await File.ReadAllBytesAsync(RecordFile(place))).Should().Equal(before);
+        (await _ideas.ReadAsync(place)).Value!.Notes.Should().BeEmpty("nothing kept was changed");
+
+        (await _ideas.AcceptAsync(place, "homelab", "me")).Succeeded.Should().BeTrue();
+
+        var refused = await _ideas.PreviewAddToAsync(place, "Also on a phone", "nigel");
+        refused.ExitCode.Should().Be(ExitCode.InvalidArguments);
+        refused.Error.Should().Contain("Nothing was added");
+    }
+
+    [Fact]
+    public async Task A_credential_in_a_note_is_refused_by_pattern_and_nothing_is_written()
+    {
+        var place = await ProposedAsync("homelab");
+        var before = await File.ReadAllBytesAsync(RecordFile(place));
+        var token = "ghp_" + new string('f', 36);
+
+        var added = await _ideas.AddToAsync(place, $"Use {token} for it", "nigel");
+
+        added.ExitCode.Should().Be(ExitCode.PolicyViolation);
+        added.Error.Should().NotContain(token);
+        (await File.ReadAllBytesAsync(RecordFile(place))).Should().Equal(before);
+    }
+
     [Fact]
     public async Task Moving_an_idea_takes_its_record_with_its_task()
     {

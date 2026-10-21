@@ -72,6 +72,60 @@ public static class IdeaWork
         return AnythingNewFor(record, record.Plan) ? IdeaStage.Ready : IdeaStage.Proposed;
     }
 
+    /// <summary>
+    /// Why a note cannot be added to this idea, or null when it can. One rule
+    /// for the write and for a dry run, so the two never disagree.
+    /// </summary>
+    /// <remarks>
+    /// Only acceptance refuses. An accepted idea is a task now, and changing
+    /// what it is belongs to the task. Every other stage takes a note, and the
+    /// next round reads it.
+    /// </remarks>
+    public static string? NoteRefusal(IdeaPlace place, IdeaRecord record)
+    {
+        ArgumentNullException.ThrowIfNull(place);
+        ArgumentNullException.ThrowIfNull(record);
+
+        return record.Accepted is { } accepted
+            ? $"That idea has been accepted, onto {accepted.Project}, so its plan is settled. Nothing was added."
+            : null;
+    }
+
+    /// <summary>
+    /// Adds a note to the record, numbered after every note it has had, and
+    /// hands it back.
+    /// </summary>
+    public static IdeaNote AddNote(IdeaRecord record, string text, string by, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        ArgumentNullException.ThrowIfNull(text);
+
+        var last = record.Notes
+            .Select(note => note.Id.Length > 1 && int.TryParse(note.Id.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture, out var n) ? n : 0)
+            .DefaultIfEmpty(0)
+            .Max();
+
+        var note = new IdeaNote
+        {
+            Id = $"N{(last + 1).ToString(CultureInfo.InvariantCulture)}",
+            Text = text.Trim(),
+            By = by,
+            AddedUtc = now,
+        };
+
+        record.Notes.Add(note);
+
+        return note;
+    }
+
+    /// <summary>Notes no round has read yet.</summary>
+    public static IReadOnlyList<IdeaNote> Unread(IdeaRecord record)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+
+        return [.. record.Notes.Where(note => note.TakenUtc is null)];
+    }
+
     /// <summary>Questions still waiting on the person.</summary>
     public static IReadOnlyList<IdeaQuestion> Unanswered(IdeaRecord record)
     {
@@ -158,8 +212,8 @@ public static class IdeaWork
 
     /// <summary>
     /// Whether the person has said anything since the plan that the agent has
-    /// not yet seen: a request, something to improve, or answers to questions
-    /// asked after the plan was made.
+    /// not yet seen: a request, something to improve, answers to questions
+    /// asked after the plan was made, or a note no round has read.
     /// </summary>
     /// <remarks>
     /// Keep, drop and a changed choice are not new in this sense. They are the
@@ -171,7 +225,8 @@ public static class IdeaWork
         record.Request.Length > 0
         || plan.Layers.Any(layer => layer.Verdict == IdeaVerdict.Improve)
         || plan.Additions.Any(addition => addition.Verdict == IdeaVerdict.Improve)
-        || record.Rounds.Any(round => round.Revision >= plan.Revision);
+        || record.Rounds.Any(round => round.Revision >= plan.Revision)
+        || record.Notes.Any(note => note.TakenUtc is null);
 
     /// <summary>
     /// Makes a question's recommendation one of its options, so it can be
@@ -253,9 +308,17 @@ public static class IdeaWork
     /// <summary>
     /// Folds an agent's answer into the record: new questions become a round,
     /// a plan replaces the last one, carrying over what the person decided
-    /// about each piece that is still there.
+    /// about each piece that is still there. The notes named in
+    /// <paramref name="seen"/> are marked taken in only when the reply
+    /// carries a plan: a round that only asked questions has not put them in
+    /// a plan, so the next plan round must still be given them as unread.
     /// </summary>
-    public static void Merge(IdeaRecord record, IdeaReply reply, DateTimeOffset now)
+    /// <remarks>
+    /// Only those named, because a round reads the record when it starts and
+    /// its answer lands minutes later. A note added in between was never in
+    /// front of the agent, and marking it taken would lose it.
+    /// </remarks>
+    public static void Merge(IdeaRecord record, IdeaReply reply, DateTimeOffset now, IReadOnlyCollection<string>? seen = null)
     {
         ArgumentNullException.ThrowIfNull(record);
         ArgumentNullException.ThrowIfNull(reply);
@@ -370,6 +433,15 @@ public static class IdeaWork
 
             // Answered by this plan, so no longer outstanding.
             record.Request = string.Empty;
+
+            if (seen is { Count: > 0 })
+            {
+                foreach (var note in record.Notes.Where(note =>
+                             note.TakenUtc is null && seen.Contains(note.Id, StringComparer.OrdinalIgnoreCase)))
+                {
+                    note.TakenUtc = now;
+                }
+            }
         }
 
         ClearFailure(record);
@@ -473,7 +545,7 @@ public static class IdeaWork
 
         return "Revise the plan. Keep what they marked keep as it is, leave out what they dropped, "
             + "rework what they asked to improve as they asked, and apply any request about the "
-            + "whole plan. Keep a layer's name the same where the layer itself is unchanged, so "
+            + "whole plan, and take in anything under What they have added since. Keep a layer's name the same where the layer itself is unchanged, so "
             + "their decisions about it carry over.";
     }
 
@@ -496,6 +568,11 @@ public static class IdeaWork
 
             text.AppendLine();
         }
+
+        // Both, every round: a fresh agent not shown what was taken in last
+        // time would quietly write it out of the next revision.
+        AppendNotes(text, "## What they have added since", record.Notes.Where(note => note.TakenUtc is null));
+        AppendNotes(text, "## What they added earlier", record.Notes.Where(note => note.TakenUtc is not null));
 
         if (record.Plan is not { } plan)
         {
@@ -532,6 +609,29 @@ public static class IdeaWork
 
         text.AppendLine();
     }
+
+    private static void AppendNotes(StringBuilder text, string heading, IEnumerable<IdeaNote> notes)
+    {
+        var listed = notes.ToList();
+
+        if (listed.Count == 0)
+        {
+            return;
+        }
+
+        text.AppendLine(heading);
+        text.AppendLine();
+
+        foreach (var note in listed)
+        {
+            text.AppendLine(CultureInfo.InvariantCulture, $"{note.Id} (by {note.By}, {Day(note.AddedUtc)}): {note.Text}");
+        }
+
+        text.AppendLine();
+    }
+
+    private static string Day(DateTimeOffset utc) =>
+        utc.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
     private static string Said(IdeaVerdict verdict, string request) => verdict switch
     {
@@ -628,6 +728,15 @@ public static class IdeaWork
         text.AppendLine();
         text.AppendLine(record.Ask.Trim());
         text.AppendLine();
+
+        foreach (var note in record.Notes)
+        {
+            text.AppendLine(CultureInfo.InvariantCulture, $"Added later, by {note.By} on {Day(note.AddedUtc)}:");
+            text.AppendLine();
+            text.AppendLine(note.Text);
+            text.AppendLine();
+        }
+
         text.AppendLine("## What it is");
         text.AppendLine();
         text.AppendLine(plan.Understanding);

@@ -105,6 +105,10 @@ internal sealed class IdeaRefiner : IIdeaRefiner
         var record = read.Value!;
         var before = IdeaWork.StageOf(record);
 
+        // The notes this round is shown, taken now: one the person adds while
+        // the agent works was never in its prompt, so it stays unread.
+        var seen = IdeaWork.Unread(record).Select(note => note.Id).ToList();
+
         if (Nothing(request.Place, record, before) is { } reason)
         {
             return OperationResult<RefineOutcome>.Fail(reason, ExitCode.InvalidArguments);
@@ -192,7 +196,7 @@ internal sealed class IdeaRefiner : IIdeaRefiner
             return OperationResult<RefineOutcome>.Fail(round.Answer.Error!, ExitCode.GeneralFailure);
         }
 
-        var recorded = await _ideas.RecordReplyAsync(request.Place, round.Answer.Value!, CancellationToken.None, attempt)
+        var recorded = await _ideas.RecordReplyAsync(request.Place, round.Answer.Value!, CancellationToken.None, attempt, seen)
             .ConfigureAwait(false);
 
         return recorded.Succeeded

@@ -162,6 +162,7 @@ public sealed class IdeaBatchTests : IDisposable
     {
         var place = await ProposedAsync();
         (await _space.Ideas.AnswerAsync(place, "q1", "private")).Succeeded.Should().BeTrue();
+        (await _space.Ideas.AddToAsync(place, "Also on a phone", "nigel")).Succeeded.Should().BeTrue();
         File.SetLastWriteTimeUtc(RecordPath(place), DateTime.UtcNow.AddMinutes(-5));
 
         var first = (await _space.Ideas.ReadAsync(place)).Value!;
@@ -172,6 +173,7 @@ public sealed class IdeaBatchTests : IDisposable
 
         var third = (await _space.Ideas.ReadAsync(place)).Value!;
         third.Plan!.Layers[0].Options[1].Title.Should().Be("Postgres");
+        third.Notes.Should().ContainSingle("the fixture has every field in it, notes too");
         third.Should().BeEquivalentTo(IdeaService.Copy(third), "a copy carries every field");
     }
 

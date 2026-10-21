@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Loadout.Agents;
 using Loadout.Agents.Ideas;
 using Loadout.Core.Ideas;
 using Loadout.Models.Agents;
@@ -243,5 +244,72 @@ public sealed class IdeaRefinerTests : IDisposable
         (await Refiner(launcher, _space.Scratch("r")).RefineAsync(new RefineRequest(place))).Failed.Should().BeTrue();
 
         _space.Locks.Held(place).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task A_note_the_round_was_shown_is_marked_taken()
+    {
+        var idea = (await _space.Ideas.CaptureAsync(null, "A status page", "me")).Value!;
+        var place = new IdeaPlace(null, idea.Id);
+        (await _space.Ideas.AddToAsync(place, "It must also show the backup jobs.", "me")).Succeeded.Should().BeTrue();
+        var launcher = new ScriptedDetachedLauncher(ScriptedDetachedLauncher.Result(APlan));
+
+        var refined = await Refiner(launcher, _space.Scratch("r")).RefineAsync(new RefineRequest(place));
+
+        refined.Succeeded.Should().BeTrue(refined.Error);
+        launcher.Pipe!.Written.ToString().Should().Contain("It must also show the backup jobs.");
+        (await _space.Ideas.ReadAsync(place)).Value!.Notes.Single().TakenUtc.Should().NotBeNull(
+            "the round was shown the note and returned a plan, so it has been taken in");
+    }
+
+    [Fact]
+    public async Task A_note_shown_to_a_round_that_only_asks_questions_stays_unread()
+    {
+        var idea = (await _space.Ideas.CaptureAsync(null, "A status page", "me")).Value!;
+        var place = new IdeaPlace(null, idea.Id);
+        (await _space.Ideas.AddToAsync(place, "It must also show the backup jobs.", "me")).Succeeded.Should().BeTrue();
+        var launcher = new ScriptedDetachedLauncher(ScriptedDetachedLauncher.Result(Questions));
+
+        var refined = await Refiner(launcher, _space.Scratch("r")).RefineAsync(new RefineRequest(place));
+
+        refined.Succeeded.Should().BeTrue(refined.Error);
+        launcher.Pipe!.Written.ToString().Should().Contain("It must also show the backup jobs.");
+        (await _space.Ideas.ReadAsync(place)).Value!.Notes.Single().TakenUtc.Should().BeNull(
+            "no plan has taken it in yet, so the next round must be given it again");
+    }
+
+    [Fact]
+    public async Task A_note_added_while_the_round_runs_stays_unread()
+    {
+        var idea = (await _space.Ideas.CaptureAsync(null, "A status page", "me")).Value!;
+        var place = new IdeaPlace(null, idea.Id);
+        (await _space.Ideas.AddToAsync(place, "Shown to the round.", "me")).Succeeded.Should().BeTrue();
+        var launcher = new AddingWhileRunning(
+            new ScriptedDetachedLauncher(ScriptedDetachedLauncher.Result(APlan)),
+            () => _space.Ideas.AddToAsync(place, "Added while it ran.", "me"));
+
+        var refined = await new IdeaRefiner(_space.Ideas, new FakeProjects("homelab", _space.Scratch("r")), launcher, _space.Paths, _space.Locks)
+            .RefineAsync(new RefineRequest(place));
+
+        refined.Succeeded.Should().BeTrue(refined.Error);
+        var notes = (await _space.Ideas.ReadAsync(place)).Value!.Notes;
+        notes.Single(note => note.Text == "Shown to the round.").TakenUtc.Should().NotBeNull();
+        notes.Single(note => note.Text == "Added while it ran.").TakenUtc.Should().BeNull(
+            "no round has read it yet");
+    }
+
+    /// <summary>A launcher that has the person add a note once the agent has started.</summary>
+    private sealed class AddingWhileRunning(ScriptedDetachedLauncher inner, Func<Task> adding) : IDetachedLauncher
+    {
+        public async Task<Loadout.Models.Results.OperationResult<HeadlessLaunch>> StartAsync(
+            DetachedLaunchRequest request,
+            HeadlessOptions options,
+            CancellationToken ct = default)
+        {
+            var started = await inner.StartAsync(request, options, ct);
+            await adding();
+
+            return started;
+        }
     }
 }

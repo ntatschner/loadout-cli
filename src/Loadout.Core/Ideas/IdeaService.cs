@@ -138,13 +138,37 @@ public interface IIdeaService
 
     /// <summary>
     /// Folds an agent's answer into the record, and remembers the agent and
-    /// model it came from as the next round's default.
+    /// model it came from as the next round's default. The notes named in
+    /// <paramref name="seen"/>, the ones the round was shown, are marked taken
+    /// in; null marks none.
     /// </summary>
     Task<OperationResult<IdeaRecord>> RecordReplyAsync(
         IdeaPlace place,
         IdeaReply reply,
         CancellationToken ct = default,
-        IdeaAttempt? asked = null);
+        IdeaAttempt? asked = null,
+        IReadOnlyCollection<string>? seen = null);
+
+    /// <summary>
+    /// Adds something the person wants the plan to take in, kept verbatim with
+    /// who said it and when, for the next round to read. Refused once the idea
+    /// has been accepted.
+    /// </summary>
+    Task<OperationResult<IdeaRecord>> AddToAsync(
+        IdeaPlace place,
+        string text,
+        string by,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// What <see cref="AddToAsync"/> would make of the record, refused for the
+    /// same reasons, with nothing written. For a dry run.
+    /// </summary>
+    Task<OperationResult<IdeaRecord>> PreviewAddToAsync(
+        IdeaPlace place,
+        string text,
+        string by,
+        CancellationToken ct = default);
 
     /// <summary>
     /// Notes that a round went wrong, and with which agent and model, so the
@@ -589,7 +613,8 @@ internal sealed partial class IdeaService : IIdeaService
         IdeaPlace place,
         IdeaReply reply,
         CancellationToken ct = default,
-        IdeaAttempt? asked = null)
+        IdeaAttempt? asked = null,
+        IReadOnlyCollection<string>? seen = null)
     {
         ArgumentNullException.ThrowIfNull(reply);
 
@@ -613,7 +638,7 @@ internal sealed partial class IdeaService : IIdeaService
 
             var now = _time.GetUtcNow();
 
-            IdeaWork.Merge(record, reply, now);
+            IdeaWork.Merge(record, reply, now, seen);
 
             if (asked is not null)
             {
@@ -623,6 +648,64 @@ internal sealed partial class IdeaService : IIdeaService
             return null;
         }, ct).ConfigureAwait(false);
     }
+
+    /// <inheritdoc />
+    public Task<OperationResult<IdeaRecord>> AddToAsync(
+        IdeaPlace place,
+        string text,
+        string by,
+        CancellationToken ct = default) =>
+        EditAsync(place, [AddNote(place, text, by, _time.GetUtcNow())], null, ct);
+
+    /// <inheritdoc />
+    public async Task<OperationResult<IdeaRecord>> PreviewAddToAsync(
+        IdeaPlace place,
+        string text,
+        string by,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(place);
+
+        var edit = AddNote(place, text, by, _time.GetUtcNow());
+
+        if (edit.Refusal is { } refusal)
+        {
+            return OperationResult<IdeaRecord>.Fail(refusal, ExitCode.InvalidArguments);
+        }
+
+        if (Screened(edit.Screen) is { } screened)
+        {
+            return OperationResult<IdeaRecord>.Fail(screened, ExitCode.PolicyViolation);
+        }
+
+        // ReadAsync hands out a copy, so the change made to it is made to nothing kept.
+        var read = await ReadAsync(place, ct).ConfigureAwait(false);
+
+        if (read.Failed)
+        {
+            return read;
+        }
+
+        return edit.Change(read.Value!) is { } refused
+            ? OperationResult<IdeaRecord>.Fail(refused, ExitCode.InvalidArguments)
+            : read;
+    }
+
+    /// <summary>Adding a note to an idea, verbatim, for the next round to read.</summary>
+    private static IdeaEdit AddNote(IdeaPlace place, string text, string by, DateTimeOffset now) => new(
+        string.IsNullOrWhiteSpace(text) ? "A note needs saying: the text was empty." : null,
+        text,
+        record =>
+        {
+            if (IdeaWork.NoteRefusal(place, record) is { } refused)
+            {
+                return refused;
+            }
+
+            IdeaWork.AddNote(record, text, by, now);
+
+            return null;
+        });
 
     /// <inheritdoc />
     public Task<OperationResult<IdeaRecord>> RecordFailureAsync(
@@ -705,8 +788,8 @@ internal sealed partial class IdeaService : IIdeaService
 
             case IdeaStage.Ready:
                 return OperationResult<IdeaAccepted>.Fail(
-                    $"{place.Id} has changes the plan has not taken in yet: improvements, a request or "
-                    + "new answers. Refine it first, or take the improvements back.",
+                    $"{place.Id} has changes the plan has not taken in yet: improvements, a request, "
+                    + "new answers or something you added. Refine it first, or take the improvements back.",
                     ExitCode.InvalidArguments);
         }
 
