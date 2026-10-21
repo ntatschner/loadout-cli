@@ -878,7 +878,13 @@ Three views of one thing. Each run writes one journal, and all three read it, so
 there is one account of what happened rather than three that can disagree.
 
 - `loadout team status` — where each node got to, what it is doing now, what it
-  cost.
+  cost. Once a run has merged, it also says which branch the work went into
+  and whether that has been pushed. A run never pushes, so straight after one
+  the answer is no, and the next step is yours: push the branch, or move the
+  work onto a branch of its own and open a pull request. It checks against
+  what git last fetched and never touches the network, so a change that
+  reached the remote by a squash-merged pull request still reads as not
+  pushed.
 - `loadout dashboard` — a page on this machine, live, at a loopback address
   you sign in to (see below). It watches and it acts: starting a
   team, answering a gate, holding a run, stopping one, renaming its room,

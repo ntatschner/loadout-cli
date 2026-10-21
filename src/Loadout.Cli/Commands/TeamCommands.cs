@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using Loadout.Agents.Teams;
 using Loadout.Cli.Infrastructure;
+using Loadout.Core.Git;
 using Loadout.Core.Instructions;
 using Loadout.Core.Projects;
 using Loadout.Core.Teams;
@@ -531,12 +532,14 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
     private readonly IRunJournal _journal;
     private readonly IAnsiConsole _console;
     private readonly TimeProvider _time;
+    private readonly IGitManager _git;
 
-    public TeamStatusCommand(IRunJournal journal, IAnsiConsole console, TimeProvider time)
+    public TeamStatusCommand(IRunJournal journal, IAnsiConsole console, TimeProvider time, IGitManager git)
     {
         _journal = journal;
         _console = console;
         _time = time;
+        _git = git;
     }
 
     public sealed class Settings : GlobalSettings
@@ -547,7 +550,7 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
     }
 
     /// <inheritdoc />
-    public override Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -560,16 +563,16 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
 
         if (runId is null)
         {
-            return Task.FromResult(output.Fail(
+            return output.Fail(
                 "No team has run on this machine yet. Start one with: loadout team run <team> \"<goal>\"",
-                ExitCode.ProjectNotFound));
+                ExitCode.ProjectNotFound);
         }
 
         var read = _journal.Summarise(runId);
 
         if (read.Failed)
         {
-            return Task.FromResult(output.Fail(read));
+            return output.Fail(read);
         }
 
         var run = read.Value!;
@@ -580,6 +583,8 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
         // already has; nothing new is recorded to make this work.
         var events = _journal.Read(run.RunId);
         var behind = RunLeftBehind.In(run.Directory, events.Failed ? [] : events.Value!);
+        var landing = await RunLanding.OfAsync(run, events.Failed ? [] : events.Value!, _git, cancellationToken)
+            .ConfigureAwait(false);
 
         if (output.IsJson)
         {
@@ -623,6 +628,15 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
                 }),
                 run.Branches,
                 run.Merged,
+                landing = landing is null ? null : new
+                {
+                    landing.Target,
+                    landing.Branches,
+                    landing.Commit,
+                    landing.Repository,
+                    landing.Standing?.Upstream,
+                    pushed = landing.Standing?.Pushed,
+                },
                 run.GoalUnderstood,
                 coverage = run.Coverage.Select(one => new
                 {
@@ -671,7 +685,7 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
                 unreadableReports = behind.Unreadable,
             });
 
-            return Task.FromResult(CommandOutput.Success());
+            return CommandOutput.Success();
         }
 
         output.WriteLine(
@@ -742,6 +756,18 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
             output.WriteLine(
                 $"  [dim]at this rate, up to {Elapsed(left)} more if it uses all "
                 + $"{run.RoundLimit} rounds[/]");
+        }
+
+        // Where the work went, under what it achieved and above who did it,
+        // because once a run is done this is the next thing anybody asks.
+        if (landing is not null)
+        {
+            output.WriteBlankLine();
+
+            foreach (var line in Landed(landing))
+            {
+                output.WriteLine(line);
+            }
         }
 
         output.WriteBlankLine();
@@ -886,7 +912,56 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
         output.WriteLine($"[dim]journal: {Markup.Escape(Path.Combine(run.Directory, "journal.jsonl"))}[/]");
         output.WriteLine($"[dim]Read it with:[/] loadout team log {Markup.Escape(run.RunId)}");
 
-        return Task.FromResult(CommandOutput.Success());
+        return CommandOutput.Success();
+    }
+
+    /// <summary>
+    /// Where a run's work went, whether it has left this machine, and what to
+    /// do about it when it has not.
+    /// </summary>
+    /// <remarks>
+    /// A run never pushes, so "merged" on its own reads as finished when the
+    /// work is still somewhere only this machine can see.
+    /// </remarks>
+    internal static IReadOnlyList<string> Landed(Landing landing)
+    {
+        var count = landing.Branches.Count == 1 ? "1 branch" : $"{landing.Branches.Count} branches";
+        var target = Markup.Escape(landing.Target);
+        var lines = new List<string>
+        {
+            $"  [bold]landed[/]  merged {count} into {target}"
+                + (landing.Repository is { Length: > 0 } at ? $" [dim]in {Markup.Escape(at)}[/]" : string.Empty),
+        };
+
+        var commit = landing.Commit is { Length: > 7 } full ? full[..7] : landing.Commit;
+        var next = $"    [dim]next: push {target}, or put it on a branch of its own and open a pull request[/]";
+
+        switch (landing.Standing)
+        {
+            case { Pushed: true, Upstream: { } upstream }:
+                lines.Add($"    [green]pushed[/]  {Markup.Escape(commit!)} is on {Markup.Escape(upstream)}");
+                break;
+
+            case { Upstream: { } upstream }:
+                lines.Add(
+                    $"    [yellow]not pushed[/]  {Markup.Escape(commit!)} is not on {Markup.Escape(upstream)} "
+                    + "yet, so only this machine has it");
+                lines.Add(next);
+                break;
+
+            case { Upstream: null }:
+                lines.Add($"    [yellow]not pushed[/]  {target} has no upstream, so only this machine has it");
+                lines.Add(next);
+                break;
+
+            default:
+                // An older journal, or a repository that has moved: what is
+                // still true is that a run does not push.
+                lines.Add($"    [dim]a run never pushes, so this is only on this machine until {target} is pushed[/]");
+                break;
+        }
+
+        return lines;
     }
 
     /// <summary>

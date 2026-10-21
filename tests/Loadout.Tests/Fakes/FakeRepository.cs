@@ -186,6 +186,14 @@ public sealed class FakeGit : IGitManager
     public Task<OperationResult> PushAsync(string repositoryPath, CancellationToken ct = default) =>
         throw new NotSupportedException("a team run pushes nothing");
 
+    /// <summary>What each "branch@commit" has reached; anything not here has no upstream.</summary>
+    public Dictionary<string, GitPushStanding> Pushes { get; } = new(StringComparer.Ordinal);
+
+    public Task<OperationResult<GitPushStanding>> GetPushStandingAsync(
+        string repositoryPath, string branch, string commit, CancellationToken ct = default) =>
+        Task.FromResult(OperationResult<GitPushStanding>.Ok(
+            Pushes.TryGetValue($"{branch}@{commit}", out var standing) ? standing : new GitPushStanding(null, false)));
+
     /// <summary>What each file holds at each revision here, by "revision:path".</summary>
     public Dictionary<string, byte[]> Blobs { get; } = new(StringComparer.Ordinal);
 

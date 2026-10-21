@@ -25,6 +25,11 @@ public sealed record GitRepositoryState(
 /// <param name="Conflicts">Paths git could not merge, when it could not. Empty otherwise.</param>
 public sealed record GitMerge(bool Merged, bool FastForward, IReadOnlyList<string> Conflicts);
 
+/// <summary>Whether a commit on a branch has reached that branch's upstream.</summary>
+/// <param name="Upstream">The upstream, such as <c>origin/main</c>, or null when the branch has none.</param>
+/// <param name="Pushed">Whether the commit is on the upstream, as of the last fetch.</param>
+public sealed record GitPushStanding(string? Upstream, bool Pushed);
+
 /// <summary>A linked working tree (spec section 71).</summary>
 /// <param name="Path">Absolute path to the worktree.</param>
 /// <param name="Branch">Branch checked out there, or null when detached.</param>
@@ -257,6 +262,24 @@ public interface IGitManager
 
     /// <summary>Pushes the current branch to its upstream.</summary>
     Task<OperationResult> PushAsync(string repositoryPath, CancellationToken ct = default);
+
+    /// <summary>
+    /// Whether a commit has reached the upstream of the branch it is on.
+    /// </summary>
+    /// <param name="repositoryPath">Any working tree of the repository.</param>
+    /// <param name="branch">The branch whose upstream to look at.</param>
+    /// <param name="commit">The commit to look for there.</param>
+    /// <param name="ct">Cancellation.</param>
+    /// <remarks>
+    /// Read from the remote-tracking branch, so nothing reaches the network
+    /// and the answer is as fresh as the last fetch. A commit that is not
+    /// there may still have arrived another way, such as a squash merge.
+    /// </remarks>
+    Task<OperationResult<GitPushStanding>> GetPushStandingAsync(
+        string repositoryPath,
+        string branch,
+        string commit,
+        CancellationToken ct = default);
 
     /// <summary>
     /// Commit messages in full, with the hash each belongs to, newest first.

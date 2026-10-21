@@ -724,6 +724,47 @@ internal sealed class GitManager : IGitManager
     }
 
     /// <inheritdoc />
+    public async Task<OperationResult<GitPushStanding>> GetPushStandingAsync(
+        string repositoryPath,
+        string branch,
+        string commit,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(repositoryPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(branch);
+        ArgumentException.ThrowIfNullOrWhiteSpace(commit);
+
+        // git fails this when the branch tracks nothing, which is an answer
+        // rather than an error: nothing on it has been pushed anywhere.
+        var upstream = await RunAsync(
+            repositoryPath,
+            ["rev-parse", "--abbrev-ref", "--symbolic-full-name", branch + "@{upstream}"],
+            LocalOperationTimeout,
+            ct).ConfigureAwait(false);
+
+        if (upstream.Failed || upstream.Value!.Trim() is not { Length: > 0 } tracked)
+        {
+            return OperationResult<GitPushStanding>.Ok(new GitPushStanding(null, false));
+        }
+
+        var full = await ResolveAsync(repositoryPath, commit, ct).ConfigureAwait(false);
+
+        if (full.Failed)
+        {
+            return OperationResult<GitPushStanding>.Fail(full.Error!, full.ExitCode);
+        }
+
+        // merge-base rather than --is-ancestor: the answer is in what it
+        // prints, not in an exit code of 1 that every other failure shares.
+        var common = await RunAsync(
+            repositoryPath, ["merge-base", full.Value!, tracked], LocalOperationTimeout, ct).ConfigureAwait(false);
+
+        return OperationResult<GitPushStanding>.Ok(new GitPushStanding(
+            tracked,
+            common.Succeeded && string.Equals(common.Value!.Trim(), full.Value, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    /// <inheritdoc />
     public async Task<OperationResult> PushAsync(string repositoryPath, CancellationToken ct = default)
     {
         var result = await RunAsync(repositoryPath, ["push"], TimeSpan.FromMinutes(5), ct)
