@@ -523,16 +523,12 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             }
         }
 
-        _notices = new Notices(_secrets, _client);
-
         var kept = (await _configuration.LoadMachineAsync(cancellationToken).ConfigureAwait(false)).Value?.Teams.EventsDays;
 
         _watch = new Loadout.Core.Events.EventWatch(events, _journal, _sessions, _time);
         _watch.Start(Loadout.Core.Events.EventStore.Days(kept));
 
-        _sendTo = await _notices.AddressAsync(cancellationToken).ConfigureAwait(false);
-
-        if (_sendTo is { Length: > 0 })
+        if (await TellingAsync(cancellationToken).ConfigureAwait(false) is { Length: > 0 })
         {
             var where = (await _configuration.LoadMachineAsync(cancellationToken).ConfigureAwait(false))
                 .Value?.Teams.NotifyKind;
@@ -568,14 +564,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         var watching = WatchAsync(stopping, output);
         var recording = _watch?.WatchAsync(stopping.Token) ?? Task.CompletedTask;
 
-        try
-        {
-            await FireAsync(output, stopping.Token).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            // Asked to stop, which is how this ends.
-        }
+        await LoopsAsync(output, stopping.Token).ConfigureAwait(false);
 
         await stopping.CancelAsync().ConfigureAwait(false);
 
@@ -1283,13 +1272,77 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         CancellationToken ct) =>
         DashboardActions.RanAsync(_commands, _time, action, output, ct);
 
+    /// <summary>How often notices are looked for; a test shortens it.</summary>
+    internal TimeSpan NoticeEvery { get; init; } = Interval;
+
+    /// <summary>
+    /// Readies the notices and reads where they go, which is null when nowhere.
+    /// </summary>
+    internal async Task<string?> TellingAsync(CancellationToken ct)
+    {
+        _notices = new Notices(_secrets, _client);
+        _sendTo = await _notices.AddressAsync(ct).ConfigureAwait(false);
+
+        return _sendTo;
+    }
+
+    /// <summary>
+    /// The schedules, and beside them the notices, until told to stop.
+    /// </summary>
+    /// <remarks>
+    /// The notices had been on the schedules' loop, which waits for each
+    /// scheduled run to end. So while one was going nothing was sent, and the
+    /// run going is the one most likely to be asking something: its question
+    /// reached Slack when it had finished, by which time nobody could answer
+    /// it. On a loop of their own, as the event history is, they go out within
+    /// a minute whatever the schedules are waiting on.
+    /// </remarks>
+    internal async Task LoopsAsync(CommandOutput output, CancellationToken ct)
+    {
+        // Its own token as well as the daemon's, so a schedule loop that ends
+        // by throwing does not leave this waiting on a loop that never stops.
+        using var ending = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var noticing = NoticingAsync(output, ending.Token);
+
+        try
+        {
+            await FireAsync(output, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Asked to stop, which is how this ends.
+        }
+        finally
+        {
+            await ending.CancelAsync().ConfigureAwait(false);
+            await noticing.ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Says what is newly worth saying, every so often, until told to stop.</summary>
+    private async Task NoticingAsync(CommandOutput output, CancellationToken ct)
+    {
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                await NoticeAsync(output, _sendTo, ct).ConfigureAwait(false);
+                await Task.Delay(NoticeEvery, _time, ct).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Stopping, which is how this ends.
+        }
+    }
+
     /// <summary>
     /// Says out loud, somewhere else, anything newly worth saying.
     /// </summary>
     /// <remarks>
-    /// On the same loop as the schedules rather than a second one: a run that
-    /// wants somebody is not more urgent than a minute, and a second timer
-    /// would be a second thing to reason about when one of them stops.
+    /// Only ever from <see cref="NoticingAsync"/>, one pass at a time, which
+    /// <see cref="Notices"/> relies on: what it has said is kept in a field
+    /// it replaces at the end of each pass.
     /// </remarks>
     private async Task NoticeAsync(CommandOutput output, string? address, CancellationToken ct)
     {
@@ -1334,8 +1387,8 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     /// </summary>
     /// <remarks>
     /// <para>
-    /// On the loop that already runs, for the reason notices are: a second
-    /// timer is a second thing to reason about when one of them stops. Hourly
+    /// On the schedules' loop, so it waits while a scheduled run goes, which
+    /// costs nothing when retention is counted in days. Hourly
     /// rather than every pass, because retention is counted in days and
     /// reading every entry's record sixty times an hour would learn nothing
     /// new fifty-nine times.
@@ -1406,7 +1459,6 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     {
         while (!ct.IsCancellationRequested)
         {
-            await NoticeAsync(output, _sendTo, ct).ConfigureAwait(false);
             await EmptyBinAsync(output, ct).ConfigureAwait(false);
 
             var now = _time.GetUtcNow();
