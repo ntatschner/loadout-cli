@@ -4,26 +4,6 @@ kind: role
 mode: coordinate
 deliverable: answer
 contract: report/1
-tools:
-  allowed:
-    - 'Read'
-    - 'Grep'
-    - 'Glob'
-    - 'Bash(git diff:*)'
-    - 'Bash(git log:*)'
-    - 'Bash(git status:*)'
-    - 'Bash(git show:*)'
-  denied:
-    - 'Edit'
-    - 'Write'
-    - 'MultiEdit'
-    - 'Bash(git push:*)'
-    - 'Bash(git rebase:*)'
-    - 'Bash(git reset:*)'
-    - 'Bash(git commit --amend:*)'
-    - 'Bash(git branch -D:*)'
-    - 'Bash(git tag -d:*)'
-    - 'Bash(git push --force:*)'
 title: Executive lead
 summary: Splits a company-level goal across department leads, reconciles what they report, and answers to the user.
 requires:

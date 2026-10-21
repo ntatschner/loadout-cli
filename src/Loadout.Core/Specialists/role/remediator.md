@@ -5,6 +5,7 @@ mode: implement
 deliverable: answer
 contract: report/1
 tools:
+  defaults: false
   allowed:
     - 'Read'
     - 'Grep'
@@ -19,6 +20,9 @@ tools:
     - 'Bash(sh:*)'
     - 'Bash(python:*)'
   denied:
+    - 'Edit'
+    - 'Write'
+    - 'MultiEdit'
     - 'Bash(git push:*)'
     - 'Bash(git rebase:*)'
     - 'Bash(git reset:*)'

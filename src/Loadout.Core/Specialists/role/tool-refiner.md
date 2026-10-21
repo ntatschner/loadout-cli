@@ -5,6 +5,7 @@ mode: implement
 deliverable: file
 contract: report/1
 tools:
+  defaults: false
   allowed:
     - 'Read'
     - 'Grep'

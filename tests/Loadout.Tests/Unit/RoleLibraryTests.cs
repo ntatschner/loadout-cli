@@ -110,6 +110,13 @@ public sealed class RoleLibraryTests
     [InlineData("role.verifier", "cd \"C:/trees/one\" && dotnet test Loadout.slnx --no-build 2>&1 | tail -15; echo \"EXIT ${PIPESTATUS[0]}\"")]
     [InlineData("role.reviewer", "dotnet test tests/Loadout.Tests --filter \"FullyQualifiedName~Tool\" 2>&1 | tail -15; echo \"exit ${PIPESTATUS[0]}\"")]
     [InlineData("role.implementer", "git status --short; echo \"status-exit=$?\"")]
+
+    // Roles whose probes look for a run they could not make, until every role
+    // took its tools from its posture rather than from a hand copy.
+    [InlineData("role.fixer", "dotnet test --filter \"FullyQualifiedName~Repro\"")]
+    [InlineData("role.reproducer", "dotnet test 2>&1 | tail -20")]
+    [InlineData("role.regression-tester", "git stash && dotnet test; git stash pop")]
+    [InlineData("role.release-validator", "dotnet test Loadout.slnx -c Release")]
     public async Task The_roles_that_prove_a_change_may_build_and_test_it(string id, string command)
     {
         // Run 20260923-1216-be60 stopped here: the implementer's own probe
@@ -187,6 +194,47 @@ public sealed class RoleLibraryTests
             var writes = role.Id is not ("role.reviewer" or "role.verifier");
             Allowed("mcp__loadout__loadout_tools_submit").Should().Be(writes, role.Id);
             Allowed("mcp__loadout__loadout_tools_used").Should().Be(writes, role.Id);
+        }
+    }
+
+    [Fact]
+    public async Task The_tagger_cannot_push_and_the_remediator_cannot_edit()
+    {
+        // The two gaps the hand copies left. The tagger's brief says it pushes
+        // nothing unasked, and was the one role with no deny for it; the
+        // remediator's says it has no Write and no Edit "on purpose", and
+        // its list denied neither.
+        //
+        // The deny list, not the gate's answer: the gate refuses what nothing
+        // allows either way, but only a denied tool reaches the agent as
+        // --disallowed-tools, and an implementing node runs in acceptEdits,
+        // where an edit nothing denies is accepted without being asked about.
+        var library = await LibraryAsync();
+        var tagger = library.Find("role.tagger")!.Role!;
+        var remediator = library.Find("role.remediator")!.Role!;
+
+        tagger.DeniedTools.Should().Contain("Bash(git push:*)");
+        tagger.AllowedTools.Should().Contain("Bash(git tag:*)");
+        remediator.DeniedTools.Should().Contain(["Edit", "Write", "MultiEdit"]);
+    }
+
+    [Theory]
+    [InlineData("role.tool-creator")]
+    [InlineData("role.tool-refiner")]
+    [InlineData("role.remediator")]
+    public async Task The_roles_guarding_the_catalogue_and_the_remedies_take_no_defaults(string id)
+    {
+        // A shell command is not held to the directories the agent is given,
+        // so cat or echo with a > could write the catalogue's verify records.
+        // These roles' lists are the whole of what they may do.
+        var role = (await LibraryAsync()).Find(id)!.Role!;
+        var policy = new Loadout.Core.Teams.NodePolicy("run", "node", id, role.AllowedTools, role.DeniedTools);
+
+        foreach (var command in new[] { "cat notes.md", "echo x", "dotnet test" })
+        {
+            Loadout.Core.Teams.NodePermissions
+                .Decide(policy, "Bash", $$"""{"command":{{System.Text.Json.JsonSerializer.Serialize(command)}}}""")
+                .Allowed.Should().BeFalse($"{id} must not be given '{command}' by its posture");
         }
     }
 

@@ -6,26 +6,9 @@ deliverable: decision
 contract: report/1
 tools:
   allowed:
-    - 'Read'
-    - 'Grep'
-    - 'Glob'
-    - 'Bash(git diff:*)'
-    - 'Bash(git log:*)'
-    - 'Bash(git status:*)'
-    - 'Bash(git show:*)'
     - 'Bash(git stash:*)'
     - 'Bash(git checkout:*)'
     - 'Bash(git restore:*)'
-  denied:
-    - 'Bash(git add:*)'
-    - 'Bash(git commit:*)'
-    - 'Bash(git push:*)'
-    - 'Bash(git rebase:*)'
-    - 'Bash(git reset:*)'
-    - 'Bash(git commit --amend:*)'
-    - 'Bash(git branch -D:*)'
-    - 'Bash(git tag -d:*)'
-    - 'Bash(git push --force:*)'
 title: Regression tester
 summary: Proves the fix holds by breaking it, and proves the new test would catch it.
 requires:

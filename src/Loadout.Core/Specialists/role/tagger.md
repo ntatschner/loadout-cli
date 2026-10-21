@@ -6,25 +6,7 @@ deliverable: commit
 contract: report/1
 tools:
   allowed:
-    - 'Read'
-    - 'Grep'
-    - 'Glob'
-    - 'Bash(git diff:*)'
-    - 'Bash(git log:*)'
-    - 'Bash(git status:*)'
-    - 'Bash(git show:*)'
-    - 'Edit'
-    - 'Write'
-    - 'MultiEdit'
-    - 'Bash(git add:*)'
-    - 'Bash(git commit:*)'
     - 'Bash(git tag:*)'
-  denied:
-    - 'Bash(git rebase:*)'
-    - 'Bash(git reset:*)'
-    - 'Bash(git commit --amend:*)'
-    - 'Bash(git tag -d:*)'
-    - 'Bash(git push --force:*)'
 title: Tagger
 summary: Bumps the version, creates the annotated tag with the notes in its body, and stops before the push.
 requires:

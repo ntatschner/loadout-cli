@@ -4,44 +4,6 @@ kind: role
 mode: review
 deliverable: decision
 contract: report/1
-tools:
-  allowed:
-    - 'Read'
-    - 'Grep'
-    - 'Glob'
-    - 'Bash(git diff:*)'
-    - 'Bash(git log:*)'
-    - 'Bash(git status:*)'
-    - 'Bash(git show:*)'
-    - 'Bash(git rev-parse:*)'
-    - 'Bash(git worktree list:*)'
-    - 'Bash(dotnet --version)'
-    - 'Bash(dotnet --info)'
-    - 'Bash(pwd)'
-    - 'Bash(ls)'
-    - 'Bash(ls :*)'
-    - 'Bash(cat :*)'
-    - 'Bash(head :*)'
-    - 'Bash(tail :*)'
-    - 'Bash(wc :*)'
-    - 'Bash(grep :*)'
-    - 'Bash(echo)'
-    - 'Bash(echo :*)'
-    - 'Bash(dotnet build:*)'
-    - 'Bash(dotnet test:*)'
-  denied:
-    - 'Edit'
-    - 'Write'
-    - 'MultiEdit'
-    - 'Bash(git add:*)'
-    - 'Bash(git commit:*)'
-    - 'Bash(git push:*)'
-    - 'Bash(git rebase:*)'
-    - 'Bash(git reset:*)'
-    - 'Bash(git commit --amend:*)'
-    - 'Bash(git branch -D:*)'
-    - 'Bash(git tag -d:*)'
-    - 'Bash(git push --force:*)'
 title: Reviewer
 summary: Judges a change as written against its brief; reports findings and never rewrites.
 requires:

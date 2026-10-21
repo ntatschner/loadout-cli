@@ -6,26 +6,9 @@ deliverable: answer
 contract: report/1
 tools:
   allowed:
-    - 'Read'
-    - 'Grep'
-    - 'Glob'
-    - 'Bash(git diff:*)'
-    - 'Bash(git log:*)'
-    - 'Bash(git status:*)'
-    - 'Bash(git show:*)'
     - 'Edit'
     - 'Write'
     - 'MultiEdit'
-  denied:
-    - 'Bash(git add:*)'
-    - 'Bash(git commit:*)'
-    - 'Bash(git push:*)'
-    - 'Bash(git rebase:*)'
-    - 'Bash(git reset:*)'
-    - 'Bash(git commit --amend:*)'
-    - 'Bash(git branch -D:*)'
-    - 'Bash(git tag -d:*)'
-    - 'Bash(git push --force:*)'
 title: Investigator
 summary: Finds the cause of a reproduced failure and proves it, without changing the fix in.
 requires:

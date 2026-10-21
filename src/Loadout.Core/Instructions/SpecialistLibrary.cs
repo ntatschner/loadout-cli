@@ -502,14 +502,31 @@ internal sealed partial class SpecialistLibrary : ISpecialistLibrary
 
             // Only a role carries these; on anything else they are ignored
             // the way every unknown frontmatter key is.
-            kind == SpecialistKind.Role
-                ? new RoleDefinition(
-                    Blank(front.Mode),
-                    Blank(front.Deliverable),
-                    Blank(front.Contract),
-                    front.Tools?.Allowed ?? [],
-                    front.Tools?.Denied ?? [])
-                : null));
+            kind == SpecialistKind.Role ? Role(front) : null));
+    }
+
+    /// <summary>
+    /// A role's frontmatter as the coordinator reads it, with its posture's
+    /// tools laid under its own.
+    /// </summary>
+    /// <remarks>
+    /// Composed here, once, so that everything reading a role - the run, the
+    /// catalogue's checks, the tests - sees the lists a node is actually given.
+    /// A role that says <c>defaults: false</c> under <c>tools</c> gets exactly
+    /// what it lists, which is how the roles guarding the tool catalogue and
+    /// the remedies keep lists narrower than any posture's.
+    /// </remarks>
+    private static RoleDefinition Role(SpecialistFront front)
+    {
+        var mode = Blank(front.Mode);
+        var deliverable = Blank(front.Deliverable);
+        var (allowed, denied) = RoleTools.Compose(
+            front.Tools is { Defaults: false } ? null : mode,
+            deliverable,
+            front.Tools?.Allowed ?? [],
+            front.Tools?.Denied ?? []);
+
+        return new RoleDefinition(mode, deliverable, Blank(front.Contract), allowed, denied);
     }
 
     private static string? Blank(string? value) =>
@@ -569,6 +586,12 @@ internal sealed partial class SpecialistLibrary : ISpecialistLibrary
         public List<string> Allowed { get; set; } = [];
 
         public List<string> Denied { get; set; } = [];
+
+        /// <summary>
+        /// Whether the role's posture lays its defaults under these lists.
+        /// False for a role whose lists are the whole of what it may do.
+        /// </summary>
+        public bool Defaults { get; set; } = true;
     }
 
     /// <summary>A probe as written, before it is checked.</summary>

@@ -4,28 +4,6 @@ kind: role
 mode: implement
 deliverable: commit
 contract: report/1
-tools:
-  allowed:
-    - 'Read'
-    - 'Grep'
-    - 'Glob'
-    - 'Bash(git diff:*)'
-    - 'Bash(git log:*)'
-    - 'Bash(git status:*)'
-    - 'Bash(git show:*)'
-    - 'Edit'
-    - 'Write'
-    - 'MultiEdit'
-    - 'Bash(git add:*)'
-    - 'Bash(git commit:*)'
-  denied:
-    - 'Bash(git push:*)'
-    - 'Bash(git rebase:*)'
-    - 'Bash(git reset:*)'
-    - 'Bash(git commit --amend:*)'
-    - 'Bash(git branch -D:*)'
-    - 'Bash(git tag -d:*)'
-    - 'Bash(git push --force:*)'
 title: Documentation writer
 summary: Fixes documentation findings in the register the docs already use, and commits them.
 requires:
