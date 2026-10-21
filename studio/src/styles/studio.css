@@ -283,14 +283,18 @@ main.page:has(> .ls-session:not(.lost)) > .ls-session { flex: 1 1 auto; min-heig
 
 /* ---------- Modes: the bar at the top of every mode, and the layout each one gives the page ---------- */
 :root { --ls-focus-top: 57px; }
-#modebar { position: fixed; top: 0; left: var(--rail-width); right: 0; z-index: 35; padding: 0 max(28px, env(safe-area-inset-right, 0px)) 0 28px; background: color-mix(in srgb, var(--ground) 90%, transparent); backdrop-filter: blur(8px); box-shadow: inset 0 -1px 0 var(--rule); transition: left var(--dur-travel) var(--ease-travel); }
+#modebar { position: fixed; top: 0; left: var(--rail-width); right: 0; z-index: var(--z-modebar); padding: 0 max(28px, env(safe-area-inset-right, 0px)) 0 28px; background: color-mix(in srgb, var(--ground) 90%, transparent); backdrop-filter: blur(8px); box-shadow: inset 0 -1px 0 var(--rule); transition: left var(--dur-travel) var(--ease-travel); }
 .page { padding-top: 76px; }
-.ls-railnav { view-transition-name: ls-rail; transition: transform var(--dur-travel) var(--ease-travel), width var(--dur-base) var(--ease-out), box-shadow var(--dur-base); }
-@media (max-width: 599px) { #modebar { left: 0; padding-left: 52px; padding-right: 12px; } [data-mode="minimal"] #modebar { padding-left: 12px; } [data-mode="minimal"] .page { padding-left: 16px; padding-right: 16px; } }
+/* The rail keeps its open layer until it has finished narrowing, so its labels never slide under the bar. */
+.ls-railnav { view-transition-name: ls-rail; transition: transform var(--dur-travel) var(--ease-travel), width var(--dur-base) var(--ease-out), box-shadow var(--dur-base), z-index 0s var(--dur-base); }
+/* Focus view starts where the page does: beside the rail, at the left edge below 600px with the Pages tab clear of its header, and at the left edge in Minimal. */
+@media (max-width: 599px) { #modebar { left: 0; padding-left: 52px; padding-right: 12px; } [data-mode="minimal"] #modebar { padding-left: 12px; } [data-mode="minimal"] .page { padding-left: 16px; padding-right: 16px; } .ls-focus { left: 0; } .ls-focus .fhead { padding-left: max(52px, env(safe-area-inset-left, 0px)); } }
 /* Minimal: the rail slides away but stays in the page, so its view transition has somewhere to go. */
 [data-mode="minimal"] .ls-railnav, [data-mode="minimal"] .ls-pagestab { transform: translateX(-120%); visibility: hidden; transition: transform var(--dur-travel) var(--ease-travel), visibility 0s var(--dur-travel); }
 [data-mode="minimal"] #modebar { left: 0; padding-left: max(28px, env(safe-area-inset-left, 0px)); background: transparent; backdrop-filter: none; box-shadow: none; }
 [data-mode="minimal"] .page { padding-left: max(28px, env(safe-area-inset-left, 0px)); }
+[data-mode="minimal"] .ls-focus { left: 0; }
+[data-mode="minimal"] .ls-focus .fhead { padding-left: max(20px, env(safe-area-inset-left, 0px)); }
 [data-mode="minimal"] .quietwrap { max-width: 760px; margin: 6vh auto 0; }
 .quietnone { color: var(--muted); }
 /* Terminals: the deck takes the page's full height. */

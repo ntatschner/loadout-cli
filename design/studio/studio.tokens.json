@@ -1146,6 +1146,64 @@
       "$description": "What is less urgent recedes to this when something needs you, and an idle signal dims to it. Dark only: text there stays 4.5:1 or better. In Light and both high-contrast themes nothing fades (a fade would break contrast), so the rise alone carries urgency."
     }
   },
+  "layer": {
+    "z-page": {
+      "$type": "number",
+      "$value": 10,
+      "$description": "Things that float over the page itself but belong to it: a popover from a picker, the Next chip, a command line's suggestions."
+    },
+    "z-rail": {
+      "$type": "number",
+      "$value": 20,
+      "$description": "The side rail at rest, and the Pages tab below 600px."
+    },
+    "z-modebar": {
+      "$type": "number",
+      "$value": 30,
+      "$description": "The mode bar across the top."
+    },
+    "z-focus": {
+      "$type": "number",
+      "$value": 40,
+      "$description": "Focus view, which starts below the mode bar and beside the rail."
+    },
+    "z-rail-open": {
+      "$type": "number",
+      "$value": 50,
+      "$description": "The rail while it is widened, and the Pages slide-in with its dim. It draws over the mode bar and Focus view, which its dim covers like the rest of the page."
+    },
+    "z-menu": {
+      "$type": "number",
+      "$value": 55,
+      "$description": "A menu opened from something on the page, such as a terminal tab's menu."
+    },
+    "z-scrim": {
+      "$type": "number",
+      "$value": 60,
+      "$description": "The dim behind a dialog."
+    },
+    "z-dialog": {
+      "$type": "number",
+      "$value": 61,
+      "$description": "A dialog, over its dim and over an open rail."
+    },
+    "z-toast": {
+      "$type": "number",
+      "$value": 70,
+      "$description": "Toasts, over everything a person works in, dialogs included."
+    },
+    "z-skip": {
+      "$type": "number",
+      "$value": 80,
+      "$description": "The skip link, when it has focus."
+    },
+    "z-ambient": {
+      "$type": "number",
+      "$value": 90,
+      "$description": "Ambient view, which covers the whole screen."
+    },
+    "$description": "The order of Studio's page-level layers, from the bottom up. Every z-index on something fixed to the screen, or on something that can overlap another region of it, uses one of these; a bare number is only for stacking inside one component, such as a badge over its card."
+  },
   "font": {
     "family": {
       "sans": {
