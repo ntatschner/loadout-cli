@@ -383,4 +383,44 @@ public sealed class GitMergeTests : IAsyncLifetime
         read.Failed.Should().BeTrue();
         read.ExitCode.Should().Be(Loadout.Models.ExitCode.InvalidArguments);
     }
+
+    [Fact]
+    public async Task A_branch_with_no_upstream_has_pushed_nothing()
+    {
+        var head = (await GitAsync("rev-parse", "HEAD")).Trim();
+
+        var standing = await _git.GetPushStandingAsync(_repository, "main", head);
+
+        standing.Succeeded.Should().BeTrue(standing.Error);
+        standing.Value.Should().Be(new GitPushStanding(null, Pushed: false));
+    }
+
+    [Fact]
+    public async Task A_commit_is_pushed_once_its_upstream_has_it_and_not_before()
+    {
+        // What a run's merge looks like afterwards: a commit on main that the
+        // remote has not seen, until somebody pushes.
+        var remote = Path.Combine(_root, "remote.git");
+        var made = await _processes.RunAsync(
+            new ProcessRequest("git", ["init", "--bare", "-b", "main", remote], _root), TimeSpan.FromSeconds(60));
+        made.Succeeded.Should().BeTrue(made.Error);
+
+        await GitAsync("remote", "add", "origin", remote);
+        await GitAsync("push", "-u", "origin", "main");
+
+        var pushed = (await GitAsync("rev-parse", "HEAD")).Trim();
+
+        await GitAsync("commit", "--allow-empty", "--message", "merged by a run");
+        var merged = (await GitAsync("rev-parse", "HEAD")).Trim();
+
+        (await _git.GetPushStandingAsync(_repository, "main", pushed)).Value
+            .Should().Be(new GitPushStanding("origin/main", Pushed: true));
+        (await _git.GetPushStandingAsync(_repository, "main", merged)).Value
+            .Should().Be(new GitPushStanding("origin/main", Pushed: false));
+
+        await GitAsync("push");
+
+        (await _git.GetPushStandingAsync(_repository, "main", merged[..7])).Value
+            .Should().Be(new GitPushStanding("origin/main", Pushed: true), "a short hash is resolved before comparing");
+    }
 }

@@ -240,8 +240,19 @@ internal sealed class MergeStep
 
             merged.Add(branch);
 
-            await journal.WriteAsync("merge.done", node, new { branch, target, result.Value!.FastForward }, ct)
-                .ConfigureAwait(false);
+            // What the target now points at, so that whoever reads the run
+            // afterwards can ask whether the merge has been pushed. Left out
+            // rather than written as null when it cannot be read, so a journal
+            // says nothing it does not know.
+            var head = await _git.ResolveAsync(repository, "HEAD", ct).ConfigureAwait(false);
+
+            await journal.WriteAsync(
+                "merge.done",
+                node,
+                head.Succeeded
+                    ? new { branch, target, result.Value!.FastForward, commit = head.Value }
+                    : (object)new { branch, target, result.Value!.FastForward },
+                ct).ConfigureAwait(false);
 
             console.Note(
                 result.Value.FastForward

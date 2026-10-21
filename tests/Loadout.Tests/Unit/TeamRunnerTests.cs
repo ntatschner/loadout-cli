@@ -3186,6 +3186,24 @@ public sealed partial class TeamRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task A_merge_records_the_commit_it_left_the_target_at()
+    {
+        // So that team status can ask, afterwards, whether it was pushed. A
+        // run never pushes, and "merged" alone reads as finished.
+        var git = new FakeGit(Path.Combine(_root, "repo"));
+        git.Commits["HEAD"] = "0f900893aa11bb22cc33dd44ee55ff6677889900";
+
+        ScriptAGatedRun();
+
+        var outcome = (await RunAsync(git: git)).Value!;
+
+        var journal = await File.ReadAllLinesAsync(Path.Combine(outcome.Directory!, "journal.jsonl"));
+        journal.Should().Contain(l =>
+            l.Contains("\"kind\":\"merge.done\"")
+            && l.Contains("\"commit\":\"0f900893aa11bb22cc33dd44ee55ff6677889900\""));
+    }
+
+    [Fact]
     public async Task A_branch_that_conflicts_twice_is_left_alone_and_said_so()
     {
         // Once only. A node that cannot resolve its own conflict on a second
