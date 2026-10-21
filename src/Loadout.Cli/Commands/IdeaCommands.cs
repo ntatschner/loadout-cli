@@ -32,20 +32,37 @@ public class IdeaSettings : GlobalSettings
     /// Which list the idea is on: the one named, or found by looking, the
     /// repository's project first.
     /// </summary>
-    internal async Task<OperationResult<IdeaPlace>> PlaceAsync(
+    internal Task<OperationResult<IdeaPlace>> PlaceAsync(
         IIdeaService ideas,
         IProjectService projects,
+        CancellationToken ct) =>
+        Find(ideas, projects, Id, Project, Global, Repo, ct);
+
+    /// <summary>
+    /// Which list an idea is on: the one named, or found by looking, the
+    /// repository's project first. Shared by every command that names an idea,
+    /// whatever it calls the option.
+    /// </summary>
+    internal static async Task<OperationResult<IdeaPlace>> Find(
+        IIdeaService ideas,
+        IProjectService projects,
+        string id,
+        string? project,
+        bool global,
+        string? repo,
         CancellationToken ct)
     {
-        if (Global && Project is { Length: > 0 })
+        ArgumentNullException.ThrowIfNull(ideas);
+
+        if (global && project is { Length: > 0 })
         {
             return OperationResult<IdeaPlace>.Fail(
                 "--global and --project name different lists. Give one.", ExitCode.InvalidArguments);
         }
 
-        if (Global || Project is { Length: > 0 })
+        if (global || project is { Length: > 0 })
         {
-            var place = new IdeaPlace(Global ? null : Project, Id.Trim());
+            var place = new IdeaPlace(global ? null : project, id.Trim());
             var read = await ideas.ReadAsync(place, ct).ConfigureAwait(false);
 
             return read.Succeeded
@@ -53,9 +70,9 @@ public class IdeaSettings : GlobalSettings
                 : OperationResult<IdeaPlace>.Fail(read.Error!, read.ExitCode);
         }
 
-        var here = await ProjectHandle.ResolveAsync(projects, null, Repo, ct).ConfigureAwait(false);
+        var here = await ProjectHandle.ResolveAsync(projects, null, repo, ct).ConfigureAwait(false);
 
-        return await ideas.LocateAsync(Id, here.Succeeded ? here.Value!.Entry.Slug : null, ct).ConfigureAwait(false);
+        return await ideas.LocateAsync(id, here.Succeeded ? here.Value!.Entry.Slug : null, ct).ConfigureAwait(false);
     }
 }
 
@@ -90,8 +107,12 @@ public sealed class IdeaAddCommand : AsyncCommand<IdeaAddCommand.Settings>
         /// launcher's screens always pass the idea this way for that reason.
         /// </remarks>
         [CommandOption("--text <TEXT>")]
-        [Description("The idea, as an option. For text that starts with a dash.")]
+        [Description("The idea, or what to add to one, as an option. Prose that starts with a dash goes as --text=\"- ...\".")]
         public string? TextOption { get; init; }
+
+        [CommandOption("--to <ID>")]
+        [Description("Add the text to this idea instead of dropping in a new one. The next refine reads it.")]
+        public string? To { get; init; }
 
         [CommandOption("--project <SLUG>")]
         [Description("Put it on this project's list. Defaults to the repository you are in.")]
@@ -135,6 +156,11 @@ public sealed class IdeaAddCommand : AsyncCommand<IdeaAddCommand.Settings>
         if (string.IsNullOrWhiteSpace(text))
         {
             return output.Fail("Say what the idea is: loadout idea add \"...\"", ExitCode.InvalidArguments);
+        }
+
+        if (settings.To is { Length: > 0 })
+        {
+            return await AddToAsync(output, settings, text, cancellationToken).ConfigureAwait(false);
         }
 
         // Outside a repository an idea goes on the workspace-wide list rather
@@ -192,6 +218,69 @@ public sealed class IdeaAddCommand : AsyncCommand<IdeaAddCommand.Settings>
             $"[green]+[/] {Markup.Escape(record.Id)} is on {Markup.Escape(Core.Tasks.TaskPaths.Describe(project))}.");
         output.WriteLine(
             $"[dim]  Have an agent flesh it out with: loadout idea refine {Markup.Escape(record.Id)}[/]");
+
+        return CommandOutput.Success();
+    }
+
+    /// <summary>Adds the text to an idea already there, for its next round to read.</summary>
+    private async Task<int> AddToAsync(
+        CommandOutput output,
+        Settings settings,
+        string text,
+        CancellationToken ct)
+    {
+        if (settings.IdeaId is { Length: > 0 })
+        {
+            return output.Fail(
+                "--id names a new idea and --to adds to one already there. Give one.", ExitCode.InvalidArguments);
+        }
+
+        var found = await IdeaSettings.Find(
+            _ideas, _projects, settings.To!, settings.Project, settings.Global, settings.Repo, ct).ConfigureAwait(false);
+
+        if (found.Failed)
+        {
+            return output.Fail(
+                $"{found.Error} To look on one list only, name it with --project <SLUG>, or --global for the workspace-wide one.",
+                found.ExitCode);
+        }
+
+        var place = found.Value!;
+        var id = Markup.Escape(place.Id);
+        var by = settings.By is { Length: > 0 } who ? who : Environment.UserName;
+
+        if (settings.DryRun)
+        {
+            var previewed = await _ideas.PreviewAddToAsync(place, text, by, ct).ConfigureAwait(false);
+
+            if (previewed.Failed)
+            {
+                return output.Fail(previewed);
+            }
+
+            output.WriteLine($"Would add {Markup.Escape(previewed.Value!.Notes[^1].Id)} to {id}. Nothing was written.");
+
+            return CommandOutput.Success();
+        }
+
+        var added = await _ideas.AddToAsync(place, text, by, ct).ConfigureAwait(false);
+
+        if (added.Failed)
+        {
+            return output.Fail(added);
+        }
+
+        var record = added.Value!;
+
+        if (output.IsJson)
+        {
+            output.WriteJson(IdeaView.Of(place, record));
+
+            return CommandOutput.Success();
+        }
+
+        output.WriteLine($"[green]+[/] Added {Markup.Escape(record.Notes[^1].Id)} to {id}.");
+        output.WriteLine($"[dim]  The next round reads it: loadout idea refine {id}[/]");
 
         return CommandOutput.Success();
     }
