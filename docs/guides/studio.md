@@ -602,11 +602,16 @@ Loadout's config.
 - **Terminals** turns Home, Sessions and a session's page into one deck: every
   hosted session a tab, over one, two or four live panes. **Ctrl Alt 1** to
   **9** picks a session by its tab, and **Ctrl Alt** with the arrows moves
-  between the panes shown. A dot on a tab means output since you looked. **Go
+  between the panes shown. Panes stay where they are: clicking into one only
+  moves the highlight and the keyboard, and a session you pick from its tab
+  takes the highlighted pane without moving the others. A session that ends
+  stays in its pane until you pick something else, and one that's gone from
+  Studio altogether says so. Hiding or clearing a tab is different: you took
+  it away, so its pane goes to the next tab along. A dot on a tab means output since you looked. **Go
   to the one waiting** appears when a session needs you, and *Find in this
   terminal* searches the one you're in, highlighting matches in the needs
-  colour. Below 900px it's one pane and the tabs. The layout and the last
-  session you picked are remembered.
+  colour. Below 900px it's one pane and the tabs. The layout, which session is
+  in each pane and the last session you picked are remembered in this browser.
 - **Teams** turns Home and the Teams page into a board: each run one row with
   its goal, a small line of its rounds and nodes, its state and its spend, the
   one that needs you first, with its question answered in the row. The teams

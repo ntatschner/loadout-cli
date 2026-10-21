@@ -134,6 +134,76 @@ describe('TermDeck', () => {
     expect(focused).toEqual(['b']);
   });
 
+  it('keeps every pane where it is when you click into one, moving only the highlight', async () => {
+    const four: DeckSession[] = [...sessions, { id: 'd', title: 'notes', word: 'working' }];
+    const onpick = vi.fn();
+    const { shown, closed } = deck({ sessions: four, layout: 4, onpick });
+    const panes = () => [...document.querySelectorAll<HTMLElement>('.pane')].map((node) => node.dataset.id);
+    expect(panes()).toEqual(['a', 'b', 'c', 'd']);
+
+    await fireEvent.focusIn(document.querySelector('.pane[data-id="c"] [data-pane]')!);
+    await tick();
+
+    expect(panes()).toEqual(['a', 'b', 'c', 'd']);
+    expect(shown()).toEqual(['a', 'b', 'c', 'd']);
+    expect(closed).toEqual([]);
+    expect(document.querySelector('.pane.on')?.getAttribute('data-id')).toBe('c');
+    expect(onpick).toHaveBeenCalledWith('c');
+  });
+
+  it('puts a session picked from its tab into the highlighted pane, moving no other', async () => {
+    const five: DeckSession[] = [...sessions, { id: 'd', title: 'notes', word: 'working' }, { id: 'e', title: 'spike', word: 'working' }];
+    const onslots = vi.fn();
+    const { closed } = deck({ sessions: five, layout: 4, onslots });
+    const panes = () => [...document.querySelectorAll<HTMLElement>('.pane')].map((node) => node.dataset.id);
+
+    await fireEvent.focusIn(document.querySelector('.pane[data-id="b"] [data-pane]')!);
+    await fireEvent.click(screen.getByRole('tab', { name: /spike/ }));
+    await tick();
+
+    expect(panes()).toEqual(['a', 'e', 'c', 'd']);
+    expect(closed).toEqual(['b']);
+    expect(document.querySelector('.pane.on')?.getAttribute('data-id')).toBe('e');
+    expect(onslots).toHaveBeenLastCalledWith(['a', 'e', 'c', 'd']);
+  });
+
+  it('keeps a session that has gone in its pane, and says it has gone', async () => {
+    const { shown } = deck({ layout: 2, slots: ['a', 'old'] });
+
+    expect(shown()).toEqual(['a', 'old']);
+    expect(document.querySelector('.pane[data-id="old"]')?.textContent).toContain('no longer in Studio');
+    expect(document.querySelector('.pane[data-id="a"]')?.textContent).not.toContain('no longer in Studio');
+  });
+
+  it('gives up the pane of an ended tab cleared off the strip, and the next tab takes it', async () => {
+    const onclear = vi.fn();
+    const onhide = vi.fn();
+    const mixed: DeckSession[] = [sessions[0], { ...sessions[1], word: 'ended', ended: true }, sessions[2]];
+    deck({ sessions: mixed, layout: 2, changes: false, onclear, onhide });
+    const panes = () => [...document.querySelectorAll<HTMLElement>('.pane')].map((node) => node.dataset.id);
+    expect(panes()).toEqual(['a', 'b']);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Close docs' }));
+    await tick();
+
+    expect(onclear).toHaveBeenCalledWith('b');
+    expect(panes()).toEqual(['a', 'c']);
+    expect(onhide).not.toHaveBeenCalled();
+  });
+
+  it('gives up the pane of a running tab hidden off the strip, leaving the others in place', async () => {
+    const onhide = vi.fn();
+    deck({ layout: 2, changes: false, onhide });
+    const panes = () => [...document.querySelectorAll<HTMLElement>('.pane')].map((node) => node.dataset.id);
+    expect(panes()).toEqual(['a', 'b']);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Close fix-tests' }));
+    await tick();
+
+    expect(onhide).toHaveBeenCalledWith('a');
+    expect(panes()).toEqual(['c', 'b']);
+  });
+
   it('offers the one waiting, and goes to it', async () => {
     const { shown } = deck();
 
