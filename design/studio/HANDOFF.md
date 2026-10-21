@@ -54,7 +54,7 @@ Don't reopen these. Ask me only if one turns out to be impossible.
 - **Overlays:**
   - Dialogs are a projected panel.
   - Popovers hang on a light tether.
-  - Toasts sit top right with four levels (Done, For your information, Needs you, Problem) and fold after 6 seconds unless they still need you.
+  - Toasts sit top right with four levels (Done, For your information, Needs you, Problem) They fold to a chip after 4 seconds and are gone after 10, unless they still need you; an answered one follows the same times from its answer. Each toast counts its own seconds, so only the one under the pointer or holding the keyboard waits. On a session's page, in Pure Focus and on the Desk, everything shows as a chip, and Done and notice chips go see-through and let clicks pass while the pointer is near. Whatever leaves goes into an Earlier list for the session, and Ctrl+Shift+X folds the stack, then clears what is not waiting on you.
   - The command palette opens on Ctrl/Cmd+K, with three groups: Go to, In flight and Do.
 
 **Home has two views,** Lens and Map, and a person can switch between them.

@@ -7,10 +7,16 @@ import Toasts from './Toasts.svelte';
 import Meter from './Meter.svelte';
 import Urgency from './Urgency.svelte';
 import SideRail from './SideRail.svelte';
-import { FOLD_AFTER, ToastStack } from '../toasts.svelte';
+import { GONE_AFTER, OPEN_FOR, ToastStack } from '../toasts.svelte';
 import { applyUrgency } from '../urgency';
 
 describe('Toasts', () => {
+  function seconds(stack: ToastStack, count: number) {
+    for (let second = 0; second < count; second++) {
+      stack.tick();
+    }
+  }
+
   it('says each level in words, and reads a Problem out at once', async () => {
     const stack = new ToastStack();
     render(Toasts, { stack, clock: false });
@@ -26,57 +32,201 @@ describe('Toasts', () => {
     expect(screen.getByRole('status').textContent).toBe('Done: Started in starstats');
   });
 
-  it('folds a Done after the fold time, and leaves a question open until it is answered', async () => {
+  it('folds a Done and a notice at the open time and lets them go into the history at the gone time', () => {
+    const stack = new ToastStack();
+
+    stack.add({ level: 'done', text: 'Saved' });
+    stack.add({ level: 'info', text: 'writer/1 reported back' });
+
+    seconds(stack, OPEN_FOR - 1);
+    expect(stack.list.every((one) => !one.folded)).toBe(true);
+
+    stack.tick();
+    expect(stack.list.every((one) => one.folded)).toBe(true);
+
+    seconds(stack, GONE_AFTER - OPEN_FOR - 1);
+    expect(stack.list).toHaveLength(2);
+
+    stack.tick();
+    expect(stack.list).toHaveLength(0);
+    expect(stack.history.map((one) => one.text)).toEqual(['writer/1 reported back', 'Saved']);
+  });
+
+  it('leaves a question open until it is answered, then follows Done from the answer', async () => {
     const stack = new ToastStack();
     render(Toasts, { stack, clock: false });
 
-    stack.add({ level: 'done', text: 'Saved' });
     stack.add({ level: 'needs', text: 'release-crew asks: push the tag?', actions: [{ label: 'Approve', cmd: '$ loadout team gate r1 --answer Approve --by dashboard' }] });
-
-    for (let second = 0; second < FOLD_AFTER; second++) {
-      stack.tick();
-    }
-
+    seconds(stack, GONE_AFTER * 6);
     await tick();
-    expect(stack.list.find((one) => one.level === 'done')?.folded).toBe(true);
-    expect(stack.list.find((one) => one.level === 'needs')?.folded).toBe(false);
+
+    expect(stack.list[0].folded).toBe(false);
 
     await fireEvent.click(screen.getByRole('button', { name: /Approve/ }));
     await tick();
 
     expect(screen.getByRole('status').textContent).toBe('Approve');
-    expect(stack.list.find((one) => one.text === 'Approve')?.settled).not.toBeNull();
+    expect(stack.list[0].settled).toBe(true);
+
+    seconds(stack, OPEN_FOR);
+    expect(stack.list[0].folded).toBe(true);
+
+    seconds(stack, GONE_AFTER - OPEN_FOR);
+    expect(stack.list).toHaveLength(0);
+    expect(stack.history[0]).toMatchObject({ level: 'done', text: 'Approve' });
   });
 
-  it('folds nothing while the pointer or keyboard is on the stack', async () => {
+  it('stops only the toast under the pointer, and its neighbours go on', async () => {
     const stack = new ToastStack();
     const { container } = render(Toasts, { stack, clock: false });
 
-    stack.add({ level: 'info', text: 'writer/1 reported back' });
+    stack.add({ level: 'info', text: 'older' });
+    stack.add({ level: 'info', text: 'newer' });
     await tick();
-    await fireEvent.mouseEnter(container.querySelector('.ls-toasts')!);
 
-    for (let second = 0; second < FOLD_AFTER * 2; second++) {
-      stack.tick();
-    }
+    const cards = Array.from(container.querySelectorAll('.ls-toast'));
+    const older = cards.find((card) => card.textContent?.includes('older'))!;
+    await fireEvent.mouseEnter(older);
+    seconds(stack, GONE_AFTER);
 
+    expect(stack.list.map((one) => one.text)).toEqual(['older']);
     expect(stack.list[0].folded).toBe(false);
+
+    await fireEvent.mouseLeave(older);
+    seconds(stack, GONE_AFTER);
+    expect(stack.list).toHaveLength(0);
   });
 
-  it('opens a folded chip again', async () => {
+  it('stops the toast holding the keyboard', async () => {
+    const stack = new ToastStack();
+    render(Toasts, { stack, clock: false });
+
+    stack.add({ level: 'done', text: 'Saved' });
+    stack.add({ level: 'done', text: 'Pushed' });
+    await tick();
+
+    await fireEvent.focusIn(screen.getByRole('button', { name: 'Dismiss: Saved' }));
+    seconds(stack, GONE_AFTER);
+
+    expect(stack.list.map((one) => one.text)).toEqual(['Saved']);
+  });
+
+  it('puts a dismissed toast into the history too', async () => {
+    const stack = new ToastStack();
+    render(Toasts, { stack, clock: false });
+
+    stack.add({ level: 'problem', text: 'round 3 failed' });
+    await tick();
+    await fireEvent.click(screen.getByRole('button', { name: 'Dismiss: round 3 failed' }));
+
+    expect(stack.list).toHaveLength(0);
+    expect(stack.history[0]).toMatchObject({ level: 'problem', text: 'round 3 failed' });
+    expect(screen.getByRole('button', { name: /Earlier/ }).textContent).toContain('1');
+  });
+
+  it('opens a folded chip again, for another run of the times', async () => {
     const stack = new ToastStack();
     render(Toasts, { stack, clock: false });
 
     stack.add({ level: 'info', text: 'round 3 started' });
-
-    for (let second = 0; second < FOLD_AFTER; second++) {
-      stack.tick();
-    }
+    seconds(stack, OPEN_FOR + 2);
 
     await tick();
     await fireEvent.click(screen.getByRole('button', { name: /round 3 started\. Open it/ }));
 
     expect(stack.list[0].folded).toBe(false);
+
+    seconds(stack, GONE_AFTER - 1);
+    expect(stack.list).toHaveLength(1);
+  });
+
+  it('counts a repeated Done once, with how many times', async () => {
+    const stack = new ToastStack();
+    render(Toasts, { stack, clock: false });
+
+    stack.add({ level: 'done', text: 'Session ended' });
+    stack.add({ level: 'done', text: 'Session ended' });
+    stack.add({ level: 'done', text: 'Session ended' });
+    await tick();
+
+    expect(stack.list).toHaveLength(1);
+    expect(stack.list[0].count).toBe(3);
+    expect(screen.getByText('×3')).toBeTruthy();
+
+    seconds(stack, GONE_AFTER);
+    expect(stack.history).toHaveLength(1);
+    expect(stack.history[0].count).toBe(3);
+  });
+
+  it('shows everything as a chip in a named place, and opens a waiting question again on leaving it', async () => {
+    const stack = new ToastStack();
+    const { container, rerender } = render(Toasts, { stack, clock: false, place: null });
+
+    stack.add({ level: 'needs', text: 'writer/2 asks: delete the branch?', actions: [{ label: 'Yes', cmd: '' }] });
+    stack.add({ level: 'done', text: 'Saved' });
+    await tick();
+
+    await rerender({ stack, clock: false, place: 'pure' });
+    expect(stack.list.every((one) => one.folded)).toBe(true);
+    expect(container.querySelectorAll('.ls-toast')).toHaveLength(0);
+
+    stack.add({ level: 'info', text: 'arrived here' });
+    expect(stack.list[0].folded).toBe(true);
+
+    await rerender({ stack, clock: false, place: null });
+    const needs = stack.list.find((one) => one.level === 'needs')!;
+    expect(needs.folded).toBe(false);
+    expect(stack.list.filter((one) => one.level !== 'needs').every((one) => one.folded)).toBe(true);
+    // Nothing moved: the order is the order they came in.
+    expect(stack.list.map((one) => one.text)).toEqual(['arrived here', 'Saved', 'writer/2 asks: delete the branch?']);
+  });
+
+  it('lets Done and notice chips give way in a named place, and never a waiting question', async () => {
+    const stack = new ToastStack();
+    const { container } = render(Toasts, { stack, clock: false, place: 'session' });
+
+    stack.add({ level: 'done', text: 'Saved' });
+    stack.add({ level: 'problem', text: 'round 3 failed' });
+    await tick();
+
+    const chips = Array.from(container.querySelectorAll('.ls-toast-chip'));
+    expect(chips.find((chip) => chip.textContent?.includes('Saved'))?.hasAttribute('data-gives-way')).toBe(true);
+    expect(chips.find((chip) => chip.textContent?.includes('round 3'))?.hasAttribute('data-gives-way')).toBe(false);
+  });
+
+  it('gives way only while the pointer is near', async () => {
+    const stack = new ToastStack();
+    const { container } = render(Toasts, { stack, clock: false, place: 'desk' });
+
+    stack.add({ level: 'done', text: 'Saved' });
+    await tick();
+
+    const chip = container.querySelector<HTMLElement>('[data-gives-way]')!;
+    chip.getBoundingClientRect = () => ({ left: 900, right: 1000, top: 100, bottom: 130, width: 100, height: 30, x: 900, y: 100, toJSON: () => ({}) });
+
+    window.dispatchEvent(new MouseEvent('pointermove', { clientX: 880, clientY: 110 }));
+    await tick();
+    expect(container.querySelector('.ls-toasts')?.classList.contains('near')).toBe(true);
+
+    window.dispatchEvent(new MouseEvent('pointermove', { clientX: 400, clientY: 500 }));
+    await tick();
+    expect(container.querySelector('.ls-toasts')?.classList.contains('near')).toBe(false);
+  });
+
+  it('folds with Ctrl+Shift+X, and clears all but a waiting question when pressed again', async () => {
+    const stack = new ToastStack();
+    render(Toasts, { stack, clock: false });
+
+    stack.add({ level: 'needs', text: 'writer/2 asks: delete the branch?' });
+    stack.add({ level: 'done', text: 'Saved' });
+    await tick();
+
+    await fireEvent.keyDown(window, { key: 'X', code: 'KeyX', ctrlKey: true, shiftKey: true });
+    expect(stack.list.every((one) => one.folded)).toBe(true);
+
+    await fireEvent.keyDown(window, { key: 'X', code: 'KeyX', ctrlKey: true, shiftKey: true });
+    expect(stack.list.map((one) => one.level)).toEqual(['needs']);
+    expect(stack.history.map((one) => one.text)).toEqual(['Saved']);
   });
 });
 

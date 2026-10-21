@@ -371,7 +371,7 @@
     {/if}
   {/snippet}
 
-  <Toasts />
+  <Toasts place={pure ? 'pure' : pureDesk ? 'desk' : page === 'session' ? 'session' : null} />
 
   {#if ambient}
     <Ambient onleave={() => (ambient = false)} onlaunch={() => { router.go('sessions'); openLaunch(); }} />
