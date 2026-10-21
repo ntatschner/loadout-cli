@@ -13,6 +13,9 @@ import RunBoard from './RunBoard.svelte';
 import TermDeck from './TermDeck.svelte';
 import type { DeckSession, PaneHandle } from '../modes';
 
+// The dividers watch their grid's size, which jsdom has no layout to give.
+globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver;
+
 describe('ModeSwitcher', () => {
   it('moves on the arrow keys, Home and End, and says which is picked', async () => {
     const onchange = vi.fn();
@@ -228,6 +231,70 @@ describe('TermDeck', () => {
 
     expect(screen.getByRole('tab', { name: /fix-tests/ }).getAttribute('aria-keyshortcuts')).toBe('Control+Alt+1');
     expect(screen.getByRole('tab', { name: /docs/ }).textContent).toContain('new output');
+  });
+
+  describe('dividers', () => {
+    const panesOf = () => document.querySelector<HTMLElement>('.panes')!;
+    const width = () => screen.queryByRole('separator', { name: 'Width of the panes' });
+    const height = () => screen.queryByRole('separator', { name: 'Height of the panes' });
+
+    it('has none for one pane, one for two, and for four one across and one down, shared by the grid', async () => {
+      deck({ layout: 1 });
+      expect(screen.queryAllByRole('separator')).toHaveLength(0);
+
+      await fireEvent.click(screen.getByRole('radio', { name: 'Two side by side' }));
+      expect(width()).toBeTruthy();
+      expect(height()).toBeNull();
+
+      await fireEvent.click(screen.getByRole('radio', { name: 'Four' }));
+      expect(screen.getAllByRole('separator')).toHaveLength(2);
+      expect(width()!.getAttribute('aria-orientation')).toBe('vertical');
+      expect(height()!.getAttribute('aria-orientation')).toBe('horizontal');
+    });
+
+    it('has none while only one session is there to show', () => {
+      deck({ layout: 2, sessions: [sessions[0]] });
+
+      expect(screen.queryAllByRole('separator')).toHaveLength(0);
+    });
+
+    it('comes after the panes, so each pane keeps its place in the grid', () => {
+      deck({ layout: 4, sessions: [...sessions, { id: 'd', title: 'four', word: 'working' }] });
+
+      const children = [...panesOf().children];
+      expect(children.slice(0, 4).every((one) => one.classList.contains('pane'))).toBe(true);
+      expect(children.slice(4).every((one) => one.getAttribute('role') === 'separator')).toBe(true);
+    });
+
+    it('sizes the grid from where they were left, and reports a move for the layout showing', async () => {
+      const onsplit = vi.fn();
+      deck({ layout: 4, splits: { 2: [0.7], 4: [0.3, 0.6] }, onsplit });
+
+      expect(panesOf().style.getPropertyValue('--deck-cols')).toBe('minmax(0, 0.3000fr) minmax(0, 0.7000fr)');
+      expect(panesOf().style.getPropertyValue('--deck-rows')).toBe('minmax(0, 0.6000fr) minmax(0, 0.4000fr)');
+      expect(width()!.getAttribute('aria-valuenow')).toBe('30');
+
+      await fireEvent.keyDown(height()!, { key: 'ArrowDown', shiftKey: true });
+      expect(onsplit).toHaveBeenLastCalledWith(4, [0.3, 0.7]);
+      await tick();
+      expect(panesOf().style.getPropertyValue('--deck-rows')).toBe('minmax(0, 0.7000fr) minmax(0, 0.3000fr)');
+
+      // Two panes keep their own place, untouched by four's.
+      await fireEvent.click(screen.getByRole('radio', { name: 'Two side by side' }));
+      expect(width()!.getAttribute('aria-valuenow')).toBe('70');
+      expect(panesOf().style.getPropertyValue('--deck-rows')).toBe('');
+      await fireEvent.keyDown(width()!, { key: 'Enter' });
+      expect(onsplit).toHaveBeenLastCalledWith(2, [0.5]);
+    });
+
+    it('lets Ctrl+Alt with the arrows still move between the panes from a divider', async () => {
+      const onpick = vi.fn();
+      deck({ layout: 2, onpick });
+
+      await fireEvent.keyDown(width()!, { key: 'ArrowRight', ctrlKey: true, altKey: true });
+
+      expect(onpick).toHaveBeenCalledWith('b');
+    });
   });
 });
 

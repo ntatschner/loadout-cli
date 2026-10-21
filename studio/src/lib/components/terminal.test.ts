@@ -1,12 +1,14 @@
 // Terminal: the bar under the screen says what the session needs in words,
-// typing follows the state, Ctrl+] leaves for the page, and the screen is
-// themed from the term-* tokens with the contrast floor the README sets.
+// typing follows the state, Ctrl+] leaves for the page, the screen is
+// themed from the term-* tokens with the contrast floor the README sets, and
+// a screen resized over and over tells its session once.
 // xterm.js cannot draw in a document without layout, so it is replaced by a
 // recorder that keeps what Terminal asked of it.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { readFileSync } from 'node:fs';
+import { SPLIT_SETTLED } from '../splits';
 
 const made: FakeTerminal[] = [];
 
@@ -18,6 +20,7 @@ class FakeTerminal {
   keys: ((event: KeyboardEvent) => boolean) | null = null;
   focused = 0;
   host: HTMLElement | null = null;
+  resized: ((size: { cols: number; rows: number }) => void) | null = null;
 
   constructor(options: Record<string, unknown>) {
     this.options = { ...options };
@@ -37,12 +40,15 @@ class FakeTerminal {
   onData() {
     return { dispose() {} };
   }
-  onResize() {
+  onResize(listener: (size: { cols: number; rows: number }) => void) {
+    this.resized = listener;
+
     return { dispose() {} };
   }
   resize(cols: number, rows: number) {
     this.cols = cols;
     this.rows = rows;
+    this.resized?.({ cols, rows });
   }
   write() {}
   focus() {
@@ -177,5 +183,48 @@ describe('Terminal', () => {
     expect(made[0].options.fontSize).toBe(13.3);
     expect(made[0].cols).toBe(80);
     expect(made[0].rows).toBe(24);
+  });
+
+  it('tells the session a new size once it stops changing, not on every frame', async () => {
+    vi.useFakeTimers();
+
+    try {
+      const onresize = vi.fn();
+      render(Terminal, { title: 'starstats', status: 'working', onresize });
+      onresize.mockClear();
+
+      for (let cols = 81; cols <= 120; cols++) {
+        made[0].resize(cols, 30);
+        vi.advanceTimersByTime(16);
+      }
+
+      expect(onresize).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(200);
+      expect(onresize).toHaveBeenCalledOnce();
+      expect(onresize).toHaveBeenCalledWith(120, 30);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('tells the session at once when a divider is let go', async () => {
+    vi.useFakeTimers();
+
+    try {
+      const onresize = vi.fn();
+      render(Terminal, { title: 'starstats', status: 'working', onresize });
+      onresize.mockClear();
+
+      made[0].resize(100, 30);
+      document.dispatchEvent(new CustomEvent(SPLIT_SETTLED));
+      expect(onresize).toHaveBeenCalledWith(100, 30);
+
+      // Nothing waits behind it, and a divider let go with no change says nothing.
+      vi.advanceTimersByTime(500);
+      document.dispatchEvent(new CustomEvent(SPLIT_SETTLED));
+      expect(onresize).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -2,12 +2,15 @@
 // field, a terminal or a dialog; closing goes back to the last route that
 // was not one of the six pages; and the watched side is the same element,
 // never made again, whether a page is beside it or not.
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { createRawSnippet } from 'svelte';
 import PageBeside from './PageBeside.svelte';
 import BesideGrid from './BesideGrid.svelte';
 import { besideReturn } from '../modes';
+
+// The dividers watch their grid's size, which jsdom has no layout to give.
+globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver;
 
 const body = createRawSnippet(() => ({ render: () => '<p>Memory page</p>' }));
 
@@ -84,5 +87,31 @@ describe('BesideGrid', () => {
 
     expect(made).toBe(1);
     expect(shown.container.querySelector('.deck')).toBe(deck);
+  });
+});
+
+describe('BesideGrid divider', () => {
+  const focus = createRawSnippet(() => ({ render: () => '<div class="deck">terminals</div>' }));
+  const beside = createRawSnippet(() => ({ render: () => '<aside class="ls-beside">a page</aside>' }));
+  const grid = () => document.querySelector<HTMLElement>('.ls-besidegrid')!;
+
+  it('has a divider only while a page is beside, and leaves the stylesheet alone until it is moved', () => {
+    const shown = render(BesideGrid, { focus });
+    expect(screen.queryByRole('separator')).toBeNull();
+
+    shown.unmount();
+    render(BesideGrid, { focus, beside });
+    expect(screen.getByRole('separator', { name: 'Width of the page beside' }).getAttribute('aria-valuenow')).toBe('48');
+    expect(grid().style.getPropertyValue('--beside-cols')).toBe('');
+  });
+
+  it('sizes the page beside from where it was left, and reports how much it has after a move', async () => {
+    const onsplit = vi.fn();
+    render(BesideGrid, { focus, beside, split: 0.4, onsplit });
+
+    expect(grid().style.getPropertyValue('--beside-cols')).toBe('minmax(0, 0.6000fr) minmax(0, 0.4000fr)');
+    await fireEvent.keyDown(screen.getByRole('separator'), { key: 'ArrowLeft' });
+
+    expect(onsplit.mock.lastCall![0]).toBeCloseTo(0.42);
   });
 });

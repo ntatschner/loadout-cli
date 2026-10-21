@@ -14,6 +14,10 @@
   import HaloButton from './HaloButton.svelte';
   import Signal from './Signal.svelte';
   import { TERMINAL_STATES, largestFitting, resumeCommand, type TerminalState } from '../terminal';
+  import { SPLIT_SETTLED } from '../splits';
+
+  /** How long a new size waits for the next before the session is told. */
+  const RESIZE_HOLD = 200;
 
   interface Props {
     title: string;
@@ -291,11 +295,30 @@
     layout();
 
     const typing = terminal.onData((data) => oninput?.(data));
+    // The screen follows a moving divider, or a window being resized, every
+    // frame; the session is told the size once it stops for a moment, or the
+    // divider is let go, so a full-screen agent redraws once rather than on
+    // every pixel.
+    const xterm = terminal;
+    let held: ReturnType<typeof setTimeout> | null = null;
+    const tell = () => {
+      if (held) {
+        clearTimeout(held);
+        held = null;
+        onresize?.(xterm.cols, xterm.rows);
+      }
+    };
     const resizing = terminal.onResize((next) => {
       columns = next.cols;
       rows = next.rows;
-      onresize?.(next.cols, next.rows);
+
+      if (held) {
+        clearTimeout(held);
+      }
+
+      held = setTimeout(tell, RESIZE_HOLD);
     });
+    document.addEventListener(SPLIT_SETTLED, tell);
 
     columns = terminal.cols;
     rows = terminal.rows;
@@ -320,6 +343,12 @@
     looks.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-accent', 'data-motion'] });
 
     return () => {
+      document.removeEventListener(SPLIT_SETTLED, tell);
+
+      if (held) {
+        clearTimeout(held);
+      }
+
       looks.disconnect();
       watcher.disconnect();
       cancelAnimationFrame(pending);

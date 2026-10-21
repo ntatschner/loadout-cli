@@ -36,6 +36,8 @@ vi.mock('../lib/api', async (original) => {
 
 // The live terminal is not what is under test, and opens a socket.
 vi.mock('../lib/components/SessionPane.svelte', () => ({ default: () => undefined }));
+// The deck's dividers watch its size, which jsdom has no layout to give.
+globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver;
 
 const { studio } = await import('../lib/state.svelte');
 const { default: TerminalFocus } = await import('./TerminalFocus.svelte');
@@ -141,5 +143,27 @@ describe('Terminal Focus tabs', () => {
     await vi.waitFor(() => expect(stopped).toEqual(['bbbb0002']));
 
     expect(kept()?.cleared ?? []).toEqual([]);
+  });
+});
+
+describe('Terminal Focus dividers', () => {
+  const width = () => screen.getByRole('separator', { name: 'Width of the panes' });
+
+  it('keeps where a divider was left in this browser, one place for each layout', async () => {
+    localStorage.setItem('studio-split-deck-2', '[0.35]');
+    render(TerminalFocus, {});
+    expect(width().getAttribute('aria-valuenow')).toBe('35');
+
+    await fireEvent.keyDown(width(), { key: 'ArrowRight' });
+
+    expect(JSON.parse(localStorage.getItem('studio-split-deck-2')!)[0]).toBeCloseTo(0.37);
+    expect(localStorage.getItem('studio-split-deck-4')).toBeNull();
+  });
+
+  it('starts from the middle where what was kept cannot be used', () => {
+    localStorage.setItem('studio-split-deck-2', '[7]');
+    render(TerminalFocus, {});
+
+    expect(width().getAttribute('aria-valuenow')).toBe('50');
   });
 });

@@ -9,7 +9,9 @@
   import { untrack, type Snippet } from 'svelte';
   import HaloButton from './HaloButton.svelte';
   import SessionTabs from './SessionTabs.svelte';
+  import Splitter from './Splitter.svelte';
   import { signalOf } from '../signals';
+  import { clampSplit, floorOf, terminalFloor, tracks } from '../splits';
   import { deckKey, morph, placeSlots, type DeckLayout, type DeckSession, type DeckSlots, type PaneHandle } from '../modes';
 
   interface Props {
@@ -27,9 +29,13 @@
     hidden?: DeckSession[];
     /** Whether names can be changed and sessions ended: false where Studio is only watching. */
     changes?: boolean;
+    /** Where the dividers were left for two panes, [column], and for four, [column, row]; kept by the page. */
+    splits?: { 2?: number[] | null; 4?: number[] | null };
     onpick?: (id: string) => void;
     onlayout?: (layout: DeckLayout) => void;
     onslots?: (slots: DeckSlots) => void;
+    /** A divider moved, for the layout showing. */
+    onsplit?: (layout: 2 | 4, fractions: number[]) => void;
     onnew?: () => void;
     onmove?: (order: string[]) => void;
     onrename?: (id: string, name: string | null) => unknown;
@@ -48,9 +54,11 @@
     pane,
     hidden = [],
     changes = true,
+    splits = {},
     onpick = undefined,
     onlayout = undefined,
     onslots = undefined,
+    onsplit = undefined,
     onnew = undefined,
     onmove = undefined,
     onrename = undefined,
@@ -81,6 +89,37 @@
   let term = $state('');
   let found = $state('');
   const handles = new Map<string, PaneHandle>();
+  // Where the dividers sit, one set for two panes and one for four: the
+  // column first, then the row. Four keeps a grid, so one divider runs the
+  // full height and one the full width.
+  // svelte-ignore state_referenced_locally
+  let split2 = $state(splits[2]?.[0] ?? 0.5);
+  // svelte-ignore state_referenced_locally
+  let split4 = $state<[number, number]>([splits[4]?.[0] ?? 0.5, splits[4]?.[1] ?? 0.5]);
+  let wide = $state(0);
+  let tall = $state(0);
+  const GAP = 10;
+  const floor = terminalFloor();
+  const colMin = $derived(floorOf(floor.width, wide - GAP));
+  const rowMin = $derived(floorOf(floor.height, tall - GAP));
+  // Held to the floors as the window changes, without moving what was kept.
+  const column = $derived(clampSplit(panes === 4 ? split4[0] : split2, colMin, 1 - colMin));
+  const row = $derived(clampSplit(split4[1], rowMin, 1 - rowMin));
+
+  function setColumn(to: number) {
+    if (panes === 4) {
+      split4 = [to, split4[1]];
+      onsplit?.(4, split4);
+    } else {
+      split2 = to;
+      onsplit?.(2, [to]);
+    }
+  }
+
+  function setRow(to: number) {
+    split4 = [split4[0], to];
+    onsplit?.(4, split4);
+  }
 
   const order = $derived(sessions.map((one) => one.id));
   const on = $derived(arranged[hi] ?? order[0] ?? null);
@@ -88,6 +127,8 @@
   // sessions; the wider arrangement waits for the window to widen again.
   const shown = $derived(narrow ? (on ? [on] : []) : arranged.filter((id): id is string => !!id));
   const waiting = $derived(sessions.filter((one) => signalOf(one.word).family === 'needs'));
+  // Dividers only where there is more than one pane to share the room.
+  const split = $derived(!narrow && panes > 1 && shown.length > 1);
 
   /** Puts a session in a pane, if it is not in one already, and highlights it. */
   function arrange(pick: string | null, from: DeckSlots = arranged, tabs: string[] = order) {
@@ -245,9 +286,16 @@
       <span role="status">{found}</span>
     </div>
     <span class="grow"></span>
-    <span class="keys">Ctrl Alt 1–9 picks · Ctrl Alt arrows move · Ctrl ] leaves a terminal · F2 renames a tab · Ctrl Shift arrows move it</span>
+    <span class="keys">Ctrl Alt 1–9 picks · Ctrl Alt arrows move · Ctrl ] leaves a terminal · F2 renames a tab · Ctrl Shift arrows move it{#if split} · drag a divider, or arrow it; Enter puts it back{/if}</span>
   </div>
-  <div class={`panes l${narrow ? 1 : panes}`} id={panesId}>
+  <div
+    class={`panes l${narrow ? 1 : panes}`}
+    id={panesId}
+    bind:clientWidth={wide}
+    bind:clientHeight={tall}
+    style:--deck-cols={split ? tracks(column) : undefined}
+    style:--deck-rows={split && panes === 4 ? tracks(row) : undefined}
+  >
     {#each shown as id (id)}
       <div class="pane" class:on={id === on} data-id={id} onfocusin={() => { if (on !== id) { hi = arranged.indexOf(id); onpick?.(id); } }}>
         {#if listed && !order.includes(id)}
@@ -258,6 +306,13 @@
     {/each}
     {#if !shown.length}
       <p class="calm">No sessions are running. Start one with the + beside the tabs, or N.</p>
+    {/if}
+    <!-- After the panes, so a pane's place among its siblings is still its place in the grid. -->
+    {#if split}
+      <Splitter class="cols" label="Width of the panes" controls={panesId} value={column} min={colMin} max={1 - colMin} reset={0.5} onchange={setColumn} />
+      {#if panes === 4}
+        <Splitter class="rows" orientation="horizontal" label="Height of the panes" controls={panesId} value={row} min={rowMin} max={1 - rowMin} reset={0.5} onchange={setRow} />
+      {/if}
     {/if}
   </div>
 </section>
