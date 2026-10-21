@@ -106,6 +106,21 @@ internal static class IdeaView
                 $"[dim]Refine again, or clear this with: loadout idea dismiss {Markup.Escape(place.Id)}[/]");
         }
 
+        if (record.Notes.Count > 0)
+        {
+            output.WriteBlankLine();
+            output.WriteLine("[bold]Added since[/]");
+
+            foreach (var note in record.Notes)
+            {
+                var unread = note.TakenUtc is null ? "  [yellow]not read by a round yet[/]" : string.Empty;
+
+                output.WriteLine(
+                    $"  [bold]{Markup.Escape(note.Id)}[/] [dim]by {Markup.Escape(note.By)}, {note.AddedUtc.UtcDateTime:yyyy-MM-dd}[/]{unread}");
+                output.WriteLine($"     {Markup.Escape(note.Text)}");
+            }
+        }
+
         var questions = record.Rounds.SelectMany(round => round.Questions).ToList();
 
         if (questions.Count > 0)
