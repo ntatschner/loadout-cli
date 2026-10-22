@@ -12,7 +12,7 @@
   import HaloButton from '../lib/components/HaloButton.svelte';
   import ListToolbar from '../lib/components/ListToolbar.svelte';
   import NeedsYou from '../lib/components/NeedsYou.svelte';
-  import QueuePanel, { type QueuePlan, type QueueRead, type QueueTask } from '../lib/components/QueuePanel.svelte';
+  import QueuePanel, { type DoneWhenProposed, type QueuePlan, type QueueRead, type QueueTask } from '../lib/components/QueuePanel.svelte';
   import Picker from '../lib/components/Picker.svelte';
   import Remedy from '../lib/components/Remedy.svelte';
   import RunBoard from '../lib/components/RunBoard.svelte';
@@ -377,6 +377,13 @@
 
   const queueTasks = (project: string) =>
     readJson<{ tasks: QueueTask[] }>('task list', ['--project', project]).then((read) => read.tasks);
+
+  // A round with an agent, so it runs as a job and is given as long as a
+  // refine round is; it records nothing, and the panel saves what is kept.
+  const queuePropose = (project: string, task: string) =>
+    runJob('task propose-done-when', [task, '--project', project, '--json'], 1_200_000).then(
+      (job) => JSON.parse(job.output ?? 'null') as DoneWhenProposed,
+    );
   const queuePlan = (team: string) => () => readJson<QueuePlan>('team queue plan', [team]);
 
   // run-next starts a team run, which goes on long after any page would wait
@@ -522,7 +529,7 @@
       {#if queues && choices}
         <p class="calm small">Tasks with a done-when, worked through one run at a time. Only a task that says when it is finished gets in.</p>
         {#each shownQueues as queue (queue.team)}
-          <QueuePanel {queue} projects={choices.projects} tasksOf={queueTasks} act={queueAct} readPlan={queuePlan(queue.team)} disabledReason={watch} />
+          <QueuePanel {queue} projects={choices.projects} tasksOf={queueTasks} propose={queuePropose} act={queueAct} readPlan={queuePlan(queue.team)} disabledReason={watch} />
         {/each}
         {#if unqueued.length}
           <div class="ls-field qstart">

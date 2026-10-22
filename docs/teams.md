@@ -2245,6 +2245,15 @@ the task, or replaces them with the `--done-when` you give. Any team run for the
 task, queued or not, is then held to them, after any `--done-when` the run was
 given and beside the project's standing ones.
 
+**A task with none can have some proposed.** `task propose-done-when <id>` asks
+an agent, with read-only access to the project's checkout, for two to five
+conditions from the task's title, note, detail and the plan it was accepted
+from, if any. It records nothing unless you say so: `--accept`, or yes when it
+asks, and otherwise it prints the `task declare` that would record them as they
+are. It is for work recorded by hand, and for ideas accepted before an idea's
+plan proposed any. Each proposal is one agent round, so it costs about what a
+refine round does.
+
 **One queue per team, and each item names its project.** The team decides how
 a run behaves, so one queue can work through several projects' tasks. Items go
 first in, first out; `team queue move <team> <task> <position>` reorders them,

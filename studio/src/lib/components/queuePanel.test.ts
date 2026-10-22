@@ -26,6 +26,7 @@ function queue(over: Partial<QueueRead> = {}): QueueRead {
 
 function setup(over: Partial<QueueRead> = {}, plan: QueuePlan | Error = { order: [], left: [], stops: 'The queue is empty.' }) {
   const acted: [string, string[]][] = [];
+  const proposals: [string, string][] = [];
   const shown = render(QueuePanel, {
     queue: queue(over),
     projects: ['website', 'homelab'],
@@ -39,6 +40,19 @@ function setup(over: Partial<QueueRead> = {}, plan: QueuePlan | Error = { order:
             { id: 'cache', title: 'Cache it', state: 'blocked', kind: 'task' },
           ]
         : [],
+    propose: async (project: string, task: string) => {
+      proposals.push([project, task]);
+
+      return {
+        task,
+        project,
+        proposed: ['the page loads in under a second', '-q still prints errors'],
+        why: 'From the title.',
+        costUsd: 0.12,
+        replaces: [],
+        recorded: false,
+      };
+    },
     act: (path: string, words: string[]) => {
       acted.push([path, words]);
 
@@ -54,7 +68,7 @@ function setup(over: Partial<QueueRead> = {}, plan: QueuePlan | Error = { order:
     now: () => NOW,
   });
 
-  return { acted, shown };
+  return { acted, shown, proposals };
 }
 
 const said = (button: HTMLElement) => button.closest('.ls-action')?.querySelector('.ls-cmd')?.textContent ?? '';
@@ -236,5 +250,62 @@ describe('whose', () => {
   it('says a team name ending in s owns something with an apostrophe alone', () => {
     expect(whose('builders')).toBe("builders'");
     expect(whose('docs-crew')).toBe("docs-crew's");
+  });
+});
+
+describe('QueuePanel done-when for a task that has none', () => {
+  async function choose(task: string) {
+    await fireEvent.click(screen.getByRole('button', { name: 'Add a task' }));
+    const form = screen.getByRole('form', { name: "Add a task to builders' queue" });
+    await fireEvent.change(within(form).getByLabelText('Project'), { target: { value: 'website' } });
+    await waitFor(() => expect(within(within(form).getByLabelText('Task')).getByRole('option', { name: /vague/ })).toBeTruthy());
+    await fireEvent.change(within(form).getByLabelText('Task'), { target: { value: task } });
+
+    return form;
+  }
+
+  it('offers to write them only for a task that has none', async () => {
+    setup();
+
+    const form = await choose('fix-login');
+
+    expect(within(form).queryByRole('group', { name: 'Done-when for fix-login' })).toBeNull();
+
+    await fireEvent.change(within(form).getByLabelText('Task'), { target: { value: 'vague' } });
+
+    expect(within(form).getByRole('group', { name: 'Done-when for vague' }).textContent).toContain('the queue would refuse it');
+  });
+
+  it('fills them from an agent, and saves what is kept as option=value', async () => {
+    const { acted, proposals } = setup();
+
+    const form = await choose('vague');
+    const group = within(form).getByRole('group', { name: 'Done-when for vague' });
+
+    await fireEvent.click(within(group).getByRole('button', { name: 'Propose them' }));
+    await waitFor(() => expect((within(group).getByRole('textbox') as HTMLTextAreaElement).value).toContain('under a second'));
+
+    expect(proposals).toEqual([['website', 'vague']]);
+    expect(group.textContent).toContain('From the title. ($0.12)');
+
+    await fireEvent.click(within(group).getByRole('button', { name: 'Save them' }));
+
+    expect(acted).toEqual([
+      ['task declare', ['vague', 'open', '--project', 'website', '--done-when=the page loads in under a second', '--done-when=-q still prints errors']],
+    ]);
+    await waitFor(() => expect(within(form).queryByRole('group', { name: 'Done-when for vague' })).toBeNull());
+  });
+
+  it('saves conditions written by hand, one a line, without asking an agent', async () => {
+    const { acted, proposals } = setup();
+
+    const form = await choose('vague');
+    const group = within(form).getByRole('group', { name: 'Done-when for vague' });
+
+    await fireEvent.input(within(group).getByRole('textbox'), { target: { value: 'it reads well\n\n  it builds  ' } });
+    await fireEvent.click(within(group).getByRole('button', { name: 'Save them' }));
+
+    expect(proposals).toEqual([]);
+    expect(acted).toEqual([['task declare', ['vague', 'open', '--project', 'website', '--done-when=it reads well', '--done-when=it builds']]]);
   });
 });

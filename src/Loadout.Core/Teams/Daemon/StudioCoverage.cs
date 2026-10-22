@@ -118,6 +118,7 @@ public static class StudioCoverage
         ["task shorten"] = Terminal("a one-off tidy of titles written before the 72-character limit, best tried with --dry-run first, which no page needs to offer"),
         ["task apply"] = Terminal("reads its changes from a file or standard input, which a page has neither of; Studio makes the same changes through its own batch route"),
         ["task declare"] = new("projects", StudioEffect.Changes),
+        ["task propose-done-when"] = new("teams", StudioEffect.Changes),
         ["task move"] = new("projects", StudioEffect.Changes),
         ["task remove"] = new("projects", StudioEffect.Changes),
         ["idea add"] = new("ideas", StudioEffect.Changes),
