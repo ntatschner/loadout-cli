@@ -1340,6 +1340,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             + $"{Markup.Escape(journal.Directory)}[/]");
 
         var running = spine.RunAsync(ct);
+        var answering = AnswerAsync(spine, new Loadout.Core.Triggers.TriggerInbox(state), output, ct);
 
         try
         {
@@ -1372,6 +1373,59 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         {
             _spine = null;
             await running.ConfigureAwait(false);
+            await answering.ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>How often the trigger inbox is looked at; a person is waiting on each answer.</summary>
+    internal TimeSpan AnswerEvery { get; init; } = TimeSpan.FromMilliseconds(250);
+
+    /// <summary>
+    /// Makes the changes to the rules that the trigger commands ask for, and
+    /// answers them, until told to stop.
+    /// </summary>
+    private async Task AnswerAsync(
+        Loadout.Core.Triggers.TriggerSpine spine,
+        Loadout.Core.Triggers.TriggerInbox inbox,
+        CommandOutput output,
+        CancellationToken ct)
+    {
+        var swept = DateTimeOffset.MinValue;
+
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                try
+                {
+                    foreach (var asking in inbox.Waiting())
+                    {
+                        var answer = await spine.ApplyAsync(asking, ct).ConfigureAwait(false);
+
+                        inbox.Answer(answer);
+                        output.WriteLine(
+                            $"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] trigger rules: {Markup.Escape(answer.Message)}");
+                    }
+
+                    if (_time.GetUtcNow() - swept > TimeSpan.FromHours(1))
+                    {
+                        swept = _time.GetUtcNow();
+                        inbox.Sweep(swept);
+                    }
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    output.WriteLine(
+                        $"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] the trigger inbox could not be read: "
+                        + Markup.Escape(ex.Message));
+                }
+
+                await Task.Delay(AnswerEvery, _time, ct).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Stopping, which is how this ends.
         }
     }
 
@@ -1985,7 +2039,8 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
                     _processes.CurrentProcessStartedAt,
                     address,
                     _since.Value,
-                    _sessions.Running)),
+                    _sessions.Running,
+                    _triggering)),
                 ct).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

@@ -94,6 +94,8 @@ public sealed class TriggerSpine
     private readonly Channel<TriggerStart> _work;
     private readonly Dictionary<(string Rule, string Subject), Waiting> _waiting = [];
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _working = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _applied = new(StringComparer.Ordinal);
+    private readonly SemaphoreSlim _gate = new(1, 1);
     private DateTimeOffset _settled = DateTimeOffset.MinValue;
 
     /// <param name="rules">The rules to match against, read afresh for every event.</param>
@@ -175,7 +177,13 @@ public sealed class TriggerSpine
     }
 
     /// <summary>Reads the ledger back from the journal.</summary>
-    internal void Rebuild() => Ledger = SpendLedger.Rebuild(_journal.Read(_time.GetUtcNow() - Remembered));
+    internal void Rebuild()
+    {
+        var entries = _journal.Read(_time.GetUtcNow() - Remembered);
+
+        Ledger = SpendLedger.Rebuild(entries);
+        _applied.UnionWith(entries.Select(one => one.Request).OfType<string>());
+    }
 
     private async Task DispatchLoopAsync(CancellationToken ct)
     {
@@ -187,26 +195,35 @@ public sealed class TriggerSpine
 
             await Task.WhenAny(arriving, Task.Delay(Tick, _time, ct)).ConfigureAwait(false);
 
-            if (arriving.IsCompleted)
+            if (arriving.IsCompleted && !await arriving.ConfigureAwait(false))
             {
-                if (!await arriving.ConfigureAwait(false))
-                {
-                    return;
-                }
-
-                arriving = null;
-
-                while (_inbound.Reader.TryRead(out var happened))
-                {
-                    await DispatchAsync(happened, ct).ConfigureAwait(false);
-                }
+                return;
             }
 
-            await FlushAsync(_time.GetUtcNow(), ct).ConfigureAwait(false);
+            await _gate.WaitAsync(ct).ConfigureAwait(false);
 
-            if (_time.GetUtcNow() - _settled >= SettleEvery)
+            try
             {
-                await SettleAsync(_time.GetUtcNow(), ct).ConfigureAwait(false);
+                if (arriving.IsCompleted)
+                {
+                    arriving = null;
+
+                    while (_inbound.Reader.TryRead(out var happened))
+                    {
+                        await DispatchAsync(happened, ct).ConfigureAwait(false);
+                    }
+                }
+
+                await FlushAsync(_time.GetUtcNow(), ct).ConfigureAwait(false);
+
+                if (_time.GetUtcNow() - _settled >= SettleEvery)
+                {
+                    await SettleAsync(_time.GetUtcNow(), ct).ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                _gate.Release();
             }
         }
 
@@ -279,14 +296,149 @@ public sealed class TriggerSpine
         }
     }
 
-    /// <summary>Lets a paused rule act again, its caps counting from now.</summary>
-    public void Resume(TriggerRule rule, string reason)
+    /// <summary>
+    /// Makes a change to the rules somebody asked the daemon for, and answers.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Here and not by writing the file, because the spine holds what a direct
+    /// write would race: actions waiting for their subject to go quiet, each
+    /// decided against the rule as it was. A change is made under the same
+    /// gate the dispatcher holds, then every waiting action of that rule is
+    /// checked against it again; one that no longer matches is withdrawn and
+    /// written down rather than left to start under a rule that has changed.
+    /// </para>
+    /// <para>
+    /// A request applied once is never applied again. The asker retries with
+    /// the same id when an answer is slow, and an edit applied twice would
+    /// count the rule's version on twice.
+    /// </para>
+    /// </remarks>
+    public async Task<TriggerAnswer> ApplyAsync(TriggerAsk asking, CancellationToken ct)
     {
-        ArgumentNullException.ThrowIfNull(rule);
+        ArgumentNullException.ThrowIfNull(asking);
+
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+
+        try
+        {
+            if (_applied.Contains(asking.Id))
+            {
+                return new TriggerAnswer(asking.Id, true, "Already applied by an earlier copy of this request.");
+            }
+
+            var answer = asking.Verb switch
+            {
+                TriggerVerbs.Save when asking.Rule is { } rule => await SaveAsync(asking.Id, rule, ct).ConfigureAwait(false),
+                TriggerVerbs.Remove when asking.RuleId is { Length: > 0 } id => await RemoveAsync(asking.Id, id, ct).ConfigureAwait(false),
+                TriggerVerbs.Resume when asking.RuleId is { Length: > 0 } id => await ResumeAsync(asking.Id, id, ct).ConfigureAwait(false),
+                _ => new TriggerAnswer(asking.Id, false, $"'{asking.Verb}' is not a change the daemon can make to the rules."),
+            };
+
+            if (answer.Applied)
+            {
+                _applied.Add(asking.Id);
+            }
+
+            return answer;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private async Task<TriggerAnswer> SaveAsync(string request, TriggerRule rule, CancellationToken ct)
+    {
+        var saved = await _rules.SaveAsync(rule, ct).ConfigureAwait(false);
+
+        if (saved.Failed)
+        {
+            return new TriggerAnswer(request, false, saved.Error!);
+        }
+
+        var now = _time.GetUtcNow();
+        rule = saved.Value!;
 
         Write(new TriggerEntry(
-            _time.GetUtcNow(), TriggerEntryKinds.Resumed, Rule: rule.Id, Version: rule.Version, Reason: reason));
+            now, TriggerEntryKinds.Edited, Rule: rule.Id, Version: rule.Version, Reason: "saved", Request: request));
+
+        foreach (var (key, waiting) in WaitingOn(rule.Id))
+        {
+            var decision = TriggerMatcher.Decide(waiting.Event, rule);
+
+            if (decision.Matched)
+            {
+                // Still wanted: it goes ahead under the rule as it is now,
+                // caps and budget included, when its subject goes quiet.
+                _waiting[key] = waiting with { Rule = rule };
+
+                continue;
+            }
+
+            _waiting.Remove(key);
+            Write(new TriggerEntry(
+                now, TriggerEntryKinds.Withdrawn, waiting.Event.Id, rule.Id, rule.Version, waiting.Event.Subject,
+                $"the rule changed and {decision.Reason}", Request: request));
+        }
+
+        return new TriggerAnswer(request, true, $"Applied by the daemon: '{rule.Id}' is now version {rule.Version}.", rule.Version);
     }
+
+    private async Task<TriggerAnswer> RemoveAsync(string request, string id, CancellationToken ct)
+    {
+        var removed = await _rules.RemoveAsync(id, ct).ConfigureAwait(false);
+
+        if (removed.Failed)
+        {
+            return new TriggerAnswer(request, false, removed.Error!);
+        }
+
+        var now = _time.GetUtcNow();
+
+        Write(new TriggerEntry(now, TriggerEntryKinds.Removed, Rule: id, Reason: "removed", Request: request));
+
+        foreach (var (key, waiting) in WaitingOn(id))
+        {
+            _waiting.Remove(key);
+            Write(new TriggerEntry(
+                now, TriggerEntryKinds.Withdrawn, waiting.Event.Id, id, waiting.Rule.Version, waiting.Event.Subject,
+                "the rule was removed", Request: request));
+        }
+
+        return new TriggerAnswer(request, true, $"Applied by the daemon: '{id}' is gone, and nothing waiting on it will start.");
+    }
+
+    private async Task<TriggerAnswer> ResumeAsync(string request, string id, CancellationToken ct)
+    {
+        var listed = await _rules.ListAsync(ct).ConfigureAwait(false);
+
+        if (listed.Failed)
+        {
+            return new TriggerAnswer(request, false, listed.Error!);
+        }
+
+        if (listed.Value!.FirstOrDefault(one => string.Equals(one.Rule.Id, id, StringComparison.OrdinalIgnoreCase))
+            is not { } found)
+        {
+            return new TriggerAnswer(request, false, $"There is no trigger rule called '{id}' on this machine.");
+        }
+
+        if (!Ledger.Paused(found.Rule.Id))
+        {
+            return new TriggerAnswer(request, true, $"'{found.Rule.Id}' was not paused, so nothing changed.");
+        }
+
+        Write(new TriggerEntry(
+            _time.GetUtcNow(), TriggerEntryKinds.Resumed, Rule: found.Rule.Id, Version: found.Rule.Version,
+            Reason: "resumed; its caps count from now", Request: request));
+
+        return new TriggerAnswer(request, true, $"Applied by the daemon: '{found.Rule.Id}' acts again, its caps counting from now.");
+    }
+
+    /// <summary>The actions waiting on one rule for their subject to go quiet.</summary>
+    private List<KeyValuePair<(string Rule, string Subject), Waiting>> WaitingOn(string rule) =>
+        [.. _waiting.Where(one => string.Equals(one.Key.Rule, rule, StringComparison.OrdinalIgnoreCase))];
 
     private async Task DecideAsync(TriggerRule rule, TriggerEvent happened, DateTimeOffset now, CancellationToken ct)
     {

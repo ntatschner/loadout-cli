@@ -32,7 +32,41 @@ public static class TriggerSwitch
     }
 
     /// <summary>What to say to somebody who asked for a trigger command while the switch is off.</summary>
+    /// <remarks>
+    /// Not 'loadout daemon restart': the running daemon starts its successor
+    /// itself, which inherits its environment, so a variable set since in some
+    /// other shell never reaches it.
+    /// </remarks>
     public static string Refusal =>
-        $"Triggers are not switched on. They are unfinished and live behind {Variable}: set it to 1 and "
-        + "restart the daemon with 'loadout daemon restart' to try them.";
+        $"Triggers are not switched on. They are unfinished and live behind {Variable}: set it to 1, "
+        + "then stop the daemon with 'loadout daemon stop' and start it again from that shell.";
+
+    /// <summary>
+    /// Whether triggers are on, asking the running daemon where there is one,
+    /// and what to say when they are not.
+    /// </summary>
+    /// <param name="daemon">Whether a daemon is running, and if so whether it started with triggers on.</param>
+    /// <param name="environment">This process's own environment, for when no daemon is running.</param>
+    /// <remarks>
+    /// The daemon's answer is the one that counts, because it is the only
+    /// process that acts on rules. A shell with the variable set talking to a
+    /// daemon started without it is told so, which explains a refusal that
+    /// would otherwise make no sense to the person who just set it.
+    /// </remarks>
+    public static (bool On, string? Refusal) Ask(bool? daemon, IEnvironmentProvider environment)
+    {
+        ArgumentNullException.ThrowIfNull(environment);
+
+        var here = On(environment);
+
+        return daemon switch
+        {
+            true => (true, null),
+            false when here => (false,
+                $"The running daemon was started without {Variable}, though it is set here. Stop it with "
+                + "'loadout daemon stop' and start it again from this shell."),
+            false => (false, Refusal),
+            null => here ? (true, null) : (false, Refusal),
+        };
+    }
 }

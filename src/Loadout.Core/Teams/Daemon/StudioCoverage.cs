@@ -86,6 +86,9 @@ public static class StudioCoverage
 
     private static StudioReach Terminal(string reason) => new(CommandsPage, StudioEffect.TerminalOnly, reason);
 
+    private const string Unfinished =
+        "belongs to triggers, which are unfinished and off unless the daemon was started with LOADOUT_TRIGGERS=1";
+
     private static StudioReach ChangesWith(params string[] options) => new(CommandsPage, StudioEffect.Changes, ChangesOnlyWith: options);
 
     /// <summary>Every command path, and how Studio reaches it.</summary>
@@ -202,6 +205,17 @@ public static class StudioCoverage
         ["team webhook enable"] = new("teams", StudioEffect.Changes),
         ["team webhook disable"] = new("teams", StudioEffect.Changes),
         ["team webhook show"] = new("teams", StudioEffect.Reads),
+
+        // Terminal only while triggers are unfinished and switched off by
+        // default, so Studio shows nothing of them until they are whole. A
+        // page of their own, with the approvals inbox, comes with the slice
+        // that has something to approve.
+        ["trigger list"] = Terminal(Unfinished),
+        ["trigger add"] = Terminal(Unfinished),
+        ["trigger remove"] = Terminal(Unfinished),
+        ["trigger resume"] = Terminal(Unfinished),
+        ["trigger journal"] = Terminal(Unfinished),
+        ["trigger test"] = Terminal(Unfinished),
         ["dashboard"] = Terminal("serves a dashboard page, and this is one"),
         ["dashboard sign-out"] = new("settings", StudioEffect.Changes),
         ["dashboard signal"] = Terminal("is run by the agent's own hook inside a session, to say it is waiting"),

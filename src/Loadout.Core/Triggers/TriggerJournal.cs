@@ -23,6 +23,7 @@ namespace Loadout.Core.Triggers;
 /// <param name="Origins">For an event: the rules whose actions led to it.</param>
 /// <param name="Run">For a start: the run it became, once known.</param>
 /// <param name="Happened">For an event: when it happened, where that is not when it arrived.</param>
+/// <param name="Request">For a change to the rules: the request that asked for it, so a retry is not applied twice.</param>
 public sealed record TriggerEntry(
     DateTimeOffset At,
     string Kind,
@@ -39,7 +40,8 @@ public sealed record TriggerEntry(
     IReadOnlyDictionary<string, string>? Fields = null,
     IReadOnlyList<string>? Origins = null,
     string? Run = null,
-    DateTimeOffset? Happened = null)
+    DateTimeOffset? Happened = null,
+    string? Request = null)
 {
     /// <summary>The entry recording an event as it arrived.</summary>
     public static TriggerEntry Of(TriggerEvent one, DateTimeOffset at)
@@ -95,6 +97,15 @@ public static class TriggerEntryKinds
 
     /// <summary>A person let a paused rule act again; its caps count from here.</summary>
     public const string Resumed = "resumed";
+
+    /// <summary>A rule was saved, new or changed.</summary>
+    public const string Edited = "edited";
+
+    /// <summary>A rule was removed.</summary>
+    public const string Removed = "removed";
+
+    /// <summary>An action waiting to start was dropped, because its rule changed or went.</summary>
+    public const string Withdrawn = "withdrawn";
 }
 
 /// <summary>
