@@ -311,7 +311,10 @@ public sealed class TriggerAddCommand(
         }
 
         if (rule.Action.Kind == TriggerActionKinds.Team
-            && await TeamMoneyAsync(rule, settings, output, cancellationToken).ConfigureAwait(false) is { } refused)
+            && await TeamMoneyAsync(
+                rule, settings.BudgetUsd, settings.CapUsd, output,
+                new DaemonTriggerActions(commands, runs, teams, library, workspace), runs, cancellationToken)
+                .ConfigureAwait(false) is { } refused)
         {
             return output.Fail(refused, ExitCode.InvalidArguments);
         }
@@ -374,9 +377,15 @@ public sealed class TriggerAddCommand(
     /// written now and act once approvals exist.
     /// </para>
     /// </remarks>
-    private async Task<string?> TeamMoneyAsync(TriggerRule rule, Settings settings, CommandOutput output, CancellationToken ct)
+    internal static async Task<string?> TeamMoneyAsync(
+        TriggerRule rule,
+        string? budgetText,
+        string? capText,
+        CommandOutput output,
+        DaemonTriggerActions actions,
+        Loadout.Core.Teams.IRunJournal runs,
+        CancellationToken ct)
     {
-        var actions = new DaemonTriggerActions(commands, runs, teams, library, workspace);
         var traits = await actions.DescribeAsync(rule.Action, rule.Projects.FirstOrDefault(), ct).ConfigureAwait(false);
 
         if (traits.Problem is { } problem)
@@ -391,13 +400,13 @@ public sealed class TriggerAddCommand(
 
         var accepted = false;
 
-        if (TriggerWords.Proposed(settings.BudgetUsd))
+        if (TriggerWords.Proposed(budgetText))
         {
             rule.BudgetUsd = proposal.BudgetUsd;
             accepted = true;
         }
 
-        if (TriggerWords.Proposed(settings.CapUsd))
+        if (TriggerWords.Proposed(capText))
         {
             // Never below one run, or the budget just accepted could not start.
             rule.CapUsd = Math.Max(proposal.CapUsd, rule.BudgetUsd ?? traits.BudgetUsd ?? 0m);
@@ -730,6 +739,219 @@ public sealed class TriggerTestCommand(
     }
 }
 
+/// <summary>Lists the trigger rules teams suggest for themselves, and where each stands.</summary>
+[Description("List the trigger rules teams suggest for themselves: which are accepted here, and which have changed since. Unfinished: needs LOADOUT_TRIGGERS.")]
+[CommandMeta(CommandCategory.Integration, Intent = "trigger suggested team suggests rules offered")]
+public sealed class TriggerSuggestedCommand(
+    IPlatformPaths paths,
+    IProcessInspector processes,
+    IEnvironmentProvider environment,
+    YamlStore yaml,
+    IFilePermissions permissions,
+    IAnsiConsole console,
+    TimeProvider time,
+    Loadout.Core.Teams.ITeamCatalogue teams,
+    Loadout.Core.Instructions.ISpecialistLibrary library,
+    Loadout.Core.Workspace.IWorkspaceManager workspace) : AsyncCommand<TriggerSuggestedCommand.Settings>
+{
+    public sealed class Settings : TriggerSettings
+    {
+        [CommandOption("--project <SLUG>")]
+        [Description("Include the teams of this project as well as the built-in and workspace ones.")]
+        public string? Project { get; init; }
+    }
+
+    /// <inheritdoc />
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var output = new CommandOutput(console, settings);
+        var desk = new TriggerDesk(paths, processes, environment, yaml, permissions, time);
+
+        if (desk.Switch() is (false, var refusal))
+        {
+            return output.Fail(refusal, ExitCode.InvalidArguments);
+        }
+
+        var root = workspace.IsAvailable() ? workspace.LocalPath : null;
+        var specialists = await library.LoadAsync(root, settings.Project, cancellationToken).ConfigureAwait(false);
+        var catalogue = await teams.LoadAsync(root, settings.Project, specialists, cancellationToken).ConfigureAwait(false);
+        var listed = await desk.Rules.ListAsync(cancellationToken).ConfigureAwait(false);
+
+        if (listed.Failed)
+        {
+            return output.Fail(listed);
+        }
+
+        var suggestions = TeamSuggestions.Of(catalogue.Teams.Values, listed.Value!.Select(one => one.Rule));
+
+        if (output.IsJson)
+        {
+            output.WriteJson(suggestions.Select(one => new
+            {
+                team = one.Team,
+                name = one.Suggested.Name,
+                rule = one.RuleId,
+                suggested = one.Suggested,
+                accepted = one.Accepted is not null,
+                changed = one.Changed,
+            }));
+
+            return CommandOutput.Success();
+        }
+
+        if (suggestions.Count == 0)
+        {
+            output.WriteLine("No team here suggests any trigger rules.");
+
+            return CommandOutput.Success();
+        }
+
+        foreach (var one in suggestions)
+        {
+            var where = one.Suggested.Where.Count > 0
+                ? " where " + string.Join(", ", one.Suggested.Where.Select(pair => $"{pair.Key}={pair.Value}"))
+                : string.Empty;
+            var state = one.Accepted is null ? "not accepted"
+                : one.Changed ? "accepted, and the team has changed it since: accept it again to take the change"
+                : "accepted";
+
+            output.WriteLine(Markup.Escape($"{one.Team} {one.Suggested.Name}: on {one.Suggested.On}{where}, \"{one.Suggested.Goal}\" ({state})"));
+        }
+
+        output.WriteBlankLine();
+        output.WriteLine("[dim]Take one as a rule of your own with:[/] loadout trigger accept <team> <name>");
+
+        return CommandOutput.Success();
+    }
+}
+
+/// <summary>Takes a team's suggested trigger rule as a rule on this machine.</summary>
+[Description("Accept a trigger rule a team suggests, as a rule of your own with a spend cap. Accepting it again takes a changed suggestion. Unfinished: needs LOADOUT_TRIGGERS.")]
+[CommandMeta(CommandCategory.Integration, Intent = "trigger accept team suggestion opt in rule", Mutates = true)]
+public sealed class TriggerAcceptCommand(
+    IPlatformPaths paths,
+    IProcessInspector processes,
+    IEnvironmentProvider environment,
+    YamlStore yaml,
+    IFilePermissions permissions,
+    IAnsiConsole console,
+    TimeProvider time,
+    Loadout.Core.Teams.IRunJournal runs,
+    ICommandCatalogue commands,
+    Loadout.Core.Teams.ITeamCatalogue teams,
+    Loadout.Core.Instructions.ISpecialistLibrary library,
+    Loadout.Core.Workspace.IWorkspaceManager workspace) : AsyncCommand<TriggerAcceptCommand.Settings>
+{
+    public sealed class Settings : TriggerSettings
+    {
+        [CommandArgument(0, "<TEAM>")]
+        [Description("The team that suggests it.")]
+        public string Team { get; init; } = string.Empty;
+
+        [CommandArgument(1, "<NAME>")]
+        [Description("Which of its suggestions, as 'trigger suggested' names it.")]
+        public string Name { get; init; } = string.Empty;
+
+        [CommandOption("--project <SLUG>")]
+        [Description("Only events from this project count. Give it more than once for several; leave it out for all.")]
+        public string[] Projects { get; init; } = [];
+
+        [CommandOption("--cap-usd <AMOUNT>")]
+        [Description("The most its runs may spend in the window, in US dollars, or proposed. The team's suggestion when left out.")]
+        public string? CapUsd { get; init; }
+
+        [CommandOption("--budget-usd <AMOUNT>")]
+        [Description("What each run may spend, in US dollars, or proposed. The team's suggestion, then the team's own, when left out.")]
+        public string? BudgetUsd { get; init; }
+    }
+
+    /// <inheritdoc />
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var output = new CommandOutput(console, settings);
+        var desk = new TriggerDesk(paths, processes, environment, yaml, permissions, time);
+
+        if (desk.Switch() is (false, var refusal))
+        {
+            return output.Fail(refusal, ExitCode.InvalidArguments);
+        }
+
+        var projects = settings.Projects.Select(one => one.Trim()).Where(one => one.Length > 0).ToList();
+        var root = workspace.IsAvailable() ? workspace.LocalPath : null;
+        var slug = projects.FirstOrDefault();
+        var specialists = await library.LoadAsync(root, slug, cancellationToken).ConfigureAwait(false);
+        var catalogue = await teams.LoadAsync(root, slug, specialists, cancellationToken).ConfigureAwait(false);
+
+        if (catalogue.Find(settings.Team) is not { } team)
+        {
+            return output.Fail($"No team named '{settings.Team}'. See what there is with: loadout team list", ExitCode.ProjectNotFound);
+        }
+
+        if (team.Triggers.FirstOrDefault(one => string.Equals(one.Name, settings.Name, StringComparison.OrdinalIgnoreCase))
+            is not { } suggested)
+        {
+            return output.Fail(
+                $"{team.Name} suggests no trigger called '{settings.Name}'. See what it suggests with: loadout trigger suggested",
+                ExitCode.ProjectNotFound);
+        }
+
+        var rule = TeamSuggestions.Rule(team.Name, suggested, projects);
+
+        // What the person says wins over what the team suggests, figure by figure.
+        var unreadable = TriggerWords.Money(settings.CapUsd, "--cap-usd", value => rule.CapUsd = value)
+            ?? TriggerWords.Money(settings.BudgetUsd, "--budget-usd", value => rule.BudgetUsd = value);
+
+        if (unreadable is not null)
+        {
+            return output.Fail(unreadable, ExitCode.InvalidArguments);
+        }
+
+        if (await TriggerAddCommand.TeamMoneyAsync(
+                rule, settings.BudgetUsd, settings.CapUsd, output,
+                new DaemonTriggerActions(commands, runs, teams, library, workspace), runs, cancellationToken)
+                .ConfigureAwait(false) is { } refused)
+        {
+            return output.Fail(refused, ExitCode.InvalidArguments);
+        }
+
+        if (TriggerRules.Check(rule) is { } problem)
+        {
+            return output.Fail($"{team.Name}'s suggestion cannot be accepted as it stands: {problem}", ExitCode.InvalidArguments);
+        }
+
+        if (settings.DryRun)
+        {
+            output.WriteLine($"[dim]Dry run: nothing was saved.[/] This would save '{Markup.Escape(rule.Id)}':");
+            output.WriteLine(Markup.Escape(TriggerWords.Line(rule, null)));
+
+            return CommandOutput.Success();
+        }
+
+        var request = Guid.NewGuid().ToString("N");
+
+        return await desk.ChangeAsync(
+            new TriggerAsk(request, TriggerVerbs.Save, Rule: rule),
+            output,
+            async () =>
+            {
+                var saved = await desk.Rules.SaveAsync(rule, cancellationToken).ConfigureAwait(false);
+
+                return saved.Failed
+                    ? new TriggerAnswer(request, false, saved.Error!)
+                    : desk.Journalled(
+                        request, TriggerEntryKinds.Edited, saved.Value!.Id, saved.Value!.Version,
+                        $"accepted from {team.Name}'s suggestion with no daemon running",
+                        $"'{saved.Value!.Id}' is saved as version {saved.Value!.Version}. No daemon is running, so it "
+                        + "takes effect when one starts.");
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+}
+
 /// <summary>Turning options into rules, and rules and entries into lines.</summary>
 internal static class TriggerWords
 {
@@ -810,7 +1032,7 @@ internal static class TriggerWords
     public static bool Proposed(string? text) =>
         string.Equals(text?.Trim(), "proposed", StringComparison.OrdinalIgnoreCase);
 
-    private static string? Money(string? text, string option, Action<decimal> set)
+    internal static string? Money(string? text, string option, Action<decimal> set)
     {
         // Filled in by the command once it has read the team's runs.
         if (string.IsNullOrWhiteSpace(text) || Proposed(text))

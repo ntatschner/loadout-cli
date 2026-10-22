@@ -100,6 +100,87 @@ public sealed class TriggerContractTests
     }
 
     [BuiltCliFact]
+    public async Task A_team_suggestion_is_offered_accepted_kept_as_accepted_when_it_changes_and_taken_again()
+    {
+        using var loadout = new LoadoutProcess();
+        loadout.Environment["LOADOUT_TRIGGERS"] = "1";
+
+        var team = await WatcherAsync(loadout, cap: "6");
+
+        var offered = (await loadout.RunAsync("trigger", "suggested", "--json")).Json().EnumerateArray().Single();
+        offered.GetProperty("rule").GetString().Should().Be("watcher-after-failure");
+        offered.GetProperty("accepted").GetBoolean().Should().BeFalse();
+
+        var accepted = await loadout.RunAsync("trigger", "accept", "watcher", "after-failure");
+        accepted.ExitCode.Should().Be(0, accepted.StandardError);
+
+        Rule().Should().Be((1, 6m));
+
+        // The team's author raises the cap. The rule stays as accepted, and
+        // the change is shown rather than taken.
+        await File.WriteAllTextAsync(team, Watcher(cap: "8"));
+
+        var changed = (await loadout.RunAsync("trigger", "suggested", "--json")).Json().EnumerateArray().Single();
+        changed.GetProperty("changed").GetBoolean().Should().BeTrue();
+        Rule().Should().Be((1, 6m));
+
+        (await loadout.RunAsync("trigger", "accept", "watcher", "after-failure")).ExitCode.Should().Be(0);
+        Rule().Should().Be((2, 8m));
+
+        (int, decimal) Rule()
+        {
+            var rule = loadout.RunAsync("trigger", "list", "--json").GetAwaiter().GetResult()
+                .Json().EnumerateArray().Single().GetProperty("rule");
+
+            return (rule.GetProperty("version").GetInt32(), rule.GetProperty("capUsd").GetDecimal());
+        }
+    }
+
+    /// <summary>
+    /// Puts a team that suggests a trigger in this run's own workspace, and
+    /// returns its file.
+    /// </summary>
+    /// <remarks>
+    /// The workspace is asked for its path rather than worked out, for the
+    /// reason the daemon tests ask for the state directory: the layout differs
+    /// between Windows and the XDG platforms. It counts as a workspace once it
+    /// has a projects directory.
+    /// </remarks>
+    private static async Task<string> WatcherAsync(LoadoutProcess loadout, string cap)
+    {
+        var root = (await loadout.RunAsync("workspace", "status", "--json")).Json().GetProperty("localPath").GetString()!;
+        var teams = Path.Combine(root, "global", "teams");
+
+        Directory.CreateDirectory(Path.Combine(root, "projects"));
+        Directory.CreateDirectory(teams);
+
+        var file = Path.Combine(teams, "watcher.yaml");
+        await File.WriteAllTextAsync(file, Watcher(cap));
+
+        return file;
+    }
+
+    /// <summary>A small team with no worktree, so it only reads, that suggests one rule.</summary>
+    private static string Watcher(string cap) =>
+        "name: watcher\n"
+        + "description: Looks at failed runs.\n"
+        + "lead: lead\n"
+        + "nodes:\n"
+        + "  lead:\n"
+        + "    role: role.project-lead\n"
+        + "rules:\n"
+        + "  autonomy: autonomous\n"
+        + "  budget:\n"
+        + "    usd: 3\n"
+        + "triggers:\n"
+        + "  - name: after-failure\n"
+        + "    on: run-finished\n"
+        + "    where:\n"
+        + "      outcome: failed\n"
+        + "    goal: Find out why {run} failed.\n"
+        + $"    cap_usd: {cap}\n";
+
+    [BuiltCliFact]
     public async Task A_dry_run_says_what_it_would_save_and_saves_nothing()
     {
         using var loadout = new LoadoutProcess();

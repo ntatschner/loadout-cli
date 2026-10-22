@@ -73,6 +73,12 @@ public sealed class TriggerRule
     /// <summary>The team whose suggestion this was accepted from, or empty for a rule written here.</summary>
     public string SuggestedBy { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Which of that team's suggestions, and a fingerprint of it as it was
+    /// accepted, so a change to the suggestion is noticed rather than taken.
+    /// </summary>
+    public string Suggestion { get; set; } = string.Empty;
+
     /// <summary>Runs in a window where nothing is set.</summary>
     public const int DefaultCapRuns = 10;
 

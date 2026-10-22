@@ -1053,6 +1053,8 @@ public static class Program
             trigger.AddCommand<TriggerResumeCommand>("resume");
             trigger.AddCommand<TriggerJournalCommand>("journal");
             trigger.AddCommand<TriggerTestCommand>("test");
+            trigger.AddCommand<TriggerSuggestedCommand>("suggested");
+            trigger.AddCommand<TriggerAcceptCommand>("accept");
         });
 
         TopBranch(config, "voice", voice =>
