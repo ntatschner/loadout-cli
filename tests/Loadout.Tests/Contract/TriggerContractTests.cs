@@ -216,6 +216,31 @@ public sealed class TriggerContractTests
     }
 
     [BuiltCliFact]
+    public async Task Prune_says_what_it_would_delete_then_deletes_it()
+    {
+        using var loadout = new LoadoutProcess();
+        loadout.Environment["LOADOUT_TRIGGERS"] = "1";
+
+        var doctor = (await loadout.RunAsync("doctor", "--json")).Json();
+        var state = doctor.GetProperty("checks").EnumerateArray()
+            .First(check => check.GetProperty("name").GetString() == "State").GetProperty("detail").GetString()!;
+        var journal = Path.Combine(state, "triggers", "journal");
+        var old = Path.Combine(journal, DateTimeOffset.UtcNow.AddDays(-120).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture) + ".jsonl");
+
+        Directory.CreateDirectory(journal);
+        await File.WriteAllTextAsync(old, "{\"at\":\"2026-06-01T00:00:00+00:00\",\"kind\":\"event\"}\n");
+
+        var dry = await loadout.RunAsync("trigger", "prune", "--dry-run");
+
+        dry.ExitCode.Should().Be(0, dry.StandardError);
+        dry.StandardOutput.Should().Contain("1 day(s) would go");
+        File.Exists(old).Should().BeTrue();
+
+        (await loadout.RunAsync("trigger", "prune")).ExitCode.Should().Be(0);
+        File.Exists(old).Should().BeFalse();
+    }
+
+    [BuiltCliFact]
     public async Task A_dry_run_says_what_it_would_save_and_saves_nothing()
     {
         using var loadout = new LoadoutProcess();

@@ -122,6 +122,9 @@ public static class TriggerEntryKinds
 
     /// <summary>An action waiting to start was dropped, because its rule changed or went.</summary>
     public const string Withdrawn = "withdrawn";
+
+    /// <summary>Days of the journal were deleted, and which.</summary>
+    public const string Pruned = "pruned";
 }
 
 /// <summary>
@@ -198,6 +201,79 @@ public sealed class TriggerJournal
                 _permissions?.RestrictToCurrentUser(day.Key);
             }
         }
+    }
+
+    /// <summary>How long the journal is kept where nobody has said otherwise.</summary>
+    public static readonly TimeSpan Kept = TimeSpan.FromDays(90);
+
+    /// <summary>
+    /// The day files a prune of everything older than <paramref name="olderThan"/>
+    /// would delete, oldest first, and the bytes they hold.
+    /// </summary>
+    /// <remarks>
+    /// Never anything inside <see cref="TriggerSpine.Remembered"/>: the spend
+    /// ledger is rebuilt from that much of the journal, and a reservation whose
+    /// day had gone would be money forgotten while its run still spends it.
+    /// A whole day goes or stays, so pruning is deleting files.
+    /// </remarks>
+    public (IReadOnlyList<string> Days, long Bytes) Prunable(DateTimeOffset now, TimeSpan olderThan)
+    {
+        if (!System.IO.Directory.Exists(Directory))
+        {
+            return ([], 0);
+        }
+
+        var keep = now - (olderThan > TriggerSpine.Remembered ? olderThan : TriggerSpine.Remembered);
+        var first = Path.GetFileName(DayPath(keep));
+
+        var days = new DirectoryInfo(Directory).GetFiles("*.jsonl")
+            .Where(one => string.CompareOrdinal(one.Name, first) < 0)
+            .OrderBy(one => one.Name, StringComparer.Ordinal)
+            .ToList();
+
+        return ([.. days.Select(one => one.Name[..^".jsonl".Length])], days.Sum(one => one.Length));
+    }
+
+    /// <summary>
+    /// Deletes the day files older than <paramref name="olderThan"/>, and
+    /// writes in the journal what went, so nothing disappears without a record.
+    /// </summary>
+    /// <returns>The days that went.</returns>
+    public IReadOnlyList<string> Prune(DateTimeOffset now, TimeSpan olderThan, string why)
+    {
+        var (days, bytes) = Prunable(now, olderThan);
+
+        if (days.Count == 0)
+        {
+            return [];
+        }
+
+        var gone = new List<string>();
+
+        lock (_gate)
+        {
+            foreach (var day in days)
+            {
+                try
+                {
+                    File.Delete(Path.Combine(Directory, day + ".jsonl"));
+                    gone.Add(day);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // Held open somewhere; the next prune takes it.
+                }
+            }
+        }
+
+        if (gone.Count > 0)
+        {
+            Append(new TriggerEntry(
+                now, TriggerEntryKinds.Pruned,
+                Reason: $"{why}: {gone.Count} day(s), {gone[0]} to {gone[^1]}, about {bytes / 1024} KB"));
+        }
+
+        return gone;
     }
 
     /// <summary>Every entry from <paramref name="since"/> on, oldest first. A line that will not parse is left out.</summary>

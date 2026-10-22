@@ -1055,6 +1055,7 @@ public static class Program
             trigger.AddCommand<TriggerTestCommand>("test");
             trigger.AddCommand<TriggerSuggestedCommand>("suggested");
             trigger.AddCommand<TriggerAcceptCommand>("accept");
+            trigger.AddCommand<TriggerPruneCommand>("prune");
         });
 
         TopBranch(config, "voice", voice =>

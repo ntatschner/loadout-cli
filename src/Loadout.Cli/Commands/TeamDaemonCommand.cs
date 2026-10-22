@@ -1336,6 +1336,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         var rules = new Loadout.Core.Triggers.TriggerRules(state, yaml);
         var drift = new Loadout.Core.Triggers.DocsDriftSource(state, _projects, _git, DocsPolicyAsync);
         var drifted = DateTimeOffset.MinValue;
+        var pruned = DateTimeOffset.MinValue;
 
         _spine = spine;
         output.WriteLine(
@@ -1359,6 +1360,23 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
                         }
                     },
                     output).ConfigureAwait(false);
+
+                // Daily, from the first pass, so a daemon that is restarted
+                // often still prunes.
+                if (_time.GetUtcNow() - pruned >= TimeSpan.FromDays(1))
+                {
+                    pruned = _time.GetUtcNow();
+
+                    await LookedAsync(
+                        "the trigger journal could not be pruned",
+                        () =>
+                        {
+                            journal.Prune(pruned, Loadout.Core.Triggers.TriggerJournal.Kept, "kept for 90 days");
+
+                            return Task.CompletedTask;
+                        },
+                        output).ConfigureAwait(false);
+                }
 
                 if (_time.GetUtcNow() - drifted >= DocsDriftEvery)
                 {

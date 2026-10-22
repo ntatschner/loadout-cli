@@ -751,6 +751,91 @@ public sealed class TriggerTestCommand(
     }
 }
 
+/// <summary>Deletes old days of the trigger journal.</summary>
+[Description("Delete days of the trigger journal older than a given age, recording what went. Never the last 31 days, which hold money still set aside. Unfinished: needs LOADOUT_TRIGGERS.")]
+[CommandMeta(CommandCategory.Integration, Intent = "trigger journal prune delete old days disk", Mutates = true)]
+public sealed class TriggerPruneCommand(
+    IPlatformPaths paths,
+    IProcessInspector processes,
+    IEnvironmentProvider environment,
+    YamlStore yaml,
+    IFilePermissions permissions,
+    IAnsiConsole console,
+    TimeProvider time) : AsyncCommand<TriggerPruneCommand.Settings>
+{
+    public sealed class Settings : TriggerSettings
+    {
+        [CommandOption("--older-than <DURATION>")]
+        [Description("Delete days older than this, such as 60d. 90d when left out, which is what the daemon keeps; never less than 31d.")]
+        public string? OlderThan { get; init; }
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Straight to the files, even with a daemon running: only whole days
+    /// older than the ledger reads are deleted, and the daemon appends only to
+    /// today's.
+    /// </remarks>
+    public override Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var output = new CommandOutput(console, settings);
+        var desk = new TriggerDesk(paths, processes, environment, yaml, permissions, time);
+
+        if (desk.Switch() is (false, var refusal))
+        {
+            return Task.FromResult(output.Fail(refusal, ExitCode.InvalidArguments));
+        }
+
+        if (TriggerWords.Duration(settings.OlderThan, TriggerJournal.Kept) is not { } age)
+        {
+            return Task.FromResult(output.Fail(TeamDuration.Refusal(settings.OlderThan!), ExitCode.InvalidArguments));
+        }
+
+        if (age < TriggerSpine.Remembered)
+        {
+            output.WriteLine(
+                $"[dim]The last {TriggerSpine.Remembered.TotalDays:0} days are kept whatever is asked: the spend ledger is "
+                + "read from them.[/]");
+        }
+
+        var now = time.GetUtcNow();
+        var (days, bytes) = desk.Journal.Prunable(now, age);
+
+        if (settings.DryRun || days.Count == 0)
+        {
+            var said = days.Count == 0
+                ? "Nothing in the trigger journal is that old."
+                : $"Dry run: nothing was deleted. {days.Count} day(s) would go, {days[0]} to {days[^1]}, about {bytes / 1024} KB.";
+
+            if (output.IsJson)
+            {
+                output.WriteJson(new { pruned = false, days, bytes });
+            }
+            else
+            {
+                output.WriteLine(Markup.Escape(said));
+            }
+
+            return Task.FromResult(CommandOutput.Success());
+        }
+
+        var gone = desk.Journal.Prune(now, age, $"pruned by hand, older than {TeamDuration.Spell(age)}");
+
+        if (output.IsJson)
+        {
+            output.WriteJson(new { pruned = true, days = gone, bytes });
+        }
+        else
+        {
+            output.WriteLine(Markup.Escape($"Deleted {gone.Count} day(s) of the trigger journal, and recorded that it did."));
+        }
+
+        return Task.FromResult(CommandOutput.Success());
+    }
+}
+
 /// <summary>Lists the trigger rules teams suggest for themselves, and where each stands.</summary>
 [Description("List the trigger rules teams suggest for themselves: which are accepted here, and which have changed since. Unfinished: needs LOADOUT_TRIGGERS.")]
 [CommandMeta(CommandCategory.Integration, Intent = "trigger suggested team suggests rules offered")]
