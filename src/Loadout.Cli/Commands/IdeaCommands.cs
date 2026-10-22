@@ -305,7 +305,7 @@ public sealed class IdeaAddCommand : AsyncCommand<IdeaAddCommand.Settings>
             || (!settings.NoRefine
                 && settings.AllowsPrompting
                 && IdeaWork.StageOf(record) is IdeaStage.Captured or IdeaStage.Ready
-                && _console.Confirm("Refine now?", defaultValue: true));
+                && AskToRefine(_console));
 
         if (!refine)
         {
@@ -410,6 +410,12 @@ public sealed class IdeaAddCommand : AsyncCommand<IdeaAddCommand.Settings>
 
         return json;
     }
+
+    /// <summary>
+    /// Asks whether to refine now, with Yes as the answer Enter gives: someone
+    /// adding to an idea at a keyboard usually wants the plan to take it in.
+    /// </summary>
+    internal static bool AskToRefine(IAnsiConsole console) => console.Confirm("Refine now?", defaultValue: true);
 
     private static void Remind(CommandOutput output, IdeaPlace place, string? reminder)
     {
