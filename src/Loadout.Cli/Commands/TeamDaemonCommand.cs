@@ -1349,43 +1349,34 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         {
             while (!ct.IsCancellationRequested)
             {
-                try
-                {
-                    foreach (var one in finished.Look())
+                await LookedAsync(
+                    "finished runs could not be read for triggers",
+                    async () =>
                     {
-                        await spine.PostAsync(one, ct).ConfigureAwait(false);
-                    }
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                {
-                    // One look that could not read is not the end of the
-                    // source: said, and tried again at the next.
-                    output.WriteLine(
-                        $"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] finished runs could not be read for "
-                        + $"triggers: {Markup.Escape(ex.Message)}");
-                }
+                        foreach (var one in finished.Look())
+                        {
+                            await spine.PostAsync(one, ct).ConfigureAwait(false);
+                        }
+                    },
+                    output).ConfigureAwait(false);
 
                 if (_time.GetUtcNow() - drifted >= DocsDriftEvery)
                 {
                     drifted = _time.GetUtcNow();
 
-                    try
-                    {
-                        if (await DocsWatchedAsync(rules, ct).ConfigureAwait(false) is { } watched)
+                    await LookedAsync(
+                        "documentation could not be audited for triggers",
+                        async () =>
                         {
-                            foreach (var one in await drift.LookAsync(watched, drifted, ct).ConfigureAwait(false))
+                            if (await DocsWatchedAsync(rules, ct).ConfigureAwait(false) is { } watched)
                             {
-                                await spine.PostAsync(one, ct).ConfigureAwait(false);
+                                foreach (var one in await drift.LookAsync(watched, drifted, ct).ConfigureAwait(false))
+                                {
+                                    await spine.PostAsync(one, ct).ConfigureAwait(false);
+                                }
                             }
-                        }
-                    }
-                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
-                        or System.Text.RegularExpressions.RegexMatchTimeoutException or System.Text.Json.JsonException)
-                    {
-                        output.WriteLine(
-                            $"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] documentation could not be audited for "
-                            + $"triggers: {Markup.Escape(ex.Message)}");
-                    }
+                        },
+                        output).ConfigureAwait(false);
                 }
 
                 await Task.Delay(TriggerEvery, _time, ct).ConfigureAwait(false);
@@ -1400,6 +1391,35 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             _spine = null;
             await running.ConfigureAwait(false);
             await answering.ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Runs one look of a trigger source, and says so when it fails rather
+    /// than letting the failure end the loop.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Everything but a stop is caught here, which is not how the rest of the
+    /// daemon catches, and the reason is what an uncaught one did. A look that
+    /// threw something no catch named ended the whole trigger loop: finished
+    /// runs stopped being heard as well as the source that threw, nothing said
+    /// so, and the exception surfaced only when the daemon was stopped. A
+    /// resident loop nobody is watching has to outlive one bad look; the line
+    /// it writes is where the cause gets found.
+    /// </para>
+    /// </remarks>
+    private async Task LookedAsync(string failed, Func<Task> look, CommandOutput output)
+    {
+        try
+        {
+            await look().ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            output.WriteLine(
+                $"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] {failed}: "
+                + $"{Markup.Escape(ex.GetType().Name)}: {Markup.Escape(ex.Message)}");
         }
     }
 
@@ -1482,7 +1502,21 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
                 {
                     foreach (var asking in inbox.Waiting())
                     {
-                        var answer = await spine.ApplyAsync(asking, ct).ConfigureAwait(false);
+                        Loadout.Core.Triggers.TriggerAnswer answer;
+
+                        try
+                        {
+                            answer = await spine.ApplyAsync(asking, ct).ConfigureAwait(false);
+                        }
+                        catch (Exception ex) when (ex is not OperationCanceledException)
+                        {
+                            // Answered rather than left waiting: left, it would be
+                            // tried again every glance, and the person who asked
+                            // would see a daemon that never answers instead of
+                            // why it could not.
+                            answer = new Loadout.Core.Triggers.TriggerAnswer(
+                                asking.Id, false, $"The daemon could not make the change: {ex.GetType().Name}: {ex.Message}");
+                        }
 
                         inbox.Answer(answer);
                         output.WriteLine(

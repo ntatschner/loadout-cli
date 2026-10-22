@@ -133,6 +133,36 @@ public sealed class DaemonTriggersTests : IDisposable
     }
 
     [Fact]
+    public async Task A_source_that_throws_does_not_stop_the_others_being_heard()
+    {
+        // Built without a workspace, so reading a docs policy throws
+        // NullReferenceException: no catch names it, and it ended the whole
+        // loop before the looks were guarded.
+        await Rule("audit-on-drift", TriggerEventKinds.DocsDrift, ("project", "demo"));
+        await Rule("audit-after-run", TriggerEventKinds.RunFinished, ("team", "alpha"));
+
+        var repository = Path.Combine(_root, "repo");
+        Directory.CreateDirectory(repository);
+
+        var daemon = Daemon(on: true, new FakeProjects("demo", repository), new FakeGit(repository));
+        using var stop = new CancellationTokenSource();
+        var running = daemon.TriggersAsync(Output(), stop.Token);
+
+        await Eventually(() => File.Exists(Path.Combine(_paths.Paths.State, "triggers", "cursors", "run-finished.json")));
+
+        // Long enough for the docs look to have thrown several times.
+        await Task.Delay(300);
+
+        Run("20261022-1000-b001", "alpha", DateTimeOffset.UtcNow);
+        await Eventually(() => _commands.Asked.Count > 0);
+
+        await stop.CancelAsync();
+        await running;
+
+        _commands.Asked.Should().ContainSingle().Which.Should().Be(("docs audit", "loadout-cli"));
+    }
+
+    [Fact]
     public async Task With_the_switch_off_nothing_is_started_and_a_webhook_starts_its_team_as_before()
     {
         await Rule("audit-on-hook", TriggerEventKinds.Webhook, ("team", "docs-crew"));
