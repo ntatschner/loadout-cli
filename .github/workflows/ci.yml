@@ -324,7 +324,18 @@ jobs:
           # No hosted runner is an Intel Mac any longer, so the x64 build runs
           # under Rosetta on Apple Silicon. That catches a binary that will not
           # start or run; it does not catch every x64-only fault.
-          - { rid: osx-x64,     os: macos-latest }
+          #
+          # And only the JSON contracts, not all of them. Every contract test
+          # starts the binary, and under Rosetta a start costs about eight
+          # times what it does natively: the whole set took 4m13s on
+          # osx-arm64 and was cancelled at the 30 minute limit here, with no
+          # test failed or stalled. The same code runs the whole set natively
+          # on osx-arm64; what this leg adds is that the x64 build starts and
+          # answers correctly, which a dozen commands show as well as five
+          # hundred.
+          - rid: osx-x64
+            os: macos-latest
+            tests: FullyQualifiedName~Loadout.Tests.Contract.JsonContractTests|FullyQualifiedName~Loadout.Tests.Contract.ExecutableOverrideTests
           - { rid: osx-arm64,   os: macos-latest }
 
     steps:
@@ -390,7 +401,7 @@ jobs:
       - name: Run the contract tests against it
         run: >
           dotnet test tests/Loadout.Tests --configuration Release --no-build
-          --filter "FullyQualifiedName~Loadout.Tests.Contract"
+          --filter "${{ matrix.tests || 'FullyQualifiedName~Loadout.Tests.Contract' }}"
           --logger "trx;LogFileName=results.trx"
           --blame-hang --blame-hang-timeout 10m --blame-hang-dump-type mini
 
