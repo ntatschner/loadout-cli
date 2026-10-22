@@ -843,6 +843,58 @@ public sealed partial class TeamRunner : ITeamRunner
             .Union(JudgesOnly.Contains(roleId) ? [] : CatalogueWriting, StringComparer.Ordinal)
             .ToList();
 
+    /// <summary>
+    /// A node's lists with the outward actions its brief allows laid over
+    /// them: each one allowed exactly, and every deny it falls under lifted.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The brief said a node may take them and its tools said it may not. The
+    /// posture denies <c>Bash(git push:*)</c> to every role, the agent reads a
+    /// deny before an allow, and the gate found nothing allowing it, so a
+    /// tagger told it may run <c>git push --tags</c> was refused at the one
+    /// step it was started for.
+    /// </para>
+    /// <para>
+    /// This is the one place a deny is lifted, and on purpose: the action was
+    /// asked for by the team and agreed by this machine, and reaches only the
+    /// run that carries it. A command is allowed exactly, as the ceiling
+    /// agreed it, so <c>git push --tags</c> carries no other push with it;
+    /// what lifting the broad deny would let through is still refused by the
+    /// gate, which nothing else allows it past. A deny the action does not
+    /// fall under, <c>git push --force</c>, stays. Delegating never lifts.
+    /// </para>
+    /// </remarks>
+    internal static (List<string> Allowed, List<string> Denied) WithOutward(
+        IReadOnlyList<string> allowed,
+        IReadOnlyList<string> denied,
+        IReadOnlyList<string>? outward)
+    {
+        var allow = allowed.ToList();
+        var deny = denied.ToList();
+
+        foreach (var action in (outward ?? []).Select(one => one.Trim()).Where(one => one.Length > 0))
+        {
+            // Spelled as the agent spells a tool, and exactly: an action
+            // already written as a rule is taken as written.
+            var rule = action.Contains('(', StringComparison.Ordinal) ? action : $"Bash({action})";
+            var open = rule.IndexOf('(', StringComparison.Ordinal);
+            var (tool, target) = open > 0 && rule.EndsWith(')')
+                ? (rule[..open], rule[(open + 1)..^1])
+                : (rule, (string?)null);
+
+            if (!allow.Contains(rule, StringComparer.Ordinal))
+            {
+                allow.Add(rule);
+            }
+
+            deny.RemoveAll(one => !NeverDelegated.Contains(one, StringComparer.Ordinal)
+                && NodePermissions.Matches(one, tool, target));
+        }
+
+        return (allow, deny);
+    }
+
     /// <summary>The catalogue's reading tools, which every node may call.</summary>
     internal static readonly IReadOnlyList<string> CatalogueReading =
     [
