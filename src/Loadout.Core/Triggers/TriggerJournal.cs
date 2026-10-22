@@ -43,6 +43,22 @@ public sealed record TriggerEntry(
     DateTimeOffset? Happened = null,
     string? Request = null)
 {
+    /// <summary>The event an event entry recorded, as the rules would have seen it.</summary>
+    /// <remarks>
+    /// What lets a held event be decided later and a rule be tried against
+    /// past events: the journal keeps everything a rule can ask of one.
+    /// </remarks>
+    public TriggerEvent ToEvent() =>
+        new(
+            Event ?? string.Empty,
+            Happened ?? At,
+            Source ?? string.Empty,
+            EventKind ?? string.Empty,
+            Subject ?? string.Empty,
+            Project,
+            Fields ?? new Dictionary<string, string>(),
+            Origins ?? []);
+
     /// <summary>The entry recording an event as it arrived.</summary>
     public static TriggerEntry Of(TriggerEvent one, DateTimeOffset at)
     {

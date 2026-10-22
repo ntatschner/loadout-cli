@@ -181,6 +181,41 @@ public sealed class TriggerContractTests
         + $"    cap_usd: {cap}\n";
 
     [BuiltCliFact]
+    public async Task With_no_daemon_a_rule_that_held_events_while_paused_is_not_resumed()
+    {
+        using var loadout = new LoadoutProcess();
+        loadout.Environment["LOADOUT_TRIGGERS"] = "1";
+
+        (await loadout.RunAsync("trigger", "add", "audit-failures", "run-finished", "--builtin", "docs audit"))
+            .ExitCode.Should().Be(0);
+
+        // What a daemon writes when a rule reaches its cap and goes on matching.
+        var doctor = (await loadout.RunAsync("doctor", "--json")).Json();
+        var state = doctor.GetProperty("checks").EnumerateArray()
+            .First(check => check.GetProperty("name").GetString() == "State").GetProperty("detail").GetString()!;
+        var journal = Path.Combine(state, "triggers", "journal");
+        var now = DateTimeOffset.UtcNow;
+
+        Directory.CreateDirectory(journal);
+        await File.AppendAllTextAsync(
+            Path.Combine(journal, now.UtcDateTime.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture) + ".jsonl"),
+            string.Join('\n',
+                System.Text.Json.JsonSerializer.Serialize(new { at = now, kind = "paused", rule = "audit-failures" }),
+                System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    at = now, kind = "event", @event = "e1", subject = "run:1", source = "daemon",
+                    eventKind = "run-finished", fields = new { team = "alpha", outcome = "failed" },
+                }),
+                System.Text.Json.JsonSerializer.Serialize(new { at = now, kind = "held", @event = "e1", rule = "audit-failures" }))
+            + "\n");
+
+        var resumed = await loadout.RunAsync("trigger", "resume", "audit-failures");
+
+        resumed.ExitCode.Should().Be(2, resumed.StandardOutput);
+        resumed.StandardError.Should().Contain("held 1 event(s)").And.Contain("only a running daemon");
+    }
+
+    [BuiltCliFact]
     public async Task A_dry_run_says_what_it_would_save_and_saves_nothing()
     {
         using var loadout = new LoadoutProcess();

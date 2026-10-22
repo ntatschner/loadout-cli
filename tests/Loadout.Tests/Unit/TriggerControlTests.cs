@@ -332,8 +332,8 @@ public sealed class TriggerControlTests : IDisposable
         Action = new TriggerAction { Kind = TriggerActionKinds.Builtin, Name = "docs audit" },
     };
 
-    private static TriggerEvent Event(string id, string project) =>
-        new(id, Now, "daemon", TriggerEventKinds.RunFinished, $"run:{id}", project,
+    private static TriggerEvent Event(string id, string project, string? subject = null, DateTimeOffset? at = null) =>
+        new(id, at ?? Now, "daemon", TriggerEventKinds.RunFinished, subject ?? $"run:{id}", project,
             new Dictionary<string, string> { ["team"] = "alpha", ["project"] = project, ["outcome"] = "done" }, []);
 
     private sealed class Builtins : ITriggerActions
@@ -348,8 +348,80 @@ public sealed class TriggerControlTests : IDisposable
             Task.FromResult(new Settling(SettleState.Unknown));
     }
 
+    [Fact]
+    public async Task Resuming_decides_the_latest_held_event_of_each_subject_and_supersedes_the_rest()
+    {
+        var (spine, journal) = await PausedAsync();
+
+        // Two events about one subject and one about another, while paused.
+        await spine.DispatchAsync(Event("e2", "loadout-cli", subject: "run:s"), CancellationToken.None);
+        await spine.DispatchAsync(Event("e3", "loadout-cli", subject: "run:s"), CancellationToken.None);
+
+        // Raised while paused, as somebody resuming a rule that hit its cap would.
+        var raised = Rule();
+        raised.CapRuns = 5;
+        await spine.ApplyAsync(new TriggerAsk("req-0", TriggerVerbs.Save, raised), CancellationToken.None);
+
+        var answer = await spine.ApplyAsync(new TriggerAsk("req-1", TriggerVerbs.Resume, RuleId: raised.Id), CancellationToken.None);
+
+        // The event that tripped the cap was held too, so three came to two.
+        answer.Message.Should().Contain("3 event(s) it held came to 2 decided now");
+
+        var after = journal.Read(Now.AddDays(-1)).SkipWhile(one => one.Kind != TriggerEntryKinds.Resumed).ToList();
+        after.Single(one => one.Kind == TriggerEntryKinds.Superseded).Event.Should().Be("e2");
+        after.Where(one => one.Kind == TriggerEntryKinds.Started).Select(one => one.Event)
+            .Should().BeEquivalentTo(["e1b", "e3"]);
+    }
+
+    [Fact]
+    public async Task Resuming_withdraws_what_was_held_past_the_catch_up_window_or_no_longer_matches()
+    {
+        var clock = new Clock(Now);
+        var (spine, journal) = await PausedAsync(clock);
+
+        await spine.DispatchAsync(Event("old", "loadout-cli", subject: "run:old"), CancellationToken.None);
+
+        clock.Now = Now.AddHours(30);
+        await spine.DispatchAsync(Event("elsewhere", "starstats", subject: "run:new", at: clock.Now), CancellationToken.None);
+
+        // While paused, somebody narrowed the rule to one project.
+        var edited = Rule();
+        edited.CapRuns = 1;
+        edited.Projects = ["loadout-cli"];
+        await spine.ApplyAsync(new TriggerAsk("req-0", TriggerVerbs.Save, edited), CancellationToken.None);
+
+        await spine.ApplyAsync(new TriggerAsk("req-1", TriggerVerbs.Resume, RuleId: edited.Id), CancellationToken.None);
+
+        var withdrawn = journal.Read(Now.AddDays(-1)).Where(one => one.Kind == TriggerEntryKinds.Withdrawn).ToList();
+        withdrawn.Single(one => one.Event == "old").Reason.Should().Contain("catch-up window");
+        withdrawn.Single(one => one.Event == "elsewhere").Reason.Should().Contain("watches loadout-cli");
+        journal.Read(Now.AddDays(-1)).Count(one => one.Kind == TriggerEntryKinds.Started).Should().Be(1, "only the run before the pause");
+    }
+
+    /// <summary>A spine whose one rule has run once and paused at its cap of one run.</summary>
+    private async Task<(TriggerSpine Spine, TriggerJournal Journal)> PausedAsync(Clock? clock = null)
+    {
+        var rules = new TriggerRules(State, _yaml);
+        var rule = Rule();
+        rule.CapRuns = 1;
+        await rules.SaveAsync(rule);
+
+        var journal = new TriggerJournal(State);
+        var spine = new TriggerSpine(rules, journal, new Builtins(), clock ?? new Clock(Now));
+        spine.Rebuild();
+
+        await spine.DispatchAsync(Event("e1", "loadout-cli", subject: "run:first"), CancellationToken.None);
+        await spine.DispatchAsync(Event("e1b", "loadout-cli", subject: "run:second"), CancellationToken.None);
+
+        spine.Ledger.Paused(rule.Id).Should().BeTrue("the second start met the cap of one run");
+
+        return (spine, journal);
+    }
+
     private sealed class Clock(DateTimeOffset now) : TimeProvider
     {
-        public override DateTimeOffset GetUtcNow() => now;
+        public DateTimeOffset Now { get; set; } = now;
+
+        public override DateTimeOffset GetUtcNow() => Now;
     }
 }

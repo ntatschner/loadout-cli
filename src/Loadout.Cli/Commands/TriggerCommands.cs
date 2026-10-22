@@ -557,11 +557,23 @@ public sealed class TriggerResumeCommand(
         return await desk.ChangeAsync(
             new TriggerAsk(request, TriggerVerbs.Resume, RuleId: found.Rule.Id),
             output,
-            () => Task.FromResult(standing.Paused
-                ? desk.Journalled(
-                    request, TriggerEntryKinds.Resumed, found.Rule.Id, found.Rule.Version, "resumed with no daemon running",
-                    $"'{found.Rule.Id}' will act again when the daemon starts, its caps counting from now.")
-                : new TriggerAnswer(request, true, $"'{found.Rule.Id}' was not paused, so nothing changed.")),
+            () => Task.FromResult(
+                !standing.Paused
+                    ? new TriggerAnswer(request, true, $"'{found.Rule.Id}' was not paused, so nothing changed.")
+
+                    // Refused rather than done: the daemon is what decides the
+                    // events a paused rule held, and resumed here they would
+                    // stay held for good with nothing to say so.
+                    : TriggerSpine.Held(desk.Journal.Read(time.GetUtcNow() - TriggerSpine.Remembered), found.Rule.Id)
+                        is { Count: > 0 } held
+                        ? new TriggerAnswer(
+                            request,
+                            false,
+                            $"'{found.Rule.Id}' held {held.Count} event(s) while it was paused, and only a running daemon "
+                            + "can decide them. Start it with 'loadout daemon', then resume the rule.")
+                        : desk.Journalled(
+                            request, TriggerEntryKinds.Resumed, found.Rule.Id, found.Rule.Version, "resumed with no daemon running",
+                            $"'{found.Rule.Id}' will act again when the daemon starts, its caps counting from now.")),
             cancellationToken).ConfigureAwait(false);
     }
 }
@@ -694,7 +706,7 @@ public sealed class TriggerTestCommand(
         var decisions = desk.Journal.Read(time.GetUtcNow() - since)
             .Where(one => one.Kind == TriggerEntryKinds.Event
                 && string.Equals(one.EventKind, found.Rule.On, StringComparison.OrdinalIgnoreCase))
-            .Select(one => (Entry: one, Decision: TriggerMatcher.Decide(TriggerWords.Replayed(one), found.Rule)))
+            .Select(one => (Entry: one, Decision: TriggerMatcher.Decide(one.ToEvent(), found.Rule)))
             .ToList();
 
         if (output.IsJson)
@@ -1111,16 +1123,4 @@ internal static class TriggerWords
 
         return string.Join("  ", parts);
     }
-
-    /// <summary>A recorded event, as the matcher would have seen it.</summary>
-    public static TriggerEvent Replayed(TriggerEntry one) =>
-        new(
-            one.Event ?? string.Empty,
-            one.Happened ?? one.At,
-            one.Source ?? string.Empty,
-            one.EventKind ?? string.Empty,
-            one.Subject ?? string.Empty,
-            one.Project,
-            one.Fields ?? new Dictionary<string, string>(),
-            one.Origins ?? []);
 }

@@ -429,11 +429,104 @@ public sealed class TriggerSpine
             return new TriggerAnswer(request, true, $"'{found.Rule.Id}' was not paused, so nothing changed.");
         }
 
+        var rule = found.Rule;
+        var now = _time.GetUtcNow();
+        var held = Held(rule.Id, now);
+
         Write(new TriggerEntry(
-            _time.GetUtcNow(), TriggerEntryKinds.Resumed, Rule: found.Rule.Id, Version: found.Rule.Version,
+            now, TriggerEntryKinds.Resumed, Rule: rule.Id, Version: rule.Version,
             Reason: "resumed; its caps count from now", Request: request));
 
-        return new TriggerAnswer(request, true, $"Applied by the daemon: '{found.Rule.Id}' acts again, its caps counting from now.");
+        var decided = 0;
+
+        // The latest of each subject, the way a daemon that was off catches
+        // up: whoever acts on a pull request wants it as it is now, not every
+        // push it went through while the rule was paused.
+        foreach (var subject in held.GroupBy(one => one.Subject, StringComparer.Ordinal))
+        {
+            // A stable sort, so of two stamped the same moment the later arrival wins.
+            var latest = subject.OrderBy(one => one.At).Last();
+
+            foreach (var older in subject.Where(one => !ReferenceEquals(one, latest)))
+            {
+                Write(new TriggerEntry(
+                    now, TriggerEntryKinds.Superseded, older.Id, rule.Id, rule.Version, older.Subject,
+                    $"held while paused; {latest.Id} is the latest about its subject", Request: request));
+            }
+
+            if (now - latest.At > CatchUp)
+            {
+                Write(new TriggerEntry(
+                    now, TriggerEntryKinds.Withdrawn, latest.Id, rule.Id, rule.Version, latest.Subject,
+                    $"held while paused for longer than the {CatchUp.TotalHours:0}-hour catch-up window", Request: request));
+
+                continue;
+            }
+
+            // Checked against the rule as it is now: it may have been edited
+            // while it was paused.
+            if (TriggerMatcher.Decide(latest, rule) is { Matched: false } passed)
+            {
+                Write(new TriggerEntry(
+                    now, TriggerEntryKinds.Withdrawn, latest.Id, rule.Id, rule.Version, latest.Subject,
+                    passed.Reason, Request: request));
+
+                continue;
+            }
+
+            await DecideAsync(rule, latest, now, ct).ConfigureAwait(false);
+            decided++;
+        }
+
+        return new TriggerAnswer(
+            request,
+            true,
+            $"Applied by the daemon: '{rule.Id}' acts again, its caps counting from now"
+            + (held.Count == 0 ? "." : $"; {held.Count} event(s) it held came to {decided} decided now."));
+    }
+
+    /// <summary>
+    /// How far back held events are caught up on resume: the same 24 hours the
+    /// rest of the design counts in.
+    /// </summary>
+    internal static readonly TimeSpan CatchUp = TimeSpan.FromHours(24);
+
+    /// <summary>The events a rule held since it last paused, oldest first, as they arrived.</summary>
+    private List<TriggerEvent> Held(string rule, DateTimeOffset now) => Held(_journal.Read(now - Remembered), rule);
+
+    /// <summary>The events a rule held since it last paused, read from journal entries.</summary>
+    /// <remarks>Public so a command can say what a resume with no daemon running would leave undecided.</remarks>
+    public static List<TriggerEvent> Held(IReadOnlyList<TriggerEntry> journal, string rule)
+    {
+        ArgumentNullException.ThrowIfNull(journal);
+
+        var entries = journal.ToList();
+
+        var paused = entries.FindLastIndex(one =>
+            one.Kind == TriggerEntryKinds.Paused && string.Equals(one.Rule, rule, StringComparison.OrdinalIgnoreCase));
+
+        if (paused < 0)
+        {
+            return [];
+        }
+
+        var events = entries
+            .Where(one => one.Kind == TriggerEntryKinds.Event && one.Event is not null)
+            .GroupBy(one => one.Event!, StringComparer.Ordinal)
+            .ToDictionary(one => one.Key, one => one.First(), StringComparer.Ordinal);
+
+        return
+        [
+            .. entries
+                .Skip(paused)
+                .Where(one => one.Kind == TriggerEntryKinds.Held
+                    && string.Equals(one.Rule, rule, StringComparison.OrdinalIgnoreCase)
+                    && one.Event is not null)
+                .Select(one => one.Event!)
+                .Distinct(StringComparer.Ordinal)
+                .Where(events.ContainsKey)
+                .Select(id => events[id].ToEvent()),
+        ];
     }
 
     /// <summary>The actions waiting on one rule for their subject to go quiet.</summary>
