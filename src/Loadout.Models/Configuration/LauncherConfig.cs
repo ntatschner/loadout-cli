@@ -203,11 +203,27 @@ public sealed class StatuslineSettings
 
     /// <summary>When the last-commit segment changes colour; unset means never.</summary>
     public string? LastCommitAfter { get; set; }
+
+    /// <summary>
+    /// A copy that shares nothing with this one. A copy written out member by
+    /// member drops every setting added after it was written, silently.
+    /// </summary>
+    public StatuslineSettings Copy()
+    {
+        var copy = (StatuslineSettings)MemberwiseClone();
+
+        copy.Time = Time.Copy();
+
+        return copy;
+    }
 }
 
 /// <summary>How the status line writes a time.</summary>
 public sealed class StatuslineTimeSettings
 {
+    /// <summary>A copy that shares nothing with this one.</summary>
+    public StatuslineTimeSettings Copy() => (StatuslineTimeSettings)MemberwiseClone();
+
     /// <summary>
     /// Clock times ("write 14:02") rather than ages ("write 3m ago"). An age
     /// only moves when the line is redrawn, so a clock time is the honest

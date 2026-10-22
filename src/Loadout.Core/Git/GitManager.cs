@@ -97,6 +97,29 @@ internal sealed class GitManager : IGitManager
             new GitRepositoryState(root, branch, remote, isClean, head));
     }
 
+    /// <inheritdoc />
+    public async Task<OperationResult<DateTimeOffset?>> GetHeadCommitTimeAsync(
+        string repositoryPath,
+        CancellationToken ct = default)
+    {
+        var result = await RunAsync(repositoryPath, ["log", "-1", "--format=%cI", "HEAD"], LocalOperationTimeout, ct)
+            .ConfigureAwait(false);
+
+        // A repository with no commits has no HEAD to log, and git says so by
+        // failing. That is an answer - there is no last commit - not an error.
+        return OperationResult<DateTimeOffset?>.Ok(result.Succeeded ? ParseCommitTime(result.Value!) : null);
+    }
+
+    /// <summary>Reads the strict ISO 8601 time <c>%cI</c> prints, or null for anything else.</summary>
+    internal static DateTimeOffset? ParseCommitTime(string output) =>
+        DateTimeOffset.TryParse(
+            output.Trim(),
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None,
+            out var at)
+            ? at
+            : null;
+
     /// <summary>
     /// Reads the branch, the head commit and whether anything is changed out of
     /// <c>status --porcelain=v2 --branch</c>.

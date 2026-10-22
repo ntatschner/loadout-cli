@@ -140,4 +140,23 @@ public sealed class GitStatusTests
         // No changes were listed, so there is nothing to call dirty.
         isClean.Should().BeTrue();
     }
+
+    [Theory]
+    [InlineData("2026-10-22T14:02:00+01:00", true)]
+    [InlineData("2026-10-22T14:02:00+01:00\n", true)]
+    [InlineData("", false)]
+    [InlineData("garbage", false)]
+    public void ParseCommitTime_reads_what_percent_cI_prints_and_nothing_else(string output, bool hasTime)
+    {
+        var at = GitManager.ParseCommitTime(output);
+
+        if (hasTime)
+        {
+            at.Should().Be(new DateTimeOffset(2026, 10, 22, 14, 2, 0, TimeSpan.FromHours(1)));
+        }
+        else
+        {
+            at.Should().BeNull();
+        }
+    }
 }

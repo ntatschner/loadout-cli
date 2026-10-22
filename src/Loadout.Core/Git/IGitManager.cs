@@ -79,6 +79,13 @@ public interface IGitManager
     Task<OperationResult<GitRepositoryState>> GetStateAsync(string repositoryPath, CancellationToken ct = default);
 
     /// <summary>
+    /// When the head commit was committed, or null in a repository with no
+    /// commits yet. Kept apart from <see cref="GetStateAsync"/> because the
+    /// status that answers that carries no time, so this is a process of its own.
+    /// </summary>
+    Task<OperationResult<DateTimeOffset?>> GetHeadCommitTimeAsync(string repositoryPath, CancellationToken ct = default);
+
+    /// <summary>
     /// Initialises a repository, so a freshly created workspace is something
     /// that can actually be committed and pushed rather than a bare directory.
     /// </summary>
