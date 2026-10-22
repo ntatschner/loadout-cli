@@ -468,6 +468,35 @@ public sealed class DashboardIdeasTests : IAsyncLifetime, IDisposable
         DashboardIdeas.Verbs.Should().OnlyContain(v => verbs.Contains(v), "every verb the server maps is one the page offers");
     }
 
+    [Fact]
+    public void The_page_refines_by_default_and_offers_remove_only_for_an_unread_note()
+    {
+        var page = DashboardServer.Page();
+        var from = page.IndexOf("var ideasSeen", StringComparison.Ordinal);
+        var to = page.IndexOf("function drawSettings()", from, StringComparison.Ordinal);
+
+        from.Should().BeGreaterThan(-1);
+        to.Should().BeGreaterThan(from);
+
+        var ideas = page[from..to];
+
+        // The box whose value the addto body sends as refine.
+        var box = Regex.Match(ideas, @"verb:\s*""addto""[^{}]*refine:\s*(\w+)\.checked");
+
+        box.Success.Should().BeTrue("adding to an idea sends whether to refine from a checkbox");
+        Regex.IsMatch(ideas, $@"\b{box.Groups[1].Value}\.checked\s*=\s*true\b")
+            .Should().BeTrue("'Refine now' is ticked unless somebody unticks it");
+
+        // The condition guarding the note-remove button, read back from the send.
+        var remove = ideas.IndexOf(@"verb: ""note-remove""", StringComparison.Ordinal);
+
+        remove.Should().BeGreaterThan(-1);
+
+        var guard = Regex.Matches(ideas[..remove], @"if\s*\(([^)]*)\)").Last().Groups[1].Value;
+
+        guard.Should().Contain("!note.taken", "a note a round has read cannot be taken back");
+    }
+
     private static List<string> Busy(object read) =>
         [.. JsonSerializer.SerializeToElement(read).GetProperty("busy").EnumerateArray().Select(one => one.GetString()!)];
 
