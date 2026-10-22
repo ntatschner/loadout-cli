@@ -14,6 +14,11 @@
     until the day it did not, and would fail somewhere in the middle of
     somebody's package manager.
 
+    Handed a build with -Build, it packages that and compiles nothing, which
+    is how a release runs it: the build is the one CI published and tested,
+    already signed. Without one it publishes through publish.ps1 first, which
+    is the local path, and that build is unsigned.
+
 .PARAMETER Runtime
     Runtime identifier, for example linux-x64.
 
@@ -22,6 +27,10 @@
 
 .PARAMETER OutputDirectory
     Where the installers are written. Created if absent.
+
+.PARAMETER Build
+    A directory holding a build made by publish.ps1. Copied, not moved, and
+    nothing in it is changed.
 #>
 [CmdletBinding()]
 param(
@@ -31,14 +40,15 @@ param(
 
     [string] $Version = '0.1.0',
 
-    [string] $OutputDirectory = 'artifacts'
+    [string] $OutputDirectory = 'artifacts',
+
+    [string] $Build
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
-$project = Join-Path $repositoryRoot 'src/Loadout.Cli/Loadout.Cli.csproj'
 $staging = Join-Path $repositoryRoot "artifacts/installer/$Runtime"
 $payload = Join-Path $staging 'payload'
 
@@ -52,36 +62,19 @@ if (Test-Path $staging) { Remove-Item $staging -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $payload | Out-Null
 New-Item -ItemType Directory -Force -Path $output | Out-Null
 
-Write-Host "Publishing $Runtime..."
-
-& dotnet publish $project `
-    --configuration Release `
-    --runtime $Runtime `
-    --self-contained true `
-    -p:PublishSingleFile=true `
-    --output $payload `
-    -p:Version=$Version `
-    -p:RestoreLockedMode=true `
-    --nologo `
-    --verbosity quiet
-
-if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for $Runtime." }
-
-# Same reasoning as the archive build: symbols and generated API documentation
-# are weight to somebody installing this, and the XML alone is a quarter of a
-# megabyte describing internals nobody outside this repository will call.
-Get-ChildItem $payload -Include '*.pdb', '*.xml' -Recurse -File | Remove-Item -Force
-
-# Signed here, before packaging, so the executable inside the package carries a
-# signature too. Signing only the installer leaves the thing it installs
-# unsigned, which is what SmartScreen actually looks at when somebody runs it.
-#
-# A no-op unless Artifact Signing is configured in the environment, so a local
-# build takes this same path and simply produces an unsigned binary.
-if ($Runtime -like 'win-*') {
-    & (Join-Path $PSScriptRoot 'sign-windows.ps1') -Path (Join-Path $payload 'loadout.exe')
-    if ($LASTEXITCODE -ne 0) { throw "Signing the payload failed for $Runtime." }
+if (-not $Build) {
+    $Build = Join-Path $repositoryRoot "artifacts/publish/$Runtime"
+    & (Join-Path $PSScriptRoot 'publish.ps1') -Runtime $Runtime -OutputDirectory $Build
 }
+
+if (-not (Test-Path (Join-Path $Build 'SHA256SUMS'))) {
+    throw "$Build is not a build from publish.ps1: it has no SHA256SUMS."
+}
+
+# The checksums describe the build, not the package, so they stay out of it.
+# The executable is not signed here: a release signs it once, before either
+# this or the archive is made, so both carry the same signed bytes.
+Copy-Item (Join-Path $Build '*') $payload -Recurse -Force -Exclude 'SHA256SUMS'
 
 # The Debian architecture names differ from the .NET runtime identifiers, and
 # a package built with the wrong one installs on nothing.

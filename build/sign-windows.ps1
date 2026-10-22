@@ -12,7 +12,7 @@
     ARTIFACT_SIGNING_ACCOUNT unset this writes a notice and exits zero, so an
     ordinary local build produces an unsigned binary rather than failing. That
     is the same switch the workflow gates on, which means a developer and CI
-    take the same path through installer.ps1.
+    take the same path through it.
 
     Half-configured is treated as an error rather than a fallback: an account
     with no endpoint or profile means somebody set one secret and not the rest,
@@ -64,9 +64,9 @@ $files = @(foreach ($candidate in $Path) {
     (Resolve-Path $candidate).Path
 })
 
-# Reused across calls within one job. installer.ps1 signs twice — the payload
-# before packaging and the package after — and downloading the dlib each time
-# would double a slow step for nothing.
+# Reused across calls within one job. A release signs twice — the executable
+# before packaging and the MSI after — and downloading the dlib each time would
+# double a slow step for nothing.
 $tools = Join-Path ($env:RUNNER_TEMP ?? $env:TEMP) 'loadout-signing'
 New-Item -ItemType Directory -Force -Path $tools | Out-Null
 

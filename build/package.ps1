@@ -1,8 +1,13 @@
 <#
 .SYNOPSIS
-    Publishes loadout for one runtime identifier and packages it for release.
+    Packages a build of loadout for one runtime identifier as a release archive.
 
 .DESCRIPTION
+    Handed a build with -Build, it packages that and compiles nothing, which
+    is how a release runs it: the build is the one CI published and tested,
+    already signed. Without one it publishes through publish.ps1 first, which
+    is the local path, and that build is unsigned.
+
     Written in PowerShell because pwsh runs on all three Tier-1 platforms, so
     the packaging step is the same command on every CI leg rather than three
     scripts that drift apart.
@@ -19,6 +24,10 @@
 
 .PARAMETER OutputDirectory
     Where the archives are written. Created if absent.
+
+.PARAMETER Build
+    A directory holding a build made by publish.ps1. Copied, not moved, and
+    nothing in it is changed.
 #>
 [CmdletBinding()]
 param(
@@ -28,14 +37,15 @@ param(
 
     [string] $Version = '0.1.0',
 
-    [string] $OutputDirectory = 'artifacts'
+    [string] $OutputDirectory = 'artifacts',
+
+    [string] $Build
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
-$project = Join-Path $repositoryRoot 'src/Loadout.Cli/Loadout.Cli.csproj'
 $staging = Join-Path $repositoryRoot "artifacts/staging/$Runtime"
 $output = if ([System.IO.Path]::IsPathRooted($OutputDirectory)) {
     $OutputDirectory
@@ -47,36 +57,17 @@ if (Test-Path $staging) { Remove-Item $staging -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $staging | Out-Null
 New-Item -ItemType Directory -Force -Path $output | Out-Null
 
-Write-Host "Publishing $Runtime..."
-
-# Self-contained so the download needs no .NET installed, which is the whole
-# point of shipping a single binary (spec section 7).
-& dotnet publish $project `
-    --configuration Release `
-    --runtime $Runtime `
-    --self-contained true `
-    -p:PublishSingleFile=true `
-    --output $staging `
-    -p:Version=$Version `
-    -p:RestoreLockedMode=true `
-    --nologo `
-    --verbosity quiet
-
-if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for $Runtime." }
-
-# Debug symbols and the generated XML API documentation are useful to us and
-# nothing but weight to somebody downloading a release. The XML in particular is
-# a quarter of a megabyte of text describing internals a user will never call.
-Get-ChildItem $staging -Include '*.pdb', '*.xml' -Recurse -File | Remove-Item -Force
-
-# The archive ships the executable directly, with no installer around it, so
-# this is the only signature a user of the .tar.gz or .zip ever sees. A no-op
-# unless Artifact Signing is configured, which it is not on a developer
-# machine.
-if ($Runtime -like 'win-*') {
-    & (Join-Path $PSScriptRoot 'sign-windows.ps1') -Path (Join-Path $staging 'loadout.exe')
-    if ($LASTEXITCODE -ne 0) { throw "Signing the archive payload failed for $Runtime." }
+if (-not $Build) {
+    $Build = Join-Path $repositoryRoot "artifacts/publish/$Runtime"
+    & (Join-Path $PSScriptRoot 'publish.ps1') -Runtime $Runtime -OutputDirectory $Build
 }
+
+if (-not (Test-Path (Join-Path $Build 'SHA256SUMS'))) {
+    throw "$Build is not a build from publish.ps1: it has no SHA256SUMS."
+}
+
+# The checksums describe the build, not the archive, so they stay out of it.
+Copy-Item (Join-Path $Build '*') $staging -Recurse -Force -Exclude 'SHA256SUMS'
 
 Copy-Item (Join-Path $repositoryRoot 'README.md') $staging -Force
 
