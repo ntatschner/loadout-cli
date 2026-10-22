@@ -99,6 +99,7 @@ public sealed partial class TeamRunnerTests : IDisposable
         string? task = null,
         StandingCriteria? standing = null,
         string? onTimeout = null,
+        string? origin = null,
         CancellationToken ct = default)
     {
         return await new TeamRunner(
@@ -113,7 +114,7 @@ public sealed partial class TeamRunnerTests : IDisposable
                 "Add --since to loadout usage.", autonomy, dryRun, MaxRounds: rounds, Offline: true,
                 Criteria: criteria, TakeRecommendationAfter: takeRecommendationAfter,
                 Budget: budget, MachineBudget: machineBudget, Task: task, Standing: standing,
-                OnTimeout: onTimeout),
+                OnTimeout: onTimeout, Origin: origin),
             console ?? _console,
             ct);
     }
@@ -260,6 +261,17 @@ public sealed partial class TeamRunnerTests : IDisposable
         outcome.Ended.Should().Be("stopped before the lead was briefed");
         _launcher.Requests.Should().BeEmpty();
         File.ReadAllLines(Path.Combine(outcome.Directory!, "journal.jsonl")).Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task What_started_a_run_is_written_to_its_journal_and_read_back_in_its_summary()
+    {
+        _console.Confirm = _ => false;
+        var origin = new Loadout.Core.Triggers.RunOrigin("review-failures", 4, "res-1", ["nightly"]).ToString();
+
+        var outcome = (await RunAsync(autonomy: "manual", origin: origin)).Value!;
+
+        new RunJournal(_paths).Summarise(Path.GetFileName(outcome.Directory!)).Value!.Origin.Should().Be(origin);
     }
 
     [Fact]

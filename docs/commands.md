@@ -141,6 +141,8 @@
 | `loadout daemon` | Stay running: fire the scheduled runs and serve the dashboard |
 | `loadout daemon stop\|restart\|pause\|resume\|continue` | Control the running daemon from any shell: stop or restart it once its runs finish (`--now` does not wait), or hold and release its schedules |
 | `loadout team webhook enable\|disable\|show` | Let something outside this machine start a run, or stop letting it |
+| `loadout trigger list\|add\|remove\|resume` | Rules that start a team or a built-in when something happens, such as a run finishing, each with a spend cap. Unfinished: they refuse unless the daemon was started with `LOADOUT_TRIGGERS=1` |
+| `loadout trigger journal\|test` | What the trigger rules saw and decided, and what a rule would have done with the events already recorded, starting nothing |
 | `loadout daemon autostart enable\|disable\|show` | Start the daemon when you log in, per user |
 | `loadout team gate` | Answer something a run stopped to ask |
 | `loadout team message` | Say something to a run's lead, read at its next round |

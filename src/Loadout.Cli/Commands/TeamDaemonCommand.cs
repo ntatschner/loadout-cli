@@ -141,8 +141,16 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         Loadout.Core.Instructions.IMemoryImporter importer,
         Loadout.Core.Sessions.LaunchSheet sheet,
         Loadout.Core.Sessions.ISessionResumption? resumption = null,
-        TeamQueueDriver? queues = null)
+        TeamQueueDriver? queues = null,
+        IEnvironmentProvider? environment = null,
+        Loadout.Core.Configuration.YamlStore? yaml = null,
+        IFilePermissions? permissions = null)
     {
+        _yaml = yaml;
+        _permissions = permissions;
+        // Read once, here: the daemon is the process whose answer counts, and a
+        // switch that changed under it would leave rules half acted on.
+        _triggering = environment is not null && yaml is not null && Loadout.Core.Triggers.TriggerSwitch.On(environment);
         _queues = queues;
         _resumption = resumption;
         _bin = bin;
@@ -569,9 +577,12 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         var watching = WatchAsync(stopping, output);
         var recording = _watch?.WatchAsync(stopping.Token) ?? Task.CompletedTask;
 
+        var triggering = TriggersAsync(output, stopping.Token);
+
         await LoopsAsync(output, stopping.Token).ConfigureAwait(false);
 
         await stopping.CancelAsync().ConfigureAwait(false);
+        await triggering.ConfigureAwait(false);
 
         try
         {
@@ -1178,6 +1189,14 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
                 ExitCode.InvalidArguments));
         }
 
+        // With triggers on, a webhook is one more event and the rules decide
+        // what it starts, under their caps: one path for every event, rather
+        // than one that spends without asking the ledger.
+        if (_spine is { } spine)
+        {
+            return PostedAsync(spine, Loadout.Core.Triggers.WebhookEvents.From(asking, project, _time.GetUtcNow()), output, ct);
+        }
+
         output.WriteLine(
             $"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] triggered: "
             + $"{Markup.Escape(asking.Team)} on {Markup.Escape(project)}");
@@ -1276,6 +1295,155 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         CommandOutput output,
         CancellationToken ct) =>
         DashboardActions.RanAsync(_commands, _time, action, output, ct);
+
+    /// <summary>Whether triggers were switched on when this daemon started.</summary>
+    private readonly bool _triggering;
+
+    private readonly Loadout.Core.Configuration.YamlStore? _yaml;
+    private readonly IFilePermissions? _permissions;
+
+    /// <summary>The trigger spine, while it runs, or null with triggers off.</summary>
+    private Loadout.Core.Triggers.TriggerSpine? _spine;
+
+    /// <summary>How often finished runs are looked for; a test shortens it.</summary>
+    internal TimeSpan TriggerEvery { get; init; } = Interval;
+
+    /// <summary>
+    /// Carries events to the trigger rules and starts what they match, until
+    /// told to stop. Nothing at all while the switch is off.
+    /// </summary>
+    /// <remarks>
+    /// On a task of its own beside the schedules, the notices and the queues,
+    /// for the reason they each have one: the schedules' loop waits for every
+    /// run it starts, and an event that waited behind one would be acted on
+    /// against a state that had moved on.
+    /// </remarks>
+    internal async Task TriggersAsync(CommandOutput output, CancellationToken ct)
+    {
+        if (!_triggering || _yaml is not { } yaml)
+        {
+            return;
+        }
+
+        var state = _paths.Paths.State;
+        var journal = new Loadout.Core.Triggers.TriggerJournal(state, _permissions);
+        var spine = new Loadout.Core.Triggers.TriggerSpine(
+            new Loadout.Core.Triggers.TriggerRules(state, yaml),
+            journal,
+            new DaemonTriggerActions(_commands, _journal, _teams, _library, _workspace),
+            _time);
+        var finished = new Loadout.Core.Triggers.RunFinishedSource(state, _journal);
+
+        _spine = spine;
+        output.WriteLine(
+            $"[dim]Triggers are on ({Loadout.Core.Triggers.TriggerSwitch.Variable}): the journal is at "
+            + $"{Markup.Escape(journal.Directory)}[/]");
+
+        var running = spine.RunAsync(ct);
+        var answering = AnswerAsync(spine, new Loadout.Core.Triggers.TriggerInbox(state), output, ct);
+
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                try
+                {
+                    foreach (var one in finished.Look())
+                    {
+                        await spine.PostAsync(one, ct).ConfigureAwait(false);
+                    }
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // One look that could not read is not the end of the
+                    // source: said, and tried again at the next.
+                    output.WriteLine(
+                        $"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] finished runs could not be read for "
+                        + $"triggers: {Markup.Escape(ex.Message)}");
+                }
+
+                await Task.Delay(TriggerEvery, _time, ct).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Stopping, which is how this ends.
+        }
+        finally
+        {
+            _spine = null;
+            await running.ConfigureAwait(false);
+            await answering.ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>How often the trigger inbox is looked at; a person is waiting on each answer.</summary>
+    internal TimeSpan AnswerEvery { get; init; } = TimeSpan.FromMilliseconds(250);
+
+    /// <summary>
+    /// Makes the changes to the rules that the trigger commands ask for, and
+    /// answers them, until told to stop.
+    /// </summary>
+    private async Task AnswerAsync(
+        Loadout.Core.Triggers.TriggerSpine spine,
+        Loadout.Core.Triggers.TriggerInbox inbox,
+        CommandOutput output,
+        CancellationToken ct)
+    {
+        var swept = DateTimeOffset.MinValue;
+
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                try
+                {
+                    foreach (var asking in inbox.Waiting())
+                    {
+                        var answer = await spine.ApplyAsync(asking, ct).ConfigureAwait(false);
+
+                        inbox.Answer(answer);
+                        output.WriteLine(
+                            $"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] trigger rules: {Markup.Escape(answer.Message)}");
+                    }
+
+                    if (_time.GetUtcNow() - swept > TimeSpan.FromHours(1))
+                    {
+                        swept = _time.GetUtcNow();
+                        inbox.Sweep(swept);
+                    }
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    output.WriteLine(
+                        $"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] the trigger inbox could not be read: "
+                        + Markup.Escape(ex.Message));
+                }
+
+                await Task.Delay(AnswerEvery, _time, ct).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Stopping, which is how this ends.
+        }
+    }
+
+    /// <summary>Hands a webhook's event to the spine and says so.</summary>
+    private async Task<OperationResult> PostedAsync(
+        Loadout.Core.Triggers.TriggerSpine spine,
+        Loadout.Core.Triggers.TriggerEvent happened,
+        CommandOutput output,
+        CancellationToken ct)
+    {
+        await spine.PostAsync(happened, ct).ConfigureAwait(false);
+
+        output.WriteLine(
+            $"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] webhook for {Markup.Escape(happened.Field("team") ?? "?")} "
+            + $"on {Markup.Escape(happened.Project ?? "?")}: handed to the trigger rules");
+
+        return OperationResult.Ok();
+    }
 
     /// <summary>How often notices are looked for; a test shortens it.</summary>
     internal TimeSpan NoticeEvery { get; init; } = Interval;
@@ -1871,7 +2039,8 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
                     _processes.CurrentProcessStartedAt,
                     address,
                     _since.Value,
-                    _sessions.Running)),
+                    _sessions.Running,
+                    _triggering)),
                 ct).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

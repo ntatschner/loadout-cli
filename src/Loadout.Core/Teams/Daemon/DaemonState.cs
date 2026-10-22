@@ -14,12 +14,17 @@ namespace Loadout.Core.Teams.Daemon;
 /// How many sessions it is hosting for Studio that have not ended. They end
 /// when it stops, so whatever stops it says so first.
 /// </param>
+/// <param name="Triggers">
+/// Whether it started with triggers switched on. The trigger commands ask it
+/// here, because it is the only process that acts on rules.
+/// </param>
 public sealed record DaemonState(
     int Pid,
     DateTimeOffset StartedAt,
     string? Address,
     DateTimeOffset Since,
-    int Hosted = 0);
+    int Hosted = 0,
+    bool Triggers = false);
 
 /// <summary>Reading and writing the daemon's own note about itself.</summary>
 /// <remarks>
@@ -188,7 +193,11 @@ internal sealed class DaemonDiagnosticContributor : IDiagnosticContributor
                     // page, and nothing fires.
                     + (DaemonControl.Paused(_paths)
                         ? ". Paused: no schedule fires until 'loadout daemon resume'"
-                        : string.Empty)),
+                        : string.Empty)
+
+                    // Only when on: while triggers are unfinished, a line about
+                    // them on every machine would be a line about nothing.
+                    + (note.Triggers ? ". Triggers are on (LOADOUT_TRIGGERS)" : string.Empty)),
             ];
         }
 

@@ -1582,6 +1582,15 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             "A worktree of the project's repository for the run to work in, instead of the project's own checkout. "
             + "Its nodes branch from it and its merges land in it.")]
         public string? WorkIn { get; init; }
+
+        /// <summary>What started the run, where something other than a person did.</summary>
+        /// <remarks>
+        /// Hidden because nobody types it: a trigger passes it so it can find
+        /// the run again by the money it set aside, rather than guessing that
+        /// the newest run on the machine is its own.
+        /// </remarks>
+        [CommandOption("--origin <TEXT>", IsHidden = true)]
+        public string? Origin { get; init; }
     }
 
     /// <summary>
@@ -1668,6 +1677,7 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             Budget: UsdCap.TryParse(settings.Usd, out var budget) ? budget : UsdCap.Unset,
             MachineBudget: MachineBudget(machine),
             Task: settings.Task is { Length: > 0 } task ? task.Trim() : null,
+            Origin: settings.Origin is { Length: > 0 } origin ? origin.Trim() : null,
 
             // Here and not in the runner, for the reason the rest of this is:
             // every way a run starts - this command, the dashboard, a schedule,

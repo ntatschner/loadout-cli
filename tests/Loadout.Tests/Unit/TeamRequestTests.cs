@@ -54,6 +54,18 @@ public sealed class TeamRequestTests
     }
 
     [Fact]
+    public void What_started_the_run_reaches_the_request_so_its_journal_can_say_so()
+    {
+        // A trigger finds its run again by the origin it passed; one dropped
+        // here leaves the money it set aside open until it is given up on.
+        var request = TeamRunCommand.Requesting(
+            "demo", Team(), Specialists(), new TeamRunCommand.Settings { Goal = "Fix the thing", Origin = " trigger:r:1:x: " },
+            "autonomous", TeamCeiling.Nothing, new MachineConfig(), projectTeams: null);
+
+        request.Origin.Should().Be("trigger:r:1:x:");
+    }
+
+    [Fact]
     public void Remedies_this_machine_has_agreed_to_reach_the_run()
     {
         // Otherwise `team remedy trust` writes to a file nothing reads, and
