@@ -100,6 +100,19 @@ public sealed class TranscriptCacheTests : IDisposable
         cached.Outstanding(T.AddMinutes(12)).Should().BeFalse("the Monitor's ten minutes are up");
     }
 
+    [Fact]
+    public void A_reading_made_with_another_silence_limit_is_not_reused()
+    {
+        File.WriteAllLines(_transcript, Fixtures.Background);
+        File.SetLastWriteTimeUtc(_transcript, _written);
+
+        // Launched at 14:01; with no limit it never stops counting.
+        TranscriptCache.Read(_state, _transcript)!.Outstanding(T.AddMinutes(40)).Should().BeTrue();
+
+        TranscriptCache.Read(_state, _transcript, Loadout.Core.Sessions.Hosting.SessionSignals.BackgroundLimit)!
+            .Outstanding(T.AddMinutes(40)).Should().BeFalse("thirty minutes of silence is past the limit asked for");
+    }
+
     private TranscriptReading? Read() => TranscriptCache.Read(_state, _transcript);
 
     /// <summary>Moves the turn's end by a second, which keeps the file's length, and sets its time.</summary>

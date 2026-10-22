@@ -45,7 +45,9 @@ public sealed record TranscriptReading(
 /// <remarks>
 /// <para>
 /// Only ids, times and the shape of entries are read, as in
-/// <see cref="BackgroundWork"/>; nothing from the text of the conversation.
+/// <see cref="BackgroundWork"/>, and the start of a user entry only to compare
+/// it with the markers Claude Code writes for itself: an interrupt ends the
+/// turn, and a local slash command such as <c>/model</c> starts none.
 /// </para>
 /// <para>
 /// A finished turn is an assistant entry whose <c>message.stop_reason</c> is
@@ -63,6 +65,12 @@ public sealed record TranscriptReading(
 public static class TranscriptTimes
 {
     private static readonly HashSet<string> Writes = new(StringComparer.Ordinal) { "Write", "Edit", "MultiEdit", "NotebookEdit" };
+
+    // Both "[Request interrupted by user]" and "... for tool use]".
+    private const string Interrupted = "[Request interrupted";
+
+    private static readonly string[] LocalCommand =
+        ["<command-name>", "<command-message>", "<command-args>", "<local-command-stdout>", "<local-command-stderr>"];
 
     /// <summary>Reads a transcript, or null where it cannot be read or holds no entry.</summary>
     /// <param name="path">The transcript.</param>
@@ -150,6 +158,26 @@ public static class TranscriptTimes
                         continue;
                     }
 
+                    var opening = Opening(content);
+
+                    // A slash command run locally, such as /model, and what
+                    // it printed, are written as user entries but ask Claude
+                    // nothing, so the turn before stays where it was.
+                    if (LocalCommand.Any(tag => opening.StartsWith(tag, StringComparison.Ordinal)))
+                    {
+                        continue;
+                    }
+
+                    // Pressing Esc writes this and stops the turn, so it is
+                    // the turn's end: nothing will answer what was pending.
+                    if (opening.StartsWith(Interrupted, StringComparison.Ordinal))
+                    {
+                        ended = at;
+                        pending.Clear();
+
+                        continue;
+                    }
+
                     started = at;
                     ended = null;
                     pending.Clear();
@@ -177,6 +205,20 @@ public static class TranscriptTimes
         var since = pending.Values.Select(call => call.At).Where(made => made is not null).Min();
 
         return new TranscriptReading(started, ended, tally.LastEntry, ended is null ? since : null, written, tally.OpenUntil, tally.Due);
+    }
+
+    /// <summary>
+    /// The start of a user entry's text, read only to compare with the
+    /// markers Claude Code writes for itself; a prompt is a string, other
+    /// entries an array whose first text part says it.
+    /// </summary>
+    private static string Opening(JsonElement content)
+    {
+        var text = content.ValueKind == JsonValueKind.String
+            ? content.GetString()
+            : Parts(content).Where(part => Text(part, "type") == "text").Select(part => Text(part, "text")).FirstOrDefault();
+
+        return text?.TrimStart() ?? string.Empty;
     }
 
     private static IEnumerable<JsonElement> Parts(JsonElement content) =>

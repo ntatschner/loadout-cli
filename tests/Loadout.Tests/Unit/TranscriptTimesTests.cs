@@ -100,6 +100,44 @@ public sealed class TranscriptTimesTests : IDisposable
     }
 
     [Fact]
+    public void An_interrupt_ends_the_turn_rather_than_starting_one()
+    {
+        var reading = Read(Fixtures.Interrupted)!;
+
+        reading.TurnStartedAt.Should().Be(T);
+        reading.TurnEndedAt.Should().Be(T.AddMinutes(2), "Esc stops the turn, so the session is waiting for you");
+        reading.PendingToolSince.Should().BeNull();
+    }
+
+    [Fact]
+    public void An_interrupt_while_Claude_is_writing_ends_the_turn()
+    {
+        var reading = Read([Fixtures.Prompt(T), Fixtures.Interrupt(T.AddSeconds(30), forTool: false)])!;
+
+        reading.TurnStartedAt.Should().Be(T);
+        reading.TurnEndedAt.Should().Be(T.AddSeconds(30));
+    }
+
+    [Fact]
+    public void A_local_command_while_idle_keeps_waiting()
+    {
+        var reading = Read(Fixtures.ModelWhileIdle)!;
+
+        reading.TurnStartedAt.Should().Be(T);
+        reading.TurnEndedAt.Should().Be(T.AddMinutes(2).AddSeconds(5), "/model asks Claude nothing");
+    }
+
+    [Fact]
+    public void A_new_prompt_drops_a_call_left_pending()
+    {
+        var reading = Read([.. Fixtures.Pending, Fixtures.Prompt(T.AddMinutes(3))])!;
+
+        reading.TurnStartedAt.Should().Be(T.AddMinutes(3));
+        reading.TurnEndedAt.Should().BeNull();
+        reading.PendingToolSince.Should().BeNull("the call before the prompt will never be answered");
+    }
+
+    [Fact]
     public void A_stale_signal_is_ignored()
     {
         TranscriptReading.SignalCounts(Signal(T.AddSeconds(-1)), T).Should().BeFalse();
@@ -217,7 +255,56 @@ public sealed class TranscriptTimesTests : IDisposable
             (nameof(Background), Background),
             (nameof(Monitor), Monitor),
             (nameof(Edits), Edits),
+            (nameof(Interrupted), Interrupted),
+            (nameof(ModelWhileIdle), ModelWhileIdle),
         ];
+
+        /// <summary>A tool call refused with Esc: its result says so, then the interrupt.</summary>
+        public static List<string> Interrupted =>
+        [
+            Prompt(T),
+            Call("toolu_g1", "Bash", T.AddMinutes(1)),
+            Result("toolu_g1", T.AddMinutes(2), error: true),
+            Interrupt(T.AddMinutes(2), forTool: true),
+        ];
+
+        /// <summary>/model run after a turn ended: the caveat, the command and what it printed.</summary>
+        public static List<string> ModelWhileIdle =>
+        [
+            .. Waiting,
+            Local("<local-command-caveat></local-command-caveat>", T.AddMinutes(5), meta: true),
+            Local("<command-name>/model</command-name>\n<command-message>model</command-message>\n<command-args></command-args>", T.AddMinutes(5)),
+            Local("<local-command-stdout></local-command-stdout>", T.AddMinutes(5).AddSeconds(1)),
+        ];
+
+        /// <summary>
+        /// Claude Code writes the interrupt as a user entry of its own, with
+        /// one text part; for a tool call the refused call's result comes
+        /// first, in the entry before.
+        /// </summary>
+        public static string Interrupt(DateTimeOffset at, bool forTool) => Line(new
+        {
+            isSidechain = false,
+            type = "user",
+            message = new
+            {
+                role = "user",
+                content = new object[] { new { type = "text", text = forTool ? "[Request interrupted by user for tool use]" : "[Request interrupted by user]" } },
+            },
+            uuid = "u-interrupt",
+            timestamp = at,
+        });
+
+        /// <summary>A local slash command and its output are user entries whose content is a string of tags.</summary>
+        public static string Local(string content, DateTimeOffset at, bool meta = false) => Line(new
+        {
+            isSidechain = false,
+            type = "user",
+            message = new { role = "user", content },
+            isMeta = meta,
+            uuid = "u-local",
+            timestamp = at,
+        });
 
         public static string Prompt(DateTimeOffset at) => Line(new
         {
