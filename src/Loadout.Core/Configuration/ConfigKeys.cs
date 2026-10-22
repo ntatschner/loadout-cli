@@ -79,6 +79,11 @@ public static class ConfigKeys
         public const string Secrets = "Secrets";
         public const string Updates = "Updates";
         public const string Statusline = "Agent status line";
+
+        // Its own section rather than more of the one above: eighteen
+        // settings under one heading run off a page at eighty by
+        // twenty-four, the same reason Writing and Display are apart.
+        public const string StatuslineTimes = "Status line times";
         public const string Instructions = "Agent instructions";
         public const string Telemetry = "Usage reporting";
         public const string Machine = "This machine";
@@ -98,7 +103,7 @@ public static class ConfigKeys
         public static IReadOnlyList<string> InOrder =>
         [
             Workspace, Agents, Editor, Syncing, Secrets, Updates,
-            Statusline, Instructions, Accessibility, Writing, Display, Studio,
+            Statusline, StatuslineTimes, Instructions, Accessibility, Writing, Display, Studio,
             Telemetry, Machine, General,
         ];
     }
@@ -275,6 +280,74 @@ public static class ConfigKeys
             (c, _) => c.Statusline.Separator,
             (c, _, v) => c.Statusline.Separator = v, false,
             Group: Groups.Statusline),
+
+        new("statusline-waiting", "Show what the session is waiting on, and since when",
+            (c, _) => Boolean(c.Statusline.ShowWaiting),
+            (c, _, v) => c.Statusline.ShowWaiting = Flag(v), false,
+            Group: Groups.StatuslineTimes,
+            IsFlag: true),
+
+        new("statusline-last-write", "Show how long since the agent last changed a file",
+            (c, _) => Boolean(c.Statusline.ShowLastWrite),
+            (c, _, v) => c.Statusline.ShowLastWrite = Flag(v), false,
+            Group: Groups.StatuslineTimes,
+            IsFlag: true),
+
+        new("statusline-clock", "Show the time of day in the agent status line",
+            (c, _) => Boolean(c.Statusline.ShowClock),
+            (c, _, v) => c.Statusline.ShowClock = Flag(v), false,
+            Group: Groups.StatuslineTimes,
+            IsFlag: true),
+
+        new("statusline-session", "Show how long the session has been running",
+            (c, _) => Boolean(c.Statusline.ShowSession),
+            (c, _, v) => c.Statusline.ShowSession = Flag(v), false,
+            Group: Groups.StatuslineTimes,
+            IsFlag: true),
+
+        new("statusline-turn", "Show how long the last completed turn took",
+            (c, _) => Boolean(c.Statusline.ShowTurn),
+            (c, _, v) => c.Statusline.ShowTurn = Flag(v), false,
+            Group: Groups.StatuslineTimes,
+            IsFlag: true),
+
+        new("statusline-last-commit", "Show how long since the last commit",
+            (c, _) => Boolean(c.Statusline.ShowLastCommit),
+            (c, _, v) => c.Statusline.ShowLastCommit = Flag(v), false,
+            Group: Groups.StatuslineTimes,
+            IsFlag: true),
+
+        new("statusline-time-absolute", "Write times as clock times rather than ages",
+            (c, _) => Boolean(c.Statusline.Time.Absolute),
+            (c, _, v) => c.Statusline.Time.Absolute = Flag(v), false,
+            Group: Groups.StatuslineTimes,
+            IsFlag: true),
+
+        new("statusline-time-24h", "Write clock times in 24-hour form",
+            (c, _) => Boolean(c.Statusline.Time.Hour24),
+            (c, _, v) => c.Statusline.Time.Hour24 = Flag(v), false,
+            Group: Groups.StatuslineTimes,
+            IsFlag: true),
+
+        // Free text, because a value that cannot be read means no colour
+        // change rather than a refusal: the line is never worth an error.
+        new("statusline-waiting-after", "Ages at which waiting turns amber then red, as 10m,30m",
+            (c, _) => c.Statusline.WaitingAfter,
+            (c, _, v) => c.Statusline.WaitingAfter = v, false,
+            Group: Groups.StatuslineTimes,
+            WhenUnset: "waiting never changes colour"),
+
+        new("statusline-write-after", "Ages at which the last write turns amber then red",
+            (c, _) => c.Statusline.LastWriteAfter,
+            (c, _, v) => c.Statusline.LastWriteAfter = v, false,
+            Group: Groups.StatuslineTimes,
+            WhenUnset: "the last write never changes colour"),
+
+        new("statusline-commit-after", "Ages at which the last commit turns amber then red",
+            (c, _) => c.Statusline.LastCommitAfter,
+            (c, _, v) => c.Statusline.LastCommitAfter = v, false,
+            Group: Groups.StatuslineTimes,
+            WhenUnset: "the last commit never changes colour"),
 
         new("specialists", "Give launched agents specialist guidance chosen for the task",
             (c, _) => Boolean(c.InstructionContext.Specialists),
