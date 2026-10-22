@@ -208,6 +208,10 @@ nothing has to be running to answer:
 }
 ```
 
+A feed can also list `installers`, keyed the same way, with the MSI for each
+Windows platform. A copy the MSI installed is updated from that; a feed
+without one tells such a copy to download the MSI and run it by hand.
+
 Replacing the binary you're about to run is the most dangerous thing the
 launcher does. So:
 
@@ -225,3 +229,42 @@ launcher does. So:
 
 The running executable is moved aside rather than overwritten, because Windows
 won't let a running image be replaced but will let it be renamed.
+
+### With the daemon running
+
+A plain `loadout update` replaces the binary and leaves a running daemon
+serving the old version until you restart it. `--restart-daemon` hands the
+install to the daemon instead, which is what Studio's **Install and restart**
+runs:
+
+```bash
+loadout update --restart-daemon                 # once the runs it started have finished
+loadout update --restart-daemon --now           # straight away, ending them
+loadout update --roll-back --restart-daemon     # back to the version before
+```
+
+The download is checked here, before anything is asked of the daemon, so a bad
+one is reported while the daemon is still up to show it. The daemon then
+finishes its runs, starting nothing new meanwhile, and hands over to a
+short-lived helper. The helper runs from a copy outside the install folder,
+because the daemon can't replace itself while it runs, and on a machine with
+the Restart Manager off the MSI can't replace a running daemon either. It puts
+the new version in place, starts the daemon and waits for it to say it's
+serving. Each step goes in the daemon's log.
+
+- **A copy unpacked from an archive** keeps the old binary as
+  `loadout.previous`. If the new daemon doesn't start, the helper puts the old
+  one back and starts that. `--roll-back` puts it back on purpose, and discards
+  the newer binary rather than keeping it, so rolling back twice doesn't roll
+  forward again.
+- **A copy the MSI installed** is updated by running the newer MSI, so Windows
+  goes on knowing which version is installed. winget installs the same MSI, so
+  its copies are updated the same way rather than through `winget upgrade`,
+  which is submitted once a day and can run behind the release. There's no
+  previous binary, so no roll back, and a failed install is reported only in
+  the daemon's log, with the MSI's own log beside the download. A Loadout
+  session in progress stops the MSI, as it does when you run it by hand.
+
+A copy counts as the MSI's when it's running from the folder the MSI recorded
+under `HKCU\Software\Loadout\InstalledPath`. Anything else is an archive copy,
+including a second copy elsewhere on a machine that also has the MSI.

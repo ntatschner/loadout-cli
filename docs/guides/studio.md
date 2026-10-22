@@ -317,6 +317,25 @@ it starts when you log in, with a button for each of those. Restarting or
 stopping it asks first, because it ends the sessions the daemon hosts. **This
 machine** shows what `loadout doctor` finds, worst first.
 
+Under the daemon, **Version and updates** says which version it is and whether
+a newer one is out. The daemon reads the release feed shortly after it starts
+and once a day after that, and the Settings item in the rail says when it has
+found something; **Check now** reads it straight away. **Install and restart**
+asks each time whether to wait for the runs the daemon started or restart now,
+and says what restarting now would end. While it waits it refuses new runs and
+says an update is pending, so the wait has an end. Underneath it's
+`loadout update --restart-daemon`, the same as typing it.
+
+How it installs depends on how you installed Loadout. A copy unpacked from a
+release archive keeps the old binary, so **Roll back** is there until the next
+update, and if the new version doesn't start, the old one is put back and
+started instead, so Studio comes back rather than staying dark. A copy the MSI
+or winget installed is updated by running the newer MSI while the daemon is
+down. It has no Roll back, because the MSI keeps no previous version, and if
+the daemon doesn't come back, only the daemon's log says why. When the daemon
+does come back on a new version, every open Studio tab offers to reload, so a
+page from the old version isn't left talking to the new one.
+
 What is only ever done in a terminal has a block saying what to type and why,
 with **Copy**, and never a button: setting a secret, the attach passphrase,
 agreeing to a tool's tests, and the telemetry receiver on Spend. Copy copies the
