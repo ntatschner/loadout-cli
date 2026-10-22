@@ -278,6 +278,13 @@ public sealed class DashboardServer : IDisposable
     /// <summary>Whether the daemon's schedules are held, for the server room; null where nothing can say.</summary>
     public Func<bool>? DaemonPaused { get; set; }
 
+    /// <summary>
+    /// What the daemon knows about updates, and whether one is waiting for
+    /// its restart; reading the feed first when asked to check now. Null for
+    /// a dashboard, which updates nothing.
+    /// </summary>
+    public Func<bool, CancellationToken, Task<object>>? Update { get; set; }
+
     /// <summary>The bin, for the garbage room to show; null where nothing gave this server one.</summary>
     public TeamBin? Bin { get; set; }
 
@@ -1313,6 +1320,28 @@ public sealed class DashboardServer : IDisposable
             }
 
             await LaunchApi.HandleAsync(context, Launch, path, ct).ConfigureAwait(false);
+
+            return;
+        }
+
+        // Whether there is a newer release, and whether one is waiting for the
+        // daemon's restart. A read, even with check=now, which reads the
+        // release feed rather than changing anything: installing is a job,
+        // 'update --restart-daemon', like every other change from the page.
+        if (path == "/api/v1/update" && request.HttpMethod == "GET")
+        {
+            if (Update is null)
+            {
+                await WriteAsync(context, 404, "text/plain; charset=utf-8",
+                    "This dashboard does not look for updates. The daemon's does: loadout daemon").ConfigureAwait(false);
+
+                return;
+            }
+
+            var fresh = string.Equals(request.QueryString["check"], "now", StringComparison.Ordinal);
+
+            await WriteAsync(context, 200, "application/json; charset=utf-8",
+                JsonSerializer.Serialize(await Update(fresh, ct).ConfigureAwait(false), Json)).ConfigureAwait(false);
 
             return;
         }

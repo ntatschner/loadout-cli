@@ -57,6 +57,7 @@ public static class PlatformServices
         services.AddSingleton<IApplicationLauncher>(opener);
         services.AddSingleton<IDesktopIntegration>(desktop);
         services.AddSingleton<IAutostart>(CreateAutostart(processes, resolver));
+        services.AddSingleton<IInstallRecord>(OperatingSystem.IsWindows() ? new Windows.WindowsInstallRecord() : new NoInstallRecord());
         services.AddSingleton<ISpeech>(CreateSpeech(processes, resolver));
         services.AddSingleton(secrets);
         services.AddSingleton<IPlatformCapabilities>(capabilities);

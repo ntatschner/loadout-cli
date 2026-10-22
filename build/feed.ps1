@@ -13,10 +13,11 @@
     against, so a feed derived from it cannot disagree with the checksums people
     are told to use.
 
-    Archives only. The updater replaces the executable from the download, so it
-    wants the .zip or .tar.gz — the .msi, .deb and .rpm install through the
-    platform's own machinery and are not something to unpack over a running
-    binary.
+    Archives under artifacts. The updater replaces the executable from the
+    download, so it wants the .zip or .tar.gz — the .msi, .deb and .rpm install
+    through the platform's own machinery and are not something to unpack over a
+    running binary. The MSI is listed separately, under installers, for a copy
+    the MSI installed, which is updated by running the newer MSI.
 
 .PARAMETER Version
     The version being released, without the leading v.
@@ -110,11 +111,46 @@ if ($artifacts.Count -eq 0) {
     throw "No archives found in $Directory for version $Version."
 }
 
+# The installers, beside the archives rather than among them. A copy the MSI
+# installed is updated by running the newer MSI, so Windows goes on knowing
+# which version is installed; unpacking the zip over it would leave Windows
+# believing the old one is. Optional: a release with no MSI has no entry, and
+# an MSI the manifest does not cover is refused like an archive would be.
+$installerNames = [ordered]@{
+    'win-x64'   = "loadout-$Version-win-x64.msi"
+    'win-arm64' = "loadout-$Version-win-arm64.msi"
+}
+
+$installers = [ordered]@{}
+
+foreach ($rid in $installerNames.Keys) {
+    $name = $installerNames[$rid]
+    $path = Join-Path $Directory $name
+
+    if (-not (Test-Path -LiteralPath $path)) {
+        continue
+    }
+
+    if (-not $hashes.ContainsKey($name)) {
+        throw "$name is in $Directory but not in SHA256SUMS, so its hash cannot be stated."
+    }
+
+    $installers[$rid] = [ordered]@{
+        url    = "$BaseUrl/$name"
+        sha256 = $hashes[$name]
+        size   = (Get-Item -LiteralPath $path).Length
+    }
+}
+
 $feed = [ordered]@{
     schemaVersion = 1
     version       = $Version
     released      = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
     artifacts     = $artifacts
+}
+
+if ($installers.Count -gt 0) {
+    $feed['installers'] = $installers
 }
 
 if ($Notes) {

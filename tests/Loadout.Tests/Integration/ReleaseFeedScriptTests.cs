@@ -122,6 +122,35 @@ public sealed class ReleaseFeedScriptTests : IDisposable
     }
 
     [PwshFact]
+    public async Task The_msi_is_listed_apart_for_copies_the_msi_installed()
+    {
+        Release("win-x64", "zip");
+        Release("win-x64", "msi");
+        WriteManifest();
+
+        (await RunAsync()).ExitCode.Should().Be(0);
+
+        var feed = Read()!;
+
+        // A copy the MSI installed is updated by the newer MSI, so Windows goes
+        // on knowing which version is installed.
+        feed.Installers["win-x64"].Url.Should().EndWith(".msi");
+        feed.Installers["win-x64"].Sha256.Should().Be(HashOf("win-x64", "msi"));
+        feed.Installers.Should().NotContainKey("linux-x64");
+    }
+
+    [PwshFact]
+    public async Task A_release_with_no_msi_has_no_installers_and_is_still_a_feed()
+    {
+        Release("win-x64", "zip");
+        WriteManifest();
+
+        (await RunAsync()).ExitCode.Should().Be(0);
+
+        Read()!.Installers.Should().BeEmpty();
+    }
+
+    [PwshFact]
     public async Task A_platform_that_did_not_build_is_left_out_rather_than_guessed_at()
     {
         Release("linux-x64", "tar.gz");

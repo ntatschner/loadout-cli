@@ -26,6 +26,18 @@ public sealed class ReleaseFeed
     /// that omits a platform simply has no update for it, which is not an error.
     /// </summary>
     public Dictionary<string, ReleaseArtifact> Artifacts { get; set; } = [];
+
+    /// <summary>
+    /// The platform's own installer, where there is one, keyed the same way:
+    /// the MSI for <c>win-x64</c> and <c>win-arm64</c>.
+    /// </summary>
+    /// <remarks>
+    /// Apart from <see cref="Artifacts"/> because a copy the MSI installed has
+    /// to be updated by the MSI, or Windows goes on believing the old version
+    /// is installed. Feeds written before this existed have none, which reads
+    /// as "this release offers no installer" rather than as a broken feed.
+    /// </remarks>
+    public Dictionary<string, ReleaseArtifact> Installers { get; set; } = [];
 }
 
 /// <summary>One downloadable build.</summary>
@@ -54,12 +66,14 @@ public sealed class ReleaseArtifact
 /// <param name="IsNewer">Whether the offered version is actually newer than the running one.</param>
 /// <param name="Artifact">The build for this platform, when there is one.</param>
 /// <param name="Notes">Release notes, when the feed carries any.</param>
+/// <param name="Installer">The platform installer for this platform, when the feed lists one.</param>
 public sealed record UpdateCheck(
     string CurrentVersion,
     string? AvailableVersion,
     bool IsNewer,
     ReleaseArtifact? Artifact,
-    string? Notes);
+    string? Notes,
+    ReleaseArtifact? Installer = null);
 
 /// <summary>
 /// Where <c>loadout update</c> looks, and what it means to say "nowhere".

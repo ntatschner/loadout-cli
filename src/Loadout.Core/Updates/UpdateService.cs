@@ -30,6 +30,7 @@ internal sealed class UpdateService : IUpdateService
     private readonly IFilePermissions _permissions;
     private readonly HttpClient _http;
     private readonly Func<string> _currentExecutable;
+    private readonly Func<string?> _installedBin;
     private readonly string _currentVersion;
 
     public UpdateService(
@@ -38,7 +39,8 @@ internal sealed class UpdateService : IUpdateService
         IFilePermissions permissions,
         HttpClient http,
         Func<string>? currentExecutable = null,
-        string? currentVersion = null)
+        string? currentVersion = null,
+        Func<string?>? installedBin = null)
     {
         _configuration = configuration;
         _paths = paths;
@@ -46,6 +48,7 @@ internal sealed class UpdateService : IUpdateService
         _http = http;
 
         _currentExecutable = currentExecutable ?? (() => Environment.ProcessPath ?? string.Empty);
+        _installedBin = installedBin ?? (() => null);
 
         _currentVersion = currentVersion
             ?? typeof(UpdateService).Assembly.GetName().Version?.ToString(3)
@@ -87,6 +90,7 @@ internal sealed class UpdateService : IUpdateService
         // A feed with no build for this platform is a perfectly ordinary state,
         // not a failure: a release may simply not cover every architecture yet.
         feed.Artifacts.TryGetValue(rid, out var artifact);
+        feed.Installers.TryGetValue(rid, out var installer);
 
         var isNewer = artifact is not null && IsNewer(feed.Version, _currentVersion);
 
@@ -95,8 +99,96 @@ internal sealed class UpdateService : IUpdateService
             artifact is null ? null : feed.Version,
             isNewer,
             artifact,
-            feed.Notes));
+            feed.Notes,
+            installer));
     }
+
+    /// <inheritdoc />
+    public string Executable => _currentExecutable();
+
+    /// <inheritdoc />
+    public InstallChannel Channel => InstallChannels.Detect(_currentExecutable(), _installedBin());
+
+    /// <inheritdoc />
+    public async Task<OperationResult<string>> StageAsync(
+        UpdateCheck check,
+        InstallChannel channel,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(check);
+
+        var artifact = channel == InstallChannel.Installer ? check.Installer : check.Artifact;
+
+        if (artifact is null || check.AvailableVersion is null)
+        {
+            return OperationResult<string>.Fail(
+                channel == InstallChannel.Installer
+                    ? $"This copy was installed by the MSI, and the release source lists no installer for "
+                      + $"{_paths.Host.RuntimeIdentifier}. Download the MSI from the release page and run it."
+                    : $"The release source has no build for {_paths.Host.RuntimeIdentifier}.",
+                ExitCode.ConfigurationInvalid);
+        }
+
+        if (string.IsNullOrWhiteSpace(artifact.Sha256))
+        {
+            return OperationResult<string>.Fail(
+                "The release source published no SHA-256 for this build, so the download cannot be "
+                + "verified. Refusing to update.",
+                ExitCode.PolicyViolation);
+        }
+
+        var executable = _currentExecutable();
+
+        if (string.IsNullOrWhiteSpace(executable) || !File.Exists(executable))
+        {
+            return OperationResult<string>.Fail(
+                "The running executable could not be located, so it cannot be replaced.",
+                ExitCode.GeneralFailure);
+        }
+
+        // Kept, unlike ApplyAsync's staging: it is installed later, by another
+        // process, once the daemon has finished its runs. One folder for every
+        // staged update, emptied each time, so they do not pile up.
+        var staging = StagingFolder();
+
+        try
+        {
+            if (Directory.Exists(staging))
+            {
+                Directory.Delete(staging, recursive: true);
+            }
+
+            Directory.CreateDirectory(staging);
+
+            var download = Path.Combine(staging, channel == InstallChannel.Installer
+                ? $"loadout-{check.AvailableVersion}-{_paths.Host.RuntimeIdentifier}.msi"
+                : "download");
+
+            var downloadResult = await DownloadAsync(artifact.Url, download, ct).ConfigureAwait(false);
+            if (downloadResult.Failed)
+            {
+                return OperationResult<string>.Fail(downloadResult.Error!, downloadResult.ExitCode);
+            }
+
+            var verifyResult = await VerifyAsync(download, artifact, ct).ConfigureAwait(false);
+            if (verifyResult.Failed)
+            {
+                return OperationResult<string>.Fail(verifyResult.Error!, verifyResult.ExitCode);
+            }
+
+            return channel == InstallChannel.Installer
+                ? OperationResult<string>.Ok(download)
+                : ExtractBinary(download, staging, Path.GetFileName(executable));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return OperationResult<string>.Fail(
+                $"The update could not be downloaded: {SecretRedactor.Redact(ex.Message)}");
+        }
+    }
+
+    /// <summary>Where a staged update waits to be installed.</summary>
+    internal string StagingFolder() => Path.Combine(_paths.Paths.Cache, "update-staged");
 
     /// <inheritdoc />
     public async Task<OperationResult<string>> ApplyAsync(
@@ -157,7 +249,7 @@ internal sealed class UpdateService : IUpdateService
                 return OperationResult<string>.Fail(extracted.Error!, extracted.ExitCode);
             }
 
-            return Swap(executable, extracted.Value!);
+            return UpdateFiles.Swap(executable, extracted.Value!, _permissions);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -354,50 +446,6 @@ internal sealed class UpdateService : IUpdateService
         // Read the signature rather than trusting the name: the feed chooses
         // the URL, and a mislabelled archive should not decide how it is parsed.
         return stream.ReadByte() == 'P' && stream.ReadByte() == 'K';
-    }
-
-    /// <summary>
-    /// Puts the new binary in place, keeping the old one.
-    /// </summary>
-    private OperationResult<string> Swap(string executable, string replacement)
-    {
-        var kept = executable + ".previous";
-
-        try
-        {
-            if (File.Exists(kept))
-            {
-                File.Delete(kept);
-            }
-
-            // Windows refuses to overwrite a running image but allows it to be
-            // renamed, which is what makes an in-place update possible at all.
-            // Keeping the old binary rather than deleting it also means a bad
-            // update can be undone by hand.
-            File.Move(executable, kept);
-
-            try
-            {
-                File.Copy(replacement, executable, overwrite: true);
-            }
-            catch
-            {
-                // Put the working binary back rather than leaving the user with
-                // nothing to run.
-                File.Move(kept, executable, overwrite: true);
-                throw;
-            }
-
-            _permissions.MakeExecutable(executable);
-
-            return OperationResult<string>.Ok(kept);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return OperationResult<string>.Fail(
-                $"The new binary could not be put in place: {ex.Message}. "
-                + "If the launcher is installed system-wide this may need elevated permissions.");
-        }
     }
 
     /// <summary>

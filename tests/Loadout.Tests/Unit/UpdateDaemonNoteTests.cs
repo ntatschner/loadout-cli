@@ -87,7 +87,13 @@ public sealed class UpdateDaemonNoteTests : IDisposable
     {
         console.Profile.Width = 400;
 
-        return new UpdateCommand(new Newer(), console, _paths, processes);
+        return new UpdateCommand(
+            new Newer(),
+            console,
+            _paths,
+            processes,
+            new UpdateFinisher(new StubProcessLauncher(string.Empty), processes, new NoOpFilePermissions(), _paths, TimeProvider.System),
+            TimeProvider.System);
     }
 
     private void Note(int hosted)
@@ -106,5 +112,12 @@ public sealed class UpdateDaemonNoteTests : IDisposable
 
         public Task<OperationResult<string>> ApplyAsync(UpdateCheck check, CancellationToken ct = default) =>
             Task.FromResult(OperationResult<string>.Ok("loadout.old"));
+
+        public string Executable => string.Empty;
+
+        public InstallChannel Channel => InstallChannel.Archive;
+
+        public Task<OperationResult<string>> StageAsync(UpdateCheck check, InstallChannel channel, CancellationToken ct = default) =>
+            Task.FromResult(OperationResult<string>.Fail("not staged here"));
     }
 }
