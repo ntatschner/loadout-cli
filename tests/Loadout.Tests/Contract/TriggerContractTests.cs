@@ -123,9 +123,16 @@ public sealed class TriggerContractTests
         var changed = (await loadout.RunAsync("trigger", "suggested", "--json")).Json().EnumerateArray().Single();
         changed.GetProperty("changed").GetBoolean().Should().BeTrue();
         Rule().Should().Be((1, 6m));
+        SuggestionChanged().Should().BeTrue("the rules list says so too, not only 'trigger suggested'");
+        (await loadout.RunAsync("trigger", "list")).StandardOutput.Should().Contain("Changed since you accepted it");
 
         (await loadout.RunAsync("trigger", "accept", "watcher", "after-failure")).ExitCode.Should().Be(0);
         Rule().Should().Be((2, 8m));
+        SuggestionChanged().Should().BeFalse();
+
+        bool SuggestionChanged() =>
+            loadout.RunAsync("trigger", "list", "--json").GetAwaiter().GetResult()
+                .Json().EnumerateArray().Single().GetProperty("suggestionChanged").GetBoolean();
 
         (int, decimal) Rule()
         {

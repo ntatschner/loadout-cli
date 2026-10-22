@@ -149,7 +149,10 @@ public sealed class TriggerListCommand(
     YamlStore yaml,
     IFilePermissions permissions,
     IAnsiConsole console,
-    TimeProvider time) : AsyncCommand<TriggerSettings>
+    TimeProvider time,
+    Loadout.Core.Teams.ITeamCatalogue teams,
+    Loadout.Core.Instructions.ISpecialistLibrary library,
+    Loadout.Core.Workspace.IWorkspaceManager workspace) : AsyncCommand<TriggerSettings>
 {
     /// <inheritdoc />
     public override async Task<int> ExecuteAsync(CommandContext context, TriggerSettings settings, CancellationToken cancellationToken)
@@ -173,7 +176,10 @@ public sealed class TriggerListCommand(
 
         var ledger = desk.Ledger();
         var now = time.GetUtcNow();
-        var rows = listed.Value!.Select(one => (one.Rule, one.Problem, Standing: ledger.Standing(one.Rule, now))).ToList();
+        var changed = await ChangedAsync(listed.Value!.Select(one => one.Rule).ToList(), cancellationToken).ConfigureAwait(false);
+        var rows = listed.Value!
+            .Select(one => (one.Rule, one.Problem, Standing: ledger.Standing(one.Rule, now), Changed: changed.Contains(one.Rule.Id)))
+            .ToList();
 
         if (output.IsJson)
         {
@@ -186,6 +192,7 @@ public sealed class TriggerListCommand(
                 reservedUsd = one.Standing.Reserved,
                 headroomUsd = one.Standing.Headroom,
                 paused = one.Standing.Paused,
+                suggestionChanged = one.Changed,
             }));
 
             return CommandOutput.Success();
@@ -198,13 +205,22 @@ public sealed class TriggerListCommand(
             return CommandOutput.Success();
         }
 
-        foreach (var (rule, problem, standing) in rows)
+        foreach (var (rule, problem, standing, suggestionChanged) in rows)
         {
             output.WriteLine(Markup.Escape(TriggerWords.Line(rule, standing)));
 
             if (problem is not null)
             {
                 output.WriteLine($"  [yellow]Not acted on:[/] {Markup.Escape(problem)}");
+            }
+
+            if (suggestionChanged)
+            {
+                var project = rule.Projects.FirstOrDefault() is { } slug ? $" --project {slug}" : string.Empty;
+
+                output.WriteLine(
+                    $"  [yellow]Changed since you accepted it:[/] {Markup.Escape(rule.SuggestedBy)} now suggests something "
+                    + $"different. This rule runs as accepted until you look: loadout trigger suggested{Markup.Escape(project)}");
             }
         }
 
@@ -215,6 +231,30 @@ public sealed class TriggerListCommand(
         }
 
         return CommandOutput.Success();
+    }
+
+    /// <summary>
+    /// The rules accepted from a team suggestion that the team has changed since.
+    /// </summary>
+    /// <remarks>
+    /// Each team is looked for the way 'trigger accept' found it, in the rule's
+    /// first project, so a project's own team is found where it was. Rules
+    /// written by hand load no teams at all.
+    /// </remarks>
+    private async Task<HashSet<string>> ChangedAsync(IReadOnlyList<TriggerRule> rules, CancellationToken cancellationToken)
+    {
+        var changed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var root = workspace.IsAvailable() ? workspace.LocalPath : null;
+
+        foreach (var group in rules.Where(one => one.SuggestedBy.Length > 0).GroupBy(one => one.Projects.FirstOrDefault()))
+        {
+            var specialists = await library.LoadAsync(root, group.Key, cancellationToken).ConfigureAwait(false);
+            var catalogue = await teams.LoadAsync(root, group.Key, specialists, cancellationToken).ConfigureAwait(false);
+
+            changed.UnionWith(group.Where(one => TeamSuggestions.Changed(one, catalogue.Teams.Values)).Select(one => one.Id));
+        }
+
+        return changed;
     }
 }
 

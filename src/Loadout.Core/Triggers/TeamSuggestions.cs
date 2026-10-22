@@ -91,6 +91,21 @@ public static class TeamSuggestions
     }
 
     /// <summary>
+    /// Whether the team <paramref name="rule"/> was accepted from, found among
+    /// <paramref name="teams"/>, now suggests something different. A team that
+    /// cannot be found, or no longer makes the suggestion, has not changed it.
+    /// </summary>
+    public static bool Changed(TriggerRule rule, IEnumerable<TeamDefinition> teams)
+    {
+        ArgumentNullException.ThrowIfNull(rule);
+        ArgumentNullException.ThrowIfNull(teams);
+
+        return rule.SuggestedBy.Length > 0
+            && Of(teams.Where(team => string.Equals(team.Name, rule.SuggestedBy, StringComparison.OrdinalIgnoreCase)), [rule])
+                .Any(one => one.Changed && ReferenceEquals(one.Accepted, rule));
+    }
+
+    /// <summary>
     /// The suggestion's name and a short hash of everything it says, so any
     /// change to it, a figure included, reads as a change.
     /// </summary>

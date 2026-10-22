@@ -44,6 +44,23 @@ public sealed class TeamSuggestionsTests
     }
 
     [Fact]
+    public void A_rule_says_whether_the_suggestion_it_came_from_has_changed()
+    {
+        var accepted = TeamSuggestions.Rule("watcher", Suggested(), []);
+        var team = Team(Suggested());
+
+        TeamSuggestions.Changed(accepted, [team]).Should().BeFalse();
+
+        team.Triggers[0].Goal = "Find out why {run} failed, and fix it.";
+
+        TeamSuggestions.Changed(accepted, [team]).Should().BeTrue();
+        TeamSuggestions.Changed(accepted, [new TeamDefinition { Name = "other", Triggers = [team.Triggers[0]] }])
+            .Should().BeFalse("only the team it came from counts");
+        TeamSuggestions.Changed(accepted, []).Should().BeFalse("a team that is not here has changed nothing");
+        TeamSuggestions.Changed(new TriggerRule { Id = accepted.Id }, [team]).Should().BeFalse("a rule written by hand came from no suggestion");
+    }
+
+    [Fact]
     public void A_rule_written_by_hand_with_the_same_name_is_not_taken_for_an_accepted_suggestion()
     {
         var mine = new TriggerRule { Id = "watcher-after-failure", On = TriggerEventKinds.RunFinished };
