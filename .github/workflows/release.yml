@@ -166,7 +166,11 @@ jobs:
           sha256sum -c SHA256SUMS
           binary=$(ls | grep -E '^loadout(\.exe)?$')
           echo "binary=$binary" >> "$GITHUB_OUTPUT"
-          echo "hash=$(awk -v b="$binary" '$2 == b { print $1 }' SHA256SUMS)" >> "$GITHUB_OUTPUT"
+          # sha256sum on Windows marks a name with * for binary mode; the
+          # name is the same file either way.
+          hash=$(awk -v b="$binary" '{ sub(/^\*/, "", $2) } $2 == b { print $1 }' SHA256SUMS)
+          [ -n "$hash" ] || { echo "SHA256SUMS does not list $binary" >&2; exit 1; }
+          echo "hash=$hash" >> "$GITHUB_OUTPUT"
           [ "$binary" = loadout.exe ] || chmod +x loadout
 
       # Placed immediately before the step that signs, and deliberately not
