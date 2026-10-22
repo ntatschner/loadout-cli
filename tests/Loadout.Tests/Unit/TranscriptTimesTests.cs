@@ -119,6 +119,22 @@ public sealed class TranscriptTimesTests : IDisposable
     }
 
     [Fact]
+    public void An_interrupt_drops_the_call_it_left_pending()
+    {
+        // Esc while a call is still out, then Claude carries on with another
+        // before the tail holds a prompt: the call it is on is the new one.
+        var reading = Read(
+        [
+            .. Fixtures.Pending,
+            Fixtures.Interrupt(T.AddMinutes(2), forTool: false),
+            Fixtures.Call("toolu_b2", "Bash", T.AddMinutes(4)),
+        ])!;
+
+        reading.TurnEndedAt.Should().BeNull();
+        reading.PendingToolSince.Should().Be(T.AddMinutes(4), "nothing will answer the call the interrupt stopped");
+    }
+
+    [Fact]
     public void A_local_command_while_idle_keeps_waiting()
     {
         var reading = Read(Fixtures.ModelWhileIdle)!;

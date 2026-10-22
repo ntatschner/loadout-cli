@@ -106,7 +106,8 @@ internal sealed class GitManager : IGitManager
             .ConfigureAwait(false);
 
         // A repository with no commits has no HEAD to log, and git says so by
-        // failing. That is an answer - there is no last commit - not an error.
+        // failing. That is an answer - there is no last commit - not an error,
+        // and every other failure of git is given the same answer.
         return OperationResult<DateTimeOffset?>.Ok(result.Succeeded ? ParseCommitTime(result.Value!) : null);
     }
 

@@ -112,6 +112,19 @@ public sealed class StatuslineTimesContractTests
     }
 
     [BuiltCliFact]
+    public async Task Times_that_cannot_be_read_drop_the_time_group_and_keep_the_line()
+    {
+        using var loadout = Isolated();
+
+        // Longer than a TimeSpan can hold, so working out the session's
+        // length throws inside the time readings.
+        var line = await RenderAsync(loadout, Transcript(loadout, Waiting(Start)), durationMs: 1_000_000_000_000_000_000);
+
+        line.Should().Contain("Opus 5", "the rest of the line is drawn");
+        line.Should().NotContain("waiting for you", "the time group goes, and only that");
+    }
+
+    [BuiltCliFact]
     public async Task Show_json_lists_the_time_segments_and_previews_them()
     {
         using var loadout = Isolated();
@@ -178,7 +191,15 @@ public sealed class StatuslineTimesContractTests
         return loadout;
     }
 
-    private static string Clock(DateTimeOffset at) => TimeFormat.Clock(at, TimeZoneInfo.Local, hour24: true);
+    private static string Clock(DateTimeOffset at) => Expected(at, DateTimeOffset.Now, TimeZoneInfo.Local);
+
+    /// <summary>
+    /// The text the line gives a time drawn at <paramref name="now"/>: with
+    /// the day in front once it is not today, which in the first minutes
+    /// after midnight is every time these transcripts hold.
+    /// </summary>
+    internal static string Expected(DateTimeOffset at, DateTimeOffset now, TimeZoneInfo zone) =>
+        TimeFormat.Absolute(at, now, zone, hour24: true);
 
     private static string Transcript(LoadoutProcess loadout, IEnumerable<string> lines)
     {
@@ -211,7 +232,7 @@ public sealed class StatuslineTimesContractTests
         File.WriteAllText(file, signal.ToJsonString());
     }
 
-    private static async Task<string> RenderAsync(LoadoutProcess loadout, string transcript)
+    private static async Task<string> RenderAsync(LoadoutProcess loadout, string transcript, long durationMs = 600_000)
     {
         var payload = JsonSerializer.Serialize(new
         {
@@ -219,7 +240,7 @@ public sealed class StatuslineTimesContractTests
             transcript_path = transcript,
             cwd = loadout.Home,
             model = new { display_name = "Opus 5" },
-            cost = new { total_duration_ms = 600_000 },
+            cost = new { total_duration_ms = durationMs },
         });
 
         var output = await TalkAsync(loadout, payload, "statusline");

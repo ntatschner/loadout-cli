@@ -79,8 +79,11 @@ public interface IGitManager
     Task<OperationResult<GitRepositoryState>> GetStateAsync(string repositoryPath, CancellationToken ct = default);
 
     /// <summary>
-    /// When the head commit was committed, or null in a repository with no
-    /// commits yet. Kept apart from <see cref="GetStateAsync"/> because the
+    /// When the head commit was committed, or null whenever git could not say:
+    /// a repository with no commits yet, a folder that is not a repository,
+    /// any other failure of git, or output that is not a time. Never a failed
+    /// result. Kept
+    /// apart from <see cref="GetStateAsync"/> because the
     /// status that answers that carries no time, so this is a process of its own.
     /// </summary>
     Task<OperationResult<DateTimeOffset?>> GetHeadCommitTimeAsync(string repositoryPath, CancellationToken ct = default);
