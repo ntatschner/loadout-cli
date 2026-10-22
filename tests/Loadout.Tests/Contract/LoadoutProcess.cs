@@ -96,7 +96,31 @@ public sealed class LoadoutProcess : IDisposable
     /// skips these tests with a reason instead of failing with a path.
     /// </para>
     /// </remarks>
-    internal static string? Executable
+    internal static string? Executable =>
+        Named(System.Environment.GetEnvironmentVariable(ExecutableVariable)) ?? Built;
+
+    /// <summary>
+    /// The variable that points these tests at a binary built somewhere else.
+    /// </summary>
+    /// <remarks>
+    /// CI sets it to the published single-file build of each runtime, so the
+    /// bytes that ship are the ones these tests run, rather than the
+    /// framework-dependent build beside them.
+    /// </remarks>
+    internal const string ExecutableVariable = "LOADOUT_CONTRACT_EXECUTABLE";
+
+    /// <summary>
+    /// The binary a non-empty <paramref name="path"/> names, made absolute.
+    /// </summary>
+    /// <remarks>
+    /// Returned whether or not the file exists. A missing one then fails every
+    /// test that starts it, with the path in the error; returning null would
+    /// skip them all, and a job that tested nothing would read as green.
+    /// </remarks>
+    internal static string? Named(string? path) =>
+        string.IsNullOrWhiteSpace(path) ? null : Path.GetFullPath(path);
+
+    private static string? Built
     {
         get
         {

@@ -265,16 +265,152 @@ jobs:
         with:
           global-json-file: global.json
 
+      # With the same flags build/package.ps1 ships with, so this is the build
+      # a release would carry rather than a near relation of it. The version
+      # is not passed: it comes from Directory.Build.props, which on a release
+      # commit is the version being released.
       - name: Publish
         run: >
           dotnet publish src/Loadout.Cli/Loadout.Cli.csproj
           --configuration Release
           --runtime ${{ matrix.rid }}
           --self-contained true
+          -p:PublishSingleFile=true
+          -p:RestoreLockedMode=true
           --output artifacts/${{ matrix.rid }}
+
+      # Every file is hashed, not only the executable: a native library ships
+      # beside it on some runtimes, and it is as much a part of what was
+      # tested. Symbols and the API documentation are removed first, as the
+      # packaging does, so the hashes describe exactly what would ship.
+      - name: Leave out what does not ship, and hash what does
+        shell: bash
+        working-directory: artifacts/${{ matrix.rid }}
+        run: |
+          set -euo pipefail
+          find . -type f \( -name '*.pdb' -o -name '*.xml' \) -delete
+
+          if command -v sha256sum >/dev/null; then hash=(sha256sum); else hash=(shasum -a 256); fi
+          find . -type f ! -name SHA256SUMS | sed 's|^\./||' | sort | xargs "${hash[@]}" > SHA256SUMS
+          cat SHA256SUMS
 
       - name: Upload binary
         uses: actions/upload-artifact@v7
         with:
           name: loadout-${{ matrix.rid }}
           path: artifacts/${{ matrix.rid }}
+          if-no-files-found: error
+
+  # The published build of every runtime, run on a machine that can run it.
+  # The test job above runs a framework-dependent build; what ships is a
+  # self-contained single file, and a problem in bundling, a native library
+  # left out, or a runtime that only the published form uses would pass there
+  # and fail here. Each artefact is checked against the hashes taken when it
+  # was built, so what passes is provably what was published.
+  artefact:
+    name: Test the ${{ matrix.rid }} build
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    needs: [changes, publish]
+    if: needs.changes.outputs.docs-only != 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { rid: win-x64,     os: windows-latest }
+          - { rid: win-arm64,   os: windows-11-arm }
+          - { rid: linux-x64,   os: ubuntu-latest }
+          - { rid: linux-arm64, os: ubuntu-24.04-arm }
+          # No hosted runner is an Intel Mac any longer, so the x64 build runs
+          # under Rosetta on Apple Silicon. That catches a binary that will not
+          # start or run; it does not catch every x64-only fault.
+          #
+          # And only the JSON contracts, not all of them. Every contract test
+          # starts the binary, and under Rosetta a start costs about eight
+          # times what it does natively: the whole set took 4m13s on
+          # osx-arm64 and was cancelled at the 30 minute limit here, with no
+          # test failed or stalled. The same code runs the whole set natively
+          # on osx-arm64; what this leg adds is that the x64 build starts and
+          # answers correctly, which a dozen commands show as well as five
+          # hundred.
+          - rid: osx-x64
+            os: macos-latest
+            tests: FullyQualifiedName~Loadout.Tests.Contract.JsonContractTests|FullyQualifiedName~Loadout.Tests.Contract.ExecutableOverrideTests
+          - { rid: osx-arm64,   os: macos-latest }
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: loadout-${{ matrix.rid }}
+          path: artefact
+
+      # An artefact is a zip, which carries no Unix mode, so the executable
+      # bit has to be put back before anything can run it.
+      - name: Check it is what was published
+        shell: bash
+        working-directory: artefact
+        run: |
+          set -euo pipefail
+          if command -v sha256sum >/dev/null; then sha256sum -c SHA256SUMS; else shasum -a 256 -c SHA256SUMS; fi
+          [ -f loadout.exe ] || chmod +x loadout
+
+      - name: Make sure Rosetta is there
+        if: matrix.rid == 'osx-x64'
+        run: |
+          arch -x86_64 /usr/bin/true 2>/dev/null || sudo softwareupdate --install-rosetta --agree-to-license
+          file artefact/loadout | grep -q x86_64
+
+      # PowerShell rather than bash because it is the one shell that gives the
+      # same path, line endings and JSON parsing on every runner here.
+      - name: Smoke test
+        shell: pwsh
+        run: |
+          $loadout = (Get-ChildItem artefact -File | Where-Object Name -in 'loadout', 'loadout.exe').FullName
+          "LOADOUT_CONTRACT_EXECUTABLE=$loadout" >> $env:GITHUB_ENV
+
+          $expected = ([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          $actual = (& $loadout --version | Out-String).Trim()
+          Write-Host "Directory.Build.props says $expected; the binary says $actual"
+          if ($LASTEXITCODE -ne 0 -or $actual -ne $expected) { exit 1 }
+
+          # doctor may report problems on a bare runner; it may not fail to
+          # produce a report at all.
+          $doctor = & $loadout doctor --json | Out-String | ConvertFrom-Json
+          Write-Host "doctor's verdict: $($doctor.verdict)"
+          if (-not $doctor.verdict) { exit 1 }
+
+          & $loadout project list --json | Out-String | ConvertFrom-Json | Out-Null
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Restore
+        run: dotnet restore tests/Loadout.Tests --locked-mode
+
+      - name: Build the tests
+        run: dotnet build tests/Loadout.Tests --configuration Release --no-restore
+
+      # Only the contract tests: they are the ones that start the command line
+      # as a process, so they are the ones that can be pointed at this binary.
+      # LOADOUT_CONTRACT_EXECUTABLE was set by the smoke test, and
+      # ExecutableOverrideTests fails the run if it was not honoured.
+      - name: Run the contract tests against it
+        run: >
+          dotnet test tests/Loadout.Tests --configuration Release --no-build
+          --filter "${{ matrix.tests || 'FullyQualifiedName~Loadout.Tests.Contract' }}"
+          --logger "trx;LogFileName=results.trx"
+          --blame-hang --blame-hang-timeout 10m --blame-hang-dump-type mini
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: artefact-results-${{ matrix.rid }}
+          path: |
+            **/results.trx
+            **/Sequence_*.xml
+            **/*.dmp
