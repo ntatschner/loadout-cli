@@ -288,7 +288,9 @@ public sealed class TeamQueueListCommand : AsyncCommand<TeamQueueSettings>
         ITeamCatalogue teams,
         ISpecialistLibrary library,
         IWorkspaceManager workspace,
-        IAnsiConsole console)
+        IAnsiConsole console,
+        IScheduleService schedules,
+        TimeProvider time)
     {
         _queues = queues;
         _tasks = tasks;
@@ -297,7 +299,12 @@ public sealed class TeamQueueListCommand : AsyncCommand<TeamQueueSettings>
         _library = library;
         _workspace = workspace;
         _console = console;
+        _schedules = schedules;
+        _time = time;
     }
+
+    private readonly IScheduleService _schedules;
+    private readonly TimeProvider _time;
 
     /// <inheritdoc />
     public override async Task<int> ExecuteAsync(CommandContext context, TeamQueueSettings settings, CancellationToken cancellationToken)
@@ -324,6 +331,10 @@ public sealed class TeamQueueListCommand : AsyncCommand<TeamQueueSettings>
 
         var queue = loaded.Value!;
         var lists = await TeamQueueing.ListsAsync(_tasks, queue, cancellationToken).ConfigureAwait(false);
+        var now = _time.GetUtcNow();
+        var scheduled = await _schedules.ListAsync(cancellationToken).ConfigureAwait(false);
+        var window = scheduled.Value?.FirstOrDefault(one => one.IsQueueWindow
+            && string.Equals(one.Team, team, StringComparison.OrdinalIgnoreCase));
 
         // Each item judged as it would be at its turn, so the list says now
         // what would otherwise be found out at three in the morning.
@@ -361,12 +372,24 @@ public sealed class TeamQueueListCommand : AsyncCommand<TeamQueueSettings>
                     by = run.StartedBy,
                 }),
                 settings = Json(queue.Settings),
+                window = window is null ? null : new
+                {
+                    at = window.At?.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture),
+                    lengthMinutes = (int)(window.Length ?? TimeSpan.Zero).TotalMinutes,
+                    autonomy = window.Autonomy,
+                    open = ScheduleService.Window(window, now) is not null,
+                    next = ScheduleService.Next(window, now),
+                },
+                windowOpened = queue.WindowOpened,
             });
 
             return CommandOutput.Success();
         }
 
         output.WriteLine($"[bold]{Markup.Escape(QueueSettling.Whose(team))} queue[/]  [dim]{Markup.Escape(Spell(queue.Settings))}[/]");
+        output.WriteLine(window is null
+            ? $"[dim]No window: its runs start only with[/] loadout team queue run-next {Markup.Escape(team)}"
+            : Markup.Escape(TeamScheduleAddCommand.Describe(window, now)));
 
         if (judged.Count == 0)
         {

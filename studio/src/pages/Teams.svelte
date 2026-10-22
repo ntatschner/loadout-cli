@@ -371,7 +371,7 @@
   // A queue is shown once it has anything in it, or once somebody chose to
   // start one, so nine empty panels do not bury the one in use.
   const shownQueues = $derived(
-    (queues ?? []).filter((one) => one.items.length || one.runs.length || one.settings.draftPullRequests || queueing.includes(one.team)),
+    (queues ?? []).filter((one) => one.items.length || one.runs.length || one.settings.draftPullRequests || one.window || queueing.includes(one.team)),
   );
   const unqueued = $derived((queues ?? []).filter((one) => !shownQueues.includes(one)).map((one) => one.team));
 

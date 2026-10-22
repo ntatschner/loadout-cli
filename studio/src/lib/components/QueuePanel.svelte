@@ -28,11 +28,23 @@
     draftPullRequests: boolean;
   }
 
+  export interface QueueWindowRow {
+    at: string | null;
+    lengthMinutes: number;
+    autonomy: string;
+    open: boolean;
+    next?: string | null;
+  }
+
   export interface QueueRead {
     team: string;
     items: QueueItemRow[];
     runs: QueueRunRow[];
     settings: QueueSettingsRow;
+    /** When the daemon works through it on its own, or null when only by hand. */
+    window?: QueueWindowRow | null;
+    /** When the window being worked in opened, while one is. */
+    windowOpened?: string | null;
   }
 
   export interface QueuePlan {
@@ -46,7 +58,12 @@
     title: string;
     state: string;
     kind: string;
+    /** Its finish line; a task without one is refused by the queue. */
+    doneWhen?: string[];
   }
+
+  /** A team's name as an owner: builders' and docs-crew's. */
+  export const whose = (team: string) => (team.endsWith('s') ? `${team}'` : `${whose(team)}`);
 </script>
 
 <script lang="ts">
@@ -81,11 +98,38 @@
   const held = $derived(queue.runs.filter((run) => run.state === 'held').length);
   const going = $derived(queue.runs.find((run) => run.state === 'running') ?? null);
 
-  // There is no window yet to count against, so the honest figure is the
-  // last day's: what a person checking in the morning wants to know.
+  // The window being worked in when there is one, since that is what its
+  // caps count; otherwise the last day's, which is what a person checking in
+  // the morning wants to know.
+  const since = $derived(queue.windowOpened ? Date.parse(queue.windowOpened) : now() - 86_400_000);
   const daySpend = $derived(
-    queue.runs.filter((run) => now() - Date.parse(run.started) < 86_400_000).reduce((sum, run) => sum + run.costUsd, 0),
+    queue.runs.filter((run) => Date.parse(run.started) >= since).reduce((sum, run) => sum + run.costUsd, 0),
   );
+  const spendWhen = $derived(queue.windowOpened ? 'in this window' : 'in the last day');
+
+  /* ---------- the window ---------- */
+
+  const opening = $derived(queue.window ?? null);
+  const span = (minutes: number) =>
+    minutes % 60 === 0 ? `${minutes / 60}h` : minutes > 60 ? `${Math.floor(minutes / 60)}h${minutes % 60}m` : `${minutes}m`;
+
+  let timing = $state(false);
+  let opensAt = $state('22:00');
+  let openFor = $state('8h');
+
+  function editWindow() {
+    opensAt = opening?.at ?? '22:00';
+    openFor = opening ? span(opening.lengthMinutes) : '8h';
+    timing = true;
+  }
+
+  const windowWords = $derived([team, '--at', opensAt.trim(), '--for', openFor.trim()]);
+
+  async function saveWindow() {
+    if ((await act('team queue window', windowWords, `${whose(team)} queue has its window`)) !== false) {
+      timing = false;
+    }
+  }
 
   const money = (usd: number) => `$${usd.toFixed(2)}`;
   const at = (iso: string) => new Date(iso).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' });
@@ -125,7 +169,7 @@
   const addWords = $derived([team, task, '--project', project, ...(after ? ['--after', after] : [])]);
 
   async function add() {
-    if ((await act('team queue add', addWords, `${task} is in ${team}'s queue`)) !== false) {
+    if ((await act('team queue add', addWords, `${task} is in ${whose(team)} queue`)) !== false) {
       adding = false;
       task = '';
       after = '';
@@ -167,7 +211,7 @@
   });
 
   async function saveLimits() {
-    if ((await act('team queue settings', [team, ...limitWords], `${team}'s queue limits are saved`)) !== false) {
+    if ((await act('team queue settings', [team, ...limitWords], `${whose(team)} queue limits are saved`)) !== false) {
       editing = false;
     }
   }
@@ -189,21 +233,48 @@
   }
 </script>
 
-<section class="ls-queue" aria-label={`${team}'s queue`}>
+<section class="ls-queue" aria-label={`${whose(team)} queue`}>
   <header>
     <b>{team}</b>
-    <em>{limits}{daySpend > 0 ? ` · ${money(daySpend)} in the last day` : ''}</em>
+    <em>{limits}{daySpend > 0 ? ` · ${money(daySpend)} ${spendWhen}` : ''}</em>
   </header>
+
+  <div class="grant" role="group" aria-label={`When ${whose(team)} queue runs`}>
+    {#if opening}
+      <p>
+        Worked through daily from <strong>{opening.at}</strong> for {span(opening.lengthMinutes)}, {opening.autonomy}{opening.open ? ' · open now' : opening.next ? ` · next from ${at(opening.next)}` : ''}.
+      </p>
+      <HaloButton label="No window" size="small" cmd={`$ loadout team queue window ${team} --off`} {disabledReason} onpress={() => void act('team queue window', [team, '--off'], `${whose(team)} queue has no window`)} />
+    {:else}
+      <p>No window: its runs start only when you press Run the next one.</p>
+    {/if}
+    <HaloButton label={timing ? 'Not now' : opening ? 'Change the window' : 'Give it a window'} size="small" cmd={timing ? undefined : `opens ${whose(team)} queue window`} {disabledReason} onpress={() => (timing ? (timing = false) : editWindow())} />
+  </div>
+
+  {#if timing}
+    <form class="qform" aria-label={`${whose(team)} queue window`} onsubmit={(event) => { event.preventDefault(); void saveWindow(); }}>
+      <div class="ls-field">
+        <label class="lab" for={`${uid}-at`}>Opens each day at, this machine's time</label>
+        <input id={`${uid}-at`} class="ls-text" type="text" autocomplete="off" bind:value={opensAt} placeholder="22:00" />
+      </div>
+      <div class="ls-field">
+        <label class="lab" for={`${uid}-for`}>Stays open for</label>
+        <input id={`${uid}-for`} class="ls-text" type="text" autocomplete="off" bind:value={openFor} placeholder="8h" />
+      </div>
+      <p class="calm small">The daemon has to be running for anything to happen in it.</p>
+      <HaloButton label="Save the window" solid cmd={`$ loadout team queue window ${windowWords.join(' ')}`} disabledReason={disabledReason ?? (!opensAt.trim() || !openFor.trim() ? 'Say when it opens and for how long' : undefined)} onpress={() => void saveWindow()} />
+    </form>
+  {/if}
 
   {#if settings.draftPullRequests}
     <div class="grant on" role="note">
       <p>It may push a branch and open a <strong>draft pull request</strong> when a queued run meets its done-when. Merging still needs you.</p>
-      <HaloButton label="Stop that" size="small" kind="danger" cmd={`$ loadout team queue settings ${team} --draft-prs off`} {disabledReason} onpress={() => void act('team queue settings', [team, '--draft-prs', 'off'], `${team}'s queue opens no pull requests`)} />
+      <HaloButton label="Stop that" size="small" kind="danger" cmd={`$ loadout team queue settings ${team} --draft-prs off`} {disabledReason} onpress={() => void act('team queue settings', [team, '--draft-prs', 'off'], `${whose(team)} queue opens no pull requests`)} />
     </div>
   {:else}
     <div class="grant" role="note">
       <p>It opens no pull requests: a run that meets its done-when keeps its branch on this machine.</p>
-      <HaloButton label="Let it open drafts" size="small" cmd={`$ loadout team queue settings ${team} --draft-prs on`} {disabledReason} onpress={() => void act('team queue settings', [team, '--draft-prs', 'on'], `${team}'s queue may open draft pull requests`)} />
+      <HaloButton label="Let it open drafts" size="small" cmd={`$ loadout team queue settings ${team} --draft-prs on`} {disabledReason} onpress={() => void act('team queue settings', [team, '--draft-prs', 'on'], `${whose(team)} queue may open draft pull requests`)} />
     </div>
   {/if}
 
@@ -216,7 +287,7 @@
   {#if !items.length}
     <p class="ls-note">Nothing is waiting.</p>
   {:else}
-    <ol aria-label={`Waiting in ${team}'s queue`}>
+    <ol aria-label={`Waiting in ${whose(team)} queue`}>
       {#each items as item, index (`${item.project}/${item.task}`)}
         <li class:refused={!!item.refused}>
           <div class="t">
@@ -237,14 +308,14 @@
   {/if}
 
   <div class="row">
-    <HaloButton label="Run the next one" cmd={`$ loadout team queue run-next ${team}`} {disabledReason} onpress={() => void act('team queue run-next', [team], `${team}'s queue started its next task`)} />
+    <HaloButton label="Run the next one" cmd={`$ loadout team queue run-next ${team}`} {disabledReason} onpress={() => void act('team queue run-next', [team], `${whose(team)} queue started its next task`)} />
     <HaloButton label="What would run" cmd={`$ loadout team queue plan ${team}`} onpress={() => void showPlan()} />
-    <HaloButton label={adding ? 'Not now' : 'Add a task'} cmd={adding ? undefined : `opens Add a task to ${team}'s queue`} {disabledReason} onpress={() => (adding = !adding)} />
-    <HaloButton label={editing ? 'Not now' : 'Change its limits'} cmd={editing ? undefined : `opens ${team}'s queue limits`} {disabledReason} onpress={() => (editing ? (editing = false) : edit())} />
+    <HaloButton label={adding ? 'Not now' : 'Add a task'} cmd={adding ? undefined : `opens Add a task to ${whose(team)} queue`} {disabledReason} onpress={() => (adding = !adding)} />
+    <HaloButton label={editing ? 'Not now' : 'Change its limits'} cmd={editing ? undefined : `opens ${whose(team)} queue limits`} {disabledReason} onpress={() => (editing ? (editing = false) : edit())} />
   </div>
 
   {#if plan}
-    <div class="plan" role="region" aria-label={`What ${team}'s queue would run`}>
+    <div class="plan" role="region" aria-label={`What ${whose(team)} queue would run`}>
       {#if plan.order.length}
         <ol>
           {#each plan.order as one (`${one.project}/${one.task}`)}
@@ -265,7 +336,7 @@
   {/if}
 
   {#if adding}
-    <form class="qform" aria-label={`Add a task to ${team}'s queue`} onsubmit={(event) => { event.preventDefault(); void add(); }}>
+    <form class="qform" aria-label={`Add a task to ${whose(team)} queue`} onsubmit={(event) => { event.preventDefault(); void add(); }}>
       <div class="ls-field">
         <label class="lab" for={`${uid}-project`}>Project</label>
         <select id={`${uid}-project`} class="ls-text" value={project} onchange={(event) => void pickProject((event.currentTarget as HTMLSelectElement).value)}>
@@ -280,7 +351,7 @@
         <select id={`${uid}-task`} class="ls-text" bind:value={task} disabled={!project || tasks === null}>
           <option value="">{project && tasks === null ? 'Reading…' : 'Choose a task'}</option>
           {#each offered as one (one.id)}
-            <option value={one.id}>{one.id} · {one.title}</option>
+            <option value={one.id}>{one.id} · {one.title}{one.doneWhen && !one.doneWhen.length ? ' (no done-when yet)' : ''}</option>
           {/each}
         </select>
       </div>
@@ -299,7 +370,7 @@
   {/if}
 
   {#if editing}
-    <form class="qform" aria-label={`${team}'s queue limits`} onsubmit={(event) => { event.preventDefault(); void saveLimits(); }}>
+    <form class="qform" aria-label={`${whose(team)} queue limits`} onsubmit={(event) => { event.preventDefault(); void saveLimits(); }}>
       <div class="ls-field">
         <label class="lab" for={`${uid}-usd`}>Most a window may spend, US dollars</label>
         <input id={`${uid}-usd`} class="ls-text" type="text" autocomplete="off" bind:value={usd} placeholder="none" />
@@ -318,7 +389,7 @@
 
   {#if recent.length}
     <h4>What it ran</h4>
-    <ul aria-label={`Runs ${team}'s queue started`}>
+    <ul aria-label={`Runs ${whose(team)} queue started`}>
       {#each recent as run (`${run.project}/${run.task}/${run.started}`)}
         <li class={`st-${run.state}`}>
           <div class="t">

@@ -183,6 +183,7 @@ public static class StudioCoverage
         ["team queue plan"] = new("teams", StudioEffect.Reads),
         ["team queue settings"] = new("teams", StudioEffect.Changes),
         ["team queue run-next"] = new("teams", StudioEffect.Changes),
+        ["team queue window"] = new("teams", StudioEffect.Changes),
         ["team gate"] = new("home", StudioEffect.Changes),
         ["team message"] = new("teams", StudioEffect.Changes),
         ["team halt"] = new("home", StudioEffect.Changes),
