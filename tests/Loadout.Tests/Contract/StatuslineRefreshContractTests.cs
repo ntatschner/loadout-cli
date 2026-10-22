@@ -135,6 +135,24 @@ public sealed class StatuslineRefreshContractTests
     }
 
     [BuiltCliFact]
+    public async Task Show_says_nothing_about_reinstalling_under_redraw_never()
+    {
+        using var loadout = Isolated(claudeVersion: null);
+
+        (await loadout.RunAsync("config", "set", "show-redraw", "never")).ExitCode.Should().Be(0);
+
+        // What install writes under that profile: no interval, on purpose.
+        File.WriteAllText(SettingsPath(loadout), """
+            { "statusLine": { "type": "command", "command": "\"C:\\loadout.exe\" statusline" } }
+            """);
+
+        var run = await loadout.RunAsync("statusline", "show", "--global");
+
+        run.ExitCode.Should().Be(0, run.StandardError);
+        run.StandardOutput.Should().NotContain("Reinstall with");
+    }
+
+    [BuiltCliFact]
     public async Task Show_says_nothing_about_reinstalling_when_the_interval_is_there()
     {
         using var loadout = Isolated(claudeVersion: null);

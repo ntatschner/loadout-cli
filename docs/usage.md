@@ -115,7 +115,7 @@ The rest are single readings:
 | Clock | `14:05`, or `2:05pm` | `statusline-clock` |
 | Session | `session 1h12m`, or `started 09:10` | `statusline-session` |
 | Last turn | `turn 2m14s` | `statusline-turn` |
-| Last commit | `commit 3h ago`, or `commit 11:40` | `statusline-last-commit` |
+| Last commit | `commit 3h00m ago`, or `commit 11:40` | `statusline-last-commit` |
 
 Waiting and last write are on by default and the others are off, because those
 are the questions you have when you come back to a session, and the rest are
@@ -128,8 +128,9 @@ turn is the length of the last completed one, so it can't go stale.
 
 Waiting turns amber at 10m and red at 30m, and last write turns
 amber at 30m, so a session that has been sitting on a question
-stands out. Change the thresholds with `statusline-waiting-after 10m,30m` and
-its siblings; a value that can't be read just means no colour change.
+stands out. Change the thresholds with `statusline-waiting-after 10m,30m`,
+`statusline-write-after` and `statusline-commit-after`, which has none until you
+set one; a value that can't be read just means no colour change.
 
 #### It needs a reinstall to keep ticking
 
