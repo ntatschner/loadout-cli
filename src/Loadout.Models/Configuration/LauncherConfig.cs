@@ -162,6 +162,77 @@ public sealed class StatuslineSettings
 
     /// <summary>Separator drawn between segments.</summary>
     public string Separator { get; set; } = " | ";
+
+    /// <summary>
+    /// Whether the line says what the session is waiting on and since when:
+    /// you, a tool, a permission prompt, a wake-up or background work.
+    /// </summary>
+    /// <remarks>
+    /// On by default, with the last write, because these two answer the
+    /// question somebody glancing at a parked session actually has. The rest
+    /// of the time segments are off until asked for.
+    /// </remarks>
+    public bool ShowWaiting { get; set; } = true;
+
+    /// <summary>How long since the agent last changed a file.</summary>
+    public bool ShowLastWrite { get; set; } = true;
+
+    /// <summary>The time of day, for a terminal that has no clock of its own on screen.</summary>
+    public bool ShowClock { get; set; }
+
+    /// <summary>How long the session has been running.</summary>
+    public bool ShowSession { get; set; }
+
+    /// <summary>How long the last completed turn took.</summary>
+    public bool ShowTurn { get; set; }
+
+    /// <summary>How long since the last commit on the current branch.</summary>
+    public bool ShowLastCommit { get; set; }
+
+    /// <summary>How the time segments are written.</summary>
+    public StatuslineTimeSettings Time { get; set; } = new();
+
+    /// <summary>
+    /// When the waiting segment turns amber and then red, as "10m,30m". A
+    /// value that cannot be read means no colour change, never an error.
+    /// </summary>
+    public string? WaitingAfter { get; set; } = "10m,30m";
+
+    /// <summary>When the last-write segment changes colour, in the same form.</summary>
+    public string? LastWriteAfter { get; set; } = "30m";
+
+    /// <summary>When the last-commit segment changes colour; unset means never.</summary>
+    public string? LastCommitAfter { get; set; }
+
+    /// <summary>
+    /// A copy that shares nothing with this one. A copy written out member by
+    /// member drops every setting added after it was written, silently.
+    /// </summary>
+    public StatuslineSettings Copy()
+    {
+        var copy = (StatuslineSettings)MemberwiseClone();
+
+        copy.Time = Time.Copy();
+
+        return copy;
+    }
+}
+
+/// <summary>How the status line writes a time.</summary>
+public sealed class StatuslineTimeSettings
+{
+    /// <summary>A copy that shares nothing with this one.</summary>
+    public StatuslineTimeSettings Copy() => (StatuslineTimeSettings)MemberwiseClone();
+
+    /// <summary>
+    /// Clock times ("write 14:02") rather than ages ("write 3m ago"). An age
+    /// only moves when the line is redrawn, so a clock time is the honest
+    /// choice where redraws are rare.
+    /// </summary>
+    public bool Absolute { get; set; }
+
+    /// <summary>24-hour times ("14:05") rather than 12-hour ("2:05pm").</summary>
+    public bool Hour24 { get; set; } = true;
 }
 
 /// <summary>
