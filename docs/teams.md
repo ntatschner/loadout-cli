@@ -2270,6 +2270,12 @@ whether a queued run that meets its done-when may open a draft pull request
 (`--draft-prs on`, off unless you turn it on). The queue lives on this machine,
 beside the schedules, for the same reason they do.
 
+Studio's Teams page has the same thing under **Queued for a team**: each
+queue with anything in it, what waits and what would be refused, what it has
+run, its limits, and the draft pull request setting said first when it is on,
+with **Stop that** beside it. Every button there runs the `team queue` command
+written under it.
+
 **Not built yet.** The daemon does not work through a queue on its own: there
 is no window, so the window caps and the held cap only matter to what you start
 with `run-next`, and the draft pull request setting is recorded but nothing acts

@@ -12,6 +12,7 @@
   import HaloButton from '../lib/components/HaloButton.svelte';
   import ListToolbar from '../lib/components/ListToolbar.svelte';
   import NeedsYou from '../lib/components/NeedsYou.svelte';
+  import QueuePanel, { type QueuePlan, type QueueRead, type QueueTask } from '../lib/components/QueuePanel.svelte';
   import Picker from '../lib/components/Picker.svelte';
   import Remedy from '../lib/components/Remedy.svelte';
   import RunBoard from '../lib/components/RunBoard.svelte';
@@ -21,7 +22,7 @@
   import TeamSheet from '../lib/components/TeamSheet.svelte';
   import TeamPage from './TeamPage.svelte';
   import TeamRun from './TeamRun.svelte';
-  import { configuration, readJson, runs as runsApi, SignedOut, teamApi, type Choices, type Run } from '../lib/api';
+  import { commands, configuration, readJson, runs as runsApi, SignedOut, teamApi, type Choices, type Run } from '../lib/api';
   import { CommandList } from '../lib/commandList.svelte';
   import { runJob } from '../lib/jobs';
   import { router } from '../lib/router.svelte';
@@ -52,6 +53,8 @@
   let choices = $state<Choices | null>(null);
   let schedules = $state<{ id: string; team: string; goal: string; autonomy: string; every?: string; at?: string; on: string; enabled: boolean; next?: string }[] | null>(null);
   let daemon = $state<{ daemon: boolean; paused: boolean | null } | null>(null);
+  let queues = $state<QueueRead[] | null>(null);
+  let queueing = $state<string[]>([]);
   let problem = $state<string | null>(null);
   let sheet = $state<{ kind: SheetKind; preset: Partial<SheetValues> } | null>(null);
   let forgetting = $state<Run | null>(null);
@@ -77,6 +80,13 @@
       choices = chosen;
       schedules = planned.schedules;
       daemon = state;
+
+      // One read per team, side by side. A queue that cannot be read is left
+      // out rather than failing the page: the rest of the page is still true.
+      const read = await Promise.all(
+        list.teams.filter((team) => !team.template).map((team) => readJson<QueueRead>('team queue list', [team.name]).catch(() => null)),
+      );
+      queues = read.filter((one): one is QueueRead => one !== null);
     } catch (error) {
       fail(error);
     }
@@ -356,6 +366,30 @@
   const liveCount = $derived(running.length);
   const waitingCount = $derived(studio.runs.filter((run) => run.waitingForYou).length);
 
+  /* ---------- queues ---------- */
+
+  // A queue is shown once it has anything in it, or once somebody chose to
+  // start one, so nine empty panels do not bury the one in use.
+  const shownQueues = $derived(
+    (queues ?? []).filter((one) => one.items.length || one.runs.length || one.settings.draftPullRequests || queueing.includes(one.team)),
+  );
+  const unqueued = $derived((queues ?? []).filter((one) => !shownQueues.includes(one)).map((one) => one.team));
+
+  const queueTasks = (project: string) =>
+    readJson<{ tasks: QueueTask[] }>('task list', ['--project', project]).then((read) => read.tasks);
+  const queuePlan = (team: string) => () => readJson<QueuePlan>('team queue plan', [team]);
+
+  // run-next starts a team run, which goes on long after any page would wait
+  // for it, so it is started and left to the Jobs strip; the rest are quick
+  // and are waited for.
+  const queueAct = (path: string, words: string[], done: string) =>
+    studio.perform(
+      () => (path === 'team queue run-next' ? commands.run(path, words) : runJob(path, words)),
+      done,
+      `$ loadout ${path} ${words.join(' ')}`,
+      loadOverview,
+    );
+
   const when = (one: NonNullable<typeof schedules>[number]) => (one.at ? `at ${one.at}` : one.on ? `on ${one.on}` : one.every ? `every ${one.every.replace(/^0?(\d+):00:00$/, '$1h').replace(/^00:(\d+):00$/, '$1m')}` : '');
 </script>
 
@@ -478,6 +512,30 @@
           onremove={(name) => studio.perform(() => runJob('team schedule remove', [name]), `${name} will not fire again`, `$ loadout team schedule remove ${name}`)}
         />
         <p class="calm small">From <code class="ls-cmd">$ loadout team schedule list</code>.</p>
+      {:else}
+        <p class="calm" role="status">Reading…</p>
+      {/if}
+    </section>
+
+    <section class="tblock" aria-labelledby="tm-queue">
+      <h2 class="ls-zone" id="tm-queue">Queued for a team</h2>
+      {#if queues && choices}
+        <p class="calm small">Tasks with a done-when, worked through one run at a time. Only a task that says when it is finished gets in.</p>
+        {#each shownQueues as queue (queue.team)}
+          <QueuePanel {queue} projects={choices.projects} tasksOf={queueTasks} act={queueAct} readPlan={queuePlan(queue.team)} disabledReason={watch} />
+        {/each}
+        {#if unqueued.length}
+          <div class="ls-field qstart">
+            <label class="lab" for="tm-queue-start">Start a queue for</label>
+            <select id="tm-queue-start" class="ls-text" value="" onchange={(event) => { const picked = (event.currentTarget as HTMLSelectElement).value; if (picked) { queueing = [...queueing, picked]; } }}>
+              <option value="">Choose a team</option>
+              {#each unqueued as name (name)}
+                <option value={name}>{name}</option>
+              {/each}
+            </select>
+          </div>
+        {/if}
+        <p class="calm small">From <code class="ls-cmd">$ loadout team queue list &lt;team&gt;</code>.</p>
       {:else}
         <p class="calm" role="status">Reading…</p>
       {/if}
