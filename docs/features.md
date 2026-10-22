@@ -81,38 +81,6 @@ two stores that keep the same names and disagree get told apart. A copy that
 differs is named and left exactly where it is — which of two accounts is right
 is a judgement, not a merge.
 
-## Where the tokens went
-
-```sh
-loadout usage --days 7 --by day
-```
-
-No setup, no opt-in. It reads the transcripts your agents already write, so
-there's history from the day you install it, including sessions from before.
-Break it down by project, day, model or agent.
-
-Cache reads are counted at their real rate rather than as fresh input, which
-matters more than it sounds: on a long session the difference is most of the
-number. If a total is incomplete it says so instead of quietly showing you a
-smaller one.
-
-There's also `loadout telemetry serve`, a local OTLP receiver for agents that
-emit OpenTelemetry. Optional, and local means local: no service, no account,
-nothing sent anywhere, counts only.
-
-## Repos that stay clean
-
-`loadout protect` sets up the Git protections. Because hooks live in
-`.git/hooks` and never travel, a fresh clone is unprotected until somebody
-notices — so a launch says so on the way in, while it can still be acted on. It
-warns and never blocks: an unprotected repository is still one you may have good
-reason to work in. A working tree keeps its hooks in the repository it was made
-from, and there the launcher says nothing rather than reporting a problem you do
-not have. `loadout migrate` moves whatever
-is already scattered around into the workspace, showing you the changes first
-and taking a snapshot you can restore. `loadout drift` tells you when a project
-has wandered from what you configured.
-
 ## A launcher as well as a command line
 
 ![The launcher](images/launcher.svg)
@@ -150,92 +118,6 @@ and you get `doctor`. Nobody looking to undo a mistake searches for the words
 The launcher doesn't implement any command itself. Whatever you pick runs
 through the same parser you'd have typed at, and a test checks that.
 
-## The agent can ask back
-
-The session you launch is told `loadout` is on PATH, and gets the same few
-operations as MCP tools: read a specialist in full, ask what it was given and
-why, search what the project already knows before working it out again, write
-down one fact worth having next time, and change its own mode when the work
-changes shape.
-
-Being able to look something up and choosing to are different things. The memory
-index sat in every compiled context for months and was acted on once in twelve
-thousand turns, because "read the ones that bear on the task" leaves a session
-to notice mid-work that one of twenty-four titles might have applied. So the
-context now names the occasions: before diagnosing a failure, before an
-unfamiliar error, before anything about how this project builds, tests, releases
-or is configured, and before writing down a fact of its own, so an existing
-topic gets extended rather than contradicted by a second one beside it.
-
-The other way round was tried first — a hook that searched memory on every
-prompt and put the matches in front of the session unasked. Measured against 322
-real prompts it spoke on 56% of them when 18% had anything relevant to say, and
-it was removed. A fact arriving unasked reads as though the launcher vouched for
-it, so being wrong a third of the time costs more than saying nothing.
-
-It isn't offered anything that changes your machine or pushes to a remote, and
-the context says so rather than leaving it to be worked out. Ask an agent to
-review a repository and it has a procedure to follow — `skill.repository-review`
-— and somewhere to put what it finds.
-
-It can also read and update what the project is working on. `loadout task`
-keeps that record — open, doing, done, blocked or dropped, each with who said
-so and when — and checks it against the repository, which is how "called done,
-and nothing has been committed since" gets said out loud. A project that sets
-`tasks: true` under `context` puts the open entries in front of every session,
-so the answer to "where were we" comes from the record rather than from
-whatever is still in the conversation. They are observations, never verdicts:
-corroboration can say a claim is unsupported and can never say one is wrong.
-
-## Code that isn't a repository yet
-
-`loadout project add` takes a directory with no Git repository in it. It
-registers as one still to be set up, with a task saying so, and the launch says
-so too — the first session gets told on the way in instead of finding out by
-running something and reading an error. Initialising it, the first commit and
-the remote are the work. `loadout protect` comes after, and isn't suggested
-before there's anything to protect. A path that doesn't exist is still refused,
-because that's a typo rather than a plan.
-
-`loadout project discover` and the launcher's Add Project list offer these too,
-marked as not repositories, because a list of things you can register that
-leaves out a kind you can register isn't a list you can trust. They're never
-swept up by a bulk registration: a scratch folder doesn't become a project
-because somebody asked to register everything they'd cloned. Build output —
-`__pycache__`, `dist`, a screenshots folder — stays out of the offer, though
-it's still walked through in case a repository is buried in one.
-
-## A first project from nothing
-
-`loadout start` is for somebody who has never had a project: new to
-programming and to agents both. It checks Git, a name in Git, an agent and
-Loadout's own setup, and for whichever is missing prints the line to type for
-this operating system and offers to look again. It never runs an installer.
-Somebody new to this learns more from typing the line than from a launcher
-that changes their machine, and Loadout doesn't install the agents it starts
-anywhere else either.
-
-Then it makes the project from a starter (a web page, a checklist, or an empty
-folder for your own idea), every one of which needs only a browser, because a
-missing runtime would make the first project fail for a reason that has
-nothing to do with it. Git, registering and `loadout protect` come with it.
-
-The planning and the building are handed to an agent, in two sessions: advise
-first, ending in a `PLAN.md`, then implement. Each is previewed and asked about
-separately, because each spends from your plan, and `--yes` covers the machine
-steps only. Run it again and it carries on from the first step not done.
-[Your first project](plain/your-first-project.md) walks through it.
-
-## Undo
-
-Every command that changes a file takes `--dry-run` and shows you the change
-first. Anything that did change is in a snapshot you can put back:
-
-```sh
-loadout backup list
-loadout backup restore 20260901-204044-fd3512
-```
-
 ## Several agents on one goal
 
 ```sh
@@ -256,7 +138,7 @@ one with `team status`, in the launcher, or on a page `loadout dashboard` serves
 this machine. The page runs and writes teams as well as watching them, and every
 control on it types the command you would have typed.
 
-Eight teams ship. A team is a YAML file, so you can write your own, and copying
+Nine teams ship. A team is a YAML file, so you can write your own, and copying
 one that already works is the way to start:
 
 ```sh
@@ -295,6 +177,124 @@ would take and why it is keeping the rest.
 What it takes goes to the bin rather than away: `loadout team bin` lists it,
 `loadout team runs restore <run>` puts one back, and it is deleted for good after
 30 days, or whatever `team-bin-days` says.
+
+## A first project from nothing
+
+`loadout start` is for somebody who has never had a project: new to
+programming and to agents both. It checks Git, a name in Git, an agent and
+Loadout's own setup, and for whichever is missing prints the line to type for
+this operating system and offers to look again. It never runs an installer.
+Somebody new to this learns more from typing the line than from a launcher
+that changes their machine, and Loadout doesn't install the agents it starts
+anywhere else either.
+
+Then it makes the project from a starter (a web page, a checklist, or an empty
+folder for your own idea), every one of which needs only a browser, because a
+missing runtime would make the first project fail for a reason that has
+nothing to do with it. Git, registering and `loadout protect` come with it.
+
+The planning and the building are handed to an agent, in two sessions: advise
+first, ending in a `PLAN.md`, then implement. Each is previewed and asked about
+separately, because each spends from your plan, and `--yes` covers the machine
+steps only. Run it again and it carries on from the first step not done.
+[Your first project](plain/your-first-project.md) walks through it.
+
+## The agent can ask back
+
+The session you launch is told `loadout` is on PATH, and gets the same few
+operations as MCP tools: read a specialist in full, ask what it was given and
+why, search what the project already knows before working it out again, write
+down one fact worth having next time, and change its own mode when the work
+changes shape.
+
+Being able to look something up and choosing to are different things. The memory
+index sat in every compiled context for months and was acted on once in twelve
+thousand turns, because "read the ones that bear on the task" leaves a session
+to notice mid-work that one of twenty-four titles might have applied. So the
+context now names the occasions: before diagnosing a failure, before an
+unfamiliar error, before anything about how this project builds, tests, releases
+or is configured, and before writing down a fact of its own, so an existing
+topic gets extended rather than contradicted by a second one beside it.
+
+The other way round was tried first — a hook that searched memory on every
+prompt and put the matches in front of the session unasked. Measured against 322
+real prompts it spoke on 56% of them when 18% had anything relevant to say, and
+it was removed. A fact arriving unasked reads as though the launcher vouched for
+it, so being wrong a third of the time costs more than saying nothing.
+
+It isn't offered anything that changes your machine or pushes to a remote, and
+the context says so rather than leaving it to be worked out. Ask an agent to
+review a repository and it has a procedure to follow — `skill.repository-review`
+— and somewhere to put what it finds.
+
+It can also read and update what the project is working on. `loadout task`
+keeps that record — open, doing, done, blocked or dropped, each with who said
+so and when — and checks it against the repository, which is how "called done,
+and nothing has been committed since" gets said out loud. A project that sets
+`tasks: true` under `context` puts the open entries in front of every session,
+so the answer to "where were we" comes from the record rather than from
+whatever is still in the conversation. They are observations, never verdicts:
+corroboration can say a claim is unsupported and can never say one is wrong.
+
+## Repos that stay clean
+
+`loadout protect` sets up the Git protections. Because hooks live in
+`.git/hooks` and never travel, a fresh clone is unprotected until somebody
+notices — so a launch says so on the way in, while it can still be acted on. It
+warns and never blocks: an unprotected repository is still one you may have good
+reason to work in. A working tree keeps its hooks in the repository it was made
+from, and there the launcher says nothing rather than reporting a problem you do
+not have. `loadout migrate` moves whatever
+is already scattered around into the workspace, showing you the changes first
+and taking a snapshot you can restore. `loadout drift` tells you when a project
+has wandered from what you configured.
+
+## Code that isn't a repository yet
+
+`loadout project add` takes a directory with no Git repository in it. It
+registers as one still to be set up, with a task saying so, and the launch says
+so too — the first session gets told on the way in instead of finding out by
+running something and reading an error. Initialising it, the first commit and
+the remote are the work. `loadout protect` comes after, and isn't suggested
+before there's anything to protect. A path that doesn't exist is still refused,
+because that's a typo rather than a plan.
+
+`loadout project discover` and the launcher's Add Project list offer these too,
+marked as not repositories, because a list of things you can register that
+leaves out a kind you can register isn't a list you can trust. They're never
+swept up by a bulk registration: a scratch folder doesn't become a project
+because somebody asked to register everything they'd cloned. Build output —
+`__pycache__`, `dist`, a screenshots folder — stays out of the offer, though
+it's still walked through in case a repository is buried in one.
+
+## Undo
+
+Every command that changes a file takes `--dry-run` and shows you the change
+first. Anything that did change is in a snapshot you can put back:
+
+```sh
+loadout backup list
+loadout backup restore 20260901-204044-fd3512
+```
+
+## Where the tokens went
+
+```sh
+loadout usage --days 7 --by day
+```
+
+No setup, no opt-in. It reads the transcripts your agents already write, so
+there's history from the day you install it, including sessions from before.
+Break it down by project, day, model or agent.
+
+Cache reads are counted at their real rate rather than as fresh input, which
+matters more than it sounds: on a long session the difference is most of the
+number. If a total is incomplete it says so instead of quietly showing you a
+smaller one.
+
+There's also `loadout telemetry serve`, a local OTLP receiver for agents that
+emit OpenTelemetry. Optional, and local means local: no service, no account,
+nothing sent anywhere, counts only.
 
 ## A dashboard for the runs
 

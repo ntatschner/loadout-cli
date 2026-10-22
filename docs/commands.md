@@ -684,7 +684,7 @@ Every launch declares Loadout itself as an MCP server, so the handoff runs both
 ways: a session can ask the launcher things rather than parse console output
 written for a person.
 
-Twenty-one tools, each making the same call its command makes:
+Twenty-four tools, each making the same call its command makes:
 
 | | |
 |---|---|
@@ -703,6 +703,9 @@ Twenty-one tools, each making the same call its command makes:
 | `loadout_ideas` | Every idea and where it stands, or one in full, as `idea list` and `idea show` say it |
 | `loadout_idea_apply` | Several idea changes at once, each idea's all or nothing, as `idea apply` makes them |
 | `loadout_mode` | Change the posture for the rest of the session, and get what that changes |
+| `loadout_project_settings` | This project's `project.yaml` as it is now: the agent and model it launches, the context files every session gets, its profiles and specialist preferences |
+| `loadout_propose_settings` | Propose a change to `project.yaml` for a person to review and apply. Proposed rather than written, because the settings decide what every later session is told |
+| `loadout_permission` | For a node of a team run: whether it may make a tool call it stopped to ask about, from its role's policy. The agent calls it itself |
 | `loadout_progress` | For a node of a team run: say what you are doing, in your own words |
 | `loadout_teams` | What the team runs on this machine are doing, and which have stopped to ask |
 | `loadout_tools_search` | The machine's shared tools matching some words, as `tools search` finds them |

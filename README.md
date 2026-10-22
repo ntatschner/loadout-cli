@@ -1,21 +1,24 @@
 # Loadout
 
-**Before you start a session, Loadout shows you what your coding agent will be
-told and what it'll cost. Everything the agent needs stays out of your
-repository.**
+**Your coding agents, kitted out and kept in check.**
 
 [![CI](https://github.com/ntatschner/loadout-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/ntatschner/loadout-cli/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/ntatschner/loadout-cli)](https://github.com/ntatschner/loadout-cli/releases/latest)
 [![Licence](https://img.shields.io/github/license/ntatschner/loadout-cli)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-informational)](https://github.com/ntatschner/loadout-cli/releases/latest)
 
-Loadout starts the coding agent you already use — Claude Code or Codex — with
-the right instructions for the job in front of you. It doesn't replace the
-agent, and it won't install one for you.
+Loadout is a workbench for coding agents. It starts the one you already use —
+Claude Code, Codex or one you define — and looks after everything around it.
+It doesn't replace the agent, and it won't install one for you.
 
-You see which instructions a session will load, and what they cost, before it
-starts, for one keystroke. The task line fills itself in, because people typed
-it only twice in 122 launches.
+On its own, your agent reads all of `CLAUDE.md` or `AGENTS.md` every session.
+Loadout picks the instructions the job in front of you needs, and shows you
+what they'll cost before anything starts. What a project has taught you goes
+into memory, and where you got to goes into a task record, so the next session
+and the next machine both start from there. Agent files stay out of your
+repository, and spend is added up from transcripts your agents already write.
+When one agent isn't enough, put a team on the goal and watch it from your
+browser. A run without a budget won't start.
 
 ## Start here
 
@@ -33,49 +36,14 @@ it only twice in 122 launches.
 
 ## What it does for you
 
-### The launcher: choose a project, see the session, press Enter
+Everything Loadout does works on something around the agent, never on the agent
+itself: what it's told, what it knows, what it may touch and spend, and where
+you watch it work. [What you get](docs/features.md) has the whole list, with
+commands.
 
-Run `loadout` and pick a project. Enter doesn't start anything yet — it opens
-the launch sheet, which asks the four things that decide a session: which agent,
-what the task is, how to work, and which profile or worktree. Underneath, it
-shows which instructions that task would load and what they cost. Enter again
-starts the agent with exactly that. The preview costs you one keystroke.
+## What your agent is told
 
-The task line fills itself in from what the project has already recorded,
-because a blank line gets skipped: here it was typed twice in 122 launches, and
-sat empty 120 times out of 122. Correcting a sentence is a much lower bar than
-writing one. `Ctrl+P` finds any command by what it's for — search `undo` and you
-get `backup restore`.
-
-[Launching a session, step by step](docs/guides/launching.md)
-
-### The dashboard: watch and steer team runs from your browser
-
-`loadout dashboard` serves a page on this machine showing what every team
-run is doing, what's waiting for you and what it's spent. Runs that need you
-come first, under their own heading. It has five screens — List, Office, Graph,
-Timeline and Terminal — and every button on it runs the same command
-you'd type, so there's one behaviour rather than two that drift apart.
-
-It listens on a loopback address, behind a token that changes every time it
-starts, and it fetches nothing from the internet: no webfont, no stylesheet, no
-image. A dashboard that needed the network wouldn't work on the machine that
-most wants one.
-
-[Using the dashboard, step by step](docs/guides/dashboard.md)
-
-### Studio: start sessions and work in them from your browser
-
-Studio is the page the daemon serves, at `/studio/`, with the classic
-dashboard beside it at `/classic`. Start a session from it, with the same launch sheet the terminal
-gives you, and type into its live terminal. It shows everything in flight on
-one page and lets you answer what's waiting on you. The session belongs to the
-daemon, so closing the tab ends nothing. `loadout dashboard --open` opens it
-signed in, and `--classic` opens the classic page instead.
-
-[Using Studio, step by step](docs/guides/studio.md)
-
-### Specialists and context: the right instructions, with the cost shown
+### Specialists: the right instructions, with the cost shown
 
 Loadout doesn't hand your agent one enormous prompt that's mostly irrelevant.
 There are 105 specialists compiled in, including 17 skills, and it works out
@@ -94,7 +62,22 @@ and `coordinate`, which is for the lead of a team run — hold for the whole
 session and are never guessed from your wording.
 The compiled context is deleted when the agent exits.
 
+Nobody has measured yet whether a session given the narrower set does better
+work than one given everything — only that what it carries is smaller.
+
 [How specialists get chosen](docs/specialists.md)
+
+### Your coding styles, your voice and a map of the code
+
+Coding styles say how you write code, and you choose which apply to a project.
+`loadout voice learn` learns how you write from your own writing, as rules you
+accept one at a time, and `loadout voice check` holds commit messages and docs
+to them. An index of every type and member puts a one-line map of each
+directory in front of the agent, so it can find where something is declared
+without searching the tree, and `loadout docs audit` checks that the prose
+still describes the code.
+
+## What it knows
 
 ### Memory: what one session learned, there for the next
 
@@ -111,20 +94,105 @@ spoke on 56% of 322 real prompts when only 18% had anything relevant to say.
 
 [Memory](docs/memory.md)
 
+### Tasks, ideas and sessions
+
+- **Where you got to.** `loadout task` keeps what a project is working on, each
+  entry with who said so and when, and checks it against the repository, so
+  "called done, and nothing committed since" gets said out loud.
+- **Ideas into plans.** `loadout idea add` takes a half-formed idea, and an
+  agent turns it into a plan over rounds of questions you answer, instead of it
+  living and dying in one conversation.
+- **Sessions across agents.** List and resume them, with the task, mode and
+  profile brought back rather than a bare transcript reopened.
+- **The agent can ask back.** Every launch declares Loadout itself as an MCP
+  server with 24 tools: read a specialist, ask what it was given and why,
+  search what the project knows, read and update its tasks and ideas. The ones
+  that write change Loadout's own records, never your repository, and none of
+  them pushes to a remote. Only Claude sessions get them so far.
+
+## What it may touch, and what it spends
+
+### Keeping your repository yours
+
+Every coding agent wants to leave something in your repository — instruction
+files, a rules directory, MCP config, session state. Loadout keeps all of it in
+one workspace instead, a plain directory or a Git repository if you want it
+versioned. `loadout protect` installs a pre-commit hook and Git excludes that
+keep agent files out, and it warns rather than blocks. `loadout migrate` moves
+what's already scattered around, shows you the change first and takes a
+snapshot you can restore.
+
+### Preview, undo, one workspace and what it cost
+
+- **Preview first, undo afterwards.** Every Loadout command that changes a file
+  takes `--dry-run`, and what did change is in a snapshot `loadout backup
+  restore` can put back.
+- **One workspace for every machine.** Projects, instructions, memory and MCP
+  definitions go wherever you install Loadout, with secrets left in each
+  machine's OS credential store and referenced by name.
+- **What it costs.** `loadout usage` reads the transcripts your agents already
+  write, so it needs no setup and has history from before you installed it.
+
+## Where you watch, and who's working
+
+### The launcher: choose a project, see the session, press Enter
+
+Run `loadout` and pick a project. Enter doesn't start anything yet — it opens
+the launch sheet, which asks the four things that decide a session: which agent,
+what the task is, how to work, and which profile or worktree. Underneath, it
+shows which instructions that task would load and what they cost. Enter again
+starts the agent with exactly that. The preview costs you one keystroke.
+
+The task line fills itself in from what the project has already recorded,
+because a blank line gets skipped: when it started empty, it was typed twice in
+122 launches. Correcting a sentence is a much lower bar than writing one.
+`Ctrl+P` finds any command by what it's for — search `undo` and you get
+`backup restore`.
+
+[Launching a session, step by step](docs/guides/launching.md)
+
 ### Teams: several agents on one goal, one report back to you
 
 Give a team a goal in your own words. A lead splits it into requests, workers
-do them in their own sessions, and you get one report. You can say what "done"
-means up front with `--done-when`, and the report says which criteria were met.
+do them in their own sessions and Git worktrees, and you get one report. You
+can say what "done" means up front with `--done-when`, and the report says
+which criteria were met.
 
 Spending is capped. A run with no budget and no round limit is refused before it
 starts anything, a run that goes two rounds without progress stops, and a run
 stops when its budget is spent. In one real run it used four of its five rounds
-and $20.84 of a $25 budget.
+and $20.84 of a $25 budget. How often a run reaches done without help hasn't
+been measured.
 
 [Running a team, step by step](docs/guides/teams.md)
 
-### Accessibility: say once how you read, and three things change
+### Studio: start sessions and work in them from your browser
+
+Studio is the page the daemon serves, at `/studio/`, with the classic
+dashboard beside it at `/classic`. Start a session from it, with the same launch sheet the terminal
+gives you, and type into its live terminal. It shows everything in flight on
+one page and lets you answer what's waiting on you. The session belongs to the
+daemon, so closing the tab ends nothing. `loadout dashboard --open` opens it
+signed in, and `--classic` opens the classic page instead.
+
+[Using Studio, step by step](docs/guides/studio.md)
+
+### The dashboard: watch and steer team runs from your browser
+
+`loadout dashboard` serves a page on this machine showing what every team
+run is doing, what's waiting for you and what it's spent. Runs that need you
+come first, under their own heading. It has five screens — List, Office, Graph,
+Timeline and Terminal — and every button on it runs the same command
+you'd type, so there's one behaviour rather than two that drift apart.
+
+It listens on a loopback address, behind a token that changes every time it
+starts, and it fetches nothing from the internet: no webfont, no stylesheet, no
+image. A dashboard that needed the network wouldn't work on the machine that
+most wants one.
+
+[Using the dashboard, step by step](docs/guides/dashboard.md)
+
+## Accessibility: say once how you read, and three things change
 
 One setting changes how the agent writes to you, what it draws while it works,
 and what Loadout itself prints. Nothing is detected — you turn it on, and the
@@ -144,30 +212,6 @@ used with any of it, and no keyboard-only pass by a person has been recorded.
 If you use one, what you hear is worth more than any of the above.
 
 [Setting up accessibility, step by step](docs/guides/accessibility.md)
-
-## Keeping your repository yours
-
-Every coding agent wants to leave something in your repository — instruction
-files, a rules directory, MCP config, session state. Loadout keeps all of it in
-one workspace instead, a plain directory or a Git repository if you want it
-versioned. `loadout protect` installs a pre-commit hook and Git excludes that
-keep agent files out, and it warns rather than blocks. `loadout migrate` moves
-what's already scattered around, shows you the change first and takes a
-snapshot you can restore.
-
-## Sessions, cost and the agent asking back
-
-- **Sessions across agents.** List and resume them, with the task, mode and
-  profile brought back rather than a bare transcript reopened.
-- **What it costs.** `loadout usage` reads the transcripts your agents already
-  write, so it needs no setup and has history from before you installed it.
-- **The agent can ask back.** Every launch declares nine MCP tools: read a
-  specialist, ask what it was given and why, search what the project knows, and
-  more. None of them changes your machine or pushes to a remote.
-- **One workspace for every machine.** Projects, instructions, memory and MCP
-  definitions, with secrets in the OS credential store, referenced by name.
-
-The whole list, with commands, is in [what you get](docs/features.md).
 
 ## Agents and editors
 
