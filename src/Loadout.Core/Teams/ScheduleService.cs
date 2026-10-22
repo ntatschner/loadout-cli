@@ -214,7 +214,9 @@ public sealed class ScheduleService : IScheduleService
     {
         ArgumentNullException.ThrowIfNull(schedule);
 
-        if (!schedule.Enabled)
+        // A queue window starts no run of its own: the daemon works through
+        // the team's queue while it is open, which Window answers.
+        if (!schedule.Enabled || schedule.IsQueueWindow)
         {
             return false;
         }
@@ -262,6 +264,46 @@ public sealed class ScheduleService : IScheduleService
     /// actually is, which is why that arrives as an argument.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// When the queue window open now opened, or null when none is open.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A window opens at <see cref="TeamSchedule.At"/> each day, in this
+    /// machine's own time, and stays open for <see cref="TeamSchedule.Length"/>,
+    /// so a window from ten at night for eight hours is still open at three in
+    /// the morning: yesterday's start is tried as well as today's.
+    /// </para>
+    /// <para>
+    /// Unlike a run, a window that was missed is joined late rather than
+    /// skipped: a machine woken at one in the morning works through what is
+    /// left of the night, because the caps, not the start, are what limit it.
+    /// </para>
+    /// </remarks>
+    public static DateTimeOffset? Window(TeamSchedule schedule, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(schedule);
+
+        if (!schedule.Enabled || !schedule.IsQueueWindow || schedule.At is not { } at
+            || schedule.Length is not { } length || length <= TimeSpan.Zero)
+        {
+            return null;
+        }
+
+        var local = now.ToLocalTime();
+        var today = new DateTimeOffset(local.Date.Add(at.ToTimeSpan()), local.Offset);
+
+        foreach (var start in (DateTimeOffset[])[today, today.AddDays(-1)])
+        {
+            if (local >= start && local < start + length)
+            {
+                return start;
+            }
+        }
+
+        return null;
+    }
+
     public static bool Moved(TeamSchedule schedule, string? head)
     {
         ArgumentNullException.ThrowIfNull(schedule);
@@ -285,6 +327,24 @@ public sealed class ScheduleService : IScheduleService
         if (!schedule.Enabled)
         {
             return null;
+        }
+
+        if (schedule.IsQueueWindow)
+        {
+            if (Window(schedule, now) is { } open)
+            {
+                return open;
+            }
+
+            if (schedule.At is not { } opens)
+            {
+                return null;
+            }
+
+            var here = now.ToLocalTime();
+            var start = new DateTimeOffset(here.Date.Add(opens.ToTimeSpan()), here.Offset);
+
+            return start > here ? start : start.AddDays(1);
         }
 
         if (schedule.Every is { } every && every > TimeSpan.Zero)
@@ -402,6 +462,11 @@ public sealed class ScheduleService : IScheduleService
             return rejected;
         }
 
+        if (schedule.IsQueueWindow)
+        {
+            return CheckWindow(schedule);
+        }
+
         if (string.IsNullOrWhiteSpace(schedule.Project))
         {
             return "A schedule needs a project to run against.";
@@ -435,6 +500,12 @@ public sealed class ScheduleService : IScheduleService
                 + "watch for.";
         }
 
+        if (schedule.Kind.Length > 0)
+        {
+            return $"'{schedule.Kind}' is not a kind of schedule. A schedule either starts a run or, as "
+                + $"'{TeamSchedule.QueueKind}', opens a window for a team's queue.";
+        }
+
         if (schedule.Every is { } every && every < TimeSpan.FromMinutes(5))
         {
             // Not a limit for its own sake: a team run takes minutes and costs
@@ -442,6 +513,37 @@ public sealed class ScheduleService : IScheduleService
             // until somebody noticed the bill.
             return "A schedule cannot run more often than every five minutes. A team run takes "
                 + "minutes and costs money, and one that overlaps itself spends twice for one answer.";
+        }
+
+        return null;
+    }
+
+    /// <summary>What is wrong with a queue window, or null when nothing is.</summary>
+    private static string? CheckWindow(TeamSchedule schedule)
+    {
+        if (string.IsNullOrWhiteSpace(schedule.Team))
+        {
+            return "A queue window needs the team whose queue it works through.";
+        }
+
+        if (schedule.At is null)
+        {
+            return "A queue window needs the time of day it opens.";
+        }
+
+        if (schedule.Length is not { } length || length < TimeSpan.FromMinutes(5) || length > TimeSpan.FromHours(24))
+        {
+            return "A queue window stays open for between five minutes and a day.";
+        }
+
+        if (schedule.Every is not null || schedule.On.Length > 0)
+        {
+            return "A queue window opens at a time of day, not on an interval or an event.";
+        }
+
+        if (string.Equals(schedule.Autonomy, "manual", StringComparison.OrdinalIgnoreCase))
+        {
+            return "A queue window cannot be manual: it works when nobody is watching. Use supervised or autonomous.";
         }
 
         return null;

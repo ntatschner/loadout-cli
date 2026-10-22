@@ -1420,6 +1420,8 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
 
     private readonly ReadingProfile _reading;
 
+    private readonly IProjectCheckouts? _checkouts;
+
     public TeamRunCommand(
         ITeamRunner runner,
         IPlatformPaths paths,
@@ -1432,8 +1434,10 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         IProjectService projects,
         IAnsiConsole console,
         ReadingProfile reading,
-        Loadout.Core.Tasks.ITaskService tasks)
+        Loadout.Core.Tasks.ITaskService tasks,
+        IProjectCheckouts? checkouts = null)
     {
+        _checkouts = checkouts;
         _runner = runner;
         _paths = paths;
         _processes = processes;
@@ -1564,6 +1568,20 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             "A task on the project's list that this run is for. The run moves it to doing, then done or blocked, "
             + "instead of adding a task of its own.")]
         public string? Task { get; init; }
+
+        /// <summary>
+        /// A worktree of the project's repository to work in instead of its checkout.
+        /// </summary>
+        /// <remarks>
+        /// What a team's queue gives each run, so an unattended run never
+        /// works in, merges into, or switches the branch of the tree the
+        /// person is using.
+        /// </remarks>
+        [CommandOption("--work-in <PATH>")]
+        [Description(
+            "A worktree of the project's repository for the run to work in, instead of the project's own checkout. "
+            + "Its nodes branch from it and its merges land in it.")]
+        public string? WorkIn { get; init; }
     }
 
     /// <summary>
@@ -1661,6 +1679,45 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
 
             // The run's own, then the team's; the runner's default where neither says.
             OnTimeout: TeamTimeout.Parse(settings.OnTimeout) ?? TeamTimeout.Parse(team.Rules.OnTimeout));
+    }
+
+    /// <summary>Why a path is not a worktree of the project's repository, or null when it is.</summary>
+    /// <remarks>
+    /// Checked against the repository's own list of worktrees rather than by
+    /// asking the directory, so a different repository - or a copy of this
+    /// one - can never stand in for the project.
+    /// </remarks>
+    internal static async Task<string?> WorktreeRejectionAsync(
+        Loadout.Core.Git.IGitManager git,
+        Loadout.Models.Projects.ProjectResolution project,
+        string path,
+        CancellationToken ct)
+    {
+        if (project.LocalPath is not { Length: > 0 } repository)
+        {
+            return $"{project.Entry.Slug} has no checkout on this machine, so it has no worktrees either.";
+        }
+
+        if (!Directory.Exists(path))
+        {
+            return $"There is no directory at {path}.";
+        }
+
+        var listed = await git.ListWorktreesAsync(repository, ct).ConfigureAwait(false);
+
+        if (listed.Failed)
+        {
+            return $"The worktrees of {repository} could not be listed: {listed.Error}";
+        }
+
+        var wanted = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        return listed.Value!.Any(one => string.Equals(
+                Path.GetFullPath(one.Path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                wanted,
+                OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+            ? null
+            : $"{path} is not a worktree of {project.Entry.Slug}'s repository.";
     }
 
     /// <summary>
@@ -1779,6 +1836,20 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         if (ceiling.IsShort)
         {
             return output.Fail(TeamCeiling.Explain(team.Name, ceiling), ExitCode.PolicyViolation);
+        }
+
+        if (settings.WorkIn is { Length: > 0 } workIn)
+        {
+            if (await WorktreeRejectionAsync(_git, project, workIn, cancellationToken).ConfigureAwait(false) is { } wrong)
+            {
+                return output.Fail(wrong, ExitCode.RepositoryUnavailable);
+            }
+
+            // From here on everything this process resolves the project to -
+            // the run's own record, the merge gate, each node it launches - is
+            // the worktree.
+            _checkouts?.Use(project.Entry.Slug, workIn);
+            output.WriteLine(TeamStyle.Note($"Working in {workIn}, not the project's own checkout."));
         }
 
         IReadOnlyList<string>? taskDoneWhen = null;

@@ -32,6 +32,16 @@ public sealed class TeamQueue
 
     /// <summary>The limits and grants a person set for it.</summary>
     public QueueSettings Settings { get; set; } = new();
+
+    /// <summary>
+    /// When the window the daemon is working in opened, or null when none is open.
+    /// </summary>
+    /// <remarks>
+    /// Written when the daemon first finds a window open and cleared when it
+    /// has said what the window did, so a summary is sent once per window and
+    /// a daemon restarted mid-window carries on counting from the same start.
+    /// </remarks>
+    public DateTimeOffset? WindowOpened { get; set; }
 }
 
 /// <summary>One task waiting in a queue.</summary>
@@ -99,6 +109,27 @@ public sealed class QueueRun
 
     /// <summary>Who started it: a person's name for 'run next', or the daemon.</summary>
     public string StartedBy { get; set; } = string.Empty;
+
+    /// <summary>The process running it, when the daemon started it as one; zero otherwise.</summary>
+    public int Pid { get; set; }
+
+    /// <summary>When that process started, so a reused process id is not mistaken for it.</summary>
+    public DateTimeOffset? PidStarted { get; set; }
+
+    /// <summary>The worktree it worked in, removed once it has ended; empty when there was none.</summary>
+    public string Worktree { get; set; } = string.Empty;
+
+    /// <summary>The branch its work is on.</summary>
+    public string Branch { get; set; } = string.Empty;
+
+    /// <summary>The draft pull request it opened, when it opened one.</summary>
+    public string PullRequest { get; set; } = string.Empty;
+
+    /// <summary>Whether what happened after it ended - the pull request, the task - has been done.</summary>
+    public bool Landed { get; set; }
+
+    /// <summary>When the pull request was last looked at to see whether it has been merged.</summary>
+    public DateTimeOffset? MergeChecked { get; set; }
 }
 
 /// <summary>What a person allowed a queue, and its limits.</summary>

@@ -74,6 +74,27 @@ public sealed class TeamSchedule
 
     /// <summary>Whether it fires at all. A paused schedule keeps its history.</summary>
     public bool Enabled { get; set; } = true;
+
+    /// <summary>
+    /// What it is: empty for a run it starts, or <see cref="QueueKind"/> for a
+    /// window in which the daemon works through a team's queue.
+    /// </summary>
+    /// <remarks>
+    /// One list rather than two for the reason <see cref="On"/> gives: a
+    /// person asking "what starts runs for me" wants one answer. A queue
+    /// window names a team and a time; its project and goal come from each
+    /// queued task, so <see cref="Project"/> and <see cref="Goal"/> are empty.
+    /// </remarks>
+    public string Kind { get; set; } = string.Empty;
+
+    /// <summary>How long a queue window stays open from <see cref="At"/>.</summary>
+    public TimeSpan? Length { get; set; }
+
+    /// <summary>The kind a queue window has.</summary>
+    public const string QueueKind = "queue";
+
+    /// <summary>Whether this is a queue window rather than a run.</summary>
+    public bool IsQueueWindow => string.Equals(Kind, QueueKind, StringComparison.OrdinalIgnoreCase);
 }
 
 /// <summary>Every schedule on this machine.</summary>

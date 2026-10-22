@@ -108,6 +108,9 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     /// <summary>Past conversations and resuming them; null in a daemon the tests build without it.</summary>
     private readonly Loadout.Core.Sessions.ISessionResumption? _resumption;
 
+    /// <summary>What works through the teams' queues, or null for a daemon built without one.</summary>
+    private readonly TeamQueueDriver? _queues;
+
     public TeamDaemonCommand(
         ISecretProvider secrets,
         HttpClient client,
@@ -137,8 +140,10 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         Loadout.Core.Instructions.IMemoryService memory,
         Loadout.Core.Instructions.IMemoryImporter importer,
         Loadout.Core.Sessions.LaunchSheet sheet,
-        Loadout.Core.Sessions.ISessionResumption? resumption = null)
+        Loadout.Core.Sessions.ISessionResumption? resumption = null,
+        TeamQueueDriver? queues = null)
     {
+        _queues = queues;
         _resumption = resumption;
         _bin = bin;
         _sheet = sheet;
@@ -1303,6 +1308,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         // by throwing does not leave this waiting on a loop that never stops.
         using var ending = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var noticing = NoticingAsync(output, ending.Token);
+        var queuing = QueuingAsync(output, ending.Token);
 
         try
         {
@@ -1316,6 +1322,81 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         {
             await ending.CancelAsync().ConfigureAwait(false);
             await noticing.ConfigureAwait(false);
+            await queuing.ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>How often the queues are looked at; a test shortens it.</summary>
+    internal TimeSpan QueueEvery { get; init; } = Interval;
+
+    /// <summary>
+    /// Works through the teams' queues, every so often, until told to stop.
+    /// </summary>
+    /// <remarks>
+    /// On a loop of its own, as the notices are, because the schedules' loop
+    /// waits for each scheduled run to end, and a queue whose window opened
+    /// during one would lose that time. Queued runs are processes of their
+    /// own, so a pass never waits for one: it starts the next item, reads how
+    /// the last one went, and comes back a minute later.
+    /// </remarks>
+    private async Task QueuingAsync(CommandOutput output, CancellationToken ct)
+    {
+        if (_queues is null)
+        {
+            return;
+        }
+
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                try
+                {
+                    await _queues.PassAsync(
+                        Firing(output),
+                        line => output.WriteLine($"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] {Markup.Escape(line)}"),
+                        (title, detail) => TellAsync(output, title, detail, ct),
+                        ct).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+                {
+                    // One bad pass is not the end of the queue: said, and tried
+                    // again at the next look.
+                    output.WriteLine(
+                        $"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] the queues could not be worked through: "
+                        + Markup.Escape(ex.Message));
+                }
+
+                await Task.Delay(QueueEvery, _time, ct).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Stopping, which is how this ends.
+        }
+    }
+
+    /// <summary>
+    /// Says what a queue window did: in the daemon's log always, and wherever
+    /// notices go when this machine sends them.
+    /// </summary>
+    private async Task TellAsync(CommandOutput output, string title, string detail, CancellationToken ct)
+    {
+        output.WriteLine($"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] {Markup.Escape(title)}");
+
+        foreach (var line in detail.Split('\n'))
+        {
+            output.WriteLine($"  {Markup.Escape(line)}");
+        }
+
+        var machine = await _configuration.LoadMachineAsync(ct).ConfigureAwait(false);
+        var teams = machine.Value?.Teams;
+
+        if (_notices is not null && Notices.KindOf(teams?.NotifyKind) is { } kind && _sendTo is { Length: > 0 } address)
+        {
+            await _notices.PostAsync(
+                kind, title, detail, _address is { Length: > 0 } page ? page : "loadout team queue list",
+                teams!.NotifyChat, address, ct).ConfigureAwait(false);
         }
     }
 

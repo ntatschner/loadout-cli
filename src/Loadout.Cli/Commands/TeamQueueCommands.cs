@@ -199,7 +199,7 @@ public sealed class TeamQueueAddCommand : AsyncCommand<TeamQueueAddCommand.Setti
         {
             if (TeamQueueing.Find(queue, item.Task, item.Project) is not null)
             {
-                return $"'{item.Task}' on {item.Project} is already in {team}'s queue.";
+                return $"'{item.Task}' on {item.Project} is already in {QueueSettling.Whose(team)} queue.";
             }
 
             if (queue.Runs.Any(run => QueueRules.Same(run.Task, item.Task) && QueueRules.Same(run.Project, item.Project)
@@ -227,7 +227,7 @@ public sealed class TeamQueueAddCommand : AsyncCommand<TeamQueueAddCommand.Setti
 
             output.WriteLine(
                 $"[dim]Dry run: nothing was added.[/] {Markup.Escape(TeamQueueing.Describe(item))} would join "
-                + $"{Markup.Escape(team)}'s queue at {current.Value!.Items.Count + 1}.");
+                + $"{Markup.Escape(QueueSettling.Whose(team))} queue at {current.Value!.Items.Count + 1}.");
 
             return CommandOutput.Success();
         }
@@ -261,7 +261,7 @@ public sealed class TeamQueueAddCommand : AsyncCommand<TeamQueueAddCommand.Setti
 
         output.WriteLine(
             $"[green]+[/] {Markup.Escape(TeamQueueing.Describe(item))} is number {saved.Value!.Items.Count} "
-            + $"in {Markup.Escape(team)}'s queue.");
+            + $"in {Markup.Escape(QueueSettling.Whose(team))} queue.");
         output.WriteLine($"[dim]Run it now with:[/] loadout team queue run-next {Markup.Escape(team)}");
 
         return CommandOutput.Success();
@@ -366,7 +366,7 @@ public sealed class TeamQueueListCommand : AsyncCommand<TeamQueueSettings>
             return CommandOutput.Success();
         }
 
-        output.WriteLine($"[bold]{Markup.Escape(team)}'s queue[/]  [dim]{Markup.Escape(Spell(queue.Settings))}[/]");
+        output.WriteLine($"[bold]{Markup.Escape(QueueSettling.Whose(team))} queue[/]  [dim]{Markup.Escape(Spell(queue.Settings))}[/]");
 
         if (judged.Count == 0)
         {
@@ -492,7 +492,7 @@ public sealed class TeamQueueMoveCommand : AsyncCommand<TeamQueueMoveCommand.Set
 
             if (item is null)
             {
-                return $"'{settings.Task}' is not in {team}'s queue.";
+                return $"'{settings.Task}' is not in {QueueSettling.Whose(team)} queue.";
             }
 
             if (settings.Position < 1 || settings.Position > queue.Items.Count)
@@ -524,7 +524,7 @@ public sealed class TeamQueueMoveCommand : AsyncCommand<TeamQueueMoveCommand.Set
 
         return saved.Failed
             ? output.Fail(saved)
-            : Said(output, $"'{Markup.Escape(settings.Task)}' is number {settings.Position} in {Markup.Escape(team)}'s queue.");
+            : Said(output, $"'{Markup.Escape(settings.Task)}' is number {settings.Position} in {Markup.Escape(QueueSettling.Whose(team))} queue.");
     }
 
     internal static int Said(CommandOutput output, string line)
@@ -597,7 +597,7 @@ public sealed class TeamQueueRemoveCommand : AsyncCommand<TeamQueueRemoveCommand
         {
             if (TeamQueueing.Find(queue, settings.Task, project) is not { } item)
             {
-                return $"'{settings.Task}' is not in {team}'s queue.";
+                return $"'{settings.Task}' is not in {QueueSettling.Whose(team)} queue.";
             }
 
             // Said rather than left to stall: an item waiting for this one
@@ -628,7 +628,7 @@ public sealed class TeamQueueRemoveCommand : AsyncCommand<TeamQueueRemoveCommand
             return output.Fail(saved);
         }
 
-        output.WriteLine($"'{Markup.Escape(settings.Task)}' is out of {Markup.Escape(team)}'s queue. The task itself is unchanged.");
+        output.WriteLine($"'{Markup.Escape(settings.Task)}' is out of {Markup.Escape(QueueSettling.Whose(team))} queue. The task itself is unchanged.");
 
         foreach (var waiting in saved.Value!.Items.Where(one => QueueRules.Same(one.After, settings.Task)))
         {
@@ -788,7 +788,7 @@ public sealed class TeamQueueSettingsCommand : AsyncCommand<TeamQueueSettingsCom
 
             return TeamQueueMoveCommand.Said(
                 output,
-                $"[dim]Dry run: nothing was changed.[/] {Markup.Escape(team)}'s queue would have "
+                $"[dim]Dry run: nothing was changed.[/] {Markup.Escape(QueueSettling.Whose(team))} queue would have "
                 + Markup.Escape(TeamQueueListCommand.Spell(current.Value.Settings)) + ".");
         }
 
@@ -816,7 +816,7 @@ public sealed class TeamQueueSettingsCommand : AsyncCommand<TeamQueueSettingsCom
 
         return TeamQueueMoveCommand.Said(
             output,
-            $"{Markup.Escape(team)}'s queue: {Markup.Escape(TeamQueueListCommand.Spell(saved.Value!.Settings))}.");
+            $"{Markup.Escape(QueueSettling.Whose(team))} queue: {Markup.Escape(TeamQueueListCommand.Spell(saved.Value!.Settings))}.");
     }
 }
 
@@ -898,7 +898,7 @@ public sealed class TeamQueuePlanCommand : AsyncCommand<TeamQueueSettings>
             return CommandOutput.Success();
         }
 
-        output.WriteLine($"[bold]What {Markup.Escape(team)}'s queue would run next[/], if every run met its done-when:");
+        output.WriteLine($"[bold]What {Markup.Escape(QueueSettling.Whose(team))} queue would run next[/], if every run met its done-when:");
 
         if (plan.Order.Count == 0)
         {
@@ -967,16 +967,18 @@ public sealed class TeamQueuePlanCommand : AsyncCommand<TeamQueueSettings>
 /// <summary>Starts the next item in a team's queue now, by hand.</summary>
 /// <remarks>
 /// <para>
-/// Runs the same command a person would type, <c>team run --task</c>, so a
-/// queued run is held to the task's done-when, the project's standing ones and
-/// the team's own rules exactly as any other run is.
+/// Runs the same command a person would type, <c>team run --task</c>, in a
+/// worktree of its own, so a queued run is held to the task's done-when, the
+/// project's standing ones and the team's own rules exactly as any other run
+/// is, without touching the checkout the person is using.
 /// </para>
 /// <para>
 /// Not held to a window's caps: whoever asks by hand is there to see what it
-/// costs. One run at a time and the held cap still apply.
+/// costs. One run at a time and the held cap still apply. It runs here, in
+/// this terminal, so its questions are asked here.
 /// </para>
 /// </remarks>
-[Description("Start the next task in a team's queue now, as 'team run --task' would, and record how it went.")]
+[Description("Start the next task in a team's queue now, in a worktree of its own, as 'team run --task' would, and record how it went.")]
 [CommandMeta(CommandCategory.Start, Intent = "team queue run next start now", Mutates = true)]
 public sealed class TeamQueueRunNextCommand : AsyncCommand<TeamQueueSettings>
 {
@@ -986,10 +988,9 @@ public sealed class TeamQueueRunNextCommand : AsyncCommand<TeamQueueSettings>
     private readonly ITeamCatalogue _teams;
     private readonly ISpecialistLibrary _library;
     private readonly IWorkspaceManager _workspace;
-    private readonly IRunJournal _journal;
     private readonly ICommandCatalogue _commands;
+    private readonly TeamQueueDriver _driver;
     private readonly IAnsiConsole _console;
-    private readonly TimeProvider _time;
 
     public TeamQueueRunNextCommand(
         IQueueService queues,
@@ -998,10 +999,9 @@ public sealed class TeamQueueRunNextCommand : AsyncCommand<TeamQueueSettings>
         ITeamCatalogue teams,
         ISpecialistLibrary library,
         IWorkspaceManager workspace,
-        IRunJournal journal,
         ICommandCatalogue commands,
-        IAnsiConsole console,
-        TimeProvider time)
+        TeamQueueDriver driver,
+        IAnsiConsole console)
     {
         _queues = queues;
         _tasks = tasks;
@@ -1009,10 +1009,9 @@ public sealed class TeamQueueRunNextCommand : AsyncCommand<TeamQueueSettings>
         _teams = teams;
         _library = library;
         _workspace = workspace;
-        _journal = journal;
         _commands = commands;
+        _driver = driver;
         _console = console;
-        _time = time;
     }
 
     /// <inheritdoc />
@@ -1031,221 +1030,200 @@ public sealed class TeamQueueRunNextCommand : AsyncCommand<TeamQueueSettings>
             return output.Fail(refused!, ExitCode.ProjectNotFound);
         }
 
-        var loaded = await _queues.LoadAsync(team, cancellationToken).ConfigureAwait(false);
-
-        if (loaded.Failed)
+        if (settings.DryRun)
         {
-            return output.Fail(loaded);
-        }
-
-        if (!settings.DryRun)
-        {
-            await QueueOutcome.SettleAsync(_queues, _tasks, _journal, team, loaded.Value!, _time, cancellationToken)
-                .ConfigureAwait(false);
-
-            loaded = await _queues.LoadAsync(team, cancellationToken).ConfigureAwait(false);
+            var loaded = await _queues.LoadAsync(team, cancellationToken).ConfigureAwait(false);
 
             if (loaded.Failed)
             {
                 return output.Fail(loaded);
             }
-        }
 
-        var lists = await TeamQueueing.ListsAsync(_tasks, loaded.Value!, cancellationToken).ConfigureAwait(false);
-
-        if (settings.DryRun)
-        {
+            var lists = await TeamQueueing.ListsAsync(_tasks, loaded.Value!, cancellationToken).ConfigureAwait(false);
             var preview = QueueRules.Next(loaded.Value!, lists, window: null);
 
             return TeamQueueMoveCommand.Said(
                 output,
                 "[dim]Dry run: nothing was started.[/] " + Markup.Escape(preview.Verdict == QueueVerdict.Start
-                    ? $"{TeamQueueing.Describe(preview.Item!)} would start."
+                    ? $"{TeamQueueing.Describe(preview.Item!)} would start, in a worktree of its own."
                     : preview.Reason));
         }
 
-        var started = _time.GetUtcNow();
-        var by = Environment.UserName;
-        QueueDecision? decision = null;
+        // What ran before, settled first: a run whose process was killed would
+        // otherwise be recorded as going for ever, and stop the queue.
+        await _driver.SettleAsync(team, cancellationToken).ConfigureAwait(false);
 
-        // Decided and recorded under the queue's lock, so two people asking at
-        // once can't both start the same item.
-        var taken = await _queues.UpdateAsync(
-            team,
-            queue =>
-            {
-                decision = QueueRules.Next(queue, lists, window: null);
+        var (item, run, decision, error) = await _driver
+            .TakeAsync(team, window: null, Environment.UserName, cancellationToken)
+            .ConfigureAwait(false);
 
-                if (decision.Verdict != QueueVerdict.Start)
-                {
-                    return decision.Reason;
-                }
-
-                queue.Items.Remove(decision.Item!);
-                queue.Runs.Add(new QueueRun
-                {
-                    Task = decision.Item!.Task,
-                    Project = decision.Item.Project,
-                    StartedUtc = started,
-                    StartedBy = by,
-                });
-
-                return null;
-            },
-            cancellationToken).ConfigureAwait(false);
-
-        if (taken.Failed)
+        if (error is not null)
         {
-            // Nothing to run is an answer, not a failure of the command.
-            if (decision is { Verdict: not QueueVerdict.Start })
-            {
-                return TeamQueueMoveCommand.Said(output, Markup.Escape(decision.Reason));
-            }
-
-            return output.Fail(taken);
+            return output.Fail(error, ExitCode.GeneralFailure);
         }
 
-        var item = decision!.Item!;
-        var task = lists(item.Project) is { } tasks ? TaskRuns.Find(item.Task, tasks) : null;
+        if (item is null || run is null)
+        {
+            return TeamQueueMoveCommand.Said(output, Markup.Escape(decision?.Reason ?? "Nothing started."));
+        }
 
-        output.WriteLine($"Starting {Markup.Escape(TeamQueueing.Describe(item))} from {Markup.Escape(team)}'s queue.");
+        var tasks = await _tasks.ListAsync(item.Project, cancellationToken).ConfigureAwait(false);
+        var task = tasks.Succeeded ? TaskRuns.Find(item.Task, tasks.Value!) : null;
+
+        output.WriteLine(
+            $"Starting {Markup.Escape(TeamQueueing.Describe(item))} from {Markup.Escape(QueueSettling.Whose(team))} queue, "
+            + $"on branch {Markup.Escape(run.Branch)}.");
 
         var code = await _commands.RunAsync(
             "team run",
-            [
-                team,
-                task is null ? item.Task : TaskRuns.Goal(task),
-                "--project", item.Project,
-                "--task", item.Task,
-            ],
+            TeamQueueDriver.RunArguments(team, item, task, run.Worktree, autonomy: null, unattended: false),
             cancellationToken).ConfigureAwait(false);
 
-        var outcome = QueueOutcome.Read(_journal, item, started, code);
+        var ended = await _driver.SettleAsync(team, CancellationToken.None).ConfigureAwait(false);
 
-        await QueueOutcome.RecordAsync(_queues, _tasks, team, item, started, outcome, _time, CancellationToken.None)
-            .ConfigureAwait(false);
-
-        output.WriteLine(
-            $"{Markup.Escape(item.Task)}: {outcome.State.ToString().ToLowerInvariant()}"
-            + (outcome.Reason.Length > 0 ? $" - {Markup.Escape(outcome.Reason)}" : string.Empty));
+        if (ended.FirstOrDefault(one => QueueRules.Same(one.Task, item.Task) && one.StartedUtc == run.StartedUtc) is { } settled)
+        {
+            output.WriteLine(
+                $"{Markup.Escape(item.Task)}: {settled.State.ToString().ToLowerInvariant()}"
+                + (settled.Reason.Length > 0 ? $" - {Markup.Escape(settled.Reason)}" : string.Empty)
+                + (settled.PullRequest.Length > 0 ? $"\n  draft pull request: {Markup.Escape(settled.PullRequest)}" : string.Empty));
+        }
 
         return code;
     }
 }
 
-/// <summary>How a queued run ended, as the queue records it.</summary>
-internal sealed record QueueOutcome(QueueRunState State, string RunId, string Reason, decimal CostUsd)
+/// <summary>Sets when the daemon works through a team's queue on its own.</summary>
+/// <remarks>
+/// Kept in the schedule list, as a queue window, so 'team schedule list'
+/// still answers "what starts runs for me" in one place. One window per team.
+/// </remarks>
+[Description("Set the daily window in which the daemon works through a team's queue on its own, or take it away with --off.")]
+[CommandMeta(CommandCategory.Start, Intent = "team queue window overnight schedule hours unattended", Mutates = true)]
+public sealed class TeamQueueWindowCommand : AsyncCommand<TeamQueueWindowCommand.Settings>
 {
-    /// <summary>
-    /// Reads how the run for an item ended, from the journal.
-    /// </summary>
-    /// <remarks>
-    /// Found by the task it was for and when it started, rather than taken as
-    /// the newest run on the machine: another run started meanwhile, from a
-    /// schedule or the dashboard, would otherwise be recorded as this one.
-    /// </remarks>
-    public static QueueOutcome Read(IRunJournal journal, QueueItem item, DateTimeOffset started, int code)
-    {
-        var summary = journal.List(20)
-            .Select(journal.Summarise)
-            .Where(one => one.Succeeded)
-            .Select(one => one.Value!)
-            .FirstOrDefault(one => one.Task is { } task && QueueRules.Same(task, item.Task)
-                && one.Project is { } project && QueueRules.Same(project, item.Project)
-                && one.Started >= started.AddSeconds(-5));
+    private readonly IScheduleService _schedules;
+    private readonly IProjectService _projects;
+    private readonly ITeamCatalogue _teams;
+    private readonly ISpecialistLibrary _library;
+    private readonly IWorkspaceManager _workspace;
+    private readonly IAnsiConsole _console;
+    private readonly TimeProvider _time;
 
-        return summary switch
-        {
-            null => new QueueOutcome(
-                QueueRunState.Failed, string.Empty, $"the run never started (exit code {code})", 0m),
-            { Ended: "done" } => new QueueOutcome(QueueRunState.Met, summary.RunId, "every done-when met", summary.CostUsd),
-            { Ended: null } => new QueueOutcome(
-                QueueRunState.Failed, summary.RunId, $"the run stopped without saying how it ended (exit code {code})", summary.CostUsd),
-            _ => new QueueOutcome(QueueRunState.Failed, summary.RunId, summary.Ended, summary.CostUsd),
-        };
+    public TeamQueueWindowCommand(
+        IScheduleService schedules,
+        IProjectService projects,
+        ITeamCatalogue teams,
+        ISpecialistLibrary library,
+        IWorkspaceManager workspace,
+        IAnsiConsole console,
+        TimeProvider time)
+    {
+        _schedules = schedules;
+        _projects = projects;
+        _teams = teams;
+        _library = library;
+        _workspace = workspace;
+        _console = console;
+        _time = time;
     }
 
-    /// <summary>How long a run may be recorded as going with no journal of its own before it is taken as never started.</summary>
-    internal static readonly TimeSpan Unstarted = TimeSpan.FromMinutes(10);
-
-    /// <summary>
-    /// Settles runs the queue still has as going when their journal says they have ended.
-    /// </summary>
-    /// <remarks>
-    /// A run the queue started whose process was then killed is otherwise
-    /// recorded as going for ever, and since a queue runs one at a time that
-    /// would stop it for good with nothing to say why.
-    /// </remarks>
-    public static async Task SettleAsync(
-        IQueueService queues,
-        ITaskService tasks,
-        IRunJournal journal,
-        string team,
-        TeamQueue queue,
-        TimeProvider time,
-        CancellationToken ct)
+    public sealed class Settings : TeamQueueSettings
     {
-        foreach (var run in queue.Runs.Where(one => one.State == QueueRunState.Running).ToList())
-        {
-            var item = new QueueItem { Task = run.Task, Project = run.Project };
-            var outcome = Read(journal, item, run.StartedUtc, code: -1);
-            var ended = outcome.RunId.Length > 0
-                && journal.Summarise(outcome.RunId) is { Succeeded: true, Value.Finished: not null };
+        [CommandOption("--at <TIME>")]
+        [Description("When the window opens each day, as 22:00, in this machine's own time.")]
+        public string? At { get; init; }
 
-            if (ended || (outcome.RunId.Length == 0 && time.GetUtcNow() - run.StartedUtc > Unstarted))
+        [CommandOption("--for <DURATION>")]
+        [Description("How long it stays open: 30m, 8h. At most a day.")]
+        public string? For { get; init; }
+
+        [CommandOption("--autonomy <MODE>")]
+        [Description("supervised or autonomous. The team's own when left out. Never manual: nobody is watching.")]
+        public string? Autonomy { get; init; }
+
+        [CommandOption("--off")]
+        [Description("Take the window away. The queue stays, and run-next still works.")]
+        public bool Off { get; init; }
+    }
+
+    /// <summary>The schedule name a team's window is kept under.</summary>
+    internal static string Name(string team) => $"queue-{team.Trim().ToLowerInvariant()}";
+
+    /// <inheritdoc />
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var output = new CommandOutput(_console, settings);
+
+        var (catalogue, _, _) = await TeamLoading
+            .LoadAsync(_teams, _library, _workspace, _projects, settings, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (catalogue.Find(settings.Team) is not { Template: false } team)
+        {
+            return output.Fail(
+                $"No team named '{settings.Team}' that can be run. See what there is with: loadout team list",
+                ExitCode.ProjectNotFound);
+        }
+
+        var name = Name(team.Name);
+
+        if (settings.Off)
+        {
+            if (settings.DryRun)
             {
-                await RecordAsync(queues, tasks, team, item, run.StartedUtc, outcome, time, ct).ConfigureAwait(false);
+                return TeamQueueMoveCommand.Said(output, $"[dim]Dry run: nothing was removed.[/] {Markup.Escape(QueueSettling.Whose(team.Name))} window would go.");
             }
+
+            var removed = await _schedules.RemoveAsync(name, cancellationToken).ConfigureAwait(false);
+
+            return removed.Failed
+                ? output.Fail($"{QueueSettling.Whose(team.Name)} queue has no window.", ExitCode.ProjectNotFound)
+                : TeamQueueMoveCommand.Said(output, $"{Markup.Escape(QueueSettling.Whose(team.Name))} queue has no window now. Its runs start only with run-next.");
         }
-    }
 
-    /// <summary>
-    /// Records the outcome on the queue's run and, for a failure, marks the task blocked.
-    /// </summary>
-    /// <remarks>
-    /// A failed run is not tried again: a spec that failed once usually needs
-    /// a person to rewrite it, and a queue retrying it overnight spends the
-    /// window on the one thing least likely to work. Its item has already left
-    /// the queue, when it started.
-    /// </remarks>
-    public static async Task RecordAsync(
-        IQueueService queues,
-        ITaskService tasks,
-        string team,
-        QueueItem item,
-        DateTimeOffset started,
-        QueueOutcome outcome,
-        TimeProvider time,
-        CancellationToken ct)
-    {
-        await queues.UpdateAsync(
-            team,
-            queue =>
-            {
-                var run = queue.Runs.LastOrDefault(one => QueueRules.Same(one.Task, item.Task)
-                    && QueueRules.Same(one.Project, item.Project) && one.StartedUtc == started);
-
-                if (run is not null)
-                {
-                    run.State = outcome.State;
-                    run.RunId = outcome.RunId;
-                    run.Reason = outcome.Reason;
-                    run.CostUsd = outcome.CostUsd;
-                    run.EndedUtc = time.GetUtcNow();
-                }
-
-                return null;
-            },
-            ct).ConfigureAwait(false);
-
-        if (outcome.State == QueueRunState.Failed)
+        if (settings.At is not { Length: > 0 } clock
+            || !TimeOnly.TryParse(clock, System.Globalization.CultureInfo.InvariantCulture, out var at))
         {
-            await tasks.DeclareAsync(
-                item.Project,
-                item.Task,
-                TaskState.Blocked,
-                outcome.RunId.Length > 0 ? $"team {team} queue, run {outcome.RunId}" : $"team {team} queue",
-                ct: ct).ConfigureAwait(false);
+            return output.Fail("Say when the window opens, as --at 22:00.", ExitCode.InvalidArguments);
         }
+
+        if (settings.For is not { Length: > 0 } typed || TeamDuration.Parse(typed) is not { } length)
+        {
+            return output.Fail("Say how long it stays open, as --for 8h.", ExitCode.InvalidArguments);
+        }
+
+        var window = new TeamSchedule
+        {
+            Id = name,
+            Team = team.Name,
+            Kind = TeamSchedule.QueueKind,
+            At = at,
+            Length = length,
+            Autonomy = (settings.Autonomy ?? team.Rules.Autonomy).Trim().ToLowerInvariant(),
+        };
+
+        var opens = ScheduleService.Next(window, _time.GetUtcNow());
+        var said = $"{QueueSettling.Whose(team.Name)} queue: worked through daily from {at:HH:mm} for {typed}, {window.Autonomy}"
+            + (opens is { } next ? $", next from {next.ToLocalTime():yyyy-MM-dd HH:mm}." : ".");
+
+        if (settings.DryRun)
+        {
+            return TeamQueueMoveCommand.Said(output, "[dim]Dry run: nothing was recorded.[/] " + Markup.Escape(said));
+        }
+
+        var saved = await _schedules.SaveAsync(window, cancellationToken).ConfigureAwait(false);
+
+        if (saved.Failed)
+        {
+            return output.Fail(saved);
+        }
+
+        output.WriteLine(Markup.Escape(said));
+        output.WriteLine("[dim]Nothing is worked through until the daemon is running:[/] loadout daemon");
+
+        return CommandOutput.Success();
     }
 }

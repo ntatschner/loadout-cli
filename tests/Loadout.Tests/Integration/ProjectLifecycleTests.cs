@@ -1060,6 +1060,49 @@ public sealed class ProjectLifecycleTests : IAsyncLifetime
         RepositoryAttribution.RecoverPath(slug).Should().Be(repository);
     }
 
+    [Fact]
+    public async Task A_checkout_this_process_was_told_to_work_in_is_where_the_project_resolves()
+    {
+        // What a queued run's 'team run --work-in' relies on: once set, the
+        // run, its merge gate and every node it launches all find the project
+        // in the worktree rather than in the person's own checkout.
+        var repository = await CreateRepositoryAsync("queued", "ssh://git.internal/apps/queued.git");
+        (await _projects.AddAsync(repository)).Succeeded.Should().BeTrue();
+
+        var worktree = Path.Combine(_root, "worktrees", "queued-one");
+        (await _git.AddWorktreeAsync(repository, worktree, "queue/one")).Succeeded.Should().BeTrue();
+
+        var checkouts = new ProjectCheckouts();
+        var projects = new ProjectService(_configuration, _workspace, _git, new PathSemantics(), _tasks, checkouts);
+
+        (await projects.ResolveAsync("queued")).Value!.LocalPath.Should().Be(repository);
+
+        checkouts.Use("queued", worktree);
+
+        (await projects.ResolveAsync("queued")).Value!.LocalPath.Should().Be(Path.GetFullPath(worktree));
+        (await projects.ListAsync()).Value!.Single(one => one.Entry.Slug == "queued").LocalPath
+            .Should().Be(Path.GetFullPath(worktree));
+        (await _projects.ResolveAsync("queued")).Value!.LocalPath.Should().Be(repository, "another process is not told");
+    }
+
+    [Fact]
+    public async Task Work_in_takes_only_a_worktree_of_the_projects_own_repository()
+    {
+        var repository = await CreateRepositoryAsync("guarded", "ssh://git.internal/apps/guarded.git");
+        var other = await CreateRepositoryAsync("elsewhere", "ssh://git.internal/apps/elsewhere.git");
+        var project = (await _projects.AddAsync(repository)).Value!;
+
+        var worktree = Path.Combine(_root, "worktrees", "guarded-one");
+        (await _git.AddWorktreeAsync(repository, worktree, "queue/one")).Succeeded.Should().BeTrue();
+
+        (await Loadout.Cli.Commands.TeamRunCommand.WorktreeRejectionAsync(_git, project, worktree, default))
+            .Should().BeNull();
+        (await Loadout.Cli.Commands.TeamRunCommand.WorktreeRejectionAsync(_git, project, other, default))
+            .Should().Contain("is not a worktree of guarded's repository");
+        (await Loadout.Cli.Commands.TeamRunCommand.WorktreeRejectionAsync(_git, project, Path.Combine(_root, "nothing"), default))
+            .Should().Contain("There is no directory");
+    }
+
     private async Task<string> CreateRepositoryAsync(string name, string remote)
     {
         var path = Path.Combine(_repositories, name);

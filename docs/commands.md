@@ -133,7 +133,9 @@
 | `loadout hook session-start --agent <agent>` | Not for typing: a Claude Code session Loadout launched runs it from its own hook as a conversation starts, so that resuming it later knows what it was launched for |
 | `loadout team office check <set>` | Whether an office set's kit (with its rules) or tile scene can be used, and each thing wrong with it by name. A kit may lack parts: it lists which, and those are drawn in the built-in kit's shapes meanwhile |
 | `loadout team schedule add\|list\|remove` | Runs that should happen again and again on this machine |
-| `loadout team queue add\|list\|move\|remove\|plan\|settings\|run-next` | A team's queue of fully specified tasks, worked through one run at a time. Only a task with a title and a done-when gets in |
+| `loadout team queue add\|list\|move\|remove\|plan\|settings\|run-next` | A team's queue of fully specified tasks, worked through one run at a time, each in a worktree of its own. Only a task with a title and a done-when gets in |
+| `loadout team queue window <team> --at <time> --for <duration>` | The daily window in which the daemon works through a team's queue on its own; `--off` takes it away |
+| `loadout team run --task <id> --work-in <worktree>` | A run in a worktree of the project's repository instead of its own checkout, which is how a queued run keeps out of yours |
 | `loadout daemon` | Stay running: fire the scheduled runs and serve the dashboard |
 | `loadout daemon stop\|restart\|pause\|resume\|continue` | Control the running daemon from any shell: stop or restart it once its runs finish (`--now` does not wait), or hold and release its schedules |
 | `loadout team webhook enable\|disable\|show` | Let something outside this machine start a run, or stop letting it |

@@ -60,7 +60,8 @@ public interface ITaskService
         CancellationToken ct = default,
         TaskKind? kind = null,
         string? detail = null,
-        IReadOnlyList<string>? doneWhen = null);
+        IReadOnlyList<string>? doneWhen = null,
+        string? reason = null);
 
     /// <summary>
     /// Shortens every title on a list that is longer than
@@ -161,7 +162,8 @@ public interface ITaskService
                     ? await MoveAsync(operation.Project, operation.To, id, ct).ConfigureAwait(false)
                     : await DeclareAsync(
                         operation.Project, id, operation.State ?? TaskState.Open, operation.By,
-                        operation.Title, operation.Note, ct, operation.Kind, operation.Detail, operation.DoneWhen).ConfigureAwait(false);
+                        operation.Title, operation.Note, ct, operation.Kind, operation.Detail, operation.DoneWhen,
+                        operation.Reason).ConfigureAwait(false);
             }
 
             outcomes.Add(new TaskOutcome(
@@ -279,9 +281,10 @@ internal sealed class TaskService : ITaskService
         CancellationToken ct = default,
         TaskKind? kind = null,
         string? detail = null,
-        IReadOnlyList<string>? doneWhen = null) =>
+        IReadOnlyList<string>? doneWhen = null,
+        string? reason = null) =>
         One(await ApplyCoreAsync(
-            [new TaskOperation(TaskOperation.Declare, projectSlug, id, state, title, note, kind, declaredBy, Detail: detail, DoneWhen: doneWhen)],
+            [new TaskOperation(TaskOperation.Declare, projectSlug, id, state, title, note, kind, declaredBy, Detail: detail, DoneWhen: doneWhen, Reason: reason)],
             false,
             ct).ConfigureAwait(false));
 
@@ -742,6 +745,7 @@ internal sealed class TaskService : ITaskService
                     operation.Note ?? string.Empty,
                     operation.Detail ?? string.Empty,
                     .. operation.DoneWhen ?? [],
+                    operation.Reason ?? string.Empty,
                 ]));
 
         return patterns.Count > 0
@@ -902,6 +906,14 @@ internal sealed class TaskService : ITaskService
         if (operation.DoneWhen is { } doneWhen)
         {
             existing.DoneWhen = [.. doneWhen.Select(one => one.Trim()).Where(one => one.Length > 0)];
+        }
+
+        // Said by whoever declared it, such as the queue saying where a run's
+        // pull request is, so it stays with the claim rather than replacing
+        // somebody's note.
+        if (operation.Reason is { } why && why.Trim().Length > 0)
+        {
+            reason = reason.Length > 0 ? $"{why.Trim()}; {reason}" : why.Trim();
         }
 
         // A state said again is not a change, or a task a launcher marks as

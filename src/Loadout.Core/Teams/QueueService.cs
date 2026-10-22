@@ -12,6 +12,9 @@ public interface IQueueService
     /// <summary>A team's queue, empty when it has never had one.</summary>
     Task<OperationResult<TeamQueue>> LoadAsync(string team, CancellationToken ct = default);
 
+    /// <summary>Every team that has a queue file on this machine, by the name it is kept under.</summary>
+    IReadOnlyList<string> Teams();
+
     /// <summary>
     /// Changes a team's queue under its lock, writing it only when the change succeeds.
     /// </summary>
@@ -54,6 +57,20 @@ public sealed class QueueService : IQueueService
 
     private string PathFor(string team) =>
         Path.Combine(_paths.Paths.State, "teams", "queues", team.Trim().ToLowerInvariant() + ".yaml");
+
+    /// <inheritdoc />
+    public IReadOnlyList<string> Teams()
+    {
+        var directory = Path.Combine(_paths.Paths.State, "teams", "queues");
+
+        return Directory.Exists(directory)
+            ? [.. Directory.EnumerateFiles(directory, "*.yaml")
+                .Select(Path.GetFileNameWithoutExtension)
+                .OfType<string>()
+                .Where(name => Rejection(name) is null)
+                .Order(StringComparer.Ordinal)]
+            : [];
+    }
 
     /// <inheritdoc />
     public async Task<OperationResult<TeamQueue>> LoadAsync(string team, CancellationToken ct = default)

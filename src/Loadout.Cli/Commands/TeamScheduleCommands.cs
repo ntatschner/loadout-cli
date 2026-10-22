@@ -213,6 +213,17 @@ public sealed class TeamScheduleAddCommand : AsyncCommand<TeamScheduleAddCommand
     /// <summary>One schedule in a sentence.</summary>
     internal static string Describe(TeamSchedule schedule, DateTimeOffset now)
     {
+        if (schedule.IsQueueWindow)
+        {
+            var open = ScheduleService.Window(schedule, now) is not null ? ", open now" : string.Empty;
+            var opens = ScheduleService.Next(schedule, now) is { } starts && open.Length == 0
+                ? $", next from {starts.ToLocalTime():yyyy-MM-dd HH:mm}"
+                : schedule.Enabled ? string.Empty : ", paused";
+
+            return $"{schedule.Id}: {schedule.Team}'s queue, worked through daily from {schedule.At:HH:mm} "
+                + $"for {Spell(schedule.Length ?? TimeSpan.Zero)}, {schedule.Autonomy}{open}{opens}.";
+        }
+
         var when = schedule.Every is { } every
             ? $"every {Spell(every)}"
             : schedule.At is { } at

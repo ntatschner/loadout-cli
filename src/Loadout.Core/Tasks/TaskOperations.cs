@@ -30,6 +30,7 @@ namespace Loadout.Core.Tasks;
 /// <param name="Revision">The revision of the list this was made from, or null to not check.</param>
 /// <param name="Detail">The full description. Left as it was when null; an empty one clears it.</param>
 /// <param name="DoneWhen">What must be true for it to be finished. Left as it was when null; an empty list clears it.</param>
+/// <param name="Reason">Why, written on the history line this declare adds; one is added even when the state is unchanged.</param>
 public sealed record TaskOperation(
     string Op,
     string? Project = null,
@@ -42,7 +43,8 @@ public sealed record TaskOperation(
     string? To = null,
     string? Revision = null,
     string? Detail = null,
-    IReadOnlyList<string>? DoneWhen = null)
+    IReadOnlyList<string>? DoneWhen = null,
+    string? Reason = null)
 {
     public const string Add = "add";
     public const string Declare = "declare";

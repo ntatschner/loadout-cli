@@ -144,8 +144,23 @@ public sealed class FakeGit : IGitManager
     public Task<OperationResult> SetRemoteAsync(string repositoryPath, string name, string url, CancellationToken ct = default) =>
         throw new NotSupportedException("a team run touches no remote");
 
-    public Task<OperationResult> PushWithUpstreamAsync(string repositoryPath, string remote, string branch, CancellationToken ct = default) =>
-        throw new NotSupportedException("a team run pushes nothing");
+    /// <summary>Whether a push is expected; off, a push is a bug and throws.</summary>
+    public bool AllowPush { get; set; }
+
+    /// <summary>Every branch pushed, when pushing is allowed.</summary>
+    public List<string> Pushed { get; } = [];
+
+    public Task<OperationResult> PushWithUpstreamAsync(string repositoryPath, string remote, string branch, CancellationToken ct = default)
+    {
+        if (!AllowPush)
+        {
+            throw new NotSupportedException("a team run pushes nothing");
+        }
+
+        Pushed.Add(branch);
+
+        return Task.FromResult(OperationResult.Ok());
+    }
 
     public Task<OperationResult> CloneAsync(string remote, string destination, string? branch = null, CancellationToken ct = default) =>
         throw new NotSupportedException("a team run clones nothing");

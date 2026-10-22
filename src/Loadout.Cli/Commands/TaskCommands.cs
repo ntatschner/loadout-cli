@@ -282,6 +282,7 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
                     declared = item.DeclaredUtc,
                     item.Note,
                     hasDetail = item.Detail.Length > 0,
+                    doneWhen = item.DoneWhen,
                     moved = TaskTrace.Json(item.Moved),
                     runs = counted ? ActivityOf(item).RunsOf(item.Id) : (int?)null,
                     launches = counted ? ActivityOf(item).LaunchesOf(item.Id) : (int?)null,
