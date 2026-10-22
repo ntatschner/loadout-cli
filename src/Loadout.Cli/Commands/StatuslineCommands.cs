@@ -282,12 +282,30 @@ public class StatuslineTargetSettings : GlobalSettings
 [CommandMeta(CommandCategory.Integration, Intent = "status line install prompt project branch context", Mutates = true)]
 public sealed class StatuslineInstallCommand : AsyncCommand<StatuslineTargetSettings>
 {
+    /// <summary>
+    /// How long <c>claude --version</c> may take. Only the version line is
+    /// wanted, and an install that hangs on it would be worse than one that
+    /// leaves the interval out.
+    /// </summary>
+    private static readonly TimeSpan VersionTimeout = TimeSpan.FromSeconds(10);
+
     private readonly StatuslineTargets _targets;
+    private readonly IConfigurationService _configuration;
+    private readonly IExecutableResolver _executables;
+    private readonly IProcessLauncher _processes;
     private readonly IAnsiConsole _console;
 
-    public StatuslineInstallCommand(StatuslineTargets targets, IAnsiConsole console)
+    public StatuslineInstallCommand(
+        StatuslineTargets targets,
+        IConfigurationService configuration,
+        IExecutableResolver executables,
+        IProcessLauncher processes,
+        IAnsiConsole console)
     {
         _targets = targets;
+        _configuration = configuration;
+        _executables = executables;
+        _processes = processes;
         _console = console;
     }
 
@@ -312,6 +330,18 @@ public sealed class StatuslineInstallCommand : AsyncCommand<StatuslineTargetSett
                 ExitCode.GeneralFailure);
         }
 
+        // A config that cannot be read is no reason to refuse the install; the
+        // default profile redraws, so it is treated as that.
+        var configResult = await _configuration.LoadConfigAsync(cancellationToken).ConfigureAwait(false);
+        var redraw = configResult.Succeeded
+            ? Loadout.Core.Instructions.AccessibilityProfile
+                .Resolve(configResult.Value!.Accessibility).Display.Redraw
+            : null;
+
+        var version = await ReadClaudeVersionAsync(cancellationToken).ConfigureAwait(false);
+        var refresh = StatuslineInstaller.RefreshFor(version, redraw);
+        var outcome = RefreshOutcome(refresh, version, redraw);
+
         // The targets are resolved, so the preview can name every settings file it
         // would edit — and editing an agent's own settings is worth seeing first.
         if (settings.DryRun)
@@ -323,8 +353,11 @@ public sealed class StatuslineInstallCommand : AsyncCommand<StatuslineTargetSett
                 output.WriteLine($"  [dim]{target.SettingsPath.EscapeMarkup()}[/]");
             }
 
+            output.WriteLine(refresh is { } seconds
+                ? $"It would write refreshInterval {seconds}, so it {outcome.EscapeMarkup()}."
+                : $"It would write no refreshInterval, so it {outcome.EscapeMarkup()}.");
             output.WriteLine("Nothing was changed.");
-        
+
             return CommandOutput.Success();
         }
         var installed = new List<StatuslineInstallation>();
@@ -332,7 +365,7 @@ public sealed class StatuslineInstallCommand : AsyncCommand<StatuslineTargetSett
         foreach (var target in targetsResult.Value!)
         {
             var result = await StatuslineInstaller
-                .InstallAsync(target.SettingsPath, executable)
+                .InstallAsync(target.SettingsPath, executable, refresh)
                 .ConfigureAwait(false);
 
             if (result.Failed)
@@ -350,6 +383,7 @@ public sealed class StatuslineInstallCommand : AsyncCommand<StatuslineTargetSett
                 path = i.Path,
                 command = i.Command,
                 replaced = i.Replaced,
+                refresh = i.Refresh,
             }));
 
             return CommandOutput.Success();
@@ -370,10 +404,46 @@ public sealed class StatuslineInstallCommand : AsyncCommand<StatuslineTargetSett
             }
         }
 
+        output.WriteLine($"The line {outcome.EscapeMarkup()}.");
         output.WriteBlankLine();
         output.WriteLine("[dim]Start a new session to see it. Claude reads settings at startup.[/]");
 
         return CommandOutput.Success();
+    }
+
+    /// <summary>
+    /// Which of the three things an install did about ticking, in words: it
+    /// matters, because a line that does not tick looks stuck rather than off.
+    /// </summary>
+    internal static string RefreshOutcome(int? refresh, string? version, string? redraw) =>
+        refresh is { } seconds ? $"ticks every {seconds}s"
+        : StatuslineInstaller.RedrawsNever(redraw) ? "has no ticking (screen-reader profile)"
+        : version is { Length: > 0 }
+            ? $"updates on redraw only (Claude Code {version} not known to support a refresh interval)"
+            : "updates on redraw only (Claude Code's version could not be read, so it is not known to support a refresh interval)";
+
+    /// <summary>
+    /// The first line of <c>claude --version</c>, or null when Claude Code is
+    /// not on the path or does not answer in time.
+    /// </summary>
+    private async Task<string?> ReadClaudeVersionAsync(CancellationToken ct)
+    {
+        if (_executables.Resolve("claude") is not { Length: > 0 } claude)
+        {
+            return null;
+        }
+
+        var result = await _processes.RunAsync(
+            new ProcessRequest(claude, ["--version"]),
+            VersionTimeout,
+            ct).ConfigureAwait(false);
+
+        if (result.Failed || result.Value is null || !result.Value.Succeeded)
+        {
+            return null;
+        }
+
+        return result.Value.StandardOutput.Trim().Split('\n').FirstOrDefault()?.Trim();
     }
 }
 
@@ -522,7 +592,7 @@ public sealed class StatuslineShowCommand : AsyncCommand<StatuslineTargetSetting
                 state.Value),
             options);
 
-        var installations = new List<(string Description, string Path, string? Command)>();
+        var installations = new List<(string Description, string Path, string? Command, int? Refresh)>();
 
         foreach (var target in targets)
         {
@@ -530,8 +600,19 @@ public sealed class StatuslineShowCommand : AsyncCommand<StatuslineTargetSetting
                 .ReadCommandAsync(target.SettingsPath)
                 .ConfigureAwait(false);
 
-            installations.Add((target.Description, target.SettingsPath, command.Value));
+            var refresh = await StatuslineInstaller
+                .ReadRefreshAsync(target.SettingsPath)
+                .ConfigureAwait(false);
+
+            installations.Add((target.Description, target.SettingsPath, command.Value, refresh));
         }
+
+        // An entry written before the interval existed still draws, but its
+        // relative times stop moving while the session is idle. Under a profile
+        // that asks for nothing to redraw, no interval is the right answer.
+        var redrawNever = StatuslineInstaller.RedrawsNever(
+            Loadout.Core.Instructions.AccessibilityProfile
+                .Resolve(configResult.Value!.Accessibility).Display.Redraw);
 
         // What an install would write today. A recorded command that differs is
         // not merely out of date: it may not run at all. Claude reports nothing
@@ -584,6 +665,9 @@ public sealed class StatuslineShowCommand : AsyncCommand<StatuslineTargetSetting
                     matchesCurrent = i.Command is null || expected is null
                         ? (bool?)null
                         : i.Command == expected,
+
+                    // Seconds between redraws while idle, or null for none.
+                    refresh = i.Refresh,
                 }),
             });
 
@@ -611,9 +695,12 @@ public sealed class StatuslineShowCommand : AsyncCommand<StatuslineTargetSetting
         output.WriteLine("[bold]Installed[/]");
 
         var stale = false;
+        var still = false;
 
-        foreach (var (description, path, command) in installations)
+        foreach (var (description, path, command, refresh) in installations)
         {
+            still |= command is not null && refresh is null && !redrawNever;
+
             var matches = command is null || expected is null || command == expected;
 
             stale |= !matches;
@@ -640,6 +727,13 @@ public sealed class StatuslineShowCommand : AsyncCommand<StatuslineTargetSetting
         {
             output.WriteBlankLine();
             output.WriteLine("[yellow]Repair it with loadout statusline install[/]");
+        }
+
+        if (still)
+        {
+            output.WriteBlankLine();
+            output.WriteLine(
+                "[yellow]Reinstall with loadout statusline install so relative times keep moving while the session is idle[/]");
         }
 
         if (installations.TrueForAll(i => i.Command is null))
