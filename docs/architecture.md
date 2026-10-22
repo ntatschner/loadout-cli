@@ -127,10 +127,20 @@ Signing is driven entirely by environment, and the switch is the presence of
 | Set, others missing | Refuses to build, rather than silently shipping unsigned. |
 | Fully set | Signs and then verifies each file. |
 
-`build/sign-windows.ps1` holds all of it, and `package.ps1` and `installer.ps1`
-call it at the two points that matter. A local build takes the same path and
-just produces an unsigned binary, so signed and unsigned builds differ in one
-input rather than in which script ran.
+`build/sign-windows.ps1` holds all of it. A release calls it twice: once on
+`loadout.exe`, before anything is packaged, so the zip and the MSI carry the
+same signed bytes, and once on the MSI, from `installer.ps1`, after WiX has
+written it. A local build takes the same path and just produces an unsigned
+binary, so signed and unsigned builds differ in one input rather than in which
+script ran.
+
+The executable itself isn't compiled at release time. CI publishes every
+runtime once, through `build/publish.ps1`, and tests those bytes on a machine
+of each kind. The release finds that CI run, checks every file against the
+hashes CI took, and packages the same bytes, so what ships is what was tested.
+`PROVENANCE.txt`, published beside `SHA256SUMS`, names the run and gives the
+executable's hash as tested and as shipped. They only differ on Windows, where
+signing writes into the file.
 
 ## Verifying the Linux build without Linux
 

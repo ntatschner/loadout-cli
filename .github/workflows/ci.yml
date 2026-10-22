@@ -234,6 +234,12 @@ jobs:
     timeout-minutes: 25
     needs: [changes, test]
 
+    # The last two for the provenance attestation, which is made only on main.
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+
     # Documentation builds no binaries.
     if: needs.changes.outputs.docs-only != 'true'
     strategy:
@@ -265,34 +271,22 @@ jobs:
         with:
           global-json-file: global.json
 
-      # With the same flags build/package.ps1 ships with, so this is the build
-      # a release would carry rather than a near relation of it. The version
-      # is not passed: it comes from Directory.Build.props, which on a release
-      # commit is the version being released.
+      # The build a release ships. Release compiles nothing: it promotes this
+      # artefact, signs it and packages it, so publish.ps1 is the only place
+      # the shipping flags are written down. It also writes the SHA256SUMS
+      # that every later step checks the bytes against.
       - name: Publish
-        run: >
-          dotnet publish src/Loadout.Cli/Loadout.Cli.csproj
-          --configuration Release
-          --runtime ${{ matrix.rid }}
-          --self-contained true
-          -p:PublishSingleFile=true
-          -p:RestoreLockedMode=true
-          --output artifacts/${{ matrix.rid }}
+        shell: pwsh
+        run: ./build/publish.ps1 -Runtime ${{ matrix.rid }} -OutputDirectory artifacts/${{ matrix.rid }}
 
-      # Every file is hashed, not only the executable: a native library ships
-      # beside it on some runtimes, and it is as much a part of what was
-      # tested. Symbols and the API documentation are removed first, as the
-      # packaging does, so the hashes describe exactly what would ship.
-      - name: Leave out what does not ship, and hash what does
-        shell: bash
-        working-directory: artifacts/${{ matrix.rid }}
-        run: |
-          set -euo pipefail
-          find . -type f \( -name '*.pdb' -o -name '*.xml' \) -delete
-
-          if command -v sha256sum >/dev/null; then hash=(sha256sum); else hash=(shasum -a 256); fi
-          find . -type f ! -name SHA256SUMS | sed 's|^\./||' | sort | xargs "${hash[@]}" > SHA256SUMS
-          cat SHA256SUMS
+      # Proof, checkable by anyone with gh attestation verify, that these bytes
+      # came from this commit and this run. Only for main: a pull request's
+      # build is never promoted, and a fork's cannot be granted the token.
+      - name: Attest where the build came from
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: artifacts/${{ matrix.rid }}/*
 
       - name: Upload binary
         uses: actions/upload-artifact@v7
