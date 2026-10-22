@@ -204,8 +204,28 @@ export function applyWords(id: string, items: DumpItem[], picked: number[]): str
 }
 
 /** Where an accepted plan goes: onto a project, or as a new one. */
-export function acceptWords(id: string, where: string[], to: { project: string } | { newProject: string }): string[] {
-  return 'project' in to ? [id, ...where, '--to', to.project] : [id, ...where, `--new-project=${to.newProject}`];
+export function acceptWords(id: string, where: string[], to: { project: string } | { newProject: string }, doneWhen: string[] = []): string[] {
+  return 'project' in to ? [id, ...where, '--to', to.project, ...doneWhen] : [id, ...where, `--new-project=${to.newProject}`, ...doneWhen];
+}
+
+/** The conditions typed in the done-when box, one a line, blank lines left out. */
+export function doneWhenLines(text: string): string[] {
+  return text.split(/\r?\n/).map((line) => line.trim()).filter((line) => line.length > 0);
+}
+
+/**
+ * What accepting says about done-when: nothing when the box still holds what the
+ * plan proposed (accepting confirms those), each condition when it was changed,
+ * and --no-done-when when it was emptied. Joined with '=' because a condition can
+ * start with a dash, which the parser would otherwise read as an option.
+ */
+export function doneWhenWords(typed: string, proposed: string[]): string[] {
+  const lines = doneWhenLines(typed);
+  const same = lines.length === proposed.length && lines.every((line, index) => line === proposed[index].trim());
+
+  if (same) return [];
+  if (lines.length === 0) return ['--no-done-when'];
+  return lines.map((line) => `--done-when=${line}`);
 }
 
 /** A piece of a plan as Next sees it: a layer with its options, or an addition with none. */

@@ -503,6 +503,13 @@ back with a sentence saying what should change. **Accept the plan** puts it onto
 a project, or makes a new one for it, and says if any layer still has no option
 chosen.
 
+Above the button is **Done when**: what the agent proposes must be true for the
+work to be finished, one condition a line. Accepting confirms whatever the box
+holds, and the task carries those conditions, so a team run for it is held to
+them. Edit them first if they're vague: "the tests pass" is true of any work and
+says nothing about this one. You can empty the box, and the idea is still
+accepted, but a team queue won't take the task until it has some.
+
 ![An idea's plan in Studio: each layer's options side by side with what is for and against them, the chosen one marked, and under each option and layer the command that Choose this, Keep it and Drop it run.](../images/studio-ideas-plan.png)
 
 An idea moved from another list says where from. One that became a task on

@@ -3,7 +3,7 @@
 // action runs the queue command written under its button.
 import { describe, expect, it } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
-import QueuePanel, { type QueuePlan, type QueueRead } from './QueuePanel.svelte';
+import QueuePanel, { type QueuePlan, type QueueRead, whose } from './QueuePanel.svelte';
 
 const NOW = Date.parse('2026-10-22T08:00:00Z');
 
@@ -229,5 +229,12 @@ describe('QueuePanel', () => {
 
     await waitFor(() => expect(within(within(form).getByLabelText('Task')).getByRole('option', { name: /vague/ }).textContent).toContain('(no done-when yet)'));
     expect(within(within(form).getByLabelText('Task')).getByRole('option', { name: /fix-login/ }).textContent).not.toContain('no done-when');
+  });
+});
+
+describe('whose', () => {
+  it('says a team name ending in s owns something with an apostrophe alone', () => {
+    expect(whose('builders')).toBe("builders'");
+    expect(whose('docs-crew')).toBe("docs-crew's");
   });
 });

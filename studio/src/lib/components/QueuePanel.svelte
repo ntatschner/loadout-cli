@@ -63,7 +63,7 @@
   }
 
   /** A team's name as an owner: builders' and docs-crew's. */
-  export const whose = (team: string) => (team.endsWith('s') ? `${team}'` : `${whose(team)}`);
+  export const whose = (team: string): string => (team.endsWith('s') ? `${team}'` : `${team}'s`);
 </script>
 
 <script lang="ts">

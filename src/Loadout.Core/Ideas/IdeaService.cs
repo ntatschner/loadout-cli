@@ -190,11 +190,20 @@ public interface IIdeaService
     /// Writes the plan out, and turns the idea into a task on the project it
     /// belongs to, moving it there when it was somewhere else.
     /// </summary>
+    /// <param name="place">The idea.</param>
+    /// <param name="project">The project it goes on.</param>
+    /// <param name="by">Who is accepting it.</param>
+    /// <param name="ct">Cancellation.</param>
+    /// <param name="doneWhen">
+    /// The done-when the person confirmed, replacing what the plan proposed, or
+    /// null to confirm the plan's own by accepting it.
+    /// </param>
     Task<OperationResult<IdeaAccepted>> AcceptAsync(
         IdeaPlace place,
         string project,
         string by,
-        CancellationToken ct = default);
+        CancellationToken ct = default,
+        IReadOnlyList<string>? doneWhen = null);
 
     /// <summary>Forgets an idea: its task and its record.</summary>
     Task<OperationResult> RemoveAsync(IdeaPlace place, CancellationToken ct = default);
@@ -751,7 +760,8 @@ internal sealed partial class IdeaService : IIdeaService
         IdeaPlace place,
         string project,
         string by,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        IReadOnlyList<string>? doneWhen = null)
     {
         ArgumentNullException.ThrowIfNull(place);
 
@@ -802,6 +812,13 @@ internal sealed partial class IdeaService : IIdeaService
                 $"'{destination}' is not a project in this workspace.", ExitCode.ProjectNotFound);
         }
 
+        // What was confirmed goes into the plan before it is written, so the
+        // document, the record and the task all say the same finish line.
+        if (doneWhen is not null)
+        {
+            record.Plan!.DoneWhen = [.. doneWhen.Select(one => one.Trim()).Where(one => one.Length > 0)];
+        }
+
         var landed = new IdeaPlace(destination, place.Id);
         var planFile = $"ideas/{place.Id}.md";
         var planPath = TaskPaths.Relative(destination, planFile);
@@ -838,7 +855,8 @@ internal sealed partial class IdeaService : IIdeaService
             $"The plan is at {planPath}.",
             ct,
             TaskKind.Task,
-            record.Plan.Understanding.Trim()).ConfigureAwait(false);
+            record.Plan.Understanding.Trim(),
+            record.Plan.DoneWhen).ConfigureAwait(false);
 
         if (declared.Failed)
         {

@@ -45,7 +45,61 @@ public sealed class IdeaReplyTests
         read.Value.Plan.Layers.Single().Options.Single().Recommended.Should().BeTrue();
     }
 
+    [Fact]
+    public void A_plan_in_the_current_shape_carries_its_proposed_done_when()
+    {
+        var read = IdeaReply.Read("""
+            {
+              "contract": "idea/2", "understanding": "A page.", "questions": [],
+              "plan": {
+                "title": "Status page",
+                "layers": [{ "name": "Storage", "purpose": "Keep checks.", "options": [
+                  { "title": "SQLite", "detail": "One file.", "pros": [], "cons": [], "recommended": true } ] }],
+                "additions": [],
+                "project": { "slug": "homelab", "is_new": false, "name": "", "reason": "It watches the lab." },
+                "doneWhen": ["the page lists every host", "a host that is down shows red within a minute"]
+              }
+            }
+            """);
+
+        read.Succeeded.Should().BeTrue(read.Error);
+        read.Value!.Plan!.DoneWhen.Should().Equal("the page lists every host", "a host that is down shows red within a minute");
+    }
+
+    [Fact]
+    public void A_plan_in_the_shape_before_is_still_read_with_no_done_when()
+    {
+        var read = IdeaReply.Read("""
+            {
+              "contract": "idea/1", "understanding": "A page.", "questions": [],
+              "plan": {
+                "title": "Status page",
+                "layers": [{ "name": "Storage", "purpose": "Keep checks.", "options": [
+                  { "title": "SQLite", "detail": "One file.", "pros": [], "cons": [], "recommended": true } ] }],
+                "additions": [],
+                "project": { "slug": "", "is_new": false, "name": "", "reason": "" }
+              }
+            }
+            """);
+
+        read.Succeeded.Should().BeTrue(read.Error);
+        read.Value!.Plan!.DoneWhen.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void The_schema_offers_done_when_on_the_plan_without_requiring_it()
+    {
+        using var schema = System.Text.Json.JsonDocument.Parse(IdeaSchema.Version2);
+        var plan = schema.RootElement.GetProperty("properties").GetProperty("plan");
+
+        schema.RootElement.GetProperty("properties").GetProperty("contract").GetProperty("const").GetString()
+            .Should().Be(IdeaSchema.Version);
+        plan.GetProperty("properties").TryGetProperty("doneWhen", out _).Should().BeTrue();
+        plan.GetProperty("required").EnumerateArray().Select(one => one.GetString()).Should().NotContain("doneWhen");
+    }
+
     [Theory]
+    [InlineData("""{ "contract": "idea/3", "understanding": "", "questions": [] }""", "idea/3")]
     [InlineData(null, "without an")]
     [InlineData("not json", "not valid JSON")]
     [InlineData("""{ "contract": "report/1", "understanding": "", "questions": [] }""", "report/1")]

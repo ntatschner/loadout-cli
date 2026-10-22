@@ -203,6 +203,8 @@ your answers.
 - Once the plan has taken in everything you asked of it, **Accept the plan**
   puts it on a project as a task, with the plan written out beside it. A new
   project is one of the choices, and it is only ever made because you chose it.
+  The plan's proposed done-when go onto the task with it; to change them, use
+  Studio's Ideas page or `loadout idea accept --done-when`.
 - **Move it to another list** is for an idea dropped on the wrong project. Its
   questions, answers and plan go with it. It isn't offered while a round is
   going, because the round would write its answer back where the idea was.
