@@ -398,7 +398,8 @@ public sealed record RunSummary(
     string? Outcome = null,
     string? GoalUnderstood = null,
     bool Uncapped = false,
-    string? Task = null)
+    string? Task = null,
+    string? Origin = null)
 {
     /// <summary>Each round, with when it started and when it came back.</summary>
     public IReadOnlyList<RunRound> RoundsTaken => Timeline ?? [];
@@ -994,6 +995,7 @@ public sealed class RunJournal : IRunJournal
         string? project = null;
         string? path = null;
         string? task = null;
+        string? origin = null;
         decimal? budget = null;
         var uncapped = false;
         var quiet = 0;
@@ -1056,6 +1058,11 @@ public sealed class RunJournal : IRunJournal
                     // started for one, so a resume goes on updating that
                     // task rather than one of its own.
                     task = entry.Text("task");
+
+                    // What started it, where something other than a person did:
+                    // a trigger names its rule and the money it set aside, which
+                    // is how it finds the run again to see what it spent.
+                    origin = entry.Text("origin");
                     budget = entry.Number("budget");
                     uncapped = Uncapped(entry);
                     started = entry.At;
@@ -1339,7 +1346,8 @@ public sealed class RunJournal : IRunJournal
             outcome,
             goalUnderstood,
             uncapped,
-            task)
+            task,
+            origin)
         {
             Readings = readings,
         };

@@ -102,6 +102,10 @@ namespace Loadout.Agents.Teams;
 /// nobody answers: one of <see cref="TeamTimeout"/>'s words, or null for
 /// think-again-once.
 /// </param>
+/// <param name="Origin">
+/// What started the run where something other than a person did, written to
+/// its journal as <see cref="Loadout.Core.Triggers.RunOrigin"/> reads it.
+/// </param>
 public sealed record TeamRunRequest(
     string ProjectHandle,
     TeamDefinition Team,
@@ -126,7 +130,8 @@ public sealed record TeamRunRequest(
     UsdCap MachineBudget = default,
     string? Task = null,
     StandingCriteria? Standing = null,
-    string? OnTimeout = null);
+    string? OnTimeout = null,
+    string? Origin = null);
 
 /// <summary>
 /// A project's standing done-when criteria as they reach one run.
