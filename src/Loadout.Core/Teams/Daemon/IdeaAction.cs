@@ -16,10 +16,10 @@ namespace Loadout.Core.Teams.Daemon;
 /// command somebody would have typed.
 /// </para>
 /// </remarks>
-/// <param name="Verb">add, refine, answer, choose, keep, drop, improve, accept, move, remove, dump or apply.</param>
+/// <param name="Verb">add, addto, note-remove, refine, answer, choose, keep, drop, improve, accept, move, remove, dump or apply.</param>
 /// <param name="Id">The idea, or for apply the dump.</param>
 /// <param name="Project">The list it is on: a project's slug, or null for the workspace-wide one.</param>
-/// <param name="Text">A new idea, or the notes to dump.</param>
+/// <param name="Text">A new idea, a note to add to one, or the notes to dump.</param>
 /// <param name="Question">Which question, for answer.</param>
 /// <param name="Answer">The answer.</param>
 /// <param name="Layer">Which layer, for choose.</param>
@@ -31,6 +31,8 @@ namespace Loadout.Core.Teams.Daemon;
 /// <param name="NewProject">A name for a project to make for an accepted idea.</param>
 /// <param name="Only">Which pieces of a dump to record, or none for all of them.</param>
 /// <param name="ToGlobal">For move, true to send it to the workspace-wide list instead of a project.</param>
+/// <param name="Refine">For addto, true to start a round once the note is saved.</param>
+/// <param name="Note">Which note, for note-remove: its number as <c>idea show</c> lists it.</param>
 public sealed record IdeaAction(
     string Verb,
     string? Id = null,
@@ -46,4 +48,6 @@ public sealed record IdeaAction(
     string? To = null,
     string? NewProject = null,
     IReadOnlyList<int>? Only = null,
-    bool ToGlobal = false);
+    bool ToGlobal = false,
+    bool Refine = false,
+    string? Note = null);

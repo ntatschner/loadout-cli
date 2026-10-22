@@ -134,6 +134,7 @@ public static class StudioCoverage
         ["idea dismiss"] = new("ideas", StudioEffect.Changes),
         ["idea move"] = new("ideas", StudioEffect.Changes),
         ["idea remove"] = new("ideas", StudioEffect.Changes),
+        ["idea note remove"] = new("ideas", StudioEffect.Changes),
         ["idea apply"] = Terminal("reads its changes from a file or standard input, which a page has neither of; Studio makes the same changes through its own batch route"),
         ["idea dump add"] = new("ideas", StudioEffect.Changes),
         ["idea dump list"] = new("ideas", StudioEffect.Reads),

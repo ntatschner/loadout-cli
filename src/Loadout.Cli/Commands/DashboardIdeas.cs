@@ -61,7 +61,12 @@ internal sealed class DashboardIdeas
 
     /// <summary>Every verb the page can send, for the tests that run each one.</summary>
     internal static IReadOnlyList<string> Verbs =>
-        ["add", "refine", "answer", "choose", "keep", "drop", "improve", "accept", "move", "remove", "dump", "apply"];
+        ["add", "addto", "note-remove", "refine", "answer", "choose", "keep", "drop", "improve", "accept", "move", "remove", "dump", "apply"];
+
+    /// <summary>How long an add with a refine is watched for its note before the page is answered anyway.</summary>
+    internal static readonly TimeSpan AddPatience = TimeSpan.FromSeconds(30);
+
+    private static readonly TimeSpan AddPoll = TimeSpan.FromMilliseconds(100);
 
     /// <summary>The key a dump being split is kept busy under, until its id is known.</summary>
     internal const string Dumping = "(dump)";
@@ -129,6 +134,11 @@ internal sealed class DashboardIdeas
             $"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] from the dashboard: "
             + $"{Markup.Escape(command)} {Markup.Escape(asking.Id ?? string.Empty)}");
 
+        if (asking.Verb == "addto")
+        {
+            return await AddToAsync(command, arguments, asking, ct).ConfigureAwait(false);
+        }
+
         var key = asking.Verb switch
         {
             "refine" => asking.Id,
@@ -138,7 +148,7 @@ internal sealed class DashboardIdeas
 
         if (key is null)
         {
-            return Said(command, await _commands.RunAsync(command, arguments, ct).ConfigureAwait(false));
+            return Said(asking.Verb, command, await _commands.RunAsync(command, arguments, ct).ConfigureAwait(false));
         }
 
         // One round at a time for an idea. Two at once would each read the
@@ -192,22 +202,137 @@ internal sealed class DashboardIdeas
     /// command's own words go to the terminal serving the page, and the page
     /// says so rather than inventing a reason it cannot know.
     /// </remarks>
-    private static OperationResult Said(string command, int code) =>
+    private static OperationResult Said(string verb, string command, int code) =>
         code == (int)ExitCode.Success
             ? OperationResult.Ok()
             : OperationResult.Fail(
-                (ExitCode)code switch
+                ((ExitCode)code, verb) switch
                 {
-                    ExitCode.PolicyViolation =>
+                    (ExitCode.PolicyViolation, _) =>
                         "That looks like it contains a credential, so nothing was recorded. Say it without the value.",
-                    ExitCode.ProjectNotFound =>
+                    (ExitCode.ProjectNotFound, _) =>
                         "That project is not one this workspace knows about.",
-                    ExitCode.InvalidArguments =>
+                    (ExitCode.InvalidArguments, "addto") =>
+                        "Nothing was added. The idea may have been accepted or changed since the page last read "
+                        + "it: the page has read it again. The terminal serving this page has the exact reason.",
+                    (ExitCode.InvalidArguments, "note-remove") =>
+                        "The note was not removed. A round may have read it, the idea may have been accepted, or "
+                        + "a round on it may be running. The terminal serving this page has the exact reason.",
+                    (ExitCode.InvalidArguments, _) =>
                         "The idea could not take that. It may have changed since the page last read it: the "
                         + "page has read it again. The terminal serving this page has the exact reason.",
                     _ => $"'{command}' ended with exit code {code}. The terminal serving this page has the reason.",
                 },
                 (ExitCode)code);
+
+    /// <summary>
+    /// Adds a note to an idea, and with <see cref="IdeaAction.Refine"/> starts
+    /// a round on it in the same command.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Without a refine it is quick, and awaited like any other step. With one
+    /// it runs beside the request, as a refine does, kept busy under the idea.
+    /// </para>
+    /// <para>
+    /// The page is answered once the note is in the record or the command has
+    /// ended, whichever comes first, and told which happened by reading the
+    /// record rather than guessing from the exit code: a failed round exits
+    /// with the round's code, which can be the same code a refused add gives,
+    /// and a failed refine read as a failed add gets the same note added
+    /// twice.
+    /// </para>
+    /// </remarks>
+    private async Task<OperationResult> AddToAsync(
+        string command,
+        IReadOnlyList<string> arguments,
+        IdeaAction asking,
+        CancellationToken ct)
+    {
+        if (!asking.Refine)
+        {
+            return Said(asking.Verb, command, await _commands.RunAsync(command, arguments, ct).ConfigureAwait(false));
+        }
+
+        var place = new IdeaPlace(asking.Project is { Length: > 0 } project ? project : null, asking.Id ?? string.Empty);
+        var before = await NumberedAsync(place, ct).ConfigureAwait(false);
+
+        if (!_busy.TryAdd(place.Id, true))
+        {
+            return OperationResult.Fail($"{place.Id} has a round going already.", ExitCode.InvalidArguments);
+        }
+
+        Interlocked.Increment(ref _marked);
+
+        // Not tied to the request's token, for the same reason a refine is not.
+        var run = Task.Run(async () =>
+        {
+            try
+            {
+                var code = await _commands.RunAsync(command, arguments, CancellationToken.None).ConfigureAwait(false);
+
+                _output.WriteLine(
+                    $"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] {Markup.Escape(command)} --to "
+                    + $"{Markup.Escape(place.Id)} finished" + (code == 0 ? "." : $" with exit code {code}."));
+
+                return code;
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                _output.WriteLine($"[yellow]![/] {Markup.Escape(command)} stopped: {Markup.Escape(ex.Message)}");
+
+                return (int)ExitCode.GeneralFailure;
+            }
+            finally
+            {
+                _busy.TryRemove(place.Id, out _);
+                Interlocked.Increment(ref _marked);
+            }
+        }, CancellationToken.None);
+
+        var until = _time.GetUtcNow() + AddPatience;
+
+        while (true)
+        {
+            // Whether it had ended is taken before the record is read, so a
+            // command that ended is judged on the record it left.
+            var ended = run.IsCompleted;
+
+            if (await NumberedAsync(place, ct).ConfigureAwait(false) > before)
+            {
+                return !ended || run.Result == (int)ExitCode.Success
+                    ? OperationResult.Ok()
+                    : OperationResult.Fail(
+                        $"The note was added to {place.Id}, but the round on it failed with exit code {run.Result}, "
+                        + "so do not add it again: refine it to try the round again. The terminal serving this "
+                        + "page has the reason.",
+                        (ExitCode)run.Result);
+            }
+
+            if (ended)
+            {
+                return Said(asking.Verb, command, run.Result);
+            }
+
+            if (_time.GetUtcNow() >= until)
+            {
+                return OperationResult.Fail(
+                    $"The note had not reached {place.Id} after {AddPatience.TotalSeconds:0} seconds. The command "
+                    + "is still going; the page shows the note once it is saved.",
+                    ExitCode.GeneralFailure);
+            }
+
+            await Task.WhenAny(run, Task.Delay(AddPoll, _time, ct)).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>The highest note number the idea has given, or -1 when it cannot be read.</summary>
+    private async Task<int> NumberedAsync(IdeaPlace place, CancellationToken ct)
+    {
+        var read = await _ideas.ReadAsync(place, ct).ConfigureAwait(false);
+
+        return read.Succeeded ? Math.Max(read.Value!.NotesNumbered, read.Value!.Notes.Count) : -1;
+    }
 
     /// <summary>The command line a verb stands for, or an empty command for one there is none of.</summary>
     /// <remarks>
@@ -236,6 +361,8 @@ internal sealed class DashboardIdeas
         return asking.Verb switch
         {
             "add" => Line("idea add", [$"--text={asking.Text}"], list),
+            "addto" => Line("idea add", ["--to", id, $"--text={asking.Text}"], asking.Refine ? ["--refine"] : [], list),
+            "note-remove" => Line("idea note remove", [id, asking.Note ?? string.Empty], list),
             "refine" => Line("idea refine", [id], list),
             "answer" => Line("idea answer", [id, asking.Question ?? string.Empty, $"--answer={asking.Answer}"], list),
             "choose" => Line("idea choose", [id, asking.Layer ?? string.Empty, asking.Option ?? string.Empty], list),

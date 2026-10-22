@@ -13040,6 +13040,53 @@
         "Accepted onto " + detail.accepted.project + ". The plan is at " + detail.accepted.plan + "."));
     }
 
+    // Notes added since, each removable only while no round has read it.
+    (detail.notes || []).forEach(function (note) {
+      var row = ideaEl("div", "lk-btn-row");
+      row.appendChild(ideaEl("p", "lk-help",
+        note.id + ": " + note.text + (note.taken ? " (read by a round)" : " (not read by a round yet)")));
+
+      if (acts && !busy && !note.taken) {
+        row.appendChild(ideaButton("Remove " + note.id, true, function () {
+          send({ verb: "note-remove", note: note.id }, note.id + " is removed.");
+        }));
+      }
+
+      card.appendChild(row);
+    });
+
+    if (acts && !busy) {
+      var adding = ideaEl("details", "task-change");
+      adding.appendChild(ideaEl("summary", null, "Add to it"));
+
+      var open = (detail.questions || []).filter(function (q) { return !q.answer; }).length;
+
+      if (open) {
+        adding.appendChild(ideaEl("p", "lk-notice",
+          open + " question" + (open === 1 ? " is" : "s are") + " still open. A round waits for them."));
+      }
+
+      var more = ideaField(adding, "What to add", true);
+      var refineNow = ideaEl("input");
+      refineNow.type = "checkbox";
+      refineNow.checked = true;
+      refineNow.id = "idea-refine-" + (++ideaFields);
+      var refineLabel = ideaEl("label", "lk-label", " Refine now");
+      refineLabel.setAttribute("for", refineNow.id);
+      adding.appendChild(refineNow);
+      adding.appendChild(refineLabel);
+
+      var addRow = ideaEl("div", "lk-btn-row");
+      addRow.appendChild(ideaButton("Add it", false, function () {
+        if (!more.value.trim()) { more.focus(); return; }
+
+        send({ verb: "addto", text: more.value, refine: refineNow.checked },
+          refineNow.checked ? "Added, and a round has started." : "Added. No round was started.");
+      }));
+      adding.appendChild(addRow);
+      card.appendChild(adding);
+    }
+
     if (ideasActs && !busy && detail.stage !== "accepted") {
       var moving = ideaEl("details", "task-change");
       moving.appendChild(ideaEl("summary", null, "Move it to another list"));
