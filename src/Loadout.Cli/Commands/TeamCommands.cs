@@ -1681,7 +1681,7 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             OnTimeout: TeamTimeout.Parse(settings.OnTimeout) ?? TeamTimeout.Parse(team.Rules.OnTimeout));
     }
 
-    /// <summary>Why a path is not a worktree of the project's repository, or null when it is.</summary>
+    /// <summary>Why a path is not in a worktree of the project's repository, or null when it is.</summary>
     /// <remarks>
     /// Checked against the repository's own list of worktrees rather than by
     /// asking the directory, so a different repository - or a copy of this
@@ -1710,7 +1710,18 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             return $"The worktrees of {repository} could not be listed: {listed.Error}";
         }
 
-        var wanted = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        // The top of the tree the path is in, as git names it. git lists
+        // worktrees with symbolic links resolved - on macOS /var is
+        // /private/var - so the path as given is compared in git's spelling,
+        // or a real worktree reached through a link is refused.
+        var root = await git.FindRepositoryRootAsync(path, ct).ConfigureAwait(false);
+
+        if (root.Failed)
+        {
+            return $"{path} is not a worktree of {project.Entry.Slug}'s repository.";
+        }
+
+        var wanted = Path.GetFullPath(root.Value!).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
         return listed.Value!.Any(one => string.Equals(
                 Path.GetFullPath(one.Path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
@@ -1847,8 +1858,9 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
 
             // From here on everything this process resolves the project to -
             // the run's own record, the merge gate, each node it launches - is
-            // the worktree.
-            _checkouts?.Use(project.Entry.Slug, workIn);
+            // the worktree, at its top, however the path was spelled.
+            var top = await _git.FindRepositoryRootAsync(workIn, cancellationToken).ConfigureAwait(false);
+            _checkouts?.Use(project.Entry.Slug, top.Value ?? workIn);
             output.WriteLine(TeamStyle.Note($"Working in {workIn}, not the project's own checkout."));
         }
 

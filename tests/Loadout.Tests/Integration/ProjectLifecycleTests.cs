@@ -1075,14 +1075,17 @@ public sealed class ProjectLifecycleTests : IAsyncLifetime
         var checkouts = new ProjectCheckouts();
         var projects = new ProjectService(_configuration, _workspace, _git, new PathSemantics(), _tasks, checkouts);
 
-        (await projects.ResolveAsync("queued")).Value!.LocalPath.Should().Be(repository);
+        // As registered, which git spells with links resolved: on macOS the
+        // temporary directory is reached through /var but is /private/var.
+        var registered = (await _projects.ResolveAsync("queued")).Value!.LocalPath;
+        (await projects.ResolveAsync("queued")).Value!.LocalPath.Should().Be(registered);
 
         checkouts.Use("queued", worktree);
 
         (await projects.ResolveAsync("queued")).Value!.LocalPath.Should().Be(Path.GetFullPath(worktree));
         (await projects.ListAsync()).Value!.Single(one => one.Entry.Slug == "queued").LocalPath
             .Should().Be(Path.GetFullPath(worktree));
-        (await _projects.ResolveAsync("queued")).Value!.LocalPath.Should().Be(repository, "another process is not told");
+        (await _projects.ResolveAsync("queued")).Value!.LocalPath.Should().Be(registered, "another process is not told");
     }
 
     [Fact]
@@ -1101,6 +1104,24 @@ public sealed class ProjectLifecycleTests : IAsyncLifetime
             .Should().Contain("is not a worktree of guarded's repository");
         (await Loadout.Cli.Commands.TeamRunCommand.WorktreeRejectionAsync(_git, project, Path.Combine(_root, "nothing"), default))
             .Should().Contain("There is no directory");
+    }
+
+    [Loadout.Tests.Platform.UnixFact]
+    public async Task Work_in_takes_a_worktree_reached_through_a_symbolic_link()
+    {
+        // git names worktrees with links resolved, as macOS's /var is
+        // /private/var; a worktree reached through a link is still the worktree.
+        var repository = await CreateRepositoryAsync("linked", "ssh://git.internal/apps/linked.git");
+        var project = (await _projects.AddAsync(repository)).Value!;
+
+        var worktree = Path.Combine(_root, "worktrees", "linked-one");
+        (await _git.AddWorktreeAsync(repository, worktree, "queue/one")).Succeeded.Should().BeTrue();
+
+        var link = Path.Combine(_root, "through-a-link");
+        Directory.CreateSymbolicLink(link, worktree);
+
+        (await Loadout.Cli.Commands.TeamRunCommand.WorktreeRejectionAsync(_git, project, link, default))
+            .Should().BeNull();
     }
 
     private async Task<string> CreateRepositoryAsync(string name, string remote)
