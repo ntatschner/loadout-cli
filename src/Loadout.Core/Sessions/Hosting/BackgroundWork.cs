@@ -10,6 +10,16 @@ namespace Loadout.Core.Sessions.Hosting;
 /// <param name="WakeupDue">When a wakeup it scheduled is due, where one is still to come.</param>
 public sealed record BackgroundReading(bool Outstanding, DateTimeOffset? WakeupDue);
 
+/// <summary>What a transcript leaves open, before it is weighed against a time.</summary>
+/// <param name="OpenUntil">When each task still out stops counting, or null for one that never does.</param>
+/// <param name="Wakeup">The last wakeup scheduled, whether or not it has fired.</param>
+/// <param name="LastEntry">When the last message was written.</param>
+internal sealed record BackgroundTally(IReadOnlyList<DateTimeOffset?> OpenUntil, DateTimeOffset? Wakeup, DateTimeOffset? LastEntry)
+{
+    /// <summary>The wakeup, where it is still to come: one due before the last thing written has already fired.</summary>
+    public DateTimeOffset? Due => Wakeup is { } w && (LastEntry is null || w > LastEntry) ? Wakeup : null;
+}
+
 /// <summary>
 /// Tells an agent that has stopped to wait on its own background work apart
 /// from one that has stopped to wait for its person, from the tail of its
@@ -53,7 +63,14 @@ public static partial class BackgroundWork
     /// and never heard from is far more often a server the agent left running
     /// for you to look at than work it is waiting on.
     /// </param>
-    public static BackgroundReading? Read(string? path, DateTimeOffset now, TimeSpan? silentAfter = null)
+    public static BackgroundReading? Read(string? path, DateTimeOffset now, TimeSpan? silentAfter = null) =>
+        ReadTail(path) is { } lines ? Scan(lines, now, silentAfter) : null;
+
+    /// <summary>
+    /// The lines of the last <see cref="Tail"/> bytes of a transcript, oldest
+    /// first, or null where it cannot be read or is not a transcript.
+    /// </summary>
+    internal static IReadOnlyList<string>? ReadTail(string? path)
     {
         if (path is null || !path.EndsWith(".jsonl", StringComparison.OrdinalIgnoreCase))
         {
@@ -84,7 +101,7 @@ public static partial class BackgroundWork
                 lines.Add(line);
             }
 
-            return Scan(lines, now, silentAfter);
+            return lines;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
@@ -97,6 +114,25 @@ public static partial class BackgroundWork
     /// <param name="now">When the agent said it was idle.</param>
     /// <param name="silentAfter">As for <see cref="Read"/>.</param>
     public static BackgroundReading? Scan(IEnumerable<string> lines, DateTimeOffset now, TimeSpan? silentAfter = null)
+    {
+        if (Tally(lines, silentAfter) is not { } tally)
+        {
+            return null;
+        }
+
+        var outstanding = tally.OpenUntil.Any(expires => expires is null || expires > now);
+
+        return new BackgroundReading(outstanding || tally.Due is not null, tally.Due);
+    }
+
+    /// <summary>
+    /// What is still out at the end of transcript lines, without deciding
+    /// against a time: when each open task stops counting, the last wakeup
+    /// and the last entry. Null where none of the lines is an entry.
+    /// </summary>
+    /// <param name="lines">The lines, oldest first.</param>
+    /// <param name="silentAfter">As for <see cref="Read"/>.</param>
+    internal static BackgroundTally? Tally(IEnumerable<string> lines, TimeSpan? silentAfter)
     {
         ArgumentNullException.ThrowIfNull(lines);
 
@@ -186,11 +222,7 @@ public static partial class BackgroundWork
             return null;
         }
 
-        // A wakeup due before the last thing written has already fired.
-        var due = wakeup is { } w && (last is null || w > last) ? wakeup : null;
-        var outstanding = open.Values.Any(expires => expires is null || expires > now);
-
-        return new BackgroundReading(outstanding || due is not null, due);
+        return new BackgroundTally([.. open.Values], wakeup, last);
     }
 
     /// <summary>A tool result that started something in the background, stopped it, or set a wakeup.</summary>
