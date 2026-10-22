@@ -256,7 +256,7 @@ one with `team status`, in the launcher, or on a page `loadout dashboard` serves
 this machine. The page runs and writes teams as well as watching them, and every
 control on it types the command you would have typed.
 
-Eight teams ship. A team is a YAML file, so you can write your own, and copying
+Nine teams ship. A team is a YAML file, so you can write your own, and copying
 one that already works is the way to start:
 
 ```sh

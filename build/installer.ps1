@@ -176,9 +176,10 @@ Priority: optional
 Architecture: $architecture
 Maintainer: Loadout
 Description: Loadout
- Launches AI coding agents against registered projects, keeping agent
- configuration and context in a central workspace repository rather than in
- the application repositories themselves.
+ Your coding agents, kitted out and kept in check. A workbench for coding
+ agents: it picks what the agent is told and shows the cost first, keeps
+ what a project has learned on every machine, keeps agent files out of your
+ repositories, and runs one agent or a team where you can watch.
 "@
 
     # Debian control files are LF-terminated and must end with a newline.
@@ -236,9 +237,10 @@ AutoReqProv:    no
 %global debug_package %{nil}
 
 %description
-Launches AI coding agents against registered projects, keeping agent
-configuration and context in a central workspace repository rather than in the
-application repositories themselves.
+Your coding agents, kitted out and kept in check. A workbench for coding
+agents: it picks what the agent is told and shows the cost first, keeps
+what a project has learned on every machine, keeps agent files out of your
+repositories, and runs one agent or a team where you can watch.
 
 %install
 mkdir -p %{buildroot}/usr/lib/loadout

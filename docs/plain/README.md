@@ -36,6 +36,13 @@ Those notes are called **instructions**. How big they are is measured in
 Loadout also keeps the agent's own files out of your project. Your project stays
 tidy.
 
+It does a few more things around the agent. It writes down what the agent
+learned, so the next time starts from there instead of from nothing. It adds up
+what the agent has cost you. And when one agent isn't enough, it can run a small
+team of them on one job, and show you what they're doing in your web browser.
+None of this changes the agent itself. Everything around your coding agent,
+except the agent.
+
 ## What you need before you start
 
 - **A computer running Windows, macOS or Linux.**
