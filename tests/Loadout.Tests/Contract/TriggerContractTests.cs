@@ -62,18 +62,41 @@ public sealed class TriggerContractTests
     }
 
     [BuiltCliFact]
-    public async Task A_rule_that_starts_a_team_without_a_spend_cap_is_refused_and_nothing_is_written()
+    public async Task A_team_rule_without_a_cap_is_refused_with_a_proposal_that_one_word_accepts()
+    {
+        using var loadout = new LoadoutProcess();
+        loadout.Environment["LOADOUT_TRIGGERS"] = "1";
+
+        var refused = await loadout.RunAsync(
+            "trigger", "add", "review", "run-finished", "--team", "iterating-project", "--goal", "Look at {run}.");
+
+        refused.ExitCode.Should().Be(2, refused.StandardOutput);
+        refused.StandardError.Should().Contain("Proposed: $2 a run").And.Contain("--cap-usd proposed");
+        (await loadout.RunAsync("trigger", "list", "--json")).Json().EnumerateArray().Should().BeEmpty();
+
+        // A throwaway home has no runs, so what is taken is the starter figure.
+        var accepted = await loadout.RunAsync(
+            "trigger", "add", "review", "run-finished", "--team", "iterating-project", "--goal", "Look at {run}.",
+            "--cap-usd", "proposed", "--budget-usd", "proposed");
+
+        accepted.ExitCode.Should().Be(0, accepted.StandardError);
+
+        var rule = (await loadout.RunAsync("trigger", "list", "--json")).Json().EnumerateArray().Single().GetProperty("rule");
+        rule.GetProperty("budgetUsd").GetDecimal().Should().Be(2m);
+        rule.GetProperty("capUsd").GetDecimal().Should().Be(10m);
+    }
+
+    [BuiltCliFact]
+    public async Task A_rule_for_a_team_that_does_not_exist_is_refused()
     {
         using var loadout = new LoadoutProcess();
         loadout.Environment["LOADOUT_TRIGGERS"] = "1";
 
         var added = await loadout.RunAsync(
-            "trigger", "add", "review", "run-finished", "--team", "reviewer", "--goal", "Look at {run}.");
+            "trigger", "add", "review", "run-finished", "--team", "nobody-has-this", "--goal", "Look.", "--cap-usd", "5");
 
         added.ExitCode.Should().Be(2);
-        added.StandardError.Should().Contain("spend cap");
-
-        (await loadout.RunAsync("trigger", "list", "--json")).Json().EnumerateArray().Should().BeEmpty();
+        added.StandardError.Should().Contain("no team called 'nobody-has-this'");
     }
 
     [BuiltCliFact]

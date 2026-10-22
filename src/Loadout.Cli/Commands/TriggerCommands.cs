@@ -228,7 +228,12 @@ public sealed class TriggerAddCommand(
     YamlStore yaml,
     IFilePermissions permissions,
     IAnsiConsole console,
-    TimeProvider time) : AsyncCommand<TriggerAddCommand.Settings>
+    TimeProvider time,
+    Loadout.Core.Teams.IRunJournal runs,
+    ICommandCatalogue commands,
+    Loadout.Core.Teams.ITeamCatalogue teams,
+    Loadout.Core.Instructions.ISpecialistLibrary library,
+    Loadout.Core.Workspace.IWorkspaceManager workspace) : AsyncCommand<TriggerAddCommand.Settings>
 {
     public sealed class Settings : TriggerRuleSettings
     {
@@ -261,11 +266,11 @@ public sealed class TriggerAddCommand(
         public string[] Where { get; init; } = [];
 
         [CommandOption("--cap-usd <AMOUNT>")]
-        [Description("The most its runs may spend in the window, in US dollars. Required for a team.")]
+        [Description("The most its runs may spend in the window, in US dollars, or proposed for a figure from the team's past runs. Required for a team.")]
         public string? CapUsd { get; init; }
 
         [CommandOption("--budget-usd <AMOUNT>")]
-        [Description("What each run may spend, in US dollars. The team's own when left out; required when it has none.")]
+        [Description("What each run may spend, in US dollars, or proposed for a figure from the team's past runs. The team's own when left out; required when it has none.")]
         public string? BudgetUsd { get; init; }
 
         [CommandOption("--cap-runs <COUNT>")]
@@ -303,6 +308,12 @@ public sealed class TriggerAddCommand(
         if (problem is not null)
         {
             return output.Fail(problem, ExitCode.InvalidArguments);
+        }
+
+        if (rule.Action.Kind == TriggerActionKinds.Team
+            && await TeamMoneyAsync(rule, settings, output, cancellationToken).ConfigureAwait(false) is { } refused)
+        {
+            return output.Fail(refused, ExitCode.InvalidArguments);
         }
 
         if (TriggerRules.Check(rule) is { } wrong)
@@ -343,6 +354,89 @@ public sealed class TriggerAddCommand(
                         + "takes effect when one starts.");
             },
             cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Settles what a team rule may spend, filling in proposed figures, or
+    /// says what is missing and what is proposed for it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A cap is required, and so is a budget for a team with none of its own:
+    /// without one there is nothing to set aside. Rather than make somebody
+    /// invent a figure, the refusal offers one worked out from the team's own
+    /// runs, with its working, and <c>proposed</c> accepts it.
+    /// </para>
+    /// <para>
+    /// The team is looked up for the first project the rule watches, because
+    /// a project's own team of that name replaces the built-in one there. A
+    /// team that writes is not refused here, only said: the rule can be
+    /// written now and act once approvals exist.
+    /// </para>
+    /// </remarks>
+    private async Task<string?> TeamMoneyAsync(TriggerRule rule, Settings settings, CommandOutput output, CancellationToken ct)
+    {
+        var actions = new DaemonTriggerActions(commands, runs, teams, library, workspace);
+        var traits = await actions.DescribeAsync(rule.Action, rule.Projects.FirstOrDefault(), ct).ConfigureAwait(false);
+
+        if (traits.Problem is { } problem)
+        {
+            return $"The rule cannot start that: {problem}. See what there is with: loadout team list";
+        }
+
+        var proposal = BudgetProposal.For(
+            rule.Action.Name,
+            rule.Projects,
+            runs.List(200).Select(runs.Summarise).Where(one => one.Succeeded).Select(one => one.Value!));
+
+        var accepted = false;
+
+        if (TriggerWords.Proposed(settings.BudgetUsd))
+        {
+            rule.BudgetUsd = proposal.BudgetUsd;
+            accepted = true;
+        }
+
+        if (TriggerWords.Proposed(settings.CapUsd))
+        {
+            // Never below one run, or the budget just accepted could not start.
+            rule.CapUsd = Math.Max(proposal.CapUsd, rule.BudgetUsd ?? traits.BudgetUsd ?? 0m);
+            accepted = true;
+        }
+
+        var missing = new List<string>();
+
+        if (rule.BudgetUsd is null && traits.BudgetUsd is null)
+        {
+            missing.Add($"--budget-usd, since {rule.Action.Name} has no budget of its own");
+        }
+
+        if (rule.CapUsd is null)
+        {
+            missing.Add("--cap-usd, the most its runs may spend in the window");
+        }
+
+        if (missing.Count > 0)
+        {
+            var accept = string.Join(' ', missing.Select(one => one.Split(',', 2)[0] + " proposed"));
+
+            return $"A rule that starts {rule.Action.Name} needs {string.Join(" and ", missing)}. Proposed: "
+                + $"{proposal.Working()} Accept it with {accept}, or give your own figures.";
+        }
+
+        if (accepted && !output.IsJson)
+        {
+            output.WriteLine($"[dim]Proposed and taken:[/] {Markup.Escape(proposal.Working())}");
+        }
+
+        if (traits.Writes && !output.IsJson)
+        {
+            output.WriteLine(
+                $"[yellow]{Markup.Escape(rule.Action.Name)} writes[/] (a node works in a worktree), so the rule is kept "
+                + "but refused each time it matches until triggers can ask for your approval.");
+        }
+
+        return null;
     }
 }
 
@@ -712,9 +806,14 @@ internal static class TriggerWords
     public static TimeSpan? Duration(string? text, TimeSpan fallback) =>
         string.IsNullOrWhiteSpace(text) ? fallback : TeamDuration.Parse(text);
 
+    /// <summary>Whether a money option asked for the proposed figure rather than giving one.</summary>
+    public static bool Proposed(string? text) =>
+        string.Equals(text?.Trim(), "proposed", StringComparison.OrdinalIgnoreCase);
+
     private static string? Money(string? text, string option, Action<decimal> set)
     {
-        if (string.IsNullOrWhiteSpace(text))
+        // Filled in by the command once it has read the team's runs.
+        if (string.IsNullOrWhiteSpace(text) || Proposed(text))
         {
             return null;
         }
