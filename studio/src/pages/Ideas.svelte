@@ -539,10 +539,14 @@
     adding = true;
 
     try {
-      await ideaRoutes.act({ verb: 'addto', id: asked, project, text: more, ...(refineNow ? { refine: true } : {}) });
+      const reply = await ideaRoutes.act({ verb: 'addto', id: asked, project, text: more, ...(refineNow ? { refine: true } : {}) });
+      // The daemon says so when no round started, as while questions are open.
+      const said = (reply as unknown as { said?: string | null } | undefined)?.said;
       toasts.add({
         level: 'done',
-        text: refineNow
+        text: said
+          ? said
+          : refineNow
           ? `Added to ${asked}, and a round has started on it. It usually takes a minute or two.`
           : `Added to ${asked}. No round was started; the next one reads it.`,
         cmd,

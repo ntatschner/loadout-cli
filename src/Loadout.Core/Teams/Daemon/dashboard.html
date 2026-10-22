@@ -12628,11 +12628,14 @@
       body: JSON.stringify(body)
     }).then(function (r) {
       return r.text().then(function (text) {
-        var said = null;
+        var read = null;
 
-        try { said = JSON.parse(text).error; } catch (e) { said = null; }
+        try { read = JSON.parse(text); } catch (e) { read = null; }
 
-        if (!r.ok) { throw new Error(said || ("HTTP " + r.status)); }
+        if (!r.ok) { throw new Error((read && read.error) || ("HTTP " + r.status)); }
+
+        // Words the server has for the page, such as why no round started.
+        return read && read.said ? read.said : null;
       });
     });
   }
@@ -12641,9 +12644,9 @@
   // page may be showing something that has since changed, which is often why
   // it was refused.
   function ideaDo(body, done) {
-    return ideate(body).then(function () {
-      say(done);
-      announce(done);
+    return ideate(body).then(function (said) {
+      say(said || done);
+      announce(said || done);
     }, function (failed) {
       say(failed.message);
       announce(failed.message);

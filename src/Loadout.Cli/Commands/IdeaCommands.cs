@@ -324,6 +324,29 @@ public sealed class IdeaAddCommand : AsyncCommand<IdeaAddCommand.Settings>
             return CommandOutput.Success();
         }
 
+        // Asked for, but a round on an idea with open questions is refused
+        // until they are answered. The note is in, which is what was asked
+        // for first, so this is not a failure: the round waits, and says so.
+        if (IdeaWork.UnansweredReminder(record) is { } waiting)
+        {
+            var answer = $"loadout idea answer {place.Id} <question> --answer=<text>";
+
+            if (output.IsJson)
+            {
+                output.WriteJson(AddedJson(
+                    place, record, note, new { requested = true, waiting = "questions", next = answer }, waiting));
+
+                return CommandOutput.Success();
+            }
+
+            output.WriteLine(
+                $"[yellow]![/] {Markup.Escape(waiting)}, so no round was started: it waits until they are answered.");
+            output.WriteLine($"[dim]  See them with: loadout idea show {id}[/]");
+            output.WriteLine($"[dim]  Answer each with: {Markup.Escape(answer)}[/]");
+
+            return CommandOutput.Success();
+        }
+
         output.Meanwhile(
             $"[dim]Asking an agent about {id}. A round usually takes a minute or two.[/]");
 

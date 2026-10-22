@@ -255,6 +255,20 @@ internal sealed class DashboardIdeas
         }
 
         var place = new IdeaPlace(asking.Project is { Length: > 0 } project ? project : null, asking.Id ?? string.Empty);
+
+        // With questions open the command saves the note and starts no round,
+        // so it is quick, and awaited like an add without one. The page is
+        // told why no round started rather than that one has.
+        if (await WaitingAsync(place, ct).ConfigureAwait(false) is { } waiting)
+        {
+            var code = await _commands.RunAsync(command, arguments, ct).ConfigureAwait(false);
+
+            return code == (int)ExitCode.Success
+                ? OperationResult<string>.Ok(
+                    $"Added to {place.Id}. {waiting}, so no round was started: it waits until they are answered.")
+                : Said(asking.Verb, command, code);
+        }
+
         var before = await NumberedAsync(place, ct).ConfigureAwait(false);
 
         if (!_busy.TryAdd(place.Id, true))
@@ -324,6 +338,14 @@ internal sealed class DashboardIdeas
 
             await Task.WhenAny(run, Task.Delay(AddPoll, _time, ct)).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>The reminder that questions are open on the idea, or null when none are or it cannot be read.</summary>
+    private async Task<string?> WaitingAsync(IdeaPlace place, CancellationToken ct)
+    {
+        var read = await _ideas.ReadAsync(place, ct).ConfigureAwait(false);
+
+        return read.Succeeded ? IdeaWork.UnansweredReminder(read.Value!) : null;
     }
 
     /// <summary>The highest note number the idea has given, or -1 when it cannot be read.</summary>

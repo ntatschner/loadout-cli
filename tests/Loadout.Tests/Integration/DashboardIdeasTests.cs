@@ -235,6 +235,48 @@ public sealed class DashboardIdeasTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task An_add_with_refine_on_an_idea_with_open_questions_is_a_success_that_says_why_no_round_started()
+    {
+        var captured = await _space.Ideas.CaptureAsync(null, "A status page", "me");
+        var place = new Loadout.Core.Ideas.IdeaPlace(null, captured.Value!.Id);
+        (await _space.Ideas.RecordReplyAsync(place, new Loadout.Core.Ideas.IdeaReply
+        {
+            Contract = Loadout.Models.Ideas.IdeaSchema.Version,
+            Questions = [new Loadout.Core.Ideas.IdeaReply.ReplyQuestion { Question = "Public?" }, new Loadout.Core.Ideas.IdeaReply.ReplyQuestion { Question = "Alerts?" }],
+        })).Succeeded.Should().BeTrue();
+
+        // The command as it now is with questions open: the note saved, no
+        // round, and success.
+        var commands = new Typed { Doing = () => _space.Ideas.AddToAsync(place, "more", "me") };
+        var ideas = Ideas(commands);
+
+        var said = await ideas.DoAsync(
+            new IdeaAction("addto", Id: place.Id, Text: "more", Refine: true), CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(10));
+
+        said.Succeeded.Should().BeTrue(said.Error);
+        said.Should().BeOfType<OperationResult<string>>().Which.Value.Should()
+            .Contain($"Added to {place.Id}")
+            .And.Contain("2 questions still unanswered")
+            .And.Contain("no round was started");
+        Busy(await ideas.ReadAsync(CancellationToken.None)).Should().BeEmpty("no round is going");
+    }
+
+    [Fact]
+    public async Task Words_for_the_page_from_a_successful_step_reach_it_as_said()
+    {
+        _server.Ideate = (_, _) => Task.FromResult<OperationResult>(OperationResult<string>.Ok("2 questions still unanswered"));
+
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/ideas?token=" + _server.Token),
+            new StringContent("""{"verb":"addto","id":"x","text":"t","refine":true}""", System.Text.Encoding.UTF8, "application/json"));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.Accepted);
+        JsonDocument.Parse(await answer.Content.ReadAsStringAsync()).RootElement
+            .GetProperty("said").GetString().Should().Be("2 questions still unanswered");
+    }
+
+    [Fact]
     public async Task An_add_with_refine_that_saved_nothing_says_nothing_was_added()
     {
         var captured = await _space.Ideas.CaptureAsync(null, "A status page", "me");
