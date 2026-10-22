@@ -3660,7 +3660,9 @@ public sealed class DashboardServer : IDisposable
     /// <remarks>
     /// Awaited, and answered with what came back. A round with an agent is
     /// started and answered at once by whatever supplies <see cref="Ideate"/>;
-    /// everything else writes a small file and says whether it took.
+    /// everything else writes a small file and says whether it took. Where
+    /// what came back carries words for the page, they go as <c>said</c>, for
+    /// the page to show in place of its own.
     /// </remarks>
     private async Task IdeateAsync(HttpListenerContext context, CancellationToken ct)
     {
@@ -3706,8 +3708,8 @@ public sealed class DashboardServer : IDisposable
             "application/json; charset=utf-8",
             JsonSerializer.Serialize(
                 done.Succeeded
-                    ? new { done = true, error = (string?)null }
-                    : new { done = false, error = done.Error },
+                    ? new { done = true, error = (string?)null, said = (done as OperationResult<string>)?.Value }
+                    : new { done = false, error = done.Error, said = (string?)null },
                 Json)).ConfigureAwait(false);
     }
 

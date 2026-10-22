@@ -181,6 +181,51 @@ public sealed class IdeaAddToContractTests
     }
 
     [BuiltCliFact]
+    public async Task Refine_with_open_questions_saves_the_note_starts_no_round_and_succeeds()
+    {
+        using var loadout = new LoadoutProcess();
+        var project = await TaskTraceContractTests.Registered(loadout, "repository");
+        var record = await Write(loadout, project, "asking", """
+            id: asking
+            ask: A status page for the home lab.
+            rounds:
+            - revision: 1
+              questions:
+              - id: Q1
+                question: Which machines?
+              - id: Q2
+                question: How often?
+            """);
+
+        // An agent that does not exist, and none on the path, so a round asked
+        // for would fail and the exit code would say so.
+        loadout.Environment["PATH"] = GitDirectory();
+
+        var added = await loadout.RunAsync(
+            "idea", "add", "--to", "asking", "--text=more", "--project", project,
+            "--refine", "--non-interactive", "--agent", "no-such-agent");
+
+        added.ExitCode.Should().Be(0, added.StandardError);
+        string.Join(' ', added.StandardOutput.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+            .Should().Contain("Added N1 to asking.")
+            .And.Contain("2 questions still unanswered")
+            .And.Contain("waits until they are answered")
+            .And.Contain("loadout idea answer asking");
+        (await File.ReadAllTextAsync(record)).Should().Contain("more");
+
+        var json = await loadout.RunAsync(
+            "idea", "add", "--to", "asking", "--text=and more", "--project", project,
+            "--refine", "--non-interactive", "--agent", "no-such-agent", "--json");
+
+        json.ExitCode.Should().Be(0, json.StandardError);
+        var refine = json.Json().GetProperty("refine");
+        refine.GetProperty("requested").GetBoolean().Should().BeTrue();
+        refine.GetProperty("waiting").GetString().Should().Be("questions");
+        refine.TryGetProperty("error", out _).Should().BeFalse();
+        json.Json().GetProperty("added").GetString().Should().Be("N2");
+    }
+
+    [BuiltCliFact]
     public async Task Refine_on_an_accepted_idea_is_refused_as_an_add_and_no_round_is_asked_for()
     {
         using var loadout = new LoadoutProcess();
