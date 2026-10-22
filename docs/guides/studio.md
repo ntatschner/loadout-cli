@@ -427,6 +427,26 @@ box, taking the query `loadout team runs --filter` takes, such as
 filter you set last week. Then the teams you can run, and the runs on a
 schedule, with whether the daemon will fire them.
 
+Under those, **Queued for a team** shows each team's queue that has anything
+in it or a window, and **Start a queue for** opens one that hasn't. Each says
+first when the daemon works through it on its own, with **Give it a window**,
+**Change the window** or **No window**; without one, only **Run the next one**
+starts its runs. A queue lists what is
+waiting, in order, with **Up**, **Down** and **Take out**, and says beside an
+item why it would be refused if it reached the front now: most often a task
+with no done-when, since only a task that says when it's finished gets in.
+**Add a task** offers the open work on a project you choose, marking any with
+no done-when yet, and can make it wait for another. **Run the next one** starts it as `loadout team queue run-next`
+would, and the Jobs strip follows it from there. **What would run**
+shows the order the queue would take and what it would leave out.
+
+If a queue may push a branch and open a draft pull request when a run meets its
+done-when, that's said first, in bold, with **Stop that** beside it, because
+it's the one thing a queue does that leaves this machine. **Change its limits**
+sets what a window may spend, how many runs it may start, and how many may wait
+for an answer at once. Below all that is what the queue has run, with each run's
+state, the reason it ended as it did, what it cost and a link to it.
+
 **Start a run**, **Make a team** and **Run one on a schedule** open a sheet that
 writes its command under the form as you fill it in. Start a run asks once more,
 naming the team and the goal, because it spends money and edits a project. A
@@ -485,6 +505,13 @@ command shown under them, and a layer, an addition or the whole plan can be sent
 back with a sentence saying what should change. **Accept the plan** puts it onto
 a project, or makes a new one for it, and says if any layer still has no option
 chosen.
+
+Above the button is **Done when**: what the agent proposes must be true for the
+work to be finished, one condition a line. Accepting confirms whatever the box
+holds, and the task carries those conditions, so a team run for it is held to
+them. Edit them first if they're vague: "the tests pass" is true of any work and
+says nothing about this one. You can empty the box, and the idea is still
+accepted, but a team queue won't take the task until it has some.
 
 ![An idea's plan in Studio: each layer's options side by side with what is for and against them, the chosen one marked, and under each option and layer the command that Choose this, Keep it and Drop it run.](../images/studio-ideas-plan.png)
 

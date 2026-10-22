@@ -35,13 +35,17 @@ internal sealed class ProjectService : IProjectService
     /// </remarks>
     internal const string SetupTaskId = "setup-repository";
 
+    private readonly IProjectCheckouts? _checkouts;
+
     public ProjectService(
         IConfigurationService configuration,
         IWorkspaceManager workspace,
         IGitManager git,
         IPathSemantics paths,
-        Tasks.ITaskService? tasks = null)
+        Tasks.ITaskService? tasks = null,
+        IProjectCheckouts? checkouts = null)
     {
+        _checkouts = checkouts;
         _configuration = configuration;
         _workspace = workspace;
         _git = git;
@@ -920,6 +924,13 @@ internal sealed class ProjectService : IProjectService
         // rather than as a broken project, so spec section 28 can offer to
         // clone or relocate it.
         var path = Directory.Exists(local.Path) ? local.Path : null;
+
+        // A checkout this process was told to work in instead, such as a
+        // queued run's own worktree.
+        if (_checkouts?.For(entry.Slug) is { } elsewhere && Directory.Exists(elsewhere))
+        {
+            path = elsewhere;
+        }
 
         return new ProjectResolution(entry, path, local.LastLaunchedUtc, local.LaunchCount, local.Pinned);
     }

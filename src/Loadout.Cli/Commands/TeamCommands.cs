@@ -1420,6 +1420,8 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
 
     private readonly ReadingProfile _reading;
 
+    private readonly IProjectCheckouts? _checkouts;
+
     public TeamRunCommand(
         ITeamRunner runner,
         IPlatformPaths paths,
@@ -1432,8 +1434,10 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         IProjectService projects,
         IAnsiConsole console,
         ReadingProfile reading,
-        Loadout.Core.Tasks.ITaskService tasks)
+        Loadout.Core.Tasks.ITaskService tasks,
+        IProjectCheckouts? checkouts = null)
     {
+        _checkouts = checkouts;
         _runner = runner;
         _paths = paths;
         _processes = processes;
@@ -1564,6 +1568,20 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             "A task on the project's list that this run is for. The run moves it to doing, then done or blocked, "
             + "instead of adding a task of its own.")]
         public string? Task { get; init; }
+
+        /// <summary>
+        /// A worktree of the project's repository to work in instead of its checkout.
+        /// </summary>
+        /// <remarks>
+        /// What a team's queue gives each run, so an unattended run never
+        /// works in, merges into, or switches the branch of the tree the
+        /// person is using.
+        /// </remarks>
+        [CommandOption("--work-in <PATH>")]
+        [Description(
+            "A worktree of the project's repository for the run to work in, instead of the project's own checkout. "
+            + "Its nodes branch from it and its merges land in it.")]
+        public string? WorkIn { get; init; }
     }
 
     /// <summary>
@@ -1594,7 +1612,8 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         string autonomy,
         TeamCeiling.Decision ceiling,
         Loadout.Models.Configuration.MachineConfig? machine,
-        Loadout.Models.Projects.ProjectTeams? projectTeams)
+        Loadout.Models.Projects.ProjectTeams? projectTeams,
+        IReadOnlyList<string>? taskDoneWhen = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(ceiling);
@@ -1627,9 +1646,15 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             // Blank ones dropped rather than passed through: an empty criterion
             // is one the lead can never report a verdict on, so it would refuse
             // every done for ever.
+            //
+            // The task's own come after the run's, so a run for a task is held
+            // to the finish line somebody wrote on it without having to type
+            // it again; one given both ways is held to once.
             Criteria: [.. settings.DoneWhen
+                .Concat(taskDoneWhen ?? [])
                 .Select(one => one.Trim())
-                .Where(one => one.Length > 0)],
+                .Where(one => one.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)],
 
             // The run's own, then the team's. Neither means a person answers,
             // and so does "never" given for the run, whatever the team says.
@@ -1654,6 +1679,56 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
 
             // The run's own, then the team's; the runner's default where neither says.
             OnTimeout: TeamTimeout.Parse(settings.OnTimeout) ?? TeamTimeout.Parse(team.Rules.OnTimeout));
+    }
+
+    /// <summary>Why a path is not in a worktree of the project's repository, or null when it is.</summary>
+    /// <remarks>
+    /// Checked against the repository's own list of worktrees rather than by
+    /// asking the directory, so a different repository - or a copy of this
+    /// one - can never stand in for the project.
+    /// </remarks>
+    internal static async Task<string?> WorktreeRejectionAsync(
+        Loadout.Core.Git.IGitManager git,
+        Loadout.Models.Projects.ProjectResolution project,
+        string path,
+        CancellationToken ct)
+    {
+        if (project.LocalPath is not { Length: > 0 } repository)
+        {
+            return $"{project.Entry.Slug} has no checkout on this machine, so it has no worktrees either.";
+        }
+
+        if (!Directory.Exists(path))
+        {
+            return $"There is no directory at {path}.";
+        }
+
+        var listed = await git.ListWorktreesAsync(repository, ct).ConfigureAwait(false);
+
+        if (listed.Failed)
+        {
+            return $"The worktrees of {repository} could not be listed: {listed.Error}";
+        }
+
+        // The top of the tree the path is in, as git names it. git lists
+        // worktrees with symbolic links resolved - on macOS /var is
+        // /private/var - so the path as given is compared in git's spelling,
+        // or a real worktree reached through a link is refused.
+        var root = await git.FindRepositoryRootAsync(path, ct).ConfigureAwait(false);
+
+        if (root.Failed)
+        {
+            return $"{path} is not a worktree of {project.Entry.Slug}'s repository.";
+        }
+
+        var wanted = Path.GetFullPath(root.Value!).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        return listed.Value!.Any(one => string.Equals(
+                Path.GetFullPath(one.Path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                wanted,
+                OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+            ? null
+            : $"{path} is not a worktree of {project.Entry.Slug}'s repository.";
     }
 
     /// <summary>
@@ -1774,6 +1849,23 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             return output.Fail(TeamCeiling.Explain(team.Name, ceiling), ExitCode.PolicyViolation);
         }
 
+        if (settings.WorkIn is { Length: > 0 } workIn)
+        {
+            if (await WorktreeRejectionAsync(_git, project, workIn, cancellationToken).ConfigureAwait(false) is { } wrong)
+            {
+                return output.Fail(wrong, ExitCode.RepositoryUnavailable);
+            }
+
+            // From here on everything this process resolves the project to -
+            // the run's own record, the merge gate, each node it launches - is
+            // the worktree, at its top, however the path was spelled.
+            var top = await _git.FindRepositoryRootAsync(workIn, cancellationToken).ConfigureAwait(false);
+            _checkouts?.Use(project.Entry.Slug, top.Value ?? workIn);
+            output.WriteLine(TeamStyle.Note($"Working in {workIn}, not the project's own checkout."));
+        }
+
+        IReadOnlyList<string>? taskDoneWhen = null;
+
         if (settings.Task is { Length: > 0 } forTask)
         {
             var listed = await _tasks.ListAsync(project.Entry.Slug, cancellationToken).ConfigureAwait(false);
@@ -1787,6 +1879,8 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             {
                 return output.Fail(rejected, ExitCode.InvalidArguments);
             }
+
+            taskDoneWhen = Loadout.Core.Tasks.TaskRuns.Find(forTask, listed.Value!)?.DoneWhen;
         }
 
         // The project's standing criteria. A manifest that cannot be read
@@ -1803,7 +1897,8 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         }
 
         var request = Requesting(
-            project.Entry.Slug, team, specialists, settings, autonomy, ceiling, machine.Value, manifest.Value?.Teams);
+            project.Entry.Slug, team, specialists, settings, autonomy, ceiling, machine.Value, manifest.Value?.Teams,
+            taskDoneWhen);
 
         if (request.Standing is { } standing && (standing.Applied.Count > 0 || standing.Dropped.Count > 0))
         {

@@ -27,7 +27,7 @@
   import { holdPlace } from '../lib/holdPlace';
   import { runJob } from '../lib/jobs';
   import { router } from '../lib/router.svelte';
-  import { acceptWords, arrivalIn, gaps, keepUnchanged, needsChoice, nextStop, sendAnswers, stateWord, stopTarget, stopWords, type Arrival, type DumpItem, type Question } from '../lib/ideas';
+  import { acceptWords, doneWhenLines, doneWhenWords, arrivalIn, gaps, keepUnchanged, needsChoice, nextStop, sendAnswers, stateWord, stopTarget, stopWords, type Arrival, type DumpItem, type Question } from '../lib/ideas';
   import { studio } from '../lib/state.svelte';
   import { ideaHref, listHref, movedSaid, whereSaid } from '../lib/tasks';
   import { toasts } from '../lib/toasts.svelte';
@@ -97,6 +97,7 @@
       layers: Layer[];
       additions: Addition[];
       placement: { slug: string; isNew: boolean; name: string; reason: string } | null;
+      doneWhen?: string[];
     } | null;
     accepted: { project: string; plan: string; by: string; when: string } | null;
   }
@@ -430,8 +431,30 @@
     });
   });
 
+  // Done when: what the plan proposed, to confirm or rewrite before accepting.
+  // Filled again only when a different idea or a new revision of its plan
+  // arrives, never on a poll that brings the same plan back, or what somebody
+  // is typing would be wiped under them.
+  let doneWhenText = $state('');
+  let doneWhenFor = '';
+
+  $effect(() => {
+    const key = idea?.plan ? `${idea.id}:${idea.plan.revision}` : '';
+    const proposed = idea?.plan?.doneWhen ?? [];
+
+    untrack(() => {
+      if (key !== doneWhenFor) {
+        doneWhenFor = key;
+        doneWhenText = proposed.join(String.fromCharCode(10));
+      }
+    });
+  });
+
+  const proposedDoneWhen = $derived(idea?.plan?.doneWhen ?? []);
+  const doneWhenCount = $derived(doneWhenLines(doneWhenText).length);
+
   const undecided = $derived(idea?.plan?.layers.filter(needsChoice).length ?? 0);
-  const acceptLine = $derived(idea ? acceptWords(idea.id, where, goes === 'project' ? { project: onto || '<slug>' } : { newProject: named.trim() || '<name>' }) : []);
+  const acceptLine = $derived(idea ? acceptWords(idea.id, where, goes === 'project' ? { project: onto || '<slug>' } : { newProject: named.trim() || '<name>' }, doneWhenWords(doneWhenText, proposedDoneWhen)) : []);
   const acceptReason = $derived(refused ?? (goes === 'project' ? (onto ? undefined : 'choose the project it goes on') : named.trim() ? undefined : 'name the new project'));
 
   // Next: the next thing on the open idea that needs you, then the button that saves what is typed.
@@ -652,6 +675,11 @@
               <input class="ls-text" name="accept-new-project" aria-label="The new project's name" placeholder="its name" bind:value={named} disabled={goes !== 'new'} />
             </label>
           </fieldset>
+          <label class="done-when">
+            <span>Done when <span class="hint">one condition a line: what must be true for it to be finished. Accepting confirms them, and a run for the task is held to them.</span></span>
+            <textarea class="ls-text" name="accept-done-when" rows="4" bind:value={doneWhenText} disabled={!!refused}></textarea>
+          </label>
+          {#if !doneWhenCount}<p><span class="ls-tag needs">no done-when</span> It can still be accepted, but a team queue will refuse the task until it has some.</p>{/if}
           {#if undecided}<p><span class="ls-tag needs">{undecided} layer{undecided === 1 ? ' has' : 's have'} no option chosen</span> It can still be accepted; the plan says so where it is written.</p>{/if}
           <div class="ls-answers flush">
             <HaloButton label="Accept the plan" next="accept" solid={!acceptReason} glyph="✓" size="small" cmd={lineFor('idea accept', acceptLine)} disabledReason={acceptReason} onpress={() => void act('idea accept', acceptLine)} />

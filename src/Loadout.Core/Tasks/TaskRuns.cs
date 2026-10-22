@@ -25,7 +25,7 @@ public static class TaskRuns
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(tasks);
 
-        var found = tasks.FirstOrDefault(one => string.Equals(one.Id, id.Trim(), StringComparison.OrdinalIgnoreCase));
+        var found = Find(id, tasks);
 
         return found switch
         {
@@ -38,6 +38,15 @@ public static class TaskRuns
                 + $"loadout task declare {found.Id} open --project {project}",
             _ => null,
         };
+    }
+
+    /// <summary>The task by its id, or null when the list has none by that id.</summary>
+    public static TaskItem? Find(string id, IReadOnlyList<TaskItem> tasks)
+    {
+        ArgumentNullException.ThrowIfNull(id);
+        ArgumentNullException.ThrowIfNull(tasks);
+
+        return tasks.FirstOrDefault(one => string.Equals(one.Id, id.Trim(), StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>What the lead is told: the task's title, and its note beneath when it has one.</summary>

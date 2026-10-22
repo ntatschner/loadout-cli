@@ -165,6 +165,18 @@ public sealed class IdeaPlan
 
     /// <summary>Where the agent thinks this belongs.</summary>
     public IdeaPlacement Project { get; set; } = new();
+
+    /// <summary>
+    /// What must be true for the work to be finished, one condition each: what
+    /// the agent proposed, or, once the idea is accepted, what the person confirmed.
+    /// </summary>
+    /// <remarks>
+    /// Carried onto the task at acceptance, so the task arrives with its own
+    /// finish line. A team's queue takes only tasks that have one, and falling
+    /// back to the project's standing criteria instead would let a vague idea
+    /// through held to nothing more specific than "the suite passes".
+    /// </remarks>
+    public List<string> DoneWhen { get; set; } = [];
 }
 
 /// <summary>What the person has said about a piece of the plan.</summary>

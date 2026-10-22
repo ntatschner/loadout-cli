@@ -5,7 +5,7 @@ using Loadout.Models.Results;
 
 namespace Loadout.Core.Ideas;
 
-/// <summary>What an agent answered to one round, as <see cref="IdeaSchema.Version1"/> has it.</summary>
+/// <summary>What an agent answered to one round, as <see cref="IdeaSchema.Version2"/> has it.</summary>
 public sealed class IdeaReply
 {
     [JsonPropertyName("contract")]
@@ -48,6 +48,9 @@ public sealed class IdeaReply
 
         [JsonPropertyName("project")]
         public ReplyProject Project { get; set; } = new();
+
+        [JsonPropertyName("doneWhen")]
+        public List<string> DoneWhen { get; set; } = [];
     }
 
     public sealed class ReplyLayer
@@ -135,7 +138,10 @@ public sealed class IdeaReply
             return OperationResult<IdeaReply>.Fail("The agent's answer is empty.");
         }
 
-        if (!string.Equals(reply.Contract, IdeaSchema.Version, StringComparison.Ordinal))
+        // The one before is read too: a round already in flight when this
+        // build arrived answers in it, and its plan simply proposes no done-when.
+        if (!string.Equals(reply.Contract, IdeaSchema.Version, StringComparison.Ordinal)
+            && !string.Equals(reply.Contract, IdeaSchema.Previous, StringComparison.Ordinal))
         {
             return OperationResult<IdeaReply>.Fail(
                 $"The agent's answer names contract '{reply.Contract}', not {IdeaSchema.Version}, "

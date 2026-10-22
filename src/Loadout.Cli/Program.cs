@@ -338,6 +338,7 @@ public static class Program
         services.AddSingleton(AnsiConsole.Console);
         services.AddSingleton(new PassthroughArguments(passthrough));
         services.AddSingleton<IProjectOnboarding, ProjectOnboarding>();
+        services.AddSingleton<TeamQueueDriver>();
         // The screen-based launcher. The prompt-based one it replaced could
         // only ever show one thing at a time: choosing a project meant losing
         // the list, and reading what was wrong with a project meant losing the
@@ -853,6 +854,19 @@ public static class Program
                 schedule.AddCommand<TeamScheduleAddCommand>("add");
                 schedule.AddCommand<TeamScheduleListCommand>("list");
                 schedule.AddCommand<TeamScheduleRemoveCommand>("remove");
+            });
+
+            team.AddBranch("queue", queue =>
+            {
+                queue.SetDescription("A team's queue of fully specified tasks, worked through one run at a time.");
+                queue.AddCommand<TeamQueueAddCommand>("add");
+                queue.AddCommand<TeamQueueListCommand>("list");
+                queue.AddCommand<TeamQueueMoveCommand>("move");
+                queue.AddCommand<TeamQueueRemoveCommand>("remove");
+                queue.AddCommand<TeamQueuePlanCommand>("plan");
+                queue.AddCommand<TeamQueueSettingsCommand>("settings");
+                queue.AddCommand<TeamQueueRunNextCommand>("run-next");
+                queue.AddCommand<TeamQueueWindowCommand>("window");
             });
 
             team.AddCommand<TeamGateCommand>("gate");

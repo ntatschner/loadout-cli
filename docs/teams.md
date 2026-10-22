@@ -2219,6 +2219,109 @@ The price is that a commit somebody else makes *while* a run is going is taken
 as seen too, so one trigger covers work that arrived during it. That is the
 right way round — the alternative is a loop that cannot stop itself.
 
+## A queue of tasks
+
+A schedule asks a team for the same thing again and again. A queue asks it for
+a list of different things, one after another: the tasks you would like done
+overnight but don't want to sit and watch.
+
+```sh
+loadout task declare fix-login open --done-when "the login tests pass" --done-when "a wrong password says so" --project website
+loadout team queue add builders fix-login --project website
+loadout team queue add builders login-docs --after fix-login --project website
+loadout team queue plan builders
+loadout team queue window builders --at 22:00 --for 8h
+loadout daemon
+```
+
+**Only a task with a finish line gets in.** A task needs a title and at least
+one done-when before `team queue add` will take it, and it is told how to give
+it one when it has none. Nobody is there to judge an unattended run, so the
+task has to carry its own definition of finished. Those conditions live on the
+task, set with `task declare --done-when` (repeat it for each; together they
+replace what the task had, and `--no-done-when` clears them). An idea gets them
+when you accept it: its plan proposes some, and `idea accept` confirms them onto
+the task, or replaces them with the `--done-when` you give. Any team run for the
+task, queued or not, is then held to them, after any `--done-when` the run was
+given and beside the project's standing ones.
+
+**One queue per team, and each item names its project.** The team decides how
+a run behaves, so one queue can work through several projects' tasks. Items go
+first in, first out; `team queue move <team> <task> <position>` reorders them,
+and `--after <task>` makes one wait until another on the same project has met
+its done-when, so the pieces of a split plan run in order. A loop of afters, or
+an after naming a dropped task, is refused when it is added, because either
+would stall the queue without a word.
+
+**Everything is checked twice.** Once when it is added, and again just before
+it runs, because a task can be finished, dropped or stripped of its done-when
+in between. `team queue list` shows what would be refused now, and
+`team queue plan` shows what would run, in what order, and why anything would be
+left out, so you can fix the specs before bed. The plan assumes every run
+succeeds; a run that fails holds back whatever comes after it.
+
+### The window
+
+`team queue window <team> --at 22:00 --for 8h` gives a queue a daily window in
+which the daemon works through it on its own, one run at a time. It sits in the
+schedule list as a queue window, so `team schedule list` still answers "what
+starts runs for me" in one place, and `--off` takes it away. A window that
+crosses midnight is still open at three in the morning, and a machine woken
+halfway through joins it late rather than skipping the night: the caps, not the
+start time, are what limit it. Nothing happens unless the daemon is running, and
+`daemon pause` holds the queues as it holds the schedules.
+
+`team queue settings` sets what a window may spend (`--window-usd`), how many
+runs it may start (`--window-runs`), and how many runs may wait at a gate at
+once before the queue stops starting more (`--held-cap`, two unless set). A run
+that stops to ask something nobody is there to answer is **held**: it waits for
+you, on the dashboard as any run does, and the next item starts. When the
+window closes, what it did - each run's outcome, what is waiting for you, what
+was spent - goes into the daemon's log and to wherever notices go
+(`team notify set`).
+
+`team queue run-next <team>` starts the next item now, in your terminal, so its
+questions are asked there. It is not held to the window's caps, since you are
+there to see what it costs; one run at a time and the held cap still apply.
+
+### Where the work goes
+
+**Each queued run works in a worktree of its own**, on a branch named after the
+task, made from the repository's default branch. It never touches, merges into
+or switches the branch of the checkout you are using, and nothing you do there
+reaches it. That is `team run --work-in <worktree>`, which takes only a worktree
+of the project's own repository. The worktree is removed once the run has ended
+and its work is somewhere; the branch is always kept.
+
+**A run that meets its done-when** pushes its branch and opens a **draft** pull
+request, but only if you have said it may: `team queue settings --draft-prs on`.
+It is off until you turn it on, and Studio says so first whenever it is on. The
+pull request's description lists the done-when you confirmed and how the lead
+last read each one, so whoever reviews it in the morning judges it against what
+was agreed. Without the grant the branch stays on this machine. Either way the
+task is left **blocked**, with a line in its history saying where the work is:
+done is for when it is merged. When a draft the queue opened is merged, the
+daemon notices within a quarter of an hour and marks the task done. Merging, and
+every other outward action, is still yours.
+
+**A run that fails** - blocked, over budget, stopped, or whose process died -
+leaves the task blocked with the run and the reason in its history, and is not
+tried again: a spec that failed once usually needs a person to rewrite it.
+Whatever waits for it with `--after` waits, and says why.
+
+The queue lives on this machine, beside the schedules, for the same reason they
+do.
+
+Studio's Teams page has the same thing under **Queued for a team**: each
+queue with anything in it or a window, what waits and what would be refused,
+when it runs, what it has run, its limits, and the draft pull request setting
+said first when it is on, with **Stop that** beside it. Every button there runs
+the `team queue` command written under it.
+
+**Not tried end to end with real agents.** The pieces are covered by tests
+against real files and git, with the agents, gh and the processes stood in for;
+a real overnight window has not been run.
+
 ## Runs started from outside
 
 Off until you turn it on, and then off again for anything you have not named.

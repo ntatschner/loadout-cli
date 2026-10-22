@@ -89,6 +89,15 @@ public sealed class TaskItem
     /// </remarks>
     public string Detail { get; set; } = string.Empty;
 
+    /// <summary>What must be true for the work to count as finished, one condition each. Empty is normal.</summary>
+    /// <remarks>
+    /// On the task rather than on whatever runs it, so the finish line travels
+    /// with the work: a team run for the task is held to these, and a team's
+    /// queue refuses a task without any, because nobody is there to judge an
+    /// unattended run that has no stated finish line.
+    /// </remarks>
+    public List<string> DoneWhen { get; set; } = [];
+
     /// <summary>Every state declared for it, oldest first, added to and never rewritten.</summary>
     /// <remarks>
     /// <see cref="DeclaredBy"/> and <see cref="DeclaredUtc"/> stay as the latest
