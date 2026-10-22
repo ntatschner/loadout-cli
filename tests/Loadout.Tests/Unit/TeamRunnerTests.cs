@@ -2962,6 +2962,59 @@ public sealed partial class TeamRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task An_outward_action_the_run_carries_reaches_the_nodes_tools_and_nothing_wider()
+    {
+        // The brief told the node it may push its tags, and its tools said
+        // otherwise: the posture denies Bash(git push:*), the agent reads a
+        // deny before an allow, and the gate found nothing allowing it. So a
+        // tagger told it may run 'git push --tags' was refused at the one
+        // step it was started for.
+        var team = await IteratingProjectAsync();
+        team.Rules.Gates.OutwardAllowedWhenAutonomous = ["git push --tags"];
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.05m));
+
+        var outcome = (await new TeamRunner(_launcher, _paths, TimeProvider.System).RunAsync(
+            new TeamRunRequest(
+                "demo", team, await SpecialistsAsync(), "goal", "autonomous", Offline: true,
+                OutwardAllowed: ["git push --tags"]),
+            _console)).Value!;
+
+        var options = _launcher.Requests[0].Options;
+        options.AllowedTools.Should().Contain("Bash(git push --tags)");
+        options.DeniedTools.Should().NotContain("Bash(git push:*)", "the agent would read it first and refuse");
+        options.DeniedTools.Should().Contain("Bash(git push --force:*)", "a deny the action does not fall under stays");
+
+        var policy = NodePermissions.Read(Path.Combine(outcome.Directory!, NodePermissions.FileName("lead")));
+
+        bool Allowed(string command) =>
+            NodePermissions.Decide(policy, "Bash", System.Text.Json.JsonSerializer.Serialize(new { command })).Allowed;
+
+        Allowed("git push --tags").Should().BeTrue();
+        Allowed("git push origin main").Should().BeFalse("only the action named exactly was agreed");
+        Allowed("git push --tags --force").Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task An_outward_action_reaches_no_nodes_tools_outside_autonomous()
+    {
+        var team = await IteratingProjectAsync();
+        team.Rules.Gates.OutwardAllowedWhenAutonomous = ["git push --tags"];
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.05m));
+
+        await new TeamRunner(_launcher, _paths, TimeProvider.System).RunAsync(
+            new TeamRunRequest(
+                "demo", team, await SpecialistsAsync(), "goal", "supervised", Offline: true,
+                OutwardAllowed: ["git push --tags"]),
+            _console);
+
+        var options = _launcher.Requests[0].Options;
+        options.AllowedTools.Should().NotContain("Bash(git push --tags)");
+        options.DeniedTools.Should().Contain("Bash(git push:*)");
+    }
+
+    [Fact]
     public async Task An_outward_action_the_run_carries_still_means_nothing_outside_autonomous()
     {
         var team = await IteratingProjectAsync();
