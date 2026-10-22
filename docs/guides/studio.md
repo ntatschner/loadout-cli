@@ -436,7 +436,10 @@ waiting, in order, with **Up**, **Down** and **Take out**, and says beside an
 item why it would be refused if it reached the front now: most often a task
 with no done-when, since only a task that says when it's finished gets in.
 **Add a task** offers the open work on a project you choose, marking any with
-no done-when yet, and can make it wait for another. **Run the next one** starts it as `loadout team queue run-next`
+no done-when yet, and can make it wait for another. Choose one with none and the
+form asks for them, one a line: write them, or press **Propose them** to have an
+agent suggest some to edit, then **Save them**. Nothing is saved until you do.
+**Run the next one** starts it as `loadout team queue run-next`
 would, and the Jobs strip follows it from there. **What would run**
 shows the order the queue would take and what it would leave out.
 

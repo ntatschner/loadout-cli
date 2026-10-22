@@ -53,6 +53,17 @@
     stops: string;
   }
 
+  /** What 'task propose-done-when --json' says: an agent's proposal, recorded nowhere yet. */
+  export interface DoneWhenProposed {
+    task: string;
+    project: string | null;
+    proposed: string[];
+    why: string;
+    costUsd: number;
+    replaces: string[];
+    recorded: boolean;
+  }
+
   export interface QueueTask {
     id: string;
     title: string;
@@ -79,6 +90,8 @@
     projects: string[];
     /** The tasks on a project's list that could be queued. */
     tasksOf: (project: string) => Promise<QueueTask[]>;
+    /** Asks an agent for a task's done-when; records nothing. */
+    propose?: (project: string, task: string) => Promise<DoneWhenProposed>;
     /** Runs one queue command and says whether it was done. */
     act: (path: string, words: string[], done: string) => Promise<boolean | void> | boolean | void;
     /** Reads what the queue would run next. */
@@ -88,7 +101,7 @@
     now?: () => number;
   }
 
-  let { queue, projects, tasksOf, act, readPlan, disabledReason = undefined, now = () => Date.now() }: Props = $props();
+  let { queue, projects, tasksOf, propose = undefined, act, readPlan, disabledReason = undefined, now = () => Date.now() }: Props = $props();
 
   const uid = `ls-q-${Math.random().toString(36).slice(2, 7)}`;
   const team = $derived(queue.team);
@@ -167,6 +180,73 @@
   }
 
   const addWords = $derived([team, task, '--project', project, ...(after ? ['--after', after] : [])]);
+
+  /* ---------- a finish line for a task that has none ---------- */
+
+  // The queue refuses a task with no done-when, so the form offers to write
+  // them here, by hand or from an agent's proposal, rather than sending
+  // somebody to a terminal to find that out after pressing Add.
+  const chosen = $derived(offered.find((one) => one.id === task) ?? null);
+  const lacking = $derived(!!chosen && !!chosen.doneWhen && chosen.doneWhen.length === 0);
+
+  let conditions = $state('');
+  let proposing = $state(false);
+  let proposedWhy = $state<string | null>(null);
+  let proposeError = $state<string | null>(null);
+
+  // Cleared when a different task is chosen, so one task's conditions are
+  // never saved onto another.
+  let conditionsFor = $state('');
+  $effect(() => {
+    if (task !== conditionsFor) {
+      conditionsFor = task;
+      conditions = '';
+      proposedWhy = null;
+      proposeError = null;
+    }
+  });
+
+  const lines = $derived(conditions.split('\n').map((one) => one.trim()).filter((one) => one.length > 0));
+
+  // As option=value, because a condition can start with a dash, which the
+  // command line would read as an option of its own.
+  const declareWords = $derived([
+    task,
+    chosen?.state ?? 'open',
+    '--project',
+    project,
+    ...lines.map((one) => `--done-when=${one}`),
+  ]);
+
+  async function askForThem() {
+    if (!propose || !task) {
+      return;
+    }
+
+    proposing = true;
+    proposeError = null;
+
+    try {
+      const proposed = await propose(project, task);
+      conditions = proposed.proposed.join('\n');
+      proposedWhy = proposed.why
+        ? `${proposed.why}${proposed.costUsd > 0 ? ` (${money(proposed.costUsd)})` : ''}`
+        : null;
+    } catch (error) {
+      proposeError = (error as Error).message;
+    } finally {
+      proposing = false;
+    }
+  }
+
+  async function saveThem() {
+    if ((await act('task declare', declareWords, `${task} has its done-when`)) !== false) {
+      const kept = lines;
+      tasks = (tasks ?? []).map((one) => (one.id === task ? { ...one, doneWhen: kept } : one));
+      conditions = '';
+      proposedWhy = null;
+    }
+  }
 
   async function add() {
     if ((await act('team queue add', addWords, `${task} is in ${whose(team)} queue`)) !== false) {
@@ -364,6 +444,24 @@
           {/each}
         </select>
       </div>
+      {#if lacking}
+        <div class="ls-field" role="group" aria-label={`Done-when for ${task}`}>
+          <label class="lab" for={`${uid}-done`}>{task} has no done-when yet, so the queue would refuse it. One condition a line:</label>
+          <textarea id={`${uid}-done`} class="ls-text" rows="4" bind:value={conditions} placeholder="What must be true for it to be finished"></textarea>
+          {#if proposedWhy}
+            <p class="calm small">{proposedWhy}</p>
+          {/if}
+          {#if proposeError}
+            <p class="ls-note needs">{proposeError}</p>
+          {/if}
+          <div class="row">
+            {#if propose}
+              <HaloButton label={proposing ? 'Asking an agent…' : 'Propose them'} cmd={`$ loadout task propose-done-when ${task} --project ${project}`} disabledReason={disabledReason ?? (proposing ? 'An agent is already working on it' : undefined)} onpress={() => void askForThem()} />
+            {/if}
+            <HaloButton label="Save them" cmd={`$ loadout task declare ${task} ${chosen?.state ?? 'open'} --project ${project} --done-when …`} disabledReason={disabledReason ?? (!lines.length ? 'Write or propose at least one' : undefined)} onpress={() => void saveThem()} />
+          </div>
+        </div>
+      {/if}
       <p class="calm small">Only a task with a title and a done-when gets in, and you are told why otherwise.</p>
       <HaloButton label="Add it" solid cmd={`$ loadout team queue add ${addWords.join(' ')}`} disabledReason={disabledReason ?? (!task ? 'Choose a task first' : undefined)} onpress={() => void add()} />
     </form>
