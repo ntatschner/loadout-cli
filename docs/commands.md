@@ -105,6 +105,7 @@
 | `loadout idea dismiss <id>` | Clear the "last round failed" marker on an idea you have stopped refining, without paying for another round. Answers and the plan stay |
 | `loadout idea answer\|choose\|keep\|drop\|improve` | Answer the agent's questions, pick an option for a layer, keep or drop a piece, or ask for one to be reworked. An answer or request that starts with a dash goes as `--answer=` or `--request=` |
 | `loadout idea accept <id>` | Write the plan out and turn the idea into a task on its project, or on a new one with `--new-project` |
+| `loadout idea accept <id> --done-when <condition>` | Accepting confirms the done-when the plan proposed, and the task carries them. Give `--done-when` (repeated) to replace them, or `--no-done-when` for none. A team queue takes only a task that has some |
 | `loadout idea dump add <file\|->` | Drop in notes kept elsewhere, from a file, standard input or `--text`, and have an agent split them into separate ideas and tasks, each carrying its own words from the notes |
 | `loadout idea dump list\|show\|split\|apply` | See the notes dropped in, split one again, and record the pieces you want, all or `--only 1,3` |
 | `loadout tools search\|show\|submit\|used` | The tools this machine shares between every team: find one before building it, send in a candidate, idea, bug or lesson, and say how a use went |

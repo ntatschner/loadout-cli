@@ -19,17 +19,27 @@ namespace Loadout.Models.Ideas;
 public static class IdeaSchema
 {
     /// <summary>The contract every answer names, so a stale one is refused rather than misread.</summary>
-    public const string Version = "idea/1";
+    public const string Version = "idea/2";
+
+    /// <summary>
+    /// The contract before a plan could propose done-when. An answer naming it
+    /// is still read, as a plan with none: it is the same shape, less one field.
+    /// </summary>
+    public const string Previous = "idea/1";
 
     /// <summary>The schema for <see cref="Version"/>.</summary>
-    public const string Version1 = """
+    /// <remarks>
+    /// idea/1 with an optional <c>doneWhen</c> on the plan. Optional, so a plan
+    /// without one is still a plan; the person adds conditions at acceptance.
+    /// </remarks>
+    public const string Version2 = """
         {
-          "title": "idea/1",
+          "title": "idea/2",
           "type": "object",
           "additionalProperties": false,
           "required": ["contract", "understanding", "questions"],
           "properties": {
-            "contract": { "const": "idea/1" },
+            "contract": { "const": "idea/2" },
             "understanding": { "type": "string" },
             "questions": { "type": "array", "items": {
               "type": "object", "additionalProperties": false, "required": ["question", "why", "options", "recommendation"],
@@ -66,7 +76,8 @@ public static class IdeaSchema
                     "slug": { "type": "string" },
                     "is_new": { "type": "boolean" },
                     "name": { "type": "string" },
-                    "reason": { "type": "string" } } } } }
+                    "reason": { "type": "string" } } },
+                "doneWhen": { "type": "array", "items": { "type": "string" } } } }
           }
         }
         """;

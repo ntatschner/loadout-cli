@@ -207,6 +207,80 @@ public sealed class IdeaServiceTests : IDisposable
         (await _ideas.ListAsync()).Value!.Should().BeEmpty("an accepted idea is work now, not an idea");
     }
 
+    private static IdeaReply PlanWithDoneWhen(string slug = "")
+    {
+        var reply = Plan(slug);
+        reply.Plan!.DoneWhen = [" every host is listed ", "", "a host that is down shows red"];
+
+        return reply;
+    }
+
+    [Fact]
+    public async Task A_round_keeps_the_done_when_its_plan_proposed_and_shows_it_in_the_json()
+    {
+        var idea = (await _ideas.CaptureAsync(null, "Status page", "me")).Value!;
+        var place = new IdeaPlace(null, idea.Id);
+
+        (await _ideas.RecordReplyAsync(place, PlanWithDoneWhen())).Succeeded.Should().BeTrue();
+
+        var record = (await _ideas.ReadAsync(place)).Value!;
+        record.Plan!.DoneWhen.Should().Equal("every host is listed", "a host that is down shows red");
+        System.Text.Json.JsonSerializer.Serialize(IdeaJson.Of(place, record))
+            .Should().Contain("\"doneWhen\":[\"every host is listed\",\"a host that is down shows red\"]");
+    }
+
+    [Fact]
+    public async Task Accepting_confirms_the_plans_done_when_onto_the_task_and_into_the_document()
+    {
+        await ProjectAsync("homelab");
+        var idea = (await _ideas.CaptureAsync(null, "Status page", "me")).Value!;
+        var place = new IdeaPlace(null, idea.Id);
+        await _ideas.RecordReplyAsync(place, PlanWithDoneWhen());
+        await _ideas.JudgeAsync(place, "A1", IdeaVerdict.Keep);
+
+        var accepted = await _ideas.AcceptAsync(place, "homelab", "nigel");
+
+        accepted.Succeeded.Should().BeTrue(accepted.Error);
+        (await _tasks.ListAsync("homelab")).Value!.Single().DoneWhen
+            .Should().Equal("every host is listed", "a host that is down shows red");
+
+        var document = await File.ReadAllTextAsync(Path.Combine(_workspace.LocalPath, "projects", "homelab", "ideas", $"{idea.Id}.md"));
+        document.Should().Contain("## Done when").And.Contain("- every host is listed");
+    }
+
+    [Fact]
+    public async Task Done_when_given_at_acceptance_replace_what_the_plan_proposed_everywhere()
+    {
+        await ProjectAsync("homelab");
+        var idea = (await _ideas.CaptureAsync(null, "Status page", "me")).Value!;
+        var place = new IdeaPlace(null, idea.Id);
+        await _ideas.RecordReplyAsync(place, PlanWithDoneWhen());
+        await _ideas.JudgeAsync(place, "A1", IdeaVerdict.Keep);
+
+        var accepted = await _ideas.AcceptAsync(place, "homelab", "nigel", doneWhen: ["the page loads in under a second", " "]);
+
+        accepted.Succeeded.Should().BeTrue(accepted.Error);
+        (await _tasks.ListAsync("homelab")).Value!.Single().DoneWhen.Should().Equal("the page loads in under a second");
+        (await _ideas.ReadAsync(new IdeaPlace("homelab", idea.Id))).Value!.Plan!.DoneWhen
+            .Should().Equal("the page loads in under a second");
+
+        var document = await File.ReadAllTextAsync(Path.Combine(_workspace.LocalPath, "projects", "homelab", "ideas", $"{idea.Id}.md"));
+        document.Should().Contain("- the page loads in under a second").And.NotContain("every host is listed");
+    }
+
+    [Fact]
+    public async Task An_idea_with_no_done_when_can_still_be_accepted_and_its_task_has_none()
+    {
+        await ProjectAsync("homelab");
+        var idea = (await _ideas.CaptureAsync(null, "Status page", "me")).Value!;
+        var place = new IdeaPlace(null, idea.Id);
+        await _ideas.RecordReplyAsync(place, Plan());
+        await _ideas.JudgeAsync(place, "A1", IdeaVerdict.Keep);
+
+        (await _ideas.AcceptAsync(place, "homelab", "nigel")).Succeeded.Should().BeTrue();
+        (await _tasks.ListAsync("homelab")).Value!.Single().DoneWhen.Should().BeEmpty();
+    }
+
     [Fact]
     public async Task An_idea_with_something_the_plan_has_not_taken_in_is_not_accepted()
     {

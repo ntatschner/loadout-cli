@@ -362,6 +362,10 @@ public static class IdeaWork
                     Name = proposed.Project.Name.Trim(),
                     Reason = proposed.Project.Reason.Trim(),
                 },
+
+                // Proposed fresh each round, like the rest of the plan: the
+                // person confirms or rewrites them when they accept it.
+                DoneWhen = [.. proposed.DoneWhen.Select(one => one.Trim()).Where(one => one.Length > 0)],
             };
 
             foreach (var (layer, index) in proposed.Layers.Select((l, i) => (l, i)))
@@ -521,6 +525,10 @@ public static class IdeaWork
             + "deployment, security, testing and observability. Name only those that apply, give each "
             + "two or three real options with their pros and cons, and mark the one you recommend. "
             + "Additions are things worth including that were not asked for, each with why. "
+            + "doneWhen is what must be true for the work to be finished: two to five conditions "
+            + "somebody could check without asking you, each one sentence, specific to this idea "
+            + "rather than true of any work (not just 'the tests pass'). The person confirms or "
+            + "rewrites them when they accept the plan, and an unattended run is held to them. "
             + "understanding is what you now take the idea to be, in a few plain sentences.");
 
         return text.ToString();
@@ -741,6 +749,19 @@ public static class IdeaWork
         text.AppendLine();
         text.AppendLine(plan.Understanding);
         text.AppendLine();
+
+        if (plan.DoneWhen.Count > 0)
+        {
+            text.AppendLine("## Done when");
+            text.AppendLine();
+
+            foreach (var condition in plan.DoneWhen)
+            {
+                text.AppendLine(CultureInfo.InvariantCulture, $"- {condition}");
+            }
+
+            text.AppendLine();
+        }
 
         var answered = record.Rounds.SelectMany(r => r.Questions).Where(q => q.Answer.Length > 0).ToList();
 

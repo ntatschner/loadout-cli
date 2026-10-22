@@ -98,6 +98,7 @@ public static class IdeaJson
                     verdict = addition.Verdict.ToString().ToLowerInvariant(),
                     request = addition.Request.Length > 0 ? addition.Request : null,
                 }),
+                doneWhen = plan.DoneWhen,
                 placement = new
                 {
                     slug = plan.Project.Slug.Length > 0 ? plan.Project.Slug : null,

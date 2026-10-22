@@ -921,6 +921,25 @@ public sealed class IdeaAcceptCommand : AsyncCommand<IdeaAcceptCommand.Settings>
         [CommandOption("--by <WHO>")]
         [Description("Who is accepting it. Defaults to this machine's user.")]
         public string? By { get; init; }
+
+        /// <summary>The finish line the person confirms, replacing what the plan proposed.</summary>
+        /// <remarks>
+        /// Repeated rather than one comma-separated string, as on
+        /// <c>task declare</c>, because a condition is a sentence.
+        /// </remarks>
+        [CommandOption("--done-when <CONDITION>")]
+        [Description(
+            "Something that must be true for the work to be finished. Repeat it for each; together they replace "
+            + "what the plan proposed. Without it, accepting confirms the plan's own.")]
+        public string[] DoneWhen { get; init; } = [];
+
+        [CommandOption("--no-done-when")]
+        [Description("Accept it with no done-when, leaving out what the plan proposed. A team queue will refuse the task until it has some.")]
+        public bool NoDoneWhen { get; init; }
+
+        /// <summary>The done-when to confirm: null to take the plan's, empty for none.</summary>
+        internal IReadOnlyList<string>? DoneWhenGiven =>
+            NoDoneWhen ? [] : DoneWhen.Length > 0 ? DoneWhen : null;
     }
 
     /// <inheritdoc />
@@ -936,6 +955,11 @@ public sealed class IdeaAcceptCommand : AsyncCommand<IdeaAcceptCommand.Settings>
         if (settings.To is { Length: > 0 } && settings.NewProject is { Length: > 0 })
         {
             return output.Fail("--to and --new-project say different things. Give one.", ExitCode.InvalidArguments);
+        }
+
+        if (settings.NoDoneWhen && settings.DoneWhen.Length > 0)
+        {
+            return output.Fail("--done-when and --no-done-when say opposite things. Give one or the other.", ExitCode.InvalidArguments);
         }
 
         var place = await settings.PlaceAsync(_ideas, _projects, cancellationToken).ConfigureAwait(false);
@@ -989,6 +1013,7 @@ public sealed class IdeaAcceptCommand : AsyncCommand<IdeaAcceptCommand.Settings>
             output.WriteLine(settings.NewProject is { Length: > 0 } made
                 ? $"Would make the project {Markup.Escape(made)} and put {Markup.Escape(place.Value!.Id)} on it as a task."
                 : $"Would put {Markup.Escape(place.Value!.Id)} on {Markup.Escape(destination!)} as a task. {Markup.Escape(reason)}");
+            output.WriteLine(Markup.Escape(Confirming(settings.DoneWhenGiven, plan.DoneWhen, would: true)));
             output.WriteLine("Nothing was changed.");
 
             return CommandOutput.Success();
@@ -1013,7 +1038,8 @@ public sealed class IdeaAcceptCommand : AsyncCommand<IdeaAcceptCommand.Settings>
             place.Value!,
             destination!,
             settings.By is { Length: > 0 } who ? who : Environment.UserName,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken,
+            settings.DoneWhenGiven).ConfigureAwait(false);
 
         if (accepted.Failed)
         {
@@ -1029,6 +1055,7 @@ public sealed class IdeaAcceptCommand : AsyncCommand<IdeaAcceptCommand.Settings>
                 plan = accepted.Value.PlanPath,
                 title = accepted.Value.Task.Title,
                 from = accepted.Value.From,
+                doneWhen = accepted.Value.Task.DoneWhen,
             });
 
             return CommandOutput.Success();
@@ -1048,8 +1075,41 @@ public sealed class IdeaAcceptCommand : AsyncCommand<IdeaAcceptCommand.Settings>
         }
 
         output.WriteLine($"[dim]  The plan is at {Markup.Escape(accepted.Value.PlanPath)} in the workspace.[/]");
+        output.WriteLine(Markup.Escape(Confirming(settings.DoneWhenGiven, accepted.Value.Task.DoneWhen, would: false)));
+
+        foreach (var condition in accepted.Value.Task.DoneWhen)
+        {
+            output.WriteLine($"  - {Markup.Escape(condition)}");
+        }
 
         return CommandOutput.Success();
+    }
+
+    /// <summary>What accepting does with the done-when, in a line.</summary>
+    /// <remarks>
+    /// Said every time, because accepting without --done-when is itself a
+    /// confirmation of the plan's conditions, and nobody should find that out
+    /// from a queue holding a run to them.
+    /// </remarks>
+    /// <param name="given">What the person gave: null to take the plan's, empty for none.</param>
+    /// <param name="proposed">The conditions the task ends up with, or would.</param>
+    /// <param name="would">Whether this is a dry run.</param>
+    internal static string Confirming(IReadOnlyList<string>? given, IReadOnlyList<string> proposed, bool would)
+    {
+        var count = given is null
+            ? proposed.Count
+            : given.Count(one => one.Trim().Length > 0);
+
+        if (count == 0)
+        {
+            return (would ? "It would have" : "It has")
+                + " no done-when, so a team queue will refuse it until it has some: "
+                + "loadout task declare <id> open --done-when \"...\"";
+        }
+
+        return given is not null
+            ? $"{(would ? "Would hold" : "Holds")} the task to the {count} done-when you gave, in place of the plan's."
+            : $"Accepting confirms the plan's {count} done-when, which the task {(would ? "would be" : "is now")} held to.";
     }
 }
 

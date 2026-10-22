@@ -228,6 +228,16 @@ internal static class IdeaView
             }
 
             output.WriteBlankLine();
+            output.WriteLine(plan.DoneWhen.Count > 0
+                ? "  [bold]Done when[/] [dim]confirmed when you accept it; change them with idea accept --done-when[/]"
+                : "  [bold]Done when[/] [dim]none proposed: give some with idea accept --done-when, or a team queue will refuse the task[/]");
+
+            foreach (var condition in plan.DoneWhen)
+            {
+                output.WriteLine($"  - {Markup.Escape(condition)}");
+            }
+
+            output.WriteBlankLine();
             output.WriteLine(Placement(plan.Project));
 
             if (record.Request.Length > 0)
