@@ -33,6 +33,9 @@ public sealed class IdeaStepContractTests
             IdeaSteps.Accept(global, new IdeaTarget("website", null)),
             IdeaSteps.Accept(project, new IdeaTarget(null, "Lab watch")),
             IdeaSteps.Remove(project),
+            IdeaSteps.AddTo(project, "- and a status badge", refine: true),
+            IdeaSteps.AddTo(global, "and a status badge", refine: false),
+            IdeaSteps.RemoveNote(project, "N2"),
         ];
 
         var data = new TheoryData<string, string[]>();

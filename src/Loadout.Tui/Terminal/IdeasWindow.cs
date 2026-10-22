@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using Loadout.Core.Ideas;
 using Loadout.Models.Ideas;
 using Terminal.Gui.App;
@@ -112,6 +113,8 @@ internal sealed class IdeasWindow : Window
         var footer = new KeyLine(
         [
             ("n", "new"),
+            ("e", "add to"),
+            ("t", "take back note"),
             ("r", "refine"),
             ("a", "answer"),
             ("c", "choose"),
@@ -140,6 +143,8 @@ internal sealed class IdeasWindow : Window
         foreach (var list in (KeyedListView[])[_rows, _detail])
         {
             list.OnKey(Key.N, Command.New, () => Take(New()));
+            list.OnKey(Key.E, Command.Insert, () => Take(AddTo()));
+            list.OnKey(Key.T, Command.Replace, () => Take(TakeBack()));
             list.OnKey(Key.R, Command.Open, () => Take(Refine()));
             list.OnKey(Key.A, Command.Edit, () => Take(Answer()));
             list.OnKey(Key.C, Command.Save, () => Take(Choose()));
@@ -184,6 +189,25 @@ internal sealed class IdeasWindow : Window
 
     private IdeaStep? New() =>
         _prompts.NewIdea() is { Length: > 0 } text ? IdeaSteps.Add(text, _here) : null;
+
+    /// <remarks>Not for an accepted idea: the command would refuse it.</remarks>
+    private IdeaStep? AddTo() =>
+        Selected is { Record: { Accepted: null } record } idea
+            && _prompts.AddTo(idea.Summary.Place, record) is { } added
+            ? IdeaSteps.AddTo(idea.Summary.Place, added.Text, added.Refine)
+            : null;
+
+    /// <remarks>
+    /// Only the notes no round has read, and not while a round is running or
+    /// once the idea is accepted: the command refuses each of those, and a
+    /// read note is in the plan already.
+    /// </remarks>
+    private IdeaStep? TakeBack() =>
+        Selected is { Summary.Running: false, Record: { Accepted: null } record } idea
+            && IdeaWork.Unread(record) is { Count: > 0 } unread
+            && _prompts.TakeBack(idea.Summary.Place, unread) is { Length: > 0 } note
+            ? IdeaSteps.RemoveNote(idea.Summary.Place, note)
+            : null;
 
     private IdeaStep? Refine() =>
         Selected is { Record: { } record } idea && IdeaWork.StageOf(record) is IdeaStage.Captured or IdeaStage.Ready
@@ -272,10 +296,21 @@ internal sealed class IdeasWindow : Window
             ? ["Nothing here yet. Press n to drop an idea in."]
             : ideas.Select(idea =>
                 $"{Shorten(idea.Summary.Place.Id, 28),-28} {Shorten(IdeaSteps.Stage(idea.Summary), 17),-17} "
-                + $"{Shorten(idea.Summary.Place.Project ?? "workspace-wide", 16),-16} {idea.Summary.Title}")
+                + $"{Shorten(idea.Summary.Place.Project ?? "workspace-wide", 16),-16} {idea.Summary.Title}"
+                + Unread(idea.Record))
             .Concat(movedOn.Select(gone =>
                 $"{Shorten(gone.Id, 28),-28} {"now a task",-17} "
                 + $"{Shorten(gone.Where ?? "workspace-wide", 16),-16} {gone.Title}"));
+
+    /// <summary>Notes added that no round has read, said after the title, or nothing.</summary>
+    private static string Unread(IdeaRecord? record) =>
+        record is null ? string.Empty
+        : IdeaWork.Unread(record).Count switch
+        {
+            0 => string.Empty,
+            1 => "  (1 note not read yet)",
+            var count => string.Create(CultureInfo.InvariantCulture, $"  ({count} notes not read yet)"),
+        };
 
     /// <summary>Three dots rather than the one character, for profiles that ask for ASCII only.</summary>
     private static string Shorten(string text, int width) =>
