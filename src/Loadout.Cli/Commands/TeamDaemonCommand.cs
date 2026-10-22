@@ -1333,6 +1333,9 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             new DaemonTriggerActions(_commands, _journal, _teams, _library, _workspace),
             _time);
         var finished = new Loadout.Core.Triggers.RunFinishedSource(state, _journal);
+        var rules = new Loadout.Core.Triggers.TriggerRules(state, yaml);
+        var drift = new Loadout.Core.Triggers.DocsDriftSource(state, _projects, _git, DocsPolicyAsync);
+        var drifted = DateTimeOffset.MinValue;
 
         _spine = spine;
         output.WriteLine(
@@ -1362,6 +1365,29 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
                         + $"triggers: {Markup.Escape(ex.Message)}");
                 }
 
+                if (_time.GetUtcNow() - drifted >= DocsDriftEvery)
+                {
+                    drifted = _time.GetUtcNow();
+
+                    try
+                    {
+                        if (await DocsWatchedAsync(rules, ct).ConfigureAwait(false) is { } watched)
+                        {
+                            foreach (var one in await drift.LookAsync(watched, drifted, ct).ConfigureAwait(false))
+                            {
+                                await spine.PostAsync(one, ct).ConfigureAwait(false);
+                            }
+                        }
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+                        or System.Text.RegularExpressions.RegexMatchTimeoutException or System.Text.Json.JsonException)
+                    {
+                        output.WriteLine(
+                            $"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] documentation could not be audited for "
+                            + $"triggers: {Markup.Escape(ex.Message)}");
+                    }
+                }
+
                 await Task.Delay(TriggerEvery, _time, ct).ConfigureAwait(false);
             }
         }
@@ -1375,6 +1401,62 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             await running.ConfigureAwait(false);
             await answering.ConfigureAwait(false);
         }
+    }
+
+    /// <summary>How often documentation is audited for drift; a test shortens it.</summary>
+    /// <remarks>
+    /// Less often than finished runs are looked for, because each look asks
+    /// git where every watched checkout is, and documentation drifts over
+    /// commits, not minutes.
+    /// </remarks>
+    internal TimeSpan DocsDriftEvery { get; init; } = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// Which projects a docs-drift rule waits on, so nothing is audited that
+    /// no rule would act on.
+    /// </summary>
+    private static async Task<Func<string, bool>?> DocsWatchedAsync(
+        Loadout.Core.Triggers.TriggerRules rules,
+        CancellationToken ct)
+    {
+        var listed = await rules.ListAsync(ct).ConfigureAwait(false);
+
+        var waiting = listed.Succeeded
+            ? listed.Value!
+                .Where(one => one.Usable && one.Rule.Enabled
+                    && string.Equals(one.Rule.On, Loadout.Core.Triggers.TriggerEventKinds.DocsDrift, StringComparison.OrdinalIgnoreCase))
+                .Select(one => one.Rule)
+                .ToList()
+            : [];
+
+        // Null when no rule waits for drift at all, so nothing is listed or asked of git.
+        if (waiting.Count == 0)
+        {
+            return null;
+        }
+
+        return slug => waiting.Any(rule =>
+            rule.Projects.Count == 0 || rule.Projects.Contains(slug, StringComparer.OrdinalIgnoreCase));
+    }
+
+    /// <summary>A project's documentation policy, read where 'docs audit' reads it.</summary>
+    private async Task<Loadout.Models.Instructions.DocsPolicy?> DocsPolicyAsync(string slug, CancellationToken ct)
+    {
+        if (_yaml is null || !_workspace.IsAvailable())
+        {
+            return null;
+        }
+
+        var path = Path.Combine(_workspace.LocalPath, "projects", slug, "docs.yaml");
+
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        var loaded = await _yaml.LoadAsync(path, () => new Loadout.Models.Instructions.DocsPolicy(), ct).ConfigureAwait(false);
+
+        return loaded.Succeeded ? loaded.Value : null;
     }
 
     /// <summary>How often the trigger inbox is looked at; a person is waiting on each answer.</summary>

@@ -55,7 +55,7 @@ public static class TriggerEventKinds
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
         {
             [RunFinished] = ["team", "project", "outcome", "run"],
-            [DocsDrift] = ["project", "path"],
+            [DocsDrift] = ["project", "path", "count"],
             [Webhook] = ["team", "project", "goal"],
         };
 
