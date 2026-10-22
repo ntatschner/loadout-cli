@@ -369,6 +369,120 @@ public sealed class IdeaServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task An_unread_note_can_be_removed_by_its_number()
+    {
+        var place = await ProposedAsync("homelab");
+        (await _ideas.AddToAsync(place, "also on mobile", "nigel")).Succeeded.Should().BeTrue();
+        (await _ideas.AddToAsync(place, "and dark mode", "nigel")).Succeeded.Should().BeTrue();
+
+        var removed = await _ideas.RemoveNoteAsync(place, "1");
+
+        removed.Succeeded.Should().BeTrue(removed.Error);
+        removed.Value!.Id.Should().Be("N1");
+        (await _ideas.ReadAsync(place)).Value!.Notes.Select(n => n.Id).Should().Equal("N2");
+    }
+
+    [Fact]
+    public async Task A_note_a_round_has_read_is_not_removed()
+    {
+        var place = await ProposedAsync("homelab");
+        (await _ideas.AddToAsync(place, "also on mobile", "nigel")).Succeeded.Should().BeTrue();
+        (await _ideas.RecordReplyAsync(place, Plan(), seen: ["N1"])).Succeeded.Should().BeTrue();
+        var before = await File.ReadAllBytesAsync(RecordFile(place));
+
+        var removed = await _ideas.RemoveNoteAsync(place, "N1");
+
+        removed.ExitCode.Should().Be(ExitCode.InvalidArguments);
+        removed.Error.Should().Contain("read by a round").And.Contain("Nothing was removed");
+        (await File.ReadAllBytesAsync(RecordFile(place))).Should().Equal(before);
+        (await _ideas.PreviewRemoveNoteAsync(place, "N1")).Error.Should().Contain("read by a round");
+    }
+
+    [Fact]
+    public async Task A_note_on_an_accepted_idea_is_not_removed()
+    {
+        var place = await ProposedAsync("homelab");
+        (await _ideas.AddToAsync(place, "also on mobile", "nigel")).Succeeded.Should().BeTrue();
+        (await _ideas.RecordReplyAsync(place, Plan(), seen: ["N1"])).Succeeded.Should().BeTrue();
+        (await _ideas.AcceptAsync(place, "homelab", "me")).Succeeded.Should().BeTrue();
+
+        // Unread again by hand: acceptance has to refuse on its own, not only
+        // because the note was read.
+        var file = RecordFile(place);
+        var yaml = await File.ReadAllTextAsync(file);
+        await File.WriteAllTextAsync(file, System.Text.RegularExpressions.Regex.Replace(yaml, @"(?m)^\s*taken_utc:.*?
+", string.Empty));
+        (await _ideas.ReadAsync(place)).Value!.Notes.Single().TakenUtc.Should().BeNull("the test needs an unread note");
+        var before = await File.ReadAllBytesAsync(file);
+
+        var removed = await _ideas.RemoveNoteAsync(place, "N1");
+
+        removed.ExitCode.Should().Be(ExitCode.InvalidArguments);
+        removed.Error.Should().Contain("accepted, onto homelab").And.Contain("Nothing was removed");
+        (await File.ReadAllBytesAsync(file)).Should().Equal(before);
+    }
+
+    [Fact]
+    public async Task A_note_is_not_removed_while_a_round_on_the_idea_is_running()
+    {
+        var place = await ProposedAsync("homelab");
+        (await _ideas.AddToAsync(place, "also on mobile", "nigel")).Succeeded.Should().BeTrue();
+        var before = await File.ReadAllBytesAsync(RecordFile(place));
+
+        using (_space.Locks.Take(place).Value!)
+        {
+            var removed = await _ideas.RemoveNoteAsync(place, "N1");
+
+            removed.ExitCode.Should().Be(ExitCode.InvalidArguments);
+            removed.Error.Should().Contain("is running on this machine");
+            (await _ideas.PreviewRemoveNoteAsync(place, "N1")).Error.Should().Contain("is running on this machine");
+        }
+
+        (await File.ReadAllBytesAsync(RecordFile(place))).Should().Equal(before);
+        (await _ideas.RemoveNoteAsync(place, "N1")).Succeeded.Should().BeTrue("the round has finished");
+    }
+
+    [Fact]
+    public async Task A_removed_notes_number_is_never_given_again()
+    {
+        var place = await ProposedAsync("homelab");
+        (await _ideas.AddToAsync(place, "first", "nigel")).Succeeded.Should().BeTrue();
+        (await _ideas.AddToAsync(place, "second", "nigel")).Succeeded.Should().BeTrue();
+
+        (await _ideas.RemoveNoteAsync(place, "N2")).Succeeded.Should().BeTrue();
+        var added = await _ideas.AddToAsync(place, "third", "nigel");
+
+        added.Value!.Notes.Select(n => n.Id).Should().Equal("N1", "N3");
+
+        // A fresh service reads the count from the file, not from memory.
+        (await _ideas.RemoveNoteAsync(place, "N3")).Succeeded.Should().BeTrue();
+        (await _ideas.RemoveNoteAsync(place, "N1")).Succeeded.Should().BeTrue();
+        var fresh = new IdeaService(_workspace, _tasks, _space.Yaml, TimeProvider.System, _space.Locks);
+        (await fresh.AddToAsync(place, "fourth", "nigel")).Value!.Notes.Single().Id.Should().Be("N4");
+    }
+
+    [Fact]
+    public void The_reminder_counts_only_the_questions_still_open()
+    {
+        var record = new IdeaRecord
+        {
+            Rounds =
+            [
+                new IdeaRound { Questions = [new IdeaQuestion { Id = "Q1", Answer = "yes" }, new IdeaQuestion { Id = "Q2" }] },
+                new IdeaRound { Questions = [new IdeaQuestion { Id = "Q3" }] },
+            ],
+        };
+
+        IdeaWork.UnansweredReminder(record).Should().Be("2 questions still unanswered");
+
+        record.Rounds[1].Questions[0].Answer = "no";
+        IdeaWork.UnansweredReminder(record).Should().Be("1 question still unanswered");
+
+        record.Rounds[0].Questions[1].Answer = "no";
+        IdeaWork.UnansweredReminder(record).Should().BeNull();
+    }
+
+    [Fact]
     public async Task A_preview_of_a_note_says_what_it_would_be_and_writes_nothing()
     {
         var place = await ProposedAsync("homelab");

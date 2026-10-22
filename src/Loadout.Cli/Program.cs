@@ -757,6 +757,11 @@ public static class Program
             idea.AddCommand<IdeaMoveCommand>("move");
             idea.AddCommand<IdeaRemoveCommand>("remove");
             idea.AddCommand<IdeaApplyCommand>("apply");
+            idea.AddBranch("note", note =>
+            {
+                note.SetDescription("What you have added to an idea since dropping it in.");
+                note.AddCommand<IdeaNoteRemoveCommand>("remove");
+            });
             idea.AddBranch("dump", dump =>
             {
                 dump.SetDescription("Notes kept elsewhere, dropped in whole and split by an agent into ideas and tasks.");

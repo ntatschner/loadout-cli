@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Text;
+using Loadout.Models;
 using Loadout.Models.Ideas;
+using Loadout.Models.Results;
 
 namespace Loadout.Core.Ideas;
 
@@ -100,10 +102,13 @@ public static class IdeaWork
         ArgumentNullException.ThrowIfNull(record);
         ArgumentNullException.ThrowIfNull(text);
 
-        var last = record.Notes
-            .Select(note => note.Id.Length > 1 && int.TryParse(note.Id.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture, out var n) ? n : 0)
-            .DefaultIfEmpty(0)
-            .Max();
+        // The notes there now as well as the count kept, so a record written
+        // before the count was kept numbers on from what it has.
+        var last = Math.Max(
+            record.NotesNumbered,
+            record.Notes.Select(note => NoteNumber(note.Id) ?? 0).DefaultIfEmpty(0).Max());
+
+        record.NotesNumbered = last + 1;
 
         var note = new IdeaNote
         {
@@ -116,6 +121,82 @@ public static class IdeaWork
         record.Notes.Add(note);
 
         return note;
+    }
+
+    /// <summary>
+    /// The number in a note's id, given as <c>N2</c>, <c>n2</c> or <c>2</c>, or
+    /// null when it is not one.
+    /// </summary>
+    public static int? NoteNumber(string id)
+    {
+        ArgumentNullException.ThrowIfNull(id);
+
+        var trimmed = id.Trim();
+        var digits = trimmed.Length > 0 && (trimmed[0] == 'N' || trimmed[0] == 'n') ? trimmed.AsSpan(1) : trimmed.AsSpan();
+
+        return int.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out var n) && n > 0 ? n : null;
+    }
+
+    /// <summary>
+    /// Takes a note off the record and hands it back, or says why it cannot
+    /// be. One rule for the write and for a dry run.
+    /// </summary>
+    /// <remarks>
+    /// A note a round has read is part of what the plan was made from, so
+    /// removing it would leave the plan answering something nobody now says.
+    /// The count of numbers given is kept as it was, so the number is never
+    /// given to another note.
+    /// </remarks>
+    public static OperationResult<IdeaNote> RemoveNote(IdeaPlace place, IdeaRecord record, string which)
+    {
+        ArgumentNullException.ThrowIfNull(place);
+        ArgumentNullException.ThrowIfNull(record);
+        ArgumentNullException.ThrowIfNull(which);
+
+        if (record.Accepted is { } accepted)
+        {
+            return OperationResult<IdeaNote>.Fail(
+                $"That idea has been accepted, onto {accepted.Project}, so its plan is settled. Nothing was removed.",
+                ExitCode.InvalidArguments);
+        }
+
+        var number = NoteNumber(which);
+        var note = number is null ? null : record.Notes.FirstOrDefault(n => NoteNumber(n.Id) == number);
+
+        if (note is null)
+        {
+            return OperationResult<IdeaNote>.Fail(
+                $"{place.Id} has no note '{which.Trim()}'. 'loadout idea show {place.Id}' lists them.",
+                ExitCode.InvalidArguments);
+        }
+
+        if (note.TakenUtc is not null)
+        {
+            return OperationResult<IdeaNote>.Fail(
+                $"{note.Id} has been read by a round already, so the plan was made with it. Nothing was removed.",
+                ExitCode.InvalidArguments);
+        }
+
+        record.NotesNumbered = Math.Max(record.NotesNumbered, record.Notes.Max(n => NoteNumber(n.Id) ?? 0));
+        record.Notes.Remove(note);
+
+        return OperationResult<IdeaNote>.Ok(note);
+    }
+
+    /// <summary>
+    /// The reminder that questions are still open, such as
+    /// <c>2 questions still unanswered</c>, or null when none are.
+    /// </summary>
+    public static string? UnansweredReminder(IdeaRecord record)
+    {
+        var count = Unanswered(record).Count;
+
+        return count switch
+        {
+            0 => null,
+            1 => "1 question still unanswered",
+            _ => $"{count.ToString(CultureInfo.InvariantCulture)} questions still unanswered",
+        };
     }
 
     /// <summary>Notes no round has read yet.</summary>
