@@ -59,7 +59,8 @@ public interface ITaskService
         string? note = null,
         CancellationToken ct = default,
         TaskKind? kind = null,
-        string? detail = null);
+        string? detail = null,
+        IReadOnlyList<string>? doneWhen = null);
 
     /// <summary>
     /// Shortens every title on a list that is longer than
@@ -160,7 +161,7 @@ public interface ITaskService
                     ? await MoveAsync(operation.Project, operation.To, id, ct).ConfigureAwait(false)
                     : await DeclareAsync(
                         operation.Project, id, operation.State ?? TaskState.Open, operation.By,
-                        operation.Title, operation.Note, ct, operation.Kind, operation.Detail).ConfigureAwait(false);
+                        operation.Title, operation.Note, ct, operation.Kind, operation.Detail, operation.DoneWhen).ConfigureAwait(false);
             }
 
             outcomes.Add(new TaskOutcome(
@@ -277,9 +278,10 @@ internal sealed class TaskService : ITaskService
         string? note = null,
         CancellationToken ct = default,
         TaskKind? kind = null,
-        string? detail = null) =>
+        string? detail = null,
+        IReadOnlyList<string>? doneWhen = null) =>
         One(await ApplyCoreAsync(
-            [new TaskOperation(TaskOperation.Declare, projectSlug, id, state, title, note, kind, declaredBy, Detail: detail)],
+            [new TaskOperation(TaskOperation.Declare, projectSlug, id, state, title, note, kind, declaredBy, Detail: detail, DoneWhen: doneWhen)],
             false,
             ct).ConfigureAwait(false));
 
@@ -733,7 +735,14 @@ internal sealed class TaskService : ITaskService
         }
 
         var patterns = SecretScanner.Match(
-            string.Join(' ', operation.Title ?? string.Empty, operation.Note ?? string.Empty, operation.Detail ?? string.Empty));
+            string.Join(
+                ' ',
+                [
+                    operation.Title ?? string.Empty,
+                    operation.Note ?? string.Empty,
+                    operation.Detail ?? string.Empty,
+                    .. operation.DoneWhen ?? [],
+                ]));
 
         return patterns.Count > 0
             ? $"That looks like it contains a credential ({string.Join(", ", patterns)}), so "
@@ -887,6 +896,14 @@ internal sealed class TaskService : ITaskService
             existing.Note = note.Trim();
         }
 
+        // Replaced as a whole rather than added to: the list is what somebody
+        // confirmed, and a condition they took out must not linger. Blank ones
+        // are dropped, since a run can never report a verdict on them.
+        if (operation.DoneWhen is { } doneWhen)
+        {
+            existing.DoneWhen = [.. doneWhen.Select(one => one.Trim()).Where(one => one.Length > 0)];
+        }
+
         // A state said again is not a change, or a task a launcher marks as
         // doing on every launch would fill its history with the same line.
         // What did change is always recorded.
@@ -1004,6 +1021,7 @@ internal sealed class TaskService : ITaskService
         DeclaredUtc = item.DeclaredUtc,
         Note = item.Note,
         Detail = item.Detail,
+        DoneWhen = [.. item.DoneWhen],
         History = [.. item.History.Select(one => new TaskEvent { State = one.State, By = one.By, Utc = one.Utc, Reason = one.Reason })],
         Moved = item.Moved is { } moved ? new TaskMove { From = moved.From, Utc = moved.Utc } : null,
     };

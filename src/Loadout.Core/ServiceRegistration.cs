@@ -201,6 +201,7 @@ public static class ServiceRegistration
             provider.GetRequiredService<TimeProvider>()));
         services.AddSingleton<Tools.IToolNominationPass, Tools.ToolNominationPass>();
         services.AddSingleton<Teams.IScheduleService, Teams.ScheduleService>();
+        services.AddSingleton<Teams.IQueueService, Teams.QueueService>();
         services.AddSingleton<Diagnostics.IDiagnosticContributor, Teams.Daemon.DaemonDiagnosticContributor>();
 
         // The specialist layer: what an agent is told, and why. The library and

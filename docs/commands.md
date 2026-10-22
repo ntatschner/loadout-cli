@@ -88,6 +88,7 @@
 | `loadout find <query>` | Search tasks, ideas, sessions, team runs and projects at once, grouped, each with the command that shows it. Takes the [list query](#filtering-and-sorting-a-list): `kind:task state:open login` searches only open tasks. A query starting with a minus goes as `--query=` |
 | `loadout task list\|show\|declare\|remove` | Record what is being worked on, and check it against the repository. `--global` is the list for what belongs to no project yet |
 | `loadout task declare <id> <state> --title <line> --detail <text>` | A title is one line of 72 characters at most, so a list stays readable; the full description goes in `--detail`. A longer title is shortened at a word, the whole of it is kept at the start of the detail, and you're told so |
+| `loadout task declare <id> <state> --done-when <condition>` | What must be true for the task to be finished, repeated for each. Together they replace what it had, and `--no-done-when` clears them. A team run for the task is held to them |
 | `loadout task show <id>` | One task in full: its detail, note, and every change of state with who said so and when, and the idea it was accepted from, if it was, with the revision of its list. Lists leave the detail out |
 | `loadout task shorten` | Shorten titles written before the 72-character limit, keeping each one whole in its detail and noting it in the history. `--every-list` covers every project and the workspace-wide list; `--dry-run` names what it would change |
 | `loadout task list --filter <query> --sort <fields>` | Keep and order the list with the same query syntax Studio uses, described under [Filtering and sorting a list](#filtering-and-sorting-a-list) |
@@ -132,6 +133,7 @@
 | `loadout hook session-start --agent <agent>` | Not for typing: a Claude Code session Loadout launched runs it from its own hook as a conversation starts, so that resuming it later knows what it was launched for |
 | `loadout team office check <set>` | Whether an office set's kit (with its rules) or tile scene can be used, and each thing wrong with it by name. A kit may lack parts: it lists which, and those are drawn in the built-in kit's shapes meanwhile |
 | `loadout team schedule add\|list\|remove` | Runs that should happen again and again on this machine |
+| `loadout team queue add\|list\|move\|remove\|plan\|settings\|run-next` | A team's queue of fully specified tasks, worked through one run at a time. Only a task with a title and a done-when gets in |
 | `loadout daemon` | Stay running: fire the scheduled runs and serve the dashboard |
 | `loadout daemon stop\|restart\|pause\|resume\|continue` | Control the running daemon from any shell: stop or restart it once its runs finish (`--now` does not wait), or hold and release its schedules |
 | `loadout team webhook enable\|disable\|show` | Let something outside this machine start a run, or stop letting it |
@@ -271,7 +273,7 @@ JSON
 There are four ops. `add` names a new task from its title, `declare` says where
 one stands (and adds it if the id is new), `remove` forgets one and `move` sends
 one to another list. Each can also carry `title`, `note`, `detail`, `kind`,
-`project` and `by`, and a title over 72 characters is shortened as `task declare`
+`project`, `by` and `doneWhen` (a list of conditions), and a title over 72 characters is shortened as `task declare`
 shortens it. A change that names no project is made on the list the command names, the
 same as every other `task` command, and `"project": "-"` is the workspace-wide
 list.

@@ -578,9 +578,29 @@ public sealed class TaskDeclareCommand : AsyncCommand<TaskDeclareCommand.Setting
         [Description("The full description, which task show prints and lists leave out. Kept as it was when not given.")]
         public string? Detail { get; init; }
 
+        /// <summary>The task's finish line, replacing whatever it had.</summary>
+        /// <remarks>
+        /// Repeated rather than one comma-separated string, as on
+        /// <c>team run</c>, because a condition is a sentence and sentences
+        /// contain commas.
+        /// </remarks>
+        [CommandOption("--done-when <CONDITION>")]
+        [Description(
+            "Something that must be true for the task to be finished. Repeat it for each; together they replace "
+            + "what the task had. A team run for the task is held to them, and a team queue takes only tasks that have some.")]
+        public string[] DoneWhen { get; init; } = [];
+
+        [CommandOption("--no-done-when")]
+        [Description("Clear the task's done-when.")]
+        public bool NoDoneWhen { get; init; }
+
         [CommandOption("--by <WHO>")]
         [Description("Who is saying so. Defaults to this machine's user.")]
         public string? By { get; init; }
+
+        /// <summary>The done-when to record: null to leave it, empty to clear it.</summary>
+        internal IReadOnlyList<string>? DoneWhenGiven =>
+            NoDoneWhen ? [] : DoneWhen.Length > 0 ? DoneWhen : null;
     }
 
     /// <inheritdoc />
@@ -597,6 +617,13 @@ public sealed class TaskDeclareCommand : AsyncCommand<TaskDeclareCommand.Setting
         {
             return output.Fail(
                 $"'{settings.State}' is not a state. Use open, doing, done, blocked or dropped.",
+                ExitCode.InvalidArguments);
+        }
+
+        if (settings.NoDoneWhen && settings.DoneWhen.Length > 0)
+        {
+            return output.Fail(
+                "--done-when and --no-done-when say opposite things. Give one or the other.",
                 ExitCode.InvalidArguments);
         }
 
@@ -636,7 +663,8 @@ public sealed class TaskDeclareCommand : AsyncCommand<TaskDeclareCommand.Setting
             settings.Title,
             settings.Note,
             cancellationToken,
-            detail: settings.Detail).ConfigureAwait(false);
+            detail: settings.Detail,
+            doneWhen: settings.DoneWhenGiven).ConfigureAwait(false);
 
         if (declared.Failed)
         {
@@ -1073,6 +1101,7 @@ public sealed class TaskShowCommand : AsyncCommand<TaskShowCommand.Settings>
 
         Section(output, "Note", task.Note);
         Section(output, "Detail", task.Detail);
+        Section(output, "Done when", string.Join('\n', task.DoneWhen.Select(one => $"- {one}")));
 
         output.WriteBlankLine();
         output.WriteLine("[bold]History[/]");

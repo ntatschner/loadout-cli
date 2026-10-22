@@ -855,6 +855,18 @@ public static class Program
                 schedule.AddCommand<TeamScheduleRemoveCommand>("remove");
             });
 
+            team.AddBranch("queue", queue =>
+            {
+                queue.SetDescription("A team's queue of fully specified tasks, worked through one run at a time.");
+                queue.AddCommand<TeamQueueAddCommand>("add");
+                queue.AddCommand<TeamQueueListCommand>("list");
+                queue.AddCommand<TeamQueueMoveCommand>("move");
+                queue.AddCommand<TeamQueueRemoveCommand>("remove");
+                queue.AddCommand<TeamQueuePlanCommand>("plan");
+                queue.AddCommand<TeamQueueSettingsCommand>("settings");
+                queue.AddCommand<TeamQueueRunNextCommand>("run-next");
+            });
+
             team.AddCommand<TeamGateCommand>("gate");
             team.AddCommand<TeamMessageCommand>("message");
             team.AddCommand<TeamHaltCommand>("halt");

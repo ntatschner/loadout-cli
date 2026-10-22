@@ -29,6 +29,7 @@ namespace Loadout.Core.Tasks;
 /// <param name="To">For move, the project it goes to, or null for the workspace-wide list.</param>
 /// <param name="Revision">The revision of the list this was made from, or null to not check.</param>
 /// <param name="Detail">The full description. Left as it was when null; an empty one clears it.</param>
+/// <param name="DoneWhen">What must be true for it to be finished. Left as it was when null; an empty list clears it.</param>
 public sealed record TaskOperation(
     string Op,
     string? Project = null,
@@ -40,7 +41,8 @@ public sealed record TaskOperation(
     string By = "",
     string? To = null,
     string? Revision = null,
-    string? Detail = null)
+    string? Detail = null,
+    IReadOnlyList<string>? DoneWhen = null)
 {
     public const string Add = "add";
     public const string Declare = "declare";
@@ -222,6 +224,7 @@ public static class TaskOperations
             declared = task.DeclaredUtc,
             note = task.Note,
             detail = task.Detail,
+            doneWhen = task.DoneWhen,
             history = task.History.Select(one => new
             {
                 state = one.State.ToString().ToLowerInvariant(),
@@ -247,8 +250,25 @@ public static class TaskOperations
 
         bool Has(string name) => item.TryGetProperty(name, out var value) && value.ValueKind != JsonValueKind.Null;
 
+        IReadOnlyList<string>? doneWhen = null;
+
         foreach (var property in item.EnumerateObject())
         {
+            // The one field that is a list: each condition is a sentence, and
+            // sentences contain the commas a joined string would split on.
+            if (property.Name == "doneWhen" && property.Value.ValueKind == JsonValueKind.Array)
+            {
+                if (property.Value.EnumerateArray().Any(one => one.ValueKind != JsonValueKind.String))
+                {
+                    return OperationResult<TaskOperation>.Fail(
+                        $"Operation {index} has 'doneWhen' with something other than text in it.", ExitCode.InvalidArguments);
+                }
+
+                doneWhen = [.. property.Value.EnumerateArray().Select(one => one.GetString()!)];
+
+                continue;
+            }
+
             if (property.Value.ValueKind is not (JsonValueKind.String or JsonValueKind.Null))
             {
                 return OperationResult<TaskOperation>.Fail(
@@ -324,10 +344,11 @@ public static class TaskOperations
             Text("by") is { Length: > 0 } named ? named : by,
             List(Text("to")),
             Text("revision") is { Length: > 0 } revision ? revision : null,
-            Text("detail")));
+            Text("detail"),
+            doneWhen));
     }
 
-    private static readonly string[] Known = ["op", "project", "id", "state", "title", "note", "detail", "kind", "by", "to", "revision"];
+    private static readonly string[] Known = ["op", "project", "id", "state", "title", "note", "detail", "doneWhen", "kind", "by", "to", "revision"];
 
     private static OperationResult<IReadOnlyList<TaskOperation>> Refused(string why) =>
         OperationResult<IReadOnlyList<TaskOperation>>.Fail(why, ExitCode.InvalidArguments);

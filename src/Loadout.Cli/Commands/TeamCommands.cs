@@ -1594,7 +1594,8 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         string autonomy,
         TeamCeiling.Decision ceiling,
         Loadout.Models.Configuration.MachineConfig? machine,
-        Loadout.Models.Projects.ProjectTeams? projectTeams)
+        Loadout.Models.Projects.ProjectTeams? projectTeams,
+        IReadOnlyList<string>? taskDoneWhen = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(ceiling);
@@ -1627,9 +1628,15 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             // Blank ones dropped rather than passed through: an empty criterion
             // is one the lead can never report a verdict on, so it would refuse
             // every done for ever.
+            //
+            // The task's own come after the run's, so a run for a task is held
+            // to the finish line somebody wrote on it without having to type
+            // it again; one given both ways is held to once.
             Criteria: [.. settings.DoneWhen
+                .Concat(taskDoneWhen ?? [])
                 .Select(one => one.Trim())
-                .Where(one => one.Length > 0)],
+                .Where(one => one.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)],
 
             // The run's own, then the team's. Neither means a person answers,
             // and so does "never" given for the run, whatever the team says.
@@ -1774,6 +1781,8 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             return output.Fail(TeamCeiling.Explain(team.Name, ceiling), ExitCode.PolicyViolation);
         }
 
+        IReadOnlyList<string>? taskDoneWhen = null;
+
         if (settings.Task is { Length: > 0 } forTask)
         {
             var listed = await _tasks.ListAsync(project.Entry.Slug, cancellationToken).ConfigureAwait(false);
@@ -1787,6 +1796,8 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             {
                 return output.Fail(rejected, ExitCode.InvalidArguments);
             }
+
+            taskDoneWhen = Loadout.Core.Tasks.TaskRuns.Find(forTask, listed.Value!)?.DoneWhen;
         }
 
         // The project's standing criteria. A manifest that cannot be read
@@ -1803,7 +1814,8 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         }
 
         var request = Requesting(
-            project.Entry.Slug, team, specialists, settings, autonomy, ceiling, machine.Value, manifest.Value?.Teams);
+            project.Entry.Slug, team, specialists, settings, autonomy, ceiling, machine.Value, manifest.Value?.Teams,
+            taskDoneWhen);
 
         if (request.Standing is { } standing && (standing.Applied.Count > 0 || standing.Dropped.Count > 0))
         {
