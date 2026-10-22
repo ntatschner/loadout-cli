@@ -2,8 +2,8 @@ name: CI
 
 # Spec section 92: every release must be built and tested against all Tier-1
 # operating systems. The three test legs below are the minimum the spec names
-# (Windows, Ubuntu, macOS); the publish leg proves the remaining architectures
-# compile. A change to documentation alone is tested on one of them (see the
+# (Windows, Ubuntu, macOS); the publish leg builds every runtime as it ships,
+# and the artefact leg runs each of those on its own platform. A change to documentation alone is tested on one of them (see the
 # "changes" job), which cannot reach a release: every release commit changes
 # Directory.Build.props, so it always gets all of them.
 
@@ -232,7 +232,14 @@ jobs:
     name: Publish ${{ matrix.rid }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
-    needs: [changes, test]
+    # Not after the test legs, alongside them. Publishing needs nothing the
+    # tests produce, and waiting for the slowest leg (Windows, about sixteen
+    # minutes) put that whole wait in front of the publish and the artefact
+    # tests, making a run about thirty minutes where it can be about
+    # seventeen. Release waits for this run on every tag, so the difference
+    # is paid on every release. A failing test still fails the run, and a
+    # release refuses any run that did not succeed.
+    needs: changes
 
     # The last two for the provenance attestation, which is made only on main.
     permissions:
