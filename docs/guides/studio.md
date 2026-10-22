@@ -427,6 +427,23 @@ box, taking the query `loadout team runs --filter` takes, such as
 filter you set last week. Then the teams you can run, and the runs on a
 schedule, with whether the daemon will fire them.
 
+Under those, **Queued for a team** shows each team's queue that has anything
+in it, and **Start a queue for** opens one that hasn't. A queue lists what is
+waiting, in order, with **Up**, **Down** and **Take out**, and says beside an
+item why it would be refused if it reached the front now: most often a task
+with no done-when, since only a task that says when it's finished gets in.
+**Add a task** offers the open work on a project you choose, and can make it
+wait for another. **Run the next one** starts it as `loadout team queue run-next`
+would, and the Jobs strip follows it from there. **What would run**
+shows the order the queue would take and what it would leave out.
+
+If a queue may push a branch and open a draft pull request when a run meets its
+done-when, that's said first, in bold, with **Stop that** beside it, because
+it's the one thing a queue does that leaves this machine. **Change its limits**
+sets what a window may spend, how many runs it may start, and how many may wait
+for an answer at once. Below all that is what the queue has run, with each run's
+state, the reason it ended as it did, what it cost and a link to it.
+
 **Start a run**, **Make a team** and **Run one on a schedule** open a sheet that
 writes its command under the form as you fill it in. Start a run asks once more,
 naming the team and the goal, because it spends money and edits a project. A

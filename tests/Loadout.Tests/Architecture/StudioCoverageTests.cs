@@ -29,15 +29,6 @@ public sealed partial class StudioCoverageTests
     /// </summary>
     private static readonly string[] NotYetOnAPage =
     [
-        // New with team queues. The queue panel on the Teams page is a later
-        // part of that work.
-        "team queue add",
-        "team queue list",
-        "team queue move",
-        "team queue plan",
-        "team queue remove",
-        "team queue run-next",
-        "team queue settings",
     ];
 
     /// <summary>The pages a command can be placed on: Studio's router's, and the Commands page.</summary>
