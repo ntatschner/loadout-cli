@@ -197,6 +197,86 @@ public sealed partial class TriggerSpine
         return new TriggerAnswer(request, true, $"Applied by the daemon: '{pending.Id}' is rejected and will not start.");
     }
 
+    /// <summary>
+    /// Whether a triggered run may now spend <paramref name="usd"/> in all,
+    /// and the entry that sets the new figure aside when it may.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A run that spends its budget asks for more, the way an attended run
+    /// does. The answer can never take the rule past its spend cap: what the
+    /// run may have is what it already has set aside plus the rule's headroom,
+    /// which counts every other run in flight. The trigger cap is a ceiling,
+    /// not a starting figure for a conversation.
+    /// </para>
+    /// <para>
+    /// The new figure replaces the reservation, so the ledger holds it from
+    /// now and another start meets the cap as it really stands. Lowering is
+    /// always allowed, and gives the difference back.
+    /// </para>
+    /// </remarks>
+    public static (string? Problem, TriggerEntry? Entry) Raising(
+        SpendLedger ledger, TriggerRule rule, string reservation, decimal usd, DateTimeOffset now, string? request = null)
+    {
+        ArgumentNullException.ThrowIfNull(ledger);
+        ArgumentNullException.ThrowIfNull(rule);
+
+        if (ledger.SetAside(reservation) is not { } aside)
+        {
+            return ("the run's money is no longer set aside, so it has ended or was never started by a rule", null);
+        }
+
+        var standing = ledger.Standing(rule, now);
+
+        // No headroom figure means no cap to keep under; adding the reservation
+        // to an unbounded figure is not a number at all.
+        if (standing.Headroom is { } headroom && usd > aside.Usd + headroom)
+        {
+            var most = aside.Usd + headroom;
+
+            return (
+                $"{rule.Id} can let it have ${most:0.00} at most: its cap is ${rule.CapUsd:0.00}, with "
+                + $"${standing.Landed:0.00} spent and ${standing.Reserved:0.00} set aside in its window",
+                null);
+        }
+
+        return (null, new TriggerEntry(
+            now, TriggerEntryKinds.Reserved, Rule: rule.Id, Version: rule.Version, Usd: usd, Reservation: reservation,
+            Reason: $"a person changed what the run may spend from ${aside.Usd:0.00} to ${usd:0.00}", Request: request));
+    }
+
+    private async Task<TriggerAnswer> RaiseAsync(string request, string reservation, decimal usd, CancellationToken ct)
+    {
+        if (Ledger.SetAside(reservation) is not { } aside)
+        {
+            return new TriggerAnswer(request, false, "That run's money is no longer set aside, so there is nothing to change.");
+        }
+
+        var listed = await _rules.ListAsync(ct).ConfigureAwait(false);
+
+        if (listed.Failed)
+        {
+            return new TriggerAnswer(request, false, listed.Error!);
+        }
+
+        if (listed.Value!.FirstOrDefault(one => string.Equals(one.Rule.Id, aside.Rule, StringComparison.OrdinalIgnoreCase))
+            is not { } found)
+        {
+            return new TriggerAnswer(request, false, $"'{aside.Rule}', which started the run, is gone, so its cap cannot be checked.");
+        }
+
+        var (problem, entry) = Raising(Ledger, found.Rule, reservation, usd, _time.GetUtcNow(), request);
+
+        if (problem is not null)
+        {
+            return new TriggerAnswer(request, false, problem);
+        }
+
+        Write(entry!);
+
+        return new TriggerAnswer(request, true, $"Applied by the daemon: ${usd:0.00} is set aside for the run under '{aside.Rule}'.");
+    }
+
     /// <summary>The words for an approval that is withdrawn: its approver is told, because they expect it to run.</summary>
     private static string Withdrawing(PendingApproval one, string why) =>
         one.Approved ? $"{why}; it had been approved, so you are told" : why;

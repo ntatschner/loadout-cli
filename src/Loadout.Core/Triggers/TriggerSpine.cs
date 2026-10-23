@@ -454,6 +454,8 @@ public sealed partial class TriggerSpine
                 TriggerVerbs.Approve when asking.Approval is { Length: > 0 } approval
                     => await ApproveAsync(asking.Id, approval, ct).ConfigureAwait(false),
                 TriggerVerbs.Reject when asking.Approval is { Length: > 0 } approval => Reject(asking.Id, approval),
+                TriggerVerbs.Raise when asking is { Reservation: { Length: > 0 } reservation, Usd: { } usd }
+                    => await RaiseAsync(asking.Id, reservation, usd, ct).ConfigureAwait(false),
                 TriggerVerbs.Distrust when asking.Author is { } author
                     => Distrust(asking.Id, author, asking.Login ?? author.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                 _ => new TriggerAnswer(asking.Id, false, $"'{asking.Verb}' is not a change the daemon can make to the rules."),

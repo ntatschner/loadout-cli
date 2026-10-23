@@ -439,4 +439,58 @@ public sealed class TriggerContractTests
         unknown.ExitCode.Should().Be(2);
         unknown.StandardError.Should().Contain("Nothing is waiting");
     }
+
+    [BuiltCliFact]
+    public async Task A_triggered_run_cannot_be_given_more_than_its_rules_cap_or_no_cap_at_all()
+    {
+        using var loadout = new LoadoutProcess();
+        loadout.Environment["LOADOUT_TRIGGERS"] = "1";
+
+        var doctor = (await loadout.RunAsync("doctor", "--json")).Json();
+        var state = doctor.GetProperty("checks").EnumerateArray()
+            .First(check => check.GetProperty("name").GetString() == "State").GetProperty("detail").GetString()!;
+
+        // Written by hand: 'trigger add' refuses a team that is not there, and
+        // no team needs to be for the cap to be checked.
+        Directory.CreateDirectory(Path.Combine(state, "triggers"));
+        await File.WriteAllTextAsync(
+            Path.Combine(state, "triggers", "rules.yaml"),
+            "items:\n- id: fix-failures\n  on: run-finished\n  cap_usd: 10\n  budget_usd: 6\n  version: 1\n"
+            + "  action:\n    kind: team\n    name: fixer\n    goal: Fix it.\n");
+        var now = DateTimeOffset.UtcNow;
+        var day = now.UtcDateTime.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture) + ".jsonl";
+
+        // A run the rule started, still going, with $6 set aside for it.
+        const string run = "20261023-1200-abcd";
+        var runs = Path.Combine(state, "teams", "runs", run);
+        Directory.CreateDirectory(runs);
+        await File.WriteAllTextAsync(
+            Path.Combine(runs, "journal.jsonl"),
+            System.Text.Json.JsonSerializer.Serialize(new
+            {
+                at = now.AddMinutes(-5), run, node = (string?)null, kind = "run.started",
+                data = new { team = "fixer", goal = "Fix it.", autonomy = "autonomous", project = "app", origin = "trigger:fix-failures:1:res1:" },
+            }) + "\n");
+
+        Directory.CreateDirectory(Path.Combine(state, "triggers", "journal"));
+        await File.AppendAllTextAsync(
+            Path.Combine(state, "triggers", "journal", day),
+            System.Text.Json.JsonSerializer.Serialize(new { at = now.AddMinutes(-5), kind = "reserved", rule = "fix-failures", version = 1, usd = 6m, reservation = "res1" })
+            + "\n"
+            + System.Text.Json.JsonSerializer.Serialize(new { at = now.AddMinutes(-5), kind = "started", rule = "fix-failures", version = 1, reservation = "res1" })
+            + "\n");
+
+        var none = await loadout.RunAsync("team", "budget", run, "--usd", "none");
+        none.ExitCode.Should().Be(2, none.StandardOutput);
+        none.StandardError.Should().Contain("cannot run with no cap");
+
+        var greedy = await loadout.RunAsync("team", "budget", run, "--usd", "20");
+        greedy.ExitCode.Should().Be(2, greedy.StandardError + greedy.StandardOutput);
+        greedy.StandardError.Should().Contain("$10.00 at most");
+
+        var fair = await loadout.RunAsync("team", "budget", run, "--usd", "9");
+        fair.ExitCode.Should().Be(0, fair.StandardError);
+        (await loadout.RunAsync("trigger", "list", "--json")).Json().EnumerateArray().Single()
+            .GetProperty("reservedUsd").GetDecimal().Should().Be(9m);
+    }
 }

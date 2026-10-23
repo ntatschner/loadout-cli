@@ -262,6 +262,47 @@ public sealed class TriggerApprovalTests : IDisposable
         Pending().Should().ContainSingle().Which.Event.Id.Should().Be("e2");
     }
 
+    [Fact]
+    public async Task A_triggered_runs_budget_can_be_raised_only_within_the_rules_cap_and_the_new_figure_is_set_aside()
+    {
+        await SaveAsync(Rule());
+        var spine = Spine();
+
+        await spine.DispatchAsync(Pull("e1", "pr:acme/app#1"), CancellationToken.None);
+        var running = Taken(spine).Single();
+
+        var greedy = await spine.ApplyAsync(
+            new TriggerAsk("q1", TriggerVerbs.Raise, Reservation: running.Reservation, Usd: 11m), CancellationToken.None);
+        greedy.Applied.Should().BeFalse();
+        greedy.Message.Should().Contain("$10.00 at most");
+
+        var raised = await spine.ApplyAsync(
+            new TriggerAsk("q2", TriggerVerbs.Raise, Reservation: running.Reservation, Usd: 9m), CancellationToken.None);
+        raised.Applied.Should().BeTrue(raised.Message);
+        spine.Ledger.Standing(Rule(), Now).Reserved.Should().Be(9m);
+
+        // The next start meets the cap as it now stands.
+        await spine.DispatchAsync(Pull("e2", "pr:acme/app#2"), CancellationToken.None);
+        Taken(spine).Should().BeEmpty();
+
+        await spine.ApplyAsync(new TriggerAsk("q3", TriggerVerbs.Raise, Reservation: running.Reservation, Usd: 2m), CancellationToken.None);
+        await spine.ReleaseHeldAsync(Now, CancellationToken.None);
+
+        Taken(spine).Should().ContainSingle("lowering it gave the difference back").Which.Event.Id.Should().Be("e2");
+    }
+
+    [Fact]
+    public void A_rule_with_no_cap_to_keep_under_lets_a_raise_through_rather_than_overflowing()
+    {
+        var ledger = new SpendLedger();
+        ledger.Apply(new TriggerEntry(Now, TriggerEntryKinds.Reserved, Rule: "loose", Usd: 6m, Reservation: "r1"));
+
+        var (problem, entry) = TriggerSpine.Raising(ledger, new TriggerRule { Id = "loose" }, "r1", 20m, Now);
+
+        problem.Should().BeNull();
+        entry!.Usd.Should().Be(20m);
+    }
+
     private TriggerSpine Spine() => new(_rules, _journal, _actions, _clock);
 
     private async Task SaveAsync(TriggerRule rule) => (await _rules.SaveAsync(rule)).Succeeded.Should().BeTrue();

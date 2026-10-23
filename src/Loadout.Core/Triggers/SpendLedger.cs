@@ -174,6 +174,15 @@ public sealed class SpendLedger
                 + $"needs ${budget:0.00}");
     }
 
+    /// <summary>What one open reservation sets aside, and for which rule, or null when it is not open.</summary>
+    public (string Rule, decimal Usd)? SetAside(string reservation)
+    {
+        lock (_gate)
+        {
+            return _open.TryGetValue(reservation, out var aside) ? (aside.Rule, aside.Usd) : null;
+        }
+    }
+
     /// <summary>Every reservation not yet landed, with its rule and when it was made.</summary>
     public IReadOnlyList<(string Reservation, string Rule, DateTimeOffset At)> Open()
     {
