@@ -23,8 +23,14 @@ namespace Loadout.Cli.Commands;
 /// Whether an action writes is decided before it starts, from what it is. A
 /// built-in here only reports. A team writes when any of its nodes works in a
 /// worktree, because a worktree is how a team's changes reach the branch; a
-/// team without one reads and reports. A remedy changes something by
-/// definition. Writes wait for approvals, which triggers cannot ask for yet.
+/// team without one reads and reports. A write waits for a person's approval
+/// before it starts, and nothing is set aside for it until then.
+/// </para>
+/// <para>
+/// A remedy is not something a rule can start on its own: remedies are
+/// applied by a team's remediator inside a run, under the trust key each
+/// carries, and there is no command that applies one outside a run. A rule
+/// that wants one starts the team that owns it.
 /// </para>
 /// </remarks>
 internal sealed partial class DaemonTriggerActions : ITriggerActions
@@ -68,7 +74,9 @@ internal sealed partial class DaemonTriggerActions : ITriggerActions
 
         if (Is(action, TriggerActionKinds.Remedy))
         {
-            return new ActionTraits(Writes: true);
+            return new ActionTraits(
+                true, Problem: $"a remedy such as '{action.Name}' is applied by its team's remediator inside a run, "
+                    + "so a rule starts that team instead");
         }
 
         var root = _workspace.IsAvailable() ? _workspace.LocalPath : null;
@@ -163,9 +171,9 @@ internal sealed partial class DaemonTriggerActions : ITriggerActions
     /// they wrote goes in quoted and on one line, and the goal ends by saying
     /// whose it is and how to read it: as something to assess, never as
     /// instructions. Their pull request or issue is read by the run too, so the
-    /// warning covers that as well as what was quoted. The run's tools are
-    /// already read-only, because a write needs an approval triggers cannot
-    /// ask for yet.
+    /// warning covers that as well as what was quoted. A run that writes does
+    /// not start on outside words alone: it waits for a person's approval,
+    /// which shows the trust it would act on.
     /// </para>
     /// </remarks>
     internal static string Fill(string goal, TriggerEvent happened)

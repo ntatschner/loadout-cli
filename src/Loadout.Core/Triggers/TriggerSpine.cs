@@ -85,7 +85,7 @@ public interface ITriggerActions
 /// last daemon stopped.
 /// </para>
 /// </remarks>
-public sealed class TriggerSpine
+public sealed partial class TriggerSpine
 {
     /// <summary>How far back the ledger is rebuilt from: the longest window a rule can have.</summary>
     public static readonly TimeSpan Remembered = TimeSpan.FromDays(31);
@@ -190,6 +190,7 @@ public sealed class TriggerSpine
         var entries = _journal.Read(_time.GetUtcNow() - Remembered);
 
         Ledger = SpendLedger.Rebuild(entries);
+        RebuildHolding(entries);
         _applied.UnionWith(entries.Select(one => one.Request).OfType<string>());
     }
 
@@ -224,6 +225,11 @@ public sealed class TriggerSpine
 
                 await FlushAsync(_time.GetUtcNow(), ct).ConfigureAwait(false);
 
+                if (_time.GetUtcNow() - _released >= ReleaseEvery)
+                {
+                    await ReleaseHeldAsync(_time.GetUtcNow(), ct).ConfigureAwait(false);
+                }
+
                 if (_time.GetUtcNow() - _settled >= SettleEvery)
                 {
                     await SettleAsync(_time.GetUtcNow(), ct).ConfigureAwait(false);
@@ -257,9 +263,13 @@ public sealed class TriggerSpine
             return;
         }
 
-        var decisions = TriggerMatcher.Decide(happened, listed.Value!);
+        _lastRules = listed.Value!;
 
-        Absorb(happened, decisions.Where(one => one.Matched).Select(one => one.Rule.Id.ToLowerInvariant()).ToHashSet(), now);
+        var decisions = TriggerMatcher.Decide(happened, listed.Value!);
+        var matched = decisions.Where(one => one.Matched).Select(one => one.Rule.Id.ToLowerInvariant()).ToHashSet();
+
+        Absorb(happened, matched, now);
+        AbsorbPending(happened, matched, now);
 
         foreach (var decision in decisions)
         {
@@ -275,6 +285,10 @@ public sealed class TriggerSpine
             }
 
             Write(new TriggerEntry(now, TriggerEntryKinds.Matched, happened.Id, rule.Id, rule.Version, happened.Subject));
+
+            // What was waiting for approval or headroom on the older state of
+            // this subject gives way to this one.
+            Replace(rule, happened, now);
 
             // An event that arrives already older than the catch-up window -
             // seen by a daemon that was off, or a source that could not read -
@@ -437,6 +451,11 @@ public sealed class TriggerSpine
                 TriggerVerbs.Resume when asking.RuleId is { Length: > 0 } id => await ResumeAsync(asking.Id, id, ct).ConfigureAwait(false),
                 TriggerVerbs.Release when asking.RuleId is { Length: > 0 } id
                     => await ReleaseAsync(asking.Id, id, asking.Subject, ct).ConfigureAwait(false),
+                TriggerVerbs.Approve when asking.Approval is { Length: > 0 } approval
+                    => await ApproveAsync(asking.Id, approval, ct).ConfigureAwait(false),
+                TriggerVerbs.Reject when asking.Approval is { Length: > 0 } approval => Reject(asking.Id, approval),
+                TriggerVerbs.Raise when asking is { Reservation: { Length: > 0 } reservation, Usd: { } usd }
+                    => await RaiseAsync(asking.Id, reservation, usd, ct).ConfigureAwait(false),
                 TriggerVerbs.Distrust when asking.Author is { } author
                     => Distrust(asking.Id, author, asking.Login ?? author.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                 _ => new TriggerAnswer(asking.Id, false, $"'{asking.Verb}' is not a change the daemon can make to the rules."),
@@ -457,6 +476,11 @@ public sealed class TriggerSpine
 
     private async Task<TriggerAnswer> SaveAsync(string request, TriggerRule rule, CancellationToken ct)
     {
+        var before = await _rules.ListAsync(ct).ConfigureAwait(false);
+        var was = before.Succeeded
+            ? before.Value!.FirstOrDefault(one => string.Equals(one.Rule.Id, rule.Id, StringComparison.OrdinalIgnoreCase))?.Rule
+            : null;
+
         var saved = await _rules.SaveAsync(rule, ct).ConfigureAwait(false);
 
         if (saved.Failed)
@@ -489,6 +513,8 @@ public sealed class TriggerSpine
                 $"the rule changed and {decision.Reason}", Request: request));
         }
 
+        await ReaskAsync(was, rule, request, now, ct).ConfigureAwait(false);
+
         return new TriggerAnswer(request, true, $"Applied by the daemon: '{rule.Id}' is now version {rule.Version}.", rule.Version);
     }
 
@@ -512,6 +538,8 @@ public sealed class TriggerSpine
                 now, TriggerEntryKinds.Withdrawn, waiting.Event.Id, id, waiting.Rule.Version, waiting.Event.Subject,
                 "the rule was removed", Request: request));
         }
+
+        WithdrawPending(id, "the rule was removed", request, now);
 
         return new TriggerAnswer(request, true, $"Applied by the daemon: '{id}' is gone, and nothing waiting on it will start.");
     }
@@ -538,7 +566,8 @@ public sealed class TriggerSpine
 
         var rule = found.Rule;
         var now = _time.GetUtcNow();
-        var held = Held(rule.Id, now);
+        var journal = _journal.Read(now - Remembered);
+        var held = Held(journal, rule.Id);
 
         Write(new TriggerEntry(
             now, TriggerEntryKinds.Resumed, Rule: rule.Id, Version: rule.Version,
@@ -588,7 +617,10 @@ public sealed class TriggerSpine
                 continue;
             }
 
-            await DecideAsync(rule, latest, now, ct).ConfigureAwait(false);
+            // Decided here, so not released again from the held starts.
+            _holding.Remove((rule.Id.ToLowerInvariant(), latest.Subject));
+
+            await DecideAsync(rule, latest, now, ct, ApprovalOf(journal, latest.Id, rule.Id)).ConfigureAwait(false);
             decided++;
         }
 
@@ -788,6 +820,8 @@ public sealed class TriggerSpine
             withdrawn++;
         }
 
+        withdrawn += DistrustPending(author, login, request, now);
+
         foreach (var entry in Distrusted(_journal.Read(now - Remembered), now, author, login, request))
         {
             Write(entry);
@@ -908,27 +942,21 @@ public sealed class TriggerSpine
     private List<KeyValuePair<(string Rule, string Subject), Waiting>> WaitingOn(string rule) =>
         [.. _waiting.Where(one => string.Equals(one.Key.Rule, rule, StringComparison.OrdinalIgnoreCase))];
 
-    private async Task DecideAsync(TriggerRule rule, TriggerEvent happened, DateTimeOffset now, CancellationToken ct)
+    /// <param name="rule">The rule that matched.</param>
+    /// <param name="happened">The event it matched.</param>
+    /// <param name="now">The time.</param>
+    /// <param name="ct">Stops the wait to queue the start.</param>
+    /// <param name="approval">For an action that writes, the approval a person gave it; without one it is asked for.</param>
+    private async Task DecideAsync(TriggerRule rule, TriggerEvent happened, DateTimeOffset now, CancellationToken ct, string? approval = null)
     {
         TriggerEntry Entry(string kind, string? reason = null, decimal? usd = null, string? reservation = null) =>
-            new(now, kind, happened.Id, rule.Id, rule.Version, happened.Subject, reason, usd, reservation);
+            new(now, kind, happened.Id, rule.Id, rule.Version, happened.Subject, reason, usd, reservation, Approval: approval);
 
         var traits = await _actions.DescribeAsync(rule.Action, happened.Project, ct).ConfigureAwait(false);
 
         if (traits.Problem is { } problem)
         {
             Write(Entry(TriggerEntryKinds.Refused, problem));
-
-            return;
-        }
-
-        if (traits.Writes)
-        {
-            // Approvals are what lets a write run unattended, and they are not
-            // built yet. Refused and written down, never started quietly.
-            Write(Entry(
-                TriggerEntryKinds.Refused,
-                $"{rule.Action.Name} writes, and a write needs your approval, which triggers cannot ask for yet"));
 
             return;
         }
@@ -945,6 +973,21 @@ public sealed class TriggerSpine
             return;
         }
 
+        if (traits.Writes && approval is null)
+        {
+            // A write never starts unattended. It waits for a person, who sees
+            // what it would spend and whose words it would act on; nothing is
+            // set aside until they say yes.
+            var id = ApprovalId();
+
+            Write(new TriggerEntry(
+                now, TriggerEntryKinds.Asked, happened.Id, rule.Id, rule.Version, happened.Subject,
+                $"{rule.Action.Name} writes, so it waits for your approval: loadout trigger approve {id}",
+                each, Approval: id));
+
+            return;
+        }
+
         var (verdict, why) = Ledger.Ask(rule, each, now);
 
         switch (verdict)
@@ -952,11 +995,18 @@ public sealed class TriggerSpine
             case LedgerVerdict.Hold:
                 Write(Entry(TriggerEntryKinds.Held, why));
 
+                // Held for money to come back, rather than for a resume: the
+                // spine releases it, oldest first, as runs land.
+                if (why != SpendLedger.PausedReason)
+                {
+                    Hold(rule, happened, now, approval);
+                }
+
                 return;
 
             case LedgerVerdict.Pause:
                 Write(Entry(TriggerEntryKinds.Paused, why));
-                Write(Entry(TriggerEntryKinds.Held, "the rule is paused until it is resumed"));
+                Write(Entry(TriggerEntryKinds.Held, SpendLedger.PausedReason));
 
                 return;
         }

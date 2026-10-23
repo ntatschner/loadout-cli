@@ -14,6 +14,9 @@ namespace Loadout.Core.Triggers;
 /// <param name="Subject">For a release: only this subject, or every stale one of the rule when null.</param>
 /// <param name="Author">For a distrust: the GitHub id of the account taken off the allow-list.</param>
 /// <param name="Login">For a distrust: its login, for the journal.</param>
+/// <param name="Approval">For an approve or a reject: which approval.</param>
+/// <param name="Reservation">For a raise: the reservation of the run whose budget changes.</param>
+/// <param name="Usd">For a raise: what the run may now spend in all.</param>
 public sealed record TriggerAsk(
     string Id,
     string Verb,
@@ -21,7 +24,10 @@ public sealed record TriggerAsk(
     string? RuleId = null,
     string? Subject = null,
     long? Author = null,
-    string? Login = null);
+    string? Login = null,
+    string? Approval = null,
+    string? Reservation = null,
+    decimal? Usd = null);
 
 /// <summary>What the daemon made of a change it was asked for.</summary>
 /// <param name="Id">The request it answers.</param>
@@ -40,6 +46,15 @@ public static class TriggerVerbs
 
     /// <summary>Somebody was taken off the allow-list: withdraw what waits on their trust.</summary>
     public const string Distrust = "distrust";
+
+    /// <summary>Approve an action that writes, which sets its money aside and starts it, or holds it for headroom.</summary>
+    public const string Approve = "approve";
+
+    /// <summary>Reject an action that writes.</summary>
+    public const string Reject = "reject";
+
+    /// <summary>A person changed what a triggered run may spend: set aside the new figure, within the rule's cap.</summary>
+    public const string Raise = "raise";
 }
 
 /// <summary>

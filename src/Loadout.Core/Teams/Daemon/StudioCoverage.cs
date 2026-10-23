@@ -209,16 +209,17 @@ public static class StudioCoverage
         ["team webhook disable"] = new("teams", StudioEffect.Changes),
         ["team webhook show"] = new("teams", StudioEffect.Reads),
 
-        // Terminal only while triggers are unfinished and switched off by
-        // default, so Studio shows nothing of them until they are whole. A
-        // page of their own, with the approvals inbox, comes with the slice
-        // that has something to approve.
-        ["trigger list"] = Terminal(Unfinished),
+        // What trigger rules need of a person - approvals, a paused rule, the
+        // stale list, a stopped source - is on the Teams page beside what
+        // runs need, shown only when the daemon runs triggers. Writing and
+        // tuning rules stays in the terminal while triggers are unfinished;
+        // a page of their own comes when they are switched on for everyone.
+        ["trigger list"] = new("teams", StudioEffect.Reads),
         ["trigger add"] = Terminal(Unfinished),
         ["trigger remove"] = Terminal(Unfinished),
-        ["trigger resume"] = Terminal(Unfinished),
-        ["trigger stale"] = Terminal(Unfinished),
-        ["trigger release"] = Terminal(Unfinished),
+        ["trigger resume"] = new("teams", StudioEffect.Changes),
+        ["trigger stale"] = new("teams", StudioEffect.Reads),
+        ["trigger release"] = new("teams", StudioEffect.Changes),
         ["trigger adopt"] = Terminal(Unfinished),
         ["trigger journal"] = Terminal(Unfinished),
         ["trigger test"] = Terminal(Unfinished),
@@ -228,7 +229,10 @@ public static class StudioCoverage
         ["trigger allow"] = Terminal(Unfinished),
         ["trigger disallow"] = Terminal(Unfinished),
         ["trigger allowed"] = Terminal(Unfinished),
-        ["trigger sources"] = Terminal(Unfinished),
+        ["trigger sources"] = new("teams", StudioEffect.Reads),
+        ["trigger approvals"] = new("teams", StudioEffect.Reads),
+        ["trigger approve"] = new("teams", StudioEffect.Changes),
+        ["trigger reject"] = new("teams", StudioEffect.Changes),
         ["trigger token set"] = Terminal(Unfinished),
         ["trigger token clear"] = Terminal(Unfinished),
         ["dashboard"] = Terminal("serves a dashboard page, and this is one"),

@@ -556,6 +556,12 @@ public sealed class TeamHaltCommand : AsyncCommand<TeamHaltCommand.Settings>
 /// Lower is allowed as well as higher. A budget below what has been spent ends
 /// the run at its next check, which is a gentler stop than halting it.
 /// </para>
+/// <para>
+/// A run a trigger rule started is held to the rule's spend cap as well. The
+/// new figure goes through the daemon, which sets it aside in place of what
+/// was, and refuses anything the rule's headroom cannot cover; 'none' is
+/// refused outright, because the cap is the ceiling.
+/// </para>
 /// </remarks>
 [Description("Change what a running team may spend, from its next round on.")]
 [CommandMeta(CommandCategory.Start, Intent = "budget raise extend increase spend money limit run team", Mutates = true)]
@@ -563,11 +569,31 @@ public sealed class TeamBudgetCommand : AsyncCommand<TeamBudgetCommand.Settings>
 {
     private readonly IRunJournal _journal;
     private readonly IAnsiConsole _console;
+    private readonly IPlatformPaths? _paths;
+    private readonly IProcessInspector? _processes;
+    private readonly IEnvironmentProvider? _environment;
+    private readonly Loadout.Core.Configuration.YamlStore? _yaml;
+    private readonly IFilePermissions? _permissions;
+    private readonly TimeProvider _time;
 
-    public TeamBudgetCommand(IRunJournal journal, IAnsiConsole console)
+    public TeamBudgetCommand(
+        IRunJournal journal,
+        IAnsiConsole console,
+        IPlatformPaths? paths = null,
+        IProcessInspector? processes = null,
+        IEnvironmentProvider? environment = null,
+        Loadout.Core.Configuration.YamlStore? yaml = null,
+        IFilePermissions? permissions = null,
+        TimeProvider? time = null)
     {
         _journal = journal;
         _console = console;
+        _paths = paths;
+        _processes = processes;
+        _environment = environment;
+        _yaml = yaml;
+        _permissions = permissions;
+        _time = time ?? TimeProvider.System;
     }
 
     public sealed class Settings : RunSettings
@@ -614,6 +640,12 @@ public sealed class TeamBudgetCommand : AsyncCommand<TeamBudgetCommand.Settings>
 
         var spent = summary.Value?.CostUsd ?? 0m;
 
+        if (await TriggeredAsync(summary.Value?.Origin, cap, settings.DryRun, output, cancellationToken).ConfigureAwait(false)
+            is { } refused)
+        {
+            return refused;
+        }
+
         var allowed = cap.Usd is { } usd ? $"spend ${usd:0.00} in all" : "spend with no cap";
 
         if (settings.DryRun)
@@ -638,5 +670,72 @@ public sealed class TeamBudgetCommand : AsyncCommand<TeamBudgetCommand.Settings>
                 : string.Empty));
 
         return CommandOutput.Success();
+    }
+
+    /// <summary>
+    /// For a run a trigger rule started: sets the new figure aside under the
+    /// rule's cap, or says why it cannot be. Null to go on and change the
+    /// run's own cap; an exit code to stop with.
+    /// </summary>
+    private async Task<int?> TriggeredAsync(string? origin, UsdCap cap, bool dryRun, CommandOutput output, CancellationToken ct)
+    {
+        if (Loadout.Core.Triggers.RunOrigin.Parse(origin) is not { } started
+            || _paths is null || _processes is null || _environment is null || _yaml is null || _permissions is null)
+        {
+            return null;
+        }
+
+        var desk = new TriggerDesk(_paths, _processes, _environment, _yaml, _permissions, _time);
+
+        // With triggers switched off nothing is counting the rule's spend, so
+        // there is no cap to keep it under.
+        if (desk.Switch() is (false, _))
+        {
+            return null;
+        }
+
+        if (cap.Usd is not { } usd)
+        {
+            return output.Fail(
+                $"Rule '{started.Rule}' started this run, and its spend cap is the ceiling, so it cannot run with no cap. "
+                + "Give a figure with --usd.",
+                ExitCode.InvalidArguments);
+        }
+
+        var listed = await desk.Rules.ListAsync(ct).ConfigureAwait(false);
+        var rule = listed.Value?.FirstOrDefault(one => string.Equals(one.Rule.Id, started.Rule, StringComparison.OrdinalIgnoreCase))?.Rule;
+
+        if (rule is null)
+        {
+            return null;
+        }
+
+        var (problem, entry) = Loadout.Core.Triggers.TriggerSpine.Raising(desk.Ledger(), rule, started.Reservation, usd, _time.GetUtcNow());
+
+        if (problem is not null)
+        {
+            return output.Fail($"Not changed: {problem}.", ExitCode.InvalidArguments);
+        }
+
+        if (dryRun)
+        {
+            return null;
+        }
+
+        var request = Guid.NewGuid().ToString("N");
+        var said = await desk.ChangeAsync(
+            new Loadout.Core.Triggers.TriggerAsk(
+                request, Loadout.Core.Triggers.TriggerVerbs.Raise, Reservation: started.Reservation, Usd: usd),
+            output,
+            () =>
+            {
+                desk.Journal.Append(entry! with { Request = request });
+
+                return Task.FromResult(new Loadout.Core.Triggers.TriggerAnswer(
+                    request, true, $"${usd:0.00} is set aside for the run under '{rule.Id}'."));
+            },
+            ct).ConfigureAwait(false);
+
+        return said == CommandOutput.Success() ? null : said;
     }
 }

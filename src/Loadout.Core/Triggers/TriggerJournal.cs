@@ -24,6 +24,7 @@ namespace Loadout.Core.Triggers;
 /// <param name="Run">For a start: the run it became, once known.</param>
 /// <param name="Happened">For an event: when it happened, where that is not when it arrived.</param>
 /// <param name="Request">For a change to the rules: the request that asked for it, so a retry is not applied twice.</param>
+/// <param name="Approval">For an action that writes: the approval it waits on, or was started under.</param>
 public sealed record TriggerEntry(
     DateTimeOffset At,
     string Kind,
@@ -41,7 +42,8 @@ public sealed record TriggerEntry(
     IReadOnlyList<string>? Origins = null,
     string? Run = null,
     DateTimeOffset? Happened = null,
-    string? Request = null)
+    string? Request = null,
+    string? Approval = null)
 {
     /// <summary>The event an event entry recorded, as the rules would have seen it.</summary>
     /// <remarks>
@@ -152,6 +154,15 @@ public static class TriggerEntryKinds
 
     /// <summary>An author's trust was lowered, and what waited on their subjects was withdrawn.</summary>
     public const string Distrusted = "distrusted";
+
+    /// <summary>An action that writes is waiting for a person to approve it.</summary>
+    public const string Asked = "asked";
+
+    /// <summary>A person approved an action that writes; its money is set aside now.</summary>
+    public const string Approved = "approved";
+
+    /// <summary>A person rejected an action that writes.</summary>
+    public const string Rejected = "rejected";
 }
 
 /// <summary>

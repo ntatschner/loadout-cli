@@ -29,6 +29,7 @@
   import { studio } from '../lib/state.svelte';
   import { sheetPath, sheetWords, type SheetKind, type SheetTeam, type SheetValues } from '../lib/teamSheet';
   import { answerGate, carryOn, forget, hold, pickUp, runLines, stop } from '../lib/teamsAct';
+  import { approvalNeeds, attentionNeeds, type TriggerApproval, type TriggerSources, type TriggerStale, type TriggerStanding } from '../lib/triggers';
   import { boardOf, boardRunsOf, boardTeamsOf, gateOf, keptRuns, needsOf, summaryOf } from '../lib/teamsData';
   import type { Act, Prune } from '../lib/teams';
 
@@ -67,7 +68,57 @@
     }
   }
 
+  // Actions trigger rules want to start that write, waiting for an answer.
+  // Read only when the daemon runs triggers; a read that fails leaves the
+  // list as it was rather than failing the page.
+  let approvals = $state<TriggerApproval[]>([]);
+  let triggerRules = $state<TriggerStanding[]>([]);
+  let triggerStale = $state<TriggerStale[]>([]);
+  let triggerSources = $state<TriggerSources | null>(null);
+
+  async function loadApprovals() {
+    if (!studio.about?.triggers) {
+      approvals = [];
+      triggerRules = [];
+      triggerStale = [];
+      triggerSources = null;
+
+      return;
+    }
+
+    [approvals, triggerRules, triggerStale, triggerSources] = await Promise.all([
+      readJson<TriggerApproval[]>('trigger approvals').catch(() => approvals),
+      readJson<TriggerStanding[]>('trigger list').catch(() => triggerRules),
+      readJson<TriggerStale[]>('trigger stale').catch(() => triggerStale),
+      readJson<TriggerSources>('trigger sources').catch(() => triggerSources),
+    ]);
+  }
+
+  async function answerApproval(verb: 'approve' | 'reject' | 'resume' | 'release', id: string) {
+    try {
+      await runJob(`trigger ${verb}`, [id]);
+    } catch (error) {
+      fail(error);
+    }
+
+    void loadApprovals();
+  }
+
+  $effect(() => {
+    if (!studio.about?.triggers) {
+      return;
+    }
+
+    // A rule asks whenever its event comes, not when anything on this page
+    // changes, so the list is read again every half minute while it is shown.
+    const every = setInterval(() => void loadApprovals(), 30_000);
+
+    return () => clearInterval(every);
+  });
+
   async function loadOverview() {
+    void loadApprovals();
+
     try {
       const [list, chosen, planned, state] = await Promise.all([
         readJson<{ teams: Team[] }>('team list'),
@@ -137,11 +188,21 @@
   const href = (run: Run) => `#teams/${encodeURIComponent(run.id)}`;
   const watch = $derived(studio.watchOnly ? 'Studio is only watching: type the command in a terminal' : undefined);
 
-  const needs = $derived(
-    studio.runs.flatMap((run) =>
+  const needs = $derived([
+    ...approvalNeeds(approvals, {
+      approve: (id) => void answerApproval('approve', id),
+      reject: (id) => void answerApproval('reject', id),
+      disabledReason: watch,
+    }),
+    ...attentionNeeds(triggerRules, triggerStale, triggerSources, {
+      resume: (rule) => void answerApproval('resume', rule),
+      release: (rule) => void answerApproval('release', rule),
+      disabledReason: watch,
+    }),
+    ...studio.runs.flatMap((run) =>
       needsOf(run, href(run), (one, gate) => ({ ...gateOf(one, gate), disabledReason: watch, onanswer: (send) => answerGate(one.id, gate.id, send) })),
     ),
-  );
+  ]);
 
   function runningActs(run: Run): Act[] {
     return [
