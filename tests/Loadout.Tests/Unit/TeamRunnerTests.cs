@@ -99,6 +99,7 @@ public sealed partial class TeamRunnerTests : IDisposable
         string? task = null,
         StandingCriteria? standing = null,
         string? onTimeout = null,
+        string? origin = null,
         CancellationToken ct = default)
     {
         return await new TeamRunner(
@@ -113,7 +114,7 @@ public sealed partial class TeamRunnerTests : IDisposable
                 "Add --since to loadout usage.", autonomy, dryRun, MaxRounds: rounds, Offline: true,
                 Criteria: criteria, TakeRecommendationAfter: takeRecommendationAfter,
                 Budget: budget, MachineBudget: machineBudget, Task: task, Standing: standing,
-                OnTimeout: onTimeout),
+                OnTimeout: onTimeout, Origin: origin),
             console ?? _console,
             ct);
     }
@@ -260,6 +261,17 @@ public sealed partial class TeamRunnerTests : IDisposable
         outcome.Ended.Should().Be("stopped before the lead was briefed");
         _launcher.Requests.Should().BeEmpty();
         File.ReadAllLines(Path.Combine(outcome.Directory!, "journal.jsonl")).Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task What_started_a_run_is_written_to_its_journal_and_read_back_in_its_summary()
+    {
+        _console.Confirm = _ => false;
+        var origin = new Loadout.Core.Triggers.RunOrigin("review-failures", 4, "res-1", ["nightly"]).ToString();
+
+        var outcome = (await RunAsync(autonomy: "manual", origin: origin)).Value!;
+
+        new RunJournal(_paths).Summarise(Path.GetFileName(outcome.Directory!)).Value!.Origin.Should().Be(origin);
     }
 
     [Fact]
@@ -2947,6 +2959,59 @@ public sealed partial class TeamRunnerTests : IDisposable
             _console);
 
         _launcher.Written("role.project-lead")[0].Should().Contain("git push --tags");
+    }
+
+    [Fact]
+    public async Task An_outward_action_the_run_carries_reaches_the_nodes_tools_and_nothing_wider()
+    {
+        // The brief told the node it may push its tags, and its tools said
+        // otherwise: the posture denies Bash(git push:*), the agent reads a
+        // deny before an allow, and the gate found nothing allowing it. So a
+        // tagger told it may run 'git push --tags' was refused at the one
+        // step it was started for.
+        var team = await IteratingProjectAsync();
+        team.Rules.Gates.OutwardAllowedWhenAutonomous = ["git push --tags"];
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.05m));
+
+        var outcome = (await new TeamRunner(_launcher, _paths, TimeProvider.System).RunAsync(
+            new TeamRunRequest(
+                "demo", team, await SpecialistsAsync(), "goal", "autonomous", Offline: true,
+                OutwardAllowed: ["git push --tags"]),
+            _console)).Value!;
+
+        var options = _launcher.Requests[0].Options;
+        options.AllowedTools.Should().Contain("Bash(git push --tags)");
+        options.DeniedTools.Should().NotContain("Bash(git push:*)", "the agent would read it first and refuse");
+        options.DeniedTools.Should().Contain("Bash(git push --force:*)", "a deny the action does not fall under stays");
+
+        var policy = NodePermissions.Read(Path.Combine(outcome.Directory!, NodePermissions.FileName("lead")));
+
+        bool Allowed(string command) =>
+            NodePermissions.Decide(policy, "Bash", System.Text.Json.JsonSerializer.Serialize(new { command })).Allowed;
+
+        Allowed("git push --tags").Should().BeTrue();
+        Allowed("git push origin main").Should().BeFalse("only the action named exactly was agreed");
+        Allowed("git push --tags --force").Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task An_outward_action_reaches_no_nodes_tools_outside_autonomous()
+    {
+        var team = await IteratingProjectAsync();
+        team.Rules.Gates.OutwardAllowedWhenAutonomous = ["git push --tags"];
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.05m));
+
+        await new TeamRunner(_launcher, _paths, TimeProvider.System).RunAsync(
+            new TeamRunRequest(
+                "demo", team, await SpecialistsAsync(), "goal", "supervised", Offline: true,
+                OutwardAllowed: ["git push --tags"]),
+            _console);
+
+        var options = _launcher.Requests[0].Options;
+        options.AllowedTools.Should().NotContain("Bash(git push --tags)");
+        options.DeniedTools.Should().Contain("Bash(git push:*)");
     }
 
     [Fact]

@@ -105,6 +105,19 @@ public sealed class FakeGit : IGitManager
     public Task<OperationResult<GitRepositoryState>> GetStateAsync(string repositoryPath, CancellationToken ct = default) =>
         Task.FromResult(OperationResult<GitRepositoryState>.Ok(State));
 
+    /// <summary>What the head commit's time answers.</summary>
+    public DateTimeOffset? HeadCommitTime { get; set; }
+
+    /// <summary>How many times the head commit's time was asked for.</summary>
+    public int HeadCommitTimeQueries { get; private set; }
+
+    public Task<OperationResult<DateTimeOffset?>> GetHeadCommitTimeAsync(string repositoryPath, CancellationToken ct = default)
+    {
+        HeadCommitTimeQueries++;
+
+        return Task.FromResult(OperationResult<DateTimeOffset?>.Ok(HeadCommitTime));
+    }
+
     public Task<OperationResult<GitMerge>> MergeAsync(string repositoryPath, string branch, CancellationToken ct = default)
     {
         Merges.Add(branch);

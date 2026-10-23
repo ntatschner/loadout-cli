@@ -177,8 +177,13 @@ internal sealed class NodeSessions
     {
         var definition = role.Role ?? new RoleDefinition(null, null, null, [], []);
 
-        var allowed = TeamRunner.AllowedFor(role.Id, definition);
-        var denied = (definition.DeniedTools ?? []).Union(TeamRunner.NeverDelegated, StringComparer.Ordinal).ToList();
+        // What the brief lets the node take outward, last, so that the agent
+        // and the gate both allow what the node was told it may do. Empty
+        // outside an autonomous run, where the person is asked instead.
+        var (allowed, denied) = TeamRunner.WithOutward(
+            TeamRunner.AllowedFor(role.Id, definition),
+            (definition.DeniedTools ?? []).Union(TeamRunner.NeverDelegated, StringComparer.Ordinal).ToList(),
+            brief.Constraints.OutwardAllowed);
 
         // Written before the node starts, because whatever answers its
         // permission questions is a separate process with nothing else to

@@ -59,6 +59,28 @@ public sealed class StatuslineTests
         payload.ContextWindow.UsedFraction.Should().BeApproximately(0.42, 0.001);
     }
 
+    [Fact]
+    public void The_payload_carries_transcript_path_and_session_duration()
+    {
+        // The cost block in the shape the installed binary builds it.
+        var withCost = RealPayload.Replace(
+            "\"version\"",
+            "\"cost\": { \"total_cost_usd\": 0.42, \"total_duration_ms\": 4320000, \"total_api_duration_ms\": 900000, \"total_lines_added\": 12, \"total_lines_removed\": 3 },\n  \"version\"",
+            StringComparison.Ordinal);
+
+        var payload = StatuslinePayload.Parse(withCost)!;
+
+        payload.TranscriptFile.Should().Be("/home/n/.claude/projects/x/2b7c1d64.jsonl");
+        payload.Cost!.TotalDurationMs.Should().Be(4_320_000);
+
+        // Claude sends an empty string when it keeps no transcript.
+        var withoutTranscript = StatuslinePayload.Parse(
+            RealPayload.Replace("/home/n/.claude/projects/x/2b7c1d64.jsonl", string.Empty, StringComparison.Ordinal))!;
+
+        withoutTranscript.TranscriptPath.Should().BeEmpty();
+        withoutTranscript.TranscriptFile.Should().BeNull();
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("   ")]

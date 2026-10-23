@@ -1039,6 +1039,22 @@ public static class Program
             style.AddCommand<StyleUseCommand>("use");
         });
 
+        // Top level rather than under 'team': a rule can start a built-in
+        // command as well as a team, and it watches every project at once.
+        TopBranch(config, "trigger", trigger =>
+        {
+            trigger.Describe(
+                "Rules that start something when something happens. Unfinished, and off unless LOADOUT_TRIGGERS is set.",
+                CommandCategory.Integration,
+                "trigger event rule when happens automation webhook run finished");
+            trigger.AddCommand<TriggerListCommand>("list");
+            trigger.AddCommand<TriggerAddCommand>("add");
+            trigger.AddCommand<TriggerRemoveCommand>("remove");
+            trigger.AddCommand<TriggerResumeCommand>("resume");
+            trigger.AddCommand<TriggerJournalCommand>("journal");
+            trigger.AddCommand<TriggerTestCommand>("test");
+        });
+
         TopBranch(config, "voice", voice =>
         {
             voice.Describe(

@@ -176,7 +176,12 @@ edit it. So it may ask for things and it may never grant them.
   refused before anything starts, naming the action and both ways out. Matching
   is exact: agreeing to `git push` does not agree to `git push --force`.
 - **Each node's permissions come from its role**, not from the team file. They
-  are written out before the run starts, and deny wins.
+  are written out before the run starts, and deny wins — with one exception.
+  An outward action an autonomous run allows is added to every node's list
+  exactly as it was agreed, and lifts any deny it falls under. Without that, a
+  tagger told it may run `git push --tags` would still be refused, because
+  every mode denies `git push`. The other pushes that deny covered are still
+  refused, since nothing allows them.
 - **A role starts from its mode's defaults** and lists only how it differs.
   Every mode may read the tree and its history, and none may push, rebase,
   reset, amend or delete a branch or tag. `investigate`, `implement` and

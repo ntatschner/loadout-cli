@@ -3,6 +3,7 @@ using Loadout.Cli.Infrastructure;
 using Loadout.Core.Configuration;
 using Loadout.Core.Git;
 using Loadout.Core.Projects;
+using Loadout.Core.Sessions.Hosting;
 using Loadout.Core.Statusline;
 using Loadout.Core.Usage;
 using Loadout.Core.Workspace;
@@ -54,6 +55,9 @@ public sealed class StatuslineRenderCommand : AsyncCommand<GlobalSettings>
     private readonly ILoadedSpecialistStore _loaded;
     private readonly IExecutableResolver _executables;
     private readonly IProcessLauncher _processes;
+    private readonly IPlatformPaths _paths;
+    private readonly IEnvironmentProvider _environment;
+    private readonly TimeProvider _time;
 
     public StatuslineRenderCommand(
         IConfigurationService configuration,
@@ -62,7 +66,10 @@ public sealed class StatuslineRenderCommand : AsyncCommand<GlobalSettings>
         ISpendNoticeStore spend,
         ILoadedSpecialistStore loaded,
         IExecutableResolver executables,
-        IProcessLauncher processes)
+        IProcessLauncher processes,
+        IPlatformPaths paths,
+        IEnvironmentProvider environment,
+        TimeProvider time)
     {
         _configuration = configuration;
         _projects = projects;
@@ -71,6 +78,9 @@ public sealed class StatuslineRenderCommand : AsyncCommand<GlobalSettings>
         _loaded = loaded;
         _executables = executables;
         _processes = processes;
+        _paths = paths;
+        _environment = environment;
+        _time = time;
     }
 
     /// <inheritdoc />
@@ -88,10 +98,12 @@ public sealed class StatuslineRenderCommand : AsyncCommand<GlobalSettings>
         payload ??= new StatuslinePayload { Cwd = CurrentDirectory() };
 
         var options = new Models.Configuration.StatuslineSettings();
+        Models.Configuration.LauncherConfig? config = null;
 
         string? slug = null;
         string? root = null;
         GitRepositoryState? git = null;
+        DateTimeOffset? lastCommit = null;
 
         try
         {
@@ -99,7 +111,8 @@ public sealed class StatuslineRenderCommand : AsyncCommand<GlobalSettings>
 
             if (configResult.Succeeded)
             {
-                options = configResult.Value!.Statusline;
+                config = configResult.Value!;
+                options = config.Statusline;
             }
 
             var directory = payload?.Workspace?.ProjectDir
@@ -121,9 +134,8 @@ public sealed class StatuslineRenderCommand : AsyncCommand<GlobalSettings>
                     root = project.LocalPath;
                 }
 
-                var state = await _git.GetStateAsync(directory, deadline.Token).ConfigureAwait(false);
-
-                git = state.Value;
+                (git, lastCommit) = await ReadGitAsync(
+                    _git, directory, options, deadline.Token).ConfigureAwait(false);
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException || deadline.IsCancellationRequested)
@@ -163,14 +175,131 @@ public sealed class StatuslineRenderCommand : AsyncCommand<GlobalSettings>
             }
         }
 
+        DateTimeOffset? now = null;
+        StatuslineTimes? times = null;
+        var fixedTimes = false;
+
+        try
+        {
+            fixedTimes = config is not null && StatuslineInstaller.RedrawsNever(
+                Loadout.Core.Instructions.AccessibilityProfile.Resolve(config.Accessibility).Display.Redraw);
+
+            var at = _time.GetUtcNow();
+            var studio = _environment.GetVariable(SessionSignals.Variable);
+
+            // The transcript is read synchronously, so it is read off this
+            // thread: the deadline then bounds it like everything else.
+            times = await Task.Run(
+                    () => ReadTimes(options, payload, _paths.Paths.State, studio, at, lastCommit),
+                    deadline.Token)
+                .WaitAsync(deadline.Token)
+                .ConfigureAwait(false);
+
+            now = at;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || deadline.IsCancellationRequested)
+        {
+            // Drops the time group, and only that. With no moment to draw for,
+            // the renderer leaves every time segment out.
+        }
+
         var line = StatuslineRenderer.Render(
-            new StatuslineInputs(payload, slug, root, git, spend, loaded),
+            new StatuslineInputs(
+                payload, slug, root, git, spend, loaded,
+                Now: now,
+                Times: times,
+                FixedTimes: fixedTimes,
+                Width: Columns(_environment.GetVariable("COLUMNS"))),
             options);
 
         Console.Out.WriteLine(line);
 
         return (int)ExitCode.Success;
     }
+
+    /// <summary>
+    /// Asks git for the branch and, only when its segment is on, the head
+    /// commit's time, the two at once.
+    /// </summary>
+    /// <remarks>
+    /// The commit time is a git process of its own, since the status that
+    /// gives the branch carries no time. It is off by default, so by default
+    /// the line starts no more processes than it did before it existed.
+    /// </remarks>
+    internal static async Task<(GitRepositoryState? State, DateTimeOffset? LastCommit)> ReadGitAsync(
+        IGitManager git,
+        string directory,
+        Models.Configuration.StatuslineSettings options,
+        CancellationToken ct)
+    {
+        var stateTask = git.GetStateAsync(directory, ct);
+        var commitTask = options.ShowLastCommit
+            ? git.GetHeadCommitTimeAsync(directory, ct)
+            : Task.FromResult(Models.Results.OperationResult<DateTimeOffset?>.Ok(null));
+
+        await Task.WhenAll(stateTask, commitTask).ConfigureAwait(false);
+
+        return ((await stateTask.ConfigureAwait(false)).Value, (await commitTask.ConfigureAwait(false)).Value);
+    }
+
+    /// <summary>Gathers the session's times for the line, reading the transcript only when a segment needs it.</summary>
+    /// <param name="options">Which segments are on.</param>
+    /// <param name="payload">What Claude sent, which names the transcript and carries the session's length.</param>
+    /// <param name="state">The launcher's state directory, where the cache and Studio's signals live.</param>
+    /// <param name="studioSession">The Studio session this runs inside, if any.</param>
+    /// <param name="now">The moment the line is drawn for.</param>
+    /// <param name="lastCommit">The head commit's time, when it was asked for.</param>
+    internal static StatuslineTimes ReadTimes(
+        Models.Configuration.StatuslineSettings options,
+        StatuslinePayload? payload,
+        string state,
+        string? studioSession,
+        DateTimeOffset now,
+        DateTimeOffset? lastCommit)
+    {
+        var reading = options.ShowWaiting || options.ShowLastWrite || options.ShowTurn
+            ? TranscriptCache.Read(state, payload?.TranscriptFile, SessionSignals.BackgroundLimit)
+            : null;
+
+        // Only Studio sees a permission prompt, and only a signal written
+        // since the transcript last moved still speaks for it: an approval
+        // already given leaves the file behind until the next hook replaces it.
+        SessionSignal? signal = null;
+
+        if (reading?.PendingToolSince is not null && SessionSignals.IsSessionId(studioSession))
+        {
+            var read = SessionSignals.Read(SessionSignals.Directory(state), studioSession!);
+
+            if (TranscriptReading.SignalCounts(read, reading.LastEntryAt))
+            {
+                signal = read;
+            }
+        }
+
+        var permission = signal is { State: "approval" };
+
+        return new StatuslineTimes(
+            TurnStartedAt: reading?.TurnStartedAt,
+            TurnEndedAt: reading?.TurnEndedAt,
+            PendingToolSince: reading?.PendingToolSince,
+            PermissionAsked: permission,
+            PermissionAt: permission ? signal!.At : null,
+            BackgroundOutstanding: reading?.Outstanding(now) ?? false,
+            WakeupDue: reading?.WakeupDue,
+            LastWriteAt: reading?.LastWriteAt,
+            SessionLength: payload?.Cost?.TotalDurationMs is { } ms ? TimeSpan.FromMilliseconds(ms) : null,
+            LastCommitAt: lastCommit);
+    }
+
+    /// <summary>
+    /// The terminal's width from <c>COLUMNS</c>, or null. Claude Code does not
+    /// put the width in the payload, so this is the only place to learn it.
+    /// </summary>
+    internal static int? Columns(string? value) =>
+        int.TryParse(value, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var columns)
+            && columns > 0
+            ? columns
+            : null;
 
     /// <summary>
     /// Starts a refresh of the spending figure, out of the way, when it is due.
@@ -282,12 +411,30 @@ public class StatuslineTargetSettings : GlobalSettings
 [CommandMeta(CommandCategory.Integration, Intent = "status line install prompt project branch context", Mutates = true)]
 public sealed class StatuslineInstallCommand : AsyncCommand<StatuslineTargetSettings>
 {
+    /// <summary>
+    /// How long <c>claude --version</c> may take. Only the version line is
+    /// wanted, and an install that hangs on it would be worse than one that
+    /// leaves the interval out.
+    /// </summary>
+    private static readonly TimeSpan VersionTimeout = TimeSpan.FromSeconds(10);
+
     private readonly StatuslineTargets _targets;
+    private readonly IConfigurationService _configuration;
+    private readonly IExecutableResolver _executables;
+    private readonly IProcessLauncher _processes;
     private readonly IAnsiConsole _console;
 
-    public StatuslineInstallCommand(StatuslineTargets targets, IAnsiConsole console)
+    public StatuslineInstallCommand(
+        StatuslineTargets targets,
+        IConfigurationService configuration,
+        IExecutableResolver executables,
+        IProcessLauncher processes,
+        IAnsiConsole console)
     {
         _targets = targets;
+        _configuration = configuration;
+        _executables = executables;
+        _processes = processes;
         _console = console;
     }
 
@@ -312,6 +459,18 @@ public sealed class StatuslineInstallCommand : AsyncCommand<StatuslineTargetSett
                 ExitCode.GeneralFailure);
         }
 
+        // A config that cannot be read is no reason to refuse the install; the
+        // default profile redraws, so it is treated as that.
+        var configResult = await _configuration.LoadConfigAsync(cancellationToken).ConfigureAwait(false);
+        var redraw = configResult.Succeeded
+            ? Loadout.Core.Instructions.AccessibilityProfile
+                .Resolve(configResult.Value!.Accessibility).Display.Redraw
+            : null;
+
+        var version = await ReadClaudeVersionAsync(cancellationToken).ConfigureAwait(false);
+        var refresh = StatuslineInstaller.RefreshFor(version, redraw);
+        var outcome = RefreshOutcome(refresh, version, redraw);
+
         // The targets are resolved, so the preview can name every settings file it
         // would edit — and editing an agent's own settings is worth seeing first.
         if (settings.DryRun)
@@ -323,8 +482,11 @@ public sealed class StatuslineInstallCommand : AsyncCommand<StatuslineTargetSett
                 output.WriteLine($"  [dim]{target.SettingsPath.EscapeMarkup()}[/]");
             }
 
+            output.WriteLine(refresh is { } seconds
+                ? $"It would write refreshInterval {seconds}, so it {outcome.EscapeMarkup()}."
+                : $"It would write no refreshInterval, so it {outcome.EscapeMarkup()}.");
             output.WriteLine("Nothing was changed.");
-        
+
             return CommandOutput.Success();
         }
         var installed = new List<StatuslineInstallation>();
@@ -332,7 +494,7 @@ public sealed class StatuslineInstallCommand : AsyncCommand<StatuslineTargetSett
         foreach (var target in targetsResult.Value!)
         {
             var result = await StatuslineInstaller
-                .InstallAsync(target.SettingsPath, executable)
+                .InstallAsync(target.SettingsPath, executable, refresh)
                 .ConfigureAwait(false);
 
             if (result.Failed)
@@ -350,6 +512,7 @@ public sealed class StatuslineInstallCommand : AsyncCommand<StatuslineTargetSett
                 path = i.Path,
                 command = i.Command,
                 replaced = i.Replaced,
+                refresh = i.Refresh,
             }));
 
             return CommandOutput.Success();
@@ -370,10 +533,46 @@ public sealed class StatuslineInstallCommand : AsyncCommand<StatuslineTargetSett
             }
         }
 
+        output.WriteLine($"The line {outcome.EscapeMarkup()}.");
         output.WriteBlankLine();
         output.WriteLine("[dim]Start a new session to see it. Claude reads settings at startup.[/]");
 
         return CommandOutput.Success();
+    }
+
+    /// <summary>
+    /// Which of the three things an install did about ticking, in words: it
+    /// matters, because a line that does not tick looks stuck rather than off.
+    /// </summary>
+    internal static string RefreshOutcome(int? refresh, string? version, string? redraw) =>
+        refresh is { } seconds ? $"ticks every {seconds}s"
+        : StatuslineInstaller.RedrawsNever(redraw) ? "has no ticking (screen-reader profile)"
+        : version is { Length: > 0 }
+            ? $"updates on redraw only (Claude Code {version} not known to support a refresh interval)"
+            : "updates on redraw only (Claude Code's version could not be read, so it is not known to support a refresh interval)";
+
+    /// <summary>
+    /// The first line of <c>claude --version</c>, or null when Claude Code is
+    /// not on the path or does not answer in time.
+    /// </summary>
+    private async Task<string?> ReadClaudeVersionAsync(CancellationToken ct)
+    {
+        if (_executables.Resolve("claude") is not { Length: > 0 } claude)
+        {
+            return null;
+        }
+
+        var result = await _processes.RunAsync(
+            new ProcessRequest(claude, ["--version"]),
+            VersionTimeout,
+            ct).ConfigureAwait(false);
+
+        if (result.Failed || result.Value is null || !result.Value.Succeeded)
+        {
+            return null;
+        }
+
+        return result.Value.StandardOutput.Trim().Split('\n').FirstOrDefault()?.Trim();
     }
 }
 
@@ -453,19 +652,22 @@ public sealed class StatuslineShowCommand : AsyncCommand<StatuslineTargetSetting
     private readonly IProjectService _projects;
     private readonly IGitManager _git;
     private readonly IAnsiConsole _console;
+    private readonly TimeProvider _time;
 
     public StatuslineShowCommand(
         StatuslineTargets targets,
         IConfigurationService configuration,
         IProjectService projects,
         IGitManager git,
-        IAnsiConsole console)
+        IAnsiConsole console,
+        TimeProvider time)
     {
         _targets = targets;
         _configuration = configuration;
         _projects = projects;
         _git = git;
         _console = console;
+        _time = time;
     }
 
     /// <inheritdoc />
@@ -514,15 +716,25 @@ public sealed class StatuslineShowCommand : AsyncCommand<StatuslineTargetSetting
             },
         };
 
-        var preview = StatuslineRenderer.Render(
-            new StatuslineInputs(
-                payload,
-                resolved.Value?.Entry.Slug,
-                resolved.Value?.LocalPath,
-                state.Value),
-            options);
+        // Sample times as well, so the preview shows the time segments that
+        // are on rather than leaving them out for want of a transcript.
+        var now = _time.GetUtcNow();
+        var redrawNever = StatuslineInstaller.RedrawsNever(
+            Loadout.Core.Instructions.AccessibilityProfile
+                .Resolve(configResult.Value!.Accessibility).Display.Redraw);
 
-        var installations = new List<(string Description, string Path, string? Command)>();
+        var inputs = new StatuslineInputs(
+            payload,
+            resolved.Value?.Entry.Slug,
+            resolved.Value?.LocalPath,
+            state.Value,
+            Now: now,
+            Times: PreviewTimes(now),
+            FixedTimes: redrawNever);
+
+        var preview = StatuslineRenderer.Render(inputs, options);
+
+        var installations = new List<(string Description, string Path, string? Command, int? Refresh)>();
 
         foreach (var target in targets)
         {
@@ -530,8 +742,16 @@ public sealed class StatuslineShowCommand : AsyncCommand<StatuslineTargetSetting
                 .ReadCommandAsync(target.SettingsPath)
                 .ConfigureAwait(false);
 
-            installations.Add((target.Description, target.SettingsPath, command.Value));
+            var refresh = await StatuslineInstaller
+                .ReadRefreshAsync(target.SettingsPath)
+                .ConfigureAwait(false);
+
+            installations.Add((target.Description, target.SettingsPath, command.Value, refresh));
         }
+
+        // An entry written before the interval existed still draws, but its
+        // relative times stop moving while the session is idle. Under a profile
+        // that asks for nothing to redraw, no interval is the right answer.
 
         // What an install would write today. A recorded command that differs is
         // not merely out of date: it may not run at all. Claude reports nothing
@@ -546,25 +766,10 @@ public sealed class StatuslineShowCommand : AsyncCommand<StatuslineTargetSetting
         {
             output.WriteJson(new
             {
-                preview = StatuslineRenderer.Render(
-                    new StatuslineInputs(
-                        payload,
-                        resolved.Value?.Entry.Slug,
-                        resolved.Value?.LocalPath,
-                        state.Value),
-                    new Models.Configuration.StatuslineSettings
-                    {
-                        ShowProject = options.ShowProject,
-                        ShowDirectory = options.ShowDirectory,
-                        ShowGit = options.ShowGit,
-                        ShowModel = options.ShowModel,
-                        ShowContext = options.ShowContext,
-                        Separator = options.Separator,
-
-                        // JSON is read by programs, and escape codes in a
-                        // string field are noise to every one of them.
-                        Colour = false,
-                    }),
+                // JSON is read by programs, and escape codes in a string
+                // field are noise to every one of them. A whole copy, so a
+                // segment added later is not quietly left out of the preview.
+                preview = StatuslineRenderer.Render(inputs, Uncoloured(options)),
                 segments = new
                 {
                     project = options.ShowProject,
@@ -572,6 +777,12 @@ public sealed class StatuslineShowCommand : AsyncCommand<StatuslineTargetSetting
                     git = options.ShowGit,
                     model = options.ShowModel,
                     context = options.ShowContext,
+                    waiting = options.ShowWaiting,
+                    lastWrite = options.ShowLastWrite,
+                    clock = options.ShowClock,
+                    session = options.ShowSession,
+                    turn = options.ShowTurn,
+                    lastCommit = options.ShowLastCommit,
                 },
                 installed = installations.Select(i => new
                 {
@@ -584,6 +795,9 @@ public sealed class StatuslineShowCommand : AsyncCommand<StatuslineTargetSetting
                     matchesCurrent = i.Command is null || expected is null
                         ? (bool?)null
                         : i.Command == expected,
+
+                    // Seconds between redraws while idle, or null for none.
+                    refresh = i.Refresh,
                 }),
             });
 
@@ -604,6 +818,12 @@ public sealed class StatuslineShowCommand : AsyncCommand<StatuslineTargetSetting
         output.WriteLine($"  git        {OnOff(options.ShowGit)}");
         output.WriteLine($"  model      {OnOff(options.ShowModel)}");
         output.WriteLine($"  context    {OnOff(options.ShowContext)}");
+        output.WriteLine($"  waiting    {OnOff(options.ShowWaiting)}");
+        output.WriteLine($"  write      {OnOff(options.ShowLastWrite)}");
+        output.WriteLine($"  clock      {OnOff(options.ShowClock)}");
+        output.WriteLine($"  session    {OnOff(options.ShowSession)}");
+        output.WriteLine($"  turn       {OnOff(options.ShowTurn)}");
+        output.WriteLine($"  commit     {OnOff(options.ShowLastCommit)}");
         output.WriteBlankLine();
         output.WriteLine("[dim]Change these with loadout config set statusline-git false[/]");
         output.WriteBlankLine();
@@ -611,9 +831,12 @@ public sealed class StatuslineShowCommand : AsyncCommand<StatuslineTargetSetting
         output.WriteLine("[bold]Installed[/]");
 
         var stale = false;
+        var still = false;
 
-        foreach (var (description, path, command) in installations)
+        foreach (var (description, path, command, refresh) in installations)
         {
+            still |= command is not null && refresh is null && !redrawNever;
+
             var matches = command is null || expected is null || command == expected;
 
             stale |= !matches;
@@ -642,6 +865,13 @@ public sealed class StatuslineShowCommand : AsyncCommand<StatuslineTargetSetting
             output.WriteLine("[yellow]Repair it with loadout statusline install[/]");
         }
 
+        if (still)
+        {
+            output.WriteBlankLine();
+            output.WriteLine(
+                "[yellow]Reinstall with loadout statusline install so relative times keep moving while the session is idle[/]");
+        }
+
         if (installations.TrueForAll(i => i.Command is null))
         {
             output.WriteBlankLine();
@@ -652,4 +882,25 @@ public sealed class StatuslineShowCommand : AsyncCommand<StatuslineTargetSetting
     }
 
     private static string OnOff(bool value) => value ? "[green]on[/]" : "[dim]off[/]";
+
+    /// <summary>The settings as they are, with colour off.</summary>
+    internal static Models.Configuration.StatuslineSettings Uncoloured(Models.Configuration.StatuslineSettings options)
+    {
+        var copy = options.Copy();
+
+        copy.Colour = false;
+
+        return copy;
+    }
+
+    /// <summary>
+    /// Times for the preview, as a session that finished its turn a few
+    /// minutes ago would have them.
+    /// </summary>
+    internal static StatuslineTimes PreviewTimes(DateTimeOffset now) => new(
+        TurnStartedAt: now.AddMinutes(-6).AddSeconds(-14),
+        TurnEndedAt: now.AddMinutes(-4),
+        LastWriteAt: now.AddMinutes(-5),
+        SessionLength: TimeSpan.FromMinutes(72),
+        LastCommitAt: now.AddHours(-3));
 }

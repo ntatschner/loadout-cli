@@ -31,6 +31,19 @@ public sealed class StatuslinePayload
 
     public StatuslineContextWindow? ContextWindow { get; set; }
 
+    /// <summary>The session's transcript as Claude sent it, which can be the empty string.</summary>
+    public string? TranscriptPath { get; set; }
+
+    /// <summary>
+    /// The session's transcript, or null where there is none. Claude sends an
+    /// empty string rather than leaving the field out when it keeps no
+    /// transcript, and an empty path read as a file would be the working
+    /// directory.
+    /// </summary>
+    public string? TranscriptFile => string.IsNullOrEmpty(TranscriptPath) ? null : TranscriptPath;
+
+    public StatuslineCost? Cost { get; set; }
+
     /// <summary>
     /// Reads a payload, returning null rather than throwing on anything
     /// unexpected. The caller has no way to report a parse failure — its
@@ -82,6 +95,13 @@ public sealed class StatuslineWorkspace
 
     /// <summary>Set only when the session sits in a linked worktree.</summary>
     public string? GitWorktree { get; set; }
+}
+
+/// <summary>What the session has cost so far. Only the time is read.</summary>
+public sealed class StatuslineCost
+{
+    /// <summary>How long the session has been open, in milliseconds.</summary>
+    public long? TotalDurationMs { get; set; }
 }
 
 /// <summary>How much of the context window the session has spent.</summary>

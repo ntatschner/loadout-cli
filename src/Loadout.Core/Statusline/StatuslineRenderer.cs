@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using Loadout.Core.Git;
+using Loadout.Core.Sessions.Hosting;
 using Loadout.Models.Configuration;
 
 namespace Loadout.Core.Statusline;
@@ -19,13 +20,59 @@ namespace Loadout.Core.Statusline;
 /// What the last launch composed, read from disk. Null when nothing has
 /// launched, which is the state in a session started outside the launcher.
 /// </param>
+/// <param name="Now">
+/// The moment the line is drawn for. Null leaves out every time segment,
+/// which keeps the renderer free of a clock of its own.
+/// </param>
+/// <param name="Zone">The zone times are shown in; null means this machine's.</param>
+/// <param name="Times">What the session's times are, or null when they could not be read.</param>
+/// <param name="FixedTimes">
+/// Show only values that do not move between redraws: no clock, no ages.
+/// Set under the accessibility profile's <c>redraw: never</c>, because a
+/// screen reader announces a line that changes on its own.
+/// </param>
+/// <param name="Width">
+/// Columns the line has to fit in, or null when nobody said. Only time
+/// segments are dropped to fit.
+/// </param>
 public sealed record StatuslineInputs(
     StatuslinePayload? Payload,
     string? ProjectSlug,
     string? ProjectRoot,
     GitRepositoryState? Git,
     Usage.SpendNotice? Spend = null,
-    LoadedSpecialists? Specialists = null);
+    LoadedSpecialists? Specialists = null,
+    DateTimeOffset? Now = null,
+    TimeZoneInfo? Zone = null,
+    StatuslineTimes? Times = null,
+    bool FixedTimes = false,
+    int? Width = null);
+
+/// <summary>
+/// The session's times, already read from wherever they live. Plain values,
+/// so the renderer depends on no reader.
+/// </summary>
+/// <param name="TurnStartedAt">When the current or last turn began.</param>
+/// <param name="TurnEndedAt">When the last turn finished; null while one is running.</param>
+/// <param name="PendingToolSince">When a tool call still without a result was made.</param>
+/// <param name="PermissionAsked">Whether that call is waiting on a permission prompt.</param>
+/// <param name="PermissionAt">When the permission prompt was raised.</param>
+/// <param name="BackgroundOutstanding">Whether background work is still running.</param>
+/// <param name="WakeupDue">When a scheduled wake-up is due.</param>
+/// <param name="LastWriteAt">When the agent last changed a file.</param>
+/// <param name="SessionLength">How long the session has run.</param>
+/// <param name="LastCommitAt">When the branch was last committed to.</param>
+public sealed record StatuslineTimes(
+    DateTimeOffset? TurnStartedAt = null,
+    DateTimeOffset? TurnEndedAt = null,
+    DateTimeOffset? PendingToolSince = null,
+    bool PermissionAsked = false,
+    DateTimeOffset? PermissionAt = null,
+    bool BackgroundOutstanding = false,
+    DateTimeOffset? WakeupDue = null,
+    DateTimeOffset? LastWriteAt = null,
+    TimeSpan? SessionLength = null,
+    DateTimeOffset? LastCommitAt = null);
 
 /// <summary>
 /// Turns what the launcher knows into the one line Claude prints at the bottom
@@ -51,6 +98,7 @@ public static class StatuslineRenderer
         ArgumentNullException.ThrowIfNull(settings);
 
         var segments = new List<string>();
+        var times = new List<(TimeSegment Kind, string Text)>();
 
         if (settings.ShowProject && inputs.ProjectSlug is { Length: > 0 } slug)
         {
@@ -109,18 +157,219 @@ public static class StatuslineRenderer
                 settings));
         }
 
+        // After where the session is and before spend: these say what it is
+        // doing, which is about this session, and spend stays last.
+        if (inputs.Now is { } now && inputs.Times is { } sessionTimes)
+        {
+            times.AddRange(TimeSegments(
+                sessionTimes,
+                now,
+                inputs.Zone ?? TimeZoneInfo.Local,
+                inputs.FixedTimes,
+                settings));
+        }
+
+        string? spend = null;
+
         // Last, because it is the only segment that is not about this session.
         // Everything to its left describes where you are; this describes what
         // has been spent, and it is the thing to glance at rather than read.
         if (settings.ShowSpend && inputs.Spend is { Lines.Count: > 0 })
         {
-            segments.Add(Colour(
-                $"spend! ({inputs.Spend.Lines.Count})", Yellow, settings));
+            spend = Colour($"spend! ({inputs.Spend.Lines.Count})", Yellow, settings);
         }
 
-        var separator = string.IsNullOrEmpty(settings.Separator) ? " | " : settings.Separator;
+        var separator = Colour(
+            string.IsNullOrEmpty(settings.Separator) ? " | " : settings.Separator,
+            Dim,
+            settings);
 
-        return Flatten(string.Join(Colour(separator, Dim, settings), segments));
+        string Join() => Flatten(string.Join(
+            separator,
+            segments.Concat(times.Select(t => t.Text)).Concat(spend is null ? [] : [spend])));
+
+        var line = Join();
+
+        if (inputs.Width is not { } width)
+        {
+            return line;
+        }
+
+        // Only time segments give way, in an order that keeps the ones that
+        // need acting on: the clock is on the terminal's own screen anyway,
+        // and waiting is the reason the group exists. Spend is never dropped,
+        // because a crossed threshold missed is money.
+        foreach (var kind in DropOrder)
+        {
+            if (VisibleLength(line) <= width)
+            {
+                break;
+            }
+
+            if (times.RemoveAll(t => t.Kind == kind) > 0)
+            {
+                line = Join();
+            }
+        }
+
+        return line;
+    }
+
+    private enum TimeSegment
+    {
+        Waiting,
+        Write,
+        Clock,
+        Session,
+        Turn,
+        Commit,
+    }
+
+    private static readonly TimeSegment[] DropOrder =
+    [
+        TimeSegment.Clock,
+        TimeSegment.Session,
+        TimeSegment.Turn,
+        TimeSegment.Commit,
+        TimeSegment.Write,
+        TimeSegment.Waiting,
+    ];
+
+    /// <summary>
+    /// The time group, in the order it is drawn: what the session is waiting
+    /// on, the last write, the clock, the session, the last turn, the last
+    /// commit. A segment whose time is not known is left out.
+    /// </summary>
+    private static IEnumerable<(TimeSegment, string)> TimeSegments(
+        StatuslineTimes times,
+        DateTimeOffset now,
+        TimeZoneInfo zone,
+        bool fixedTimes,
+        StatuslineSettings settings)
+    {
+        var hour24 = settings.Time.Hour24;
+
+        // An age moves on every redraw, so under redraw-never it is a clock
+        // time instead, whatever the setting says.
+        var absolute = settings.Time.Absolute || fixedTimes;
+
+        string At(DateTimeOffset at) => TimeFormat.Absolute(at, now, zone, hour24);
+        string When(DateTimeOffset at) => absolute ? At(at) : TimeFormat.Relative(at, now);
+
+        if (settings.ShowWaiting && Waiting(times, now, settings, At) is { } waiting)
+        {
+            yield return (TimeSegment.Waiting, waiting);
+        }
+
+        if (settings.ShowLastWrite && times.LastWriteAt is { } write)
+        {
+            yield return (TimeSegment.Write, Aged(
+                "write " + When(write), now - write, settings.LastWriteAfter, settings));
+        }
+
+        if (settings.ShowClock && !fixedTimes)
+        {
+            yield return (TimeSegment.Clock, Colour(TimeFormat.Clock(now, zone, hour24), Dim, settings));
+        }
+
+        if (settings.ShowSession && times.SessionLength is { } length)
+        {
+            yield return (TimeSegment.Session, Colour(
+                absolute ? "started " + At(now - length) : "session " + TimeFormat.Duration(length),
+                Dim,
+                settings));
+        }
+
+        // Completed turns only: a duration of a finished turn cannot go
+        // stale, where one still running would need a redraw to stay true.
+        if (settings.ShowTurn
+            && times is { TurnStartedAt: { } started, TurnEndedAt: { } ended }
+            && ended >= started)
+        {
+            yield return (TimeSegment.Turn, Colour("turn " + TimeFormat.Duration(ended - started), Dim, settings));
+        }
+
+        if (settings.ShowLastCommit && times.LastCommitAt is { } commit)
+        {
+            yield return (TimeSegment.Commit, Aged(
+                "commit " + When(commit), now - commit, settings.LastCommitAfter, settings));
+        }
+    }
+
+    /// <summary>
+    /// What the session is waiting on, and since when. Null when nothing is
+    /// known about the turn at all.
+    /// </summary>
+    private static string? Waiting(
+        StatuslineTimes times,
+        DateTimeOffset now,
+        StatuslineSettings settings,
+        Func<DateTimeOffset, string> at)
+    {
+        string Since(string what, DateTimeOffset since) =>
+            Aged($"{what} since {at(since)}", now - since, settings.WaitingAfter, settings);
+
+        if (times.TurnEndedAt is not { } ended)
+        {
+            if (times.PendingToolSince is { } tool)
+            {
+                return times.PermissionAsked
+                    ? Since("permission", times.PermissionAt ?? tool)
+                    : Since("on a tool", tool);
+            }
+
+            return times.TurnStartedAt is { } started ? Since("working", started) : null;
+        }
+
+        if (times.WakeupDue is { } due)
+        {
+            // The same instant the dashboard calls a wake-up late, from the
+            // same constant, so the two never disagree about a session.
+            return now >= due + SessionSignals.WakeupGrace
+                ? Colour("due " + at(due), Red, settings)
+                : Colour("wakes " + at(due), Dim, settings);
+        }
+
+        return times.BackgroundOutstanding
+            ? Since("background", ended)
+            : Since("waiting for you", ended);
+    }
+
+    /// <summary>Dim, then amber, then red as the age passes the setting's thresholds.</summary>
+    private static string Aged(string text, TimeSpan age, string? thresholds, StatuslineSettings settings)
+    {
+        var (amber, red) = TimeFormat.Thresholds(thresholds);
+
+        var colour = red is { } r && age >= r ? Red
+            : amber is { } a && age >= a ? Yellow
+            : Dim;
+
+        return Colour(text, colour, settings);
+    }
+
+    /// <summary>The length a person sees: escape sequences take no columns.</summary>
+    private static int VisibleLength(string line)
+    {
+        var length = 0;
+
+        for (var i = 0; i < line.Length; i++)
+        {
+            if (line[i] == '\u001b' && i + 1 < line.Length && line[i + 1] == '[')
+            {
+                i += 2;
+
+                while (i < line.Length && !char.IsAsciiLetter(line[i]))
+                {
+                    i++;
+                }
+
+                continue;
+            }
+
+            length++;
+        }
+
+        return length;
     }
 
     /// <summary>
