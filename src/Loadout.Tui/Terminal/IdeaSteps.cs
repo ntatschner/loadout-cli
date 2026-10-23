@@ -51,6 +51,20 @@ internal static class IdeaSteps
         Pause: false,
         Select: null);
 
+    /// <remarks>
+    /// The refine choice is said outright either way, so the command never
+    /// stops to ask it again. Paused only when a round ran, for its questions
+    /// or plan.
+    /// </remarks>
+    internal static IdeaStep AddTo(IdeaPlace place, string text, bool refine) => new(
+        LauncherCommands.IdeaAdd,
+        ["--to", place.Id, $"--text={text}", refine ? "--refine" : "--no-refine", .. List(place.Project)],
+        Pause: refine,
+        place.Id);
+
+    internal static IdeaStep RemoveNote(IdeaPlace place, string note) => new(
+        LauncherCommands.IdeaNoteRemove, [place.Id, note, .. List(place.Project)], Pause: false, place.Id);
+
     internal static IdeaStep Refine(IdeaPlace place) => new(
         LauncherCommands.IdeaRefine, [place.Id, .. List(place.Project)], Pause: true, place.Id);
 
@@ -149,6 +163,24 @@ internal static class IdeaSteps
             lines.Add(string.Empty);
             Say($"The last round went wrong{tried}: {failed.Error}");
             Say("Refine again with r, or clear this with x.", 2);
+        }
+
+        // Numbered as 'idea show' numbers them, by the id the note was given,
+        // because that is what 'idea note remove' takes.
+        if (record.Notes.Count > 0)
+        {
+            lines.Add(string.Empty);
+            lines.Add("Added since");
+
+            foreach (var note in record.Notes)
+            {
+                Say(string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"{note.Id}  by {note.By}, {note.AddedUtc.UtcDateTime:yyyy-MM-dd}: {note.Text}"), 2);
+                Say(note.TakenUtc is null
+                    ? "Not read by a round yet. Take it back with t."
+                    : "Read by a round, so it stays.", 6);
+            }
         }
 
         var questions = record.Rounds.SelectMany(round => round.Questions).ToList();

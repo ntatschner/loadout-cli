@@ -7,6 +7,7 @@ using Loadout.Tui.Terminal;
 using Terminal.Gui.App;
 using Terminal.Gui.Drivers;
 using Terminal.Gui.Input;
+using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
 using Xunit;
 
@@ -42,6 +43,22 @@ public sealed class IdeasWindowTests
         public IReadOnlyList<string>? ProjectsOffered { get; private set; }
 
         public string? NewIdea() { Asked.Add("new"); return Idea; }
+
+        public (string, bool)? Added { get; init; }
+
+        public string? TakenBack { get; init; }
+
+        public IReadOnlyList<string>? NotesOffered { get; private set; }
+
+        public (string Text, bool Refine)? AddTo(IdeaPlace place, IdeaRecord record) { Asked.Add("addto"); return Added; }
+
+        public string? TakeBack(IdeaPlace place, IReadOnlyList<IdeaNote> unread)
+        {
+            Asked.Add("takeback");
+            NotesOffered = [.. unread.Select(note => note.Id)];
+
+            return TakenBack;
+        }
 
         public (string Question, string Answer)? Answer(IdeaRecord record) { Asked.Add("answer"); return Answered; }
 
@@ -434,6 +451,188 @@ public sealed class IdeasWindowTests
         {
             Press(window, Key.A, Detail(window))!.Command.Should().Be(LauncherCommands.IdeaAnswer,
                 "somebody scrolling a long plan should not have to go back up to act on it");
+        }
+    }
+
+    private static IdeaEntry WithNotes(IdeaEntry entry, params (string Id, bool Read)[] notes)
+    {
+        foreach (var (id, read) in notes)
+        {
+            entry.Record!.Notes.Add(new IdeaNote
+            {
+                Id = id,
+                Text = $"what {id} says",
+                By = "me",
+                AddedUtc = Now,
+                TakenUtc = read ? Now : null,
+            });
+        }
+
+        return entry;
+    }
+
+    [Fact]
+    public void Adding_to_an_idea_says_whether_to_refine_and_passes_the_text_whole()
+    {
+        var cases = new (bool Refine, string Flag, bool Pause)[] { (true, "--refine", true), (false, "--no-refine", false) };
+
+        foreach (var (refine, flag, pause) in cases)
+        {
+            var (window, app) = Open(new Scripted { Added = ("- and a status badge", refine) }, select: "asking");
+
+            using (app)
+            using (window)
+            {
+                var step = Press(window, Key.E);
+
+                step!.Command.Should().Be(LauncherCommands.IdeaAdd);
+                step.Arguments.Should().Equal("--to", "asking", "--text=- and a status badge", flag, "--project", "website");
+                step.Pause.Should().Be(pause, "a round's questions or plan are worth stopping to read");
+                step.Select.Should().Be("asking");
+            }
+        }
+    }
+
+    [Fact]
+    public void Adding_is_not_offered_for_an_accepted_idea()
+    {
+        var accepted = Entry("planned", null, Plan());
+        accepted.Record!.Accepted = new IdeaAcceptance();
+
+        var prompts = new Scripted { Added = ("more", true) };
+        var (window, app) = Open(prompts, ideas: [accepted]);
+
+        using (app)
+        using (window)
+        {
+            Press(window, Key.E).Should().BeNull();
+            prompts.Asked.Should().BeEmpty();
+        }
+    }
+
+    [Fact]
+    public void Only_a_note_no_round_has_read_is_offered_to_take_back()
+    {
+        var prompts = new Scripted { TakenBack = "N2" };
+        var (window, app) = Open(prompts, ideas: [WithNotes(Entry("asking", "website", Questions()), ("N1", true), ("N2", false))]);
+
+        using (app)
+        using (window)
+        {
+            var step = Press(window, Key.T);
+
+            prompts.NotesOffered.Should().Equal("N2");
+            step!.Command.Should().Be(LauncherCommands.IdeaNoteRemove);
+            step.Arguments.Should().Equal("asking", "N2", "--project", "website");
+
+            var shown = Text(Detail(window));
+            shown.Should().Contain("N1 by me, 2026-09-26: what N1 says").And.Contain("Read by a round, so it stays.");
+            shown.Should().Contain("N2 by me, 2026-09-26: what N2 says").And.Contain("Not read by a round yet. Take it back with t.");
+        }
+    }
+
+    [Fact]
+    public void A_read_note_offers_no_removal()
+    {
+        var prompts = new Scripted { TakenBack = "N1" };
+        var (window, app) = Open(prompts, ideas: [WithNotes(Entry("asking", "website", Questions()), ("N1", true))]);
+
+        using (app)
+        using (window)
+        {
+            Press(window, Key.T).Should().BeNull();
+            prompts.Asked.Should().BeEmpty("there is nothing it could take back");
+        }
+    }
+
+    [Fact]
+    public void An_unread_note_is_said_in_the_ideas_row()
+    {
+        var (window, app) = Open(new Scripted(), ideas:
+        [
+            WithNotes(Entry("asking", "website", Questions()), ("N1", true), ("N2", false)),
+            WithNotes(Entry("planned", null, Plan()), ("N1", true)),
+        ]);
+
+        using (app)
+        using (window)
+        {
+            var rows = Rows(window).Source!.ToList().Cast<object?>().Select(line => line?.ToString() ?? string.Empty).ToList();
+
+            rows[0].Should().EndWith("(1 note not read yet)");
+            rows[1].Should().NotContain("not read yet");
+        }
+    }
+
+    private static T Find<T>(View root, string id)
+        where T : View =>
+        Descendants(root).OfType<T>().Single(view => view.Id == id);
+
+    private static IEnumerable<View> Descendants(View root) =>
+        root.SubViews.SelectMany(view => (IEnumerable<View>)[view, .. Descendants(view)]);
+
+    private static (AddToIdeaDialog Dialog, IApplication App) AddDialog(IdeaRecord record)
+    {
+        var app = Application.Create();
+        app.Init(DriverRegistry.Names.ANSI);
+        app.Screen = new Rectangle(0, 0, 140, 40);
+
+        var dialog = new AddToIdeaDialog(new IdeaPlace("website", record.Id), record, app);
+
+        app.Begin(dialog);
+        app.LayoutAndDraw();
+
+        return (dialog, app);
+    }
+
+    [Fact]
+    public void The_refine_box_starts_ticked_and_unticking_it_says_not_to_refine()
+    {
+        var (dialog, app) = AddDialog(Entry("captured", null).Record!);
+
+        using (app)
+        using (dialog)
+        {
+            var box = Find<CheckBox>(dialog, "refine-now");
+
+            box.Value.Should().Be(CheckState.Checked, "at a keyboard the command says Yes by default");
+
+            Find<TextField>(dialog, "add-text").Text = "and a badge";
+            box.Value = CheckState.UnChecked;
+            Find<Button>(dialog, "add-ok").InvokeCommand(Command.Accept);
+
+            dialog.Chosen.Should().Be(("and a badge", false));
+        }
+
+        var (ticked, again) = AddDialog(Entry("captured", null).Record!);
+
+        using (again)
+        using (ticked)
+        {
+            Find<TextField>(ticked, "add-text").Text = "and a badge";
+            Find<Button>(ticked, "add-ok").InvokeCommand(Command.Accept);
+
+            ticked.Chosen.Should().Be(("and a badge", true));
+        }
+    }
+
+    [Fact]
+    public void The_add_step_reminds_of_open_questions_and_says_nothing_when_there_are_none()
+    {
+        var (asking, app) = AddDialog(Entry("asking", "website", Questions()).Record!);
+
+        using (app)
+        using (asking)
+        {
+            Find<Label>(asking, "add-reminder").Text.Should().StartWith("1 question still unanswered");
+        }
+
+        var (captured, again) = AddDialog(Entry("captured", null).Record!);
+
+        using (again)
+        using (captured)
+        {
+            Descendants(captured).Should().NotContain(view => view.Id == "add-reminder");
         }
     }
 }
