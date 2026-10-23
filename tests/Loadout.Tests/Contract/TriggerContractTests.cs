@@ -389,4 +389,54 @@ public sealed class TriggerContractTests
         clear.ExitCode.Should().Be(0, clear.StandardError);
         clear.StandardOutput.Should().Contain("nothing was removed");
     }
+
+    [BuiltCliFact]
+    public async Task An_approval_is_listed_with_what_it_would_spend_approving_needs_a_daemon_and_rejecting_does_not()
+    {
+        using var loadout = new LoadoutProcess();
+        loadout.Environment["LOADOUT_TRIGGERS"] = "1";
+
+        (await loadout.RunAsync("trigger", "approvals")).StandardOutput.Should().Contain("Nothing is waiting");
+
+        // What a daemon writes when a rule that writes matches.
+        var doctor = (await loadout.RunAsync("doctor", "--json")).Json();
+        var state = doctor.GetProperty("checks").EnumerateArray()
+            .First(check => check.GetProperty("name").GetString() == "State").GetProperty("detail").GetString()!;
+        var journal = Path.Combine(state, "triggers", "journal");
+        var now = DateTimeOffset.UtcNow;
+
+        Directory.CreateDirectory(journal);
+        await File.AppendAllTextAsync(
+            Path.Combine(journal, now.UtcDateTime.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture) + ".jsonl"),
+            string.Join('\n',
+                System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    at = now, kind = "event", @event = "e1", subject = "pr:acme/app#4", source = "github", eventKind = "pr-updated",
+                    fields = new { trust = "outside", because = "association NONE", title = "A fix" },
+                }),
+                System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    at = now, kind = "asked", @event = "e1", rule = "fix-pulls", version = 1, subject = "pr:acme/app#4",
+                    usd = 3m, approval = "ab12cd34",
+                }))
+            + "\n");
+
+        var listed = (await loadout.RunAsync("trigger", "approvals", "--json")).Json().EnumerateArray().Single();
+        listed.GetProperty("id").GetString().Should().Be("ab12cd34");
+        listed.GetProperty("budgetUsd").GetDecimal().Should().Be(3m);
+        listed.GetProperty("trust").GetString().Should().Be("outside");
+        listed.GetProperty("then").GetString().Should().Be("its rule is gone");
+
+        var approved = await loadout.RunAsync("trigger", "approve", "ab12cd34");
+        approved.ExitCode.Should().Be(2, approved.StandardOutput);
+        approved.StandardError.Should().Contain("Only a running daemon");
+
+        var rejected = await loadout.RunAsync("trigger", "reject", "ab12cd34");
+        rejected.ExitCode.Should().Be(0, rejected.StandardError);
+        (await loadout.RunAsync("trigger", "approvals", "--json")).Json().EnumerateArray().Should().BeEmpty();
+
+        var unknown = await loadout.RunAsync("trigger", "approve", "nope");
+        unknown.ExitCode.Should().Be(2);
+        unknown.StandardError.Should().Contain("Nothing is waiting");
+    }
 }

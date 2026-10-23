@@ -124,6 +124,17 @@ public sealed class DashboardStudioRoutesTests : IAsyncLifetime
         about.Json.GetProperty("watchOnly").GetBoolean().Should().BeTrue();
         about.Json.GetProperty("startsSessions").GetBoolean().Should().BeFalse();
         about.Json.GetProperty("attachPassphrase").GetBoolean().Should().BeFalse();
+        about.Json.GetProperty("triggers").GetBoolean().Should().BeFalse("triggers are off unless the daemon said so");
+    }
+
+    [Fact]
+    public async Task About_says_when_the_daemon_runs_triggers_so_the_approvals_inbox_is_shown()
+    {
+        _server.Triggers = true;
+
+        var about = await ReadAsync(Signed(HttpMethod.Get, "/api/v1/about"));
+
+        about.Json.GetProperty("triggers").GetBoolean().Should().BeTrue();
     }
 
     [Theory]

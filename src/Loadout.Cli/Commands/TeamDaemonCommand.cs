@@ -387,6 +387,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             server.OfficeCastPins = OfficeCast.Pins(teams?.OfficeCast);
             server.Bin = new TeamBin(_paths);
             server.IsDaemon = true;
+            server.Triggers = _triggering;
             server.DaemonPaused = () => DaemonControl.Paused(_paths);
             server.Update = UpdateAsync;
             server.BinDays = TeamBin.Days(teams?.BinDays);

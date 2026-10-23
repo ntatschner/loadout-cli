@@ -229,9 +229,11 @@ public static class StudioCoverage
         ["trigger disallow"] = Terminal(Unfinished),
         ["trigger allowed"] = Terminal(Unfinished),
         ["trigger sources"] = Terminal(Unfinished),
-        ["trigger approvals"] = Terminal(Unfinished),
-        ["trigger approve"] = Terminal(Unfinished),
-        ["trigger reject"] = Terminal(Unfinished),
+        // The approvals inbox, on the Teams page beside what runs need; shown
+        // only when the daemon runs triggers.
+        ["trigger approvals"] = new("teams", StudioEffect.Reads),
+        ["trigger approve"] = new("teams", StudioEffect.Changes),
+        ["trigger reject"] = new("teams", StudioEffect.Changes),
         ["trigger token set"] = Terminal(Unfinished),
         ["trigger token clear"] = Terminal(Unfinished),
         ["dashboard"] = Terminal("serves a dashboard page, and this is one"),

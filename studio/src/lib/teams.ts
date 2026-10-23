@@ -220,6 +220,7 @@ export const NEED_REASONS = {
   quiet: { word: 'quiet', text: '{node} has said nothing for {for}, three times its usual turn.', clears: 'it says anything at all' },
   budget: { word: 'projected over', text: 'It is projected to overrun its budget: {detail}.', clears: 'it slows, finishes, or you stop it' },
   spent: { word: 'limited', text: 'It has spent its budget.', clears: 'you raise it, or it stops' },
+  approval: { word: 'needs approval', text: 'A trigger rule wants to start a run that writes.', clears: 'you approve or reject it' },
 } as const;
 
 export type NeedReason = keyof typeof NEED_REASONS;
