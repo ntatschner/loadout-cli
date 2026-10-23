@@ -468,4 +468,38 @@ public sealed class TriggerContractTests
         (await loadout.RunAsync("trigger", "list", "--json")).Json().EnumerateArray().Single()
             .GetProperty("reservedUsd").GetDecimal().Should().Be(9m);
     }
+
+    [BuiltCliFact]
+    public async Task The_kinds_a_rule_can_wait_for_are_listed_with_the_fields_each_carries_and_the_builtins()
+    {
+        using var loadout = new LoadoutProcess();
+
+        var read = (await loadout.RunAsync("trigger", "events", "--json")).Json();
+
+        var kinds = read.GetProperty("kinds").EnumerateArray().ToList();
+        kinds.Select(one => one.GetProperty("kind").GetString()).Should().Contain(["run-finished", "pr-opened", "ci-failed", "clock"]);
+
+        var opened = kinds.Single(one => one.GetProperty("kind").GetString() == "pr-opened");
+        opened.GetProperty("github").GetBoolean().Should().BeTrue();
+        opened.GetProperty("fields").EnumerateArray().Select(one => one.GetString()).Should().Contain(["base", "trust", "draft"]);
+        kinds.Single(one => one.GetProperty("kind").GetString() == "pr-merged").GetProperty("ending").GetBoolean().Should().BeTrue();
+
+        read.GetProperty("builtins").EnumerateArray().Select(one => one.GetString()).Should().Contain("docs audit");
+    }
+
+    [BuiltCliFact]
+    public async Task A_proposed_cap_for_a_team_with_its_own_budget_is_five_of_its_runs_and_says_so()
+    {
+        using var loadout = new LoadoutProcess();
+
+        // bug-hunt budgets $15 a run of its own; it has no runs here, so the
+        // proposal on its own would be the $2 starter figure nothing uses.
+        var added = await loadout.RunAsync(
+            "trigger", "add", "second-look", "pr-opened", "--team", "bug-hunt", "--goal", "Look again.", "--cap-usd", "proposed");
+
+        added.ExitCode.Should().Be(0, added.StandardError);
+        added.StandardOutput.Should().Contain("5 runs' worth of $15").And.NotContain("starter figure");
+        (await loadout.RunAsync("trigger", "list", "--json")).Json().EnumerateArray().Single()
+            .GetProperty("rule").GetProperty("capUsd").GetDecimal().Should().Be(75m);
+    }
 }

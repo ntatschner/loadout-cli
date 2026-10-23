@@ -87,7 +87,7 @@ public static class StudioCoverage
     private static StudioReach Terminal(string reason) => new(CommandsPage, StudioEffect.TerminalOnly, reason);
 
     private const string Rules =
-        "writes or tunes trigger rules, which is done in the terminal for now; Studio shows what the rules need of you on the Teams page";
+        "is trigger housekeeping that is done rarely and best tried with --dry-run first, which the Trigger rules page does not need to offer";
 
     private static StudioReach ChangesWith(params string[] options) => new(CommandsPage, StudioEffect.Changes, ChangesOnlyWith: options);
 
@@ -209,31 +209,34 @@ public static class StudioCoverage
         ["team webhook disable"] = new("teams", StudioEffect.Changes),
         ["team webhook show"] = new("teams", StudioEffect.Reads),
 
-        // What trigger rules need of a person - approvals, a paused rule, the
-        // stale list, a stopped source - is on the Teams page beside what
-        // runs need. Writing and tuning rules stays in the terminal until
-        // they have a page of their own.
+        // Trigger rules have a place of their own on the Teams page, where
+        // they are written, tried and removed, with the allow-list and the
+        // teams' suggestions beside them; what they need of a person is in
+        // Needs you with what runs need. Moving a schedule, pruning the
+        // journal and keeping a token stay in the terminal, for the reasons
+        // each gives.
         ["trigger list"] = new("teams", StudioEffect.Reads),
-        ["trigger add"] = Terminal(Rules),
-        ["trigger remove"] = Terminal(Rules),
+        ["trigger events"] = new("teams", StudioEffect.Reads),
+        ["trigger add"] = new("teams", StudioEffect.Changes),
+        ["trigger remove"] = new("teams", StudioEffect.Changes),
         ["trigger resume"] = new("teams", StudioEffect.Changes),
         ["trigger stale"] = new("teams", StudioEffect.Reads),
         ["trigger release"] = new("teams", StudioEffect.Changes),
         ["trigger adopt"] = Terminal(Rules),
-        ["trigger journal"] = Terminal(Rules),
-        ["trigger test"] = Terminal(Rules),
-        ["trigger suggested"] = Terminal(Rules),
-        ["trigger accept"] = Terminal(Rules),
+        ["trigger journal"] = new("teams", StudioEffect.Reads),
+        ["trigger test"] = new("teams", StudioEffect.Reads),
+        ["trigger suggested"] = new("teams", StudioEffect.Reads),
+        ["trigger accept"] = new("teams", StudioEffect.Changes),
         ["trigger prune"] = Terminal(Rules),
-        ["trigger allow"] = Terminal(Rules),
-        ["trigger disallow"] = Terminal(Rules),
-        ["trigger allowed"] = Terminal(Rules),
+        ["trigger allow"] = new("teams", StudioEffect.Changes),
+        ["trigger disallow"] = new("teams", StudioEffect.Changes),
+        ["trigger allowed"] = new("teams", StudioEffect.Reads),
         ["trigger sources"] = new("teams", StudioEffect.Reads),
         ["trigger approvals"] = new("teams", StudioEffect.Reads),
         ["trigger approve"] = new("teams", StudioEffect.Changes),
         ["trigger reject"] = new("teams", StudioEffect.Changes),
-        ["trigger token set"] = Terminal(Rules),
-        ["trigger token clear"] = Terminal(Rules),
+        ["trigger token set"] = Terminal("takes a token from standard input or a hidden prompt, and a page should not carry a credential in a form"),
+        ["trigger token clear"] = Terminal("forgets the token 'trigger token set' keeps, and the two belong together in the terminal"),
         ["dashboard"] = Terminal("serves a dashboard page, and this is one"),
         ["dashboard sign-out"] = new("settings", StudioEffect.Changes),
         ["dashboard signal"] = Terminal("is run by the agent's own hook inside a session, to say it is waiting"),

@@ -416,6 +416,7 @@
     { key: 'bin', label: 'The bin' },
     { key: 'tools', label: 'Shared tools' },
     { key: 'wiring', label: 'Calls for help and the webhook' },
+    { key: 'triggers', label: 'Trigger rules' },
   ];
 
   /* ---------- Team Focus: the board, with a run or a team beside it ---------- */
@@ -511,7 +512,7 @@
   </div>
 
   <nav class="subnav" aria-label="Teams">
-    {#each PLACES as one (one.label)}
+    {#each PLACES.filter((one) => one.key !== 'triggers' || studio.about?.triggers) as one (one.label)}
       <a href={one.key ? `#teams/+${one.key}` : '#teams'} aria-current={place === one.key ? 'page' : undefined}>{one.label}</a>
     {/each}
   </nav>
@@ -695,6 +696,18 @@
       <CommandAction path="tools trust" title="Let a remediator run one" />
     </div>
     <p class="calm small">Agreeing to a draft's tests, <code class="ls-cmd">--agree</code>, is refused from here and made in a terminal.</p>
+  {:else if place === 'triggers'}
+    <!-- Loaded when it is opened: most visits to Teams never come here. -->
+    {#await import('../lib/components/TriggerRules.svelte')}
+      <p class="calm" role="status">Reading the trigger rules…</p>
+    {:then rules}
+      <rules.default
+        teams={(teams ?? []).filter((team) => !team.template).map((team) => team.name)}
+        projects={choices?.projects ?? []}
+        disabledReason={watch}
+        onfail={fail}
+      />
+    {/await}
   {:else if place === 'wiring'}
     <h2 class="topicname">Calls for help and the webhook</h2>
     {#if wiring}

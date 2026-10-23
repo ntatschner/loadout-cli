@@ -1053,6 +1053,7 @@ public static class Program
                 CommandCategory.Integration,
                 "trigger event rule when happens automation webhook run finished");
             trigger.AddCommand<TriggerListCommand>("list");
+            trigger.AddCommand<TriggerEventsCommand>("events");
             trigger.AddCommand<TriggerAddCommand>("add");
             trigger.AddCommand<TriggerRemoveCommand>("remove");
             trigger.AddCommand<TriggerResumeCommand>("resume");

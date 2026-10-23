@@ -75,7 +75,7 @@ export function attentionNeeds(
     .filter((one) => one.paused)
     .map((one) => ({
       reason: 'paused',
-      run: `paused:${one.rule.id}`,
+      run: '',
       goal: one.rule.id,
       team: 'trigger rule',
       href: '#teams',
@@ -92,7 +92,7 @@ export function attentionNeeds(
 
     return {
       reason: 'stale',
-      run: `stale:${rule}`,
+      run: '',
       goal: rule,
       team: 'trigger rule',
       href: '#teams',
@@ -102,7 +102,7 @@ export function attentionNeeds(
   });
 
   const stopped: NeedItem[] = sources?.github?.problem
-    ? [{ reason: 'source', run: 'source:github', goal: 'GitHub', team: 'trigger source', href: '#teams', text: sources.github.problem }]
+    ? [{ reason: 'source', run: '', goal: 'GitHub', team: 'trigger source', href: '#teams', text: sources.github.problem }]
     : [];
 
   return [...paused, ...held, ...stopped];
