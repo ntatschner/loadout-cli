@@ -21,6 +21,7 @@
   import { lineFor } from '../lib/commandLine';
   import { declareWords, startWords, taskAt, taskParts, whereOf, type Chosen, type Task } from '../lib/tasks';
   import { router } from '../lib/router.svelte';
+  import { reveal } from '../lib/reveal.svelte';
   import type { Finding } from '../lib/health';
   import { studio } from '../lib/state.svelte';
   import { toasts } from '../lib/toasts.svelte';
@@ -321,7 +322,7 @@
     const started = await studio.startSession({ project, taskId: task.id }, lineFor('launch', startWords(project, task.id)));
 
     if (started) {
-      router.go('session', started.id);
+      reveal({ kind: 'session', id: started.id, launched: true });
     }
   }
 

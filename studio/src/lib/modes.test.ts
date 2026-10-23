@@ -2,7 +2,7 @@
 // Terminal Focus's keys, Ctrl+Shift+M, how morph() moves under each motion
 // setting, and the mode kept in this browser across a reload.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { deckKey, isModeKey, morph, nextMode, placeSlots } from './modes';
+import { deckKey, isModeKey, launchSlots, morph, nextMode, placeSlots, shrinkSlots } from './modes';
 import { Studio } from './state.svelte';
 
 const key = (over: Partial<KeyboardEvent>) => ({ ctrlKey: false, shiftKey: false, altKey: false, metaKey: false, key: '', code: '', ...over });
@@ -62,6 +62,64 @@ describe('Terminal Focus', () => {
 
   it('reads a damaged arrangement as empty where it repeats itself', () => {
     expect(placeSlots(['a', 'a'], { order, layout: 2 })).toEqual(['a', 'b']);
+  });
+
+  it('fills only the panes it is told to from spare tabs, leaving the rest empty', () => {
+    expect(placeSlots(['a', 'b', 'c', null], { order, layout: 4, fill: 2 })).toEqual(['a', 'b', 'c', null]);
+    expect(placeSlots(['a', null], { order, layout: 2, fill: 2 })).toEqual(['a', 'b']);
+  });
+
+  describe('a session just started', () => {
+    it('takes an empty pane, not the highlighted one', () => {
+      expect(launchSlots(['a', null, 'c', 'd'], { layout: 4, pick: 'n' })).toEqual({ slots: ['a', 'n', 'c', 'd'], layout: 4, at: 1, grew: false, replaced: null, because: null });
+    });
+
+    it('grows the layout one step, 1 to 2 to 4, when no pane is free', () => {
+      expect(launchSlots(['a'], { layout: 1, pick: 'n' })).toEqual({ slots: ['a', 'n'], layout: 2, at: 1, grew: true, replaced: null, because: null });
+      expect(launchSlots(['a', 'b'], { layout: 2, pick: 'n' })).toEqual({ slots: ['a', 'b', 'n', null], layout: 4, at: 2, grew: true, replaced: null, because: null });
+    });
+
+    it('with four full, takes the pane of one that has ended before any idle one', () => {
+      const placed = launchSlots(['a', 'b', 'c', 'd'], { layout: 4, pick: 'n', ended: ['c'], active: { a: 1, b: 2, c: 3, d: 4 } });
+
+      expect(placed).toEqual({ slots: ['a', 'b', 'n', 'd'], layout: 4, at: 2, grew: false, replaced: 'c', because: 'ended' });
+    });
+
+    it('with none ended, takes the pane idle longest, and one never seen active counts as idlest', () => {
+      expect(launchSlots(['a', 'b', 'c', 'd'], { layout: 4, pick: 'n', active: { a: 30, b: 10, c: 20, d: 40 } }).replaced).toBe('b');
+      expect(launchSlots(['a', 'b', 'c', 'd'], { layout: 4, pick: 'n', active: { a: 30, b: 10, c: 20 } })).toMatchObject({ at: 3, replaced: 'd', because: 'idle' });
+    });
+
+    it('never pushes out a session waiting on you, unless every pane is waiting', () => {
+      expect(launchSlots(['a', 'b', 'c', 'd'], { layout: 4, pick: 'n', waiting: ['b'], active: { a: 30, b: 10, c: 20, d: 40 } }).replaced).toBe('c');
+      expect(launchSlots(['a', 'b', 'c', 'd'], { layout: 4, pick: 'n', waiting: ['a', 'b', 'c', 'd'], active: { a: 30, b: 10, c: 20, d: 40 } }).replaced).toBe('b');
+    });
+
+    it('takes the pane of a session gone from the list as an empty one, before growing', () => {
+      expect(launchSlots(['old'], { layout: 1, pick: 'n', gone: ['old'] })).toEqual({ slots: ['n'], layout: 1, at: 0, grew: false, replaced: null, because: null });
+    });
+
+    it('stays where it is if it is already in a pane', () => {
+      expect(launchSlots(['a', 'n'], { layout: 2, pick: 'n' })).toMatchObject({ slots: ['a', 'n'], layout: 2, at: 1, grew: false });
+    });
+  });
+
+  describe('giving panes back', () => {
+    it('shrinks to the smallest layout that holds the sessions still listed, keeping their order', () => {
+      expect(shrinkSlots(['a', 'gone', 'n', null], { layout: 4, chosen: 1, order: ['a', 'n'] })).toEqual({ slots: ['a', 'n'], layout: 2 });
+      expect(shrinkSlots(['gone', 'n'], { layout: 2, chosen: 1, order: ['n'] })).toEqual({ slots: ['n'], layout: 1 });
+    });
+
+    it('never below the layout you chose', () => {
+      expect(shrinkSlots(['a', null, null, null], { layout: 4, chosen: 2, order: ['a'] })).toEqual({ slots: ['a', null], layout: 2 });
+      expect(shrinkSlots(['a', null, null, null], { layout: 4, chosen: 4, order: ['a'] })).toEqual({ slots: ['a', null, null, null], layout: 4 });
+    });
+
+    it('keeps the grown layout while it is still full enough to need it', () => {
+      const slots = ['a', 'b', 'n', null];
+
+      expect(shrinkSlots(slots, { layout: 4, chosen: 2, order: ['a', 'b', 'n'] })).toEqual({ slots, layout: 4 });
+    });
   });
 
   it('picks a session by its tab number on Ctrl+Alt, read from the physical key too', () => {

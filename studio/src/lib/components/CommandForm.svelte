@@ -11,7 +11,7 @@
   import TerminalOnly from './TerminalOnly.svelte';
   import JobResult from './JobResult.svelte';
   import { commands, sessions, SignedOut, type Job, type StudioCommand, type StudioOption } from '../api';
-  import { router } from '../router.svelte';
+  import { reveal } from '../reveal.svelte';
   import { lineFor, problemWith, readsWith, wordsFor } from '../commandLine';
   import { studio } from '../state.svelte';
 
@@ -98,7 +98,7 @@
     try {
       const opened = await sessions.start({ project: '', command: command.path, words, columns: 120, rows: 32 });
 
-      router.go('session', opened.id);
+      reveal({ kind: 'session', id: opened.id, launched: true });
     } catch (error) {
       if (error instanceof SignedOut) {
         studio.signedOut = true;

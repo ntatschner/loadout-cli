@@ -6,7 +6,7 @@ import { quoted } from './commands';
 import { codeTokens, diffLines, fileKind, inline, markdown, parseCsv } from './files';
 import { sheetCommand, sheetProblem, sheetValues, type SheetTeam } from './teamSheet';
 import { depthKey, gateButtons, gateKind, pruneCommand, pruneSentence, type GateAsk } from './teams';
-import { boardRunsOf, boardTeamsOf, keptRuns, nodeWord } from './teamsData';
+import { boardRunsOf, boardTeamsOf, keptRuns, nodeWord, startedRun } from './teamsData';
 import type { Run } from './api';
 
 const ask = (over: Partial<GateAsk>): GateAsk => ({ kind: 'question', run: '20261017-1402-ab3f', gate: 'g1', question: 'Which way?', ...over });
@@ -245,5 +245,19 @@ describe('the runs a query kept', () => {
 
   it('are the ones the command kept, in its order, leaving out any Studio does not hold', () => {
     expect(keptRuns(runs, [{ run: 'r3' }, { run: 'gone' }, { run: 'r1' }]).map((one) => one.id)).toEqual(['r3', 'r1']);
+  });
+});
+
+describe('a run just started', () => {
+  const listed = [
+    { id: 'r1', team: 'reviewers', goal: 'check the docs' },
+    { id: 'r2', team: 'reviewers', goal: 'check the docs ' },
+    { id: 'r3', team: 'builders', goal: 'check the docs' },
+  ];
+
+  it('is the one of its team and goal that was not listed before it started', () => {
+    expect(startedRun(listed, ['r1'], 'reviewers', 'check the docs')).toBe('r2');
+    expect(startedRun(listed, ['r1', 'r2'], 'reviewers', 'check the docs')).toBeNull();
+    expect(startedRun(listed, [], 'builders', 'check the docs')).toBe('r3');
   });
 });

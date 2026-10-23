@@ -10,6 +10,7 @@
   import SessionPane from '../lib/components/SessionPane.svelte';
   import TermDeck from '../lib/components/TermDeck.svelte';
   import { studio } from '../lib/state.svelte';
+  import { deckLaunch } from '../lib/reveal.svelte';
   import { wordFor } from '../lib/signals';
   import { TABS_KEY, arrange, clear, hide, prune, readTabs, unhide, withOrder, type TabState } from '../lib/tabs';
   import { readSplit, SPLIT_KEYS } from '../lib/splits';
@@ -18,12 +19,16 @@
   let { id = null, onlaunch = undefined }: { id?: string | null; onlaunch?: () => void } = $props();
 
   const LAYOUT = 'studio-deck-layout';
+  const GROWN = 'studio-deck-grown';
   const LAST = 'studio-deck-session';
   const SLOTS = 'studio-deck-slots';
   const splits = { 2: readSplit(studio.kept(SPLIT_KEYS.deck2, ''), 1), 4: readSplit(studio.kept(SPLIT_KEYS.deck4, ''), 2) };
 
   const kept = Number(studio.kept(LAYOUT, '2'));
   const layout: DeckLayout = kept === 1 || kept === 4 ? kept : 2;
+  // Panes a launch added past that layout, so going to another page and back keeps them.
+  const grownKept = Number(studio.kept(GROWN, '0'));
+  const grown: DeckLayout | null = (grownKept === 2 || grownKept === 4) && grownKept > layout ? grownKept : null;
   const slots = keptSlots();
 
   /** The panes as they were; anything unreadable is no arrangement at all. Never more than four, the most a layout shows. */
@@ -112,6 +117,20 @@
     if (now - (seen[one] ?? 0) > 5000) {
       seen = { ...seen, [one]: now };
     }
+
+    stir(one);
+  }
+
+  // When each session last wrote or was typed into here, for which pane a
+  // launch takes when four are full. Studio's own: a reload starts them level.
+  let active = $state<Record<string, number>>({});
+
+  function stir(one: string) {
+    const now = Date.now();
+
+    if (now - (active[one] ?? 0) > 5000) {
+      active = { ...active, [one]: now };
+    }
   }
 
   function picked(one: string) {
@@ -129,10 +148,15 @@
     changes={!studio.watchOnly}
     current={id ?? (start || null)}
     {layout}
+    {grown}
     {slots}
     listed={studio.loaded}
+    launch={deckLaunch.id}
+    {active}
+    onlaunched={() => (deckLaunch.id = null)}
     onpick={picked}
-    onlayout={(next) => studio.keep(LAYOUT, String(next))}
+    onlayout={(next) => { studio.keep(LAYOUT, String(next)); studio.keep(GROWN, '0'); }}
+    ongrown={(panes) => studio.keep(GROWN, String(panes))}
     onslots={(next) => studio.keep(SLOTS, JSON.stringify(next))}
     {splits}
     onsplit={(count, fractions) => studio.keep(count === 2 ? SPLIT_KEYS.deck2 : SPLIT_KEYS.deck4, JSON.stringify(fractions))}
@@ -145,7 +169,7 @@
     onend={(one) => { const session = hosted(one); return session && studio.stopSession(session); }}
   >
     {#snippet pane(one, register)}
-      <SessionPane id={one} onready={register} onoutput={() => looked(one)} />
+      <SessionPane id={one} onready={register} onoutput={() => looked(one)} ontyped={() => stir(one)} />
     {/snippet}
   </TermDeck>
 </div>

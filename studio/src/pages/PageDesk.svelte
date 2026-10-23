@@ -36,6 +36,7 @@
   import { PAGE_TITLES, type SixPage } from '../lib/modes';
   import { PAGE_KEYS, SCOPE_WORDS, type PureAction, type PureCommand, type PureGroup, type PureItem, type PureScope } from '../lib/pure';
   import { router } from '../lib/router.svelte';
+  import { reveal, revealParts } from '../lib/reveal.svelte';
   import { studio } from '../lib/state.svelte';
   import { readSplit, SPLIT_KEYS } from '../lib/splits';
   import type { Chosen } from '../lib/tasks';
@@ -154,14 +155,14 @@
       try {
         const opened = await sessions.start({ project: '', command: path, words, columns: 120, rows: 32 });
 
-        router.go('session', opened.id);
+        reveal({ kind: 'session', id: opened.id, launched: true });
 
         return 'Opened in a terminal';
       } catch (error) {
         return fail(error);
       }
     },
-    go: (...parts) => router.go(...parts),
+    go: revealParts,
   };
 
   /* ---------- the list and the picked thing ---------- */
@@ -284,7 +285,7 @@
     }
 
     for (const one of studio.catalogue) {
-      rows.push({ kind: 'command', label: one.description || one.path, cmd: `$ loadout ${one.path}`, run: () => { studio.setMode('default'); router.go('commands', ...one.path.split(' ')); } });
+      rows.push({ kind: 'command', label: one.description || one.path, cmd: `$ loadout ${one.path}`, run: () => revealParts('commands', ...one.path.split(' ')) });
     }
 
     const q = typed.trim().toLowerCase();

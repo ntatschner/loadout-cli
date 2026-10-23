@@ -14,22 +14,33 @@ export interface Route {
    * route built by hand, as tests build them, need not say it.
    */
   query?: string;
+  /**
+   * A page kept open beside the terminals while the address names one of
+   * them: #session/<id>?beside=projects. Only the deck's own routes, Home,
+   * Sessions and a session, carry one.
+   */
+  beside?: string[];
 }
 
 const PAGES: PageKey[] = ['home', 'sessions', 'ideas', 'teams', 'events', 'memory', 'context', 'spend', 'projects', 'commands', 'settings'];
+
+const pathOf = (text: string) => text.split('/').filter(Boolean).map(decodeURIComponent);
 
 export function parse(hash: string): Route {
   const bare = hash.replace(/^#\/?/, '');
   const mark = bare.indexOf('?');
   const query = mark < 0 ? '' : bare.slice(mark + 1);
-  const parts = (mark < 0 ? bare : bare.slice(0, mark)).split('/').filter(Boolean).map(decodeURIComponent);
+  const parts = pathOf(mark < 0 ? bare : bare.slice(0, mark));
   const [first = 'home', ...rest] = parts;
+  const page = first === 'session' && rest.length ? 'session' : (PAGES as string[]).includes(first) ? (first as PageKey) : 'unknown';
+  const beside = (page === 'session' || page === 'home' || page === 'sessions') && query.startsWith('beside=') ? pathOf(query.slice('beside='.length)) : [];
 
-  if (first === 'session' && rest.length) {
-    return { page: 'session', rest, query };
-  }
+  return beside.length ? { page, rest, query: '', beside } : { page, rest, query };
+}
 
-  return { page: (PAGES as string[]).includes(first) ? (first as PageKey) : 'unknown', rest, query };
+/** The query that keeps a page open beside the terminals. */
+export function besideQuery(parts: string[] | undefined): string {
+  return parts?.length ? `beside=${parts.map(encodeURIComponent).join('/')}` : '';
 }
 
 /** The address for a page and what follows it, with a query after a '?' where there is one. */
@@ -69,7 +80,12 @@ class Router {
   }
 
   go(...parts: string[]): void {
-    const hash = `#${parts.map(encodeURIComponent).join('/')}`;
+    this.goWith(parts);
+  }
+
+  /** As go, with a query: how a jump keeps a page open beside the terminals. */
+  goWith(parts: string[], query = ''): void {
+    const hash = hashOf(parts, query);
 
     if (location.hash === hash) {
       this.route = parse(hash);

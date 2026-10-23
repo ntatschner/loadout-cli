@@ -276,3 +276,12 @@ export function keptRuns(runs: Run[], kept: { run: string }[] | null): Run[] {
 
   return kept.map((one) => byId.get(one.run)).filter((run): run is Run => !!run);
 }
+
+/**
+ * The run a start just made: starting answers before the run has an id, so
+ * it is the one of that team and goal that was not listed before. Null until
+ * it is.
+ */
+export function startedRun(runs: Pick<Run, 'id' | 'team' | 'goal'>[], before: string[], team: string, goal: string): string | null {
+  return runs.find((run) => !before.includes(run.id) && run.team === team && run.goal.trim() === goal.trim())?.id ?? null;
+}

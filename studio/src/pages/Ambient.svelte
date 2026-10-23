@@ -12,7 +12,7 @@
   import { studio } from '../lib/state.svelte';
   import type { Orbiter } from '../lib/types';
   import { actionsFor } from '../lib/actions';
-  import { router } from '../lib/router.svelte';
+  import { revealParts } from '../lib/reveal.svelte';
 
   let { onleave, onlaunch }: { onleave: () => void; onlaunch: () => void } = $props();
 
@@ -23,7 +23,7 @@
   const lines = $derived(studio.lines);
   const focus = $derived(lines.find((line) => line.id === focusId) ?? rankUrgent(lines)[0] ?? lines[0]);
   const waiting = $derived(studio.waiting);
-  const actions = $derived(focus ? actionsFor(studio, focus, router.go.bind(router)) : []);
+  const actions = $derived(focus ? actionsFor(studio, focus, revealParts) : []);
   const running = $derived(lines.filter((line) => line.stage === 2 && !line.waiting && !line.blocked).length);
   const oldest = $derived.by(() => {
     const asked = waiting.map((line) => line.askedAt).filter((at): at is number => at !== undefined);

@@ -12,7 +12,7 @@
   import Dialog from '../lib/components/Dialog.svelte';
   import type { Conversation } from '../lib/api';
   import { resumeAllWords } from '../lib/resume';
-  import { router } from '../lib/router.svelte';
+  import { reveal } from '../lib/reveal.svelte';
   import Signal from '../lib/components/Signal.svelte';
   import Command from '../lib/components/Command.svelte';
   import { wordFor } from '../lib/signals';
@@ -48,7 +48,7 @@
       const id = await studio.resume(one.conversation!, {}, one.id);
 
       if (id && lost.length <= 1) {
-        router.go('session', id);
+        reveal({ kind: 'session', id, launched: true });
       }
     } finally {
       busy = false;
@@ -81,7 +81,7 @@
     studio.keep(TABS_KEY, JSON.stringify(tabs));
     hiddenHere = tabs.hidden;
     studio.setMode('terminals');
-    router.go('session', ref);
+    reveal({ kind: 'session', id: ref });
   }
   const live = $derived(all.filter((line) => line.stage !== 4));
   const ended = $derived(all.filter((line) => line.stage === 4));

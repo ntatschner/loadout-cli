@@ -382,6 +382,7 @@ Don't reopen these.
 
 - In Terminal Focus, opening one of the six pages (from the rail, the palette or a link) keeps the TermDeck on the left and opens the page in a PageBeside on the right: "Memory · beside your terminals".
 - In Team Focus, the RunBoard stays on the left: "Spend · beside the runs board". Picking a run on the board leaves the page and opens the run, as today.
+- **Launching from a page beside keeps it open.** In Terminal Focus the new session goes into a pane of the deck and the page stays beside it; in Team Focus the session opens beside the board in the page's place, as a run does. `NEXT.md`'s "Modes: where a jump lands" has the whole table.
 - **Layout:**
   - The panel is 52% of the width, at least 460px, sticky, and scrolls on its own.
   - The left side clips rather than running under the panel.

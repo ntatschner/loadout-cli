@@ -16,7 +16,7 @@
   import { launchSheet, type Conversation, type Launch, type Preview, type Sheet } from '../lib/api';
   import { resumeWords } from '../lib/resume';
   import { roving } from '../lib/roving';
-  import { router } from '../lib/router.svelte';
+  import { reveal } from '../lib/reveal.svelte';
   import { studio } from '../lib/state.svelte';
   import type { Chosen } from '../lib/tasks';
 
@@ -175,7 +175,7 @@
 
     if (started) {
       onclose();
-      router.go('session', started.id);
+      reveal({ kind: 'session', id: started.id, launched: true });
     }
 
     return true;
@@ -190,7 +190,7 @@
 
     if (id) {
       onclose();
-      router.go('session', id);
+      reveal({ kind: 'session', id, launched: true });
     }
 
     return true;

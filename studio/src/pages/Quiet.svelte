@@ -40,18 +40,16 @@
   const run = $derived(open?.item.kind === 'team run' ? (studio.runs.find((one) => one.id === open!.item.id) ?? null) : null);
   const session = $derived(open?.item.kind === 'session' ? (studio.lines.find((line) => line.kind === 'session' && line.ref === open!.item.id) ?? null) : null);
 
-  // Something else, the ModeBar's waiting count, may ask for one to be opened.
+  // Something else, the ModeBar's waiting count or a jump, may ask for one to
+  // be opened. One just started is not listed yet, so the ask waits for it.
   $effect(() => {
     const wanted = studio.focusing;
+    const item = wanted ? items.find((one) => one.id === wanted.id && one.kind === wanted.kind) : undefined;
 
-    if (wanted) {
+    if (item) {
       untrack(() => {
         studio.focusing = null;
-        const item = items.find((one) => one.id === wanted.id && one.kind === wanted.kind);
-
-        if (item) {
-          show(item, null);
-        }
+        show(item, null);
       });
     }
   });

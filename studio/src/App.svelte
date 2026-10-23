@@ -45,7 +45,9 @@
   import QuietSettings from './pages/quiet/QuietSettings.svelte';
   import QuietMemory from './pages/quiet/QuietMemory.svelte';
   import QuietSpend from './pages/quiet/QuietSpend.svelte';
-  import { besideReturn, isModeKey, isSixPage, PAGE_TITLES, type Waiting } from './lib/modes';
+  import { besideReturn, isModeKey, isSixPage, PAGE_TITLES, type SixPage, type Waiting } from './lib/modes';
+  import { besideOf } from './lib/reveal';
+  import { reveal, revealParts } from './lib/reveal.svelte';
   import { readSplit, SPLIT_KEYS } from './lib/splits';
 
   let palette = $state(false);
@@ -132,14 +134,7 @@
 
   /** The oldest question, wherever the current mode shows it, so no focus mode ever hides one. */
   function goWaiting(waiting: Waiting) {
-    if (studio.mode === 'minimal') {
-      router.go('home');
-      studio.focusing = { kind: waiting.kind === 'session' ? 'session' : 'team run', id: waiting.id };
-    } else if (waiting.kind === 'session') {
-      router.go('session', waiting.id);
-    } else {
-      router.go('teams', waiting.id);
-    }
+    reveal(waiting.kind === 'session' ? { kind: 'session', id: waiting.id } : { kind: 'run', id: waiting.id });
   }
 
   // Ctrl+Shift+M, caught before anything on the page, a terminal included,
@@ -167,10 +162,18 @@
   // The six pages follow the mode: in Terminals and Teams they open beside
   // the deck or the board, which stay where they are and stay live.
   const six = $derived(isSixPage(page));
-  const deckHost = $derived(deck || (studio.mode === 'terminals' && six));
+  // What is open beside the deck or the board: one of the six, a run or a
+  // team's page beside the terminals, or a session beside the board. A
+  // session's address in Terminals can name the page it keeps open, so a
+  // launch from that page leaves it where it was.
+  const besideRoute = $derived(besideOf(studio.mode, router.route));
+  const deckHost = $derived(deck || (studio.mode === 'terminals' && !!besideRoute));
   // In Pure Focus each of the six pages is a desk; its places (+add and the rest) stay pages, in the flat look.
   const pureDesk = $derived(studio.mode === 'pure' && six && !router.route.rest[0]?.startsWith('+'));
-  const boardHost = $derived(board || (studio.mode === 'teams' && six));
+  const boardHost = $derived(board || (studio.mode === 'teams' && !!besideRoute));
+  const besideTitle = $derived(
+    !besideRoute ? '' : isSixPage(besideRoute.page) ? PAGE_TITLES[besideRoute.page] : besideRoute.page === 'session' ? 'Session' : besideRoute.rest[0] === '+team' ? 'Team' : 'Run',
+  );
 
   // The deck's session, kept while a page is open beside it, so opening one never changes the panes.
   let deckId = $state<string | null>(null);
@@ -181,7 +184,8 @@
     const route = router.route;
 
     untrack(() => {
-      lastOther = besideReturn(lastOther, route);
+      // Only what is beside the deck or board is left out: closing it goes back to what was there.
+      lastOther = besideReturn(lastOther, route, !route.beside && !!besideRoute);
 
       if (route.page === 'session' || route.page === 'home' || route.page === 'sessions') {
         deckId = route.page === 'session' ? (route.rest[0] ?? null) : null;
@@ -190,7 +194,13 @@
   });
 
   function closeBeside() {
-    router.go(...lastOther);
+    const route = router.route;
+
+    if (route.beside) {
+      router.go(route.page, ...route.rest);
+    } else {
+      router.go(...lastOther);
+    }
   }
 
   function keys(event: KeyboardEvent) {
@@ -212,14 +222,14 @@
     if (event.key.toLowerCase() === 'a' && router.route.page === 'home') {
       ambient = !ambient;
     } else if (event.key.toLowerCase() === 'n' && !studio.watchOnly) {
+      // The sheet opens over what is showing, which the launch then adds to.
       event.preventDefault();
-      router.go('sessions');
       openLaunch();
     }
   }
 
   const groups = $derived(
-    paletteGroups(studio, router.go.bind(router), {
+    paletteGroups(studio, revealParts, {
       launch: () => openLaunch(),
       ambient: () => {
         router.go('home');
@@ -293,7 +303,7 @@
       <!-- One deck for Home, Sessions, a session's page and any of the six
            pages beside it, so moving between them keeps its panes and their
            connections. -->
-      <BesideGrid beside={six ? besidePage : undefined} split={besideSplit} onsplit={keepBeside}>
+      <BesideGrid beside={besideRoute ? besidePage : undefined} split={besideSplit} onsplit={keepBeside}>
         {#snippet focus()}
           {#await import('./pages/TerminalFocus.svelte')}
             <p class="calm" role="status">Opening the terminals…</p>
@@ -303,7 +313,7 @@
         {/snippet}
       </BesideGrid>
     {:else if boardHost}
-      <BesideGrid beside={six ? besidePage : undefined} split={besideSplit} onsplit={keepBeside}>
+      <BesideGrid beside={besideRoute ? besidePage : undefined} split={besideSplit} onsplit={keepBeside}>
         {#snippet focus()}<Teams rest={[]} />{/snippet}
       </BesideGrid>
     {:else if quiet}
@@ -330,7 +340,7 @@
         {#if page === 'ideas'}
           <QuietIdeas rest={router.route.rest} />
         {:else if page === 'projects'}
-          <QuietProjects rest={router.route.rest} onlaunch={(chosen) => { router.go('sessions'); openLaunch('', chosen ?? null); }} />
+          <QuietProjects rest={router.route.rest} onlaunch={(chosen) => openLaunch('', chosen ?? null)} />
         {:else if page === 'context'}
           <QuietContext rest={router.route.rest} />
         {:else if page === 'settings'}
@@ -341,39 +351,52 @@
           <QuietSpend />
         {/if}
       {/key}
-    {:else if six}
-      {@render sixPage()}
+    {:else if isSixPage(page)}
+      {@render sixPage(page, router.route.rest)}
     {:else if router.route.page === 'teams'}
       <Teams rest={router.route.rest} />
     {:else if router.route.page === 'events'}
       <Events query={router.route.query ?? ''} />
     {:else if router.route.page === 'commands'}
-      <Commands rest={router.route.rest} onlaunch={() => { router.go('sessions'); openLaunch(); }} />
+      <Commands rest={router.route.rest} onlaunch={() => openLaunch()} />
     {:else}
       <Elsewhere />
     {/if}
   </main>
 
-  {#snippet sixPage()}
-    {#if page === 'settings'}
-      <Settings rest={router.route.rest} />
-    {:else if page === 'memory'}
-      <Memory slug={router.route.rest[0] ?? null} scope={router.route.rest[1] ?? null} name={router.route.rest[2] ?? null} />
-    {:else if page === 'spend'}
+  {#snippet sixPage(at: SixPage, rest: string[])}
+    {#if at === 'settings'}
+      <Settings {rest} />
+    {:else if at === 'memory'}
+      <Memory slug={rest[0] ?? null} scope={rest[1] ?? null} name={rest[2] ?? null} />
+    {:else if at === 'spend'}
       <Spend />
-    {:else if page === 'context'}
-      <Context rest={router.route.rest} />
-    {:else if page === 'ideas'}
-      <Ideas rest={router.route.rest} />
-    {:else if page === 'projects'}
-      <Projects rest={router.route.rest} onlaunch={(chosen) => { router.go('sessions'); openLaunch('', chosen ?? null); }} onresume={openResume} />
+    {:else if at === 'context'}
+      <Context {rest} />
+    {:else if at === 'ideas'}
+      <Ideas {rest} />
+    {:else if at === 'projects'}
+      <Projects {rest} onlaunch={(chosen) => openLaunch('', chosen ?? null)} onresume={openResume} />
     {/if}
   {/snippet}
 
   {#snippet besidePage()}
-    {#if isSixPage(page)}
-      <PageBeside page={PAGE_TITLES[page]} beside={studio.mode === 'teams' ? 'the runs board' : 'your terminals'} onclose={closeBeside}>
-        {@render sixPage()}
+    {#if besideRoute}
+      <PageBeside page={besideTitle} beside={studio.mode === 'teams' ? 'the runs board' : 'your terminals'} onclose={closeBeside}>
+        {#if isSixPage(besideRoute.page)}
+          {@render sixPage(besideRoute.page, besideRoute.rest)}
+        {:else if besideRoute.page === 'teams'}
+          <!-- A run or a team's page, as the Teams page shows it outside Team Focus. -->
+          <Teams rest={besideRoute.rest} />
+        {:else if besideRoute.page === 'session'}
+          {#await import('./pages/SessionView.svelte')}
+            <p class="calm" role="status">Opening the terminal…</p>
+          {:then view}
+            {#key besideRoute.rest[0]}
+              <view.default id={besideRoute.rest[0]} />
+            {/key}
+          {/await}
+        {/if}
       </PageBeside>
     {/if}
   {/snippet}
@@ -381,10 +404,10 @@
   <Toasts place={pure ? 'pure' : pureDesk ? 'desk' : page === 'session' ? 'session' : null} />
 
   {#if ambient}
-    <Ambient onleave={() => (ambient = false)} onlaunch={() => { router.go('sessions'); openLaunch(); }} />
+    <Ambient onleave={() => (ambient = false)} onlaunch={() => openLaunch()} />
   {/if}
   {#if palette}
-    <CommandPalette {groups} search={(query) => search(query, router.go.bind(router))} onclose={() => (palette = false)} />
+    <CommandPalette {groups} search={(query) => search(query, revealParts)} onclose={() => (palette = false)} />
   {/if}
   {#if appearance}
     <Dialog title="Appearance" why="Every Studio screen follows these, in every browser: they are kept in Loadout's config." cancelLabel="Done" actions={[]} onclose={() => (appearance = false)}>

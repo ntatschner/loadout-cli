@@ -5,7 +5,7 @@
   // the remedies and the bin each have their own page. Every action says the
   // command it runs. The office stays in the classic dashboard, which is the
   // one that draws rooms.
-  import { untrack } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
   import Bin from '../lib/components/Bin.svelte';
   import CommandAction from '../lib/components/CommandAction.svelte';
   import Dialog from '../lib/components/Dialog.svelte';
@@ -30,7 +30,8 @@
   import { sheetPath, sheetWords, type SheetKind, type SheetTeam, type SheetValues } from '../lib/teamSheet';
   import { answerGate, carryOn, forget, hold, pickUp, runLines, stop } from '../lib/teamsAct';
   import { approvalNeeds, attentionNeeds, type TriggerApproval, type TriggerSources, type TriggerStale, type TriggerStanding } from '../lib/triggers';
-  import { boardOf, boardRunsOf, boardTeamsOf, gateOf, keptRuns, needsOf, summaryOf } from '../lib/teamsData';
+  import { boardOf, boardRunsOf, boardTeamsOf, gateOf, keptRuns, needsOf, startedRun, summaryOf } from '../lib/teamsData';
+  import { reveal } from '../lib/reveal.svelte';
   import type { Act, Prune } from '../lib/teams';
 
   let { rest }: { rest: string[] } = $props();
@@ -257,6 +258,7 @@
   async function submit(kind: SheetKind, v: SheetValues): Promise<string> {
     if (kind === 'run') {
       const done = v.done.split('\n').map((one) => one.trim()).filter(Boolean);
+      const before = studio.runs.map((run) => run.id);
       const answer = await teamApi.start({
         team: v.team,
         goal: v.goal.trim(),
@@ -273,15 +275,42 @@
         throw new Error(answer.error ?? 'It did not start.');
       }
 
-      void studio.loadRuns();
+      void follow(before, v.team, v.goal);
 
-      return 'Started. The run is on its page.';
+      return 'Started. Its page opens as soon as the run is listed.';
     }
 
     await runJob(sheetPath(kind), sheetWords(kind, v));
     void loadOverview();
 
     return kind === 'make' ? `Written. $ loadout team edit ${v.name} --path-only says where.` : daemon?.daemon ? 'Scheduled. The daemon fires it.' : 'Scheduled. It will not fire until the daemon is running.';
+  }
+
+  let left = false;
+  onDestroy(() => (left = true));
+
+  /**
+   * Opens a run just started where the mode shows a run, beside the deck in
+   * Terminals, once it is listed: a few seconds, as the start answers before
+   * the run has an id. Not if you have gone somewhere else meanwhile.
+   */
+  async function follow(before: string[], team: string, goal: string) {
+    const from = location.hash;
+
+    for (let tries = 0; tries < 20 && !left; tries++) {
+      await studio.loadRuns();
+      const id = startedRun(studio.runs, before, team, goal);
+
+      if (id) {
+        if (location.hash === from) {
+          reveal({ kind: 'run', id });
+        }
+
+        return;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
   }
 
   /* ---------- remedies ---------- */
