@@ -100,6 +100,7 @@ public sealed partial class TeamRunnerTests : IDisposable
         StandingCriteria? standing = null,
         string? onTimeout = null,
         string? origin = null,
+        IRunOwnership? ownership = null,
         CancellationToken ct = default)
     {
         return await new TeamRunner(
@@ -109,7 +110,8 @@ public sealed partial class TeamRunnerTests : IDisposable
             git is null ? null : new FakeProjects("demo", Path.Combine(_root, "repo")),
             git,
             lifetime,
-            tasks).RunAsync(
+            tasks,
+            ownership: ownership).RunAsync(
             new TeamRunRequest("demo", team ?? await IteratingProjectAsync(), await SpecialistsAsync(),
                 "Add --since to loadout usage.", autonomy, dryRun, MaxRounds: rounds, Offline: true,
                 Criteria: criteria, TakeRecommendationAfter: takeRecommendationAfter,
@@ -3465,9 +3467,10 @@ public sealed partial class TeamRunnerTests : IDisposable
         TeamDefinition team,
         string? message = null,
         int rounds = 10,
-        Loadout.Core.Tasks.ITaskService? tasks = null)
+        Loadout.Core.Tasks.ITaskService? tasks = null,
+        IRunOwnership? ownership = null)
     {
-        return await new TeamRunner(_launcher, _paths, TimeProvider.System, null, null, null, tasks).RunAsync(
+        return await new TeamRunner(_launcher, _paths, TimeProvider.System, null, null, null, tasks, ownership: ownership).RunAsync(
             new TeamRunRequest("demo", team, await SpecialistsAsync(),
                 "Add --since to loadout usage.", "supervised", MaxRounds: rounds, Offline: true,
                 Resuming: runId, ResumeMessage: message),
@@ -3717,6 +3720,181 @@ public sealed partial class TeamRunnerTests : IDisposable
 
         refused.Failed.Should().BeTrue();
         refused.Error.Should().Contain("has not ended");
+    }
+
+    [Fact]
+    public async Task Run_holds_its_owner_lock_while_it_goes()
+    {
+        var ownership = new FakeRunOwnership();
+        OwnerReading? during = null;
+
+        _launcher.BeforeStart = where => during ??= ownership.Read(where);
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadRequests(), 0.05m));
+
+        var outcome = (await RunAsync(ownership: ownership)).Value!;
+
+        during.Should().BeOfType<OwnerReading.Held>("the lead's turn is part of the run, and the run is held");
+        ownership.Taken.Should().Equal(outcome.Directory);
+        ownership.Read(outcome.Directory!).Should().BeOfType<OwnerReading.Free>("it is let go once the run has ended");
+    }
+
+    [Fact]
+    public async Task Reopened_run_takes_the_lock_again()
+    {
+        var (team, first) = await SpentAsync("lead-1");
+
+        await RunControl.SetBudgetAsync(first.Directory!, 5m);
+
+        var ownership = new FakeRunOwnership();
+        OwnerReading? during = null;
+
+        _launcher.BeforeStart = where => during ??= ownership.Read(where);
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadDone(), 0.02m),
+            Result(LeadDone(), 0.03m));
+
+        var picked = (await ResumeAsync(first.RunId, team, ownership: ownership)).Value!;
+
+        picked.Ended.Should().Be("done");
+        ownership.Taken.Should().Equal(first.Directory);
+        during.Should().BeOfType<OwnerReading.Held>();
+    }
+
+    [Fact]
+    public async Task Run_refused_when_another_process_owns_it()
+    {
+        var (team, first) = await SpentAsync("lead-1");
+
+        await RunControl.SetBudgetAsync(first.Directory!, 5m);
+
+        // Two coordinators picking the run up at once: the other got there first.
+        var ownership = new FakeRunOwnership().Script(first.Directory!, new OwnerReading.Held());
+        var launches = _launcher.Requests.Count;
+
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadDone(), 0.02m),
+            Result(LeadDone(), 0.03m));
+
+        var refused = await ResumeAsync(first.RunId, team, ownership: ownership);
+
+        refused.Failed.Should().BeTrue();
+        refused.ExitCode.Should().Be(Loadout.Models.ExitCode.PolicyViolation);
+        refused.Error.Should().Contain("Another process owns run");
+
+        var journal = await File.ReadAllLinesAsync(Path.Combine(first.Directory!, "journal.jsonl"));
+
+        journal.Should().NotContain(l => l.Contains("\"kind\":\"run.reopened\""), "the refused coordinator writes nothing");
+        _launcher.Requests.Should().HaveCount(launches, "and starts nothing");
+    }
+
+    [Fact]
+    public async Task Lock_released_after_run_finished_is_written()
+    {
+        var ownership = new JournalAtRelease(new FakeRunOwnership());
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadRequests(), 0.05m));
+
+        (await RunAsync(ownership: ownership)).Value!.Directory.Should().NotBeNull();
+
+        ownership.AtRelease.Should().NotBeNull("the hold is let go");
+        ownership.AtRelease.Should().Contain("\"kind\":\"run.finished\"", "a run let go before it says it finished reads as one that died");
+    }
+
+    [Fact]
+    public async Task Released_hold_rewrites_the_owner_record()
+    {
+        // A hold put on the run, as against the lock: lifting it writes
+        // run.resumed, in the same process, which says again that it has the run.
+        var ownership = new FakeRunOwnership();
+        var started = 0;
+        Task lifted = Task.CompletedTask;
+
+        _launcher.BeforeStart = where =>
+        {
+            if (Interlocked.Increment(ref started) != 2)
+            {
+                return;
+            }
+
+            RunControl.PauseAsync(where).GetAwaiter().GetResult();
+
+            lifted = Task.Run(async () =>
+            {
+                for (var waited = 0; waited < 600; waited++)
+                {
+                    lock (_console.Notes)
+                    {
+                        if (_console.Notes.Exists(n => n.StartsWith("Held.", StringComparison.Ordinal)))
+                        {
+                            break;
+                        }
+                    }
+
+                    await Task.Delay(50);
+                }
+
+                RunControl.Resume(where);
+            });
+        };
+
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadRequests(AskImplementer()), 0.01m),
+            Result(LeadDone(), 0.01m),
+            Result(LeadDone(), 0.01m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.01m));
+
+        var outcome = (await RunAsync(ownership: ownership)).Value!;
+
+        await lifted;
+
+        var journal = await File.ReadAllLinesAsync(Path.Combine(outcome.Directory!, "journal.jsonl"));
+
+        journal.Should().Contain(l => l.Contains("\"kind\":\"run.resumed\""), "the case being tested");
+        ownership.Touches.Should().Be(1);
+    }
+
+    /// <summary>
+    /// Run owners that note what the run's journal said at the moment its
+    /// hold was let go.
+    /// </summary>
+    private sealed class JournalAtRelease(FakeRunOwnership inner) : IRunOwnership
+    {
+        public string? AtRelease { get; private set; }
+
+        public OperationResult<IDisposable> Take(string runDirectory)
+        {
+            var taken = inner.Take(runDirectory);
+
+            return taken.Failed ? taken : OperationResult<IDisposable>.Ok(new Watch(this, runDirectory, taken.Value!));
+        }
+
+        public OwnerReading Read(string runDirectory) => inner.Read(runDirectory);
+
+        public void Touch(IDisposable held) => inner.Touch(((Watch)held).Inner);
+
+        private sealed class Watch(JournalAtRelease owner, string runDirectory, IDisposable held) : IDisposable
+        {
+            public IDisposable Inner { get; } = held;
+
+            public void Dispose()
+            {
+                if (owner.AtRelease is null)
+                {
+                    var journal = Path.Combine(runDirectory, "journal.jsonl");
+
+                    owner.AtRelease = File.Exists(journal) ? File.ReadAllText(journal) : string.Empty;
+                }
+
+                Inner.Dispose();
+            }
+        }
     }
 
     [Fact]
