@@ -175,17 +175,19 @@ public sealed class TriggerSpineTests : IDisposable
     }
 
     [Fact]
-    public async Task An_action_that_writes_is_refused_and_written_down_rather_than_started()
+    public async Task An_action_that_writes_waits_for_approval_rather_than_starting()
     {
         await _rules.SaveAsync(Review());
         _actions.Writes = true;
 
         await Spine().DispatchAsync(Finished("alpha"), CancellationToken.None);
 
-        var refused = _journal.Read(Now.AddDays(-1)).Last();
-        refused.Kind.Should().Be(TriggerEntryKinds.Refused);
-        refused.Reason.Should().Contain("needs your approval");
+        var asked = _journal.Read(Now.AddDays(-1)).Last();
+        asked.Kind.Should().Be(TriggerEntryKinds.Asked);
+        asked.Reason.Should().Contain("waits for your approval");
+        asked.Approval.Should().NotBeNullOrEmpty();
         _actions.Started.Should().BeEmpty();
+        Kinds().Should().NotContain(TriggerEntryKinds.Reserved, "nothing is set aside until it is approved");
     }
 
     [Fact]

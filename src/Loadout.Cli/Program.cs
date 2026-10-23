@@ -1068,6 +1068,9 @@ public static class Program
             trigger.AddCommand<TriggerDisallowCommand>("disallow");
             trigger.AddCommand<TriggerAllowedCommand>("allowed");
             trigger.AddCommand<TriggerSourcesCommand>("sources");
+            trigger.AddCommand<TriggerApprovalsCommand>("approvals");
+            trigger.AddCommand<TriggerApproveCommand>("approve");
+            trigger.AddCommand<TriggerRejectCommand>("reject");
             trigger.AddBranch("token", token =>
             {
                 token.SetDescription("The GitHub token kept for trigger polling alone. Unfinished: needs LOADOUT_TRIGGERS.");

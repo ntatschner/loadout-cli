@@ -138,6 +138,9 @@ public sealed class SpendLedger
         }
     }
 
+    /// <summary>Why a start is held while its rule is paused; a resume, not money coming back, releases it.</summary>
+    public const string PausedReason = "the rule is paused until it is resumed";
+
     /// <summary>Whether a rule may start something that would set aside <paramref name="budget"/>, and why not.</summary>
     public (LedgerVerdict Verdict, string? Reason) Ask(TriggerRule rule, decimal budget, DateTimeOffset now)
     {
@@ -147,7 +150,7 @@ public sealed class SpendLedger
 
         if (standing.Paused)
         {
-            return (LedgerVerdict.Hold, "the rule is paused until it is resumed");
+            return (LedgerVerdict.Hold, PausedReason);
         }
 
         if (standing.Runs >= rule.CapRuns)

@@ -122,6 +122,16 @@ internal sealed class TriggerDesk(
         return new TriggerAnswer(request, true, message, version);
     }
 
+    /// <summary>An answer to an approval made straight to the journal, the way the daemon would write it.</summary>
+    public TriggerAnswer Journalled(string request, string kind, PendingApproval one, string message)
+    {
+        Journal.Append(new TriggerEntry(
+            time.GetUtcNow(), kind, one.Event.Id, one.Rule, one.Version, one.Event.Subject, kind,
+            Request: request, Approval: one.Id));
+
+        return new TriggerAnswer(request, true, message);
+    }
+
     /// <summary>The ledger as the journal has it, for reading where rules stand without a daemon.</summary>
     public SpendLedger Ledger() => SpendLedger.Rebuild(Journal.Read(time.GetUtcNow() - TriggerSpine.Remembered));
 }
