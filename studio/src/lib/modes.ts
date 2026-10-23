@@ -140,12 +140,8 @@ export type DeckSlots = (string | null)[];
  * from the end, though a pick in one of them keeps the last pane. A session
  * that has ended, or gone from the list, stays until something takes its place.
  */
-export function placeSlots(slots: DeckSlots, o: { order: string[]; layout: DeckLayout; pick?: string | null; at?: number }): DeckSlots {
-  const out = slots.slice(0, o.layout).map((id, i, all) => (id && all.indexOf(id) === i ? id : null));
-
-  while (out.length < o.layout) {
-    out.push(null);
-  }
+export function placeSlots(slots: DeckSlots, o: { order: string[]; layout: DeckLayout; pick?: string | null; at?: number; fill?: number }): DeckSlots {
+  const out = padSlots(slots, o.layout);
 
   if (o.pick && !out.includes(o.pick)) {
     const at = o.at ?? -1;
@@ -154,8 +150,106 @@ export function placeSlots(slots: DeckSlots, o: { order: string[]; layout: DeckL
   }
 
   const spare = o.order.filter((id) => !out.includes(id));
+  // Only the first `fill` panes take spare tabs: the ones a layout grown for
+  // a launch added wait empty for the next launch.
+  const fill = o.fill ?? o.layout;
 
-  return out.map((id) => id ?? spare.shift() ?? null);
+  return out.map((id, i) => id ?? (i < fill ? spare.shift() : null) ?? null);
+}
+
+/** The panes of a layout, each session in at most one, with nulls where a pane has nothing. */
+function padSlots(slots: DeckSlots, layout: DeckLayout): DeckSlots {
+  const out = slots.slice(0, layout).map((id, i, all) => (id && all.indexOf(id) === i ? id : null));
+
+  while (out.length < layout) {
+    out.push(null);
+  }
+
+  return out;
+}
+
+/** Where a newly started session went, and what made room for it. */
+export interface LaunchPlace {
+  slots: DeckSlots;
+  layout: DeckLayout;
+  /** The pane it is in, by its place. */
+  at: number;
+  /** Whether the layout grew to make a pane for it. */
+  grew: boolean;
+  /** The session whose pane it took, which stays a tab; null where it took an empty pane. */
+  replaced: string | null;
+  /** Why that pane gave way. */
+  because: 'ended' | 'idle' | null;
+}
+
+/**
+ * Where a session just started goes: an empty pane, which a session gone
+ * from the list leaves its pane; else a layout grown
+ * 1→2→4 to make one; else, with four full, the pane of a session that has
+ * ended, or else the one idle longest. A session waiting on you is never the
+ * idle one pushed out, unless every pane is waiting. A session already in a
+ * pane stays where it is.
+ */
+export function launchSlots(
+  slots: DeckSlots,
+  o: { layout: DeckLayout; pick: string; ended?: string[]; gone?: string[]; waiting?: string[]; active?: Record<string, number> },
+): LaunchPlace {
+  const out = padSlots(slots, o.layout).map((id) => (id && (o.gone ?? []).includes(id) ? null : id));
+  const already = out.indexOf(o.pick);
+
+  if (already >= 0) {
+    return { slots: out, layout: o.layout, at: already, grew: false, replaced: null, because: null };
+  }
+
+  const empty = out.indexOf(null);
+
+  if (empty >= 0) {
+    out[empty] = o.pick;
+
+    return { slots: out, layout: o.layout, at: empty, grew: false, replaced: null, because: null };
+  }
+
+  if (o.layout < 4) {
+    const layout: DeckLayout = o.layout === 1 ? 2 : 4;
+    const grown = padSlots(out, layout);
+    const at = grown.indexOf(null);
+    grown[at] = o.pick;
+
+    return { slots: grown, layout, at, grew: true, replaced: null, because: null };
+  }
+
+  const ended = out.findIndex((id) => !!id && (o.ended ?? []).includes(id));
+  let at = ended;
+
+  if (at < 0) {
+    const quiet = (i: number) => o.active?.[out[i] ?? ''] ?? 0;
+    const every = out.map((_, i) => i);
+    const free = every.filter((i) => !(o.waiting ?? []).includes(out[i] ?? ''));
+    const choices = free.length ? free : every;
+    at = choices.reduce((best, i) => (quiet(i) < quiet(best) ? i : best), choices[0]);
+  }
+
+  const replaced = out[at];
+  out[at] = o.pick;
+
+  return { slots: out, layout: o.layout, at, grew: false, replaced, because: ended >= 0 ? 'ended' : 'idle' };
+}
+
+/**
+ * Gives back panes a launch added once the sessions in them have gone: the
+ * smallest layout, never below the one chosen by hand, that holds the
+ * sessions still listed, in their reading order. A layout no larger than the
+ * one chosen is left alone.
+ */
+export function shrinkSlots(slots: DeckSlots, o: { layout: DeckLayout; chosen: DeckLayout; order: string[] }): { slots: DeckSlots; layout: DeckLayout } {
+  if (o.layout <= o.chosen) {
+    return { slots, layout: o.layout };
+  }
+
+  const kept = padSlots(slots, o.layout).filter((id): id is string => !!id && o.order.includes(id));
+  const layout = ([1, 2, 4] as DeckLayout[]).find((one) => one >= o.chosen && one >= kept.length) ?? 4;
+
+  return layout >= o.layout ? { slots, layout: o.layout } : { slots: padSlots(kept, layout), layout };
 }
 
 /**
@@ -244,8 +338,9 @@ export const PAGE_TITLES: Record<SixPage, string> = { ideas: 'Ideas', projects: 
 
 /**
  * Where closing a page opened beside goes back to: the last route that was
- * not one of the six pages, kept as each route is shown, or Home.
+ * not one of the six pages, nor anything else the mode opened beside, kept
+ * as each route is shown, or Home.
  */
-export function besideReturn(kept: string[], route: { page: string; rest: string[] }): string[] {
-  return isSixPage(route.page) || route.page === 'unknown' ? kept : [route.page, ...route.rest];
+export function besideReturn(kept: string[], route: { page: string; rest: string[] }, beside = false): string[] {
+  return beside || isSixPage(route.page) || route.page === 'unknown' ? kept : [route.page, ...route.rest];
 }

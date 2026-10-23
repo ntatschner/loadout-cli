@@ -64,6 +64,12 @@ describe('besideReturn', () => {
     expect(kept).toEqual(['session', 's1']);
     expect(besideReturn(['home'], { page: 'ideas', rest: [] })).toEqual(['home']);
   });
+
+  it('passes over anything else the mode opened beside, a run beside the deck or a session beside the board', () => {
+    expect(besideReturn(['session', 's1'], { page: 'teams', rest: ['r1'] }, true)).toEqual(['session', 's1']);
+    expect(besideReturn(['teams', 'r1'], { page: 'session', rest: ['s2'] }, true)).toEqual(['teams', 'r1']);
+    expect(besideReturn(['home'], { page: 'teams', rest: ['r1'] })).toEqual(['teams', 'r1']);
+  });
 });
 
 describe('BesideGrid', () => {

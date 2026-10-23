@@ -242,6 +242,23 @@ Don't reopen these.
     - a team run as just its question, its shape and its done-when.
   - The rail slides away; the ModeBar is the only chrome, and stays above the FocusFrame (`--ls-focus-top`).
 
+## Modes: where a jump lands
+
+Everything that takes you somewhere follows the mode and never changes it: the palette, a toast, the waiting count, an Open button and what happens after a launch. Every one calls `reveal()` (`studio/src/lib/reveal.svelte.ts`), which reads the table in `reveal.ts`. A test fails if anything else sends the address to a session or sets it by hand. Where a mode can't show a thing exactly, the jump shows the closest form it has.
+
+| | a session | a run | a team's page | a page |
+|---|---|---|---|---|
+| Default | its page | its page | its page | the page |
+| Terminals | a pane of the deck, keeping any page beside | beside the deck | beside the deck | the six beside the deck, the rest as pages |
+| Teams | beside the board | beside the board | beside the board | the six beside the board, the rest as pages |
+| Minimal | its FocusFrame over the column | its FocusFrame over the column | its page | the quiet column |
+| Pure | the desk | the desk | its page, flat | a desk, or the page flat |
+
+- **A page beside the deck stays open** when a session is shown: the address carries it, `#session/<id>?beside=projects`, so a reload and Back keep the split.
+- **A session just started in Terminals takes an empty pane.** With none free the layout grows 1→2→4. With four full it takes the pane of a session that has ended, else the one idle longest, and the session it pushes out stays a tab. A session waiting on you is never the one pushed out unless every pane is waiting. Idle is the last output or keystroke Studio saw in that pane, so a reload starts every session level. The new pane gets the keyboard, and a line under the tabs says where it went and what it replaced.
+- **Panes a launch added are given back** as their sessions go, never below the layout you chose. Spare tabs fill only the panes of the layout you chose, so a grown pane stays empty for the next launch.
+- **A team run started from Terminals** opens its run page beside the deck once it is listed, a few seconds after the start, unless you have gone somewhere else meanwhile.
+
 ## Modes: the work
 
 **The shell (`studio/src/App.svelte`)**

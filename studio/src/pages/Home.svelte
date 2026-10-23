@@ -17,6 +17,7 @@
   import { LENS_PANELS, MAP_PANELS, PANEL_NAMES, hide, move, place, readLayout, saved, show, type Layout } from '../lib/layout';
   import { clockOf, type Work } from '../lib/lines';
   import { router } from '../lib/router.svelte';
+  import { reveal, revealParts } from '../lib/reveal.svelte';
   import { rankUrgent, wordFor } from '../lib/signals';
   import { studio } from '../lib/state.svelte';
   import { urgencyClass } from '../lib/urgency';
@@ -200,9 +201,9 @@
               </Halo>
               {#if narrow}
                 <div class="undercore"><Core line={focus} /></div>
-              {:else if actionsFor(studio, focus, router.go.bind(router)).length}
+              {:else if actionsFor(studio, focus, revealParts).length}
                 <div class="ls-answers corecmds">
-                  {#each actionsFor(studio, focus, router.go.bind(router)) as action (action.label)}
+                  {#each actionsFor(studio, focus, revealParts) as action (action.label)}
                     <HaloButton size="small" {...action} />
                   {/each}
                 </div>
@@ -222,7 +223,7 @@
                   <span class="w">{line.kind} · {line.where}{line.askedAt ? ` · ${Math.max(1, Math.round(studio.now / 60000) - line.askedAt)} min` : ''}</span>
                   <p class="q">{line.waiting ? (line.ask ?? line.title) : `${line.title} · ${line.failed}`}</p>
                   <div class="ls-answers flush">
-                    {#each actionsFor(studio, line, router.go.bind(router)) as action (action.label)}
+                    {#each actionsFor(studio, line, revealParts) as action (action.label)}
                       <HaloButton size="small" {...action} />
                     {/each}
                     <HaloButton label="Focus it" size="small" onpress={() => (focusId = line.id)} />
@@ -254,7 +255,7 @@
                   void studio.startSession({ project: startProject, task }, `$ loadout launch ${startProject} --task "${task}"`).then((started) => {
                     if (started) {
                       startTask = '';
-                      router.go('session', started.id);
+                      reveal({ kind: 'session', id: started.id, launched: true });
                     }
                   });
                 }}
@@ -296,7 +297,7 @@
               facts={factsOf(pickedLine)}
               checks={pickedLine.checks}
               events={pickedLine.events}
-              actions={actionsFor(studio, pickedLine, router.go.bind(router))}
+              actions={actionsFor(studio, pickedLine, revealParts)}
               idleAfter={studio.idleAfter}
             />
           {/if}

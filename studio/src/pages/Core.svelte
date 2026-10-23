@@ -5,7 +5,7 @@
   import Signal from '../lib/components/Signal.svelte';
   import { actionsFor } from '../lib/actions';
   import type { Work } from '../lib/lines';
-  import { router } from '../lib/router.svelte';
+  import { revealParts } from '../lib/reveal.svelte';
   import { wordFor } from '../lib/signals';
   import { studio } from '../lib/state.svelte';
 
@@ -13,7 +13,7 @@
   // the ring is wide, so Home draws them under the halo instead.
   let { line, answers = true }: { line: Work; answers?: boolean } = $props();
 
-  const actions = $derived(actionsFor(studio, line, router.go.bind(router)));
+  const actions = $derived(actionsFor(studio, line, revealParts));
 </script>
 
 <div class="core">

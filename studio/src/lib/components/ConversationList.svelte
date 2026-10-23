@@ -5,7 +5,7 @@
   import HaloButton from './HaloButton.svelte';
   import type { Conversation } from '../api';
   import { carriedWords, hostedIn, resumeWords } from '../resume';
-  import { router } from '../router.svelte';
+  import { reveal } from '../reveal.svelte';
   import { studio } from '../state.svelte';
 
   interface Props {
@@ -57,7 +57,7 @@
       const id = await studio.resume(conversation);
 
       if (id) {
-        router.go('session', id);
+        reveal({ kind: 'session', id, launched: true });
       }
     } finally {
       busy = null;
@@ -77,7 +77,7 @@
         </div>
         <div class="acts">
           {#if there}
-            <HaloButton label="Open" size="small" cmd="goes to its terminal" onpress={() => router.go('session', there)} />
+            <HaloButton label="Open" size="small" cmd="goes to its terminal" onpress={() => reveal({ kind: 'session', id: there })} />
           {:else}
             <HaloButton
               label={conversation.registered ? 'Resume' : 'Register and resume'}

@@ -11,6 +11,7 @@ import { isMode, morph, nextMode, type StudioMode } from './modes';
 import { resumeConversation, type ResumeAsk, type ResumeOutcome } from './resume';
 import { reloadsFor, type Reload } from './reloads';
 import { resumeCommand } from './terminal';
+import { reveal } from './reveal.svelte';
 
 export interface FeedEntry {
   t: string;
@@ -337,7 +338,7 @@ export class Studio {
       this.#asked.set(line.id, toasts.add({
         level: 'needs',
         text: `${line.title} ${line.approval ? 'needs approval' : 'is waiting for you'}`,
-        actions: [{ label: 'Go to the question', cmd: 'opens its terminal · changes nothing', onpress: () => void (location.hash = `#session/${encodeURIComponent(line.ref)}`) }],
+        actions: [{ label: 'Go to the question', cmd: 'opens its terminal · changes nothing', onpress: () => reveal({ kind: 'session', id: line.ref }) }],
       }));
 
       return;
@@ -353,7 +354,7 @@ export class Studio {
       this.#asked.set(line.id, toasts.add({
         level: 'needs',
         text: `${line.where} asks: ${gate.question}`,
-        actions: [{ label: 'Go to the question', cmd: 'opens the run · changes nothing', onpress: () => void (location.hash = `#teams/${encodeURIComponent(line.ref)}`) }],
+        actions: [{ label: 'Go to the question', cmd: 'opens the run · changes nothing', onpress: () => reveal({ kind: 'run', id: line.ref }) }],
       }));
 
       return;

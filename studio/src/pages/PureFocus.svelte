@@ -16,6 +16,7 @@
   import { teamApi, type Outcome, type Run } from '../lib/api';
   import { command } from '../lib/commands';
   import { router } from '../lib/router.svelte';
+  import { revealParts } from '../lib/reveal.svelte';
   import { studio } from '../lib/state.svelte';
   import { readSplit, SPLIT_KEYS } from '../lib/splits';
   import { resumeCommand } from '../lib/terminal';
@@ -140,7 +141,7 @@
     const line = lineOf(item);
 
     return line
-      ? actionsFor(studio, line, (...parts) => leave(...parts)).map((action) => ({
+      ? actionsFor(studio, line, revealParts).map((action) => ({
           label: action.label,
           cmd: action.cmd,
           kind: action.kind === 'danger' ? 'danger' : action.kind === 'needs' ? 'needs' : '',
@@ -186,7 +187,7 @@
     }
 
     for (const one of studio.catalogue) {
-      rows.push({ kind: 'command', label: one.description || one.path, cmd: `$ loadout ${one.path}`, run: () => leave('commands', ...one.path.split(' ')) });
+      rows.push({ kind: 'command', label: one.description || one.path, cmd: `$ loadout ${one.path}`, run: () => revealParts('commands', ...one.path.split(' ')) });
     }
 
     return rows.filter((row) => {

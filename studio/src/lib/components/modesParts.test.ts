@@ -92,11 +92,11 @@ describe('TermDeck', () => {
       },
     }));
 
-    render(TermDeck, { sessions, current: 'a', layout: 1, pane, ...props });
+    const view = render(TermDeck, { sessions, current: 'a', layout: 1, pane, ...props });
 
     const shown = () => [...document.querySelectorAll('[data-pane]')].map((node) => node.getAttribute('data-pane'));
 
-    return { opened, closed, focused, shown };
+    return { opened, closed, focused, shown, rerender: view.rerender };
   }
 
   afterEach(() => {
@@ -231,6 +231,123 @@ describe('TermDeck', () => {
 
     expect(screen.getByRole('tab', { name: /fix-tests/ }).getAttribute('aria-keyshortcuts')).toBe('Control+Alt+1');
     expect(screen.getByRole('tab', { name: /docs/ }).textContent).toContain('new output');
+  });
+
+  describe('a session just started', () => {
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+    const layoutShown = () => document.querySelector('.lay [aria-checked="true"]')?.getAttribute('aria-label');
+    const note = () => document.querySelector('.ls-deck .note')?.textContent ?? '';
+    const two = [sessions[0], sessions[2]];
+    const fresh: DeckSession = { id: 'n', title: 'new-one', word: 'working' };
+
+    it('grows the layout to give it an empty pane, gives it the keyboard, and fills no other pane from the tabs', async () => {
+      const onlaunched = vi.fn();
+      const onlayout = vi.fn();
+      // Three tabs over two panes, so one is spare and would fill a grown pane if it were let.
+      const { shown, focused, rerender } = deck({ sessions: [...two, sessions[1]], layout: 2, slots: ['a', 'c'], onlaunched, onlayout });
+      expect(shown()).toEqual(['a', 'c']);
+
+      await rerender({ sessions: [...two, sessions[1], fresh], launch: 'n' });
+      await tick();
+      await settle();
+
+      expect(shown()).toEqual(['a', 'c', 'n']);
+      expect(layoutShown()).toBe('Four');
+      expect(focused).toContain('n');
+      expect(onlaunched).toHaveBeenCalledWith('n');
+      expect(note()).toBe('Opened in pane 3, added for it.');
+      // Grown for the launch, not chosen, so it is not kept as your layout.
+      expect(onlayout).not.toHaveBeenCalled();
+    });
+
+    it('takes the pane of a session no longer listed rather than growing', async () => {
+      const { shown, rerender } = deck({ sessions: two, layout: 1, slots: ['old'], current: null });
+      expect(shown()).toEqual(['old']);
+
+      await rerender({ sessions: [...two, fresh], launch: 'n' });
+      await tick();
+
+      expect(shown()).toEqual(['n']);
+      expect(layoutShown()).toBe('One');
+      expect(note()).toBe('Opened in pane 1.');
+    });
+
+    it('waits for it to be among the tabs before placing it', async () => {
+      const { shown, rerender } = deck({ sessions: two, layout: 2, slots: ['a', 'c'] });
+
+      await rerender({ launch: 'n' });
+      await tick();
+      expect(shown()).toEqual(['a', 'c']);
+
+      await rerender({ sessions: [...two, fresh] });
+      await tick();
+      expect(shown()).toEqual(['a', 'c', 'n']);
+    });
+
+    it('with four full, takes the pane of one that has ended, which stays a tab', async () => {
+      const four: DeckSession[] = [sessions[0], sessions[1], { ...sessions[2], word: 'ended', ended: true }, { id: 'd', title: 'notes', word: 'working' }];
+      const { shown, rerender } = deck({ sessions: four, layout: 4, slots: ['a', 'b', 'c', 'd'] });
+
+      await rerender({ sessions: [...four, fresh], launch: 'n' });
+      await tick();
+
+      expect(shown()).toEqual(['a', 'b', 'n', 'd']);
+      expect(screen.getByRole('tab', { name: /release/ })).toBeTruthy();
+      expect(note()).toBe('Opened in pane 3, in place of ‘release’, which had ended. It is still a tab.');
+    });
+
+    it('with none ended, takes the one idle longest, passing over one waiting on you', async () => {
+      const four: DeckSession[] = [sessions[0], sessions[1], sessions[2], { id: 'd', title: 'notes', word: 'working' }];
+      // b, waiting for approval, is the quietest; c is the quietest of the rest.
+      const { shown, rerender } = deck({ sessions: four, layout: 4, slots: ['a', 'b', 'c', 'd'], active: { a: 300, b: 100, c: 200, d: 400 } });
+
+      await rerender({ sessions: [...four, fresh], launch: 'n' });
+      await tick();
+
+      expect(shown()).toEqual(['a', 'b', 'n', 'd']);
+      expect(note()).toContain('in place of ‘release’, which had been idle longest');
+    });
+
+    it('says when it grows and gives back, and opens again with the panes it grew, so leaving the deck keeps them', async () => {
+      const ongrown = vi.fn();
+      const { rerender } = deck({ sessions: two, layout: 1, slots: ['a'], ongrown });
+
+      await rerender({ sessions: [...two, fresh], launch: 'n' });
+      await tick();
+      expect(ongrown).toHaveBeenLastCalledWith(2);
+
+      document.body.innerHTML = '';
+      // The deck made again, as it is after another page: one pane chosen, two grown, and what was in them.
+      const again = deck({ sessions: [...two, fresh], layout: 1, grown: 2, slots: ['a', 'n'], ongrown });
+      expect(layoutShown()).toBe('Two side by side');
+      expect(again.shown()).toEqual(['a', 'n']);
+
+      // The next launch grows on from two, rather than taking the pane the last one was given.
+      await again.rerender({ sessions: [...two, fresh, { id: 'm', title: 'next', word: 'working' }], launch: 'm' });
+      await tick();
+      expect(layoutShown()).toBe('Four');
+      expect(again.shown()).toEqual(['a', 'n', 'm']);
+      expect(ongrown).toHaveBeenLastCalledWith(4);
+    });
+
+    it('gives the pane it added back when its session goes, but never a layout you chose', async () => {
+      const { shown, rerender } = deck({ sessions: two, layout: 2, slots: ['a', 'c'] });
+
+      await rerender({ sessions: [...two, fresh], launch: 'n' });
+      await tick();
+      expect(layoutShown()).toBe('Four');
+
+      await rerender({ sessions: two, launch: null });
+      await tick();
+      expect(layoutShown()).toBe('Two side by side');
+      expect(shown()).toEqual(['a', 'c']);
+
+      // Four chosen by hand stays four as sessions go.
+      await fireEvent.click(screen.getByRole('radio', { name: 'Four' }));
+      await rerender({ sessions: [sessions[0]] });
+      await tick();
+      expect(layoutShown()).toBe('Four');
+    });
   });
 
   describe('dividers', () => {

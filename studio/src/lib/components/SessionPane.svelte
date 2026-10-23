@@ -22,11 +22,13 @@
     onstatus?: (status: TerminalState, facts: { agentSession: string | null; holds: boolean; renderer: string }) => void;
     /** Told when output arrives, for a tab's new-output dot. */
     onoutput?: () => void;
+    /** Told when you type into it, for which pane has been idle longest. */
+    ontyped?: () => void;
     /** Given what a deck needs to reach this pane once it is on the page, and null as it goes. */
     onready?: (pane: PaneHandle | null) => void;
   }
 
-  let { id, leaveTo = undefined, onstatus = undefined, onoutput = undefined, onready = undefined }: Props = $props();
+  let { id, leaveTo = undefined, onstatus = undefined, onoutput = undefined, ontyped = undefined, onready = undefined }: Props = $props();
 
   const line = $derived(studio.lines.find((one) => one.kind === 'session' && one.ref === id));
   const session: Session | undefined = $derived(line?.session);
@@ -99,6 +101,7 @@
   function type(data: string) {
     if (holds && !studio.watchOnly && socket?.readyState === WebSocket.OPEN) {
       socket.send(encoder.encode(data));
+      ontyped?.();
     }
   }
 
