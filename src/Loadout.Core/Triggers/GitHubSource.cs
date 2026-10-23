@@ -300,7 +300,7 @@ public sealed partial class GitHubSource
 
         foreach (var (endpoint, path) in new[]
         {
-            (Pulls, $"repos/{repo}/pulls?state=all&sort=updated&direction=desc&per_page=50"),
+            (Pulls, $"repos/{repo}/pulls?state=all&sort=updated&direction=desc&per_page=30"),
             (Runs, $"repos/{repo}/actions/runs?status=failure&per_page=30"),
             (Issues, $"repos/{repo}/issues?state=all&sort=created&direction=desc&per_page=30"),
             (Comments, $"repos/{repo}/issues/comments?sort=created&direction=desc&per_page=30"),

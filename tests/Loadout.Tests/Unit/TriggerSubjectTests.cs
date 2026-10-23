@@ -154,7 +154,9 @@ public sealed class TriggerSubjectTests : IDisposable
         await spine.DispatchAsync(Opened("pr:acme/app#7", trust: "outside"), CancellationToken.None);
         await spine.FlushAsync(Now.AddHours(1), CancellationToken.None);
 
-        Reasons(TriggerEntryKinds.Withdrawn).Should().ContainSingle().Which.Should().Contain("trust is 'outside'");
+        // Withdrawn by the fold's own check, which says where it went.
+        Reasons(TriggerEntryKinds.Withdrawn).Should().ContainSingle()
+            .Which.Should().Be("folded into pr:acme/app#7, where trust is 'outside', not 'trusted'");
         Taken(spine).Should().BeEmpty();
     }
 
