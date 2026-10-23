@@ -201,8 +201,11 @@ public sealed class TriggerApprovalTests : IDisposable
         await SaveAsync(Rule());
         var spine = Spine();
 
+        // A minute apart, so which was held first is plain.
         await spine.DispatchAsync(Pull("e1", "pr:acme/app#1"), CancellationToken.None);
+        _clock.Now = Now.AddMinutes(1);
         await spine.DispatchAsync(Pull("e2", "pr:acme/app#2"), CancellationToken.None);
+        _clock.Now = Now.AddMinutes(2);
         await spine.DispatchAsync(Pull("e3", "pr:acme/app#3"), CancellationToken.None);
 
         var first = Taken(spine).Should().ContainSingle().Subject;
@@ -329,6 +332,8 @@ public sealed class TriggerApprovalTests : IDisposable
 
     private sealed class Clock(DateTimeOffset now) : TimeProvider
     {
-        public override DateTimeOffset GetUtcNow() => now;
+        public DateTimeOffset Now { get; set; } = now;
+
+        public override DateTimeOffset GetUtcNow() => Now;
     }
 }
