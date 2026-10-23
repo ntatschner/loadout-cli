@@ -1,12 +1,10 @@
-using System.Text.Json;
+using Loadout.Core.Teams;
 
 namespace Loadout.Agents.Teams.Steps;
 
 /// <summary>The run's record: one JSON line per thing that happened, appended as it happens.</summary>
 internal sealed class JournalWriter
 {
-    private static readonly JsonSerializerOptions JournalLine = new() { WriteIndented = false };
-
     private readonly string _path;
     private readonly string _run;
     private readonly TimeProvider _time;
@@ -66,8 +64,7 @@ internal sealed class JournalWriter
         CancellationToken ct,
         DateTimeOffset? at = null)
     {
-        var line = JsonSerializer.Serialize(
-            new { at = at ?? _time.GetUtcNow(), run = _run, node, kind, data }, JournalLine);
+        var line = RunJournalLine.Serialize(at ?? _time.GetUtcNow(), _run, node, kind, data);
 
         await _lock.WaitAsync(ct).ConfigureAwait(false);
 

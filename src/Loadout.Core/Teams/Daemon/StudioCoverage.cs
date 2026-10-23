@@ -168,6 +168,7 @@ public static class StudioCoverage
         ["team runs remove"] = new("teams", StudioEffect.Changes),
         ["team runs prune"] = new("teams", StudioEffect.Changes),
         ["team runs restore"] = new("teams", StudioEffect.Changes),
+        ["team runs close"] = Terminal("ends a run whose driver has died; until the run page has an End run action, a terminal is the only place to do it"),
         ["team restore"] = new("teams", StudioEffect.Changes),
         ["team bin"] = new("teams", StudioEffect.Reads),
         ["team bin empty"] = new("teams", StudioEffect.Changes),

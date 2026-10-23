@@ -816,6 +816,7 @@ public static class Program
                 runs.AddCommand<TeamRunsRemoveCommand>("remove");
                 runs.AddCommand<TeamRunsPruneCommand>("prune");
                 runs.AddCommand<TeamRunsRestoreCommand>("restore");
+                runs.AddCommand<TeamRunsCloseCommand>("close");
             });
 
             team.AddCommand<TeamRestoreCommand>("restore");
