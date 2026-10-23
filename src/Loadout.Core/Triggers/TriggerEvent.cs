@@ -57,8 +57,69 @@ public static class TriggerEventKinds
     /// </remarks>
     public const string Clock = "clock";
 
+    /// <summary>A pull request was opened.</summary>
+    public const string PrOpened = "pr-opened";
+
+    /// <summary>A pull request's branch moved: somebody pushed to it.</summary>
+    public const string PrUpdated = "pr-updated";
+
+    /// <summary>A draft pull request was marked ready for review.</summary>
+    public const string PrReady = "pr-ready";
+
+    /// <summary>A pull request that was ready for review went back to being a draft.</summary>
+    public const string PrDraft = "pr-draft";
+
+    /// <summary>A pull request now merges into a different base branch.</summary>
+    public const string PrRetargeted = "pr-retargeted";
+
+    /// <summary>A pull request was closed without being merged.</summary>
+    public const string PrClosed = "pr-closed";
+
+    /// <summary>A pull request was merged.</summary>
+    public const string PrMerged = "pr-merged";
+
+    /// <summary>A closed pull request was opened again, which makes it a fresh subject.</summary>
+    public const string PrReopened = "pr-reopened";
+
+    /// <summary>A GitHub Actions run failed, on a pull request's branch or another.</summary>
+    public const string CiFailed = "ci-failed";
+
+    /// <summary>An issue was opened.</summary>
+    public const string IssueOpened = "issue-opened";
+
+    /// <summary>Somebody commented on an issue or a pull request.</summary>
+    public const string Comment = "comment";
+
     /// <summary>Every kind, in the order the commands list them.</summary>
-    public static readonly IReadOnlyList<string> All = [RunFinished, DocsDrift, Webhook, Clock];
+    public static readonly IReadOnlyList<string> All =
+    [
+        RunFinished, DocsDrift, Webhook, Clock,
+        PrOpened, PrUpdated, PrReady, PrDraft, PrRetargeted, PrClosed, PrMerged, PrReopened,
+        CiFailed, IssueOpened, Comment,
+    ];
+
+    /// <summary>The kinds that end their subject: nothing waiting on it is worth starting afterwards.</summary>
+    public static readonly IReadOnlyList<string> Ending = [PrClosed, PrMerged];
+
+    /// <summary>Whether a kind comes from GitHub, and so carries an author and a trust.</summary>
+    public static bool FromGitHub(string? kind) =>
+        kind is { Length: > 0 } && GitHubKinds.Contains(kind, StringComparer.OrdinalIgnoreCase);
+
+    private static readonly IReadOnlyList<string> GitHubKinds =
+    [
+        PrOpened, PrUpdated, PrReady, PrDraft, PrRetargeted, PrClosed, PrMerged, PrReopened,
+        CiFailed, IssueOpened, Comment,
+    ];
+
+    /// <summary>What every pull request event carries.</summary>
+    /// <remarks>
+    /// <c>trust</c> is <c>trusted</c> or <c>outside</c>, and <c>because</c>
+    /// says which association or allow-list entry decided it, so the journal
+    /// can say why a run was trusted. <c>state</c> is <c>open</c>,
+    /// <c>closed</c> or <c>merged</c>.
+    /// </remarks>
+    private static readonly IReadOnlyList<string> Pull =
+        ["repo", "number", "base", "branch", "head", "author", "author-id", "trust", "because", "draft", "state", "title", "url"];
 
     /// <summary>The fields each kind carries, which are the ones a rule may ask about.</summary>
     public static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> Fields =
@@ -68,6 +129,17 @@ public static class TriggerEventKinds
             [DocsDrift] = ["project", "path", "count"],
             [Webhook] = ["team", "project", "goal"],
             [Clock] = ["rule"],
+            [PrOpened] = Pull,
+            [PrUpdated] = Pull,
+            [PrReady] = Pull,
+            [PrDraft] = Pull,
+            [PrRetargeted] = [.. Pull, "was-base"],
+            [PrClosed] = Pull,
+            [PrMerged] = Pull,
+            [PrReopened] = [.. Pull, "was"],
+            [CiFailed] = [.. Pull, "workflow", "run"],
+            [IssueOpened] = ["repo", "number", "author", "author-id", "trust", "because", "title", "url"],
+            [Comment] = ["repo", "number", "on", "author", "author-id", "trust", "because", "mention", "draft", "state", "url"],
         };
 
     /// <summary>Whether a kind is one the spine knows.</summary>

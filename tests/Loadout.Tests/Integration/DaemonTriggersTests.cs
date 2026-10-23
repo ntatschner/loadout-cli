@@ -163,6 +163,35 @@ public sealed class DaemonTriggersTests : IDisposable
     }
 
     [Fact]
+    public async Task A_pull_request_opened_on_a_watched_repository_starts_what_a_rule_asks()
+    {
+        await Rule("audit-new-pulls", TriggerEventKinds.PrOpened, ("base", "main"));
+
+        var repository = Path.Combine(_root, "repo");
+        Directory.CreateDirectory(repository);
+
+        var projects = new FakeProjects("demo", repository);
+        projects.Resolution.Entry.Remote = "git@github.com:acme/app.git";
+
+        var github = new OnePull();
+        var daemon = Daemon(on: true, projects, new FakeGit(repository), github: github);
+        using var stop = new CancellationTokenSource();
+        var running = daemon.TriggersAsync(Output(), stop.Token);
+
+        // The first look takes what is there as the baseline.
+        await Eventually(() => File.Exists(Path.Combine(_paths.Paths.State, "triggers", "cursors", "github.json")));
+        github.Opened = true;
+
+        await Eventually(() => _commands.Asked.Count > 0);
+
+        await stop.CancelAsync();
+        await running;
+
+        _commands.Asked.Should().ContainSingle().Which.Should().Be(("docs audit", "demo"));
+        github.Paths.Should().OnlyContain(one => one.StartsWith("repos/acme/app/", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task With_the_switch_off_nothing_is_started_and_a_webhook_starts_its_team_as_before()
     {
         await Rule("audit-on-hook", TriggerEventKinds.Webhook, ("team", "docs-crew"));
@@ -222,7 +251,12 @@ public sealed class DaemonTriggersTests : IDisposable
                 [TriggerSwitch.Variable] = on == true ? "1" : "0",
             });
 
-    private TeamDaemonCommand Daemon(bool on, Loadout.Core.Projects.IProjectService? projects = null, Loadout.Core.Git.IGitManager? git = null, Loadout.Core.Workspace.IWorkspaceManager? workspace = null) =>
+    private TeamDaemonCommand Daemon(
+        bool on,
+        Loadout.Core.Projects.IProjectService? projects = null,
+        Loadout.Core.Git.IGitManager? git = null,
+        Loadout.Core.Workspace.IWorkspaceManager? workspace = null,
+        IGitHubReads? github = null) =>
         new(
             secrets: null!,
             client: null!,
@@ -257,6 +291,9 @@ public sealed class DaemonTriggersTests : IDisposable
         {
             TriggerEvery = TimeSpan.FromMilliseconds(50),
             DocsDriftEvery = TimeSpan.FromMilliseconds(50),
+            GitHubReads = github,
+            GitHubCredential = github is null ? null : _ => Task.FromResult(TriggerCredential.Of(TriggerCredential.GhToken, "t")),
+            GitHubEvery = TimeSpan.FromMilliseconds(50),
         };
 
     /// <summary>Waits for the daemon to get somewhere, and when it does not, says what its journal recorded.</summary>
@@ -283,6 +320,38 @@ public sealed class DaemonTriggersTests : IDisposable
             Out = new AnsiConsoleOutput(TextWriter.Null),
             Interactive = InteractionSupport.No,
         });
+
+    /// <summary>A repository with no pull requests until <see cref="Opened"/>, then one into main.</summary>
+    private sealed class OnePull : IGitHubReads
+    {
+        private readonly ConcurrentQueue<string> _paths = new();
+
+        private volatile bool _opened;
+
+        public bool Opened
+        {
+            get => _opened;
+            set => _opened = value;
+        }
+
+        public IReadOnlyList<string> Paths => [.. _paths];
+
+        public Task<GitHubReply> GetAsync(TriggerCredential credential, string path, string? etag, CancellationToken ct)
+        {
+            _paths.Enqueue(path);
+
+            var pulls = Opened
+                ? """[{"number":4,"state":"open","draft":false,"title":"T","html_url":"u","updated_at":"UPDATED","author_association":"OWNER","user":{"login":"o","id":1},"head":{"sha":"abc","ref":"f","repo":{"full_name":"acme/app"}},"base":{"ref":"main"}}]"""
+                    .Replace("UPDATED", DateTimeOffset.UtcNow.ToString("O"), StringComparison.Ordinal)
+                : "[]";
+
+            var body = path.Contains("/pulls?", StringComparison.Ordinal) ? pulls
+                : path.Contains("/actions/runs", StringComparison.Ordinal) ? """{"workflow_runs":[]}"""
+                : "[]";
+
+            return Task.FromResult(new GitHubReply(200, body));
+        }
+    }
 
     /// <summary>Records each command asked for, with its first argument, and says it worked.</summary>
     private sealed class Recording : ICommandCatalogue

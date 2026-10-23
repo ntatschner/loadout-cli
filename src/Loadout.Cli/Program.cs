@@ -1064,6 +1064,16 @@ public static class Program
             trigger.AddCommand<TriggerSuggestedCommand>("suggested");
             trigger.AddCommand<TriggerAcceptCommand>("accept");
             trigger.AddCommand<TriggerPruneCommand>("prune");
+            trigger.AddCommand<TriggerAllowCommand>("allow");
+            trigger.AddCommand<TriggerDisallowCommand>("disallow");
+            trigger.AddCommand<TriggerAllowedCommand>("allowed");
+            trigger.AddCommand<TriggerSourcesCommand>("sources");
+            trigger.AddBranch("token", token =>
+            {
+                token.SetDescription("The GitHub token kept for trigger polling alone. Unfinished: needs LOADOUT_TRIGGERS.");
+                token.AddCommand<TriggerTokenSetCommand>("set");
+                token.AddCommand<TriggerTokenClearCommand>("clear");
+            });
         });
 
         TopBranch(config, "voice", voice =>

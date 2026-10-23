@@ -145,8 +145,10 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         Loadout.Core.Updates.IUpdateService? updates = null,
         IEnvironmentProvider? environment = null,
         Loadout.Core.Configuration.YamlStore? yaml = null,
-        IFilePermissions? permissions = null)
+        IFilePermissions? permissions = null,
+        IExecutableResolver? resolver = null)
     {
+        _resolver = resolver;
         _updateWatch = updates is null ? null : new Loadout.Core.Updates.UpdateWatch(updates, configuration, time);
         _yaml = yaml;
         _permissions = permissions;
@@ -1535,6 +1537,19 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
 
     private readonly Loadout.Core.Configuration.YamlStore? _yaml;
     private readonly IFilePermissions? _permissions;
+    private readonly IExecutableResolver? _resolver;
+
+    /// <summary>Reads from GitHub for the trigger source; a test scripts it.</summary>
+    internal Loadout.Core.Triggers.IGitHubReads? GitHubReads { get; init; }
+
+    /// <summary>Finds the token the GitHub source reads with; a test supplies one.</summary>
+    internal Func<CancellationToken, Task<Loadout.Core.Triggers.TriggerCredential>>? GitHubCredential { get; init; }
+
+    /// <summary>How often each watched repository is read when quota is plentiful; a test shortens it.</summary>
+    internal TimeSpan GitHubEvery { get; init; } = Loadout.Core.Triggers.GitHubSource.Every;
+
+    /// <summary>How long a found token is used before it is looked for again, which is how a renewal is noticed.</summary>
+    internal TimeSpan CredentialEvery { get; init; } = TimeSpan.FromMinutes(5);
 
     /// <summary>The trigger spine, while it runs, or null with triggers off.</summary>
     private Loadout.Core.Triggers.TriggerSpine? _spine;
@@ -1570,6 +1585,11 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         var rules = new Loadout.Core.Triggers.TriggerRules(state, yaml);
         var drift = new Loadout.Core.Triggers.DocsDriftSource(state, _projects, _git, DocsPolicyAsync);
         var clock = new Loadout.Core.Triggers.ClockSource(state);
+        var github = new Loadout.Core.Triggers.GitHubSource(
+            state, GitHubReads ?? new Loadout.Core.Triggers.GitHubApi(_client), GitHubEvery);
+        var allow = new Loadout.Core.Triggers.TriggerAllowStore(state, yaml);
+        var credential = Loadout.Core.Triggers.TriggerCredential.Missing;
+        var credentialAt = DateTimeOffset.MinValue;
         var drifted = DateTimeOffset.MinValue;
         var pruned = DateTimeOffset.MinValue;
 
@@ -1608,6 +1628,41 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
                         }
 
                         foreach (var one in clock.Look(listed.Value!.Where(each => each.Usable).Select(each => each.Rule), _time.GetUtcNow()))
+                        {
+                            await spine.PostAsync(one, ct).ConfigureAwait(false);
+                        }
+                    },
+                    output).ConfigureAwait(false);
+
+                await LookedAsync(
+                    "GitHub could not be read for triggers",
+                    async () =>
+                    {
+                        // Nothing is asked of GitHub, or of the credential
+                        // store, until a rule waits for something there.
+                        if (await GitHubWatchedAsync(rules, ct).ConfigureAwait(false) is not { Count: > 0 } watched)
+                        {
+                            return;
+                        }
+
+                        var now = _time.GetUtcNow();
+
+                        if (now - credentialAt >= CredentialEvery)
+                        {
+                            credential = await (GitHubCredential ?? CredentialAsync)(ct).ConfigureAwait(false);
+                            credentialAt = now;
+                        }
+
+                        var allowed = (await allow.ListAsync(ct).ConfigureAwait(false)).Value ?? [];
+                        var look = await github.LookAsync(watched, credential, allowed, now, ct).ConfigureAwait(false);
+
+                        foreach (var note in look.Notes)
+                        {
+                            journal.Append(note);
+                            output.WriteLine($"[dim]{now.ToLocalTime():HH:mm}[/] GitHub: {Markup.Escape(note.Reason ?? note.Kind)}");
+                        }
+
+                        foreach (var one in look.Events)
                         {
                             await spine.PostAsync(one, ct).ConfigureAwait(false);
                         }
@@ -1747,6 +1802,52 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         return slug => waiting.Any(rule =>
             rule.Projects.Count == 0 || rule.Projects.Contains(slug, StringComparer.OrdinalIgnoreCase));
     }
+
+    /// <summary>
+    /// The repositories a rule waits on GitHub for: each watched project whose
+    /// remote is on github.com, or every such project for a rule that names none.
+    /// </summary>
+    private async Task<IReadOnlyList<Loadout.Core.Triggers.WatchedRepo>?> GitHubWatchedAsync(
+        Loadout.Core.Triggers.TriggerRules rules,
+        CancellationToken ct)
+    {
+        var listed = await rules.ListAsync(ct).ConfigureAwait(false);
+
+        var waiting = listed.Succeeded
+            ? listed.Value!
+                .Where(one => one.Usable && one.Rule.Enabled && Loadout.Core.Triggers.TriggerEventKinds.FromGitHub(one.Rule.On))
+                .Select(one => one.Rule)
+                .ToList()
+            : [];
+
+        if (waiting.Count == 0)
+        {
+            return null;
+        }
+
+        var projects = await _projects.ListAsync(ct).ConfigureAwait(false);
+
+        if (projects.Failed)
+        {
+            return null;
+        }
+
+        return
+        [
+            .. projects.Value!
+                .Where(project => waiting.Any(rule =>
+                    rule.Projects.Count == 0 || rule.Projects.Contains(project.Entry.Slug, StringComparer.OrdinalIgnoreCase)))
+                .Select(project => (project.Entry.Slug, Repo: Loadout.Core.Triggers.GitHubRepo.From(project.Entry.Remote)))
+                .Where(one => one.Repo is not null)
+                .Select(one => new Loadout.Core.Triggers.WatchedRepo(one.Slug, one.Repo!)),
+        ];
+    }
+
+    /// <summary>The token the GitHub source reads with: the dedicated one, or gh's.</summary>
+    private Task<Loadout.Core.Triggers.TriggerCredential> CredentialAsync(CancellationToken ct) =>
+        _resolver is null
+            ? Task.FromResult(Loadout.Core.Triggers.TriggerCredential.Missing)
+            : Loadout.Core.Triggers.TriggerCredential.ResolveAsync(_secrets, _resolver, _launcher, ct);
 
     /// <summary>A project's documentation policy, read where 'docs audit' reads it.</summary>
     private async Task<Loadout.Models.Instructions.DocsPolicy?> DocsPolicyAsync(string slug, CancellationToken ct)
