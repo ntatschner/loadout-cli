@@ -21,6 +21,8 @@ class FakeTerminal {
   focused = 0;
   host: HTMLElement | null = null;
   resized: ((size: { cols: number; rows: number }) => void) | null = null;
+  selection = '';
+  pasted: string[] = [];
 
   constructor(options: Record<string, unknown>) {
     this.options = { ...options };
@@ -55,7 +57,52 @@ class FakeTerminal {
     this.focused++;
   }
   scrollToBottom() {}
+  hasSelection() {
+    return this.selection !== '';
+  }
+  getSelection() {
+    return this.selection;
+  }
+  clearSelection() {
+    this.selection = '';
+  }
+  paste(text: string) {
+    this.pasted.push(text);
+  }
   dispose() {}
+}
+
+/** Puts a clipboard on navigator, which jsdom has none of, holding what is written to it. */
+function stubClipboard(board: { held?: string; refuse?: boolean } = {}) {
+  const writes: string[] = [];
+  const clipboard = {
+    writeText: vi.fn(async (text: string) => {
+      if (board.refuse) {
+        throw new DOMException('Write permission denied.', 'NotAllowedError');
+      }
+
+      writes.push(text);
+    }),
+    readText: vi.fn(async () => {
+      if (board.refuse) {
+        throw new DOMException('Read permission denied.', 'NotAllowedError');
+      }
+
+      return board.held ?? '';
+    }),
+  };
+  Object.defineProperty(navigator, 'clipboard', { value: clipboard, configurable: true });
+
+  return { clipboard, writes };
+}
+
+/** Lets the clipboard's promises settle and the component draw what they changed. */
+async function settle() {
+  for (let i = 0; i < 5; i++) {
+    await Promise.resolve();
+  }
+
+  await tick();
 }
 
 vi.mock('@xterm/xterm', () => ({ Terminal: FakeTerminal }));
@@ -85,6 +132,7 @@ const { default: Terminal } = await import('./Terminal.svelte');
 
 afterEach(() => {
   made.length = 0;
+  Reflect.deleteProperty(navigator, 'clipboard');
   document.documentElement.removeAttribute('data-theme');
 });
 
@@ -138,6 +186,118 @@ describe('Terminal', () => {
 
     expect(asked).toHaveBeenCalledOnce();
     around.remove();
+  });
+
+  // xterm turned Ctrl+V into ^V and cancelled the key, so the browser never
+  // fired its paste event and nothing was pasted.
+  it.each([
+    ['Ctrl+V', { key: 'v', code: 'KeyV', ctrlKey: true }],
+    ['Ctrl+Shift+V', { key: 'V', code: 'KeyV', ctrlKey: true, shiftKey: true }],
+  ])('leaves %s to the browser, so its own paste event fires', (_, keys) => {
+    render(Terminal, { title: 'starstats', status: 'working' });
+
+    const event = new KeyboardEvent('keydown', { ...keys, cancelable: true });
+    expect(made[0].keys!(event)).toBe(false);
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it('passes Alt+V to the agent, for Claude Code to paste an image', () => {
+    render(Terminal, { title: 'starstats', status: 'working' });
+
+    expect(made[0].keys!(new KeyboardEvent('keydown', { key: 'v', code: 'KeyV', altKey: true }))).toBe(true);
+  });
+
+  it('copies a selection on Ctrl+C and clears it, rather than interrupting', async () => {
+    const { writes } = stubClipboard();
+    render(Terminal, { title: 'starstats', status: 'working' });
+    made[0].selection = 'dotnet test';
+
+    expect(made[0].keys!(new KeyboardEvent('keydown', { key: 'c', code: 'KeyC', ctrlKey: true, cancelable: true }))).toBe(false);
+    await settle();
+
+    expect(writes).toEqual(['dotnet test']);
+    expect(made[0].hasSelection()).toBe(false);
+  });
+
+  it('passes Ctrl+C to the agent as the interrupt when nothing is selected', async () => {
+    const { clipboard } = stubClipboard();
+    render(Terminal, { title: 'starstats', status: 'working' });
+
+    expect(made[0].keys!(new KeyboardEvent('keydown', { key: 'c', code: 'KeyC', ctrlKey: true }))).toBe(true);
+    await settle();
+    expect(clipboard.writeText).not.toHaveBeenCalled();
+  });
+
+  it('keeps the browser menu off the terminal on right-click', () => {
+    stubClipboard();
+    render(Terminal, { title: 'starstats', status: 'working' });
+
+    const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+    made[0].host!.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('stops taking right-clicks once it has gone', () => {
+    stubClipboard();
+    const { unmount } = render(Terminal, { title: 'starstats', status: 'working' });
+    const host = made[0].host!;
+    unmount();
+
+    const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+    host.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it('copies a selection on right-click and clears it', async () => {
+    const { writes } = stubClipboard({ held: 'not this' });
+    render(Terminal, { title: 'starstats', status: 'working' });
+    made[0].selection = 'exit code 3';
+
+    made[0].host!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    await settle();
+
+    expect(writes).toEqual(['exit code 3']);
+    expect(made[0].hasSelection()).toBe(false);
+    expect(made[0].pasted).toEqual([]);
+  });
+
+  it('pastes the clipboard through xterm on right-click when nothing is selected', async () => {
+    const { clipboard } = stubClipboard({ held: 'git status' });
+    render(Terminal, { title: 'starstats', status: 'working' });
+
+    made[0].host!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    await settle();
+
+    expect(made[0].pasted).toEqual(['git status']);
+    expect(clipboard.writeText).not.toHaveBeenCalled();
+  });
+
+  it('says on the bar when the browser refuses the clipboard', async () => {
+    stubClipboard({ refuse: true });
+    render(Terminal, { title: 'starstats', status: 'working' });
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    made[0].host!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    await settle();
+
+    expect(screen.getByRole('alert').textContent).toBe('The browser refused the clipboard');
+    expect(made[0].pasted).toEqual([]);
+  });
+
+  it('says on the bar when the browser has no clipboard to offer', async () => {
+    render(Terminal, { title: 'starstats', status: 'working' });
+    made[0].selection = 'exit code 3';
+
+    made[0].keys!(new KeyboardEvent('keydown', { key: 'c', code: 'KeyC', ctrlKey: true }));
+    await settle();
+
+    expect(screen.getByRole('alert').textContent).toBe('The browser refused the clipboard');
+  });
+
+  it('names the paste, image and copy keys on the bar', () => {
+    render(Terminal, { title: 'starstats', status: 'working' });
+
+    expect(screen.getByText('Ctrl+V paste · Alt+V image · right-click copy or paste')).toBeTruthy();
   });
 
   it('lifts colours to 7:1 in the high-contrast themes and 4.5:1 otherwise, and names the screen', () => {
