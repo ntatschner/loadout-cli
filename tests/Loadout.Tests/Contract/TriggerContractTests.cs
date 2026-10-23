@@ -28,6 +28,73 @@ public sealed class TriggerContractTests
     }
 
     [BuiltCliFact]
+    public async Task A_clock_rule_is_added_with_its_time_and_a_schedule_that_is_not_there_cannot_be_adopted()
+    {
+        using var loadout = new LoadoutProcess();
+        loadout.Environment["LOADOUT_TRIGGERS"] = "1";
+
+        var added = await loadout.RunAsync("trigger", "add", "hourly-audit", "clock", "--every", "1h", "--builtin", "docs audit");
+        added.ExitCode.Should().Be(0, added.StandardError);
+
+        var rule = (await loadout.RunAsync("trigger", "list", "--json")).Json().EnumerateArray().Single().GetProperty("rule");
+        rule.GetProperty("on").GetString().Should().Be("clock");
+        (await loadout.RunAsync("trigger", "list")).StandardOutput.Should().Contain("hourly-audit v1: every 1h");
+
+        var both = await loadout.RunAsync("trigger", "add", "both", "clock", "--every", "1h", "--at", "09:00", "--builtin", "docs audit");
+        both.ExitCode.Should().Be(2);
+        both.StandardError.Should().Contain("exactly one of them");
+
+        var adopted = await loadout.RunAsync("trigger", "adopt", "no-such-schedule");
+        adopted.ExitCode.Should().NotBe(0);
+        adopted.StandardError.Should().Contain("no schedule called 'no-such-schedule'");
+    }
+
+    [BuiltCliFact]
+    public async Task The_stale_list_starts_empty_and_a_release_with_no_daemon_is_refused()
+    {
+        using var loadout = new LoadoutProcess();
+        loadout.Environment["LOADOUT_TRIGGERS"] = "1";
+
+        var listed = await loadout.RunAsync("trigger", "stale");
+        listed.ExitCode.Should().Be(0, listed.StandardError);
+        listed.StandardOutput.Should().Contain("Nothing is on the stale list");
+        (await loadout.RunAsync("trigger", "stale", "--json")).Json().EnumerateArray().Should().BeEmpty();
+
+        var nothing = await loadout.RunAsync("trigger", "release", "audit-failures");
+        nothing.ExitCode.Should().Be(0, nothing.StandardError);
+        nothing.StandardOutput.Should().Contain("nothing of that on the stale list");
+
+        // What a daemon writes when it resumes a rule that held an event for
+        // longer than the catch-up window.
+        var doctor = (await loadout.RunAsync("doctor", "--json")).Json();
+        var state = doctor.GetProperty("checks").EnumerateArray()
+            .First(check => check.GetProperty("name").GetString() == "State").GetProperty("detail").GetString()!;
+        var journal = Path.Combine(state, "triggers", "journal");
+        var now = DateTimeOffset.UtcNow;
+
+        Directory.CreateDirectory(journal);
+        await File.AppendAllTextAsync(
+            Path.Combine(journal, now.UtcDateTime.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture) + ".jsonl"),
+            string.Join('\n',
+                System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    at = now.AddHours(-30), kind = "event", @event = "e1", subject = "run:1", source = "daemon",
+                    eventKind = "run-finished", fields = new { team = "alpha", outcome = "failed" },
+                }),
+                System.Text.Json.JsonSerializer.Serialize(new { at = now, kind = "stale", @event = "e1", rule = "audit-failures", subject = "run:1" }))
+            + "\n");
+
+        var stale = (await loadout.RunAsync("trigger", "stale", "--json")).Json().EnumerateArray().Single();
+        stale.GetProperty("subject").GetString().Should().Be("run:1");
+        stale.GetProperty("agesOut").GetDateTimeOffset().Should().BeCloseTo(now.AddDays(7), TimeSpan.FromSeconds(1));
+        (await loadout.RunAsync("trigger", "stale")).StandardOutput.Should().Contain("audit-failures: run-finished about run:1");
+
+        var released = await loadout.RunAsync("trigger", "release", "audit-failures");
+        released.ExitCode.Should().Be(2, released.StandardOutput);
+        released.StandardError.Should().Contain("Only a running daemon can decide the 1 stale event(s)");
+    }
+
+    [BuiltCliFact]
     public async Task A_rule_added_with_no_daemon_is_kept_journalled_listed_tried_and_removed()
     {
         using var loadout = new LoadoutProcess();
@@ -125,6 +192,8 @@ public sealed class TriggerContractTests
         Rule().Should().Be((1, 6m));
         SuggestionChanged().Should().BeTrue("the rules list says so too, not only 'trigger suggested'");
         (await loadout.RunAsync("trigger", "list")).StandardOutput.Should().Contain("Changed since you accepted it");
+        (await loadout.RunAsync("trigger", "accept", "watcher", "after-failure", "--dry-run")).StandardOutput
+            .Should().Contain("spend cap: $6.00 -> $8.00", "a dry run says what taking the change would change");
 
         (await loadout.RunAsync("trigger", "accept", "watcher", "after-failure")).ExitCode.Should().Be(0);
         Rule().Should().Be((2, 8m));

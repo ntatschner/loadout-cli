@@ -87,6 +87,11 @@ public static class ConfigKeys
         public const string Instructions = "Agent instructions";
         public const string Telemetry = "Usage reporting";
         public const string Machine = "This machine";
+
+        // Apart from the machine's other settings, which ran off a page at
+        // eighty by twenty-four once the trigger journal had a limit of its
+        // own; how long things are kept is one question in any case.
+        public const string Keeping = "Keeping and pruning";
         public const string Accessibility = "Accessibility";
         public const string Studio = "Studio";
 
@@ -104,7 +109,7 @@ public static class ConfigKeys
         [
             Workspace, Agents, Editor, Syncing, Secrets, Updates,
             Statusline, StatuslineTimes, Instructions, Accessibility, Writing, Display, Studio,
-            Telemetry, Machine, General,
+            Telemetry, Machine, Keeping, General,
         ];
     }
 
@@ -481,7 +486,7 @@ public static class ConfigKeys
             (_, m, v) => m.Teams.BinDays = v.Trim().Length == 0 ? null : Count(v),
             true,
             Sample: "30",
-            Group: Groups.Machine,
+            Group: Groups.Keeping,
             WhenUnset: "thirty days, then the daemon deletes it"),
 
         new("events-days",
@@ -492,8 +497,19 @@ public static class ConfigKeys
             (_, m, v) => m.Teams.EventsDays = v.Trim().Length == 0 ? null : Count(v),
             true,
             Sample: "30",
-            Group: Groups.Machine,
+            Group: Groups.Keeping,
             WhenUnset: "thirty days, pruned each time the daemon starts"),
+
+        new("trigger-journal-mb",
+            "Megabytes the trigger journal may take before its oldest days go, beyond the last 31. 0 leaves it to its 90 days",
+            (_, m) => m.Teams.TriggerJournalMegabytes is { } megabytes
+                ? megabytes.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                : string.Empty,
+            (_, m, v) => m.Teams.TriggerJournalMegabytes = v.Trim().Length == 0 ? null : Count(v),
+            true,
+            Sample: "64",
+            Group: Groups.Keeping,
+            WhenUnset: "64 MB, pruned once a day by the daemon"),
 
         new("team-webhook-teams",
             "Comma-separated teams something outside this machine may start",

@@ -152,7 +152,8 @@ public sealed class TriggerListCommand(
     TimeProvider time,
     Loadout.Core.Teams.ITeamCatalogue teams,
     Loadout.Core.Instructions.ISpecialistLibrary library,
-    Loadout.Core.Workspace.IWorkspaceManager workspace) : AsyncCommand<TriggerSettings>
+    Loadout.Core.Workspace.IWorkspaceManager workspace,
+    Loadout.Core.Configuration.IConfigurationService configuration) : AsyncCommand<TriggerSettings>
 {
     /// <inheritdoc />
     public override async Task<int> ExecuteAsync(CommandContext context, TriggerSettings settings, CancellationToken cancellationToken)
@@ -168,6 +169,7 @@ public sealed class TriggerListCommand(
         }
 
         var listed = await desk.Rules.ListAsync(cancellationToken).ConfigureAwait(false);
+        var megabytes = (await configuration.LoadMachineAsync(cancellationToken).ConfigureAwait(false)).Value?.Teams.TriggerJournalMegabytes;
 
         if (listed.Failed)
         {
@@ -222,6 +224,12 @@ public sealed class TriggerListCommand(
                     $"  [yellow]Changed since you accepted it:[/] {Markup.Escape(rule.SuggestedBy)} now suggests something "
                     + $"different. This rule runs as accepted until you look: loadout trigger suggested{Markup.Escape(project)}");
             }
+        }
+
+        if (desk.Journal.OverAllowance(now, TriggerJournal.Allowance(megabytes)) is { } over)
+        {
+            output.WriteBlankLine();
+            output.WriteLine($"[yellow]{Markup.Escape(over)}[/] Raise it with: loadout config set trigger-journal-mb <MB>");
         }
 
         if (desk.Daemon is null)
@@ -328,6 +336,14 @@ public sealed class TriggerAddCommand(
         [CommandOption("--disabled")]
         [Description("Record it without letting it act yet.")]
         public bool Disabled { get; init; }
+
+        [CommandOption("--every <DURATION>")]
+        [Description("For a clock rule: how often it comes round, such as 30m, 2h or 1d. At least five minutes.")]
+        public string? Every { get; init; }
+
+        [CommandOption("--at <TIME>")]
+        [Description("For a clock rule: the time of day it comes round, as 09:00, in this machine's own time.")]
+        public string? At { get; init; }
     }
 
     /// <inheritdoc />
@@ -375,6 +391,7 @@ public sealed class TriggerAddCommand(
                 $"[dim]Dry run: nothing was saved.[/] {(was is null ? "This would add" : $"This would replace version {was.Rule.Version} of")} "
                 + $"'{Markup.Escape(rule.Id)}':");
             output.WriteLine(Markup.Escape(TriggerWords.Line(rule, null)));
+            TriggerWords.Changes(output, was?.Rule, rule);
 
             return CommandOutput.Success();
         }
@@ -841,7 +858,7 @@ public sealed class TriggerPruneCommand(
         }
 
         var now = time.GetUtcNow();
-        var (days, bytes) = desk.Journal.Prunable(now, age);
+        var (days, bytes, _, _) = desk.Journal.Prunable(now, age);
 
         if (settings.DryRun || days.Count == 0)
         {
@@ -873,6 +890,279 @@ public sealed class TriggerPruneCommand(
         }
 
         return Task.FromResult(CommandOutput.Success());
+    }
+}
+
+/// <summary>Lists the events held too long to act on unasked, waiting for somebody to release them.</summary>
+[Description("List the events trigger rules held for longer than the 24-hour catch-up window, and when each is dropped if nobody releases it. Unfinished: needs LOADOUT_TRIGGERS.")]
+[CommandMeta(CommandCategory.Integration, Intent = "trigger stale held events catch up window")]
+public sealed class TriggerStaleCommand(
+    IPlatformPaths paths,
+    IProcessInspector processes,
+    IEnvironmentProvider environment,
+    YamlStore yaml,
+    IFilePermissions permissions,
+    IAnsiConsole console,
+    TimeProvider time) : AsyncCommand<TriggerSettings>
+{
+    /// <inheritdoc />
+    public override Task<int> ExecuteAsync(CommandContext context, TriggerSettings settings, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var output = new CommandOutput(console, settings);
+        var desk = new TriggerDesk(paths, processes, environment, yaml, permissions, time);
+
+        if (desk.Switch() is (false, var refusal))
+        {
+            return Task.FromResult(output.Fail(refusal, ExitCode.InvalidArguments));
+        }
+
+        var now = time.GetUtcNow();
+        var stale = TriggerSpine.Stale(desk.Journal.Read(now - TriggerSpine.Remembered), now);
+
+        if (output.IsJson)
+        {
+            output.WriteJson(stale.Select(one => new
+            {
+                rule = one.Rule,
+                version = one.Version,
+                @event = one.Event.Id,
+                subject = one.Event.Subject,
+                project = one.Event.Project,
+                happened = one.Event.At,
+                since = one.Since,
+                agesOut = one.AgesOut,
+            }));
+
+            return Task.FromResult(CommandOutput.Success());
+        }
+
+        if (stale.Count == 0)
+        {
+            output.WriteLine("Nothing is on the stale list.");
+
+            return Task.FromResult(CommandOutput.Success());
+        }
+
+        foreach (var one in stale)
+        {
+            output.WriteLine(Markup.Escape(
+                $"{one.Rule}: {one.Event.Kind} about {one.Event.Subject}, at {one.Event.At:yyyy-MM-dd HH:mm} UTC; "
+                + $"dropped {one.AgesOut:yyyy-MM-dd HH:mm} UTC unless released"));
+        }
+
+        output.WriteBlankLine();
+        output.WriteLine("[dim]Release a rule's, under its caps as usual, with:[/] loadout trigger release <rule> [[--subject <subject>]]");
+
+        return Task.FromResult(CommandOutput.Success());
+    }
+}
+
+/// <summary>Releases stale events, to be decided against their rule as it is now.</summary>
+[Description("Release the stale events a trigger rule holds, to be decided against the rule as it is now, under its caps. Unfinished: needs LOADOUT_TRIGGERS.")]
+[CommandMeta(CommandCategory.Integration, Intent = "trigger release stale held events", Mutates = true)]
+public sealed class TriggerReleaseCommand(
+    IPlatformPaths paths,
+    IProcessInspector processes,
+    IEnvironmentProvider environment,
+    YamlStore yaml,
+    IFilePermissions permissions,
+    IAnsiConsole console,
+    TimeProvider time) : AsyncCommand<TriggerReleaseCommand.Settings>
+{
+    public sealed class Settings : TriggerRuleSettings
+    {
+        [CommandOption("--subject <SUBJECT>")]
+        [Description("Only the stale event about this subject, as 'trigger stale' names it. Every one of the rule's when left out.")]
+        public string? Subject { get; init; }
+    }
+
+    /// <inheritdoc />
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var output = new CommandOutput(console, settings);
+        var desk = new TriggerDesk(paths, processes, environment, yaml, permissions, time);
+
+        if (desk.Switch() is (false, var refusal))
+        {
+            return output.Fail(refusal, ExitCode.InvalidArguments);
+        }
+
+        var now = time.GetUtcNow();
+        var subject = settings.Subject is { Length: > 0 } one ? one.Trim() : null;
+        var stale = TriggerSpine.Stale(desk.Journal.Read(now - TriggerSpine.Remembered), now)
+            .Where(each => string.Equals(each.Rule, settings.Name, StringComparison.OrdinalIgnoreCase)
+                && (subject is null || string.Equals(each.Event.Subject, subject, StringComparison.Ordinal)))
+            .ToList();
+
+        if (settings.DryRun)
+        {
+            output.WriteLine(stale.Count == 0
+                ? "[dim]Dry run: nothing was released.[/] There is nothing of that on the stale list."
+                : $"[dim]Dry run: nothing was released.[/] {stale.Count} stale event(s) of '{Markup.Escape(settings.Name)}' "
+                  + "would be decided against the rule as it is now, under its caps.");
+
+            return CommandOutput.Success();
+        }
+
+        var request = Guid.NewGuid().ToString("N");
+
+        return await desk.ChangeAsync(
+            new TriggerAsk(request, TriggerVerbs.Release, RuleId: settings.Name, Subject: subject),
+            output,
+
+            // Refused rather than done: the daemon is what decides an event,
+            // and written here it would only record a release nothing acted on.
+            () => Task.FromResult(stale.Count == 0
+                ? new TriggerAnswer(request, true, "There is nothing of that on the stale list, so nothing changed.")
+                : new TriggerAnswer(
+                    request,
+                    false,
+                    $"Only a running daemon can decide the {stale.Count} stale event(s). Start it with 'loadout daemon', "
+                    + "then release them.")),
+            cancellationToken).ConfigureAwait(false);
+    }
+}
+
+/// <summary>Moves a schedule onto a clock rule, and pauses the schedule so nothing fires twice.</summary>
+[Description("Move a team schedule that runs on a clock onto a trigger rule with a spend cap, and pause the schedule. Unfinished: needs LOADOUT_TRIGGERS.")]
+[CommandMeta(CommandCategory.Integration, Intent = "trigger adopt schedule clock move fold", Mutates = true)]
+public sealed class TriggerAdoptCommand(
+    IPlatformPaths paths,
+    IProcessInspector processes,
+    IEnvironmentProvider environment,
+    YamlStore yaml,
+    IFilePermissions permissions,
+    IAnsiConsole console,
+    TimeProvider time,
+    Loadout.Core.Teams.IScheduleService schedules,
+    Loadout.Core.Teams.IRunJournal runs,
+    ICommandCatalogue commands,
+    Loadout.Core.Teams.ITeamCatalogue teams,
+    Loadout.Core.Instructions.ISpecialistLibrary library,
+    Loadout.Core.Workspace.IWorkspaceManager workspace) : AsyncCommand<TriggerAdoptCommand.Settings>
+{
+    public sealed class Settings : TriggerSettings
+    {
+        [CommandArgument(0, "<SCHEDULE>")]
+        [Description("The schedule, as 'team schedule list' names it. The rule takes its name.")]
+        public string Schedule { get; init; } = string.Empty;
+
+        [CommandOption("--cap-usd <AMOUNT>")]
+        [Description("The most its runs may spend in the window, in US dollars, or proposed.")]
+        public string? CapUsd { get; init; }
+
+        [CommandOption("--budget-usd <AMOUNT>")]
+        [Description("What each run may spend, in US dollars, or proposed. The schedule's own, then the team's, when left out.")]
+        public string? BudgetUsd { get; init; }
+    }
+
+    /// <inheritdoc />
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var output = new CommandOutput(console, settings);
+        var desk = new TriggerDesk(paths, processes, environment, yaml, permissions, time);
+
+        if (desk.Switch() is (false, var refusal))
+        {
+            return output.Fail(refusal, ExitCode.InvalidArguments);
+        }
+
+        var listed = await schedules.ListAsync(cancellationToken).ConfigureAwait(false);
+
+        if (listed.Failed)
+        {
+            return output.Fail(listed);
+        }
+
+        if (listed.Value!.FirstOrDefault(one => string.Equals(one.Id, settings.Schedule, StringComparison.OrdinalIgnoreCase))
+            is not { } schedule)
+        {
+            return output.Fail(
+                $"There is no schedule called '{settings.Schedule}'. See them with: loadout team schedule list",
+                ExitCode.ProjectNotFound);
+        }
+
+        if (TriggerAdopt.Rule(schedule) is (null, var why))
+        {
+            return output.Fail(why!, ExitCode.InvalidArguments);
+        }
+
+        var rule = TriggerAdopt.Rule(schedule).Rule!;
+
+        var unreadable = TriggerWords.Money(settings.CapUsd, "--cap-usd", value => rule.CapUsd = value)
+            ?? TriggerWords.Money(settings.BudgetUsd, "--budget-usd", value => rule.BudgetUsd = value);
+
+        if (unreadable is not null)
+        {
+            return output.Fail(unreadable, ExitCode.InvalidArguments);
+        }
+
+        if (await TriggerAddCommand.TeamMoneyAsync(
+                rule, settings.BudgetUsd, settings.CapUsd, output,
+                new DaemonTriggerActions(commands, runs, teams, library, workspace), runs, cancellationToken)
+                .ConfigureAwait(false) is { } refused)
+        {
+            return output.Fail(refused, ExitCode.InvalidArguments);
+        }
+
+        if (TriggerRules.Check(rule) is { } problem)
+        {
+            return output.Fail($"'{schedule.Id}' cannot become a rule as it stands: {problem}", ExitCode.InvalidArguments);
+        }
+
+        if (settings.DryRun)
+        {
+            output.WriteLine($"[dim]Dry run: nothing was saved and the schedule still runs.[/] This would save '{Markup.Escape(rule.Id)}':");
+            output.WriteLine(Markup.Escape(TriggerWords.Line(rule, null)));
+            output.WriteLine($"and pause the schedule '{Markup.Escape(schedule.Id)}', keeping its history.");
+
+            return CommandOutput.Success();
+        }
+
+        var request = Guid.NewGuid().ToString("N");
+        var saved = await desk.ChangeAsync(
+            new TriggerAsk(request, TriggerVerbs.Save, Rule: rule),
+            output,
+            async () =>
+            {
+                var written = await desk.Rules.SaveAsync(rule, cancellationToken).ConfigureAwait(false);
+
+                return written.Failed
+                    ? new TriggerAnswer(request, false, written.Error!)
+                    : desk.Journalled(
+                        request, TriggerEntryKinds.Edited, written.Value!.Id, written.Value!.Version,
+                        $"adopted from the schedule '{schedule.Id}' with no daemon running",
+                        $"'{written.Value!.Id}' is saved as version {written.Value!.Version}. No daemon is running, so it "
+                        + "takes effect when one starts.");
+            },
+            cancellationToken).ConfigureAwait(false);
+
+        if (saved != 0)
+        {
+            return saved;
+        }
+
+        // Paused only once the rule is saved, so a refused save leaves the
+        // schedule running rather than nothing running at all.
+        schedule.Enabled = false;
+        var paused = await schedules.SaveAsync(schedule, cancellationToken).ConfigureAwait(false);
+
+        if (paused.Failed)
+        {
+            return output.Fail(
+                $"The rule is saved, but the schedule '{schedule.Id}' could not be paused, so both would run: {paused.Error} "
+                + $"Remove it yourself with: loadout team schedule remove {schedule.Id}");
+        }
+
+        output.WriteLine($"The schedule '{Markup.Escape(schedule.Id)}' is paused, and keeps its history.");
+
+        return CommandOutput.Success();
     }
 }
 
@@ -1062,8 +1352,14 @@ public sealed class TriggerAcceptCommand(
 
         if (settings.DryRun)
         {
+            var listed = await desk.Rules.ListAsync(cancellationToken).ConfigureAwait(false);
+            var was = listed.Succeeded
+                ? listed.Value!.FirstOrDefault(one => string.Equals(one.Rule.Id, rule.Id, StringComparison.OrdinalIgnoreCase))?.Rule
+                : null;
+
             output.WriteLine($"[dim]Dry run: nothing was saved.[/] This would save '{Markup.Escape(rule.Id)}':");
             output.WriteLine(Markup.Escape(TriggerWords.Line(rule, null)));
+            TriggerWords.Changes(output, was, rule);
 
             return CommandOutput.Success();
         }
@@ -1158,8 +1454,38 @@ internal static class TriggerWords
             problem ??= TeamDuration.Refusal(settings.Debounce!);
         }
 
+        if (settings.Every is { Length: > 0 } every)
+        {
+            if (TeamDuration.Parse(every) is { } parsed)
+            {
+                rule.Every = parsed;
+            }
+            else
+            {
+                problem ??= TeamDuration.Refusal(every);
+            }
+        }
+
+        if (settings.At is { Length: > 0 } at)
+        {
+            if (TimeOnly.TryParse(at, CultureInfo.InvariantCulture, out var parsed))
+            {
+                rule.At = parsed;
+            }
+            else
+            {
+                problem ??= $"'{at}' is not a time of day. Write it as 09:00.";
+            }
+        }
+
         return (rule, problem);
     }
+
+    /// <summary>When a rule waits for, in words: its event, or for a clock rule its time.</summary>
+    public static string When(TriggerRule rule) =>
+        rule.Every is { } every ? $"every {TeamDuration.Spell(every)}"
+        : rule.At is { } at ? $"daily at {at.ToString("HH:mm", CultureInfo.InvariantCulture)}"
+        : $"on {rule.On}";
 
     /// <summary>A duration given as an option, the fallback when none was, or null when what was given is not one.</summary>
     public static TimeSpan? Duration(string? text, TimeSpan fallback) =>
@@ -1207,7 +1533,35 @@ internal static class TriggerWords
             ? string.Empty
             : $"; {standing.Runs} run(s), ${standing.Landed:0.00} spent, ${standing.Reserved:0.00} set aside";
 
-        return $"{rule.Id} v{rule.Version}{state}: on {rule.On}{projects}{where}, start {starts}{caps}{stood}";
+        return $"{rule.Id} v{rule.Version}{state}: {When(rule)}{projects}{where}, start {starts}{caps}{stood}";
+    }
+
+    /// <summary>
+    /// Under a dry run's line, what saving would change in a rule already
+    /// there, a field to a line; nothing for a new one.
+    /// </summary>
+    public static void Changes(CommandOutput output, TriggerRule? was, TriggerRule rule)
+    {
+        ArgumentNullException.ThrowIfNull(output);
+
+        if (was is null)
+        {
+            return;
+        }
+
+        var changes = TriggerRuleChanges.Of(was, rule);
+
+        if (changes.Count == 0)
+        {
+            output.WriteLine("[dim]Nothing in it would change.[/]");
+
+            return;
+        }
+
+        foreach (var one in changes)
+        {
+            output.WriteLine($"  {Markup.Escape(one)}");
+        }
     }
 
     /// <summary>One journal entry as a line.</summary>

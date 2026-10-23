@@ -38,7 +38,12 @@ public static class TriggerMatcher
         [
             .. rules
                 .Where(one => one.Usable
-                    && string.Equals(one.Rule.On, happened.Kind, StringComparison.OrdinalIgnoreCase))
+                    && string.Equals(one.Rule.On, happened.Kind, StringComparison.OrdinalIgnoreCase)
+
+                    // A clock event is one rule's own; every other clock rule
+                    // passing it by would be a skip a minute each.
+                    && (!string.Equals(happened.Kind, TriggerEventKinds.Clock, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(happened.Field("rule"), one.Rule.Id, StringComparison.OrdinalIgnoreCase)))
                 .Select(one => Decide(happened, one.Rule)),
         ];
     }

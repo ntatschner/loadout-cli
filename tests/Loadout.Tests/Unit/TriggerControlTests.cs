@@ -374,7 +374,75 @@ public sealed class TriggerControlTests : IDisposable
     }
 
     [Fact]
-    public async Task Resuming_withdraws_what_was_held_past_the_catch_up_window_or_no_longer_matches()
+    public async Task Resuming_keeps_what_was_held_past_the_catch_up_window_as_stale_and_withdraws_what_no_longer_matches()
+    {
+        var (_, journal, clock) = await StaleAsync();
+
+        var entries = journal.Read(Now.AddDays(-1));
+        entries.Where(one => one.Kind == TriggerEntryKinds.Stale).Select(one => one.Event)
+            .Should().BeEquivalentTo(["e1b", "old"], "both were held 30 hours before the resume");
+        entries.Single(one => one.Kind == TriggerEntryKinds.Withdrawn).Reason.Should().Contain("watches loadout-cli");
+        entries.Count(one => one.Kind == TriggerEntryKinds.Started).Should().Be(1, "only the run before the pause");
+
+        var listed = TriggerSpine.Stale(entries, clock.Now);
+        listed.Select(one => one.Event.Subject).Should().BeEquivalentTo(["run:second", "run:old"]);
+        listed.Should().OnlyContain(one => one.AgesOut == clock.Now + TriggerSpine.StaleKept);
+    }
+
+    [Fact]
+    public async Task Releasing_a_stale_event_decides_it_under_the_caps_and_takes_it_off_the_list()
+    {
+        var (spine, journal, clock) = await StaleAsync();
+
+        var answer = await spine.ApplyAsync(new TriggerAsk("req-2", TriggerVerbs.Release, RuleId: "audit-after-run"), CancellationToken.None);
+
+        answer.Applied.Should().BeTrue(answer.Message);
+        var entries = journal.Read(Now.AddDays(-1));
+        entries.Should().Contain(one => one.Kind == TriggerEntryKinds.Released && one.Event == "old");
+        entries.Count(one => one.Kind == TriggerEntryKinds.Started).Should().Be(2, "released, it starts like any other match");
+        TriggerSpine.Stale(entries, clock.Now).Should().BeEmpty();
+
+        (await spine.ApplyAsync(new TriggerAsk("req-3", TriggerVerbs.Release, RuleId: "audit-after-run"), CancellationToken.None))
+            .Message.Should().Contain("nothing on the stale list");
+    }
+
+    [Fact]
+    public async Task A_stale_event_nobody_releases_is_withdrawn_after_a_week_and_said_so()
+    {
+        var (spine, journal, clock) = await StaleAsync();
+
+        (await spine.AgeOutAsync(CancellationToken.None)).Should().Be(0, "it has only just gone stale");
+
+        clock.Now += TriggerSpine.StaleKept + TimeSpan.FromMinutes(1);
+
+        (await spine.AgeOutAsync(CancellationToken.None)).Should().Be(2);
+        var entries = journal.Read(Now.AddDays(-1));
+        entries.Last().Reason.Should().Contain("never released");
+        TriggerSpine.Stale(entries, clock.Now).Should().BeEmpty();
+        TriggerSpine.Stale(entries, clock.Now, aged: true).Should().BeEmpty("withdrawn once, never again");
+    }
+
+    [Fact]
+    public async Task A_newer_event_about_the_same_subject_takes_a_stale_one_off_the_list()
+    {
+        var (spine, journal, clock) = await StaleAsync();
+
+        // Of a kind the rule does not watch, so the rule writes nothing about
+        // it: only the event itself says the subject has moved on.
+        clock.Now += TimeSpan.FromMinutes(5);
+        await spine.DispatchAsync(
+            Event("newer", "loadout-cli", subject: "run:old", at: clock.Now) with { Kind = TriggerEventKinds.DocsDrift },
+            CancellationToken.None);
+
+        TriggerSpine.Stale(journal.Read(Now.AddDays(-1)), clock.Now).Select(one => one.Event.Subject)
+            .Should().Equal(["run:second"], "only the subject that moved on leaves the list");
+    }
+
+    /// <summary>
+    /// A paused spine resumed 30 hours after it held "e1b" and "old", so both
+    /// are stale, and after its rule was narrowed so "elsewhere" no longer matches.
+    /// </summary>
+    private async Task<(TriggerSpine Spine, TriggerJournal Journal, Clock Clock)> StaleAsync()
     {
         var clock = new Clock(Now);
         var (spine, journal) = await PausedAsync(clock);
@@ -392,10 +460,7 @@ public sealed class TriggerControlTests : IDisposable
 
         await spine.ApplyAsync(new TriggerAsk("req-1", TriggerVerbs.Resume, RuleId: edited.Id), CancellationToken.None);
 
-        var withdrawn = journal.Read(Now.AddDays(-1)).Where(one => one.Kind == TriggerEntryKinds.Withdrawn).ToList();
-        withdrawn.Single(one => one.Event == "old").Reason.Should().Contain("catch-up window");
-        withdrawn.Single(one => one.Event == "elsewhere").Reason.Should().Contain("watches loadout-cli");
-        journal.Read(Now.AddDays(-1)).Count(one => one.Kind == TriggerEntryKinds.Started).Should().Be(1, "only the run before the pause");
+        return (spine, journal, clock);
     }
 
     /// <summary>A spine whose one rule has run once and paused at its cap of one run.</summary>

@@ -1051,6 +1051,9 @@ public static class Program
             trigger.AddCommand<TriggerAddCommand>("add");
             trigger.AddCommand<TriggerRemoveCommand>("remove");
             trigger.AddCommand<TriggerResumeCommand>("resume");
+            trigger.AddCommand<TriggerStaleCommand>("stale");
+            trigger.AddCommand<TriggerReleaseCommand>("release");
+            trigger.AddCommand<TriggerAdoptCommand>("adopt");
             trigger.AddCommand<TriggerJournalCommand>("journal");
             trigger.AddCommand<TriggerTestCommand>("test");
             trigger.AddCommand<TriggerSuggestedCommand>("suggested");

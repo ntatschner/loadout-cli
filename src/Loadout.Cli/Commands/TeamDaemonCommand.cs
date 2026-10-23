@@ -1335,6 +1335,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         var finished = new Loadout.Core.Triggers.RunFinishedSource(state, _journal);
         var rules = new Loadout.Core.Triggers.TriggerRules(state, yaml);
         var drift = new Loadout.Core.Triggers.DocsDriftSource(state, _projects, _git, DocsPolicyAsync);
+        var clock = new Loadout.Core.Triggers.ClockSource(state);
         var drifted = DateTimeOffset.MinValue;
         var pruned = DateTimeOffset.MinValue;
 
@@ -1361,6 +1362,24 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
                     },
                     output).ConfigureAwait(false);
 
+                await LookedAsync(
+                    "clock rules could not be read for triggers",
+                    async () =>
+                    {
+                        var listed = await rules.ListAsync(ct).ConfigureAwait(false);
+
+                        if (listed.Failed)
+                        {
+                            return;
+                        }
+
+                        foreach (var one in clock.Look(listed.Value!.Where(each => each.Usable).Select(each => each.Rule), _time.GetUtcNow()))
+                        {
+                            await spine.PostAsync(one, ct).ConfigureAwait(false);
+                        }
+                    },
+                    output).ConfigureAwait(false);
+
                 // Daily, from the first pass, so a daemon that is restarted
                 // often still prunes.
                 if (_time.GetUtcNow() - pruned >= TimeSpan.FromDays(1))
@@ -1369,12 +1388,30 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
 
                     await LookedAsync(
                         "the trigger journal could not be pruned",
-                        () =>
+                        async () =>
                         {
-                            journal.Prune(pruned, Loadout.Core.Triggers.TriggerJournal.Kept, "kept for 90 days");
+                            // Read each time, so a changed limit is taken
+                            // without restarting the daemon.
+                            var allowance = Loadout.Core.Triggers.TriggerJournal.Allowance(
+                                (await _configuration.LoadMachineAsync(ct).ConfigureAwait(false)).Value?.Teams.TriggerJournalMegabytes);
+                            var kept = Loadout.Core.Triggers.TriggerJournal.Kept;
 
-                            return Task.CompletedTask;
+                            journal.Prune(pruned, kept, "kept for 90 days", allowance);
+
+                            // Over with nothing left to prune: kept writing, and
+                            // said, rather than losing records the ledger needs.
+                            if (journal.OverAllowance(pruned, allowance) is { } over)
+                            {
+                                journal.Append(new Loadout.Core.Triggers.TriggerEntry(
+                                    pruned, Loadout.Core.Triggers.TriggerEntryKinds.OverAllowance, Reason: over));
+                                output.WriteLine($"[yellow]{Markup.Escape(over)}[/]");
+                            }
                         },
+                        output).ConfigureAwait(false);
+
+                    await LookedAsync(
+                        "stale trigger events could not be aged out",
+                        () => spine.AgeOutAsync(ct),
                         output).ConfigureAwait(false);
                 }
 

@@ -125,6 +125,18 @@ public static class TriggerEntryKinds
 
     /// <summary>Days of the journal were deleted, and which.</summary>
     public const string Pruned = "pruned";
+
+    /// <summary>
+    /// An event a rule held for longer than the catch-up window, kept for a
+    /// person to release rather than acted on or dropped.
+    /// </summary>
+    public const string Stale = "stale";
+
+    /// <summary>A person released a stale event, to be decided against the rule as it is now.</summary>
+    public const string Released = "released";
+
+    /// <summary>The journal is over its disk allowance with only days the ledger reads left.</summary>
+    public const string OverAllowance = "over-allowance";
 }
 
 /// <summary>
@@ -206,46 +218,93 @@ public sealed class TriggerJournal
     /// <summary>How long the journal is kept where nobody has said otherwise.</summary>
     public static readonly TimeSpan Kept = TimeSpan.FromDays(90);
 
+    /// <summary>The disk the journal may take where nobody has said otherwise, in megabytes.</summary>
+    public const int DefaultMegabytes = 64;
+
+    /// <summary>
+    /// The configured allowance in bytes, the default for nothing or nonsense,
+    /// or null when zero turns the size limit off.
+    /// </summary>
+    public static long? Allowance(int? megabytes) => megabytes switch
+    {
+        0 => null,
+        > 0 => megabytes.Value * 1024L * 1024,
+        _ => DefaultMegabytes * 1024L * 1024,
+    };
+
     /// <summary>
     /// The day files a prune of everything older than <paramref name="olderThan"/>
-    /// would delete, oldest first, and the bytes they hold.
+    /// would delete, oldest first, with the bytes they hold; then, while what
+    /// is left is over <paramref name="allowance"/>, the oldest of the rest.
     /// </summary>
     /// <remarks>
-    /// Never anything inside <see cref="TriggerSpine.Remembered"/>: the spend
-    /// ledger is rebuilt from that much of the journal, and a reservation whose
-    /// day had gone would be money forgotten while its run still spends it.
-    /// A whole day goes or stays, so pruning is deleting files.
+    /// Never anything inside <see cref="TriggerSpine.Remembered"/>, whatever
+    /// the size: the spend ledger is rebuilt from that much of the journal,
+    /// and a reservation whose day had gone would be money forgotten while its
+    /// run still spends it. A journal that is over its allowance with only
+    /// those days left stays over, and says so through
+    /// <see cref="JournalPrune.Over"/>. A whole day goes or stays, so pruning
+    /// is deleting files.
     /// </remarks>
-    public (IReadOnlyList<string> Days, long Bytes) Prunable(DateTimeOffset now, TimeSpan olderThan)
+    public JournalPrune Prunable(DateTimeOffset now, TimeSpan olderThan, long? allowance = null)
     {
         if (!System.IO.Directory.Exists(Directory))
         {
-            return ([], 0);
+            return new JournalPrune([], 0, 0, false);
         }
 
         var keep = now - (olderThan > TriggerSpine.Remembered ? olderThan : TriggerSpine.Remembered);
         var first = Path.GetFileName(DayPath(keep));
+        var ledger = Path.GetFileName(DayPath(now - TriggerSpine.Remembered));
 
-        var days = new DirectoryInfo(Directory).GetFiles("*.jsonl")
-            .Where(one => string.CompareOrdinal(one.Name, first) < 0)
+        var all = new DirectoryInfo(Directory).GetFiles("*.jsonl")
             .OrderBy(one => one.Name, StringComparer.Ordinal)
             .ToList();
+        var days = all.Where(one => string.CompareOrdinal(one.Name, first) < 0).ToList();
+        var left = all.Skip(days.Count).Sum(one => one.Length);
+        var forSize = 0;
 
-        return ([.. days.Select(one => one.Name[..^".jsonl".Length])], days.Sum(one => one.Length));
+        if (allowance is { } most)
+        {
+            foreach (var one in all.Skip(days.Count).Where(one => string.CompareOrdinal(one.Name, ledger) < 0))
+            {
+                if (left <= most)
+                {
+                    break;
+                }
+
+                days.Add(one);
+                left -= one.Length;
+                forSize++;
+            }
+        }
+
+        return new JournalPrune(
+            [.. days.Select(one => one.Name[..^".jsonl".Length])],
+            days.Sum(one => one.Length),
+            forSize,
+            allowance is { } limit && left > limit);
     }
 
     /// <summary>
     /// Deletes the day files older than <paramref name="olderThan"/>, and
-    /// writes in the journal what went, so nothing disappears without a record.
+    /// then the oldest of the rest while the journal is over
+    /// <paramref name="allowance"/>, and writes in the journal what went, so
+    /// nothing disappears without a record.
     /// </summary>
     /// <returns>The days that went.</returns>
-    public IReadOnlyList<string> Prune(DateTimeOffset now, TimeSpan olderThan, string why)
+    public IReadOnlyList<string> Prune(DateTimeOffset now, TimeSpan olderThan, string why, long? allowance = null)
     {
-        var (days, bytes) = Prunable(now, olderThan);
+        var (days, bytes, forSize, _) = Prunable(now, olderThan, allowance);
 
         if (days.Count == 0)
         {
             return [];
+        }
+
+        if (forSize > 0)
+        {
+            why += $", and {forSize} more to stay under {allowance / (1024 * 1024)} MB";
         }
 
         var gone = new List<string>();
@@ -274,6 +333,50 @@ public sealed class TriggerJournal
         }
 
         return gone;
+    }
+
+    /// <summary>
+    /// What to tell somebody when the journal is over <paramref name="allowance"/>
+    /// with only the days the ledger reads left, or null when it is not.
+    /// </summary>
+    /// <remarks>
+    /// Worked out each time it is asked, so it goes away by itself once the
+    /// days age past the ledger's window and are pruned.
+    /// </remarks>
+    public string? OverAllowance(DateTimeOffset now, long? allowance)
+    {
+        if (allowance is not { } most || !Prunable(now, Kept, most).Over)
+        {
+            return null;
+        }
+
+        var heaviest = Heaviest(now - TriggerSpine.Remembered) is { } one
+            ? $" {one.Name} writes the most, about {one.Bytes / 1024} KB."
+            : string.Empty;
+
+        return $"The trigger journal is over its {most / (1024 * 1024)} MB with only the last "
+            + $"{TriggerSpine.Remembered.TotalDays:0} days left, which are kept for the spend ledger.{heaviest}";
+    }
+
+    /// <summary>
+    /// The rule whose entries from <paramref name="since"/> on take the most
+    /// space, counting an event with no rule against the source that produced
+    /// it, and roughly how many bytes; null for an empty journal.
+    /// </summary>
+    /// <remarks>
+    /// What a journal over its allowance names, so the person knows where to
+    /// look rather than only that something is writing a great deal.
+    /// </remarks>
+    public (string Name, long Bytes)? Heaviest(DateTimeOffset since)
+    {
+        var sizes = Read(since)
+            .GroupBy(one => one.Rule ?? (one.Source is { Length: > 0 } source ? $"source {source}" : one.Kind))
+            .Select(group => (group.Key, Bytes: group.Sum(one => (long)Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(one, Json)) + 1)))
+            .OrderByDescending(one => one.Bytes)
+            .ThenBy(one => one.Key, StringComparer.Ordinal)
+            .ToList();
+
+        return sizes.Count == 0 ? null : (sizes[0].Key, sizes[0].Bytes);
     }
 
     /// <summary>Every entry from <paramref name="since"/> on, oldest first. A line that will not parse is left out.</summary>
@@ -367,3 +470,10 @@ public sealed class TriggerJournal
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 }
+
+/// <summary>What a prune of the trigger journal would delete.</summary>
+/// <param name="Days">The days, oldest first.</param>
+/// <param name="Bytes">What they hold.</param>
+/// <param name="ForSize">How many of them go for the size limit rather than their age.</param>
+/// <param name="Over">Whether what is left is still over the size limit, because only days the ledger reads are left.</param>
+public sealed record JournalPrune(IReadOnlyList<string> Days, long Bytes, int ForSize, bool Over);
