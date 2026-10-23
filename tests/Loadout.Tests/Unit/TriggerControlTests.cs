@@ -51,28 +51,6 @@ public sealed class TriggerControlTests : IDisposable
 
     private string State => _paths.Paths.State;
 
-    [Theory]
-    [InlineData(true, false, true, null)]
-    [InlineData(false, true, false, "started without")]
-    [InlineData(false, false, false, "not switched on")]
-    [InlineData(null, true, true, null)]
-    [InlineData(null, false, false, "not switched on")]
-    public void The_running_daemon_decides_whether_triggers_are_on(bool? daemon, bool here, bool on, string? said)
-    {
-        var (answer, refusal) = TriggerSwitch.Ask(daemon, Environment(here));
-
-        answer.Should().Be(on);
-
-        if (said is null)
-        {
-            refusal.Should().BeNull();
-        }
-        else
-        {
-            refusal.Should().Contain(said).And.NotContain("daemon restart", "a restarted daemon keeps its old environment");
-        }
-    }
-
     [Fact]
     public async Task A_retry_with_the_same_id_gets_the_first_answer_and_the_change_is_made_once()
     {
@@ -306,7 +284,7 @@ public sealed class TriggerControlTests : IDisposable
     }
 
     private (TriggerDesk Desk, TestConsole Console) Desk(TimeSpan? wait = null) =>
-        (new TriggerDesk(_paths, _processes, Environment(on: true), _yaml, new NoOpFilePermissions(), new Clock(Now))
+        (new TriggerDesk(_paths, _processes, _yaml, new NoOpFilePermissions(), new Clock(Now))
         {
             Wait = wait ?? TimeSpan.FromSeconds(1),
         }, new TestConsole());
@@ -322,7 +300,6 @@ public sealed class TriggerControlTests : IDisposable
                 ["XDG_DATA_HOME"] = Path.Combine(_root, "data"),
                 ["XDG_STATE_HOME"] = Path.Combine(_root, "state"),
                 ["XDG_CACHE_HOME"] = Path.Combine(_root, "cache"),
-                [TriggerSwitch.Variable] = on ? "1" : "0",
             });
 
     private static TriggerRule Rule() => new()

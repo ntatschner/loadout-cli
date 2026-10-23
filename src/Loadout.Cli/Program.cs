@@ -1049,7 +1049,7 @@ public static class Program
         TopBranch(config, "trigger", trigger =>
         {
             trigger.Describe(
-                "Rules that start something when something happens. Unfinished, and off unless LOADOUT_TRIGGERS is set.",
+                "Rules that start something when something happens: a run finishing, a pull request, a failed build, a clock.",
                 CommandCategory.Integration,
                 "trigger event rule when happens automation webhook run finished");
             trigger.AddCommand<TriggerListCommand>("list");
@@ -1073,7 +1073,7 @@ public static class Program
             trigger.AddCommand<TriggerRejectCommand>("reject");
             trigger.AddBranch("token", token =>
             {
-                token.SetDescription("The GitHub token kept for trigger polling alone. Unfinished: needs LOADOUT_TRIGGERS.");
+                token.SetDescription("The GitHub token kept for trigger polling alone.");
                 token.AddCommand<TriggerTokenSetCommand>("set");
                 token.AddCommand<TriggerTokenClearCommand>("clear");
             });

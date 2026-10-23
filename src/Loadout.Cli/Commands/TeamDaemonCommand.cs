@@ -152,9 +152,9 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         _updateWatch = updates is null ? null : new Loadout.Core.Updates.UpdateWatch(updates, configuration, time);
         _yaml = yaml;
         _permissions = permissions;
-        // Read once, here: the daemon is the process whose answer counts, and a
-        // switch that changed under it would leave rules half acted on.
-        _triggering = environment is not null && yaml is not null && Loadout.Core.Triggers.TriggerSwitch.On(environment);
+        // Every daemon runs the trigger rules; one built without a YAML store
+        // (a test that wants nothing of them) has nowhere to read them from.
+        _triggering = yaml is not null;
         _queues = queues;
         _resumption = resumption;
         _bin = bin;
@@ -1378,31 +1378,33 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     /// manual means a person at every step, and a webhook is the case where
     /// there is nobody.
     /// </remarks>
-    internal Task<OperationResult> TriggeredAsync(
+    internal async Task<OperationResult> TriggeredAsync(
         TriggerRequest asking,
         CommandOutput output,
         CancellationToken ct)
     {
         if (asking.Project is not { Length: > 0 } project)
         {
-            return Task.FromResult(OperationResult.Fail(
+            return OperationResult.Fail(
                 "A triggered run needs a project: add \"project\" to the body.",
-                ExitCode.InvalidArguments));
+                ExitCode.InvalidArguments);
         }
 
         // First, whatever would start the run: a daemon waiting to restart
         // for an update takes on nothing new, from a rule or otherwise.
         if (Holding() is { } held)
         {
-            return Task.FromResult(OperationResult.Fail(held, ExitCode.PolicyViolation));
+            return OperationResult.Fail(held, ExitCode.PolicyViolation);
         }
 
-        // With triggers on, a webhook is one more event and the rules decide
-        // what it starts, under their caps: one path for every event, rather
-        // than one that spends without asking the ledger.
-        if (_spine is { } spine)
+        // Where a rule waits for webhooks, a webhook is one more event and the
+        // rules decide what it starts, under their caps: one path for every
+        // event, rather than one that spends without asking the ledger. Where
+        // none does, it starts its team as it always has, so a webhook set up
+        // before rules existed keeps working rather than going quiet.
+        if (_spine is { } spine && await WebhookRuledAsync(ct).ConfigureAwait(false))
         {
-            return PostedAsync(spine, Loadout.Core.Triggers.WebhookEvents.From(asking, project, _time.GetUtcNow()), output, ct);
+            return await PostedAsync(spine, Loadout.Core.Triggers.WebhookEvents.From(asking, project, _time.GetUtcNow()), output, ct).ConfigureAwait(false);
         }
 
         output.WriteLine(
@@ -1447,7 +1449,22 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             },
             CancellationToken.None);
 
-        return Task.FromResult(OperationResult.Ok());
+        return OperationResult.Ok();
+    }
+
+    /// <summary>Whether any usable rule waits for webhooks, read afresh so a new rule takes effect at once.</summary>
+    private async Task<bool> WebhookRuledAsync(CancellationToken ct)
+    {
+        if (_yaml is not { } yaml)
+        {
+            return false;
+        }
+
+        var listed = await new Loadout.Core.Triggers.TriggerRules(_paths.Paths.State, yaml).ListAsync(ct).ConfigureAwait(false);
+
+        return listed.Succeeded
+            && listed.Value!.Any(one => one.Usable && one.Rule.Enabled
+                && string.Equals(one.Rule.On, Loadout.Core.Triggers.TriggerEventKinds.Webhook, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -1595,9 +1612,6 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         var pruned = DateTimeOffset.MinValue;
 
         _spine = spine;
-        output.WriteLine(
-            $"[dim]Triggers are on ({Loadout.Core.Triggers.TriggerSwitch.Variable}): the journal is at "
-            + $"{Markup.Escape(journal.Directory)}[/]");
 
         var running = spine.RunAsync(ct);
         var answering = AnswerAsync(spine, new Loadout.Core.Triggers.TriggerInbox(state), output, ct);

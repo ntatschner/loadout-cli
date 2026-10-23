@@ -19,12 +19,11 @@ public class TriggerApprovalSettings : TriggerSettings
 }
 
 /// <summary>Lists the actions that write, waiting for a person to say yes or no.</summary>
-[Description("List the actions trigger rules want to start that write, each waiting for your approval: what it would act on, whose words, what it would spend, and whether it would start at once or wait for headroom. Unfinished: needs LOADOUT_TRIGGERS.")]
+[Description("List the actions trigger rules want to start that write, each waiting for your approval: what it would act on, whose words, what it would spend, and whether it would start at once or wait for headroom.")]
 [CommandMeta(CommandCategory.Integration, Intent = "trigger approvals pending writes approve reject inbox")]
 public sealed class TriggerApprovalsCommand(
     IPlatformPaths paths,
     IProcessInspector processes,
-    IEnvironmentProvider environment,
     YamlStore yaml,
     IFilePermissions permissions,
     IAnsiConsole console,
@@ -36,12 +35,8 @@ public sealed class TriggerApprovalsCommand(
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(console, settings);
-        var desk = new TriggerDesk(paths, processes, environment, yaml, permissions, time);
+        var desk = new TriggerDesk(paths, processes, yaml, permissions, time);
 
-        if (desk.Switch() is (false, var refusal))
-        {
-            return output.Fail(refusal, ExitCode.InvalidArguments);
-        }
 
         var now = time.GetUtcNow();
         var pending = TriggerSpine.Approvals(desk.Journal.Read(now - TriggerSpine.Remembered));
@@ -121,12 +116,11 @@ public sealed class TriggerApprovalsCommand(
 }
 
 /// <summary>Approves an action that writes, which sets its money aside and starts it.</summary>
-[Description("Approve an action a trigger rule wants to start that writes. Its budget is set aside now, and it starts at once or when its rule has headroom. Unfinished: needs LOADOUT_TRIGGERS.")]
+[Description("Approve an action a trigger rule wants to start that writes. Its budget is set aside now, and it starts at once or when its rule has headroom.")]
 [CommandMeta(CommandCategory.Integration, Intent = "trigger approve write action yes", Mutates = true)]
 public sealed class TriggerApproveCommand(
     IPlatformPaths paths,
     IProcessInspector processes,
-    IEnvironmentProvider environment,
     YamlStore yaml,
     IFilePermissions permissions,
     IAnsiConsole console,
@@ -138,12 +132,8 @@ public sealed class TriggerApproveCommand(
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(console, settings);
-        var desk = new TriggerDesk(paths, processes, environment, yaml, permissions, time);
+        var desk = new TriggerDesk(paths, processes, yaml, permissions, time);
 
-        if (desk.Switch() is (false, var refusal))
-        {
-            return output.Fail(refusal, ExitCode.InvalidArguments);
-        }
 
         var id = settings.Approval.Trim();
         var pending = TriggerSpine.Approvals(desk.Journal.Read(time.GetUtcNow() - TriggerSpine.Remembered))
@@ -178,12 +168,11 @@ public sealed class TriggerApproveCommand(
 }
 
 /// <summary>Rejects an action that writes.</summary>
-[Description("Reject an action a trigger rule wants to start that writes; it will not start. Unfinished: needs LOADOUT_TRIGGERS.")]
+[Description("Reject an action a trigger rule wants to start that writes; it will not start.")]
 [CommandMeta(CommandCategory.Integration, Intent = "trigger reject write action no", Mutates = true)]
 public sealed class TriggerRejectCommand(
     IPlatformPaths paths,
     IProcessInspector processes,
-    IEnvironmentProvider environment,
     YamlStore yaml,
     IFilePermissions permissions,
     IAnsiConsole console,
@@ -195,12 +184,8 @@ public sealed class TriggerRejectCommand(
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(console, settings);
-        var desk = new TriggerDesk(paths, processes, environment, yaml, permissions, time);
+        var desk = new TriggerDesk(paths, processes, yaml, permissions, time);
 
-        if (desk.Switch() is (false, var refusal))
-        {
-            return output.Fail(refusal, ExitCode.InvalidArguments);
-        }
 
         var id = settings.Approval.Trim();
         var pending = TriggerSpine.Approvals(desk.Journal.Read(time.GetUtcNow() - TriggerSpine.Remembered))

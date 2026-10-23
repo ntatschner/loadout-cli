@@ -86,8 +86,8 @@ public static class StudioCoverage
 
     private static StudioReach Terminal(string reason) => new(CommandsPage, StudioEffect.TerminalOnly, reason);
 
-    private const string Unfinished =
-        "belongs to triggers, which are unfinished and off unless the daemon was started with LOADOUT_TRIGGERS=1";
+    private const string Rules =
+        "writes or tunes trigger rules, which is done in the terminal for now; Studio shows what the rules need of you on the Teams page";
 
     private static StudioReach ChangesWith(params string[] options) => new(CommandsPage, StudioEffect.Changes, ChangesOnlyWith: options);
 
@@ -211,30 +211,29 @@ public static class StudioCoverage
 
         // What trigger rules need of a person - approvals, a paused rule, the
         // stale list, a stopped source - is on the Teams page beside what
-        // runs need, shown only when the daemon runs triggers. Writing and
-        // tuning rules stays in the terminal while triggers are unfinished;
-        // a page of their own comes when they are switched on for everyone.
+        // runs need. Writing and tuning rules stays in the terminal until
+        // they have a page of their own.
         ["trigger list"] = new("teams", StudioEffect.Reads),
-        ["trigger add"] = Terminal(Unfinished),
-        ["trigger remove"] = Terminal(Unfinished),
+        ["trigger add"] = Terminal(Rules),
+        ["trigger remove"] = Terminal(Rules),
         ["trigger resume"] = new("teams", StudioEffect.Changes),
         ["trigger stale"] = new("teams", StudioEffect.Reads),
         ["trigger release"] = new("teams", StudioEffect.Changes),
-        ["trigger adopt"] = Terminal(Unfinished),
-        ["trigger journal"] = Terminal(Unfinished),
-        ["trigger test"] = Terminal(Unfinished),
-        ["trigger suggested"] = Terminal(Unfinished),
-        ["trigger accept"] = Terminal(Unfinished),
-        ["trigger prune"] = Terminal(Unfinished),
-        ["trigger allow"] = Terminal(Unfinished),
-        ["trigger disallow"] = Terminal(Unfinished),
-        ["trigger allowed"] = Terminal(Unfinished),
+        ["trigger adopt"] = Terminal(Rules),
+        ["trigger journal"] = Terminal(Rules),
+        ["trigger test"] = Terminal(Rules),
+        ["trigger suggested"] = Terminal(Rules),
+        ["trigger accept"] = Terminal(Rules),
+        ["trigger prune"] = Terminal(Rules),
+        ["trigger allow"] = Terminal(Rules),
+        ["trigger disallow"] = Terminal(Rules),
+        ["trigger allowed"] = Terminal(Rules),
         ["trigger sources"] = new("teams", StudioEffect.Reads),
         ["trigger approvals"] = new("teams", StudioEffect.Reads),
         ["trigger approve"] = new("teams", StudioEffect.Changes),
         ["trigger reject"] = new("teams", StudioEffect.Changes),
-        ["trigger token set"] = Terminal(Unfinished),
-        ["trigger token clear"] = Terminal(Unfinished),
+        ["trigger token set"] = Terminal(Rules),
+        ["trigger token clear"] = Terminal(Rules),
         ["dashboard"] = Terminal("serves a dashboard page, and this is one"),
         ["dashboard sign-out"] = new("settings", StudioEffect.Changes),
         ["dashboard signal"] = Terminal("is run by the agent's own hook inside a session, to say it is waiting"),
