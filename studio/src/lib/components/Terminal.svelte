@@ -218,6 +218,39 @@
     terminal?.textarea?.setAttribute('aria-label', `Terminal: ${title}`);
   });
 
+  // Said on the bar when the browser will not hand over or take the
+  // clipboard, so a copy or paste that did nothing says why.
+  let refused = $state(false);
+
+  /** Runs a clipboard call, saying so on the bar where the browser refuses it or has no clipboard to offer. */
+  function clipboard<T>(call: (board: Clipboard) => Promise<T>): Promise<T | undefined> {
+    return Promise.resolve()
+      .then(() => call(navigator.clipboard))
+      .then(
+        (result) => {
+          refused = false;
+
+          return result;
+        },
+        () => {
+          refused = true;
+
+          return undefined;
+        },
+      );
+  }
+
+  /** Copies what is selected and clears it, as Windows Terminal does. */
+  function copySelection() {
+    if (!terminal) {
+      return;
+    }
+
+    const text = terminal.getSelection();
+    terminal.clearSelection();
+    void clipboard((board) => board.writeText(text));
+  }
+
   function press() {
     if (status === 'reconnecting') {
       onretry?.();
@@ -285,8 +318,50 @@
         return false;
       }
 
+      // Ctrl+V and Ctrl+Shift+V go to the browser untouched: xterm would make
+      // ^V of them and cancel the key, so no paste event would ever fire. Let
+      // through, the browser's paste reaches xterm's own paste path, bracketed
+      // where the agent asked. Alt+V is left alone for Claude Code's image paste.
+      const plainCtrl = event.ctrlKey && !event.altKey && !event.metaKey;
+
+      if (plainCtrl && (event.key === 'v' || event.key === 'V' || event.code === 'KeyV')) {
+        return false;
+      }
+
+      // Ctrl+C copies a selection; with nothing selected it is the interrupt.
+      if (plainCtrl && !event.shiftKey && (event.key === 'c' || event.code === 'KeyC') && terminal?.hasSelection()) {
+        if (event.type === 'keydown') {
+          event.preventDefault();
+          copySelection();
+        }
+
+        return false;
+      }
+
       return true;
     });
+
+    // Right-click copies a selection, otherwise pastes, in place of the
+    // browser's own menu for a web page.
+    const menu = (event: MouseEvent) => {
+      event.preventDefault();
+
+      if (!terminal) {
+        return;
+      }
+
+      if (terminal.hasSelection()) {
+        copySelection();
+      } else {
+        const xterm = terminal;
+        void clipboard((board) => board.readText()).then((text) => {
+          if (text) {
+            xterm.paste(text);
+          }
+        });
+      }
+    };
+    box.addEventListener('contextmenu', menu);
 
     terminal.open(box);
     // Named, as every field on the page is, so a browser can tell it apart.
@@ -351,6 +426,7 @@
     looks.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-accent', 'data-motion'] });
 
     return () => {
+      box.removeEventListener('contextmenu', menu);
       document.removeEventListener(SPLIT_SETTLED, settled);
       cancelAnimationFrame(settling);
 
@@ -375,6 +451,10 @@
     <span>{[project, agent].filter(Boolean).join(' · ')}</span>
     <span class="size">{columns} × {rows}</span>
     <span class="keyhint">Ctrl+] leaves the terminal</span>
+    <span class="keyhint">Ctrl+V paste · Alt+V image · right-click copy or paste</span>
+    {#if refused}
+      <span role="alert">The browser refused the clipboard</span>
+    {/if}
     <span class="grow"></span>
     <button type="button" class="tbtn" aria-label="Smaller text" onclick={() => zoom(-1)}>A−</button>
     <button type="button" class="tbtn" aria-label="Larger text" onclick={() => zoom(1)}>A+</button>
