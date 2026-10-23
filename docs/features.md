@@ -178,6 +178,40 @@ What it takes goes to the bin rather than away: `loadout team bin` lists it,
 `loadout team runs restore <run>` puts one back, and it is deleted for good after
 30 days, or whatever `team-bin-days` says.
 
+## When something happens
+
+```sh
+loadout trigger add review-pulls pr-opened --team reviewer --goal "Review {title}" --cap-usd proposed
+loadout trigger approvals
+```
+
+A trigger rule starts a team or a built-in command when something happens: a
+team run finishing, documentation drifting from the code, a pull request opened
+or pushed to, a build failing, an issue or a comment naming `@loadout`, a
+webhook, or a clock. The daemon watches for them. GitHub is polled with
+conditional requests, so a repository where nothing happened costs no quota,
+and only the repositories a rule watches are read.
+
+Every rule that can spend has a spend cap, and Loadout offers one worked out
+from what the team's own last runs cost. Money is set aside as a run starts,
+so several runs at once cannot share headroom meant for one; a rule at its cap
+pauses and says so rather than dropping events. A run that would write waits
+for your approval, in the terminal or on Studio's Teams page, and nothing is
+set aside until you give it.
+
+Whose words a run acts on matters. Owners, members and collaborators are
+trusted; anybody else is quoted to the agent as somebody else's text, to be
+assessed rather than followed, unless you put them on the allow-list, which is
+how a bot such as dependabot, which GitHub calls a contributor, gets trusted.
+Every event and every decision about it is written to a journal, which
+`loadout trigger journal` reads and `loadout trigger test` tries a rule against
+before it starts anything.
+
+What it does not do yet: there are no desktop notifications, so an approval
+waits in Studio or the terminal until you look; rules are written in the
+terminal, not on a page; and schedules are not moved onto rules for you.
+`loadout trigger adopt` moves one when you ask.
+
 ## A first project from nothing
 
 `loadout start` is for somebody who has never had a project: new to

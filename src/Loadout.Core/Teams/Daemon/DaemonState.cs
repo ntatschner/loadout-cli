@@ -15,8 +15,8 @@ namespace Loadout.Core.Teams.Daemon;
 /// when it stops, so whatever stops it says so first.
 /// </param>
 /// <param name="Triggers">
-/// Whether it started with triggers switched on. The trigger commands ask it
-/// here, because it is the only process that acts on rules.
+/// Whether it runs the trigger rules, which every daemon now does; kept so a
+/// note written by an older daemon still reads.
 /// </param>
 public sealed record DaemonState(
     int Pid,
@@ -193,11 +193,7 @@ internal sealed class DaemonDiagnosticContributor : IDiagnosticContributor
                     // page, and nothing fires.
                     + (DaemonControl.Paused(_paths)
                         ? ". Paused: no schedule fires until 'loadout daemon resume'"
-                        : string.Empty)
-
-                    // Only when on: while triggers are unfinished, a line about
-                    // them on every machine would be a line about nothing.
-                    + (note.Triggers ? ". Triggers are on (LOADOUT_TRIGGERS)" : string.Empty)),
+                        : string.Empty)),
             ];
         }
 

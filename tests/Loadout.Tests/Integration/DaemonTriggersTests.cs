@@ -192,21 +192,28 @@ public sealed class DaemonTriggersTests : IDisposable
     }
 
     [Fact]
-    public async Task With_the_switch_off_nothing_is_started_and_a_webhook_starts_its_team_as_before()
+    public async Task A_webhook_no_rule_waits_for_starts_its_team_as_it_did_before_rules()
     {
-        await Rule("audit-on-hook", TriggerEventKinds.Webhook, ("team", "docs-crew"));
+        // Rules exist, just none for webhooks: one set up before triggers
+        // keeps working rather than going quiet on an upgrade.
+        await Rule("audit-after-run", TriggerEventKinds.RunFinished, ("team", "alpha"));
 
-        var daemon = Daemon(on: false);
+        var daemon = Daemon(on: true);
         using var stop = new CancellationTokenSource();
+        var running = daemon.TriggersAsync(Output(), stop.Token);
 
-        await daemon.TriggersAsync(Output(), stop.Token);
-        Directory.Exists(Path.Combine(_paths.Paths.State, "triggers", "journal")).Should().BeFalse();
+        await Eventually(Started);
 
-        await daemon.TriggeredAsync(
+        var answered = await daemon.TriggeredAsync(
             new TriggerRequest("docs-crew", "check the docs", "loadout-cli"), Output(), CancellationToken.None);
+
+        answered.Succeeded.Should().BeTrue(answered.Error);
         await Eventually(() => _commands.Asked.Count > 0);
 
-        _commands.Asked.Should().ContainSingle().Which.Path.Should().Be("team run");
+        await stop.CancelAsync();
+        await running;
+
+        _commands.Asked.Should().ContainSingle().Which.Should().Be(("team run", "docs-crew"));
     }
 
     private bool Started() =>
@@ -248,7 +255,6 @@ public sealed class DaemonTriggersTests : IDisposable
                 ["XDG_DATA_HOME"] = Path.Combine(_root, "data"),
                 ["XDG_STATE_HOME"] = Path.Combine(_root, "state"),
                 ["XDG_CACHE_HOME"] = Path.Combine(_root, "cache"),
-                [TriggerSwitch.Variable] = on == true ? "1" : "0",
             });
 
     private TeamDaemonCommand Daemon(
@@ -287,7 +293,7 @@ public sealed class DaemonTriggersTests : IDisposable
             importer: null!,
             sheet: null!,
             environment: Environment(on),
-            yaml: _yaml)
+            yaml: on ? _yaml : null)
         {
             TriggerEvery = TimeSpan.FromMilliseconds(50),
             DocsDriftEvery = TimeSpan.FromMilliseconds(50),

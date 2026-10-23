@@ -92,7 +92,7 @@ export interface About {
   port: number;
   watchOnly: boolean;
   isDaemon: boolean;
-  /** Whether the daemon runs trigger rules, which are unfinished and off unless LOADOUT_TRIGGERS was set. */
+  /** Whether the daemon runs trigger rules; every daemon does, and a plain dashboard does not. */
   triggers?: boolean;
   hostsSessions: boolean;
   startsSessions: boolean;

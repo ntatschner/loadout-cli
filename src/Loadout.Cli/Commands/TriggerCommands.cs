@@ -36,7 +36,6 @@ namespace Loadout.Cli.Commands;
 internal sealed class TriggerDesk(
     IPlatformPaths paths,
     IProcessInspector processes,
-    IEnvironmentProvider environment,
     YamlStore yaml,
     IFilePermissions permissions,
     TimeProvider time)
@@ -55,8 +54,6 @@ internal sealed class TriggerDesk(
     /// <summary>The daemon running now, or null.</summary>
     public DaemonState? Daemon => DaemonNote.Live(paths, processes);
 
-    /// <summary>Whether triggers are on, and what to say when they are not.</summary>
-    public (bool On, string? Refusal) Switch() => TriggerSwitch.Ask(Daemon?.Triggers, environment);
 
     /// <summary>Makes a change to the rules, through the daemon when one is running.</summary>
     /// <param name="asking">The change.</param>
@@ -150,12 +147,11 @@ public class TriggerRuleSettings : TriggerSettings
 }
 
 /// <summary>Lists the trigger rules, and where each stands against its caps.</summary>
-[Description("List the trigger rules on this machine, and where each stands against its caps. Unfinished: needs LOADOUT_TRIGGERS.")]
+[Description("List the trigger rules on this machine, and where each stands against its caps.")]
 [CommandMeta(CommandCategory.Integration, Intent = "trigger rules list events automation")]
 public sealed class TriggerListCommand(
     IPlatformPaths paths,
     IProcessInspector processes,
-    IEnvironmentProvider environment,
     YamlStore yaml,
     IFilePermissions permissions,
     IAnsiConsole console,
@@ -171,12 +167,8 @@ public sealed class TriggerListCommand(
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(console, settings);
-        var desk = new TriggerDesk(paths, processes, environment, yaml, permissions, time);
+        var desk = new TriggerDesk(paths, processes, yaml, permissions, time);
 
-        if (desk.Switch() is (false, var refusal))
-        {
-            return output.Fail(refusal, ExitCode.InvalidArguments);
-        }
 
         var listed = await desk.Rules.ListAsync(cancellationToken).ConfigureAwait(false);
         var megabytes = (await configuration.LoadMachineAsync(cancellationToken).ConfigureAwait(false)).Value?.Teams.TriggerJournalMegabytes;
@@ -277,12 +269,11 @@ public sealed class TriggerListCommand(
 }
 
 /// <summary>Adds a trigger rule, or replaces one of the same name.</summary>
-[Description("Add a trigger rule: an event to wait for and what to start when it happens. Run again with the same name to change one. Unfinished: needs LOADOUT_TRIGGERS.")]
+[Description("Add a trigger rule: an event to wait for and what to start when it happens. Run again with the same name to change one.")]
 [CommandMeta(CommandCategory.Integration, Intent = "trigger rule add edit when event happens start team", Mutates = true)]
 public sealed class TriggerAddCommand(
     IPlatformPaths paths,
     IProcessInspector processes,
-    IEnvironmentProvider environment,
     YamlStore yaml,
     IFilePermissions permissions,
     IAnsiConsole console,
@@ -362,12 +353,8 @@ public sealed class TriggerAddCommand(
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(console, settings);
-        var desk = new TriggerDesk(paths, processes, environment, yaml, permissions, time);
+        var desk = new TriggerDesk(paths, processes, yaml, permissions, time);
 
-        if (desk.Switch() is (false, var refusal))
-        {
-            return output.Fail(refusal, ExitCode.InvalidArguments);
-        }
 
         var (rule, problem) = TriggerWords.Build(settings);
 
@@ -517,12 +504,11 @@ public sealed class TriggerAddCommand(
 }
 
 /// <summary>Removes a trigger rule.</summary>
-[Description("Remove a trigger rule. Anything waiting to start under it is withdrawn. Unfinished: needs LOADOUT_TRIGGERS.")]
+[Description("Remove a trigger rule. Anything waiting to start under it is withdrawn.")]
 [CommandMeta(CommandCategory.Integration, Intent = "trigger rule remove delete", Mutates = true)]
 public sealed class TriggerRemoveCommand(
     IPlatformPaths paths,
     IProcessInspector processes,
-    IEnvironmentProvider environment,
     YamlStore yaml,
     IFilePermissions permissions,
     IAnsiConsole console,
@@ -534,12 +520,8 @@ public sealed class TriggerRemoveCommand(
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(console, settings);
-        var desk = new TriggerDesk(paths, processes, environment, yaml, permissions, time);
+        var desk = new TriggerDesk(paths, processes, yaml, permissions, time);
 
-        if (desk.Switch() is (false, var refusal))
-        {
-            return output.Fail(refusal, ExitCode.InvalidArguments);
-        }
 
         if (settings.DryRun)
         {
@@ -570,12 +552,11 @@ public sealed class TriggerRemoveCommand(
 }
 
 /// <summary>Lets a paused trigger rule act again.</summary>
-[Description("Let a trigger rule that paused at a cap act again. Its caps count afresh from now. Unfinished: needs LOADOUT_TRIGGERS.")]
+[Description("Let a trigger rule that paused at a cap act again. Its caps count afresh from now.")]
 [CommandMeta(CommandCategory.Integration, Intent = "trigger rule resume paused cap", Mutates = true)]
 public sealed class TriggerResumeCommand(
     IPlatformPaths paths,
     IProcessInspector processes,
-    IEnvironmentProvider environment,
     YamlStore yaml,
     IFilePermissions permissions,
     IAnsiConsole console,
@@ -587,12 +568,8 @@ public sealed class TriggerResumeCommand(
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(console, settings);
-        var desk = new TriggerDesk(paths, processes, environment, yaml, permissions, time);
+        var desk = new TriggerDesk(paths, processes, yaml, permissions, time);
 
-        if (desk.Switch() is (false, var refusal))
-        {
-            return output.Fail(refusal, ExitCode.InvalidArguments);
-        }
 
         var listed = await desk.Rules.ListAsync(cancellationToken).ConfigureAwait(false);
 
@@ -646,12 +623,11 @@ public sealed class TriggerResumeCommand(
 }
 
 /// <summary>Shows what the trigger journal recorded.</summary>
-[Description("Show what the trigger journal recorded: events, and every decision made about them. Unfinished: needs LOADOUT_TRIGGERS.")]
+[Description("Show what the trigger journal recorded: events, and every decision made about them.")]
 [CommandMeta(CommandCategory.Integration, Intent = "trigger journal log events decisions why")]
 public sealed class TriggerJournalCommand(
     IPlatformPaths paths,
     IProcessInspector processes,
-    IEnvironmentProvider environment,
     YamlStore yaml,
     IFilePermissions permissions,
     IAnsiConsole console,
@@ -678,12 +654,8 @@ public sealed class TriggerJournalCommand(
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(console, settings);
-        var desk = new TriggerDesk(paths, processes, environment, yaml, permissions, time);
+        var desk = new TriggerDesk(paths, processes, yaml, permissions, time);
 
-        if (desk.Switch() is (false, var refusal))
-        {
-            return Task.FromResult(output.Fail(refusal, ExitCode.InvalidArguments));
-        }
 
         if (TriggerWords.Duration(settings.Since, TimeSpan.FromHours(24)) is not { } since)
         {
@@ -719,12 +691,11 @@ public sealed class TriggerJournalCommand(
 }
 
 /// <summary>Tries a rule against the events the journal recorded, without acting on any.</summary>
-[Description("Try a trigger rule against the events already recorded, saying which it would have acted on and why. Starts nothing. Unfinished: needs LOADOUT_TRIGGERS.")]
+[Description("Try a trigger rule against the events already recorded, saying which it would have acted on and why. Starts nothing.")]
 [CommandMeta(CommandCategory.Integration, Intent = "trigger rule test replay would it match dry")]
 public sealed class TriggerTestCommand(
     IPlatformPaths paths,
     IProcessInspector processes,
-    IEnvironmentProvider environment,
     YamlStore yaml,
     IFilePermissions permissions,
     IAnsiConsole console,
@@ -743,12 +714,8 @@ public sealed class TriggerTestCommand(
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(console, settings);
-        var desk = new TriggerDesk(paths, processes, environment, yaml, permissions, time);
+        var desk = new TriggerDesk(paths, processes, yaml, permissions, time);
 
-        if (desk.Switch() is (false, var refusal))
-        {
-            return output.Fail(refusal, ExitCode.InvalidArguments);
-        }
 
         if (TriggerWords.Duration(settings.Since, TimeSpan.FromDays(7)) is not { } since)
         {
@@ -819,12 +786,11 @@ public sealed class TriggerTestCommand(
 }
 
 /// <summary>Deletes old days of the trigger journal.</summary>
-[Description("Delete days of the trigger journal older than a given age, recording what went. Never the last 31 days, which hold money still set aside. Unfinished: needs LOADOUT_TRIGGERS.")]
+[Description("Delete days of the trigger journal older than a given age, recording what went. Never the last 31 days, which hold money still set aside.")]
 [CommandMeta(CommandCategory.Integration, Intent = "trigger journal prune delete old days disk", Mutates = true)]
 public sealed class TriggerPruneCommand(
     IPlatformPaths paths,
     IProcessInspector processes,
-    IEnvironmentProvider environment,
     YamlStore yaml,
     IFilePermissions permissions,
     IAnsiConsole console,
@@ -848,12 +814,8 @@ public sealed class TriggerPruneCommand(
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(console, settings);
-        var desk = new TriggerDesk(paths, processes, environment, yaml, permissions, time);
+        var desk = new TriggerDesk(paths, processes, yaml, permissions, time);
 
-        if (desk.Switch() is (false, var refusal))
-        {
-            return Task.FromResult(output.Fail(refusal, ExitCode.InvalidArguments));
-        }
 
         if (TriggerWords.Duration(settings.OlderThan, TriggerJournal.Kept) is not { } age)
         {
@@ -904,12 +866,11 @@ public sealed class TriggerPruneCommand(
 }
 
 /// <summary>Lists the events held too long to act on unasked, waiting for somebody to release them.</summary>
-[Description("List the events trigger rules held for longer than the 24-hour catch-up window, and when each is dropped if nobody releases it. Unfinished: needs LOADOUT_TRIGGERS.")]
+[Description("List the events trigger rules held for longer than the 24-hour catch-up window, and when each is dropped if nobody releases it.")]
 [CommandMeta(CommandCategory.Integration, Intent = "trigger stale held events catch up window")]
 public sealed class TriggerStaleCommand(
     IPlatformPaths paths,
     IProcessInspector processes,
-    IEnvironmentProvider environment,
     YamlStore yaml,
     IFilePermissions permissions,
     IAnsiConsole console,
@@ -921,12 +882,8 @@ public sealed class TriggerStaleCommand(
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(console, settings);
-        var desk = new TriggerDesk(paths, processes, environment, yaml, permissions, time);
+        var desk = new TriggerDesk(paths, processes, yaml, permissions, time);
 
-        if (desk.Switch() is (false, var refusal))
-        {
-            return Task.FromResult(output.Fail(refusal, ExitCode.InvalidArguments));
-        }
 
         var now = time.GetUtcNow();
         var stale = TriggerSpine.Stale(desk.Journal.Read(now - TriggerSpine.Remembered), now);
@@ -970,12 +927,11 @@ public sealed class TriggerStaleCommand(
 }
 
 /// <summary>Releases stale events, to be decided against their rule as it is now.</summary>
-[Description("Release the stale events a trigger rule holds, to be decided against the rule as it is now, under its caps. Unfinished: needs LOADOUT_TRIGGERS.")]
+[Description("Release the stale events a trigger rule holds, to be decided against the rule as it is now, under its caps.")]
 [CommandMeta(CommandCategory.Integration, Intent = "trigger release stale held events", Mutates = true)]
 public sealed class TriggerReleaseCommand(
     IPlatformPaths paths,
     IProcessInspector processes,
-    IEnvironmentProvider environment,
     YamlStore yaml,
     IFilePermissions permissions,
     IAnsiConsole console,
@@ -994,12 +950,8 @@ public sealed class TriggerReleaseCommand(
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(console, settings);
-        var desk = new TriggerDesk(paths, processes, environment, yaml, permissions, time);
+        var desk = new TriggerDesk(paths, processes, yaml, permissions, time);
 
-        if (desk.Switch() is (false, var refusal))
-        {
-            return output.Fail(refusal, ExitCode.InvalidArguments);
-        }
 
         var now = time.GetUtcNow();
         var subject = settings.Subject is { Length: > 0 } one ? one.Trim() : null;
@@ -1038,12 +990,11 @@ public sealed class TriggerReleaseCommand(
 }
 
 /// <summary>Moves a schedule onto a clock rule, and pauses the schedule so nothing fires twice.</summary>
-[Description("Move a team schedule that runs on a clock onto a trigger rule with a spend cap, and pause the schedule. Unfinished: needs LOADOUT_TRIGGERS.")]
+[Description("Move a team schedule that runs on a clock onto a trigger rule with a spend cap, and pause the schedule.")]
 [CommandMeta(CommandCategory.Integration, Intent = "trigger adopt schedule clock move fold", Mutates = true)]
 public sealed class TriggerAdoptCommand(
     IPlatformPaths paths,
     IProcessInspector processes,
-    IEnvironmentProvider environment,
     YamlStore yaml,
     IFilePermissions permissions,
     IAnsiConsole console,
@@ -1076,12 +1027,8 @@ public sealed class TriggerAdoptCommand(
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(console, settings);
-        var desk = new TriggerDesk(paths, processes, environment, yaml, permissions, time);
+        var desk = new TriggerDesk(paths, processes, yaml, permissions, time);
 
-        if (desk.Switch() is (false, var refusal))
-        {
-            return output.Fail(refusal, ExitCode.InvalidArguments);
-        }
 
         var listed = await schedules.ListAsync(cancellationToken).ConfigureAwait(false);
 
@@ -1177,12 +1124,11 @@ public sealed class TriggerAdoptCommand(
 }
 
 /// <summary>Lists the trigger rules teams suggest for themselves, and where each stands.</summary>
-[Description("List the trigger rules teams suggest for themselves: which are accepted here, and which have changed since. Unfinished: needs LOADOUT_TRIGGERS.")]
+[Description("List the trigger rules teams suggest for themselves: which are accepted here, and which have changed since.")]
 [CommandMeta(CommandCategory.Integration, Intent = "trigger suggested team suggests rules offered")]
 public sealed class TriggerSuggestedCommand(
     IPlatformPaths paths,
     IProcessInspector processes,
-    IEnvironmentProvider environment,
     YamlStore yaml,
     IFilePermissions permissions,
     IAnsiConsole console,
@@ -1204,12 +1150,8 @@ public sealed class TriggerSuggestedCommand(
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(console, settings);
-        var desk = new TriggerDesk(paths, processes, environment, yaml, permissions, time);
+        var desk = new TriggerDesk(paths, processes, yaml, permissions, time);
 
-        if (desk.Switch() is (false, var refusal))
-        {
-            return output.Fail(refusal, ExitCode.InvalidArguments);
-        }
 
         var root = workspace.IsAvailable() ? workspace.LocalPath : null;
         var specialists = await library.LoadAsync(root, settings.Project, cancellationToken).ConfigureAwait(false);
@@ -1265,12 +1207,11 @@ public sealed class TriggerSuggestedCommand(
 }
 
 /// <summary>Takes a team's suggested trigger rule as a rule on this machine.</summary>
-[Description("Accept a trigger rule a team suggests, as a rule of your own with a spend cap. Accepting it again takes a changed suggestion. Unfinished: needs LOADOUT_TRIGGERS.")]
+[Description("Accept a trigger rule a team suggests, as a rule of your own with a spend cap. Accepting it again takes a changed suggestion.")]
 [CommandMeta(CommandCategory.Integration, Intent = "trigger accept team suggestion opt in rule", Mutates = true)]
 public sealed class TriggerAcceptCommand(
     IPlatformPaths paths,
     IProcessInspector processes,
-    IEnvironmentProvider environment,
     YamlStore yaml,
     IFilePermissions permissions,
     IAnsiConsole console,
@@ -1310,12 +1251,8 @@ public sealed class TriggerAcceptCommand(
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(console, settings);
-        var desk = new TriggerDesk(paths, processes, environment, yaml, permissions, time);
+        var desk = new TriggerDesk(paths, processes, yaml, permissions, time);
 
-        if (desk.Switch() is (false, var refusal))
-        {
-            return output.Fail(refusal, ExitCode.InvalidArguments);
-        }
 
         var projects = settings.Projects.Select(one => one.Trim()).Where(one => one.Length > 0).ToList();
         var root = workspace.IsAvailable() ? workspace.LocalPath : null;

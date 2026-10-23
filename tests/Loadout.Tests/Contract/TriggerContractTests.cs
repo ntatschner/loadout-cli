@@ -16,22 +16,9 @@ namespace Loadout.Tests.Contract;
 public sealed class TriggerContractTests
 {
     [BuiltCliFact]
-    public async Task With_the_switch_off_every_trigger_command_refuses_and_says_how_to_turn_it_on()
-    {
-        using var loadout = new LoadoutProcess();
-        loadout.Environment["LOADOUT_TRIGGERS"] = "0";
-
-        var listed = await loadout.RunAsync("trigger", "list");
-
-        listed.ExitCode.Should().Be(2, listed.StandardError);
-        listed.StandardError.Should().Contain("LOADOUT_TRIGGERS").And.Contain("loadout daemon stop");
-    }
-
-    [BuiltCliFact]
     public async Task A_clock_rule_is_added_with_its_time_and_a_schedule_that_is_not_there_cannot_be_adopted()
     {
         using var loadout = new LoadoutProcess();
-        loadout.Environment["LOADOUT_TRIGGERS"] = "1";
 
         var added = await loadout.RunAsync("trigger", "add", "hourly-audit", "clock", "--every", "1h", "--builtin", "docs audit");
         added.ExitCode.Should().Be(0, added.StandardError);
@@ -53,7 +40,6 @@ public sealed class TriggerContractTests
     public async Task The_stale_list_starts_empty_and_a_release_with_no_daemon_is_refused()
     {
         using var loadout = new LoadoutProcess();
-        loadout.Environment["LOADOUT_TRIGGERS"] = "1";
 
         var listed = await loadout.RunAsync("trigger", "stale");
         listed.ExitCode.Should().Be(0, listed.StandardError);
@@ -98,7 +84,6 @@ public sealed class TriggerContractTests
     public async Task A_rule_added_with_no_daemon_is_kept_journalled_listed_tried_and_removed()
     {
         using var loadout = new LoadoutProcess();
-        loadout.Environment["LOADOUT_TRIGGERS"] = "1";
 
         var added = await loadout.RunAsync(
             "trigger", "add", "audit-failures", "run-finished", "--builtin", "docs audit", "--where", "outcome=failed");
@@ -132,7 +117,6 @@ public sealed class TriggerContractTests
     public async Task A_team_rule_without_a_cap_is_refused_with_a_proposal_that_one_word_accepts()
     {
         using var loadout = new LoadoutProcess();
-        loadout.Environment["LOADOUT_TRIGGERS"] = "1";
 
         var refused = await loadout.RunAsync(
             "trigger", "add", "review", "run-finished", "--team", "iterating-project", "--goal", "Look at {run}.");
@@ -157,7 +141,6 @@ public sealed class TriggerContractTests
     public async Task A_rule_for_a_team_that_does_not_exist_is_refused()
     {
         using var loadout = new LoadoutProcess();
-        loadout.Environment["LOADOUT_TRIGGERS"] = "1";
 
         var added = await loadout.RunAsync(
             "trigger", "add", "review", "run-finished", "--team", "nobody-has-this", "--goal", "Look.", "--cap-usd", "5");
@@ -170,7 +153,6 @@ public sealed class TriggerContractTests
     public async Task A_team_suggestion_is_offered_accepted_kept_as_accepted_when_it_changes_and_taken_again()
     {
         using var loadout = new LoadoutProcess();
-        loadout.Environment["LOADOUT_TRIGGERS"] = "1";
 
         var team = await WatcherAsync(loadout, cap: "6");
 
@@ -260,7 +242,6 @@ public sealed class TriggerContractTests
     public async Task With_no_daemon_a_rule_that_held_events_while_paused_is_not_resumed()
     {
         using var loadout = new LoadoutProcess();
-        loadout.Environment["LOADOUT_TRIGGERS"] = "1";
 
         (await loadout.RunAsync("trigger", "add", "audit-failures", "run-finished", "--builtin", "docs audit"))
             .ExitCode.Should().Be(0);
@@ -295,7 +276,6 @@ public sealed class TriggerContractTests
     public async Task Prune_says_what_it_would_delete_then_deletes_it()
     {
         using var loadout = new LoadoutProcess();
-        loadout.Environment["LOADOUT_TRIGGERS"] = "1";
 
         var doctor = (await loadout.RunAsync("doctor", "--json")).Json();
         var state = doctor.GetProperty("checks").EnumerateArray()
@@ -320,7 +300,6 @@ public sealed class TriggerContractTests
     public async Task A_dry_run_says_what_it_would_save_and_saves_nothing()
     {
         using var loadout = new LoadoutProcess();
-        loadout.Environment["LOADOUT_TRIGGERS"] = "1";
 
         var added = await loadout.RunAsync(
             "trigger", "add", "audit-failures", "run-finished", "--builtin", "docs audit", "--dry-run");
@@ -335,7 +314,6 @@ public sealed class TriggerContractTests
     public async Task An_account_is_trusted_by_id_listed_with_its_scope_and_taken_off_with_the_journal_saying_so()
     {
         using var loadout = new LoadoutProcess();
-        loadout.Environment["LOADOUT_TRIGGERS"] = "1";
 
         var both = await loadout.RunAsync("trigger", "allow", "bot", "--id", "7", "--repository", "a/b", "--owner", "a");
         both.ExitCode.Should().Be(2);
@@ -370,7 +348,6 @@ public sealed class TriggerContractTests
     public async Task A_github_rule_can_ask_about_trust_and_the_sources_say_nothing_has_been_read_yet()
     {
         using var loadout = new LoadoutProcess();
-        loadout.Environment["LOADOUT_TRIGGERS"] = "1";
 
         var added = await loadout.RunAsync(
             "trigger", "add", "triage-outside", "issue-opened", "--builtin", "docs audit", "--where", "trust=outside");
@@ -394,7 +371,6 @@ public sealed class TriggerContractTests
     public async Task An_approval_is_listed_with_what_it_would_spend_approving_needs_a_daemon_and_rejecting_does_not()
     {
         using var loadout = new LoadoutProcess();
-        loadout.Environment["LOADOUT_TRIGGERS"] = "1";
 
         (await loadout.RunAsync("trigger", "approvals")).StandardOutput.Should().Contain("Nothing is waiting");
 
@@ -444,7 +420,6 @@ public sealed class TriggerContractTests
     public async Task A_triggered_run_cannot_be_given_more_than_its_rules_cap_or_no_cap_at_all()
     {
         using var loadout = new LoadoutProcess();
-        loadout.Environment["LOADOUT_TRIGGERS"] = "1";
 
         var doctor = (await loadout.RunAsync("doctor", "--json")).Json();
         var state = doctor.GetProperty("checks").EnumerateArray()

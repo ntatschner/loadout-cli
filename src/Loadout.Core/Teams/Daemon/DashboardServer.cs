@@ -275,7 +275,7 @@ public sealed class DashboardServer : IDisposable
     /// <summary>Whether this server is the daemon's, for the server room to say so.</summary>
     public bool IsDaemon { get; set; }
 
-    /// <summary>Whether the daemon runs trigger rules, for Studio to show what waits on them; off unless LOADOUT_TRIGGERS was set.</summary>
+    /// <summary>Whether the daemon runs trigger rules, for Studio to show what waits on them; every daemon does.</summary>
     public bool Triggers { get; set; }
 
     /// <summary>Whether the daemon's schedules are held, for the server room; null where nothing can say.</summary>

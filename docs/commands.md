@@ -143,7 +143,7 @@
 | `loadout daemon` | Stay running: fire the scheduled runs and serve the dashboard |
 | `loadout daemon stop\|restart\|pause\|resume\|continue` | Control the running daemon from any shell: stop or restart it once its runs finish (`--now` does not wait), or hold and release its schedules |
 | `loadout team webhook enable\|disable\|show` | Let something outside this machine start a run, or stop letting it |
-| `loadout trigger list\|add\|remove\|resume` | Rules that start a team or a built-in when something happens, such as a run finishing, each with a spend cap. Unfinished: they refuse unless the daemon was started with `LOADOUT_TRIGGERS=1` |
+| `loadout trigger list\|add\|remove\|resume` | Rules that start a team or a built-in when something happens, such as a run finishing, a pull request or a failed build, each with a spend cap. The daemon acts on them |
 | `loadout trigger adopt` | Move a team schedule that runs on a clock onto a trigger rule with a spend cap, and pause the schedule so nothing runs twice. Queue windows and schedules watching for a commit stay schedules |
 | `loadout trigger stale\|release` | Events a paused rule held for longer than a day, kept for you to release rather than acted on unasked. Released ones go through the rule's caps as usual; ones nobody releases are dropped after a week, and the journal says so |
 | `loadout trigger journal\|test\|prune` | What the trigger rules saw and decided, and what a rule would have done with the events already recorded, starting nothing. Prune deletes days older than you say, never the last 31 |

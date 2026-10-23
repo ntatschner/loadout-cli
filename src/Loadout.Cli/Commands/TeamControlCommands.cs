@@ -571,7 +571,6 @@ public sealed class TeamBudgetCommand : AsyncCommand<TeamBudgetCommand.Settings>
     private readonly IAnsiConsole _console;
     private readonly IPlatformPaths? _paths;
     private readonly IProcessInspector? _processes;
-    private readonly IEnvironmentProvider? _environment;
     private readonly Loadout.Core.Configuration.YamlStore? _yaml;
     private readonly IFilePermissions? _permissions;
     private readonly TimeProvider _time;
@@ -581,7 +580,6 @@ public sealed class TeamBudgetCommand : AsyncCommand<TeamBudgetCommand.Settings>
         IAnsiConsole console,
         IPlatformPaths? paths = null,
         IProcessInspector? processes = null,
-        IEnvironmentProvider? environment = null,
         Loadout.Core.Configuration.YamlStore? yaml = null,
         IFilePermissions? permissions = null,
         TimeProvider? time = null)
@@ -590,7 +588,6 @@ public sealed class TeamBudgetCommand : AsyncCommand<TeamBudgetCommand.Settings>
         _console = console;
         _paths = paths;
         _processes = processes;
-        _environment = environment;
         _yaml = yaml;
         _permissions = permissions;
         _time = time ?? TimeProvider.System;
@@ -680,19 +677,12 @@ public sealed class TeamBudgetCommand : AsyncCommand<TeamBudgetCommand.Settings>
     private async Task<int?> TriggeredAsync(string? origin, UsdCap cap, bool dryRun, CommandOutput output, CancellationToken ct)
     {
         if (Loadout.Core.Triggers.RunOrigin.Parse(origin) is not { } started
-            || _paths is null || _processes is null || _environment is null || _yaml is null || _permissions is null)
+            || _paths is null || _processes is null || _yaml is null || _permissions is null)
         {
             return null;
         }
 
-        var desk = new TriggerDesk(_paths, _processes, _environment, _yaml, _permissions, _time);
-
-        // With triggers switched off nothing is counting the rule's spend, so
-        // there is no cap to keep it under.
-        if (desk.Switch() is (false, _))
-        {
-            return null;
-        }
+        var desk = new TriggerDesk(_paths, _processes, _yaml, _permissions, _time);
 
         if (cap.Usd is not { } usd)
         {

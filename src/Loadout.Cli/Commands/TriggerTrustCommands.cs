@@ -30,12 +30,11 @@ public class TriggerScopeSettings : TriggerSettings
 }
 
 /// <summary>Trusts a GitHub account that is not a collaborator, such as a bot.</summary>
-[Description("Trust a GitHub account that is not a collaborator, such as a bot, so trigger rules treat what it writes as yours. Everywhere, or on one repository or owner. Unfinished: needs LOADOUT_TRIGGERS.")]
+[Description("Trust a GitHub account that is not a collaborator, such as a bot, so trigger rules treat what it writes as yours. Everywhere, or on one repository or owner.")]
 [CommandMeta(CommandCategory.Integration, Intent = "trigger allow trust bot collaborator allow-list", Mutates = true)]
 public sealed class TriggerAllowCommand(
     IPlatformPaths paths,
     IProcessInspector processes,
-    IEnvironmentProvider environment,
     YamlStore yaml,
     IFilePermissions permissions,
     IAnsiConsole console,
@@ -56,12 +55,8 @@ public sealed class TriggerAllowCommand(
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(console, settings);
-        var desk = new TriggerDesk(paths, processes, environment, yaml, permissions, time);
+        var desk = new TriggerDesk(paths, processes, yaml, permissions, time);
 
-        if (desk.Switch() is (false, var refusal))
-        {
-            return output.Fail(refusal, ExitCode.InvalidArguments);
-        }
 
         if (TriggerTrustWords.Scope(settings) is (null, var wrong))
         {
@@ -150,12 +145,11 @@ public sealed class TriggerAllowCommand(
 }
 
 /// <summary>Stops trusting an account, and withdraws at once what waits on its trust.</summary>
-[Description("Stop trusting a GitHub account on the allow-list, and withdraw at once anything waiting on that trust. Unfinished: needs LOADOUT_TRIGGERS.")]
+[Description("Stop trusting a GitHub account on the allow-list, and withdraw at once anything waiting on that trust.")]
 [CommandMeta(CommandCategory.Integration, Intent = "trigger disallow untrust remove allow-list", Mutates = true)]
 public sealed class TriggerDisallowCommand(
     IPlatformPaths paths,
     IProcessInspector processes,
-    IEnvironmentProvider environment,
     YamlStore yaml,
     IFilePermissions permissions,
     IAnsiConsole console,
@@ -167,12 +161,8 @@ public sealed class TriggerDisallowCommand(
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(console, settings);
-        var desk = new TriggerDesk(paths, processes, environment, yaml, permissions, time);
+        var desk = new TriggerDesk(paths, processes, yaml, permissions, time);
 
-        if (desk.Switch() is (false, var refusal))
-        {
-            return output.Fail(refusal, ExitCode.InvalidArguments);
-        }
 
         if (TriggerTrustWords.Scope(settings) is (null, var wrong))
         {
@@ -239,12 +229,11 @@ public sealed class TriggerDisallowCommand(
 }
 
 /// <summary>Lists the allow-list.</summary>
-[Description("List the GitHub accounts trusted beyond the collaborators, where each holds, and any renamed since it was added. Unfinished: needs LOADOUT_TRIGGERS.")]
+[Description("List the GitHub accounts trusted beyond the collaborators, where each holds, and any renamed since it was added.")]
 [CommandMeta(CommandCategory.Integration, Intent = "trigger allowed allow-list trusted accounts")]
 public sealed class TriggerAllowedCommand(
     IPlatformPaths paths,
     IProcessInspector processes,
-    IEnvironmentProvider environment,
     YamlStore yaml,
     IFilePermissions permissions,
     IAnsiConsole console,
@@ -256,12 +245,8 @@ public sealed class TriggerAllowedCommand(
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(console, settings);
-        var desk = new TriggerDesk(paths, processes, environment, yaml, permissions, time);
+        var desk = new TriggerDesk(paths, processes, yaml, permissions, time);
 
-        if (desk.Switch() is (false, var refusal))
-        {
-            return output.Fail(refusal, ExitCode.InvalidArguments);
-        }
 
         var listed = await new TriggerAllowStore(paths.Paths.State, yaml).ListAsync(cancellationToken).ConfigureAwait(false);
 
@@ -312,12 +297,11 @@ public sealed class TriggerAllowedCommand(
 }
 
 /// <summary>Says how each trigger source is doing.</summary>
-[Description("Show how each trigger source is doing: which token GitHub is read with, quota left, repositories read less often to save it, and anything stopping a source. Unfinished: needs LOADOUT_TRIGGERS.")]
+[Description("Show how each trigger source is doing: which token GitHub is read with, quota left, repositories read less often to save it, and anything stopping a source.")]
 [CommandMeta(CommandCategory.Integration, Intent = "trigger sources health github token quota")]
 public sealed class TriggerSourcesCommand(
     IPlatformPaths paths,
     IProcessInspector processes,
-    IEnvironmentProvider environment,
     YamlStore yaml,
     IFilePermissions permissions,
     IAnsiConsole console,
@@ -329,12 +313,8 @@ public sealed class TriggerSourcesCommand(
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(console, settings);
-        var desk = new TriggerDesk(paths, processes, environment, yaml, permissions, time);
+        var desk = new TriggerDesk(paths, processes, yaml, permissions, time);
 
-        if (desk.Switch() is (false, var refusal))
-        {
-            return Task.FromResult(output.Fail(refusal, ExitCode.InvalidArguments));
-        }
 
         var github = GitHubSource.ReadHealth(paths.Paths.State);
 
@@ -385,12 +365,11 @@ public sealed class TriggerSourcesCommand(
 }
 
 /// <summary>Keeps a token for the GitHub source alone.</summary>
-[Description("Keep a GitHub token for trigger polling alone, in the credential store. A fine-grained, read-only token is best. Read from standard input, or asked for. Unfinished: needs LOADOUT_TRIGGERS.")]
+[Description("Keep a GitHub token for trigger polling alone, in the credential store. A fine-grained, read-only token is best. Read from standard input, or asked for.")]
 [CommandMeta(CommandCategory.Integration, Intent = "trigger token set github poll credential", Mutates = true)]
 public sealed class TriggerTokenSetCommand(
     IPlatformPaths paths,
     IProcessInspector processes,
-    IEnvironmentProvider environment,
     YamlStore yaml,
     IFilePermissions permissions,
     IAnsiConsole console,
@@ -403,12 +382,8 @@ public sealed class TriggerTokenSetCommand(
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(console, settings);
-        var desk = new TriggerDesk(paths, processes, environment, yaml, permissions, time);
+        var desk = new TriggerDesk(paths, processes, yaml, permissions, time);
 
-        if (desk.Switch() is (false, var refusal))
-        {
-            return output.Fail(refusal, ExitCode.InvalidArguments);
-        }
 
         string token;
 
@@ -454,12 +429,11 @@ public sealed class TriggerTokenSetCommand(
 }
 
 /// <summary>Forgets the GitHub source's own token.</summary>
-[Description("Forget the GitHub token kept for trigger polling, after which polling uses the one gh is signed in with. Unfinished: needs LOADOUT_TRIGGERS.")]
+[Description("Forget the GitHub token kept for trigger polling, after which polling uses the one gh is signed in with.")]
 [CommandMeta(CommandCategory.Integration, Intent = "trigger token clear github credential", Mutates = true)]
 public sealed class TriggerTokenClearCommand(
     IPlatformPaths paths,
     IProcessInspector processes,
-    IEnvironmentProvider environment,
     YamlStore yaml,
     IFilePermissions permissions,
     IAnsiConsole console,
@@ -472,12 +446,8 @@ public sealed class TriggerTokenClearCommand(
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(console, settings);
-        var desk = new TriggerDesk(paths, processes, environment, yaml, permissions, time);
+        var desk = new TriggerDesk(paths, processes, yaml, permissions, time);
 
-        if (desk.Switch() is (false, var refusal))
-        {
-            return output.Fail(refusal, ExitCode.InvalidArguments);
-        }
 
         if (settings.DryRun)
         {
