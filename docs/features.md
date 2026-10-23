@@ -207,10 +207,15 @@ Every event and every decision about it is written to a journal, which
 `loadout trigger journal` reads and `loadout trigger test` tries a rule against
 before it starts anything.
 
+Rules can be written in the terminal or on Studio's Teams page, under Trigger
+rules, where a form shows the command it will run and Preview runs it with
+`--dry-run` first, so you see the cap a proposal works out to before anything
+is saved. The same page tries a rule against what has already happened,
+accepts what a team suggests, and keeps the allow-list.
+
 What it does not do yet: there are no desktop notifications, so an approval
-waits in Studio or the terminal until you look; rules are written in the
-terminal, not on a page; and schedules are not moved onto rules for you.
-`loadout trigger adopt` moves one when you ask.
+waits in Studio or the terminal until you look, and schedules are not moved
+onto rules for you. `loadout trigger adopt` moves one when you ask.
 
 ## A first project from nothing
 

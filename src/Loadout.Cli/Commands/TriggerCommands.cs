@@ -287,7 +287,7 @@ public sealed class TriggerAddCommand(
     public sealed class Settings : TriggerRuleSettings
     {
         [CommandArgument(1, "<EVENT>")]
-        [Description("What to wait for: run-finished, docs-drift or webhook.")]
+        [Description("What to wait for, such as run-finished, pr-opened, ci-failed or clock. 'loadout trigger events' lists every kind and what each carries.")]
         public string On { get; init; } = string.Empty;
 
         [CommandOption("--team <TEAM>")]
@@ -460,10 +460,25 @@ public sealed class TriggerAddCommand(
             accepted = true;
         }
 
+        string? taken = null;
+
         if (TriggerWords.Proposed(capText))
         {
-            // Never below one run, or the budget just accepted could not start.
-            rule.CapUsd = Math.Max(proposal.CapUsd, rule.BudgetUsd ?? traits.BudgetUsd ?? 0m);
+            if (!TriggerWords.Proposed(budgetText) && (rule.BudgetUsd ?? traits.BudgetUsd) is { } each)
+            {
+                // The runs will spend the team's own budget, or the one given,
+                // not the proposal's: five of those, the same ratio as any
+                // proposal, rather than five of a figure nothing is using.
+                rule.CapUsd = Math.Ceiling(each * BudgetProposal.RunsInCap);
+                taken = $"${rule.CapUsd:0} in the window is {BudgetProposal.RunsInCap} runs' worth of ${each:0.##}, "
+                    + (rule.BudgetUsd is null ? $"{rule.Action.Name}'s own budget for a run." : "the budget given for a run.");
+            }
+            else
+            {
+                // Never below one run, or the budget just accepted could not start.
+                rule.CapUsd = Math.Max(proposal.CapUsd, rule.BudgetUsd ?? traits.BudgetUsd ?? 0m);
+            }
+
             accepted = true;
         }
 
@@ -489,17 +504,60 @@ public sealed class TriggerAddCommand(
 
         if (accepted && !output.IsJson)
         {
-            output.WriteLine($"[dim]Proposed and taken:[/] {Markup.Escape(proposal.Working())}");
+            output.WriteLine($"[dim]Proposed and taken:[/] {Markup.Escape(taken ?? proposal.Working())}");
         }
 
         if (traits.Writes && !output.IsJson)
         {
             output.WriteLine(
-                $"[yellow]{Markup.Escape(rule.Action.Name)} writes[/] (a node works in a worktree), so the rule is kept "
-                + "but refused each time it matches until triggers can ask for your approval.");
+                $"[yellow]{Markup.Escape(rule.Action.Name)} writes[/] (a node works in a worktree), so each run it would "
+                + "start waits for your approval first: loadout trigger approvals");
         }
 
         return null;
+    }
+}
+
+/// <summary>Lists the kinds of event a rule can wait for, and what each carries.</summary>
+/// <remarks>
+/// The spine's own list, so a page building a rule offers exactly the kinds and
+/// fields a rule may name, and a new kind reaches it without a second list to
+/// keep in step.
+/// </remarks>
+[Description("List the kinds of event a trigger rule can wait for, the fields each carries for --where, and the built-in commands a rule can start.")]
+[CommandMeta(CommandCategory.Integration, Intent = "trigger events kinds fields where conditions")]
+public sealed class TriggerEventsCommand(IAnsiConsole console) : Command<TriggerSettings>
+{
+    /// <inheritdoc />
+    public override int Execute(CommandContext context, TriggerSettings settings, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var output = new CommandOutput(console, settings);
+        var kinds = TriggerEventKinds.All.Select(kind => new
+        {
+            kind,
+            fields = TriggerEventKinds.Fields[kind],
+            github = TriggerEventKinds.FromGitHub(kind),
+            ending = TriggerEventKinds.Ending.Contains(kind, StringComparer.OrdinalIgnoreCase),
+        }).ToList();
+
+        if (output.IsJson)
+        {
+            output.WriteJson(new { kinds, builtins = DaemonTriggerActions.Builtins });
+
+            return CommandOutput.Success();
+        }
+
+        foreach (var one in kinds)
+        {
+            output.WriteLine(Markup.Escape($"{one.kind}: {string.Join(", ", one.fields)}"));
+        }
+
+        output.WriteBlankLine();
+        output.WriteLine(Markup.Escape($"A rule can also start a built-in: {string.Join(", ", DaemonTriggerActions.Builtins)}."));
+
+        return CommandOutput.Success();
     }
 }
 
