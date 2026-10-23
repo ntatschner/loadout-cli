@@ -137,6 +137,21 @@ public static class TriggerEntryKinds
 
     /// <summary>The journal is over its disk allowance with only days the ledger reads left.</summary>
     public const string OverAllowance = "over-allowance";
+
+    /// <summary>A source's credential was refused, and it stopped until the credential is replaced.</summary>
+    public const string Lapsed = "lapsed";
+
+    /// <summary>A source's credential was replaced, and it started again.</summary>
+    public const string Renewed = "renewed";
+
+    /// <summary>Something about a source worth knowing before it becomes a problem.</summary>
+    public const string Warning = "warning";
+
+    /// <summary>A waiting action moved from one subject to another, such as a branch into its pull request.</summary>
+    public const string Folded = "folded";
+
+    /// <summary>An author's trust was lowered, and what waited on their subjects was withdrawn.</summary>
+    public const string Distrusted = "distrusted";
 }
 
 /// <summary>

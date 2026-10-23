@@ -330,4 +330,63 @@ public sealed class TriggerContractTests
 
         (await loadout.RunAsync("trigger", "list", "--json")).Json().EnumerateArray().Should().BeEmpty();
     }
+
+    [BuiltCliFact]
+    public async Task An_account_is_trusted_by_id_listed_with_its_scope_and_taken_off_with_the_journal_saying_so()
+    {
+        using var loadout = new LoadoutProcess();
+        loadout.Environment["LOADOUT_TRIGGERS"] = "1";
+
+        var both = await loadout.RunAsync("trigger", "allow", "bot", "--id", "7", "--repository", "a/b", "--owner", "a");
+        both.ExitCode.Should().Be(2);
+        both.StandardError.Should().Contain("not both");
+
+        var dry = await loadout.RunAsync("trigger", "allow", "dependabot[bot]", "--id", "49699333", "--dry-run");
+        dry.ExitCode.Should().Be(0, dry.StandardError);
+        // Short phrases: redirected output wraps at 80 columns.
+        dry.StandardOutput.Should().Contain("nothing was changed").And.Contain("49699333");
+        (await loadout.RunAsync("trigger", "allowed", "--json")).Json().EnumerateArray().Should().BeEmpty();
+
+        (await loadout.RunAsync("trigger", "allow", "dependabot[bot]", "--id", "49699333")).ExitCode.Should().Be(0);
+        (await loadout.RunAsync("trigger", "allow", "pat", "--id", "5", "--repository", "acme/app")).ExitCode.Should().Be(0);
+
+        var listed = (await loadout.RunAsync("trigger", "allowed", "--json")).Json().EnumerateArray().ToList();
+        listed.Select(one => one.GetProperty("scope").GetString()).Should().Equal("everywhere", "acme/app");
+
+        var taken = await loadout.RunAsync("trigger", "disallow", "pat");
+        taken.ExitCode.Should().Be(0, taken.StandardError);
+        taken.StandardOutput.Should().Contain("pat is off the allow-list").And.Contain("0 waiting");
+
+        (await loadout.RunAsync("trigger", "allowed")).StandardOutput.Should().Contain("dependabot[bot] (49699333)")
+            .And.NotContain("pat");
+        (await loadout.RunAsync("trigger", "journal", "--json")).StandardOutput.Should().Contain("taken off the allow-list");
+
+        var again = await loadout.RunAsync("trigger", "disallow", "pat");
+        again.ExitCode.Should().NotBe(0);
+        again.StandardError.Should().Contain("not on the allow-list");
+    }
+
+    [BuiltCliFact]
+    public async Task A_github_rule_can_ask_about_trust_and_the_sources_say_nothing_has_been_read_yet()
+    {
+        using var loadout = new LoadoutProcess();
+        loadout.Environment["LOADOUT_TRIGGERS"] = "1";
+
+        var added = await loadout.RunAsync(
+            "trigger", "add", "triage-outside", "issue-opened", "--builtin", "docs audit", "--where", "trust=outside");
+        added.ExitCode.Should().Be(0, added.StandardError);
+
+        var wrong = await loadout.RunAsync(
+            "trigger", "add", "nonsense", "pr-opened", "--builtin", "docs audit", "--where", "workflow=CI");
+        wrong.ExitCode.Should().Be(2);
+        wrong.StandardError.Should().Contain("carries no 'workflow'");
+
+        var sources = await loadout.RunAsync("trigger", "sources");
+        sources.ExitCode.Should().Be(0, sources.StandardError);
+        sources.StandardOutput.Should().Contain("GitHub has not been read yet");
+
+        var clear = await loadout.RunAsync("trigger", "token", "clear", "--dry-run");
+        clear.ExitCode.Should().Be(0, clear.StandardError);
+        clear.StandardOutput.Should().Contain("nothing was removed");
+    }
 }

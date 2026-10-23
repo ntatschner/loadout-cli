@@ -257,7 +257,11 @@ public sealed class TriggerSpine
             return;
         }
 
-        foreach (var decision in TriggerMatcher.Decide(happened, listed.Value!))
+        var decisions = TriggerMatcher.Decide(happened, listed.Value!);
+
+        Absorb(happened, decisions.Where(one => one.Matched).Select(one => one.Rule.Id.ToLowerInvariant()).ToHashSet(), now);
+
+        foreach (var decision in decisions)
         {
             var rule = decision.Rule;
 
@@ -271,6 +275,20 @@ public sealed class TriggerSpine
             }
 
             Write(new TriggerEntry(now, TriggerEntryKinds.Matched, happened.Id, rule.Id, rule.Version, happened.Subject));
+
+            // An event that arrives already older than the catch-up window -
+            // seen by a daemon that was off, or a source that could not read -
+            // goes on the stale list, the same list a paused rule's old events
+            // go on, whatever caused the gap.
+            if (now - happened.At > CatchUp)
+            {
+                Write(new TriggerEntry(
+                    now, TriggerEntryKinds.Stale, happened.Id, rule.Id, rule.Version, happened.Subject,
+                    $"it happened {Ago(now - happened.At)} ago, outside the {CatchUp.TotalHours:0}-hour catch-up window; "
+                    + $"release it with: loadout trigger release {rule.Id}"));
+
+                continue;
+            }
 
             if (rule.Debounce <= TimeSpan.Zero)
             {
@@ -292,6 +310,83 @@ public sealed class TriggerSpine
             _waiting[key] = new Waiting(rule, happened, now + rule.Debounce);
         }
     }
+
+    /// <summary>
+    /// What a new event does to the actions already waiting on its subject:
+    /// a branch's fold into the pull request opened from it, and the
+    /// withdrawal of whatever the subject has moved past.
+    /// </summary>
+    /// <param name="happened">The new event.</param>
+    /// <param name="matched">The rules it matched, lower case: their own waiting actions are superseded the usual way.</param>
+    /// <param name="now">The time.</param>
+    private void Absorb(TriggerEvent happened, IReadOnlySet<string> matched, DateTimeOffset now)
+    {
+        if (happened.Field(TriggerSubjects.FoldsField) is { Length: > 0 } branch)
+        {
+            foreach (var (key, waiting) in _waiting.Where(one => string.Equals(one.Key.Subject, branch, StringComparison.Ordinal)).ToList())
+            {
+                _waiting.Remove(key);
+
+                var folded = TriggerSubjects.Folded(waiting.Event, happened);
+
+                _journal.Append(TriggerEntry.Of(folded, now));
+                Write(new TriggerEntry(
+                    now, TriggerEntryKinds.Folded, waiting.Event.Id, waiting.Rule.Id, waiting.Rule.Version, branch,
+                    $"folded into {happened.Subject} as {folded.Id}"));
+
+                // Checked again: the pull request's author may be trusted less
+                // than whoever pushed the branch.
+                if (TriggerMatcher.Decide(folded, waiting.Rule) is { Matched: false } passed)
+                {
+                    Write(new TriggerEntry(
+                        now, TriggerEntryKinds.Withdrawn, folded.Id, waiting.Rule.Id, waiting.Rule.Version, folded.Subject,
+                        $"folded into {happened.Subject}, where {passed.Reason}"));
+
+                    continue;
+                }
+
+                var moved = (key.Rule, folded.Subject);
+
+                if (_waiting.TryGetValue(moved, out var there))
+                {
+                    var (kept, lost) = there.Event.At >= folded.At ? (there, waiting with { Event = folded }) : (waiting with { Event = folded }, there);
+
+                    Write(new TriggerEntry(
+                        now, TriggerEntryKinds.Superseded, lost.Event.Id, waiting.Rule.Id, waiting.Rule.Version, folded.Subject,
+                        $"replaced by {kept.Event.Id}"));
+                    _waiting[moved] = kept;
+
+                    continue;
+                }
+
+                _waiting[moved] = waiting with { Event = folded };
+            }
+        }
+
+        foreach (var (key, waiting) in _waiting
+            .Where(one => string.Equals(one.Key.Subject, happened.Subject, StringComparison.Ordinal) && !matched.Contains(one.Key.Rule))
+            .ToList())
+        {
+            var why = TriggerSubjects.Overtaken(waiting.Event, happened)
+                ?? TriggerMatcher.Decide(TriggerSubjects.Refreshed(waiting.Event, happened), waiting.Rule) switch
+                {
+                    { Matched: false } passed => $"{happened.Id} arrived and {passed.Reason}",
+                    _ => null,
+                };
+
+            if (why is null)
+            {
+                continue;
+            }
+
+            _waiting.Remove(key);
+            Write(new TriggerEntry(
+                now, TriggerEntryKinds.Withdrawn, waiting.Event.Id, waiting.Rule.Id, waiting.Rule.Version, happened.Subject, why));
+        }
+    }
+
+    private static string Ago(TimeSpan age) =>
+        age >= TimeSpan.FromDays(2) ? $"{age.TotalDays:0} days" : $"{age.TotalHours:0} hours";
 
     /// <summary>Decides on every waiting subject that has gone quiet.</summary>
     internal async Task FlushAsync(DateTimeOffset now, CancellationToken ct)
@@ -342,6 +437,8 @@ public sealed class TriggerSpine
                 TriggerVerbs.Resume when asking.RuleId is { Length: > 0 } id => await ResumeAsync(asking.Id, id, ct).ConfigureAwait(false),
                 TriggerVerbs.Release when asking.RuleId is { Length: > 0 } id
                     => await ReleaseAsync(asking.Id, id, asking.Subject, ct).ConfigureAwait(false),
+                TriggerVerbs.Distrust when asking.Author is { } author
+                    => Distrust(asking.Id, author, asking.Login ?? author.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                 _ => new TriggerAnswer(asking.Id, false, $"'{asking.Verb}' is not a change the daemon can make to the rules."),
             };
 
@@ -665,6 +762,95 @@ public sealed class TriggerSpine
     }
 
     /// <summary>
+    /// Withdraws everything waiting on an author's trust from the allow-list,
+    /// now that they are off it.
+    /// </summary>
+    /// <remarks>
+    /// Lowering trust is done at once, before anything else can run on the
+    /// strength of it; raising it waits for the next event. Waiting actions,
+    /// held ones and stale ones are all withdrawn, because each would
+    /// otherwise start one day with a trust nobody holds any more. An action
+    /// trusted by GitHub's own association is left alone: the allow-list did
+    /// not decide it.
+    /// </remarks>
+    private TriggerAnswer Distrust(string request, long author, string login)
+    {
+        var now = _time.GetUtcNow();
+        var id = author.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var withdrawn = 0;
+
+        foreach (var (key, waiting) in _waiting.Where(one => TrustedBy(one.Value.Event, author)).ToList())
+        {
+            _waiting.Remove(key);
+            Write(new TriggerEntry(
+                now, TriggerEntryKinds.Withdrawn, waiting.Event.Id, waiting.Rule.Id, waiting.Rule.Version, waiting.Event.Subject,
+                Untrusted(login), Request: request));
+            withdrawn++;
+        }
+
+        foreach (var entry in Distrusted(_journal.Read(now - Remembered), now, author, login, request))
+        {
+            Write(entry);
+            withdrawn++;
+        }
+
+        Write(new TriggerEntry(
+            now, TriggerEntryKinds.Distrusted, Reason: $"{login} ({id}) taken off the allow-list; {withdrawn} withdrawn",
+            Request: request));
+
+        return new TriggerAnswer(
+            request, true, withdrawn == 0
+                ? $"Applied by the daemon: nothing was waiting on {login}'s trust."
+                : $"Applied by the daemon: {withdrawn} waiting on {login}'s trust withdrawn. What each was is in: loadout trigger journal");
+    }
+
+    /// <summary>
+    /// The withdrawals an author's leaving the allow-list makes of what the
+    /// journal holds for later: stale events, and events held by paused rules.
+    /// </summary>
+    /// <remarks>
+    /// Read from the journal alone, so the command can write the same entries
+    /// when no daemon is running; what a running daemon has waiting in memory
+    /// it withdraws itself.
+    /// </remarks>
+    public static IReadOnlyList<TriggerEntry> Distrusted(
+        IReadOnlyList<TriggerEntry> journal, DateTimeOffset now, long author, string login, string? request = null)
+    {
+        ArgumentNullException.ThrowIfNull(journal);
+
+        var entries = new List<TriggerEntry>();
+
+        foreach (var one in Stale(journal, now).Where(each => TrustedBy(each.Event, author)))
+        {
+            entries.Add(new TriggerEntry(
+                now, TriggerEntryKinds.Withdrawn, one.Event.Id, one.Rule, one.Version, one.Event.Subject, Untrusted(login),
+                Request: request));
+        }
+
+        foreach (var rule in journal.Where(one => one.Kind == TriggerEntryKinds.Paused && one.Rule is not null)
+            .Select(one => one.Rule!).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            foreach (var held in Held(journal, rule).Where(each => TrustedBy(each, author)))
+            {
+                entries.Add(new TriggerEntry(
+                    now, TriggerEntryKinds.Withdrawn, held.Id, rule, Subject: held.Subject, Reason: Untrusted(login),
+                    Request: request));
+            }
+        }
+
+        return entries;
+    }
+
+    /// <summary>Whether an event was trusted on an allow-list entry for this author, rather than on GitHub's word.</summary>
+    private static bool TrustedBy(TriggerEvent happened, long author) =>
+        string.Equals(happened.Field("author-id"), author.ToString(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal)
+        && happened.Field("because") is { } because
+        && because.StartsWith("allow-list", StringComparison.Ordinal);
+
+    private static string Untrusted(string login) =>
+        $"{login} was taken off the allow-list, so what was trusted on their word is withdrawn";
+
+    /// <summary>
     /// How far back held events are caught up on resume: the same 24 hours the
     /// rest of the design counts in.
     /// </summary>
@@ -694,6 +880,16 @@ public sealed class TriggerSpine
             .GroupBy(one => one.Event!, StringComparer.Ordinal)
             .ToDictionary(one => one.Key, one => one.First(), StringComparer.Ordinal);
 
+        // One withdrawn since it was held - its author distrusted, say - is
+        // not held any more.
+        var withdrawn = entries
+            .Skip(paused)
+            .Where(one => one.Kind == TriggerEntryKinds.Withdrawn
+                && string.Equals(one.Rule, rule, StringComparison.OrdinalIgnoreCase)
+                && one.Event is not null)
+            .Select(one => one.Event!)
+            .ToHashSet(StringComparer.Ordinal);
+
         return
         [
             .. entries
@@ -703,7 +899,7 @@ public sealed class TriggerSpine
                     && one.Event is not null)
                 .Select(one => one.Event!)
                 .Distinct(StringComparer.Ordinal)
-                .Where(events.ContainsKey)
+                .Where(one => events.ContainsKey(one) && !withdrawn.Contains(one))
                 .Select(id => events[id].ToEvent()),
         ];
     }

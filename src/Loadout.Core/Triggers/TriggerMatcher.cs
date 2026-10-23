@@ -86,6 +86,24 @@ public static class TriggerMatcher
                 rule, false, $"it watches {string.Join(", ", rule.Projects)}, not {happened.Project ?? "no project"}");
         }
 
+        // A closed subject has nothing left to act on, except for a rule that
+        // asks about the closing itself.
+        if (happened.Field("state") is "closed" or "merged"
+            && !TriggerEventKinds.Ending.Contains(rule.On, StringComparer.OrdinalIgnoreCase))
+        {
+            return new RuleDecision(rule, false, $"the pull request is {happened.Field("state")}");
+        }
+
+        // Drafts are pushed to many times an hour, and a review of unfinished
+        // work spends money on what is about to change. A rule that wants
+        // them says so.
+        if (string.Equals(happened.Field("draft"), "true", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(rule.On, TriggerEventKinds.PrDraft, StringComparison.OrdinalIgnoreCase)
+            && !rule.Where.Keys.Contains("draft", StringComparer.OrdinalIgnoreCase))
+        {
+            return new RuleDecision(rule, false, "it is a draft, and the rule takes drafts only with --where draft=true");
+        }
+
         foreach (var (field, wanted) in rule.Where)
         {
             var has = happened.Field(field);

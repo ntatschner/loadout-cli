@@ -12,7 +12,16 @@ namespace Loadout.Core.Triggers;
 /// <param name="Rule">For a save: the rule.</param>
 /// <param name="RuleId">For a remove, a resume or a release: which rule.</param>
 /// <param name="Subject">For a release: only this subject, or every stale one of the rule when null.</param>
-public sealed record TriggerAsk(string Id, string Verb, TriggerRule? Rule = null, string? RuleId = null, string? Subject = null);
+/// <param name="Author">For a distrust: the GitHub id of the account taken off the allow-list.</param>
+/// <param name="Login">For a distrust: its login, for the journal.</param>
+public sealed record TriggerAsk(
+    string Id,
+    string Verb,
+    TriggerRule? Rule = null,
+    string? RuleId = null,
+    string? Subject = null,
+    long? Author = null,
+    string? Login = null);
 
 /// <summary>What the daemon made of a change it was asked for.</summary>
 /// <param name="Id">The request it answers.</param>
@@ -28,6 +37,9 @@ public static class TriggerVerbs
     public const string Remove = "remove";
     public const string Resume = "resume";
     public const string Release = "release";
+
+    /// <summary>Somebody was taken off the allow-list: withdraw what waits on their trust.</summary>
+    public const string Distrust = "distrust";
 }
 
 /// <summary>
