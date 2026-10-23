@@ -29,7 +29,7 @@
   import { studio } from '../lib/state.svelte';
   import { sheetPath, sheetWords, type SheetKind, type SheetTeam, type SheetValues } from '../lib/teamSheet';
   import { answerGate, carryOn, forget, hold, pickUp, runLines, stop } from '../lib/teamsAct';
-  import { approvalNeeds, type TriggerApproval } from '../lib/triggers';
+  import { approvalNeeds, attentionNeeds, type TriggerApproval, type TriggerSources, type TriggerStale, type TriggerStanding } from '../lib/triggers';
   import { boardOf, boardRunsOf, boardTeamsOf, gateOf, keptRuns, needsOf, summaryOf } from '../lib/teamsData';
   import type { Act, Prune } from '../lib/teams';
 
@@ -72,18 +72,29 @@
   // Read only when the daemon runs triggers; a read that fails leaves the
   // list as it was rather than failing the page.
   let approvals = $state<TriggerApproval[]>([]);
+  let triggerRules = $state<TriggerStanding[]>([]);
+  let triggerStale = $state<TriggerStale[]>([]);
+  let triggerSources = $state<TriggerSources | null>(null);
 
   async function loadApprovals() {
     if (!studio.about?.triggers) {
       approvals = [];
+      triggerRules = [];
+      triggerStale = [];
+      triggerSources = null;
 
       return;
     }
 
-    approvals = await readJson<TriggerApproval[]>('trigger approvals').catch(() => approvals);
+    [approvals, triggerRules, triggerStale, triggerSources] = await Promise.all([
+      readJson<TriggerApproval[]>('trigger approvals').catch(() => approvals),
+      readJson<TriggerStanding[]>('trigger list').catch(() => triggerRules),
+      readJson<TriggerStale[]>('trigger stale').catch(() => triggerStale),
+      readJson<TriggerSources>('trigger sources').catch(() => triggerSources),
+    ]);
   }
 
-  async function answerApproval(verb: 'approve' | 'reject', id: string) {
+  async function answerApproval(verb: 'approve' | 'reject' | 'resume' | 'release', id: string) {
     try {
       await runJob(`trigger ${verb}`, [id]);
     } catch (error) {
@@ -181,6 +192,11 @@
     ...approvalNeeds(approvals, {
       approve: (id) => void answerApproval('approve', id),
       reject: (id) => void answerApproval('reject', id),
+      disabledReason: watch,
+    }),
+    ...attentionNeeds(triggerRules, triggerStale, triggerSources, {
+      resume: (rule) => void answerApproval('resume', rule),
+      release: (rule) => void answerApproval('release', rule),
       disabledReason: watch,
     }),
     ...studio.runs.flatMap((run) =>

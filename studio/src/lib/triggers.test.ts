@@ -1,5 +1,44 @@
 import { describe, expect, it, vi } from 'vitest';
-import { approvalLines, approvalNeeds, type TriggerApproval } from './triggers';
+import { approvalLines, approvalNeeds, attentionNeeds, type TriggerApproval } from './triggers';
+
+describe('attentionNeeds', () => {
+  it('offers resume for a paused rule, release for each rule with stale events, and says when a source stopped', () => {
+    const resume = vi.fn();
+    const release = vi.fn();
+    const items = attentionNeeds(
+      [
+        { rule: { id: 'quiet-one' }, paused: false },
+        { rule: { id: 'capped' }, paused: true },
+      ],
+      [
+        { rule: 'late', subject: 'pr:acme/app#2', agesOut: '2026-10-30T12:00:00Z' },
+        { rule: 'late', subject: 'pr:acme/app#1', agesOut: '2026-10-29T12:00:00Z' },
+      ],
+      { github: { problem: 'GitHub refused the trigger token' } },
+      { resume, release },
+    );
+
+    expect(items.map((one) => [one.reason, one.goal])).toEqual([
+      ['paused', 'capped'],
+      ['stale', 'late'],
+      ['source', 'GitHub'],
+    ]);
+    expect(items[0].actions?.[0].cmd).toBe(approvalLines.resume('capped'));
+    expect(items[1].text).toContain('2 event(s)');
+    expect(items[1].text).toContain('the first about pr:acme/app#1');
+    expect(items[2].text).toBe('GitHub refused the trigger token');
+    expect(items[2].actions).toBeUndefined();
+
+    items[0].actions?.[0].onpress?.();
+    items[1].actions?.[0].onpress?.();
+    expect(resume).toHaveBeenCalledWith('capped');
+    expect(release).toHaveBeenCalledWith('late');
+  });
+
+  it('is empty when nothing is wrong', () => {
+    expect(attentionNeeds([{ rule: { id: 'fine' }, paused: false }], [], { github: { problem: null } }, { resume: vi.fn(), release: vi.fn() })).toEqual([]);
+  });
+});
 
 const one = (over: Partial<TriggerApproval> = {}): TriggerApproval => ({
   id: 'ab12cd34',

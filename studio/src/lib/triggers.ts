@@ -28,7 +28,85 @@ export interface TriggerApproval {
 export const approvalLines = {
   approve: (id: string) => `loadout trigger approve ${id}`,
   reject: (id: string) => `loadout trigger reject ${id}`,
+  resume: (rule: string) => `loadout trigger resume ${rule}`,
+  release: (rule: string) => `loadout trigger release ${rule}`,
 };
+
+/** One rule, as 'trigger list --json' lists it, as far as Needs you reads it. */
+export interface TriggerStanding {
+  rule: { id: string };
+  problem?: string | null;
+  paused: boolean;
+  headroomUsd?: number | null;
+}
+
+/** One stale event, as 'trigger stale --json' lists it. */
+export interface TriggerStale {
+  rule: string;
+  subject: string;
+  agesOut: string;
+}
+
+/** How the sources are doing, as 'trigger sources --json' says, as far as Needs you reads it. */
+export interface TriggerSources {
+  github?: { problem?: string | null; credential?: string } | null;
+}
+
+/** What the attention buttons do, given by the page. */
+export interface AttentionAnswers {
+  resume: (rule: string) => void;
+  release: (rule: string) => void;
+  disabledReason?: string;
+}
+
+/**
+ * What else trigger rules need of you: a rule paused at a cap, events held
+ * past the catch-up window waiting to be released, and a source that has
+ * stopped. Each clears itself when the command it offers is run, or the
+ * cause goes.
+ */
+export function attentionNeeds(
+  rules: TriggerStanding[],
+  stale: TriggerStale[],
+  sources: TriggerSources | null,
+  answers: AttentionAnswers,
+): NeedItem[] {
+  const paused: NeedItem[] = rules
+    .filter((one) => one.paused)
+    .map((one) => ({
+      reason: 'paused',
+      run: `paused:${one.rule.id}`,
+      goal: one.rule.id,
+      team: 'trigger rule',
+      href: '#teams',
+      actions: [{ label: 'Resume', cmd: approvalLines.resume(one.rule.id), disabledReason: answers.disabledReason, onpress: () => answers.resume(one.rule.id) }],
+    }));
+
+  const byRule = new Map<string, TriggerStale[]>();
+  for (const one of stale) {
+    byRule.set(one.rule, [...(byRule.get(one.rule) ?? []), one]);
+  }
+
+  const held: NeedItem[] = [...byRule].map(([rule, list]) => {
+    const first = [...list].sort((a, b) => a.agesOut.localeCompare(b.agesOut))[0];
+
+    return {
+      reason: 'stale',
+      run: `stale:${rule}`,
+      goal: rule,
+      team: 'trigger rule',
+      href: '#teams',
+      text: `${list.length} event(s) held past the 24-hour window, the first about ${first.subject}. Nothing is dropped before ${new Date(first.agesOut).toLocaleString()}.`,
+      actions: [{ label: 'Release', cmd: approvalLines.release(rule), disabledReason: answers.disabledReason, onpress: () => answers.release(rule) }],
+    };
+  });
+
+  const stopped: NeedItem[] = sources?.github?.problem
+    ? [{ reason: 'source', run: 'source:github', goal: 'GitHub', team: 'trigger source', href: '#teams', text: sources.github.problem }]
+    : [];
+
+  return [...paused, ...held, ...stopped];
+}
 
 /** What an approval's buttons do, given by the page. */
 export interface ApprovalAnswers {
