@@ -16,6 +16,14 @@ public sealed record ActionTraits(bool Writes, decimal? BudgetUsd = null, string
 /// <param name="Reservation">The reservation its landing closes.</param>
 public sealed record TriggerStart(TriggerRule Rule, TriggerEvent Event, decimal BudgetUsd, string Reservation);
 
+/// <summary>An event on the stale list, waiting for a person to release it.</summary>
+/// <param name="Rule">The rule that held it.</param>
+/// <param name="Version">That rule's version when it went stale.</param>
+/// <param name="Event">The event, as the rule would see it.</param>
+/// <param name="Since">When it went on the list.</param>
+/// <param name="AgesOut">When it is withdrawn if nobody releases it.</param>
+public sealed record StaleEvent(string Rule, int? Version, TriggerEvent Event, DateTimeOffset Since, DateTimeOffset AgesOut);
+
 /// <summary>How a started action went.</summary>
 /// <param name="SpentUsd">What it spent, which is what lands against the rule.</param>
 /// <param name="Run">The run it became, where it became one.</param>
@@ -332,6 +340,8 @@ public sealed class TriggerSpine
                 TriggerVerbs.Save when asking.Rule is { } rule => await SaveAsync(asking.Id, rule, ct).ConfigureAwait(false),
                 TriggerVerbs.Remove when asking.RuleId is { Length: > 0 } id => await RemoveAsync(asking.Id, id, ct).ConfigureAwait(false),
                 TriggerVerbs.Resume when asking.RuleId is { Length: > 0 } id => await ResumeAsync(asking.Id, id, ct).ConfigureAwait(false),
+                TriggerVerbs.Release when asking.RuleId is { Length: > 0 } id
+                    => await ReleaseAsync(asking.Id, id, asking.Subject, ct).ConfigureAwait(false),
                 _ => new TriggerAnswer(asking.Id, false, $"'{asking.Verb}' is not a change the daemon can make to the rules."),
             };
 
@@ -429,11 +439,273 @@ public sealed class TriggerSpine
             return new TriggerAnswer(request, true, $"'{found.Rule.Id}' was not paused, so nothing changed.");
         }
 
+        var rule = found.Rule;
+        var now = _time.GetUtcNow();
+        var held = Held(rule.Id, now);
+
         Write(new TriggerEntry(
-            _time.GetUtcNow(), TriggerEntryKinds.Resumed, Rule: found.Rule.Id, Version: found.Rule.Version,
+            now, TriggerEntryKinds.Resumed, Rule: rule.Id, Version: rule.Version,
             Reason: "resumed; its caps count from now", Request: request));
 
-        return new TriggerAnswer(request, true, $"Applied by the daemon: '{found.Rule.Id}' acts again, its caps counting from now.");
+        var decided = 0;
+        var stale = 0;
+
+        // The latest of each subject, the way a daemon that was off catches
+        // up: whoever acts on a pull request wants it as it is now, not every
+        // push it went through while the rule was paused.
+        foreach (var subject in held.GroupBy(one => one.Subject, StringComparer.Ordinal))
+        {
+            // A stable sort, so of two stamped the same moment the later arrival wins.
+            var latest = subject.OrderBy(one => one.At).Last();
+
+            foreach (var older in subject.Where(one => !ReferenceEquals(one, latest)))
+            {
+                Write(new TriggerEntry(
+                    now, TriggerEntryKinds.Superseded, older.Id, rule.Id, rule.Version, older.Subject,
+                    $"held while paused; {latest.Id} is the latest about its subject", Request: request));
+            }
+
+            // Kept for a person to release rather than acted on: a subject
+            // that went quiet a day ago may not matter any more, and only
+            // somebody who knows can say.
+            if (now - latest.At > CatchUp)
+            {
+                Write(new TriggerEntry(
+                    now, TriggerEntryKinds.Stale, latest.Id, rule.Id, rule.Version, latest.Subject,
+                    $"held while paused for longer than the {CatchUp.TotalHours:0}-hour catch-up window; "
+                    + $"release it with: loadout trigger release {rule.Id}",
+                    Request: request));
+                stale++;
+
+                continue;
+            }
+
+            // Checked against the rule as it is now: it may have been edited
+            // while it was paused.
+            if (TriggerMatcher.Decide(latest, rule) is { Matched: false } passed)
+            {
+                Write(new TriggerEntry(
+                    now, TriggerEntryKinds.Withdrawn, latest.Id, rule.Id, rule.Version, latest.Subject,
+                    passed.Reason, Request: request));
+
+                continue;
+            }
+
+            await DecideAsync(rule, latest, now, ct).ConfigureAwait(false);
+            decided++;
+        }
+
+        return new TriggerAnswer(
+            request,
+            true,
+            $"Applied by the daemon: '{rule.Id}' acts again, its caps counting from now"
+            + (held.Count == 0 ? "." : $"; {held.Count} event(s) it held came to {decided} decided now")
+            + (stale == 0 ? (held.Count == 0 ? string.Empty : ".")
+                : $", and {stale} too old to act on unasked, kept until released or {StaleKept.TotalDays:0} days pass: "
+                  + "loadout trigger stale"));
+    }
+
+    /// <summary>How long a stale event waits to be released before it is withdrawn.</summary>
+    /// <remarks>
+    /// A week covers a holiday, and after it the list holds only what is
+    /// still worth deciding.
+    /// </remarks>
+    public static readonly TimeSpan StaleKept = TimeSpan.FromDays(7);
+
+    /// <summary>
+    /// The events on the stale list: each held past the catch-up window and
+    /// not yet released, withdrawn, aged out or overtaken.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Read from the journal, so the list is the same whether a daemon is
+    /// running or not, and survives a restart. A stale event leaves the list
+    /// when anything later is written about its rule and subject, when a newer
+    /// event about its subject arrives (the subject is back inside the window
+    /// and handled as usual), or when its rule is removed.
+    /// </para>
+    /// <para>
+    /// With <paramref name="aged"/>, the ones past <see cref="StaleKept"/>,
+    /// which the daemon withdraws; without, the ones still waiting.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<StaleEvent> Stale(IReadOnlyList<TriggerEntry> journal, DateTimeOffset now, bool aged = false)
+    {
+        ArgumentNullException.ThrowIfNull(journal);
+
+        var events = journal
+            .Where(one => one.Kind == TriggerEntryKinds.Event && one.Event is not null)
+            .GroupBy(one => one.Event!, StringComparer.Ordinal)
+            .ToDictionary(one => one.Key, one => one.First().ToEvent(), StringComparer.Ordinal);
+
+        var listed = new List<StaleEvent>();
+
+        for (var at = 0; at < journal.Count; at++)
+        {
+            var entry = journal[at];
+
+            if (entry.Kind != TriggerEntryKinds.Stale || entry.Rule is not { } rule || entry.Event is not { } id
+                || !events.TryGetValue(id, out var happened))
+            {
+                continue;
+            }
+
+            var overtaken = journal.Skip(at + 1).Any(later =>
+                (string.Equals(later.Rule, rule, StringComparison.OrdinalIgnoreCase)
+                    && (later.Kind == TriggerEntryKinds.Removed || string.Equals(later.Subject, happened.Subject, StringComparison.Ordinal)))
+                || (later.Kind == TriggerEntryKinds.Event
+                    && string.Equals(later.Subject, happened.Subject, StringComparison.Ordinal)
+                    && (later.Happened ?? later.At) > happened.At));
+
+            if (overtaken)
+            {
+                continue;
+            }
+
+            var agesOut = entry.At + StaleKept;
+
+            if ((agesOut <= now) == aged)
+            {
+                listed.Add(new StaleEvent(rule, entry.Version, happened, entry.At, agesOut));
+            }
+        }
+
+        return listed;
+    }
+
+    /// <summary>
+    /// Withdraws the stale events nobody released within <see cref="StaleKept"/>,
+    /// and writes down that it did, so none goes without a record.
+    /// </summary>
+    /// <returns>How many went.</returns>
+    public async Task<int> AgeOutAsync(CancellationToken ct)
+    {
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+
+        try
+        {
+            var now = _time.GetUtcNow();
+            var aged = Stale(_journal.Read(now - Remembered), now, aged: true);
+
+            foreach (var one in aged)
+            {
+                Write(new TriggerEntry(
+                    now, TriggerEntryKinds.Withdrawn, one.Event.Id, one.Rule, one.Version, one.Event.Subject,
+                    $"on the stale list for {StaleKept.TotalDays:0} days and never released"));
+            }
+
+            return aged.Count;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private async Task<TriggerAnswer> ReleaseAsync(string request, string id, string? subject, CancellationToken ct)
+    {
+        var listed = await _rules.ListAsync(ct).ConfigureAwait(false);
+
+        if (listed.Failed)
+        {
+            return new TriggerAnswer(request, false, listed.Error!);
+        }
+
+        if (listed.Value!.FirstOrDefault(one => string.Equals(one.Rule.Id, id, StringComparison.OrdinalIgnoreCase))
+            is not { } found)
+        {
+            return new TriggerAnswer(request, false, $"There is no trigger rule called '{id}' on this machine.");
+        }
+
+        var rule = found.Rule;
+        var now = _time.GetUtcNow();
+        var stale = Stale(_journal.Read(now - Remembered), now)
+            .Where(one => string.Equals(one.Rule, rule.Id, StringComparison.OrdinalIgnoreCase)
+                && (subject is null || string.Equals(one.Event.Subject, subject, StringComparison.Ordinal)))
+            .ToList();
+
+        if (stale.Count == 0)
+        {
+            return new TriggerAnswer(
+                request, true, subject is null
+                    ? $"'{rule.Id}' has nothing on the stale list, so nothing changed."
+                    : $"'{rule.Id}' has nothing stale about {subject}, so nothing changed.");
+        }
+
+        var decided = 0;
+
+        // Through the caps and headroom like any other match, so releasing a
+        // long list cannot spend in a burst what a day of events could not.
+        foreach (var one in stale)
+        {
+            Write(new TriggerEntry(
+                now, TriggerEntryKinds.Released, one.Event.Id, rule.Id, rule.Version, one.Event.Subject,
+                "released from the stale list", Request: request));
+
+            // Checked against the rule as it is now: it may have been edited
+            // since the event went stale.
+            if (TriggerMatcher.Decide(one.Event, rule) is { Matched: false } passed)
+            {
+                Write(new TriggerEntry(
+                    now, TriggerEntryKinds.Withdrawn, one.Event.Id, rule.Id, rule.Version, one.Event.Subject,
+                    passed.Reason, Request: request));
+
+                continue;
+            }
+
+            await DecideAsync(rule, one.Event, now, ct).ConfigureAwait(false);
+            decided++;
+        }
+
+        return new TriggerAnswer(
+            request,
+            true,
+            $"Applied by the daemon: {stale.Count} stale event(s) of '{rule.Id}' released, {decided} decided now. "
+            + $"What each came to is in: loadout trigger journal");
+    }
+
+    /// <summary>
+    /// How far back held events are caught up on resume: the same 24 hours the
+    /// rest of the design counts in.
+    /// </summary>
+    internal static readonly TimeSpan CatchUp = TimeSpan.FromHours(24);
+
+    /// <summary>The events a rule held since it last paused, oldest first, as they arrived.</summary>
+    private List<TriggerEvent> Held(string rule, DateTimeOffset now) => Held(_journal.Read(now - Remembered), rule);
+
+    /// <summary>The events a rule held since it last paused, read from journal entries.</summary>
+    /// <remarks>Public so a command can say what a resume with no daemon running would leave undecided.</remarks>
+    public static List<TriggerEvent> Held(IReadOnlyList<TriggerEntry> journal, string rule)
+    {
+        ArgumentNullException.ThrowIfNull(journal);
+
+        var entries = journal.ToList();
+
+        var paused = entries.FindLastIndex(one =>
+            one.Kind == TriggerEntryKinds.Paused && string.Equals(one.Rule, rule, StringComparison.OrdinalIgnoreCase));
+
+        if (paused < 0)
+        {
+            return [];
+        }
+
+        var events = entries
+            .Where(one => one.Kind == TriggerEntryKinds.Event && one.Event is not null)
+            .GroupBy(one => one.Event!, StringComparer.Ordinal)
+            .ToDictionary(one => one.Key, one => one.First(), StringComparer.Ordinal);
+
+        return
+        [
+            .. entries
+                .Skip(paused)
+                .Where(one => one.Kind == TriggerEntryKinds.Held
+                    && string.Equals(one.Rule, rule, StringComparison.OrdinalIgnoreCase)
+                    && one.Event is not null)
+                .Select(one => one.Event!)
+                .Distinct(StringComparer.Ordinal)
+                .Where(events.ContainsKey)
+                .Select(id => events[id].ToEvent()),
+        ];
     }
 
     /// <summary>The actions waiting on one rule for their subject to go quiet.</summary>

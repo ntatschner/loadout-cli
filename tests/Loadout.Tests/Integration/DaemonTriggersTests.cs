@@ -101,6 +101,68 @@ public sealed class DaemonTriggersTests : IDisposable
     }
 
     [Fact]
+    public async Task Documentation_that_goes_stale_after_a_commit_starts_what_a_docs_drift_rule_asks()
+    {
+        await Rule("audit-on-drift", TriggerEventKinds.DocsDrift, ("project", "demo"));
+
+        var repository = Path.Combine(_root, "repo");
+        Directory.CreateDirectory(Path.Combine(repository, "docs"));
+        File.WriteAllText(Path.Combine(repository, "docs", "guide.md"), "# Guide\n\nNothing to see.\n");
+
+        var git = new FakeGit(repository);
+        var daemon = Daemon(
+            on: true,
+            new FakeProjects("demo", repository),
+            git,
+            new Loadout.Core.Workspace.WorkspaceManager(_paths, git, _yaml, TimeProvider.System));
+        using var stop = new CancellationTokenSource();
+        var running = daemon.TriggersAsync(Output(), stop.Token);
+
+        // The first look takes what is there as the baseline.
+        await Eventually(() => File.Exists(Path.Combine(_paths.Paths.State, "triggers", "cursors", "docs-drift.json")));
+
+        File.WriteAllText(Path.Combine(repository, "docs", "guide.md"), "# Guide\n\nSee [it](missing.md).\n");
+        git.State = git.State with { HeadCommit = "c2" };
+
+        await Eventually(() => _commands.Asked.Count > 0);
+
+        await stop.CancelAsync();
+        await running;
+
+        _commands.Asked.Should().ContainSingle().Which.Should().Be(("docs audit", "demo"));
+    }
+
+    [Fact]
+    public async Task A_source_that_throws_does_not_stop_the_others_being_heard()
+    {
+        // Built without a workspace, so reading a docs policy throws
+        // NullReferenceException: no catch names it, and it ended the whole
+        // loop before the looks were guarded.
+        await Rule("audit-on-drift", TriggerEventKinds.DocsDrift, ("project", "demo"));
+        await Rule("audit-after-run", TriggerEventKinds.RunFinished, ("team", "alpha"));
+
+        var repository = Path.Combine(_root, "repo");
+        Directory.CreateDirectory(repository);
+
+        var daemon = Daemon(on: true, new FakeProjects("demo", repository), new FakeGit(repository));
+        using var stop = new CancellationTokenSource();
+        var running = daemon.TriggersAsync(Output(), stop.Token);
+
+        await Eventually(() => File.Exists(Path.Combine(_paths.Paths.State, "triggers", "cursors", "run-finished.json")));
+
+        // Long enough for the docs look to have thrown several times.
+        await Task.Delay(300);
+
+        Run("20261022-1000-b001", "alpha", DateTimeOffset.UtcNow);
+        await Eventually(() => _commands.Asked.Count > 0);
+
+        await stop.CancelAsync();
+        await running;
+
+        _commands.Asked.Should().ContainSingle().Which.Should().Be(("docs audit", "loadout-cli"));
+    }
+
+    [Fact]
     public async Task With_the_switch_off_nothing_is_started_and_a_webhook_starts_its_team_as_before()
     {
         await Rule("audit-on-hook", TriggerEventKinds.Webhook, ("team", "docs-crew"));
@@ -160,7 +222,7 @@ public sealed class DaemonTriggersTests : IDisposable
                 [TriggerSwitch.Variable] = on == true ? "1" : "0",
             });
 
-    private TeamDaemonCommand Daemon(bool on) =>
+    private TeamDaemonCommand Daemon(bool on, Loadout.Core.Projects.IProjectService? projects = null, Loadout.Core.Git.IGitManager? git = null, Loadout.Core.Workspace.IWorkspaceManager? workspace = null) =>
         new(
             secrets: null!,
             client: null!,
@@ -169,9 +231,9 @@ public sealed class DaemonTriggersTests : IDisposable
             journal: new RunJournal(_paths),
             _commands,
             _paths,
-            projects: null!,
+            projects: projects!,
             tasks: null!,
-            git: null!,
+            git: git!,
             processes: null!,
             Quiet(),
             TimeProvider.System,
@@ -179,7 +241,7 @@ public sealed class DaemonTriggersTests : IDisposable
             speech: null!,
             teams: null!,
             library: null!,
-            workspace: null!,
+            workspace: workspace!,
             agents: null!,
             launcher: null!,
             nominations: null!,
@@ -194,15 +256,21 @@ public sealed class DaemonTriggersTests : IDisposable
             yaml: _yaml)
         {
             TriggerEvery = TimeSpan.FromMilliseconds(50),
+            DocsDriftEvery = TimeSpan.FromMilliseconds(50),
         };
 
-    private static async Task Eventually(Func<bool> condition)
+    /// <summary>Waits for the daemon to get somewhere, and when it does not, says what its journal recorded.</summary>
+    private async Task Eventually(Func<bool> condition)
     {
         var until = DateTime.UtcNow + TimeSpan.FromSeconds(15);
 
         while (!condition())
         {
-            DateTime.UtcNow.Should().BeBefore(until, "the daemon should have got there by now");
+            DateTime.UtcNow.Should().BeBefore(
+                until,
+                "the daemon should have got there by now; its trigger journal says: {0}",
+                string.Join(" | ", new TriggerJournal(_paths.Paths.State).Read(DateTimeOffset.UtcNow.AddDays(-1))
+                    .Select(one => $"{one.Kind} {one.EventKind} {one.Rule} {one.Reason}")));
             await Task.Delay(25);
         }
     }

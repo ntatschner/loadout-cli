@@ -10,8 +10,9 @@ namespace Loadout.Core.Triggers;
 /// </param>
 /// <param name="Verb">One of <see cref="TriggerVerbs"/>.</param>
 /// <param name="Rule">For a save: the rule.</param>
-/// <param name="RuleId">For a remove or a resume: which rule.</param>
-public sealed record TriggerAsk(string Id, string Verb, TriggerRule? Rule = null, string? RuleId = null);
+/// <param name="RuleId">For a remove, a resume or a release: which rule.</param>
+/// <param name="Subject">For a release: only this subject, or every stale one of the rule when null.</param>
+public sealed record TriggerAsk(string Id, string Verb, TriggerRule? Rule = null, string? RuleId = null, string? Subject = null);
 
 /// <summary>What the daemon made of a change it was asked for.</summary>
 /// <param name="Id">The request it answers.</param>
@@ -26,6 +27,7 @@ public static class TriggerVerbs
     public const string Save = "save";
     public const string Remove = "remove";
     public const string Resume = "resume";
+    public const string Release = "release";
 }
 
 /// <summary>

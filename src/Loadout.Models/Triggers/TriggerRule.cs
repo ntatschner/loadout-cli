@@ -28,6 +28,16 @@ public sealed class TriggerRule
     /// <summary>The projects whose events count, or empty for every project.</summary>
     public List<string> Projects { get; set; } = [];
 
+    /// <summary>For a clock rule: how often it comes round.</summary>
+    public TimeSpan? Every { get; set; }
+
+    /// <summary>For a clock rule: the local time of day it comes round, once a day.</summary>
+    /// <remarks>
+    /// The two clock fields are a schedule's own, read the same way, so a
+    /// schedule moved onto a rule keeps the times it had.
+    /// </remarks>
+    public TimeOnly? At { get; set; }
+
     /// <summary>
     /// Fields of the event that must hold a given value, compared without
     /// regard to case. Empty matches every event of the kind.
@@ -72,6 +82,12 @@ public sealed class TriggerRule
 
     /// <summary>The team whose suggestion this was accepted from, or empty for a rule written here.</summary>
     public string SuggestedBy { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Which of that team's suggestions, and a fingerprint of it as it was
+    /// accepted, so a change to the suggestion is noticed rather than taken.
+    /// </summary>
+    public string Suggestion { get; set; } = string.Empty;
 
     /// <summary>Runs in a window where nothing is set.</summary>
     public const int DefaultCapRuns = 10;

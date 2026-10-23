@@ -73,6 +73,54 @@ public static partial class DocsAuditor
         RegexOptions.Compiled | RegexOptions.IgnoreCase)]
     private static partial Regex Claim();
 
+    /// <summary>Where documentation lives when nobody has said otherwise.</summary>
+    private static readonly string[] DefaultRoots = ["docs", "."];
+
+    /// <summary>
+    /// The Markdown worth auditing: the docs directory, and the pages beside the
+    /// root README rather than every Markdown file in the tree.
+    /// </summary>
+    /// <remarks>
+    /// A repository holds Markdown that is not documentation — issue templates,
+    /// a licence, notes inside a package nobody here wrote. Walking everything
+    /// would turn a report about the documentation into a report about the
+    /// repository.
+    /// <para>
+    /// Here rather than in the command, so the daemon's docs-drift source audits
+    /// the same pages the command does.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<string> Documents(string repository)
+    {
+        var found = new List<string>();
+
+        foreach (var root in DefaultRoots)
+        {
+            var directory = Path.Combine(repository, root);
+
+            if (!Directory.Exists(directory))
+            {
+                continue;
+            }
+
+            var search = root == "."
+                ? SearchOption.TopDirectoryOnly
+                : SearchOption.AllDirectories;
+
+            foreach (var file in Directory.EnumerateFiles(directory, "*.md", search))
+            {
+                var relative = Path.GetRelativePath(repository, file).Replace('\\', '/');
+
+                if (!found.Contains(relative, StringComparer.OrdinalIgnoreCase))
+                {
+                    found.Add(relative);
+                }
+            }
+        }
+
+        return found.Order(StringComparer.Ordinal).ToList();
+    }
+
     /// <summary>
     /// Audits a set of documents against the repository holding them.
     /// </summary>

@@ -291,6 +291,16 @@ public sealed class MachineTeams
     /// records the history and prunes it, each time it starts.
     /// </remarks>
     public int? EventsDays { get; set; }
+
+    /// <summary>
+    /// The most disk the trigger journal may take, in megabytes, or null for
+    /// the default. Zero leaves it to its ninety days alone.
+    /// </summary>
+    /// <remarks>
+    /// Here with the daemon's other settings because the daemon writes the
+    /// journal and prunes it.
+    /// </remarks>
+    public int? TriggerJournalMegabytes { get; set; }
 }
 
 /// <summary>This machine's view of one project.</summary>
