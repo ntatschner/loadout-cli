@@ -171,6 +171,21 @@ public interface IIdeaService
         CancellationToken ct = default);
 
     /// <summary>
+    /// Takes off a note no round has read, named by its number as
+    /// <c>idea show</c> lists it (<c>2</c> or <c>N2</c>). Refused once a round
+    /// has read it, once the idea is accepted, and while a round on the idea
+    /// is running on this machine, which may have read it without saying so
+    /// yet. Its number is never given to another note.
+    /// </summary>
+    Task<OperationResult<IdeaNote>> RemoveNoteAsync(IdeaPlace place, string note, CancellationToken ct = default);
+
+    /// <summary>
+    /// What <see cref="RemoveNoteAsync"/> would take off, refused for the
+    /// same reasons, with nothing written. For a dry run.
+    /// </summary>
+    Task<OperationResult<IdeaNote>> PreviewRemoveNoteAsync(IdeaPlace place, string note, CancellationToken ct = default);
+
+    /// <summary>
     /// Notes that a round went wrong, and with which agent and model, so the
     /// next look at the idea says so. Replaces any earlier failure.
     /// </summary>
@@ -715,6 +730,61 @@ internal sealed partial class IdeaService : IIdeaService
 
             return null;
         });
+
+    /// <inheritdoc />
+    public async Task<OperationResult<IdeaNote>> RemoveNoteAsync(IdeaPlace place, string note, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(place);
+        ArgumentNullException.ThrowIfNull(note);
+
+        if (Running(place) is { } running)
+        {
+            return OperationResult<IdeaNote>.Fail(running, ExitCode.InvalidArguments);
+        }
+
+        IdeaNote? removed = null;
+        string? refusal = null;
+        var code = ExitCode.InvalidArguments;
+
+        var edited = await EditAsync(place, [new IdeaEdit(null, null, record =>
+        {
+            var taken = IdeaWork.RemoveNote(place, record, note);
+            removed = taken.Value;
+            refusal = taken.Error;
+            code = taken.ExitCode;
+
+            return taken.Error;
+        })], null, ct).ConfigureAwait(false);
+
+        return edited.Succeeded
+            ? OperationResult<IdeaNote>.Ok(removed!)
+            : OperationResult<IdeaNote>.Fail(refusal ?? edited.Error!, refusal is null ? edited.ExitCode : code);
+    }
+
+    /// <inheritdoc />
+    public async Task<OperationResult<IdeaNote>> PreviewRemoveNoteAsync(IdeaPlace place, string note, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(place);
+        ArgumentNullException.ThrowIfNull(note);
+
+        if (Running(place) is { } running)
+        {
+            return OperationResult<IdeaNote>.Fail(running, ExitCode.InvalidArguments);
+        }
+
+        // ReadAsync hands out a copy, so the change made to it is made to nothing kept.
+        var read = await ReadAsync(place, ct).ConfigureAwait(false);
+
+        return read.Failed
+            ? OperationResult<IdeaNote>.Fail(read.Error!, read.ExitCode)
+            : IdeaWork.RemoveNote(place, read.Value!, note);
+    }
+
+    private string? Running(IdeaPlace place) =>
+        _locks.Held(place)
+            ? $"A round on {place.Id} is running on this machine, and may have read the note already. "
+                + "Remove it when the round has finished. Nothing was removed."
+            : null;
 
     /// <inheritdoc />
     public Task<OperationResult<IdeaRecord>> RecordFailureAsync(

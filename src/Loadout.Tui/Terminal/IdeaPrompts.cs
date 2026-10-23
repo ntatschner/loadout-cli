@@ -24,6 +24,12 @@ internal interface IIdeaPrompts
     /// <summary>A new idea's text.</summary>
     string? NewIdea();
 
+    /// <summary>What to add to an idea already there, and whether to refine it now.</summary>
+    (string Text, bool Refine)? AddTo(IdeaPlace place, IdeaRecord record);
+
+    /// <summary>Which of the notes no round has read yet to take back, by its id.</summary>
+    string? TakeBack(IdeaPlace place, IReadOnlyList<IdeaNote> unread);
+
     /// <summary>A question and its answer.</summary>
     (string Question, string Answer)? Answer(IdeaRecord record);
 
@@ -57,6 +63,22 @@ internal sealed class DialogIdeaPrompts : IIdeaPrompts
 
     public string? NewIdea() =>
         Text("New idea", ["What is it? In your own words; it is kept as you write it."], string.Empty);
+
+    public (string Text, bool Refine)? AddTo(IdeaPlace place, IdeaRecord record)
+    {
+        using var dialog = new AddToIdeaDialog(place, record, _application);
+
+        _application.Run(dialog);
+
+        return dialog.Chosen;
+    }
+
+    public string? TakeBack(IdeaPlace place, IReadOnlyList<IdeaNote> unread) =>
+        Pick(
+            $"Take back which note on {place.Id}? Only notes no round has read yet can be.",
+            unread.Select(note => $"{note.Id}  {note.Text}").ToList()) is { } at
+            ? unread[at].Id
+            : null;
 
     public (string Question, string Answer)? Answer(IdeaRecord record)
     {
@@ -390,6 +412,103 @@ internal sealed class TextEntryDialog : Window
         }
 
         Chosen = typed;
+
+        _application.RequestStop(this);
+    }
+}
+
+/// <summary>
+/// Something to add to an idea already there, with whether to refine it now.
+/// </summary>
+/// <remarks>
+/// The box starts ticked, as <c>idea add --to</c> at a keyboard says Yes by
+/// default: the box makes that default visible rather than asking afterwards.
+/// When questions are still open it says how many, because a round run on top
+/// of them asks them again.
+/// </remarks>
+internal sealed class AddToIdeaDialog : Window
+{
+    private readonly TextField _value;
+    private readonly CheckBox _refine;
+    private readonly IApplication _application;
+
+    /// <summary>What was typed and whether the box was ticked, or null when the dialog was dismissed.</summary>
+    internal (string Text, bool Refine)? Chosen { get; private set; }
+
+    internal AddToIdeaDialog(IdeaPlace place, IdeaRecord record, IApplication application)
+    {
+        ArgumentNullException.ThrowIfNull(place);
+        ArgumentNullException.ThrowIfNull(record);
+        ArgumentNullException.ThrowIfNull(application);
+
+        _application = application;
+
+        var reminder = IdeaWork.UnansweredReminder(record);
+        var top = 0;
+
+        Title = $"Add to {place.Id}";
+        Width = Dim.Percent(80);
+        Height = reminder is null ? 9 : 10;
+        BorderStyle = LauncherTheme.Lines;
+
+        Add(new Label
+        {
+            X = 1,
+            Y = top++,
+            Width = Dim.Fill(1),
+            Text = "What should the next round take in? Kept as you write it.",
+        });
+
+        if (reminder is not null)
+        {
+            Add(new Label
+            {
+                Id = "add-reminder",
+                X = 1,
+                Y = top++,
+                Width = Dim.Fill(1),
+                Text = $"{reminder}. Answer them with a, or the round asks them again.",
+            });
+        }
+
+        _value = new TextField { Id = "add-text", X = 1, Y = top + 1, Width = Dim.Fill(1) };
+
+        _refine = new CheckBox
+        {
+            Id = "refine-now",
+            X = 1,
+            Y = top + 3,
+            Text = "_Refine now",
+            Value = CheckState.Checked,
+        };
+
+        var ok = new Button { Id = "add-ok", X = 1, Y = Pos.AnchorEnd(1), Text = "_OK", IsDefault = true };
+        var cancel = new Button { X = Pos.Right(ok) + 2, Y = Pos.AnchorEnd(1), Text = "Cance_l" };
+
+        ok.Accepting += (_, e) => { e.Handled = true; Accept(); };
+        cancel.Accepting += (_, e) => { e.Handled = true; _application.RequestStop(this); };
+        _value.Accepting += (_, e) => { e.Handled = true; Accept(); };
+
+        this.Bind(Key.Esc, Command.Quit);
+        AddCommand(Command.Quit, () => { _application.RequestStop(this); return true; });
+
+        Add(_value, _refine, ok, cancel);
+
+        _value.SetFocus();
+    }
+
+    private void Accept()
+    {
+        var typed = _value.Text?.Trim();
+
+        if (string.IsNullOrWhiteSpace(typed))
+        {
+            _value.SetFocus();
+
+            return;
+        }
+
+        Chosen = (typed, _refine.Value == CheckState.Checked);
 
         _application.RequestStop(this);
     }

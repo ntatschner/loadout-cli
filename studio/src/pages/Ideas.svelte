@@ -100,6 +100,8 @@
       doneWhen?: string[];
     } | null;
     accepted: { project: string; plan: string; by: string; when: string } | null;
+    /** What was added since it was asked; taken is when a round read it, null until one has. */
+    notes?: { id: string; text: string; by: string; added: string; taken: string | null }[];
   }
 
   interface Dump {
@@ -254,6 +256,8 @@
     idea = null;
     problem = null;
     untrack(() => {
+      more = '';
+      refineNow = true;
       drafted = [];
       sentAnswers = [];
       reworks = {};
@@ -504,6 +508,91 @@
     }
   }
 
+  // Add to it: a note for the next round, with that round started now unless
+  // the box is unticked. Kept only here, so a poll that reads the idea again
+  // leaves what is typed alone; emptied when a different idea is opened.
+  let more = $state('');
+  let refineNow = $state(true);
+  let adding = $state(false);
+  const open = $derived(idea ? idea.questions.filter((one) => !one.answer).length : 0);
+  const addToWords = $derived(idea ? ['--to', idea.id, `--text=${more.trim() || '<note>'}`, ...(refineNow ? ['--refine'] : []), ...where] : []);
+
+  /**
+   * Sends the note as one action; the daemon starts the round when asked to.
+   * A refusal comes back in the daemon's words, which say whether the note
+   * was saved, so a failed round never reads as a failed add.
+   */
+  async function addTo() {
+    if (!idea || adding) {
+      return;
+    }
+
+    if (studio.watchOnly) {
+      toasts.add({ level: 'info', text: 'Studio is only watching, so nothing was changed.', cmd: lineFor('idea add', addToWords) });
+
+      return;
+    }
+
+    const asked = idea.id;
+    const cmd = lineFor('idea add', addToWords);
+
+    adding = true;
+
+    try {
+      const reply = await ideaRoutes.act({ verb: 'addto', id: asked, project, text: more, ...(refineNow ? { refine: true } : {}) });
+      // The daemon says so when no round started, as while questions are open.
+      const said = (reply as unknown as { said?: string | null } | undefined)?.said;
+      toasts.add({
+        level: 'done',
+        text: said
+          ? said
+          : refineNow
+          ? `Added to ${asked}, and a round has started on it. It usually takes a minute or two.`
+          : `Added to ${asked}. No round was started; the next one reads it.`,
+        cmd,
+      });
+      more = '';
+    } catch (error) {
+      if (error instanceof SignedOut) {
+        studio.signedOut = true;
+      } else {
+        toasts.add({ level: 'problem', text: (error as Error).message, cmd });
+      }
+    } finally {
+      adding = false;
+    }
+
+    await reread(true);
+  }
+
+  /** Takes off a note no round has read; the daemon refuses one that has been. */
+  async function removeNote(note: string) {
+    if (!idea) {
+      return;
+    }
+
+    const cmd = lineFor('idea note remove', [idea.id, note, ...where]);
+
+    if (studio.watchOnly) {
+      toasts.add({ level: 'info', text: 'Studio is only watching, so nothing was changed.', cmd });
+
+      return;
+    }
+
+    try {
+      await ideaRoutes.act({ verb: 'note-remove', id: idea.id, project, note });
+      toasts.add({ level: 'done', text: `${note} is removed. Its number is not given to another note.`, cmd });
+    } catch (error) {
+      if (error instanceof SignedOut) {
+        studio.signedOut = true;
+      } else {
+        toasts.add({ level: 'problem', text: (error as Error).message, cmd });
+      }
+    }
+
+    await reread();
+  }
+
   // Drop an idea in.
   let text = $state('');
   let forList = $state('~');
@@ -683,6 +772,42 @@
           {#if undecided}<p><span class="ls-tag needs">{undecided} layer{undecided === 1 ? ' has' : 's have'} no option chosen</span> It can still be accepted; the plan says so where it is written.</p>{/if}
           <div class="ls-answers flush">
             <HaloButton label="Accept the plan" next="accept" solid={!acceptReason} glyph="✓" size="small" cmd={lineFor('idea accept', acceptLine)} disabledReason={acceptReason} onpress={() => void act('idea accept', acceptLine)} />
+          </div>
+        </section>
+      {/if}
+
+      {#if idea.notes?.length}
+        <section class="pblock" aria-labelledby="in">
+          <h2 class="ls-zone" id="in" data-anchor="zone:notes">Added since</h2>
+          <ul class="notes">
+            {#each idea.notes as note (note.id)}
+              <li data-note={note.id}>
+                <span class="nid">{note.id}</span>
+                <span class="ntext">{note.text}</span>
+                {#if note.taken}
+                  <span class="ls-tag">read by a round</span>
+                {:else}
+                  <span class="ls-tag needs">not read by a round yet</span>
+                  {#if !idea.accepted}
+                    <HaloButton label={`Remove ${note.id}`} size="small" cmd={lineFor('idea note remove', [idea.id, note.id, ...where])} disabledReason={refused} onpress={() => void removeNote(note.id)} />
+                  {/if}
+                {/if}
+              </li>
+            {/each}
+          </ul>
+        </section>
+      {/if}
+
+      {#if !idea.accepted}
+        <section class="pblock" aria-labelledby="ito">
+          <h2 class="ls-zone" id="ito" data-anchor="zone:addto">Add to it</h2>
+          {#if open}<p role="note"><span class="ls-tag needs">{open} question{open === 1 ? ' is' : 's are'} still open</span> The note is kept either way; a round waits until they are answered.</p>{/if}
+          <label class="ls-vh" for="idea-more">What to add to it</label>
+          <textarea id="idea-more" class="ls-text" name="idea-more" rows="3" placeholder="Something the next round should know. It is kept as you write it." bind:value={more} disabled={!!refused}></textarea>
+          <label class="opt"><input type="checkbox" name="idea-refine-now" bind:checked={refineNow} disabled={!!refused} /> Refine now</label>
+          <div class="ls-answers flush">
+            <HaloButton label="Add it" size="small" solid={!refused && !!more.trim() && !adding} glyph="+" cmd={lineFor('idea add', addToWords)}
+              disabledReason={refused ?? (adding ? 'adding it now' : more.trim() ? undefined : 'write what to add first')} onpress={() => void addTo()} />
           </div>
         </section>
       {/if}
