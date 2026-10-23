@@ -385,13 +385,20 @@ public sealed class TeamRunsCommand : AsyncCommand<TeamRunsCommand.Settings>
     private readonly IAnsiConsole _console;
     private readonly TimeProvider _time;
     private readonly Core.Configuration.IConfigurationService _configuration;
+    private readonly IRunOwnership _ownership;
 
-    public TeamRunsCommand(IRunJournal journal, IAnsiConsole console, TimeProvider time, Core.Configuration.IConfigurationService configuration)
+    public TeamRunsCommand(
+        IRunJournal journal,
+        IAnsiConsole console,
+        TimeProvider time,
+        Core.Configuration.IConfigurationService configuration,
+        IRunOwnership ownership)
     {
         _journal = journal;
         _console = console;
         _time = time;
         _configuration = configuration;
+        _ownership = ownership;
     }
 
     public sealed class Settings : GlobalSettings
@@ -445,6 +452,8 @@ public sealed class TeamRunsCommand : AsyncCommand<TeamRunsCommand.Settings>
         }
 
         var runs = queried.Value!;
+        var now = _time.GetUtcNow();
+        var liveness = runs.ToDictionary(run => run.RunId, run => TeamStyle.LivenessOf(run, _ownership, now));
 
         if (output.IsJson)
         {
@@ -459,6 +468,8 @@ public sealed class TeamRunsCommand : AsyncCommand<TeamRunsCommand.Settings>
                     run.Goal,
                     ended = run.Ended,
                     running = run.Running,
+                    liveness = TeamStyle.LivenessWord(liveness[run.RunId]),
+                    owner = TeamStyle.OwnerJson(liveness[run.RunId]),
                     cost = run.CostUsd,
                     run.Rounds,
                     nodes = run.Nodes.Count,
@@ -495,13 +506,23 @@ public sealed class TeamRunsCommand : AsyncCommand<TeamRunsCommand.Settings>
 
         foreach (var run in runs)
         {
+            // Ahead of "waiting for you": a run nothing drives will not read
+            // an answer either, and ending it is what it needs.
+            var unresponsive = TeamStyle.Unresponsive(liveness[run.RunId], run, now);
+
             output.WriteLine(
                 $"{Markup.Escape(run.RunId),-22} {Markup.Escape(run.Team),-20} "
                 + $"[dim]{Markup.Escape(run.Project ?? string.Empty),-16}[/] "
-                + (run.WaitingForYou
-                    ? "[yellow]waiting for you[/]"
-                    : run.Running ? "[yellow]running[/]" : $"[dim]{Markup.Escape(run.Ended ?? "ended")}[/]")
+                + (unresponsive
+                    ?? (run.WaitingForYou
+                        ? "[yellow]waiting for you[/]"
+                        : run.Running ? "[yellow]running[/]" : $"[dim]{Markup.Escape(run.Ended ?? "ended")}[/]"))
                 + $"  [dim]${run.CostUsd:0.00}[/]");
+
+            if (unresponsive is not null)
+            {
+                output.WriteLine($"  {TeamStyle.CloseHint(run.RunId)}");
+            }
 
             if (run.Goal is { Length: > 0 })
             {
@@ -533,13 +554,15 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
     private readonly IAnsiConsole _console;
     private readonly TimeProvider _time;
     private readonly IGitManager _git;
+    private readonly IRunOwnership _ownership;
 
-    public TeamStatusCommand(IRunJournal journal, IAnsiConsole console, TimeProvider time, IGitManager git)
+    public TeamStatusCommand(IRunJournal journal, IAnsiConsole console, TimeProvider time, IGitManager git, IRunOwnership ownership)
     {
         _journal = journal;
         _console = console;
         _time = time;
         _git = git;
+        _ownership = ownership;
     }
 
     public sealed class Settings : GlobalSettings
@@ -576,7 +599,9 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
         }
 
         var run = read.Value!;
-        var quiet = _time.GetUtcNow() - run.LastSeen;
+        var now = _time.GetUtcNow();
+        var quiet = now - run.LastSeen;
+        var liveness = TeamStyle.LivenessOf(run, _ownership, now);
 
         // What the run produced, which this command has always said it shows.
         // It is read from the reports the nodes already wrote and the journal
@@ -601,6 +626,8 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
                 finished = run.Finished,
                 ended = run.Ended,
                 running = run.Running,
+                liveness = TeamStyle.LivenessWord(liveness),
+                owner = TeamStyle.OwnerJson(liveness),
                 quietSeconds = (int)quiet.TotalSeconds,
                 cost = run.CostUsd,
                 run.Rounds,
@@ -688,16 +715,24 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
             return CommandOutput.Success();
         }
 
+        var unresponsive = TeamStyle.Unresponsive(liveness, run, now);
+
         output.WriteLine(
             $"[bold]{Markup.Escape(run.RunId)}[/]  {Markup.Escape(run.Team)}  "
             + (run.Project is { Length: > 0 } on ? $"{Markup.Escape(on)}  " : string.Empty)
             + $"{Markup.Escape(run.Autonomy)}  "
-            + (run.WaitingForYou
-                ? "[yellow]waiting for you[/]"
-                : run.Running
-                    ? $"[yellow]running[/]  [dim]{Elapsed(quiet)} since it last said anything[/]"
-                    : $"[dim]{Markup.Escape(run.Ended ?? "ended")}[/]")
+            + (unresponsive
+                ?? (run.WaitingForYou
+                    ? "[yellow]waiting for you[/]"
+                    : run.Running
+                        ? $"[yellow]running[/]  [dim]{Elapsed(quiet)} since it last said anything[/]"
+                        : $"[dim]{Markup.Escape(run.Ended ?? "ended")}[/]"))
             + $"  [dim]{Rounds(run)}, {Elapsed(run.Elapsed)} so far, ${run.CostUsd:0.00}[/]");
+
+        if (unresponsive is not null)
+        {
+            output.WriteLine($"  {TeamStyle.CloseHint(run.RunId)}");
+        }
 
         // Everything wanting attention that is not a question - the
         // questions get their own block below, with how to answer them.
@@ -1041,7 +1076,7 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
                 : string.Empty);
     }
 
-    private static string Elapsed(TimeSpan span) => span.TotalMinutes < 1
+    internal static string Elapsed(TimeSpan span) => span.TotalMinutes < 1
         ? $"{(int)span.TotalSeconds}s"
         : span.TotalHours < 1 ? $"{(int)span.TotalMinutes}m" : $"{(int)span.TotalHours}h {span.Minutes}m";
 }

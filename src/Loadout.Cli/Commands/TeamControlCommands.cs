@@ -465,11 +465,15 @@ public sealed class TeamHaltCommand : AsyncCommand<TeamHaltCommand.Settings>
 {
     private readonly IRunJournal _journal;
     private readonly IAnsiConsole _console;
+    private readonly IRunOwnership _ownership;
+    private readonly TimeProvider _time;
 
-    public TeamHaltCommand(IRunJournal journal, IAnsiConsole console)
+    public TeamHaltCommand(IRunJournal journal, IAnsiConsole console, IRunOwnership ownership, TimeProvider time)
     {
         _journal = journal;
         _console = console;
+        _ownership = ownership;
+        _time = time;
     }
 
     public sealed class Settings : RunSettings
@@ -520,6 +524,30 @@ public sealed class TeamHaltCommand : AsyncCommand<TeamHaltCommand.Settings>
         {
             RunControl.Resume(directory);
             output.WriteLine($"[green]+[/] {Markup.Escape(run)} carries on.");
+
+            return CommandOutput.Success();
+        }
+
+        // A stop or a hold is a file the run reads between rounds. Written
+        // anyway, since a reopened run clears it, but somebody stopping a run
+        // nothing drives should not be told it will stop: it already has.
+        var summary = _journal.Summarise(run);
+
+        if (summary.Succeeded
+            && TeamStyle.Unowned(TeamStyle.LivenessOf(summary.Value!, _ownership, _time.GetUtcNow())))
+        {
+            if (settings.Pause)
+            {
+                await RunControl.PauseAsync(directory, cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                await RunControl.StopAsync(directory, cancellationToken).ConfigureAwait(false);
+            }
+
+            output.WriteLine(
+                $"[yellow]No process is driving this run, so nothing will read the {what}.[/] "
+                + $"End it with: loadout team runs close {Markup.Escape(run)}");
 
             return CommandOutput.Success();
         }

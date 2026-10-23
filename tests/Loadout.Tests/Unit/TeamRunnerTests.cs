@@ -3783,12 +3783,38 @@ public sealed partial class TeamRunnerTests : IDisposable
 
         refused.Failed.Should().BeTrue();
         refused.ExitCode.Should().Be(Loadout.Models.ExitCode.PolicyViolation);
-        refused.Error.Should().Contain("Another process owns run");
+        refused.Error.Should().Contain("Another process is driving the run");
 
         var journal = await File.ReadAllLinesAsync(Path.Combine(first.Directory!, "journal.jsonl"));
 
         journal.Should().NotContain(l => l.Contains("\"kind\":\"run.reopened\""), "the refused coordinator writes nothing");
         _launcher.Requests.Should().HaveCount(launches, "and starts nothing");
+    }
+
+    [Fact]
+    public async Task Failed_take_passes_its_own_reason_through()
+    {
+        var (team, first) = await SpentAsync("lead-1");
+
+        await RunControl.SetBudgetAsync(first.Directory!, 5m);
+
+        // Not another owner: the lock file itself could not be opened.
+        var ownership = new FakeRunOwnership();
+        ownership.Failing[first.Directory!] = ("Could not take the run: access to owner.lock is denied.", Loadout.Models.ExitCode.GeneralFailure);
+        var launches = _launcher.Requests.Count;
+
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadDone(), 0.02m),
+            Result(LeadDone(), 0.03m));
+
+        var refused = await ResumeAsync(first.RunId, team, ownership: ownership);
+
+        refused.Failed.Should().BeTrue();
+        refused.ExitCode.Should().Be(Loadout.Models.ExitCode.GeneralFailure, "the take's own exit code, not a claim about an owner");
+        refused.Error.Should().Be("Could not take the run: access to owner.lock is denied.");
+        _launcher.Requests.Should().HaveCount(launches, "and nothing starts");
     }
 
     [Fact]

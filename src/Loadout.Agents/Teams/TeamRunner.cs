@@ -663,11 +663,13 @@ public sealed partial class TeamRunner : ITeamRunner
         {
             var taken = _ownership.Take(directory);
 
+            // Passed on as the take said it. Another process holding the run
+            // is one reason; a lock file that could not be opened or written
+            // is another, and calling that an owner sends somebody looking for
+            // a process that is not there.
             if (taken.Failed)
             {
-                return OperationResult<TeamRunOutcome>.Fail(
-                    $"Another process owns run {runId}, so this one will not drive it. {taken.Error}",
-                    ExitCode.PolicyViolation);
+                return OperationResult<TeamRunOutcome>.Fail(taken.Error!, taken.ExitCode);
             }
 
             owner = taken.Value;
