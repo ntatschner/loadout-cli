@@ -142,10 +142,12 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         Loadout.Core.Sessions.LaunchSheet sheet,
         Loadout.Core.Sessions.ISessionResumption? resumption = null,
         TeamQueueDriver? queues = null,
+        Loadout.Core.Updates.IUpdateService? updates = null,
         IEnvironmentProvider? environment = null,
         Loadout.Core.Configuration.YamlStore? yaml = null,
         IFilePermissions? permissions = null)
     {
+        _updateWatch = updates is null ? null : new Loadout.Core.Updates.UpdateWatch(updates, configuration, time);
         _yaml = yaml;
         _permissions = permissions;
         // Read once, here: the daemon is the process whose answer counts, and a
@@ -328,6 +330,15 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         // the moment it looked. A hold is kept: see DaemonControl.
         DaemonControl.ClearStop(_paths);
 
+        // An update no daemon handed over is one whose daemon went without
+        // restarting, killed or crashed: carried out at the next restart, it
+        // would surprise whoever asked for that one. One handed over belongs
+        // to the helper, which may be what started this daemon.
+        if (Loadout.Core.Updates.UpdatePlan.Read(_paths) is { DaemonPid: null })
+        {
+            Loadout.Core.Updates.UpdatePlan.Clear(Loadout.Core.Updates.UpdatePlan.PathFor(_paths));
+        }
+
         _started = settings;
 
         // What needed you, kept: the daemon is the one thing running long
@@ -375,6 +386,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             server.Bin = new TeamBin(_paths);
             server.IsDaemon = true;
             server.DaemonPaused = () => DaemonControl.Paused(_paths);
+            server.Update = UpdateAsync;
             server.BinDays = TeamBin.Days(teams?.BinDays);
             server.Events = events;
             server.EventsDays = Loadout.Core.Events.EventStore.Days(teams?.EventsDays);
@@ -513,7 +525,11 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
                 new DashboardCommands(_launcher),
                 _time,
                 path => output.WriteLine(
-                    $"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] from Studio: loadout {Markup.Escape(path)}"));
+                    $"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] from Studio: loadout {Markup.Escape(path)}"))
+            {
+                // A team run typed into the Commands page is a run too.
+                Holding = path => string.Equals(path, "team run", StringComparison.Ordinal) ? Holding() : null,
+            };
 
             server.Launch = new DashboardLaunch(_projects, _workspace, _agents, _configuration, _sheet, _time);
             server.StudioPreferences = async token => StudioPreferences.Read(
@@ -576,6 +592,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         var ending = settings.Log is null ? TeamDashboardCommand.Ends(stopping) : Task.CompletedTask;
         var watching = WatchAsync(stopping, output);
         var recording = _watch?.WatchAsync(stopping.Token) ?? Task.CompletedTask;
+        var looking = _updateWatch?.WatchAsync(stopping.Token) ?? Task.CompletedTask;
 
         var triggering = TriggersAsync(output, stopping.Token);
 
@@ -605,6 +622,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         // A last look while the sessions are still there to be looked at,
         // and the history told that nothing is watched from here.
         await recording.ConfigureAwait(false);
+        await looking.ConfigureAwait(false);
         _watch?.Stop();
 
         // After the listener, so no page can start one while the rest end,
@@ -631,15 +649,198 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
 
         Forget();
 
+        var update = Loadout.Core.Updates.UpdatePlan.Read(_paths);
+
         if (request is { Restart: true } && _started is { } was)
         {
+            if (update is not null && HandOver(output, server?.Address, was, update))
+            {
+                return (int)ExitCode.Success;
+            }
+
             Succeed(output, server?.Address, was);
+        }
+        else if (update is not null)
+        {
+            // Stopped rather than restarted while an update waited. Whoever
+            // stopped it has not asked for it to come back on a new version
+            // the next time somebody starts it, so the update goes with it.
+            Loadout.Core.Updates.UpdatePlan.Clear(Loadout.Core.Updates.UpdatePlan.PathFor(_paths));
+            output.WriteLine($"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] Stopped, so the update that was "
+                + $"waiting ({Markup.Escape(update.Described)}) was dropped. Ask for it again from Studio, or: loadout update");
         }
 
         return (int)ExitCode.Success;
     }
 
+    /// <summary>
+    /// Hands the restart to the update helper, which replaces this daemon's
+    /// binary once it has gone and then starts its successor. Says whether it
+    /// did: when it could not, the restart goes ahead without the update.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The helper runs from a copy outside the install folder. Replacing a
+    /// binary from inside it works for an archive install, where the running
+    /// image is renamed aside, but the MSI ends every <c>loadout.exe</c> on
+    /// its way in and replaces the folder, so a helper running from there
+    /// would be ended by the install it started.
+    /// </para>
+    /// <para>
+    /// Internal so a test can see what it starts without a daemon to stop.
+    /// </para>
+    /// </remarks>
+    internal bool HandOver(CommandOutput output, string? address, Settings was, Loadout.Core.Updates.UpdatePlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(output);
+        ArgumentNullException.ThrowIfNull(was);
+        ArgumentNullException.ThrowIfNull(plan);
+
+        var path = Loadout.Core.Updates.UpdatePlan.PathFor(_paths);
+        var when = $"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] ";
+
+        if (Loadout.Core.Agents.LauncherInvocation.Parts() is not ({ Length: > 0 } command, var prefix))
+        {
+            Loadout.Core.Updates.UpdatePlan.Clear(path);
+            output.WriteLine(when + "[red]Could not update:[/] this launcher cannot say how it was started, "
+                + "so it restarts on the version it is.");
+
+            return false;
+        }
+
+        try
+        {
+            var helper = Helper(command, prefix);
+            var daemon = new List<string> { command };
+
+            daemon.AddRange(Arguments(prefix, was, Port(address, was)));
+
+            plan.WithDaemon(daemon, _processes.CurrentProcessId, _processes.CurrentProcessStartedAt)
+                .WriteAsync(path).GetAwaiter().GetResult();
+
+            var arguments = new List<string>(helper.Skip(1)) { "update", "--finish", path };
+
+            var started = _launcher.StartBackground(new ProcessRequest(
+                helper[0],
+                arguments,
+                WorkingDirectory: CurrentDirectory()));
+
+            if (started.Failed)
+            {
+                Loadout.Core.Updates.UpdatePlan.Clear(path);
+                output.WriteLine(when + $"[red]Could not update:[/] the helper did not start "
+                    + $"({Shown.Safely(started.Error ?? "no reason given")}), so it restarts on the version it is.");
+
+                return false;
+            }
+
+            output.WriteLine(when + $"Restarting for the update ({Markup.Escape(plan.Described)}): the update helper "
+                + $"is process {started.Value!.Pid}, and says how it went below.");
+
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Loadout.Core.Updates.UpdatePlan.Clear(path);
+            output.WriteLine(when + $"[red]Could not update:[/] {Markup.Escape(Shown.Safely(ex.Message))}. "
+                + "It restarts on the version it is.");
+
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The command line that runs the update helper: a copy of this
+    /// executable outside the install folder, or, for a development build
+    /// run through dotnet, the build itself.
+    /// </summary>
+    private List<string> Helper(string command, IReadOnlyList<string> prefix)
+    {
+        if (prefix.Count > 0)
+        {
+            return [command, .. prefix];
+        }
+
+        var folder = Path.Combine(_paths.Paths.Cache, "update-helper");
+
+        Directory.CreateDirectory(folder);
+
+        // Earlier copies, which have finished. One still running is in use
+        // and is left; it is tidied by the next update.
+        foreach (var old in Directory.EnumerateFiles(folder))
+        {
+            try
+            {
+                File.Delete(old);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+            }
+        }
+
+        // Not named loadout: the MSI ends every process of that name on its
+        // way in, and this one is the process running it.
+        var copy = Path.Combine(folder, "loadout-update-"
+            + Guid.NewGuid().ToString("N")[..8] + Path.GetExtension(command));
+
+        // File.Copy keeps the mode bits on Unix, so the copy runs as the
+        // original does.
+        File.Copy(command, copy);
+
+        return [copy];
+    }
+
+    /// <summary>
+    /// The port a successor serves on: the same as before when this one was
+    /// serving, even if it had been left to the machine to choose.
+    /// </summary>
+    private static int Port(string? address, Settings was) =>
+        was.Port == 0 && address is { Length: > 0 } && Uri.TryCreate(address, UriKind.Absolute, out var served)
+            ? served.Port
+            : was.Port;
+
     private readonly Loadout.Core.Sessions.Hosting.HostedSessions _sessions;
+
+    /// <summary>The daily look at the release feed, for Studio's badge; null in a build without updates.</summary>
+    private readonly Loadout.Core.Updates.UpdateWatch? _updateWatch;
+
+    /// <summary>
+    /// What Studio's Settings shows about updates: what the feed offers, how
+    /// this copy was installed, what a restart now would cut off, and an
+    /// update already waiting for the restart.
+    /// </summary>
+    internal async Task<object> UpdateAsync(bool fresh, CancellationToken ct)
+    {
+        var status = _updateWatch is null
+            ? null
+            : fresh ? await _updateWatch.CheckNowAsync(ct).ConfigureAwait(false) : _updateWatch.Status;
+        var asked = DaemonControl.Stopping(_paths);
+        var plan = asked is { Restart: true } ? Loadout.Core.Updates.UpdatePlan.Read(_paths) : null;
+
+        return new
+        {
+            current = status?.Current,
+            available = status?.Available,
+            isNewer = status?.IsNewer ?? false,
+            notes = status?.Notes,
+            checkedAt = status?.CheckedAt,
+            problem = status?.Problem,
+            channel = status?.Channel,
+            canRollBack = status?.CanRollBack ?? false,
+            automatic = status?.Automatic ?? false,
+            runs = _inFlight.Running,
+            hosted = _sessions.Running,
+            pending = plan is null
+                ? null
+                : new
+                {
+                    kind = plan.Kind == Loadout.Core.Updates.UpdateKind.RollBack ? "roll-back" : "install",
+                    version = plan.Version,
+                    now = asked!.Now,
+                    described = plan.Described,
+                },
+        };
+    }
 
     /// <summary>
     /// Registers a folder for 'Register and resume', returning its slug.
@@ -709,14 +910,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             return;
         }
 
-        var port = was.Port;
-
-        if (port == 0 && address is { Length: > 0 } && Uri.TryCreate(address, UriKind.Absolute, out var served))
-        {
-            port = served.Port;
-        }
-
-        var arguments = Arguments(prefix, was, port);
+        var arguments = Arguments(prefix, was, Port(address, was));
 
         arguments.Add("--after");
         arguments.Add(_processes.CurrentProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
@@ -1093,7 +1287,11 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             {
                 if (DaemonControl.Stopping(_paths) is { } asked)
                 {
-                    var what = asked.Restart ? "Restarting" : "Stopping";
+                    var what = !asked.Restart
+                        ? "Stopping"
+                        : Loadout.Core.Updates.UpdatePlan.Read(_paths) is { } update
+                            ? $"Restarting for the update ({Markup.Escape(update.Described)})"
+                            : "Restarting";
 
                     if (asked.Now || _inFlight.Running == 0)
                     {
@@ -1189,6 +1387,13 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
                 ExitCode.InvalidArguments));
         }
 
+        // First, whatever would start the run: a daemon waiting to restart
+        // for an update takes on nothing new, from a rule or otherwise.
+        if (Holding() is { } held)
+        {
+            return Task.FromResult(OperationResult.Fail(held, ExitCode.PolicyViolation));
+        }
+
         // With triggers on, a webhook is one more event and the rules decide
         // what it starts, under their caps: one path for every event, rather
         // than one that spends without asking the ledger.
@@ -1271,7 +1476,36 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         StartRequest asking,
         CommandOutput output,
         CancellationToken ct) =>
-        DashboardActions.BeganAsync(_commands, _time, asking, output, ct);
+        Holding() is { } held
+            ? Task.FromResult(OperationResult.Fail(held, ExitCode.PolicyViolation))
+            : DashboardActions.BeganAsync(_commands, _time, asking, output, ct);
+
+    /// <summary>
+    /// Why nothing new may start now, or null when it may: the daemon has
+    /// been asked to stop or restart, for an update or otherwise, and is
+    /// waiting for the runs it started.
+    /// </summary>
+    /// <remarks>
+    /// The schedules already hold while it waits. A run started from the
+    /// page or by a webhook meanwhile would be one more run to wait for, or,
+    /// started just as the last one ended, a run the restart cut off.
+    /// </remarks>
+    internal string? Holding()
+    {
+        // A daemon built without paths, as some tests build it, has no controls to read.
+        if (_paths is null || DaemonControl.Stopping(_paths) is not { } asked)
+        {
+            return null;
+        }
+
+        var waiting = _inFlight.Running == 1 ? "the run it started has" : $"the {_inFlight.Running} runs it started have";
+
+        return asked.Restart && Loadout.Core.Updates.UpdatePlan.Read(_paths) is { } update
+            ? $"An update is pending: the daemon restarts for it ({update.Described}) once {waiting} finished, "
+              + "and starts nothing new meanwhile."
+            : $"The daemon is {(asked.Restart ? "restarting" : "stopping")} once {waiting} finished, "
+              + "and starts nothing new meanwhile.";
+    }
 
     /// <summary>
     /// Does what the page asked of a run, through the command line.

@@ -102,6 +102,31 @@ export interface About {
 
 export const about = () => call<About>('GET', '/api/v1/about');
 
+/** What the daemon knows about updates, from its daily look at the release feed. */
+export interface UpdateState {
+  current: string | null;
+  available: string | null;
+  /** Whether what is available is newer, which is what the badge means. */
+  isNewer: boolean;
+  notes: string | null;
+  checkedAt: string | null;
+  /** Why the last look failed, when it did. */
+  problem: string | null;
+  /** archive: a binary is swapped and the old one kept; installer: the MSI runs. */
+  channel: 'archive' | 'installer' | null;
+  canRollBack: boolean;
+  /** Whether the daemon looks by itself; off when updates-check-automatically is. */
+  automatic: boolean;
+  /** What a restart straight away would cut off. */
+  runs: number;
+  hosted: number;
+  /** An update waiting for the daemon's restart. */
+  pending: { kind: 'install' | 'roll-back'; version: string | null; now: boolean; described: string } | null;
+}
+
+/** The daemon's update state; with check, it reads the release feed first. */
+export const update = (check = false) => call<UpdateState>('GET', `/api/v1/update${check ? '?check=now' : ''}`);
+
 /** Whether the daemon knows this browser, asked without being refused. */
 export const signedIn = async () => (await call<{ signedIn: boolean }>('GET', '/api/v1/signed-in')).signedIn;
 
@@ -686,11 +711,25 @@ export const configuration = () => call<ConfigGroup[]>('GET', '/api/v1/config');
 /* ---------- live ---------- */
 
 /** Calls back with what changed, as the daemon says it. Returns a function that stops listening. */
-export function listen(changed: (what: string[]) => void): () => void {
+export function listen(changed: (what: string[]) => void, back?: () => void): () => void {
   // An event stream cannot send a header, so a printed token goes in its
   // address, as the terminal's does.
   const query = printed ? `?token=${encodeURIComponent(printed)}` : '';
   const source = new EventSource(`/api/v1/events${query}`, { withCredentials: true });
+
+  // The stream reconnects by itself when the daemon comes back, as after a
+  // restart or an update; told, so the page can ask what it came back as.
+  let lost = false;
+
+  source.addEventListener('error', () => {
+    lost = true;
+  });
+  source.addEventListener('open', () => {
+    if (lost) {
+      lost = false;
+      back?.();
+    }
+  });
 
   source.addEventListener('changed', (event) => {
     try {

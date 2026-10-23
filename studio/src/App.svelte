@@ -90,7 +90,7 @@
     { key: 'spend', name: 'Spend', fact: studio.spentMonth === null ? 'tokens and cost' : `${tokens(studio.spentMonth)} tokens this month` },
     { key: 'projects', name: 'Projects', fact: '' },
     { key: 'commands', name: 'Commands', fact: studio.jobs.some((job) => job.state === 'running') ? `${studio.jobs.filter((job) => job.state === 'running').length} running` : 'everything else' },
-    { key: 'settings', name: 'Settings', fact: '' },
+    { key: 'settings', name: 'Settings', fact: studio.update?.pending ? 'update pending' : studio.update?.isNewer ? `${studio.update.available} available` : '' },
   ]);
 
   const current = $derived(router.route.page === 'session' ? 'sessions' : router.route.page);
@@ -262,6 +262,13 @@
     {/if}
     {#if studio.offline}
       <p class="offline" role="alert">{studio.offline}</p>
+    {/if}
+    {#if studio.newVersion}
+      <div class="reloadnote" role="status">
+        <p>The daemon is now on {studio.newVersion}. This page is from the version before, so reload it to use the new one.</p>
+        <HaloButton label="Reload" size="small" onpress={() => location.reload()} />
+        <HaloButton label="Later" size="small" onpress={() => (studio.newVersion = null)} />
+      </div>
     {/if}
 
     {#if !studio.loaded}

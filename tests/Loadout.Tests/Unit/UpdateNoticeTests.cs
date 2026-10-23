@@ -172,6 +172,13 @@ public sealed class UpdateNoticeTests : IDisposable
     /// <summary>A release source that answers however the test says, and counts.</summary>
     private sealed class CountingUpdates : IUpdateService
     {
+        public string Executable => string.Empty;
+
+        public InstallChannel Channel => InstallChannel.Archive;
+
+        public Task<OperationResult<string>> StageAsync(UpdateCheck check, InstallChannel channel, CancellationToken ct = default) =>
+            Task.FromResult(OperationResult<string>.Fail("not staged here"));
+
         private OperationResult<UpdateCheck> _next =
             OperationResult<UpdateCheck>.Fail("not configured", ExitCode.GeneralFailure);
 

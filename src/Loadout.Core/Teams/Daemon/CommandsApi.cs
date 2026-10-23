@@ -173,6 +173,12 @@ public sealed class CommandJobs
     /// <summary>The catalogue the jobs are run from.</summary>
     public IStudioCommands Commands => _commands;
 
+    /// <summary>
+    /// Why a command may not start now, given its path, or null when it may:
+    /// the daemon waiting to restart refuses new runs.
+    /// </summary>
+    public Func<string, string?>? Holding { get; init; }
+
     /// <summary>Changes whenever a job starts or ends, for the event stream to notice.</summary>
     public int Stamp => Volatile.Read(ref _stamp);
 
@@ -205,6 +211,11 @@ public sealed class CommandJobs
         if (Refusal(command, words, watchOnly) is { } refused)
         {
             return OperationResult<CommandJob>.Fail(refused, ExitCode.PolicyViolation);
+        }
+
+        if (Holding?.Invoke(path) is { } held)
+        {
+            return OperationResult<CommandJob>.Fail(held, ExitCode.PolicyViolation);
         }
 
         if (_jobs.Values.Count(job => job.State == "running") >= Running)

@@ -118,6 +118,7 @@ export class Studio {
       }
 
       this.about = await api.about();
+      this.#version = this.about.version;
       await this.loadPrefs();
       await Promise.all([this.loadRuns(), this.loadSessions(), this.loadIdeas(), this.loadTasks(), this.loadJobs(), this.loadHistory(), this.loadEvents()]);
     });
@@ -139,13 +140,18 @@ export class Studio {
       eventlog: () => this.loadEvents(),
     };
 
-    this.#stop = api.listen((what) => {
-      const reloads = reloadsFor(what);
+    this.#stop = api.listen(
+      (what) => {
+        const reloads = reloadsFor(what);
 
-      if (reloads.length > 0) {
-        void this.#guard(() => Promise.all(reloads.map((reload) => loads[reload]())).then(() => undefined));
-      }
-    });
+        if (reloads.length > 0) {
+          void this.#guard(() => Promise.all(reloads.map((reload) => loads[reload]())).then(() => undefined));
+        }
+      },
+      () => void this.#back(),
+    );
+
+    void this.loadUpdate();
 
     // The clock moves every so often for the ages the page shows. The ideas
     // are read again with it, slowly, for what no file says: notes being
@@ -157,6 +163,12 @@ export class Studio {
       if (++ticks % 4 === 0) {
         void this.#guard(() => this.loadIdeas());
       }
+
+      // The daemon looks at the feed once a day; asking it every half hour
+      // is enough for the badge to appear the same day.
+      if (ticks % 120 === 0) {
+        void this.loadUpdate();
+      }
     }, 15000);
 
     matchMedia?.('(prefers-color-scheme: light)').addEventListener?.('change', () => this.applyPrefs());
@@ -165,6 +177,46 @@ export class Studio {
 
   stop(): void {
     this.#stop?.();
+  }
+
+  /** What the daemon knows about updates, for the Settings badge; null until read, or from a dashboard. */
+  update = $state<api.UpdateState | null>(null);
+
+  /**
+   * The version the daemon came back as, when it is not the one this page
+   * was loaded from: this page's code is older than the daemon's, and a
+   * reload gives the new one.
+   */
+  newVersion = $state<string | null>(null);
+
+  #version: string | null = null;
+
+  /** Reads the daemon's update state, quietly: a daemon that does not look leaves it null. */
+  async loadUpdate(check = false): Promise<api.UpdateState | null> {
+    try {
+      this.update = await api.update(check);
+    } catch {
+      if (check) {
+        throw new Error('The daemon could not look for updates.');
+      }
+    }
+
+    return this.update;
+  }
+
+  /** The daemon is back after a restart: what it came back as, and the rest read again. */
+  async #back(): Promise<void> {
+    await this.#guard(async () => {
+      const about = await api.about();
+
+      this.about = about;
+
+      if (this.#version && about.version !== this.#version) {
+        this.newVersion = about.version;
+      }
+
+      await Promise.all([this.loadRuns(), this.loadSessions(), this.loadJobs(), this.loadUpdate()]);
+    });
   }
 
   async #guard(work: () => Promise<unknown>): Promise<void> {

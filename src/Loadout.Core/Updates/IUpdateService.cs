@@ -26,4 +26,17 @@ public interface IUpdateService
     /// </summary>
     /// <returns>The path the previous executable was kept at.</returns>
     Task<OperationResult<string>> ApplyAsync(UpdateCheck check, CancellationToken ct = default);
+
+    /// <summary>The running executable, which is what an update replaces.</summary>
+    string Executable { get; }
+
+    /// <summary>How the running copy was installed, and so how it is replaced.</summary>
+    InstallChannel Channel { get; }
+
+    /// <summary>
+    /// Downloads and verifies an update without installing it, for the helper
+    /// to install once the daemon has gone.
+    /// </summary>
+    /// <returns>The verified binary for an archive install, or the verified MSI.</returns>
+    Task<OperationResult<string>> StageAsync(UpdateCheck check, InstallChannel channel, CancellationToken ct = default);
 }

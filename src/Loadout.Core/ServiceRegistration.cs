@@ -239,7 +239,8 @@ public static class ServiceRegistration
             provider.GetRequiredService<IConfigurationService>(),
             provider.GetRequiredService<Platform.Abstractions.IPlatformPaths>(),
             provider.GetRequiredService<Platform.Abstractions.IFilePermissions>(),
-            provider.GetRequiredService<HttpClient>()));
+            provider.GetRequiredService<HttpClient>(),
+            installedBin: provider.GetRequiredService<Platform.Abstractions.IInstallRecord>().InstalledPath));
 
         // In front of the service, for the launcher's corner: cached for a day
         // and never an error, where the service is fresh every time and says
@@ -247,6 +248,14 @@ public static class ServiceRegistration
         services.AddSingleton<IUpdateNotice>(provider => new UpdateNotice(
             provider.GetRequiredService<IConfigurationService>(),
             provider.GetRequiredService<IUpdateService>(),
+            provider.GetRequiredService<Platform.Abstractions.IPlatformPaths>(),
+            provider.GetRequiredService<TimeProvider>()));
+
+        // The helper that replaces the daemon after an update asked from Studio.
+        services.AddSingleton(provider => new UpdateFinisher(
+            provider.GetRequiredService<Platform.Abstractions.IProcessLauncher>(),
+            provider.GetRequiredService<Platform.Abstractions.IProcessInspector>(),
+            provider.GetRequiredService<Platform.Abstractions.IFilePermissions>(),
             provider.GetRequiredService<Platform.Abstractions.IPlatformPaths>(),
             provider.GetRequiredService<TimeProvider>()));
 

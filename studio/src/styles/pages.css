@@ -271,6 +271,11 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
 .dstat p { margin: 4px 0 0; font-size: 13.5px; color: var(--ink-soft); }
 .dstat p.x { font-family: var(--font-mono); font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
 .setpane .ls-answers.flush + .ls-drawers { margin-top: 14px; }
+.vline { margin: 0 0 8px; color: var(--ink-soft); }
+.vline b { font-size: 17px; font-weight: 400; color: var(--ink-strong); }
+.updnote { margin: 6px 0; max-width: 72ch; font-size: 13.5px; color: var(--ink-soft); }
+.notes { margin: 6px 0; max-width: 72ch; }
+.notes p { white-space: pre-wrap; font-size: 13.5px; color: var(--ink-soft); }
 @media (max-width: 860px) { .setwrap { grid-template-columns: minmax(0, 1fr); gap: 18px; } .setidx { position: static; } .setidx ul { grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 1fr)); } .setidx .x { display: none; } }
 
 /* Memory */

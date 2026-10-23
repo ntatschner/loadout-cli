@@ -51,6 +51,8 @@
   let daemon = $state<{ daemon: boolean; paused: boolean | null } | null>(null);
   let doctor = $state<{ verdict?: string; checks: Check[] } | null>(null);
   let asking = $state<'restart' | 'stop' | null>(null);
+  let updating = $state<'install' | 'roll-back' | null>(null);
+  let checking = $state(false);
   let signingOut = $state(false);
   let idle = $state(String(studio.prefs?.idleAfter ?? 10));
 
@@ -67,6 +69,7 @@
     } else if (which === 'daemon') {
       quietly<NonNullable<typeof autostart>>('daemon autostart show', [], (read) => (autostart = read));
       teamApi.daemon().then((read) => (daemon = read), () => (daemon = null));
+      void studio.loadUpdate();
     } else if (which === 'machine') {
       quietly<NonNullable<typeof doctor>>('doctor', [], (read) => (doctor = read));
     }
@@ -112,6 +115,25 @@
     }
   }
 
+  /** Reads the release feed now, through the daemon, rather than waiting for its daily look. */
+  async function checkNow() {
+    checking = true;
+
+    try {
+      await studio.loadUpdate(true);
+    } catch (error) {
+      toasts.add({ level: 'problem', text: (error as Error).message, cmd: lineFor('update', ['--check']) });
+    } finally {
+      checking = false;
+    }
+  }
+
+  /** Installs or rolls back through 'loadout update', as typing it would, then shows it pending. */
+  async function upgrade(words: string[]) {
+    await act('update', words);
+    await studio.loadUpdate();
+  }
+
   async function out() {
     try {
       await signOut();
@@ -128,7 +150,21 @@
     return reason ? `It ${reason}.` : undefined;
   };
   const subOf = (key: string, sub: string) =>
-    key === 'daemon' && autostart ? (autostart.enabled ? 'starts when you log in' : 'does not start at log-in') : sub;
+    key === 'daemon' && studio.update?.pending
+      ? 'an update is pending'
+      : key === 'daemon' && studio.update?.isNewer
+        ? `${studio.update.available} is available`
+        : key === 'daemon' && autostart
+          ? (autostart.enabled ? 'starts when you log in' : 'does not start at log-in')
+          : sub;
+  const upd = $derived(studio.update);
+  const plural = (count: number, one: string) => `${count} ${one}${count === 1 ? '' : 's'}`;
+  /** What a restart straight away ends, in words, or empty when it ends nothing. */
+  const cutOff = $derived(
+    upd ? [upd.runs ? `the ${plural(upd.runs, 'run')} it started` : '', upd.hosted ? `the ${plural(upd.hosted, 'session')} it hosts` : ''].filter(Boolean).join(' and ') : '',
+  );
+  const updateWords = $derived(updating === 'roll-back' ? ['--roll-back', '--restart-daemon', '--yes'] : ['--restart-daemon', '--yes']);
+  const linkish = (text: string) => /^https?:\/\/\S+$/.test(text.trim());
   const held = $derived(daemon?.paused ?? null);
   const checks = $derived((doctor?.checks ?? []).map((one) => ({ name: one.name, severity: one.severity, detail: one.detail, fixable: one.fixable })));
   const when = (at: string | undefined) => (at ? new Date(at).toLocaleString([], { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '');
@@ -319,6 +355,50 @@
           <CommandAction path="daemon continue" title="Let the schedules fire, by its other name" label="Let them fire" />
         </div>
       </section>
+
+      <section class="pblock" aria-labelledby="z-upd">
+        <h2 class="ls-zone" id="z-upd">Version and updates</h2>
+        {#if upd}
+          <p class="vline">
+            <b>{upd.current ?? studio.about?.version}</b>
+            {#if upd.isNewer}<span>, and <b>{upd.available}</b> is available.</span>{:else if upd.available}<span>, the newest release.</span>{/if}
+          </p>
+          {#if upd.pending}
+            <p class="updnote" role="status">
+              Update pending: {upd.pending.described}.
+              {upd.pending.now ? 'The daemon is restarting now.' : upd.runs ? `It restarts once ${upd.runs === 1 ? 'the run it started has' : `the ${upd.runs} runs it started have`} finished, and starts nothing new meanwhile.` : 'The daemon is restarting.'}
+              This page comes back when it does.
+            </p>
+          {/if}
+          {#if upd.isNewer && upd.notes}
+            {#if linkish(upd.notes)}
+              <p><a href={upd.notes.trim()} target="_blank" rel="noopener">What is new in {upd.available}</a></p>
+            {:else}
+              <details class="notes"><summary>What is new in {upd.available}</summary><p>{upd.notes}</p></details>
+            {/if}
+          {/if}
+          {#if upd.problem}
+            <p class="updnote">The last look at the release feed did not work: {upd.problem}</p>
+          {/if}
+          <p class="ls-from">
+            {upd.checkedAt ? `Looked at the release feed ${when(upd.checkedAt)}` : 'Not looked at the release feed yet'}{upd.automatic ? '; the daemon looks once a day.' : '; the daemon does not look by itself, because updates-check-automatically is off.'}
+            {upd.channel === 'installer'
+              ? 'This copy was installed by the MSI, so an update runs the newer MSI while the daemon is down.'
+              : 'This copy was unpacked from a release archive, so an update puts the new binary in place and keeps the old one for Roll back.'}
+          </p>
+          <div class="ls-answers flush">
+            <HaloButton label={checking ? 'Looking…' : 'Check now'} size="small" cmd={lineFor('update', ['--check'])} disabledReason={checking ? 'Already looking' : undefined} onpress={() => void checkNow()} />
+            {#if upd.isNewer && !upd.pending}
+              <HaloButton label="Install and restart" kind="needs" size="small" cmd={lineFor('update', ['--restart-daemon', '--yes'])} disabledReason={refused} onpress={() => (updating = 'install')} />
+            {/if}
+            {#if upd.canRollBack && !upd.pending}
+              <HaloButton label="Roll back" size="small" cmd={lineFor('update', ['--roll-back', '--restart-daemon', '--yes'])} disabledReason={refused} onpress={() => (updating = 'roll-back')} />
+            {/if}
+          </div>
+        {:else}
+          <p class="calm">This server does not look for updates. In a terminal: <code>loadout update</code></p>
+        {/if}
+      </section>
     {:else if section === 'machine'}
       <section class="pblock" aria-labelledby="z-doc">
         <h2 class="ls-zone" id="z-doc">How this machine stands</h2>
@@ -350,6 +430,24 @@
     danger={asking === 'stop'}
     actions={[{ label: asking === 'restart' ? 'Restart it' : 'Stop it', kind: asking === 'stop' ? 'danger' : '', cmd: lineFor(asking === 'restart' ? 'daemon restart' : 'daemon stop', []), onpress: () => void act(asking === 'restart' ? 'daemon restart' : 'daemon stop') }]}
     onclose={() => (asking = null)}
+  />
+{/if}
+
+{#if updating && upd}
+  <Dialog
+    title={updating === 'install' ? `Install ${upd.available} and restart the daemon?` : 'Roll back and restart the daemon?'}
+    why={(updating === 'install'
+      ? `The daemon restarts on ${upd.available}${upd.channel === 'installer' ? ', running the MSI while it is down' : ', and if that version does not start, the one before is put back'}.`
+      : 'The daemon restarts on the version before this one.')
+      + (cutOff
+        ? ` Waiting lets ${cutOff} carry on until the runs have finished, and nothing new starts meanwhile; restarting now ends ${cutOff} at once.`
+        : ' Nothing is running that a restart would end.')
+      + ' This page comes back when the daemon does.'}
+    actions={[
+      { label: 'Restart when its runs finish', cmd: lineFor('update', updateWords), onpress: () => void upgrade(updateWords) },
+      { label: 'Restart now', kind: 'danger', cmd: lineFor('update', [...updateWords, '--now']), onpress: () => void upgrade([...updateWords, '--now']) },
+    ]}
+    onclose={() => (updating = null)}
   />
 {/if}
 
