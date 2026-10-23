@@ -34,9 +34,6 @@ namespace Loadout.Cli.Commands;
 [CommandMeta(CommandCategory.Health, Intent = "documentation docs stale links broken references audit")]
 public sealed class DocsAuditCommand : AsyncCommand<DocsAuditCommand.Settings>
 {
-    /// <summary>Where documentation lives when nobody has said otherwise.</summary>
-    private static readonly string[] DefaultRoots = ["docs", "."];
-
     private readonly IProjectService _projects;
     private readonly Loadout.Core.Workspace.IWorkspaceManager _workspace;
     private readonly Loadout.Core.Configuration.YamlStore _yaml;
@@ -99,7 +96,7 @@ public sealed class DocsAuditCommand : AsyncCommand<DocsAuditCommand.Settings>
                 ExitCode.RepositoryUnavailable);
         }
 
-        var documents = Documents(repository);
+        var documents = DocsAuditor.Documents(repository);
 
         if (documents.Count == 0)
         {
@@ -247,47 +244,6 @@ public sealed class DocsAuditCommand : AsyncCommand<DocsAuditCommand.Settings>
         var loaded = await _yaml.LoadAsync(path, () => new DocsPolicy(), ct).ConfigureAwait(false);
 
         return loaded.Succeeded ? loaded.Value : null;
-    }
-
-    /// <summary>
-    /// The Markdown worth auditing: the docs directory, and the pages beside the
-    /// root README rather than every Markdown file in the tree.
-    /// </summary>
-    /// <remarks>
-    /// A repository holds Markdown that is not documentation — issue templates,
-    /// a licence, notes inside a package nobody here wrote. Walking everything
-    /// would turn a report about the documentation into a report about the
-    /// repository.
-    /// </remarks>
-    private static IReadOnlyList<string> Documents(string repository)
-    {
-        var found = new List<string>();
-
-        foreach (var root in DefaultRoots)
-        {
-            var directory = Path.Combine(repository, root);
-
-            if (!Directory.Exists(directory))
-            {
-                continue;
-            }
-
-            var search = root == "."
-                ? SearchOption.TopDirectoryOnly
-                : SearchOption.AllDirectories;
-
-            foreach (var file in Directory.EnumerateFiles(directory, "*.md", search))
-            {
-                var relative = Path.GetRelativePath(repository, file).Replace('\\', '/');
-
-                if (!found.Contains(relative, StringComparer.OrdinalIgnoreCase))
-                {
-                    found.Add(relative);
-                }
-            }
-        }
-
-        return found.Order(StringComparer.Ordinal).ToList();
     }
 }
 

@@ -47,16 +47,27 @@ public static class TriggerEventKinds
     /// <summary>Something outside this machine asked, through <c>/api/trigger</c>.</summary>
     public const string Webhook = "webhook";
 
+    /// <summary>
+    /// A rule's own clock came round: every so often, or once a day at a time,
+    /// what a schedule does.
+    /// </summary>
+    /// <remarks>
+    /// Each clock event belongs to one rule, named in its <c>rule</c> field,
+    /// and only that rule is asked about it.
+    /// </remarks>
+    public const string Clock = "clock";
+
     /// <summary>Every kind, in the order the commands list them.</summary>
-    public static readonly IReadOnlyList<string> All = [RunFinished, DocsDrift, Webhook];
+    public static readonly IReadOnlyList<string> All = [RunFinished, DocsDrift, Webhook, Clock];
 
     /// <summary>The fields each kind carries, which are the ones a rule may ask about.</summary>
     public static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> Fields =
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
         {
             [RunFinished] = ["team", "project", "outcome", "run"],
-            [DocsDrift] = ["project", "path"],
+            [DocsDrift] = ["project", "path", "count"],
             [Webhook] = ["team", "project", "goal"],
+            [Clock] = ["rule"],
         };
 
     /// <summary>Whether a kind is one the spine knows.</summary>

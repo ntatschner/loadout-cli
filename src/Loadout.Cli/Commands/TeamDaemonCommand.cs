@@ -1567,6 +1567,11 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             new DaemonTriggerActions(_commands, _journal, _teams, _library, _workspace),
             _time);
         var finished = new Loadout.Core.Triggers.RunFinishedSource(state, _journal);
+        var rules = new Loadout.Core.Triggers.TriggerRules(state, yaml);
+        var drift = new Loadout.Core.Triggers.DocsDriftSource(state, _projects, _git, DocsPolicyAsync);
+        var clock = new Loadout.Core.Triggers.ClockSource(state);
+        var drifted = DateTimeOffset.MinValue;
+        var pruned = DateTimeOffset.MinValue;
 
         _spine = spine;
         output.WriteLine(
@@ -1580,20 +1585,87 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         {
             while (!ct.IsCancellationRequested)
             {
-                try
-                {
-                    foreach (var one in finished.Look())
+                await LookedAsync(
+                    "finished runs could not be read for triggers",
+                    async () =>
                     {
-                        await spine.PostAsync(one, ct).ConfigureAwait(false);
-                    }
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                        foreach (var one in finished.Look())
+                        {
+                            await spine.PostAsync(one, ct).ConfigureAwait(false);
+                        }
+                    },
+                    output).ConfigureAwait(false);
+
+                await LookedAsync(
+                    "clock rules could not be read for triggers",
+                    async () =>
+                    {
+                        var listed = await rules.ListAsync(ct).ConfigureAwait(false);
+
+                        if (listed.Failed)
+                        {
+                            return;
+                        }
+
+                        foreach (var one in clock.Look(listed.Value!.Where(each => each.Usable).Select(each => each.Rule), _time.GetUtcNow()))
+                        {
+                            await spine.PostAsync(one, ct).ConfigureAwait(false);
+                        }
+                    },
+                    output).ConfigureAwait(false);
+
+                // Daily, from the first pass, so a daemon that is restarted
+                // often still prunes.
+                if (_time.GetUtcNow() - pruned >= TimeSpan.FromDays(1))
                 {
-                    // One look that could not read is not the end of the
-                    // source: said, and tried again at the next.
-                    output.WriteLine(
-                        $"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] finished runs could not be read for "
-                        + $"triggers: {Markup.Escape(ex.Message)}");
+                    pruned = _time.GetUtcNow();
+
+                    await LookedAsync(
+                        "the trigger journal could not be pruned",
+                        async () =>
+                        {
+                            // Read each time, so a changed limit is taken
+                            // without restarting the daemon.
+                            var allowance = Loadout.Core.Triggers.TriggerJournal.Allowance(
+                                (await _configuration.LoadMachineAsync(ct).ConfigureAwait(false)).Value?.Teams.TriggerJournalMegabytes);
+                            var kept = Loadout.Core.Triggers.TriggerJournal.Kept;
+
+                            journal.Prune(pruned, kept, "kept for 90 days", allowance);
+
+                            // Over with nothing left to prune: kept writing, and
+                            // said, rather than losing records the ledger needs.
+                            if (journal.OverAllowance(pruned, allowance) is { } over)
+                            {
+                                journal.Append(new Loadout.Core.Triggers.TriggerEntry(
+                                    pruned, Loadout.Core.Triggers.TriggerEntryKinds.OverAllowance, Reason: over));
+                                output.WriteLine($"[yellow]{Markup.Escape(over)}[/]");
+                            }
+                        },
+                        output).ConfigureAwait(false);
+
+                    await LookedAsync(
+                        "stale trigger events could not be aged out",
+                        () => spine.AgeOutAsync(ct),
+                        output).ConfigureAwait(false);
+                }
+
+                if (_time.GetUtcNow() - drifted >= DocsDriftEvery)
+                {
+                    drifted = _time.GetUtcNow();
+
+                    await LookedAsync(
+                        "documentation could not be audited for triggers",
+                        async () =>
+                        {
+                            if (await DocsWatchedAsync(rules, ct).ConfigureAwait(false) is { } watched)
+                            {
+                                foreach (var one in await drift.LookAsync(watched, drifted, ct).ConfigureAwait(false))
+                                {
+                                    await spine.PostAsync(one, ct).ConfigureAwait(false);
+                                }
+                            }
+                        },
+                        output).ConfigureAwait(false);
                 }
 
                 await Task.Delay(TriggerEvery, _time, ct).ConfigureAwait(false);
@@ -1609,6 +1681,91 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             await running.ConfigureAwait(false);
             await answering.ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// Runs one look of a trigger source, and says so when it fails rather
+    /// than letting the failure end the loop.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Everything but a stop is caught here, which is not how the rest of the
+    /// daemon catches, and the reason is what an uncaught one did. A look that
+    /// threw something no catch named ended the whole trigger loop: finished
+    /// runs stopped being heard as well as the source that threw, nothing said
+    /// so, and the exception surfaced only when the daemon was stopped. A
+    /// resident loop nobody is watching has to outlive one bad look; the line
+    /// it writes is where the cause gets found.
+    /// </para>
+    /// </remarks>
+    private async Task LookedAsync(string failed, Func<Task> look, CommandOutput output)
+    {
+        try
+        {
+            await look().ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            output.WriteLine(
+                $"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] {failed}: "
+                + $"{Markup.Escape(ex.GetType().Name)}: {Markup.Escape(ex.Message)}");
+        }
+    }
+
+    /// <summary>How often documentation is audited for drift; a test shortens it.</summary>
+    /// <remarks>
+    /// Less often than finished runs are looked for, because each look asks
+    /// git where every watched checkout is, and documentation drifts over
+    /// commits, not minutes.
+    /// </remarks>
+    internal TimeSpan DocsDriftEvery { get; init; } = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// Which projects a docs-drift rule waits on, so nothing is audited that
+    /// no rule would act on.
+    /// </summary>
+    private static async Task<Func<string, bool>?> DocsWatchedAsync(
+        Loadout.Core.Triggers.TriggerRules rules,
+        CancellationToken ct)
+    {
+        var listed = await rules.ListAsync(ct).ConfigureAwait(false);
+
+        var waiting = listed.Succeeded
+            ? listed.Value!
+                .Where(one => one.Usable && one.Rule.Enabled
+                    && string.Equals(one.Rule.On, Loadout.Core.Triggers.TriggerEventKinds.DocsDrift, StringComparison.OrdinalIgnoreCase))
+                .Select(one => one.Rule)
+                .ToList()
+            : [];
+
+        // Null when no rule waits for drift at all, so nothing is listed or asked of git.
+        if (waiting.Count == 0)
+        {
+            return null;
+        }
+
+        return slug => waiting.Any(rule =>
+            rule.Projects.Count == 0 || rule.Projects.Contains(slug, StringComparer.OrdinalIgnoreCase));
+    }
+
+    /// <summary>A project's documentation policy, read where 'docs audit' reads it.</summary>
+    private async Task<Loadout.Models.Instructions.DocsPolicy?> DocsPolicyAsync(string slug, CancellationToken ct)
+    {
+        if (_yaml is null || !_workspace.IsAvailable())
+        {
+            return null;
+        }
+
+        var path = Path.Combine(_workspace.LocalPath, "projects", slug, "docs.yaml");
+
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        var loaded = await _yaml.LoadAsync(path, () => new Loadout.Models.Instructions.DocsPolicy(), ct).ConfigureAwait(false);
+
+        return loaded.Succeeded ? loaded.Value : null;
     }
 
     /// <summary>How often the trigger inbox is looked at; a person is waiting on each answer.</summary>
@@ -1634,7 +1791,21 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
                 {
                     foreach (var asking in inbox.Waiting())
                     {
-                        var answer = await spine.ApplyAsync(asking, ct).ConfigureAwait(false);
+                        Loadout.Core.Triggers.TriggerAnswer answer;
+
+                        try
+                        {
+                            answer = await spine.ApplyAsync(asking, ct).ConfigureAwait(false);
+                        }
+                        catch (Exception ex) when (ex is not OperationCanceledException)
+                        {
+                            // Answered rather than left waiting: left, it would be
+                            // tried again every glance, and the person who asked
+                            // would see a daemon that never answers instead of
+                            // why it could not.
+                            answer = new Loadout.Core.Triggers.TriggerAnswer(
+                                asking.Id, false, $"The daemon could not make the change: {ex.GetType().Name}: {ex.Message}");
+                        }
 
                         inbox.Answer(answer);
                         output.WriteLine(

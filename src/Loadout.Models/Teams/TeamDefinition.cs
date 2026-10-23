@@ -122,7 +122,10 @@ public sealed class TeamDefinition
     /// <summary>How a run behaves.</summary>
     public TeamRules Rules { get; set; } = new();
 
-    /// <summary>What may start a run without a person typing the command.</summary>
+    /// <summary>
+    /// Trigger rules the team suggests for itself, which do nothing until
+    /// somebody accepts one with <c>loadout trigger accept</c>.
+    /// </summary>
     public List<TeamTrigger> Triggers { get; set; } = [];
 
     /// <summary>
@@ -250,15 +253,48 @@ public sealed class TeamGates
     public List<string> OutwardAllowedWhenAutonomous { get; set; } = [];
 }
 
-/// <summary>What may start a run on its own.</summary>
+/// <summary>
+/// A trigger rule a team suggests for itself: what to wait for and what to ask
+/// it, offered to whoever uses the team and acting only once accepted.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A suggestion, never a rule. A team file travels between machines and
+/// repositories, and one that could start runs by being read would let
+/// whoever wrote it spend somebody else's money. Accepting it makes a rule on
+/// this machine, with a spend cap the person accepting it settles, and the
+/// rule stays as accepted when the team's file changes: a changed suggestion
+/// is shown, and taking it is a deliberate edit.
+/// </para>
+/// <para>
+/// Replaces a placeholder of the same name that carried a cron expression, an
+/// event and roles to bypass, which nothing ever read. A team file that still
+/// has those keys loads as before, without them.
+/// </para>
+/// </remarks>
 public sealed class TeamTrigger
 {
-    /// <summary>A cron expression, or empty.</summary>
-    public string Schedule { get; set; } = string.Empty;
+    /// <summary>Its name within the team, which the accepted rule is named after.</summary>
+    public string Name { get; set; } = string.Empty;
 
-    /// <summary>An event name such as <c>task.blocked</c>, or empty.</summary>
-    public string Event { get; set; } = string.Empty;
+    /// <summary>The kind of event it waits for, such as <c>run-finished</c>.</summary>
+    public string On { get; set; } = string.Empty;
 
-    /// <summary>Roles to run with permission checks off, honoured only where the machine allows bypass on triggered runs.</summary>
-    public List<string> Bypass { get; set; } = [];
+    /// <summary>Fields of the event that must hold a given value.</summary>
+    public Dictionary<string, string> Where { get; set; } = [];
+
+    /// <summary>What to ask the team for. Fields of the event can be named as <c>{field}</c>.</summary>
+    public string Goal { get; set; } = string.Empty;
+
+    /// <summary>supervised or autonomous.</summary>
+    public string Autonomy { get; set; } = "autonomous";
+
+    /// <summary>What it suggests each run may spend, or null to leave it to the person accepting.</summary>
+    public decimal? BudgetUsd { get; set; }
+
+    /// <summary>What it suggests its runs may spend in the window, or null to leave it to the person accepting.</summary>
+    public decimal? CapUsd { get; set; }
+
+    /// <summary>How long a subject must go quiet before acting, such as 10m, or empty for not at all.</summary>
+    public string Debounce { get; set; } = string.Empty;
 }

@@ -140,6 +140,43 @@ public sealed class TriggerRules : ITriggerRules
         return !string.Equals(action.Kind, TriggerActionKinds.Builtin, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>What is wrong with a rule's clock, or with a clock on a rule that has none to keep.</summary>
+    /// <remarks>
+    /// A clock rule names one project for a team, because a clock happens
+    /// nowhere in particular and a team run has to happen somewhere: the
+    /// project is the schedule's, not something an event could supply.
+    /// </remarks>
+    private static string? ClockProblem(TriggerRule rule)
+    {
+        var clock = string.Equals(rule.On, TriggerEventKinds.Clock, StringComparison.OrdinalIgnoreCase);
+
+        if (!clock)
+        {
+            return rule.Every is not null || rule.At is not null
+                ? $"Only a clock rule comes round every so often or at a time; a {rule.On} rule waits for its event."
+                : null;
+        }
+
+        if ((rule.Every is null) == (rule.At is null))
+        {
+            return "A clock rule comes round either every so often (--every) or once a day at a time (--at), "
+                + "and needs exactly one of them.";
+        }
+
+        if (rule.Every is { } every && every < TimeSpan.FromMinutes(5))
+        {
+            return "A clock rule comes round every five minutes at the most.";
+        }
+
+        if (string.Equals(rule.Action.Kind, TriggerActionKinds.Team, StringComparison.OrdinalIgnoreCase)
+            && rule.Projects.Count != 1)
+        {
+            return "A clock rule that starts a team names the one project it runs on, with --project.";
+        }
+
+        return null;
+    }
+
     /// <summary>What is wrong with a rule, or null when nothing is.</summary>
     /// <remarks>
     /// One check for a rule typed at the command line and a rule edited into
@@ -213,6 +250,11 @@ public sealed class TriggerRules : ITriggerRules
         if (rule.Debounce < TimeSpan.Zero || rule.Debounce > TimeSpan.FromHours(24))
         {
             return "A rule waits between nothing and a day for its subject to go quiet.";
+        }
+
+        if (ClockProblem(rule) is { } clock)
+        {
+            return clock;
         }
 
         if (!CostsMoney(action))
