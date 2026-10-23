@@ -148,7 +148,8 @@
 | `loadout trigger stale\|release` | Events a paused rule held for longer than a day, kept for you to release rather than acted on unasked. Released ones go through the rule's caps as usual; ones nobody releases are dropped after a week, and the journal says so |
 | `loadout trigger journal\|test\|prune` | What the trigger rules saw and decided, and what a rule would have done with the events already recorded, starting nothing. Prune deletes days older than you say, never the last 31 |
 | `loadout trigger allow\|disallow\|allowed` | Who counts as trusted beyond a repository's collaborators: a bot, or somebody you work with, kept by GitHub id and held everywhere or on one repository or owner. Taking somebody off withdraws at once anything waiting on their trust |
-| `loadout trigger sources\|token` | How each trigger source is doing: which token GitHub is read with, quota left, and repositories read less often to save it. `token set` keeps a read-only token for polling alone; without one, polling uses the token gh is signed in with |
+| `loadout trigger sources` | How each trigger source is doing: which token GitHub is read with, quota left, and repositories read less often to save it |
+| `loadout trigger token set\|clear` | Keep a read-only GitHub token for trigger polling alone, or forget it. Without one, polling uses the token gh is signed in with |
 | `loadout trigger suggested\|accept` | Trigger rules a team suggests for itself, and taking one as a rule of your own with a spend cap. A suggestion the team changes later is shown, never taken |
 | `loadout daemon autostart enable\|disable\|show` | Start the daemon when you log in, per user |
 | `loadout team gate` | Answer something a run stopped to ask |
