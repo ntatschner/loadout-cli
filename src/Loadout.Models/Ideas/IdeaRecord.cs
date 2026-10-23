@@ -38,6 +38,13 @@ public sealed class IdeaRecord
     /// </summary>
     public List<IdeaNote> Notes { get; set; } = [];
 
+    /// <summary>
+    /// The highest note number ever given, kept so a removed note's number is
+    /// never given again: notes are removed by number, and a number reused
+    /// while another screen still shows the old note would remove the wrong one.
+    /// </summary>
+    public int NotesNumbered { get; set; }
+
     /// <summary>Every round of questions, oldest first.</summary>
     public List<IdeaRound> Rounds { get; set; } = [];
 

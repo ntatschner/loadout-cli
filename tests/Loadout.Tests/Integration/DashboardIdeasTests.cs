@@ -67,6 +67,9 @@ public sealed class DashboardIdeasTests : IAsyncLifetime, IDisposable
 
         public int Code { get; init; }
 
+        /// <summary>What the command does to the workspace before it returns, as the real one would.</summary>
+        public Func<Task>? Doing { get; init; }
+
         public IReadOnlyList<CatalogueEntry> Commands => [];
 
         public void Release() => _go.TrySetResult();
@@ -81,6 +84,11 @@ public sealed class DashboardIdeasTests : IAsyncLifetime, IDisposable
             if (Hold)
             {
                 await _go.Task;
+            }
+
+            if (Doing is not null)
+            {
+                await Doing();
             }
 
             return Code;
@@ -117,7 +125,9 @@ public sealed class DashboardIdeasTests : IAsyncLifetime, IDisposable
         Request: "- make it smaller",
         To: "homelab",
         NewProject: "Lab watch",
-        Only: [1, 3]);
+        Only: [1, 3],
+        Refine: true,
+        Note: "N2");
 
     [Fact]
     public void Each_verb_types_its_command_with_every_field_it_reads()
@@ -125,6 +135,8 @@ public sealed class DashboardIdeasTests : IAsyncLifetime, IDisposable
         var expected = new Dictionary<string, (string Command, string[] Arguments)>
         {
             ["add"] = ("idea add", ["--text=- a bullet from somewhere", "--project", "website"]),
+            ["addto"] = ("idea add", ["--to", "status-page", "--text=- a bullet from somewhere", "--refine", "--project", "website"]),
+            ["note-remove"] = ("idea note remove", ["status-page", "N2", "--project", "website"]),
             ["refine"] = ("idea refine", ["status-page", "--project", "website"]),
             ["answer"] = ("idea answer", ["status-page", "Q1", "--answer=- only on the LAN", "--project", "website"]),
             ["choose"] = ("idea choose", ["status-page", "L1", "L1b", "--project", "website"]),
@@ -165,6 +177,117 @@ public sealed class DashboardIdeasTests : IAsyncLifetime, IDisposable
         DashboardIdeas.Maps(Asking("move") with { To = null, ToGlobal = true }).Arguments
             .Should().Contain("--to-global");
         DashboardIdeas.Maps(Asking("move") with { To = null }).Command.Should().BeEmpty("nowhere was named");
+    }
+
+    [Fact]
+    public void Adding_to_an_idea_without_refine_names_no_refine_and_starts_no_round()
+    {
+        var (command, line) = DashboardIdeas.Maps(Asking("addto") with { Refine = false });
+
+        command.Should().Be("idea add");
+        line.Should().Equal("--to", "status-page", "--text=- a bullet from somewhere", "--project", "website", "--non-interactive");
+    }
+
+    [Fact]
+    public async Task Refine_and_note_from_the_body_reach_whatever_types_the_command()
+    {
+        IdeaAction? asked = null;
+
+        _server.Ideate = (action, _) =>
+        {
+            asked = action;
+
+            return Task.FromResult(OperationResult.Ok());
+        };
+
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/ideas?token=" + _server.Token),
+            new StringContent(
+                """{"verb":"addto","id":"x","project":"website","text":"t","refine":true,"note":"N2"}""",
+                System.Text.Encoding.UTF8,
+                "application/json"));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.Accepted);
+        asked.Should().NotBeNull();
+        asked!.Refine.Should().BeTrue();
+        asked.Note.Should().Be("N2");
+    }
+
+    [Fact]
+    public async Task A_refine_that_fails_after_the_note_was_saved_says_the_note_was_added()
+    {
+        var captured = await _space.Ideas.CaptureAsync(null, "A status page", "me");
+        var place = new Loadout.Core.Ideas.IdeaPlace(null, captured.Value!.Id);
+        var commands = new Typed
+        {
+            // The command saves the note, then its round fails with the same
+            // code a refused add gives.
+            Code = (int)Loadout.Models.ExitCode.InvalidArguments,
+            Doing = () => _space.Ideas.AddToAsync(place, "more", "me"),
+        };
+
+        var said = await Ideas(commands).DoAsync(
+            new IdeaAction("addto", Id: place.Id, Text: "more", Refine: true), CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(10));
+
+        said.Failed.Should().BeTrue();
+        said.Error.Should().Contain("was added").And.Contain("do not add it again");
+    }
+
+    [Fact]
+    public async Task An_add_with_refine_on_an_idea_with_open_questions_is_a_success_that_says_why_no_round_started()
+    {
+        var captured = await _space.Ideas.CaptureAsync(null, "A status page", "me");
+        var place = new Loadout.Core.Ideas.IdeaPlace(null, captured.Value!.Id);
+        (await _space.Ideas.RecordReplyAsync(place, new Loadout.Core.Ideas.IdeaReply
+        {
+            Contract = Loadout.Models.Ideas.IdeaSchema.Version,
+            Questions = [new Loadout.Core.Ideas.IdeaReply.ReplyQuestion { Question = "Public?" }, new Loadout.Core.Ideas.IdeaReply.ReplyQuestion { Question = "Alerts?" }],
+        })).Succeeded.Should().BeTrue();
+
+        // The command as it now is with questions open: the note saved, no
+        // round, and success.
+        var commands = new Typed { Doing = () => _space.Ideas.AddToAsync(place, "more", "me") };
+        var ideas = Ideas(commands);
+
+        var said = await ideas.DoAsync(
+            new IdeaAction("addto", Id: place.Id, Text: "more", Refine: true), CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(10));
+
+        said.Succeeded.Should().BeTrue(said.Error);
+        said.Should().BeOfType<OperationResult<string>>().Which.Value.Should()
+            .Contain($"Added to {place.Id}")
+            .And.Contain("2 questions still unanswered")
+            .And.Contain("no round was started");
+        Busy(await ideas.ReadAsync(CancellationToken.None)).Should().BeEmpty("no round is going");
+    }
+
+    [Fact]
+    public async Task Words_for_the_page_from_a_successful_step_reach_it_as_said()
+    {
+        _server.Ideate = (_, _) => Task.FromResult<OperationResult>(OperationResult<string>.Ok("2 questions still unanswered"));
+
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/ideas?token=" + _server.Token),
+            new StringContent("""{"verb":"addto","id":"x","text":"t","refine":true}""", System.Text.Encoding.UTF8, "application/json"));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.Accepted);
+        JsonDocument.Parse(await answer.Content.ReadAsStringAsync()).RootElement
+            .GetProperty("said").GetString().Should().Be("2 questions still unanswered");
+    }
+
+    [Fact]
+    public async Task An_add_with_refine_that_saved_nothing_says_nothing_was_added()
+    {
+        var captured = await _space.Ideas.CaptureAsync(null, "A status page", "me");
+        var commands = new Typed { Code = (int)Loadout.Models.ExitCode.InvalidArguments };
+
+        var said = await Ideas(commands).DoAsync(
+            new IdeaAction("addto", Id: captured.Value!.Id, Text: "more", Refine: true), CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(10));
+
+        said.Failed.Should().BeTrue();
+        said.Error.Should().StartWith("Nothing was added");
     }
 
     [Fact]
@@ -339,10 +462,39 @@ public sealed class DashboardIdeasTests : IAsyncLifetime, IDisposable
                 $"the page sends '{field}', so something has to read it");
         }
 
-        var verbs = Regex.Matches(ideas, @"verb:\s*""(\w+)""").Select(m => m.Groups[1].Value).Distinct().ToList();
+        var verbs = Regex.Matches(ideas, @"verb:\s*""([\w-]+)""").Select(m => m.Groups[1].Value).Distinct().ToList();
 
         verbs.Should().OnlyContain(v => DashboardIdeas.Verbs.Contains(v), "the page sends no verb the server has no command for");
         DashboardIdeas.Verbs.Should().OnlyContain(v => verbs.Contains(v), "every verb the server maps is one the page offers");
+    }
+
+    [Fact]
+    public void The_page_refines_by_default_and_offers_remove_only_for_an_unread_note()
+    {
+        var page = DashboardServer.Page();
+        var from = page.IndexOf("var ideasSeen", StringComparison.Ordinal);
+        var to = page.IndexOf("function drawSettings()", from, StringComparison.Ordinal);
+
+        from.Should().BeGreaterThan(-1);
+        to.Should().BeGreaterThan(from);
+
+        var ideas = page[from..to];
+
+        // The box whose value the addto body sends as refine.
+        var box = Regex.Match(ideas, @"verb:\s*""addto""[^{}]*refine:\s*(\w+)\.checked");
+
+        box.Success.Should().BeTrue("adding to an idea sends whether to refine from a checkbox");
+        Regex.IsMatch(ideas, $@"\b{box.Groups[1].Value}\.checked\s*=\s*true\b")
+            .Should().BeTrue("'Refine now' is ticked unless somebody unticks it");
+
+        // The condition guarding the note-remove button, read back from the send.
+        var remove = ideas.IndexOf(@"verb: ""note-remove""", StringComparison.Ordinal);
+
+        remove.Should().BeGreaterThan(-1);
+
+        var guard = Regex.Matches(ideas[..remove], @"if\s*\(([^)]*)\)").Last().Groups[1].Value;
+
+        guard.Should().Contain("!note.taken", "a note a round has read cannot be taken back");
     }
 
     private static List<string> Busy(object read) =>

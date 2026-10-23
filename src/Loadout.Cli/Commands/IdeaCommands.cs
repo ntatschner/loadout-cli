@@ -85,12 +85,14 @@ public class IdeaSettings : GlobalSettings
 public sealed class IdeaAddCommand : AsyncCommand<IdeaAddCommand.Settings>
 {
     private readonly IIdeaService _ideas;
+    private readonly IIdeaRefiner _refiner;
     private readonly IProjectService _projects;
     private readonly IAnsiConsole _console;
 
-    public IdeaAddCommand(IIdeaService ideas, IProjectService projects, IAnsiConsole console)
+    public IdeaAddCommand(IIdeaService ideas, IIdeaRefiner refiner, IProjectService projects, IAnsiConsole console)
     {
         _ideas = ideas;
+        _refiner = refiner;
         _projects = projects;
         _console = console;
     }
@@ -129,6 +131,14 @@ public sealed class IdeaAddCommand : AsyncCommand<IdeaAddCommand.Settings>
         [CommandOption("--by <WHO>")]
         [Description("Whose idea it is. Defaults to this machine's user.")]
         public string? By { get; init; }
+
+        [CommandOption("--refine")]
+        [Description("With --to: start a round once the note is saved. Without this or --no-refine, you are asked at a keyboard, Yes by default, and no round starts when nobody is there to ask.")]
+        public bool Refine { get; init; }
+
+        [CommandOption("--no-refine")]
+        [Description("With --to: save the note and start no round.")]
+        public bool NoRefine { get; init; }
     }
 
     /// <inheritdoc />
@@ -158,9 +168,20 @@ public sealed class IdeaAddCommand : AsyncCommand<IdeaAddCommand.Settings>
             return output.Fail("Say what the idea is: loadout idea add \"...\"", ExitCode.InvalidArguments);
         }
 
+        if (settings.Refine && settings.NoRefine)
+        {
+            return output.Fail("--refine and --no-refine say opposite things. Give one.", ExitCode.InvalidArguments);
+        }
+
         if (settings.To is { Length: > 0 })
         {
             return await AddToAsync(output, settings, text, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (settings.Refine || settings.NoRefine)
+        {
+            return output.Fail(
+                "--refine and --no-refine go with --to, for adding to an idea already there.", ExitCode.InvalidArguments);
         }
 
         // Outside a repository an idea goes on the workspace-wide list rather
@@ -271,18 +292,160 @@ public sealed class IdeaAddCommand : AsyncCommand<IdeaAddCommand.Settings>
         }
 
         var record = added.Value!;
+        var note = record.Notes[^1].Id;
+        var next = $"loadout idea refine {place.Id}";
 
-        if (output.IsJson)
+        output.WriteLine($"[green]+[/] Added {Markup.Escape(note)} to {id}.");
+
+        // Asked only of someone at a keyboard. A script or a page that wants
+        // a round says --refine, so none ever starts that was not asked for.
+        // Nor is it asked while questions are open: the round would be refused
+        // until they are answered, and the reminder below says so.
+        var refine = settings.Refine
+            || (!settings.NoRefine
+                && settings.AllowsPrompting
+                && IdeaWork.StageOf(record) is IdeaStage.Captured or IdeaStage.Ready
+                && AskToRefine(_console));
+
+        if (!refine)
         {
-            output.WriteJson(IdeaView.Of(place, record));
+            var reminder = IdeaWork.UnansweredReminder(record);
+
+            if (output.IsJson)
+            {
+                output.WriteJson(AddedJson(place, record, note, new { requested = false, next }, reminder));
+
+                return CommandOutput.Success();
+            }
+
+            output.WriteLine($"[dim]  No round was started. The next one reads it: {Markup.Escape(next)}[/]");
+            Remind(output, place, reminder);
 
             return CommandOutput.Success();
         }
 
-        output.WriteLine($"[green]+[/] Added {Markup.Escape(record.Notes[^1].Id)} to {id}.");
-        output.WriteLine($"[dim]  The next round reads it: loadout idea refine {id}[/]");
+        // Asked for, but a round on an idea with open questions is refused
+        // until they are answered. The note is in, which is what was asked
+        // for first, so this is not a failure: the round waits, and says so.
+        if (IdeaWork.UnansweredReminder(record) is { } waiting)
+        {
+            var answer = $"loadout idea answer {place.Id} <question> --answer=<text>";
+
+            if (output.IsJson)
+            {
+                output.WriteJson(AddedJson(
+                    place, record, note, new { requested = true, waiting = "questions", next = answer }, waiting));
+
+                return CommandOutput.Success();
+            }
+
+            output.WriteLine(
+                $"[yellow]![/] {Markup.Escape(waiting)}, so no round was started: it waits until they are answered.");
+            output.WriteLine($"[dim]  See them with: loadout idea show {id}[/]");
+            output.WriteLine($"[dim]  Answer each with: {Markup.Escape(answer)}[/]");
+
+            return CommandOutput.Success();
+        }
+
+        output.Meanwhile(
+            $"[dim]Asking an agent about {id}. A round usually takes a minute or two.[/]");
+
+        var refined = await _refiner.RefineAsync(
+            new RefineRequest(
+                place,
+                settings.Agent,
+                null,
+                DryRun: false,
+                Watching: tool =>
+                {
+                    output.Meanwhile($"[dim]  {Markup.Escape(tool)}[/]");
+
+                    return Task.CompletedTask;
+                }),
+            ct).ConfigureAwait(false);
+
+        if (refined.Failed)
+        {
+            // The note is kept whatever the round did, and said to be, so
+            // nobody adds the same thing again thinking it was lost.
+            var saved = await _ideas.ReadAsync(place, ct).ConfigureAwait(false);
+            var reminder = IdeaWork.UnansweredReminder(saved.Succeeded ? saved.Value! : record);
+            var error = Core.Security.SecretRedactor.Redact(refined.Error ?? "The round failed.");
+
+            if (output.IsJson)
+            {
+                output.WriteJson(AddedJson(
+                    place,
+                    saved.Succeeded ? saved.Value! : record,
+                    note,
+                    new { requested = true, succeeded = false, error, next },
+                    reminder));
+            }
+            else
+            {
+                Console.Error.WriteLine(
+                    $"{note} was saved on {place.Id}, but the refine failed: {error} Try the round again with: {next}");
+                Remind(output, place, reminder);
+            }
+
+            return (int)refined.ExitCode;
+        }
+
+        var outcome = refined.Value!;
+        var after = IdeaWork.UnansweredReminder(outcome.Record);
+
+        if (output.IsJson)
+        {
+            output.WriteJson(AddedJson(place, outcome.Record, note, new { requested = true, succeeded = true }, after));
+
+            return CommandOutput.Success();
+        }
+
+        foreach (var warning in outcome.Warnings)
+        {
+            output.WriteLine($"[yellow]![/] {Markup.Escape(warning)}");
+        }
+
+        IdeaView.Write(output, place, outcome.Record);
+        Remind(output, place, after);
 
         return CommandOutput.Success();
+    }
+
+    /// <summary>
+    /// The idea as <c>idea show --json</c> gives it, with what was added, what
+    /// became of the round, and the reminder, so a caller reads all three
+    /// from one document.
+    /// </summary>
+    private static System.Text.Json.Nodes.JsonObject AddedJson(
+        IdeaPlace place,
+        IdeaRecord record,
+        string note,
+        object refine,
+        string? reminder)
+    {
+        var json = System.Text.Json.JsonSerializer.SerializeToNode(IdeaView.Of(place, record), CommandOutput.JsonOptions)!.AsObject();
+
+        json["added"] = note;
+        json["refine"] = System.Text.Json.JsonSerializer.SerializeToNode(refine, CommandOutput.JsonOptions);
+        json["unanswered"] = IdeaWork.Unanswered(record).Count;
+        json["reminder"] = reminder;
+
+        return json;
+    }
+
+    /// <summary>
+    /// Asks whether to refine now, with Yes as the answer Enter gives: someone
+    /// adding to an idea at a keyboard usually wants the plan to take it in.
+    /// </summary>
+    internal static bool AskToRefine(IAnsiConsole console) => console.Confirm("Refine now?", defaultValue: true);
+
+    private static void Remind(CommandOutput output, IdeaPlace place, string? reminder)
+    {
+        if (reminder is not null)
+        {
+            output.WriteLine($"[yellow]![/] {Markup.Escape(reminder)}. See them with: loadout idea show {Markup.Escape(place.Id)}");
+        }
     }
 }
 
@@ -1181,6 +1344,83 @@ public sealed class IdeaDismissCommand : AsyncCommand<IdeaSettings>
         }
 
         output.WriteLine($"[green]+[/] Cleared the failed round on {Markup.Escape(place.Value!.Id)}.");
+
+        return CommandOutput.Success();
+    }
+}
+
+/// <summary>Takes off a note no round has read yet.</summary>
+[Description("Take a note off an idea, by its number as 'idea show' lists it, while no round has read it.")]
+[CommandMeta(CommandCategory.Workspace,
+    Intent = "idea note remove delete take back undo addition added",
+    Mutates = true,
+    Example = "sync 2")]
+public sealed class IdeaNoteRemoveCommand : AsyncCommand<IdeaNoteRemoveCommand.Settings>
+{
+    private readonly IIdeaService _ideas;
+    private readonly IProjectService _projects;
+    private readonly IAnsiConsole _console;
+
+    public IdeaNoteRemoveCommand(IIdeaService ideas, IProjectService projects, IAnsiConsole console)
+    {
+        _ideas = ideas;
+        _projects = projects;
+        _console = console;
+    }
+
+    public sealed class Settings : IdeaSettings
+    {
+        [CommandArgument(1, "<note>")]
+        [Description("The note's number, as 'idea show' lists it: 2 or N2.")]
+        public string Note { get; init; } = string.Empty;
+    }
+
+    /// <inheritdoc />
+    public override async Task<int> ExecuteAsync(
+        CommandContext context,
+        Settings settings,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var output = new CommandOutput(_console, settings);
+        var place = await settings.PlaceAsync(_ideas, _projects, cancellationToken).ConfigureAwait(false);
+
+        if (place.Failed)
+        {
+            return output.Fail(place);
+        }
+
+        var id = Markup.Escape(place.Value!.Id);
+
+        var removed = settings.DryRun
+            ? await _ideas.PreviewRemoveNoteAsync(place.Value!, settings.Note, cancellationToken).ConfigureAwait(false)
+            : await _ideas.RemoveNoteAsync(place.Value!, settings.Note, cancellationToken).ConfigureAwait(false);
+
+        if (removed.Failed)
+        {
+            return output.Fail(removed);
+        }
+
+        var note = removed.Value!;
+
+        if (output.IsJson)
+        {
+            output.WriteJson(new
+            {
+                id = place.Value!.Id,
+                project = place.Value!.Project,
+                removed = note.Id,
+                text = note.Text,
+                dryRun = settings.DryRun,
+            });
+
+            return CommandOutput.Success();
+        }
+
+        output.WriteLine(settings.DryRun
+            ? $"Would remove {Markup.Escape(note.Id)} from {id}. Nothing was changed."
+            : $"[green]+[/] Removed {Markup.Escape(note.Id)} from {id}. Its number is not given to another note.");
 
         return CommandOutput.Success();
     }
