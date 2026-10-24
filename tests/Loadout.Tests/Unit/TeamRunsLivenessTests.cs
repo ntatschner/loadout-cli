@@ -90,9 +90,42 @@ public sealed class TeamRunsLivenessTests : IDisposable
 
         run.GetProperty("liveness").GetString().Should().Be("live");
     }
+
+    [Fact]
+    public async Task Unrecorded_run_whose_journal_was_written_lately_shows_running()
+    {
+        // Its events are weeks old, but the file was written minutes ago: a
+        // lead's turn writes lines last-seen does not count.
+        var directory = _fixture.Write(Run, LivenessFixture.Started, LivenessFixture.Launched);
+        File.SetLastWriteTimeUtc(Path.Combine(directory, "journal.jsonl"), DateTime.UtcNow.AddMinutes(-5));
+
+        var ownership = new FakeRunOwnership();
+
+        var said = await _fixture.RunsAsync(ownership);
+
+        said.Should().Contain("running");
+        said.Should().NotContain("not responding");
+        said.Should().NotContain("team runs close");
+
+        var run = (await _fixture.RunsJsonAsync(ownership)).GetProperty("runs")[0];
+
+        run.GetProperty("liveness").GetString().Should().Be("live");
+    }
+
+    [Fact]
+    public async Task Finished_runs_are_not_asked_about_their_owner()
+    {
+        _fixture.Write(Run, LivenessFixture.Started, LivenessFixture.Launched, LivenessFixture.Finished);
+        var ownership = new FakeRunOwnership();
+
+        await _fixture.RunsAsync(ownership);
+
+        ownership.Asked.Should().BeEmpty("asking takes the lock, and a finished run is finished whatever it says");
+    }
 }
 
 /// <summary>Where 'team status' says a run's driver has gone.</summary>
+[Collection(ConsoleOutCollection.Name)]
 public sealed class TeamStatusLivenessTests : IDisposable
 {
     private const string Run = "20260916-1200-bbbb";
@@ -115,6 +148,22 @@ public sealed class TeamStatusLivenessTests : IDisposable
         console.Output.Should().Contain("not responding (pid 9876, last seen");
         console.Output.Should().Contain($"End it with: loadout team runs close {Run}");
         console.Output.Should().NotContain("since it last said anything", "it is not running in any sense that helps");
+    }
+
+    [Fact]
+    public async Task Not_responding_json_carries_liveness_and_owner()
+    {
+        var directory = _fixture.Write(Run, LivenessFixture.Started, LivenessFixture.Launched);
+        var ownership = new FakeRunOwnership().Script(directory, new OwnerReading.Free(LivenessFixture.Dead));
+
+        var command = new TeamStatusCommand(_fixture.Journal, new TestConsole(), TimeProvider.System, new FakeGit(_fixture.Root), ownership);
+        var json = await LivenessFixture.JsonOfAsync(
+            () => command.ExecuteAsync(null!, new TeamStatusCommand.Settings { Run = Run, Json = true }, CancellationToken.None));
+
+        json.GetProperty("liveness").GetString().Should().Be("not-responding");
+        json.GetProperty("running").GetBoolean().Should().BeTrue("running keeps its meaning");
+        json.GetProperty("owner").GetProperty("pid").GetInt32().Should().Be(9876);
+        json.GetProperty("owner").GetProperty("machine").GetString().Should().Be("BUILDBOX");
     }
 }
 
@@ -143,6 +192,23 @@ public sealed class TeamHaltTests : IDisposable
         console.Output.Should().Contain($"End it with: loadout team runs close {Run}");
         console.Output.Should().NotContain("ends when the round it is in comes back");
     }
+
+    [Fact]
+    public async Task Hold_on_quiet_unrecorded_run_says_nothing_will_read_it()
+    {
+        var directory = _fixture.Write(Run, LivenessFixture.Started, LivenessFixture.Launched);
+        File.SetLastWriteTimeUtc(Path.Combine(directory, "journal.jsonl"), DateTime.UtcNow.AddHours(-3));
+        var console = new TestConsole().Width(400);
+
+        var command = new TeamHaltCommand(_fixture.Journal, console, new FakeRunOwnership(), TimeProvider.System);
+        var exit = await command.ExecuteAsync(null!, new TeamHaltCommand.Settings { Run = Run, Pause = true }, CancellationToken.None);
+
+        exit.Should().Be(0);
+        RunControl.Paused(directory).Should().BeTrue("the hold is still written; a reopened run clears it");
+        RunControl.Stopped(directory).Should().BeFalse("a hold is not a stop");
+        console.Output.Should().Contain("No process is driving this run, so nothing will read the hold.");
+        console.Output.Should().Contain($"End it with: loadout team runs close {Run}");
+    }
 }
 
 /// <summary>Runs alone, because its tests swap <see cref="Console.Out"/>.</summary>
@@ -160,6 +226,9 @@ internal sealed class LivenessFixture : IDisposable
 
     public const string Launched =
         """{"at":"2026-09-16T12:00:02+00:00","run":"r","node":"implementer/1","kind":"node.launched","data":{"role":"role.implementer","worktree":"teams/r/implementer-1"}}""";
+
+    public const string Finished =
+        """{"at":"2026-09-16T12:05:00+00:00","run":"r","node":null,"kind":"run.finished","data":{"ended":"done","cost":0.2,"rounds":1}}""";
 
     public static readonly RunOwner Dead =
         new(9876, new DateTimeOffset(2026, 9, 16, 11, 59, 0, TimeSpan.Zero), "BUILDBOX", new DateTimeOffset(2026, 9, 16, 12, 0, 0, TimeSpan.Zero));
@@ -215,7 +284,11 @@ internal sealed class LivenessFixture : IDisposable
     }
 
     /// <summary>What 'team runs --json' writes.</summary>
-    public async Task<JsonElement> RunsJsonAsync(IRunOwnership ownership)
+    public Task<JsonElement> RunsJsonAsync(IRunOwnership ownership) =>
+        JsonOfAsync(() => Runs(new TestConsole(), ownership).ExecuteAsync(null!, new TeamRunsCommand.Settings { Json = true }, CancellationToken.None));
+
+    /// <summary>What a command writes to <see cref="Console.Out"/>, as JSON.</summary>
+    public static async Task<JsonElement> JsonOfAsync(Func<Task<int>> execute)
     {
         var was = Console.Out;
         var captured = new StringWriter();
@@ -224,8 +297,7 @@ internal sealed class LivenessFixture : IDisposable
 
         try
         {
-            (await Runs(new TestConsole(), ownership).ExecuteAsync(null!,new TeamRunsCommand.Settings { Json = true }, CancellationToken.None))
-                .Should().Be(0);
+            (await execute()).Should().Be(0);
         }
         finally
         {
