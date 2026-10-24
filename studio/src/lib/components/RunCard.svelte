@@ -14,9 +14,11 @@
     gate?: GateShown | null;
     reasons?: { text: string; clears: string }[];
     actions?: Act[];
+    /** What is known of the process driving it, when that is worth saying (livenessOf). */
+    badge?: string | null;
   }
 
-  let { run, href = undefined, gate = null, reasons = [], actions = [] }: Props = $props();
+  let { run, href = undefined, gate = null, reasons = [], actions = [], badge = null }: Props = $props();
 
   const family = $derived(signalOf(run.word).family);
   const facts = $derived(
@@ -30,6 +32,7 @@
   <div class="top">
     {#if href}<a class="goal" {href}>{run.goal}</a>{:else}<span class="goal">{run.goal}</span>{/if}
     <Signal word={run.word} />
+    {#if badge}<span class="ls-liveness" role="status">{badge}</span>{/if}
   </div>
   <span class="facts">{facts}</span>
   {#if run.spent !== undefined}

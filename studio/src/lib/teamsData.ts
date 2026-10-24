@@ -29,9 +29,33 @@ export function runWord(run: Run): string {
       return 'needs a decision';
     case 'stopped':
       return 'stopped';
+    case 'abandoned':
+      return 'abandoned';
     default:
       return run.ended ? 'stopped' : 'idle';
   }
+}
+
+/**
+ * What the daemon can say of the process driving a run, as a badge, or null
+ * when there is nothing to say. Liveness absent or unknown reads as live.
+ */
+export function livenessOf(run: Run): string | null {
+  switch (run.liveness) {
+    case 'not-responding':
+      return run.owner ? `not responding · pid ${run.owner.pid}` : 'not responding';
+    case 'possibly-not-responding':
+      return 'possibly not responding';
+    case 'unreadable':
+      return 'owner unreadable';
+    default:
+      return null;
+  }
+}
+
+/** Whether nothing is driving a run that still reads as running, so End run is all there is to do to it. */
+export function unowned(run: Run): boolean {
+  return run.running && (run.liveness === 'not-responding' || run.liveness === 'possibly-not-responding');
 }
 
 export function duration(seconds: number): string {

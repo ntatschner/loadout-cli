@@ -30,7 +30,7 @@
   import { sheetPath, sheetWords, type SheetKind, type SheetTeam, type SheetValues } from '../lib/teamSheet';
   import { answerGate, carryOn, forget, hold, pickUp, runLines, stop } from '../lib/teamsAct';
   import { approvalNeeds, attentionNeeds, type TriggerApproval, type TriggerSources, type TriggerStale, type TriggerStanding } from '../lib/triggers';
-  import { boardOf, boardRunsOf, boardTeamsOf, gateOf, keptRuns, needsOf, summaryOf } from '../lib/teamsData';
+  import { boardOf, boardRunsOf, boardTeamsOf, gateOf, keptRuns, livenessOf, needsOf, summaryOf } from '../lib/teamsData';
   import type { Act, Prune } from '../lib/teams';
 
   let { rest }: { rest: string[] } = $props();
@@ -528,7 +528,7 @@
       <h2 class="ls-zone" id="tm-running">Running</h2>
       {#if running.length}
         <div class="runs">
-          {#each running as run (run.id)}<RunCard run={summaryOf(run)} href={href(run)} actions={runningActs(run)} />{/each}
+          {#each running as run (run.id)}<RunCard run={summaryOf(run)} href={href(run)} actions={runningActs(run)} badge={livenessOf(run)} />{/each}
         </div>
       {:else}
         <p class="calm">{filtering ? 'Nothing running matches the filter.' : 'Nothing is running.'}</p>
@@ -539,7 +539,7 @@
       <section class="tblock" aria-labelledby="tm-ended">
         <h2 class="ls-zone" id="tm-ended">Ended</h2>
         <div class="runs">
-          {#each ended as run (run.id)}<RunCard run={summaryOf(run)} href={href(run)} actions={endedActs(run)} />{/each}
+          {#each ended as run (run.id)}<RunCard run={summaryOf(run)} href={href(run)} actions={endedActs(run)} badge={livenessOf(run)} />{/each}
         </div>
       </section>
     {/if}
