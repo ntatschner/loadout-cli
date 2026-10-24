@@ -175,6 +175,11 @@ public sealed class RunCloser
                 $"Run {run.RunId} is still going: a process on this machine is driving it. "
                 + $"Stop it with 'loadout team halt {run.RunId}' instead.",
                 ExitCode.PolicyViolation),
+            Liveness.Unreadable unreadable => OperationResult<RunClosed>.Fail(
+                $"Run {run.RunId} was left alone: its owner file "
+                + $"{Path.Combine(run.Directory, FileRunOwnership.FileName)} could not be read ({unreadable.Why}), "
+                + "so there is no telling whether a process still drives it. Put right whatever stops it being read and try again.",
+                ExitCode.GeneralFailure),
             Liveness.PossiblyNotResponding quiet when !confirmed => OperationResult<RunClosed>.Fail(
                 $"Run {run.RunId} has written nothing for {Quiet(quiet.Quiet)}, but it is from a build "
                 + "that kept no owner, so it may still be going. Pass --yes to close it anyway.",

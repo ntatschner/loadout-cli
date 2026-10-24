@@ -36,6 +36,14 @@ public abstract record OwnerReading
     /// a build from before owners were kept looks like.
     /// </summary>
     public sealed record NoRecord : OwnerReading;
+
+    /// <summary>
+    /// The owner file is there and could not be opened for a reason other
+    /// than somebody holding it, such as a permission taken away. Neither held
+    /// nor free: nothing about the run's owner can be said.
+    /// </summary>
+    /// <param name="Why">What opening it said.</param>
+    public sealed record Unknown(string Why) : OwnerReading;
 }
 
 /// <summary>
@@ -180,8 +188,9 @@ internal sealed class FileRunOwnership : IRunOwnership
 
         try
         {
-            // Unshared, so that on Unix this asks for the same exclusive lock
-            // the holder has, and is refused while it holds it.
+            // Unshared, so that on Unix this asks for an exclusive flock. Any
+            // flock, shared or exclusive, is refused while the holder has its
+            // exclusive one; unshared also refuses a reader that only shares.
             using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None);
 
             return new OwnerReading.Free(Parse(file));
@@ -194,14 +203,30 @@ internal sealed class FileRunOwnership : IRunOwnership
         {
             return new OwnerReading.NoRecord();
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (IOException ex) when (IsLockConflict(ex))
         {
-            // Anything that stops the file being opened is read as held. The
-            // answer this feeds decides whether a run may be ended, and ending
-            // one that is still going is the mistake worth avoiding.
             return new OwnerReading.Held();
         }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Not held, as far as anyone can tell, and not free either. Read as
+            // held, a lasting denial would keep the run live for good and close
+            // would refuse it with no way out; read as free, a run still going
+            // could be ended. So it is neither, and says why.
+            return new OwnerReading.Unknown(ex.Message);
+        }
     }
+
+    /// <summary>Whether opening the file failed because another open holds it.</summary>
+    /// <remarks>
+    /// Windows reports a sharing or lock violation (32 or 33) in the low word
+    /// of the HResult. On Unix .NET puts the raw errno there, and a refused
+    /// flock is EWOULDBLOCK, which is 35 on macOS and FreeBSD and 11 on Linux.
+    /// </remarks>
+    private static bool IsLockConflict(IOException ex) =>
+        OperatingSystem.IsWindows()
+            ? (ex.HResult & 0xFFFF) is 32 or 33
+            : ex.HResult == (OperatingSystem.IsMacOS() || OperatingSystem.IsFreeBSD() ? 35 : 11);
 
     /// <inheritdoc />
     public void Touch(IDisposable held)

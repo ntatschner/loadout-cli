@@ -38,6 +38,15 @@ public sealed class RunLivenessTests
     }
 
     [Fact]
+    public void Unknown_owner_is_unreadable_and_carries_why()
+    {
+        // Neither live nor gone, however quiet: an owner file that cannot be
+        // read says nothing about whether its process still runs.
+        RunLiveness.Of(Run(), new OwnerReading.Unknown("Access denied."), Noon.AddDays(-2), Noon)
+            .Should().Be(new Liveness.Unreadable("Access denied."));
+    }
+
+    [Fact]
     public void No_record_and_quiet_past_the_threshold_is_possibly_not_responding()
     {
         var quiet = RunLiveness.OldRunQuiet + TimeSpan.FromMinutes(1);

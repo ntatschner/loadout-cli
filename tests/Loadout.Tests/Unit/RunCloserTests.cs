@@ -84,6 +84,23 @@ public sealed class RunCloserTests : IDisposable
     }
 
     [Fact]
+    public void Close_refuses_a_run_whose_owner_cannot_be_read()
+    {
+        var directory = Write(Started, Lead, Worker);
+        _owners.Script(directory, new OwnerReading.Unknown("Access to the path is denied."));
+        var before = File.ReadAllText(Journal(directory));
+
+        var refused = Closer().Close(RunId, confirmed: true, "test");
+
+        refused.Failed.Should().BeTrue();
+        refused.ExitCode.Should().Be(ExitCode.GeneralFailure, "not the live refusal's code: nothing says the run is live");
+        refused.Error.Should().Contain(Path.Combine(directory, "owner.lock"))
+            .And.Contain("Access to the path is denied.");
+        File.ReadAllText(Journal(directory)).Should().Be(before);
+        _owners.Taken.Should().BeEmpty();
+    }
+
+    [Fact]
     public void Close_ends_working_nodes_and_writes_abandoned()
     {
         var directory = Write(Started, Lead, Worker, WorkerTurn);

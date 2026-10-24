@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using FluentAssertions;
 using Loadout.Core.Teams;
 using Loadout.Models;
@@ -51,6 +52,15 @@ public sealed class TeamRunsCloseContractTests
             refused.ExitCode.Should().Be(
                 (int)ExitCode.PolicyViolation,
                 "a process holds the run: " + refused.StandardOutput + refused.StandardError);
+
+            // Exit 9 alone is shared with the take's own refusal, which a close
+            // that misread the lock as free would reach; only the reading's
+            // refusal says this. Whitespace is folded because redirected
+            // output wraps.
+            Regex.Replace(refused.StandardOutput + refused.StandardError, @"\s+", " ")
+                .Should().Contain(
+                    "is still going: a process on this machine is driving it",
+                    "the close must be refused on reading the lock as held, not later by failing to take it");
             Finishes(journal).Should().BeEmpty("a refused close writes nothing");
         }
 
