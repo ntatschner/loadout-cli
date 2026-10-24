@@ -79,6 +79,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     private readonly Loadout.Core.Tasks.ITaskService _tasks;
     private readonly Loadout.Core.Git.IGitManager _git;
     private readonly IProcessInspector _processes;
+    private readonly Loadout.Core.Teams.IRunOwnership? _ownership;
     private readonly ISecretProvider _secrets;
     private readonly HttpClient _client;
     private readonly Loadout.Core.Configuration.IConfigurationService _configuration;
@@ -146,9 +147,11 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         IEnvironmentProvider? environment = null,
         Loadout.Core.Configuration.YamlStore? yaml = null,
         IFilePermissions? permissions = null,
-        IExecutableResolver? resolver = null)
+        IExecutableResolver? resolver = null,
+        Loadout.Core.Teams.IRunOwnership? ownership = null)
     {
         _resolver = resolver;
+        _ownership = ownership;
         _updateWatch = updates is null ? null : new Loadout.Core.Updates.UpdateWatch(updates, configuration, time);
         _yaml = yaml;
         _permissions = permissions;
@@ -467,6 +470,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             // is the routes' own to refuse.
             server.Tasks = _tasks;
             server.Ideas = _ideas;
+            server.Ownership = _ownership;
             server.IdeasBusy = () => ideas.Marked;
 
             // What there is to start, read per request like the waiting area:

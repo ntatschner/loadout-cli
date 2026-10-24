@@ -201,7 +201,7 @@ public sealed class RunCloser
             liveness);
 
     /// <summary>When the journal was last written, since the fold dates only node events.</summary>
-    private static DateTimeOffset Written(string directory)
+    internal static DateTimeOffset Written(string directory)
     {
         var path = Path.Combine(directory, "journal.jsonl");
 

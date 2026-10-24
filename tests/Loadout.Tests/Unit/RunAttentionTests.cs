@@ -72,6 +72,28 @@ public sealed class RunAttentionTests
     private static PendingAsk Gate() =>
         new("g1", "implementer/1", "role.implementer", "Bash", "dotnet test", Noon);
 
+    /// <remarks>
+    /// Instead of the silence, not beside it: a node of a run nothing drives
+    /// will never speak again, and "it says anything at all" never clears.
+    /// </remarks>
+    [Fact]
+    public void Not_responding_run_asks_for_close()
+    {
+        var owner = new RunOwner(4242, Noon.AddHours(-3), "BOX", Noon.AddHours(-3));
+        // Two turns over four minutes, silent for ten: quiet, were it live.
+        var run = Run(nodes: [Node(turns: 2, started: Noon.AddMinutes(-14), lastSeen: Noon.AddMinutes(-10))]);
+
+        var reasons = RunAttention.For(run, Noon, new Liveness.NotResponding(owner));
+
+        reasons.Should().ContainSingle();
+        reasons[0].Kind.Should().Be(AttentionKind.NotResponding);
+        reasons[0].Clears.Should().Be("loadout team runs close 20260917-1200-aaaa");
+        reasons[0].Detail.Should().Contain("4242");
+
+        RunAttention.For(run, Noon, new Liveness.Live())
+            .Should().ContainSingle(reason => reason.Kind == AttentionKind.Quiet, "a live run's silence is still said");
+    }
+
     [Fact]
     public void A_run_that_wants_nothing_is_not_in_the_rail()
     {
