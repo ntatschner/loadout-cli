@@ -24,23 +24,32 @@ namespace Loadout.Cli.Commands;
 /// button that fails only when somebody presses it.
 /// </para>
 /// <para>
-/// Running one starts this launcher again with the words after it, so the
-/// page does exactly what typing them would. It runs in the home directory,
-/// not the daemon's: a command left to find its project from the directory
-/// it was started in would otherwise act on whichever repository the daemon
-/// happened to be started from, which is nothing the page could show.
+/// Running one hands the words to the same command tree inside this process,
+/// so the page does exactly what typing them would without a launcher
+/// starting for every page and button. It runs as if started in the home
+/// directory, not the daemon's: a command left to find its project from the
+/// directory it was started in would otherwise act on whichever repository
+/// the daemon happened to be started from, which is nothing the page could
+/// show.
 /// </para>
 /// </remarks>
 internal sealed class DashboardCommands : IStudioCommands
 {
-    private readonly IProcessLauncher _processes;
+    private readonly CommandHost? _host;
+    private readonly string _home;
     private readonly Lazy<IReadOnlyList<StudioCommand>> _catalogue;
 
-    internal DashboardCommands(IProcessLauncher processes)
+    /// <param name="host">What runs a command in this process; null for a daemon built without one, which runs nothing.</param>
+    /// <param name="home">
+    /// The home directory, as the environment names it: a home pointed
+    /// somewhere else on purpose is the one meant.
+    /// </param>
+    internal DashboardCommands(CommandHost? host, string home)
     {
-        ArgumentNullException.ThrowIfNull(processes);
+        ArgumentException.ThrowIfNullOrEmpty(home);
 
-        _processes = processes;
+        _host = host;
+        _home = home;
         _catalogue = new(() => Build(Catalogue.Commands, Catalogue.TypeOf));
     }
 
@@ -48,23 +57,31 @@ internal sealed class DashboardCommands : IStudioCommands
     IReadOnlyList<StudioCommand> IStudioCommands.Catalogue => _catalogue.Value;
 
     /// <inheritdoc />
+    public long LauncherChildren => _host?.LauncherChildren ?? 0;
+
+    /// <inheritdoc />
+    public IPipedProcess? Forward(IReadOnlyList<string> words, ForwardedTerminal terminal)
+    {
+        ArgumentNullException.ThrowIfNull(words);
+        ArgumentNullException.ThrowIfNull(terminal);
+
+        return _host?.Start(words, terminal.Directory, terminal);
+    }
+
+    /// <inheritdoc />
     public Task<OperationResult<IPipedProcess>> StartAsync(IReadOnlyList<string> words, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(words);
 
-        if (LauncherInvocation.Parts() is not ({ Length: > 0 } command, var prefix))
+        if (_host is null)
         {
             return Task.FromResult(OperationResult<IPipedProcess>.Fail(
-                "This launcher cannot say how it was started, so it cannot run a command for the page.",
+                "This daemon was started without a way to run commands, so it cannot run one for the page.",
                 ExitCode.GeneralFailure));
         }
 
-        return _processes.StartPipedAsync(
-            new ProcessRequest(
-                command,
-                [.. prefix, .. words],
-                WorkingDirectory: Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)),
-            ct);
+        return Task.FromResult(OperationResult<IPipedProcess>.Ok(
+            _host.Start(words, _home)));
     }
 
     /// <summary>Every command in the catalogue as a form sees it.</summary>

@@ -5,6 +5,7 @@ using Loadout.Core.Workspace;
 using Loadout.Core.Projects;
 using Loadout.Models;
 using Loadout.Platform.Abstractions;
+using Loadout.Platform.Common;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using Loadout.Tui;
@@ -170,7 +171,7 @@ public sealed class ProjectAddCommand : AsyncCommand<ProjectAddCommand.Settings>
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(_console, settings);
-        var path = settings.Path ?? settings.Repo ?? Directory.GetCurrentDirectory();
+        var path = settings.Path ?? settings.Repo ?? Invocation.CurrentDirectory;
 
         // Asked once, for both paths. Registering writes the registry, so a
         // preview that ran it would have registered it — but the questions the

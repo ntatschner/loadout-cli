@@ -1,6 +1,7 @@
 using Loadout.Cli.Commands;
 using Loadout.Core.Projects;
 using Loadout.Core.Sessions;
+using Loadout.Platform.Common;
 
 namespace Loadout.Cli.Infrastructure;
 
@@ -36,7 +37,7 @@ public sealed class SessionScope
             return new SessionQuery(Agent: settings.Agent, Limit: settings.Limit);
         }
 
-        var directory = settings.Repo ?? Directory.GetCurrentDirectory();
+        var directory = settings.Repo ?? Invocation.CurrentDirectory;
 
         var resolved = await _projects.ResolveFromDirectoryAsync(directory, ct).ConfigureAwait(false);
 

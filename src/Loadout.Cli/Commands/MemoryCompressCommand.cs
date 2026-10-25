@@ -4,6 +4,7 @@ using Loadout.Core.Instructions;
 using Loadout.Core.Projects;
 using Loadout.Core.Workspace;
 using Loadout.Models;
+using Loadout.Platform.Common;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using Loadout.Tui;
@@ -354,7 +355,7 @@ public sealed class MemoryCompressCommand : AsyncCommand<MemoryCompressSettings>
                 : Models.Results.OperationResult<string>.Ok(resolved.Value!.Entry.Slug);
         }
 
-        var directory = settings.Repo ?? Directory.GetCurrentDirectory();
+        var directory = settings.Repo ?? Invocation.CurrentDirectory;
 
         var here = await _projects.ResolveFromDirectoryAsync(directory).ConfigureAwait(false);
 

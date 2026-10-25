@@ -4,6 +4,7 @@ using Loadout.Core.Workspace;
 using Loadout.Models;
 using Loadout.Models.Results;
 using Loadout.Platform.Abstractions;
+using Loadout.Platform.Common;
 
 namespace Loadout.Cli.Infrastructure;
 
@@ -109,7 +110,7 @@ public sealed class StatuslineTargets
             return OperationResult<IReadOnlyList<StatuslineTarget>>.Ok(targets);
         }
 
-        var directory = settings.Repo ?? Directory.GetCurrentDirectory();
+        var directory = settings.Repo ?? Invocation.CurrentDirectory;
 
         var resolved = await _projects.ResolveFromDirectoryAsync(directory, ct).ConfigureAwait(false);
 

@@ -106,17 +106,26 @@ internal sealed class DriftService : IDriftService
             projects = [.. listed.Value!];
         }
 
-        var results = new List<ProjectDrift>(projects.Count);
+        // Several at once, and reported in the order they are registered.
+        // Inspecting one is mostly waiting on Git, a process at a time, and
+        // Studio's projects page asks about every project whenever it opens.
+        var results = new ProjectDrift[projects.Count];
 
-        foreach (var project in projects)
-        {
-            ct.ThrowIfCancellationRequested();
-
-            results.Add(await InspectOneAsync(project, ct).ConfigureAwait(false));
-        }
+        await Parallel.ForEachAsync(
+            Enumerable.Range(0, projects.Count),
+            new ParallelOptions { MaxDegreeOfParallelism = AtOnce, CancellationToken = ct },
+            async (index, token) => results[index] = await InspectOneAsync(projects[index], token).ConfigureAwait(false))
+            .ConfigureAwait(false);
 
         return OperationResult<IReadOnlyList<ProjectDrift>>.Ok(results);
     }
+
+    /// <summary>How many projects are inspected at once.</summary>
+    /// <remarks>
+    /// Each inspection starts a handful of Git processes, and Windows refuses
+    /// to start a process when too many are asked for together.
+    /// </remarks>
+    private const int AtOnce = 4;
 
     private async Task<ProjectDrift> InspectOneAsync(ProjectResolution project, CancellationToken ct)
     {
@@ -134,9 +143,17 @@ internal sealed class DriftService : IDriftService
             return new ProjectDrift(slug, findings);
         }
 
-        await AddRemoteFindingAsync(project, path, slug, findings, ct).ConfigureAwait(false);
+        // Side by side: both are Git asking about the same clone, and neither
+        // waits on the other. The remote's finding still comes first.
+        var remote = RemoteFindingAsync(project, path, slug, ct);
+        var describing = _overviews.DescribeAsync(project, specialists: false, ct);
 
-        var described = await _overviews.DescribeAsync(project, ct).ConfigureAwait(false);
+        if (await remote.ConfigureAwait(false) is { } found)
+        {
+            findings.Add(found);
+        }
+
+        var described = await describing.ConfigureAwait(false);
 
         if (described.Failed || described.Value is not { } overview)
         {
@@ -224,33 +241,32 @@ internal sealed class DriftService : IDriftService
     /// place.
     /// </para>
     /// </summary>
-    private async Task AddRemoteFindingAsync(
+    private async Task<DiagnosticCheck?> RemoteFindingAsync(
         ProjectResolution project,
         string path,
         string slug,
-        List<DiagnosticCheck> findings,
         CancellationToken ct)
     {
         var recorded = project.Entry.Remote;
 
         if (string.IsNullOrWhiteSpace(recorded))
         {
-            return;
+            return null;
         }
 
         var state = await _git.GetStateAsync(path, ct).ConfigureAwait(false);
 
         if (state.Failed || state.Value?.RemoteUrl is not { Length: > 0 } actual)
         {
-            return;
+            return null;
         }
 
-        findings.Add(GitRemote.AreEquivalent(recorded, actual)
+        return GitRemote.AreEquivalent(recorded, actual)
             ? DiagnosticCheck.Ok(slug, "Remote", actual)
             : DiagnosticCheck.Warn(
                 slug,
                 "Remote",
                 $"the registry records '{recorded}' but this clone points at '{actual}'. "
-                + "Either could be right, so nothing was changed"));
+                + "Either could be right, so nothing was changed");
     }
 }

@@ -9,6 +9,7 @@ using Loadout.Core.Usage;
 using Loadout.Core.Workspace;
 using Loadout.Models;
 using Loadout.Platform.Abstractions;
+using Loadout.Platform.Common;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using Loadout.Tui;
@@ -350,7 +351,7 @@ public sealed class StatuslineRenderCommand : AsyncCommand<GlobalSettings>
     {
         try
         {
-            return Directory.GetCurrentDirectory();
+            return Invocation.CurrentDirectory;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -367,7 +368,7 @@ public sealed class StatuslineRenderCommand : AsyncCommand<GlobalSettings>
     {
         try
         {
-            if (Console.IsInputRedirected)
+            if (Invocation.IsInputRedirected)
             {
                 return await Console.In.ReadToEndAsync(ct).ConfigureAwait(false);
             }
@@ -693,7 +694,7 @@ public sealed class StatuslineShowCommand : AsyncCommand<StatuslineTargetSetting
             ? targetsResult.Value!
             : [new StatuslineTarget("every session on this machine", _targets.GlobalSettingsPath())];
 
-        var directory = settings.Repo ?? Directory.GetCurrentDirectory();
+        var directory = settings.Repo ?? Invocation.CurrentDirectory;
 
         var resolved = await _projects.ResolveFromDirectoryAsync(directory).ConfigureAwait(false);
         var state = await _git.GetStateAsync(directory).ConfigureAwait(false);

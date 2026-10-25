@@ -1150,6 +1150,14 @@ public sealed class DashboardServer : IDisposable
         }
     }
 
+    /// <summary>Told the name of each command a terminal hands over, for the daemon's log.</summary>
+    public Action<string>? Forwarded { get; set; }
+
+    /// <summary>Whether a request carries the token itself in its header, whatever cookie it has.</summary>
+    private bool Tokened(HttpListenerRequest request) =>
+        request.Headers["X-Loadout-Token"] is { Length: > 0 } given
+        && CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(given), Encoding.UTF8.GetBytes(Token));
+
     /// <summary>Whether a request carries the token, from the query or a header.</summary>
     /// <remarks>
     /// Compared in fixed time, because the alternative leaks the token one
@@ -1369,6 +1377,11 @@ public sealed class DashboardServer : IDisposable
                 startsSessions = Launch is not null && Sessions is not null && !WatchOnly,
                 pseudoTerminal = PseudoTerminal,
 
+                // How many times running Studio's commands has started this
+                // launcher as a child. They run inside the daemon, so anything
+                // but zero is one slipping back to a process of its own.
+                launcherChildren = Jobs?.Commands.LauncherChildren ?? 0,
+
                 // Whether one is set, for Settings to say; never what it is.
                 attachPassphrase = Attach is not null && await Attach.IsSetAsync(ct).ConfigureAwait(false),
 
@@ -1446,6 +1459,24 @@ public sealed class DashboardServer : IDisposable
             await (read.Failed
                 ? WriteAsync(context, 500, "text/plain; charset=utf-8", read.Error!)
                 : WriteAsync(context, 200, "application/json; charset=utf-8", JsonSerializer.Serialize(read.Value, Json))).ConfigureAwait(false);
+
+            return;
+        }
+
+        // The command line's own commands, handed over by a launcher typed in
+        // a terminal. The token itself, never the browser's cookie, and never
+        // from a dashboard that only watches or can be reached from elsewhere.
+        if (path == RunApi.Root && request.HttpMethod == "POST")
+        {
+            if (Jobs is null || WatchOnly || Beyond || !Tokened(request))
+            {
+                await WriteAsync(context, 403, "text/plain; charset=utf-8",
+                    "This daemon does not run commands for the command line.").ConfigureAwait(false);
+
+                return;
+            }
+
+            await RunApi.HandleAsync(context, Jobs.Commands, Version(), Forwarded, ct).ConfigureAwait(false);
 
             return;
         }

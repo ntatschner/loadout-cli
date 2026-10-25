@@ -205,6 +205,27 @@ It used to exit 11. Nothing had gone wrong, though, and package validators,
 which run exactly that, read the 11 as a broken install. A command asked to do
 something only a person can, such as a manual team run, still exits 11.
 
+## When the daemon is running
+
+Most of the time a short command takes is the launcher starting up, not the
+command itself. A running daemon has already done all of that, so when one of
+the same version is up, a command that can't need your terminal is handed to
+it. It's drawn for your terminal's width and colours, and you get the same
+output and exit code you'd have got without it. The daemon's log names each
+command it ran this way, but not what you typed after the name.
+
+A command stays in your terminal, as it always did, if it might ask you
+something, puts an agent or a screen in front of you, opens an editor or a
+window, runs a team, or is the daemon itself. A command that changes something
+is only handed over when you've passed `--json`, `--non-interactive` or
+`--dry-run`, because the daemon has no way to ask you anything. Nor is a
+command that reads what you pipe into it, such as `task apply` or
+`voice check --stdin`, while something is piped in.
+
+If the daemon is a different version, isn't running, or can't be reached
+within two seconds, the command runs where you typed it. To run everything
+here regardless, set `LOADOUT_LOCAL=1`.
+
 ## Filtering and sorting a list
 
 Every list takes one query, written on one line:

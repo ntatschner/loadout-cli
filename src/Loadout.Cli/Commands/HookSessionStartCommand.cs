@@ -2,6 +2,7 @@ using System.ComponentModel;
 using Loadout.Cli.Infrastructure;
 using Loadout.Core.Sessions;
 using Loadout.Platform.Abstractions;
+using Loadout.Platform.Common;
 using Loadout.Tui;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -61,7 +62,7 @@ public sealed class HookSessionStartCommand : AsyncCommand<GlobalSettings>
         }
 
         var session = await SessionLinks.ReadSessionIdAsync(
-            Input ?? (Console.IsInputRedirected ? Console.In : null), cancellationToken).ConfigureAwait(false);
+            Input ?? (Invocation.IsInputRedirected ? Console.In : null), cancellationToken).ConfigureAwait(false);
 
         if (!SessionLinks.IsAgentSession(session))
         {

@@ -6,6 +6,7 @@ using Loadout.Core.Projects;
 using Loadout.Models;
 using Loadout.Models.Policies;
 using Loadout.Models.Results;
+using Loadout.Platform.Common;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using Loadout.Tui;
@@ -148,7 +149,7 @@ public sealed class RepoCheckCommand : AsyncCommand<RepoCheckCommand.Settings>
         }
 
         return OperationResult<IReadOnlyList<string>>.Ok(
-            [settings.Repo ?? Directory.GetCurrentDirectory()]);
+            [settings.Repo ?? Invocation.CurrentDirectory]);
     }
 
     private static void Render(CommandOutput output, PolicyReport report, bool showPath)
@@ -360,7 +361,7 @@ public sealed class ProtectCommand : AsyncCommand<ProtectCommand.Settings>
         }
 
         return OperationResult<IReadOnlyList<string>>.Ok(
-            [settings.Repo ?? Directory.GetCurrentDirectory()]);
+            [settings.Repo ?? Invocation.CurrentDirectory]);
     }
 
     /// <summary>
@@ -495,7 +496,7 @@ public sealed class ProtectCommand : AsyncCommand<ProtectCommand.Settings>
         var resolved = settings.Project is not null
             ? await _projects.ResolveAsync(settings.Project, cancellationToken).ConfigureAwait(false)
             : await _projects.ResolveFromDirectoryAsync(
-                settings.Repo ?? Directory.GetCurrentDirectory(), cancellationToken)
+                settings.Repo ?? Invocation.CurrentDirectory, cancellationToken)
                 .ConfigureAwait(false);
 
         return resolved.Failed

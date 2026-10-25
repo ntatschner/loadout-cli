@@ -3,6 +3,7 @@ using Loadout.Cli.Infrastructure;
 using Loadout.Core.Git;
 using Loadout.Core.Projects;
 using Loadout.Models;
+using Loadout.Platform.Common;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using Loadout.Tui;
@@ -61,7 +62,7 @@ public sealed class ProjectLinkCommand : AsyncCommand<ProjectLinkCommand.Setting
             var resolution = settings.Project is not null
                 ? await _projects.ResolveAsync(settings.Project).ConfigureAwait(false)
                 : await _projects
-                    .ResolveFromDirectoryAsync(settings.Repo ?? Directory.GetCurrentDirectory())
+                    .ResolveFromDirectoryAsync(settings.Repo ?? Invocation.CurrentDirectory)
                     .ConfigureAwait(false);
 
             if (resolution.Failed)

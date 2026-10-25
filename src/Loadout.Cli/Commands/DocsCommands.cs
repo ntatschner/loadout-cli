@@ -6,6 +6,7 @@ using Loadout.Models;
 using Loadout.Models.Instructions;
 using Loadout.Models.Projects;
 using Loadout.Models.Results;
+using Loadout.Platform.Common;
 using Loadout.Tui;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -77,14 +78,14 @@ public sealed class DocsAuditCommand : AsyncCommand<DocsAuditCommand.Settings>
         var resolution = settings.Project is { Length: > 0 } handle
             ? await _projects.ResolveAsync(handle, cancellationToken).ConfigureAwait(false)
             : await _projects.ResolveFromDirectoryAsync(
-                settings.Repo ?? Directory.GetCurrentDirectory(), cancellationToken).ConfigureAwait(false);
+                settings.Repo ?? Invocation.CurrentDirectory, cancellationToken).ConfigureAwait(false);
 
         // The checkout you are in, or the one --repo names, even when it
         // resolves to a project registered somewhere else: a second clone or
         // worktree is found by its remote, and auditing the registered path
         // reported on the other checkout. The project is still what supplies
         // the policy below. Only a project named outright means its own path.
-        var here = settings.Repo ?? Directory.GetCurrentDirectory();
+        var here = settings.Repo ?? Invocation.CurrentDirectory;
         var repository = resolution.Succeeded
             ? SymbolTree.Of(resolution.Value!, settings.Project is { Length: > 0 } ? null : here)
             : here;
@@ -314,7 +315,7 @@ public sealed class DocsExportCommand : AsyncCommand<DocsExportCommand.Settings>
         var resolution = settings.Project is { Length: > 0 } handle
             ? await _projects.ResolveAsync(handle, cancellationToken).ConfigureAwait(false)
             : await _projects.ResolveFromDirectoryAsync(
-                settings.Repo ?? Directory.GetCurrentDirectory(), cancellationToken)
+                settings.Repo ?? Invocation.CurrentDirectory, cancellationToken)
                 .ConfigureAwait(false);
 
         if (resolution.Failed)
@@ -329,7 +330,7 @@ public sealed class DocsExportCommand : AsyncCommand<DocsExportCommand.Settings>
         // worktree resolves to the same project by its remote.
         if (SymbolTree.Of(
                 project,
-                settings.Project is { Length: > 0 } ? null : settings.Repo ?? Directory.GetCurrentDirectory())
+                settings.Project is { Length: > 0 } ? null : settings.Repo ?? Invocation.CurrentDirectory)
             is not { } path)
         {
             return output.Fail(
@@ -521,7 +522,7 @@ public sealed class DocsFindCommand : AsyncCommand<DocsFindCommand.Settings>
         var resolution = settings.Project is { Length: > 0 } handle
             ? await _projects.ResolveAsync(handle, cancellationToken).ConfigureAwait(false)
             : await _projects.ResolveFromDirectoryAsync(
-                settings.Repo ?? Directory.GetCurrentDirectory(), cancellationToken)
+                settings.Repo ?? Invocation.CurrentDirectory, cancellationToken)
                 .ConfigureAwait(false);
 
         if (resolution.Failed)
@@ -533,7 +534,7 @@ public sealed class DocsFindCommand : AsyncCommand<DocsFindCommand.Settings>
 
         var path = SymbolTree.Of(
             project,
-            settings.Project is { Length: > 0 } ? null : settings.Repo ?? Directory.GetCurrentDirectory());
+            settings.Project is { Length: > 0 } ? null : settings.Repo ?? Invocation.CurrentDirectory);
 
         if (path is null)
         {
@@ -718,7 +719,7 @@ public sealed class DocsRefreshCommand : AsyncCommand<DocsRefreshCommand.Setting
 
         var path = SymbolTree.Of(
             project,
-            settings.Project is { Length: > 0 } ? null : settings.Repo ?? Directory.GetCurrentDirectory());
+            settings.Project is { Length: > 0 } ? null : settings.Repo ?? Invocation.CurrentDirectory);
 
         if (path is null)
         {
@@ -877,7 +878,7 @@ public sealed class DocsRefreshCommand : AsyncCommand<DocsRefreshCommand.Setting
         settings.Project is { Length: > 0 } handle
             ? _projects.ResolveAsync(handle, cancellationToken)
             : _projects.ResolveFromDirectoryAsync(
-                directory ?? Directory.GetCurrentDirectory(), cancellationToken);
+                directory ?? Invocation.CurrentDirectory, cancellationToken);
 }
 
 /// <summary>
@@ -939,7 +940,7 @@ public sealed class DocsCiCommand : AsyncCommand<DocsCiCommand.Settings>
         var resolution = settings.Project is { Length: > 0 } handle
             ? await _projects.ResolveAsync(handle, cancellationToken).ConfigureAwait(false)
             : await _projects.ResolveFromDirectoryAsync(
-                settings.Repo ?? Directory.GetCurrentDirectory(), cancellationToken)
+                settings.Repo ?? Invocation.CurrentDirectory, cancellationToken)
                 .ConfigureAwait(false);
 
         if (resolution.Failed)

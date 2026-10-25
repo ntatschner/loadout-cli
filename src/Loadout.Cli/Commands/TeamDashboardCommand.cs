@@ -5,6 +5,7 @@ using Loadout.Core.Teams;
 using Loadout.Core.Teams.Daemon;
 using Loadout.Models;
 using Loadout.Platform.Abstractions;
+using Loadout.Platform.Common;
 using Loadout.Tui;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -133,7 +134,7 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
     /// </remarks>
     internal static async Task Ends(CancellationTokenSource stopping)
     {
-        if (!Console.IsInputRedirected)
+        if (!Invocation.IsInputRedirected)
         {
             return;
         }
@@ -579,7 +580,7 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
 
             Owns(output, server);
             Warn(output, server);
-            output.WriteLine(Console.IsInputRedirected
+            output.WriteLine(Invocation.IsInputRedirected
                 ? "[dim]It stops when whatever started it closes its input.[/]"
                 : "[dim]Press Ctrl+C to stop.[/]");
         }

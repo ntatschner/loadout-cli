@@ -10,6 +10,7 @@ using Loadout.Models;
 using Loadout.Models.Instructions;
 using Loadout.Models.Teams;
 using Loadout.Platform.Abstractions;
+using Loadout.Platform.Common;
 using Loadout.Tui;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -2155,7 +2156,7 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         // Only when it is not where they are. Said every time it would be
         // noise, and noise is what somebody skims past on the run that
         // mattered.
-        var here = Directory.GetCurrentDirectory();
+        var here = Invocation.CurrentDirectory;
 
         if (Elsewhere(here, path))
         {

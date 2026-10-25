@@ -4,6 +4,7 @@ using Loadout.Core.Diagnostics;
 using Loadout.Models;
 using Loadout.Platform.Abstractions;
 using Loadout.Models.Diagnostics;
+using Loadout.Platform.Common;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using Loadout.Tui;
@@ -100,7 +101,7 @@ public sealed class DoctorCommand : AsyncCommand<DoctorSettings>
             ? Directory.Exists(given)
                 ? Path.Combine(given, DiagnosticBundle.FileName(now))
                 : given
-            : Path.Combine(Directory.GetCurrentDirectory(), DiagnosticBundle.FileName(now));
+            : Path.Combine(Invocation.CurrentDirectory, DiagnosticBundle.FileName(now));
 
         if (settings.DryRun)
         {
@@ -264,7 +265,7 @@ public sealed class DoctorCommand : AsyncCommand<DoctorSettings>
             output.WriteBlankLine();
 
             // Spec section 37: never a prompt where nobody can answer it.
-            if (settings.NonInteractive || Console.IsInputRedirected || Console.IsOutputRedirected)
+            if (settings.NonInteractive || Invocation.IsInputRedirected || Invocation.IsOutputRedirected)
             {
                 output.WriteLine(
                     "[dim]Nothing was changed. Re-run with --fix --yes to apply these.[/]");

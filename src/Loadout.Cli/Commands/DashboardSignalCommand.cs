@@ -4,6 +4,7 @@ using Loadout.Core.Sessions;
 using Loadout.Cli.Infrastructure;
 using Loadout.Core.Sessions.Hosting;
 using Loadout.Platform.Abstractions;
+using Loadout.Platform.Common;
 using Loadout.Tui;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -101,7 +102,7 @@ public sealed class DashboardSignalCommand : AsyncCommand<DashboardSignalSetting
         }
 
         var (agentSession, transcript) = await SessionLinks.ReadHookInputAsync(
-            Input ?? (Console.IsInputRedirected ? Console.In : null), cancellationToken).ConfigureAwait(false);
+            Input ?? (Invocation.IsInputRedirected ? Console.In : null), cancellationToken).ConfigureAwait(false);
 
         var state = settings.State;
         DateTimeOffset? until = null;

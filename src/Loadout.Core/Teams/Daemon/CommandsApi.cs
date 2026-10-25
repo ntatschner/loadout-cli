@@ -50,16 +50,29 @@ public sealed record StudioCommand(
 /// <remarks>
 /// An interface here and its implementation beside the commands, because the
 /// catalogue is built where the parser is configured and Core does not reach
-/// it. Running one starts this same launcher again as a child, so a job is
-/// exactly what typing the command would have done.
+/// it. Running one hands the words to the same command tree inside the
+/// daemon, seen here as the child it used to be, so a job is exactly what
+/// typing the command would have done.
 /// </remarks>
 public interface IStudioCommands
 {
     /// <summary>Every command, with its arguments and options.</summary>
     IReadOnlyList<StudioCommand> Catalogue { get; }
 
-    /// <summary>Starts <c>loadout</c> with these words after it, its output piped back.</summary>
+    /// <summary>Runs <c>loadout</c> with these words after it, its output piped back.</summary>
     Task<OperationResult<IPipedProcess>> StartAsync(IReadOnlyList<string> words, CancellationToken ct);
+
+    /// <summary>
+    /// How many times running a command has started this launcher as a child
+    /// it waits on. Zero is what running them in the daemon is for.
+    /// </summary>
+    long LauncherChildren => 0;
+
+    /// <summary>
+    /// Runs a command typed in a terminal, drawn for that terminal, or null
+    /// where commands are not run for the command line.
+    /// </summary>
+    IPipedProcess? Forward(IReadOnlyList<string> words, ForwardedTerminal terminal) => null;
 }
 
 /// <summary>One command run from Studio, while it runs and after.</summary>
@@ -114,8 +127,8 @@ public sealed class CommandJob
 /// </summary>
 /// <remarks>
 /// <para>
-/// Each runs as a child of this launcher, so nothing here implements what a
-/// command does: the parser is handed the words and decides. The child's
+/// Each is handed to the launcher's own parser, so nothing here implements
+/// what a command does: the parser is handed the words and decides. Its
 /// output is kept for the page, capped, and passed through the secret
 /// redactor line by line. It never goes to the daemon's log, which is told
 /// only which command ran, because the words after it can carry a value
@@ -140,9 +153,8 @@ public sealed class CommandJobs
 
     /// <summary>How many may run at once.</summary>
     /// <remarks>
-    /// Each is a whole launcher starting up, and Windows refuses to start a
-    /// process when too many are asked for at once. Eight is more than a
-    /// person clicks through; a page stuck in a loop is held to it.
+    /// Eight is more than a person clicks through; a page stuck in a loop is
+    /// held to it rather than filling the daemon with work.
     /// </remarks>
     internal const int Running = 8;
 
@@ -321,7 +333,7 @@ public sealed class CommandJobs
 
     private readonly SemaphoreSlim _reading = new(Running, Running);
 
-    /// <summary>Starts the child with --non-interactive and its input closed.</summary>
+    /// <summary>Starts the command with --non-interactive and its input closed.</summary>
     private async Task<OperationResult<CommandJob>> LaunchAsync(string path, IReadOnlyList<string> words, CancellationToken ct)
     {
         // Never asked anything: a job has nobody at a prompt, and a question

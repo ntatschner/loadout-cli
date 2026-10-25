@@ -1,3 +1,4 @@
+using Loadout.Platform.Common;
 using Loadout.Tui;
 using System.ComponentModel;
 using Loadout.Cli.Infrastructure;
@@ -45,7 +46,7 @@ public sealed class SecretSetCommand : AsyncCommand<SecretSettings>
 
         string value;
 
-        if (Console.IsInputRedirected)
+        if (Invocation.IsInputRedirected)
         {
             // Piped input is the scripted path: loadout secret set x < file.
             var piped = await Console.In.ReadToEndAsync().ConfigureAwait(false);

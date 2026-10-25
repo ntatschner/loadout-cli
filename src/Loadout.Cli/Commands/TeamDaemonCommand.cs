@@ -7,6 +7,7 @@ using Loadout.Models;
 using Loadout.Models.Results;
 using Loadout.Models.Teams;
 using Loadout.Platform.Abstractions;
+using Loadout.Platform.Common;
 using Loadout.Tui;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -92,6 +93,12 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     private readonly Loadout.Core.Workspace.IWorkspaceManager _workspace;
     private readonly Loadout.Agents.IAgentRegistry _agents;
     private readonly IProcessLauncher _launcher;
+
+    /// <summary>What runs Studio's commands in this process; null in a daemon the tests build without it.</summary>
+    private readonly CommandHost? _host;
+
+    /// <summary>The home directory, which Studio's commands run in.</summary>
+    private readonly string _home;
     private readonly Loadout.Core.Tools.IToolNominationPass _nominations;
     private readonly TeamBin _bin;
 
@@ -146,8 +153,11 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         IEnvironmentProvider? environment = null,
         Loadout.Core.Configuration.YamlStore? yaml = null,
         IFilePermissions? permissions = null,
-        IExecutableResolver? resolver = null)
+        IExecutableResolver? resolver = null,
+        CommandHost? host = null)
     {
+        _host = host;
+        _home = environment?.HomeDirectory ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         _resolver = resolver;
         _updateWatch = updates is null ? null : new Loadout.Core.Updates.UpdateWatch(updates, configuration, time);
         _yaml = yaml;
@@ -301,7 +311,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         // one thing a resident process is not supposed to do.
         if (!settings.Foreground && settings.Log is null)
         {
-            return await BackgroundAsync(settings, output, !Console.IsOutputRedirected, cancellationToken)
+            return await BackgroundAsync(settings, output, !Invocation.IsOutputRedirected, cancellationToken)
                 .ConfigureAwait(false);
         }
 
@@ -522,10 +532,11 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             // one runs 'config set' like any other job.
             server.Configuration = _configuration;
 
-            // And every other command, run from Studio's forms as a child of
-            // this launcher, so the page does what typing it would.
+            // And every other command, run from Studio's forms through the
+            // same command tree inside this process, so the page does what
+            // typing it would.
             server.Jobs = new CommandJobs(
-                new DashboardCommands(_launcher),
+                new DashboardCommands(_host, _home),
                 _time,
                 path => output.WriteLine(
                     $"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] from Studio: loadout {Markup.Escape(path)}"))
@@ -533,6 +544,12 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
                 // A team run typed into the Commands page is a run too.
                 Holding = path => string.Equals(path, "team run", StringComparison.Ordinal) ? Holding() : null,
             };
+
+            // And commands typed in a terminal, handed over by a launcher of
+            // this version rather than run by a new one. Named in the log, so
+            // somebody can see they ran here; never the words after the name.
+            server.Forwarded = path => output.WriteLine(
+                $"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] from a terminal: loadout {Markup.Escape(path)}");
 
             server.Launch = new DashboardLaunch(_projects, _workspace, _agents, _configuration, _sheet, _time);
             server.StudioPreferences = async token => StudioPreferences.Read(
@@ -575,7 +592,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
 
         output.WriteLine("[dim]Watching the schedules. " + (settings.Log is not null
             ? "Running in the background: 'loadout daemon stop' stops it.[/]"
-            : Console.IsInputRedirected
+            : Invocation.IsInputRedirected
                 ? "It stops when whatever started it closes its input, or on 'loadout daemon stop'.[/]"
                 : "Press Ctrl+C or run 'loadout daemon stop' to stop.[/]"));
 
@@ -1227,7 +1244,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     {
         try
         {
-            return Directory.GetCurrentDirectory();
+            return Invocation.CurrentDirectory;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

@@ -19,6 +19,7 @@ using Loadout.Core.Updates;
 using Loadout.Models.Tasks;
 using Loadout.Models.Results;
 using Loadout.Platform.Abstractions;
+using Loadout.Platform.Common;
 using Spectre.Console;
 using Terminal.Gui.App;
 
@@ -1572,7 +1573,7 @@ public sealed class TerminalLauncher : ILauncherTui
     private async Task<ProjectResolution?> ResolveCurrentAsync(CancellationToken ct)
     {
         var result = await _projects
-            .ResolveFromDirectoryAsync(Directory.GetCurrentDirectory(), ct)
+            .ResolveFromDirectoryAsync(Invocation.CurrentDirectory, ct)
             .ConfigureAwait(false);
 
         return result.Succeeded ? result.Value : null;

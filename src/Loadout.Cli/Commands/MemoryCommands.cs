@@ -1,3 +1,4 @@
+using Loadout.Platform.Common;
 using Loadout.Tui;
 using System.ComponentModel;
 using System.Globalization;
@@ -66,7 +67,7 @@ public abstract class MemoryCommandBase<TSettings> : AsyncCommand<TSettings>
         var resolution = settings.Project is not null
             ? await Projects.ResolveAsync(settings.Project).ConfigureAwait(false)
             : await Projects
-                .ResolveFromDirectoryAsync(settings.Repo ?? Directory.GetCurrentDirectory())
+                .ResolveFromDirectoryAsync(settings.Repo ?? Invocation.CurrentDirectory)
                 .ConfigureAwait(false);
 
         return resolution.Failed

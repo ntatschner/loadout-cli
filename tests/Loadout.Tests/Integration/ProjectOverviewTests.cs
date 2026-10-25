@@ -176,6 +176,17 @@ public sealed class ProjectOverviewTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Which_specialists_apply_is_worked_out_only_when_asked_for()
+    {
+        var with = await _overviews.DescribeAsync(Project());
+        var without = await _overviews.DescribeAsync(Project(), specialists: false);
+
+        with.Value!.DetectedSpecialists.Should().NotBeNull("the panel shows them, and reading the repository is how they are found");
+        without.Value!.DetectedSpecialists.Should().BeNull("drift shows none of them, and they took most of its time");
+        without.Value.Branch.Should().Be(with.Value.Branch, "everything else is described the same");
+    }
+
+    [Fact]
     public async Task Uncommitted_work_is_reported_before_a_launch()
     {
         await File.WriteAllTextAsync(Path.Combine(_repository, "scratch.txt"), "in progress");

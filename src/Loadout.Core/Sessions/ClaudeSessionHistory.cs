@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Loadout.Core.Transcripts;
 using Loadout.Models.Results;
 using Loadout.Platform.Abstractions;
 
@@ -39,9 +40,32 @@ internal sealed class ClaudeSessionHistory : ISessionHistory
     /// <summary>How long a fallback summary may be, so a list stays one line per session.</summary>
     private const int SummaryLength = 60;
 
-    private readonly IEnvironmentProvider _environment;
+    /// <summary>
+    /// Each transcript's session, kept while the file is unchanged.
+    /// </summary>
+    /// <remarks>
+    /// A list of twelve reads the newest hundred and twenty transcripts, and a
+    /// search five hundred: a head and a tail of each, every time, for files
+    /// nearly all of which have not changed since the last list. Static for
+    /// the reason <see cref="Usage.ClaudeUsageHistory"/>'s readings are.
+    /// Raise the version whenever <see cref="ReadAsync"/> or what it keeps
+    /// changes.
+    /// </remarks>
+    private static readonly TranscriptReadings<Reading> Readings = new("claude-sessions", version: 1);
 
-    public ClaudeSessionHistory(IEnvironmentProvider environment) => _environment = environment;
+    private readonly IEnvironmentProvider _environment;
+    private readonly string? _kept;
+
+    /// <param name="environment">Where the agent's history is.</param>
+    /// <param name="paths">Where readings are kept between runs; none keeps them only in memory.</param>
+    public ClaudeSessionHistory(IEnvironmentProvider environment, IPlatformPaths? paths = null)
+    {
+        _environment = environment;
+        _kept = paths is null ? null : TranscriptReadingsDirectory.Under(paths.Paths.State);
+    }
+
+    /// <summary>Drops the readings held in memory, as a new process starts with none.</summary>
+    internal static void Forget() => Readings.Forget();
 
     /// <inheritdoc />
     public string Agent => "claude";
@@ -95,13 +119,15 @@ internal sealed class ClaudeSessionHistory : ISessionHistory
                 break;
             }
 
-            var session = await ReadAsync(file, ct).ConfigureAwait(false);
+            var reading = await Readings.GetAsync(file, _kept, ReadingAsync, ct).ConfigureAwait(false);
 
-            if (session is not null)
+            if (reading?.Session is { } session)
             {
                 sessions.Add(session);
             }
         }
+
+        Readings.Keep([.. files.Select(file => file.FullName)], _kept);
 
         return OperationResult<IReadOnlyList<AgentSession>>.Ok(sessions);
     }
@@ -126,6 +152,13 @@ internal sealed class ClaudeSessionHistory : ISessionHistory
     /// </remarks>
     private static bool IsSubagent(string fileName) =>
         fileName.StartsWith("agent-", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// What one transcript says about its session, or null when it could not
+    /// be read and should be tried again.
+    /// </summary>
+    private static async Task<Reading?> ReadingAsync(FileInfo file, CancellationToken ct) =>
+        new(await ReadAsync(file, ct).ConfigureAwait(false));
 
     /// <summary>
     /// Builds one session from its transcript, or null when the file does not
@@ -385,4 +418,11 @@ internal sealed class ClaudeSessionHistory : ISessionHistory
             ? flattened
             : flattened[..(SummaryLength - 1)] + "…";
     }
+
+    /// <summary>One transcript's session, or none when it holds too little to resume from.</summary>
+    /// <remarks>
+    /// Wrapped, because a transcript with nothing to resume is an answer worth
+    /// keeping too, and a reading of nothing would be read again every time.
+    /// </remarks>
+    internal sealed record Reading(AgentSession? Session);
 }

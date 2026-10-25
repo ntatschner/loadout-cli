@@ -4,6 +4,7 @@ using Loadout.Core.Diagnostics;
 using Loadout.Core.Projects;
 using Loadout.Models;
 using Loadout.Models.Diagnostics;
+using Loadout.Platform.Common;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using Loadout.Tui;
@@ -217,7 +218,7 @@ public sealed class DriftCommand : AsyncCommand<DriftSettings>
             output.WriteBlankLine();
 
             // Spec section 37: never a prompt where nobody can answer it.
-            if (settings.NonInteractive || Console.IsInputRedirected || Console.IsOutputRedirected)
+            if (settings.NonInteractive || Invocation.IsInputRedirected || Invocation.IsOutputRedirected)
             {
                 output.WriteLine("[dim]Nothing was changed. Re-run with --fix --yes to apply these.[/]");
 

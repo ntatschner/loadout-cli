@@ -8,6 +8,7 @@ using Loadout.Core.Workspace;
 using Loadout.Models;
 using Loadout.Models.Instructions;
 using Loadout.Models.Projects;
+using Loadout.Platform.Common;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using Loadout.Tui;
@@ -63,7 +64,7 @@ public abstract class InstructionsCommandBase<TSettings> : AsyncCommand<TSetting
         var result = handle is { Length: > 0 }
             ? await Projects.ResolveAsync(handle, ct).ConfigureAwait(false)
             : await Projects.ResolveFromDirectoryAsync(
-                repo ?? Directory.GetCurrentDirectory(), ct).ConfigureAwait(false);
+                repo ?? Invocation.CurrentDirectory, ct).ConfigureAwait(false);
 
         return result.Succeeded ? result.Value : null;
     }
@@ -88,7 +89,7 @@ public abstract class InstructionsCommandBase<TSettings> : AsyncCommand<TSetting
             return known;
         }
 
-        var here = repo ?? Directory.GetCurrentDirectory();
+        var here = repo ?? Invocation.CurrentDirectory;
 
         // The repository root rather than the subdirectory somebody happens to
         // be standing in, so the answer does not change with where they ran it.
@@ -1051,7 +1052,7 @@ public sealed class InstructionsNewCommand : InstructionsCommandBase<Instruction
         var measured = settings.Project is { Length: > 0 }
             ? ProjectConventions.Detect(
                 await RepositoryAsync(here, settings.Repo, cancellationToken).ConfigureAwait(false)
-                    ?? Directory.GetCurrentDirectory(),
+                    ?? Invocation.CurrentDirectory,
                 cancellationToken)
             : null;
 

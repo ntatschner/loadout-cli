@@ -58,11 +58,13 @@ internal sealed class UsageService : IUsageService
 {
     private readonly IReadOnlyList<IUsageHistory> _histories;
     private readonly IProjectService _projects;
+    private readonly string? _kept;
 
     public UsageService(
         IEnumerable<IUsageHistory> histories,
         IDeclaredUsageHistories declared,
-        IProjectService projects)
+        IProjectService projects,
+        Loadout.Platform.Abstractions.IPlatformPaths? paths = null)
     {
         ArgumentNullException.ThrowIfNull(declared);
 
@@ -82,6 +84,7 @@ internal sealed class UsageService : IUsageService
         ];
 
         _projects = projects;
+        _kept = paths is null ? null : DirectoryProjects.Under(paths.Paths.State);
     }
 
     /// <inheritdoc />
@@ -206,17 +209,15 @@ internal sealed class UsageService : IUsageService
 
         var attributed = new List<AttributedBucket>(buckets.Count);
 
+        var slugOf = await DirectoryProjects.AskingAsync(_projects, _kept, ct).ConfigureAwait(false);
+
         foreach (var bucket in buckets)
         {
             ct.ThrowIfCancellationRequested();
 
             if (!resolved.TryGetValue(bucket.Directory, out var slug))
             {
-                var result = await _projects
-                    .ResolveFromDirectoryAsync(bucket.Directory, ct)
-                    .ConfigureAwait(false);
-
-                slug = result.Succeeded ? result.Value?.Entry.Slug : null;
+                slug = await slugOf(bucket.Directory).ConfigureAwait(false);
 
                 resolved[bucket.Directory] = slug;
             }

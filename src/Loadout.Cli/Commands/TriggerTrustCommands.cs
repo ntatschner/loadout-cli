@@ -7,6 +7,7 @@ using Loadout.Core.Triggers;
 using Loadout.Models;
 using Loadout.Models.Triggers;
 using Loadout.Platform.Abstractions;
+using Loadout.Platform.Common;
 using Loadout.Tui;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -119,7 +120,7 @@ public sealed class TriggerAllowCommand(
         }
 
         var ran = await launcher.RunAsync(
-            new ProcessRequest(gh, ["api", $"users/{login}"], Environment.CurrentDirectory),
+            new ProcessRequest(gh, ["api", $"users/{login}"], Invocation.CurrentDirectory),
             TimeSpan.FromSeconds(30),
             ct).ConfigureAwait(false);
 
@@ -387,7 +388,7 @@ public sealed class TriggerTokenSetCommand(
 
         string token;
 
-        if (Console.IsInputRedirected)
+        if (Invocation.IsInputRedirected)
         {
             token = (await Console.In.ReadToEndAsync(cancellationToken).ConfigureAwait(false)).Trim();
         }
