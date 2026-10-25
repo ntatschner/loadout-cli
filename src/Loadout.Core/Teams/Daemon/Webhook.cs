@@ -272,6 +272,10 @@ public sealed record ChoosableDoneWhen(string Text, IReadOnlyList<string> Teams)
 /// For a lead's question or its readings: choose none of it and send it back
 /// to the lead, which is <c>team gate --think-again</c>.
 /// </param>
+/// <param name="Confirmed">
+/// For ending a run: somebody agreed to end one that may still be going,
+/// which is <c>team runs close --yes</c>.
+/// </param>
 /// <remarks>
 /// One shape for all five because they all end the same way: the daemon runs
 /// the command somebody would have typed. Nothing here decides what any of
@@ -288,7 +292,8 @@ public sealed record RunAction(
     string? Node = null,
     string? Instead = null,
     string? Budget = null,
-    bool ThinkAgain = false);
+    bool ThinkAgain = false,
+    bool Confirmed = false);
 
 /// <summary>
 /// Letting something outside this machine start a run.

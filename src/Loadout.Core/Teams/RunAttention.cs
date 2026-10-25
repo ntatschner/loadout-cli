@@ -14,6 +14,9 @@ public enum AttentionKind
 
     /// <summary>It is spending faster than it can afford to finish.</summary>
     Spending,
+
+    /// <summary>Nothing is driving it any more, or it looks that way.</summary>
+    NotResponding,
 }
 
 /// <summary>One reason a run is in the rail.</summary>
@@ -118,7 +121,11 @@ public static class RunAttention
     /// <summary>Why this run wants somebody, or nothing at all.</summary>
     /// <param name="run">The run, as its journal reads back.</param>
     /// <param name="now">The clock, so this can be argued with in a test.</param>
-    public static IReadOnlyList<Attention> For(RunSummary run, DateTimeOffset now)
+    /// <param name="liveness">
+    /// Whether anything still drives it, where that was asked; null reads as
+    /// live.
+    /// </param>
+    public static IReadOnlyList<Attention> For(RunSummary run, DateTimeOffset now, Liveness? liveness = null)
     {
         ArgumentNullException.ThrowIfNull(run);
 
@@ -131,6 +138,17 @@ public static class RunAttention
         }
 
         var reasons = new List<Attention>();
+
+        // Said instead of its nodes' silences, not beside them: a node of a
+        // run nothing drives is silent because nothing will ever launch it
+        // again, and "it says anything at all" is a wait that never ends.
+        // Clears when the run is closed, because a closed run has finished.
+        var adrift = Adrift(run, liveness);
+
+        if (adrift is not null)
+        {
+            reasons.Add(adrift);
+        }
 
         foreach (var gate in run.Waiting)
         {
@@ -160,7 +178,7 @@ public static class RunAttention
                 continue;
             }
 
-            if (Silence(node, now) is { } silent)
+            if (adrift is null && Silence(node, now) is { } silent)
             {
                 reasons.Add(silent);
             }
@@ -172,6 +190,30 @@ public static class RunAttention
         }
 
         return reasons;
+    }
+
+    /// <summary>A run nothing drives, or one that looks that way, and how to end it.</summary>
+    private static Attention? Adrift(RunSummary run, Liveness? liveness)
+    {
+        var clears = $"loadout team runs close {run.RunId}";
+
+        return liveness switch
+        {
+            Liveness.NotResponding { LastOwner: { } owner } => new Attention(
+                AttentionKind.NotResponding,
+                $"Nothing is driving it: process {owner.ProcessId} on {owner.Machine}, which ran it, has gone.",
+                clears),
+            Liveness.NotResponding => new Attention(
+                AttentionKind.NotResponding,
+                "Nothing is driving it: the process that ran it has gone.",
+                clears),
+            Liveness.PossiblyNotResponding quiet => new Attention(
+                AttentionKind.NotResponding,
+                $"It has written nothing for {RunCloser.Quiet(quiet.Quiet)}, and it is from a build that kept "
+                + "no owner, so it may have stopped. Ending it asks you to confirm.",
+                clears),
+            _ => null,
+        };
     }
 
     /// <summary>

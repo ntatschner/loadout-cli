@@ -4,6 +4,7 @@ using FluentAssertions;
 using Loadout.Core.Teams;
 using Loadout.Models;
 using Loadout.Tests.Fakes;
+using Loadout.Tests.Platform;
 using Xunit;
 
 namespace Loadout.Tests.Unit;
@@ -101,6 +102,72 @@ public sealed class RunOwnershipTests : IDisposable
         taken.Succeeded.Should().BeFalse();
         taken.ExitCode.Should().Be(ExitCode.PolicyViolation);
         waited.Elapsed.Should().BeGreaterThanOrEqualTo(patience, "somebody looking holds the lock for a moment, so a take waits before refusing");
+    }
+
+    [Fact]
+    public void Take_while_another_take_holds_is_refused()
+    {
+        // The runner's own take against close's take, as both really happen,
+        // rather than a raw stream standing in for either.
+        using var first = Ownership().Take(_run).Value!;
+
+        var second = new FileRunOwnership(_processes, TimeProvider.System, TimeSpan.FromMilliseconds(200)).Take(_run);
+
+        second.Succeeded.Should().BeFalse("one process already drives the run");
+        second.ExitCode.Should().Be(ExitCode.PolicyViolation);
+    }
+
+    [DeniableFact]
+    public void Read_of_an_owner_file_that_cannot_be_opened_is_unknown()
+    {
+        var path = Path.Combine(_run, "owner.lock");
+
+        Ownership().Take(_run).Value!.Dispose();
+        Unreadable(path, true);
+
+        try
+        {
+            FluentActions.Invoking(() => File.OpenRead(path).Dispose())
+                .Should().Throw<UnauthorizedAccessException>("the fixture has to be a file this process cannot open");
+
+            var reading = Ownership().Read(_run).Should().BeOfType<OwnerReading.Unknown>(
+                "a denial is not somebody holding the run, and taking it for one keeps the run live for good").Subject;
+
+            reading.Why.Should().NotBeNullOrWhiteSpace();
+        }
+        finally
+        {
+            Unreadable(path, false);
+        }
+    }
+
+    /// <summary>Takes away, or gives back, this process's right to read a file.</summary>
+    private static void Unreadable(string path, bool denied)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var info = new FileInfo(path);
+            var security = info.GetAccessControl();
+            var rule = new System.Security.AccessControl.FileSystemAccessRule(
+                System.Security.Principal.WindowsIdentity.GetCurrent().User!,
+                System.Security.AccessControl.FileSystemRights.ReadData,
+                System.Security.AccessControl.AccessControlType.Deny);
+
+            if (denied)
+            {
+                security.AddAccessRule(rule);
+            }
+            else
+            {
+                security.RemoveAccessRule(rule);
+            }
+
+            info.SetAccessControl(security);
+        }
+        else
+        {
+            File.SetUnixFileMode(path, denied ? UnixFileMode.None : UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
     }
 
     private FileRunOwnership Ownership() => new(_processes, TimeProvider.System);

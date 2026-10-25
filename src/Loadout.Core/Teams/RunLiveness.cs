@@ -23,6 +23,13 @@ public abstract record Liveness
     /// </summary>
     /// <param name="Quiet">How long since it last wrote anything.</param>
     public sealed record PossiblyNotResponding(TimeSpan Quiet) : Liveness;
+
+    /// <summary>
+    /// The run's owner file could not be read, so whether anything drives it
+    /// cannot be told until whatever stops it being read is put right.
+    /// </summary>
+    /// <param name="Why">What opening the owner file said.</param>
+    public sealed record Unreadable(string Why) : Liveness;
 }
 
 /// <summary>
@@ -76,6 +83,9 @@ public static class RunLiveness
 
             case OwnerReading.Free free:
                 return new Liveness.NotResponding(free.LastOwner);
+
+            case OwnerReading.Unknown unknown:
+                return new Liveness.Unreadable(unknown.Why);
         }
 
         var lastWrote = run.LastSeen > journalWritten ? run.LastSeen : journalWritten;

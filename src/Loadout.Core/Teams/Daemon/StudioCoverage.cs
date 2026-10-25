@@ -172,6 +172,7 @@ public static class StudioCoverage
         ["team blocked list"] = new("teams", StudioEffect.Reads),
         ["team blocked show"] = new("teams", StudioEffect.Reads),
         ["team blocked resolve"] = new("teams", StudioEffect.Changes),
+        ["team runs close"] = new("teams", StudioEffect.Changes),
         ["team restore"] = new("teams", StudioEffect.Changes),
         ["team bin"] = new("teams", StudioEffect.Reads),
         ["team bin empty"] = new("teams", StudioEffect.Changes),

@@ -148,7 +148,7 @@ internal static partial class DashboardActions
     /// </remarks>
     internal static readonly string[] Verbs =
     [
-        "gate", "gates", "message", "stop", "forget", "pause", "resume", "name", "pr", "say", "budget", "pickup",
+        "gate", "gates", "message", "stop", "forget", "close", "pause", "resume", "name", "pr", "say", "budget", "pickup",
         "restore", "purge", "restore-team", "purge-team",
         "daemon-pause", "daemon-resume", "daemon-restart",
     ];
@@ -190,6 +190,11 @@ internal static partial class DashboardActions
             // the answers they are waiting on — and the command refuses it
             // whatever the page thinks it is looking at.
             "forget" => ("team runs remove", [action.Run]),
+
+            // Ending a run nothing drives. --yes only when the page asked and
+            // was told yes: a run from a build that kept no owner may still be
+            // going, and the command refuses it unconfirmed.
+            "close" => ("team runs close", [action.Run, .. action.Confirmed ? (string[])["--yes"] : []]),
 
             // The garbage room's: out of the bin, or out of it for good. The
             // page asks before a purge; --yes is the command's own way of
@@ -421,8 +426,21 @@ internal static partial class DashboardActions
                 ExitCode.PolicyViolation when action.Verb == "forget" =>
                     "That run has not finished. Stop it first: its nodes are still reading "
                     + "its directory for the answers they are waiting on.",
+                ExitCode.PolicyViolation when action.Verb == "close" =>
+                    "Something is still driving that run, so it was not ended.",
                 ExitCode.PolicyViolation =>
                     "That was refused by a rule. The terminal serving this page has which one.",
+                // Unconfirmed, the one refusal worth asking about is a run that
+                // may still be going. Confirmed, what is left is a run that has
+                // already ended or an id that is not a run.
+                ExitCode.InvalidArguments when action.Verb == "close" && !action.Confirmed =>
+                    "That run may still be going. Confirm to end it.",
+                ExitCode.InvalidArguments when action.Verb == "close" =>
+                    "That run has already ended, or is not a run this can end. The terminal serving "
+                    + "this page says which.",
+                ExitCode.GeneralFailure when action.Verb == "close" =>
+                    "That run was not ended: its owner file could not be read, or its journal could not "
+                    + "be written. The terminal serving this page says which, and why.",
                 ExitCode.InvalidArguments when action.Verb == "pickup" =>
                     "That run cannot be picked up as it is: it has not ended, or it would stop again "
                     + "at once. Give it more money in the budget box. The terminal serving this page "

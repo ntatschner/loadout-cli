@@ -62,6 +62,7 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
     private readonly Loadout.Core.Ideas.IIdeaDumps _dumps;
     private readonly ISecretProvider _secrets;
     private readonly IProcessInspector _processes;
+    private readonly Loadout.Core.Teams.IRunOwnership? _ownership;
     private readonly TimeProvider _time;
     private readonly Loadout.Core.Teams.ITeamCatalogue _teams;
     private readonly Loadout.Core.Instructions.ISpecialistLibrary _library;
@@ -90,8 +91,10 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         Loadout.Core.Workspace.IWorkspaceManager workspace,
         Loadout.Agents.IAgentRegistry agents,
         Loadout.Core.Ideas.IIdeaService ideas,
-        Loadout.Core.Ideas.IIdeaDumps dumps)
+        Loadout.Core.Ideas.IIdeaDumps dumps,
+        Loadout.Core.Teams.IRunOwnership? ownership = null)
     {
+        _ownership = ownership;
         _ideas = ideas;
         _dumps = dumps;
         _teams = teams;
@@ -469,6 +472,7 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         // is the routes' own to refuse.
         server.Tasks = _tasks;
         server.Ideas = _ideas;
+        server.Ownership = _ownership;
         server.IdeasBusy = () => ideas.Marked;
 
         // Said outright as well, for Studio, which shows every change as the
