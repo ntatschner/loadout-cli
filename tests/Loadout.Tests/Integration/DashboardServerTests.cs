@@ -1600,6 +1600,71 @@ public sealed class DashboardServerTests : IAsyncLifetime
     /// and the page reports success: sending a question back must reach the
     /// command as sending it back, not as an answer of "no".
     /// </remarks>
+    /// <remarks>
+    /// What Studio reads to draw "not responding" and offer End run. The owner
+    /// is there only when its record could be read, which is once the lock is
+    /// free; a run something still holds has none, and the key is left out.
+    /// </remarks>
+    [Fact]
+    public async Task Run_json_carries_liveness_and_owner()
+    {
+        var ownership = new FakeRunOwnership();
+        var directory = _journal.DirectoryOf("20260916-1200-aaaa");
+
+        _server.Ownership = ownership.Script(directory, new OwnerReading.Free(
+            new RunOwner(4242, new DateTimeOffset(2026, 9, 16, 11, 59, 0, TimeSpan.Zero), "BOX", DateTimeOffset.UnixEpoch)));
+
+        using (var gone = JsonDocument.Parse(await (await GetAsync("/api/runs/20260916-1200-aaaa")).Content.ReadAsStringAsync()))
+        {
+            var run = gone.RootElement;
+
+            run.GetProperty("liveness").GetString().Should().Be("not-responding");
+            run.GetProperty("owner").GetProperty("pid").GetInt32().Should().Be(4242);
+            run.GetProperty("owner").GetProperty("machine").GetString().Should().Be("BOX");
+            run.GetProperty("owner").GetProperty("startedAt").GetDateTimeOffset()
+                .Should().Be(new DateTimeOffset(2026, 9, 16, 11, 59, 0, TimeSpan.Zero));
+            run.GetProperty("attention").EnumerateArray()
+                .Select(one => one.GetProperty("kind").GetString())
+                .Should().Contain("notresponding");
+        }
+
+        ownership.Script(directory, new OwnerReading.Held());
+
+        using var held = JsonDocument.Parse(await (await GetAsync("/api/runs/20260916-1200-aaaa")).Content.ReadAsStringAsync());
+
+        held.RootElement.GetProperty("liveness").GetString().Should().Be("live");
+        held.RootElement.TryGetProperty("owner", out _).Should().BeFalse("an owner nobody can read is left out");
+    }
+
+    /// <remarks>
+    /// The confirmation is a flag on the body. Dropped on the way, the close
+    /// reaches the command without --yes, which refuses a run that may still
+    /// be going, and the page asks again for ever.
+    /// </remarks>
+    [Fact]
+    public async Task Confirmed_close_from_the_page_reaches_the_command_as_yes()
+    {
+        RunAction? asked = null;
+
+        _server.Act = (action, _) =>
+        {
+            asked = action;
+
+            return Task.FromResult(OperationResult.Ok());
+        };
+
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/runs/20260917-1116-ed59/close?token=" + _server.Token),
+            new StringContent("{\"confirmed\":true}", System.Text.Encoding.UTF8, "application/json"));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.Accepted);
+        asked!.Confirmed.Should().BeTrue();
+
+        var (command, arguments) = Loadout.Cli.Commands.DashboardActions.Maps(asked);
+
+        string.Join(' ', new[] { command }.Concat(arguments)).Should().Be("team runs close 20260917-1116-ed59 --yes");
+    }
+
     [Fact]
     public async Task Think_again_from_the_page_reaches_the_command_as_think_again()
     {

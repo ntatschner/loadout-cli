@@ -4,9 +4,10 @@ namespace Loadout.Core.Teams;
 
 /// <summary>One line of a run's journal, as it goes into the file.</summary>
 /// <remarks>
-/// The runner writes most of a journal and <see cref="BlockedRunReader"/>
-/// writes what a person decided about one that ended short, and they live in
-/// different assemblies. One serialiser for both, so the two cannot drift into
+/// The runner writes most of a journal, <see cref="RunCloser"/> writes the
+/// end of one whose runner died, and <see cref="BlockedRunReader"/> writes
+/// what a person decided about one that ended short; they live in different
+/// assemblies. One serialiser for all of them, so they cannot drift into
 /// lines the fold reads differently.
 /// </remarks>
 public static class RunJournalLine

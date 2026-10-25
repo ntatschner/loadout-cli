@@ -204,6 +204,15 @@ public sealed class EventRecorderTests
             .Single().Level.Should().Be(level);
     }
 
+    [Fact]
+    public void Abandoned_finish_is_info()
+    {
+        // Somebody closing a dead run has dealt with it; the crash was the
+        // problem, and a second alarm for clearing it up is noise.
+        EventRecorder.Copied(Run(), [Entry("run.finished", null, new { ended = "abandoned: the process had ended", outcome = "abandoned" })], 0)
+            .Single().Level.Should().Be(EventLevels.Info);
+    }
+
     private static RunEvent Entry(string kind, string? node, object data) =>
         new(Noon, node, kind, JsonSerializer.SerializeToElement(data));
 

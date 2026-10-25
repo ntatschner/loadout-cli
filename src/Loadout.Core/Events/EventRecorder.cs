@@ -262,6 +262,10 @@ public static class EventRecorder
                         {
                             RunOutcome.Done => EventLevels.Done,
                             RunOutcome.Stopped => EventLevels.Info,
+
+                            // Somebody ending a dead run has dealt with it;
+                            // the problem was the crash.
+                            RunOutcome.Abandoned => EventLevels.Info,
                             _ => EventLevels.Problem,
                         },
                         EventDirections.ToMe,

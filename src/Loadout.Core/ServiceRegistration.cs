@@ -185,6 +185,9 @@ public static class ServiceRegistration
         services.AddSingleton<Teams.TeamBin>();
         services.AddSingleton<Sessions.LaunchSheet>();
         services.AddSingleton<Teams.IRunJournal, Teams.RunJournal>();
+        services.AddSingleton<Teams.IRunOwnership>(provider => new Teams.FileRunOwnership(
+            provider.GetRequiredService<Platform.Abstractions.IProcessInspector>(),
+            provider.GetRequiredService<TimeProvider>()));
 
         // Global search, one source per kind, in the order results are grouped.
         services.AddSingleton<Lists.ISearchSource, Lists.TaskSearchSource>();

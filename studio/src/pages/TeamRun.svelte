@@ -23,8 +23,8 @@
   import { runJob } from '../lib/jobs';
   import { router } from '../lib/router.svelte';
   import { studio } from '../lib/state.svelte';
-  import { answerGate, carryOn, forget, hold, pickUp, runLines, setBudget, stop, tellLead } from '../lib/teamsAct';
-  import { criteriaOf, crewOf, duration, gateOf, runWord, shapeOf, summaryOf } from '../lib/teamsData';
+  import { answerGate, carryOn, close, forget, hold, pickUp, runLines, setBudget, stop, tellLead } from '../lib/teamsAct';
+  import { criteriaOf, crewOf, duration, gateOf, livenessOf, runWord, shapeOf, summaryOf, unowned } from '../lib/teamsData';
   import { money, type JournalLine } from '../lib/teams';
 
   let { id, onagain = undefined }: { id: string; onagain?: (run: Run) => void } = $props();
@@ -41,6 +41,17 @@
   let budget = $state('');
   let changing = $state(false);
   let forgetting = $state(false);
+  let ending = $state(false);
+  const badge = $derived(run ? livenessOf(run) : null);
+
+  /** End run: straight away where the owner is known to be gone, asked first where it only looks gone. */
+  function endRun(target: Run) {
+    if (target.liveness === 'possibly-not-responding') {
+      ending = true;
+    } else {
+      void close(target.id, false);
+    }
+  }
 
   /* ---------- reads, again whenever the run moves on ---------- */
 
@@ -319,7 +330,7 @@
     <div class="trhead">
       <a class="back" href="#teams"><span aria-hidden="true">←</span>Teams</a>
       <h1 class="topicname">{run.goal}</h1>
-      <div class="jobhead"><Signal word={summary.word} /><span class="calm small">{[run.team, run.project, run.autonomy, `round ${run.rounds}${run.roundLimit ? ` of ${run.roundLimit}` : ''}`, duration(run.elapsedSeconds), run.id].filter(Boolean).join(' · ')}</span></div>
+      <div class="jobhead"><Signal word={summary.word} /><span class="calm small">{[run.team, run.project, run.autonomy, `round ${run.rounds}${run.roundLimit ? ` of ${run.roundLimit}` : ''}`, duration(run.elapsedSeconds), run.id].filter(Boolean).join(' · ')}</span>{#if badge}<span class="ls-liveness" role="status">{badge}</span>{/if}</div>
     </div>
 
     {#if gate}
@@ -367,7 +378,9 @@
         <section aria-labelledby="tr-do">
           <h2 class="ls-zone" id="tr-do">Do</h2>
           <div class="ls-answers col">
-            {#if run.running}
+            {#if unowned(run)}
+              <HaloButton label="End run" kind="danger" size="small" cmd={runLines.close(run.id)} disabledReason={watch} onpress={() => endRun(run)} />
+            {:else if run.running}
               <HaloButton label="Hold after this round" size="small" cmd={runLines.hold(run.id)} disabledReason={watch} onpress={() => void hold(run.id)} />
               <HaloButton label="Let it carry on" size="small" cmd={runLines.carryOn(run.id)} disabledReason={watch} onpress={() => void carryOn(run.id)} />
               <HaloButton label="Stop after this round" kind="danger" size="small" cmd={runLines.stop(run.id)} disabledReason={watch} onpress={() => void stop(run.id)} />
@@ -510,5 +523,15 @@
     why={`“${run.goal}” goes to the bin, where it waits before it goes for good. Its branches are not touched.`}
     actions={[{ label: 'Forget it', kind: 'danger', cmd: runLines.forget(run.id), onpress: () => void forget(run.id).then((ok) => ok && router.go('teams')) }]}
     onclose={() => (forgetting = false)}
+  />
+{/if}
+
+{#if ending && run}
+  <Dialog
+    danger
+    title={`End ${run.id}?`}
+    why="Nothing has written to its journal for a while and no process holds it, but it started before Loadout recorded who drives a run, so this cannot be sure it has gone. Ending it marks it abandoned and stops any node still shown as working."
+    actions={[{ label: 'End run', kind: 'danger', cmd: `${runLines.close(run.id)} --yes`, onpress: () => void close(run.id, true).then(() => (ending = false)) }]}
+    onclose={() => (ending = false)}
   />
 {/if}

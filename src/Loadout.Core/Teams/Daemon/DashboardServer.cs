@@ -3,6 +3,7 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Loadout.Models;
 using Loadout.Models.Results;
 
@@ -222,6 +223,13 @@ public sealed class DashboardServer : IDisposable
     public Func<SettingsChange, CancellationToken, Task<OperationResult>>? Settle { get; set; }
 
     public Attaching? Attach { get; set; }
+
+    /// <summary>
+    /// What tells a run still driven from one whose driver has gone, or null
+    /// where nothing gave this server one, and every running run reads as live.
+    /// </summary>
+    public IRunOwnership? Ownership { get; set; }
+
     // Not readonly: a failed Start disposes it, so asking for another port
     // means asking with another listener.
     private HttpListener _listener = new();
@@ -877,7 +885,8 @@ public sealed class DashboardServer : IDisposable
             // A flag rather than an answer, because "Think again" is not one
             // of the lead's options and the page should not have to know the
             // words the runner listens for.
-            Flag(asked, "thinkAgain"));
+            Flag(asked, "thinkAgain"),
+            Flag(asked, "confirmed"));
 
         var done = await Act(action, ct).ConfigureAwait(false);
 
@@ -3046,10 +3055,65 @@ public sealed class DashboardServer : IDisposable
             .ToList();
     }
 
-    private static object Describe(RunSummary run, OfficeKit kit, IReadOnlyDictionary<string, string> pins) =>
-        Described(run, kit, OfficeCast.For(kit, run.RunId, run.Nodes.Select(node => (node.Node, node.Role)), pins));
+    private JsonObject Describe(RunSummary run, OfficeKit kit, IReadOnlyDictionary<string, string> pins)
+    {
+        var liveness = LivenessOf(run);
+        var described = JsonSerializer.SerializeToNode(
+            Described(run, kit, OfficeCast.For(kit, run.RunId, run.Nodes.Select(node => (node.Node, node.Role)), pins), liveness),
+            Json)!.AsObject();
 
-    private static object Described(RunSummary run, OfficeKit kit, IReadOnlyDictionary<string, string> cast) => new
+        // Left out rather than null, so a page can tell "nobody known" from
+        // a field it has not been taught to read.
+        if (described["owner"] is null)
+        {
+            described.Remove("owner");
+        }
+
+        return described;
+    }
+
+    /// <summary>
+    /// Whether anything still drives a run, asked of its owner's lock for a
+    /// running run only.
+    /// </summary>
+    /// <remarks>
+    /// One take-and-release of the lock per running run per poll, which is
+    /// cheap. Where this server was given no way to ask, or asking threw, the
+    /// run reads as live: saying a run has stopped is the claim that needs
+    /// evidence, and nothing here has any.
+    /// </remarks>
+    private Liveness LivenessOf(RunSummary run)
+    {
+        if (!run.Running)
+        {
+            return new Liveness.Finished();
+        }
+
+        if (Ownership is null)
+        {
+            return new Liveness.Live();
+        }
+
+        try
+        {
+            return RunLiveness.Of(run, Ownership.Read(run.Directory), RunCloser.Written(run.Directory), DateTimeOffset.UtcNow);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new Liveness.Live();
+        }
+    }
+
+    private static string Spelt(Liveness liveness) => liveness switch
+    {
+        Liveness.Finished => "finished",
+        Liveness.NotResponding => "not-responding",
+        Liveness.PossiblyNotResponding => "possibly-not-responding",
+        Liveness.Unreadable => "unreadable",
+        _ => "live",
+    };
+
+    private static object Described(RunSummary run, OfficeKit kit, IReadOnlyDictionary<string, string> cast, Liveness liveness) => new
     {
         id = run.RunId,
 
@@ -3075,10 +3139,22 @@ public sealed class DashboardServer : IDisposable
         // and this is the one that says the next move is yours.
         run.WaitingForYou,
 
+        // Whether anything still drives it: live, not-responding,
+        // possibly-not-responding, unreadable or finished. The journal says
+        // only that a run is going until it writes its finish, so a run whose
+        // driver was killed reads as running for good without this.
+        liveness = Spelt(liveness),
+
+        // Who last drove it, where that is known: only once the lock is free
+        // can its record be read. Taken out of the JSON when null.
+        owner = liveness is Liveness.NotResponding { LastOwner: { } last }
+            ? new { pid = last.ProcessId, machine = last.Machine, startedAt = last.StartedAt }
+            : null,
+
         // Why it wants somebody, each saying what would clear it. Computed
         // fresh every read and never remembered, because a rail that only
         // grows is worse than no rail.
-        attention = RunAttention.For(run, DateTimeOffset.UtcNow).Select(reason => new
+        attention = RunAttention.For(run, DateTimeOffset.UtcNow, liveness).Select(reason => new
         {
             kind = reason.Kind.ToString().ToLowerInvariant(),
             reason.Detail,

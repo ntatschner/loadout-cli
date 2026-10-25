@@ -44,6 +44,7 @@ export const SIGNAL_STATES: Record<string, [SignalFamily, string, string]> = {
   held: ['rest', 'held', 'still'],
   'held after this round': ['rest', 'held', 'still'],
   stopped: ['rest', 'stopped', 'still'],
+  abandoned: ['rest', 'stopped', 'still'],
   'not attempted': ['rest', 'open', 'dashed'],
   unknown: ['rest', 'unknown', 'flicker'],
   dropped: ['rest', 'dropped', 'strike'],

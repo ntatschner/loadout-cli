@@ -61,6 +61,14 @@ public sealed class RunOutcomesTests
     }
 
     [Fact]
+    public void Abandoned_ending_is_filed_as_abandoned()
+    {
+        // What team runs close writes for a run whose driver had gone. Read
+        // as anything else, or as nothing, a prune by outcome would miss it.
+        RunOutcomes.From("abandoned: the process driving it had ended").Should().Be(RunOutcome.Abandoned);
+    }
+
+    [Fact]
     public void A_finish_with_no_word_about_how_it_went_is_unrecorded()
     {
         // Not a killed run: that one never writes a finish at all, so it

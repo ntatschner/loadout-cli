@@ -234,6 +234,11 @@ public static class BlockedRuns
             RunOutcome.Failed => "failed",
             RunOutcome.Limited => "limited",
             RunOutcome.Unrecorded => "unrecorded",
+
+            // Closed with 'team runs close' after its driver died: the same
+            // run as one still read as running with nothing behind it, only
+            // tidied, so it is held the same way.
+            RunOutcome.Abandoned => "dead",
             _ => null,
         };
     }
@@ -420,7 +425,7 @@ public static class BlockedRuns
 
         new("dead", BlockedAction.CarryOn,
             facts => facts.Kind == "dead",
-            facts => "Its process went away while its journal still said it was running, so it never finished. "
+            facts => "Whatever was driving it went away before it finished, so it never said how it went. "
                 + "Carrying on starts from the work it left on its branches."),
 
         new("unrecorded", BlockedAction.Requeue,

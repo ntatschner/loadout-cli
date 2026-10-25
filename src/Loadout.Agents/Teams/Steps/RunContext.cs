@@ -138,6 +138,12 @@ internal sealed class RunContext
     /// <summary>The task the run was started for, if any.</summary>
     public string? ForTask { get; set; }
 
+    /// <summary>
+    /// This process's hold on the run, or null where nothing is kept. Owned
+    /// by the runner, which lets it go; a step only touches it.
+    /// </summary>
+    public IDisposable? Owner { get; set; }
+
     /// <summary>The lead's session, once it has started.</summary>
     public HeadlessLaunch? Lead { get; set; }
 }

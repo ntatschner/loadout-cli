@@ -60,6 +60,7 @@ public sealed class BlockedRunsTests
     [InlineData("halted: the lead took an outward action its brief did not allow", "failed")]
     [InlineData("the lead reported done with 1 of 2 criteria unmet", "failed")]
     [InlineData("", "unrecorded")]
+    [InlineData("abandoned: nothing was driving it", "dead")]
     public void Every_ending_short_of_done_is_held(string ended, string kind)
     {
         BlockedRuns.KindOf(Run(ended)).Should().Be(kind);
@@ -235,5 +236,30 @@ public sealed class BlockedRunsTests
         chains.Should().HaveCount(2);
         chains[0].Select(one => one.RunId).Should().Equal("a", "b", "c");
         chains[1].Select(one => one.RunId).Should().Equal("d");
+    }
+
+    [Fact]
+    public void A_run_whose_owner_has_gone_reads_as_dead_and_one_still_held_does_not()
+    {
+        var run = Run(null, running: true);
+        var gone = new Loadout.Tests.Fakes.FakeRunOwnership()
+            .Script(run.Directory, new OwnerReading.Free(null));
+        var held = new Loadout.Tests.Fakes.FakeRunOwnership()
+            .Script(run.Directory, new OwnerReading.Held());
+
+        Loadout.Cli.Commands.BlockedReading.Gone(run, gone, At.AddHours(2)).Should().BeTrue();
+        Loadout.Cli.Commands.BlockedReading.Gone(run, held, At.AddHours(2)).Should().BeFalse();
+    }
+
+    [Fact]
+    public void A_run_from_an_older_build_that_has_only_gone_quiet_is_not_called_dead()
+    {
+        // No owner record is a guess, not an observation: such a run is shown
+        // as possibly not responding elsewhere, and closing it asks first, so
+        // the Blocked section does not offer to carry on from it.
+        var run = Run(null, running: true);
+        var none = new Loadout.Tests.Fakes.FakeRunOwnership();
+
+        Loadout.Cli.Commands.BlockedReading.Gone(run, none, At.AddDays(2)).Should().BeFalse();
     }
 }

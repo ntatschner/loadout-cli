@@ -109,6 +109,9 @@ internal static class TeamStyle
     /// <summary>The colour for what an entry means, or null to leave it plain.</summary>
     internal static string? Colour(RunEvent entry) => entry.Kind switch
     {
+        // Somebody ended it because its driver had gone: dealt with, but not
+        // a run that finished on its own, so it should not read as one.
+        "run.finished" when Abandoned(entry) => "yellow",
         "run.started" or "run.finished" or "round.started" or "run.budget" => "bold",
         "node.asked" => "yellow",
         "node.answered" or "permission.asked" => entry.Yes("allowed") ? "green" : "red",
@@ -116,4 +119,71 @@ internal static class TeamStyle
         "node.launched" => "blue",
         _ => null,
     };
+
+    private static bool Abandoned(RunEvent entry) =>
+        string.Equals(entry.Word("outcome"), "abandoned", StringComparison.OrdinalIgnoreCase)
+        || entry.Word("ended")?.StartsWith("abandoned", StringComparison.OrdinalIgnoreCase) == true;
+
+    /// <summary>Whether anything still drives a run.</summary>
+    /// <remarks>
+    /// Asked of a run that is still going only. A finished run is finished
+    /// whatever its lock says, and asking takes the lock for a moment, so
+    /// listing a hundred old runs costs nothing.
+    /// </remarks>
+    internal static Liveness LivenessOf(RunSummary run, IRunOwnership ownership, DateTimeOffset now)
+    {
+        if (!run.Running)
+        {
+            return new Liveness.Finished();
+        }
+
+        // The journal's own write time, because a run's last-seen counts node
+        // events only and a lead's turn writes others.
+        var journal = new FileInfo(Path.Combine(run.Directory, "journal.jsonl"));
+        var written = journal.Exists ? new DateTimeOffset(journal.LastWriteTimeUtc, TimeSpan.Zero) : run.LastSeen;
+
+        return RunLiveness.Of(run, ownership.Read(run.Directory), written, now);
+    }
+
+    /// <summary>Liveness as the word --json gives it.</summary>
+    /// <remarks>
+    /// Anything not known here reads as live, the safe default: a case added
+    /// later must never make a running run look dead, which is what invites
+    /// somebody to end it.
+    /// </remarks>
+    internal static string LivenessWord(Liveness liveness) => liveness switch
+    {
+        Liveness.Finished => "finished",
+        Liveness.NotResponding => "not-responding",
+        Liveness.PossiblyNotResponding => "possibly-not-responding",
+        _ => "live",
+    };
+
+    /// <summary>Who last drove a run, for --json, or null when that is not known.</summary>
+    internal static object? OwnerJson(Liveness liveness) => liveness is Liveness.NotResponding { LastOwner: { } owner }
+        ? new { pid = owner.ProcessId, machine = owner.Machine, startedAt = owner.StartedAt }
+        : null;
+
+    /// <summary>Whether nothing, or possibly nothing, is driving the run.</summary>
+    internal static bool Unowned(Liveness liveness) =>
+        liveness is Liveness.NotResponding or Liveness.PossiblyNotResponding;
+
+    /// <summary>
+    /// What to say in place of "running" for a run nothing drives, or null
+    /// for one that is driven.
+    /// </summary>
+    internal static string? Unresponsive(Liveness liveness, RunSummary run, DateTimeOffset now) => liveness switch
+    {
+        Liveness.NotResponding { LastOwner: { } owner } =>
+            $"[red]not responding[/] (pid {owner.ProcessId}, last seen {TeamStatusCommand.Elapsed(now - run.LastSeen)} ago)",
+        Liveness.NotResponding =>
+            $"[red]not responding[/] (last seen {TeamStatusCommand.Elapsed(now - run.LastSeen)} ago)",
+        Liveness.PossiblyNotResponding possibly =>
+            $"[yellow]possibly not responding[/] (quiet for {TeamStatusCommand.Elapsed(possibly.Quiet)})",
+        _ => null,
+    };
+
+    /// <summary>The line saying how to end a run nothing drives.</summary>
+    internal static string CloseHint(string runId) =>
+        $"[dim]End it with:[/] loadout team runs close {Markup.Escape(runId)}";
 }

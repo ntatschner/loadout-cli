@@ -43,7 +43,8 @@ public static class ServiceRegistration
             provider.GetRequiredService<Core.Git.IGitManager>(),
             provider.GetRequiredService<IChildLifetime>(),
             provider.GetRequiredService<Core.Tasks.ITaskService>(),
-            provider.GetRequiredService<Core.Tools.IToolRegistry>()));
+            provider.GetRequiredService<Core.Tools.IToolRegistry>(),
+            provider.GetRequiredService<Core.Teams.IRunOwnership>()));
         services.AddSingleton<Ideas.IDetachedLauncher, Ideas.DetachedLauncher>();
         services.AddSingleton<Ideas.IIdeaRefiner, Ideas.IdeaRefiner>();
         services.AddSingleton<Ideas.IDumpSplitter, Ideas.DumpSplitter>();

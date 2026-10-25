@@ -308,7 +308,7 @@ public sealed class TeamRunsPruneCommand : AsyncCommand<TeamRunsPruneCommand.Set
         [CommandOption("--outcome <OUTCOME>")]
         [Description(
             "Take only runs that ended this way: done, failed, stopped, limited, blocked, "
-            + "needs-decision, or unrecorded for one that finished without saying how. "
+            + "needs-decision, abandoned, or unrecorded for one that finished without saying how. "
             + "Repeatable.")]
         public string[] Outcome { get; init; } = [];
 
@@ -545,4 +545,151 @@ public sealed class TeamRunsPruneCommand : AsyncCommand<TeamRunsPruneCommand.Set
     /// <summary>When a run stopped, for the line offering it up.</summary>
     private static string When(RunSummary run) =>
         (run.Finished ?? run.Started).ToLocalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+}
+
+/// <summary>Ending a run whose driver has gone.</summary>
+/// <remarks>
+/// <para>
+/// A run reads as going until its runner writes its finish, so a runner that
+/// was killed leaves one that remove, prune and resume all refuse for good.
+/// This writes the finish for it, and only once nothing on this machine is
+/// driving the run: a run that is still going is stopped with
+/// <c>team halt</c>, not closed.
+/// </para>
+/// <para>
+/// A run from a build that kept no owner can only be judged by how long it
+/// has been quiet, which is a guess, so closing one is asked about first.
+/// </para>
+/// </remarks>
+[Description("End a team run whose driver has died, so it can be removed, pruned or resumed.")]
+[CommandMeta(CommandCategory.Start,
+    Intent = "team runs close end abandon hung stuck dead orphaned run not responding", Mutates = true)]
+public sealed class TeamRunsCloseCommand : Command<TeamRunsCloseCommand.Settings>
+{
+    private readonly RunCloser _closer;
+    private readonly IAnsiConsole _console;
+
+    public TeamRunsCloseCommand(
+        IRunJournal journal,
+        IRunOwnership ownership,
+        TimeProvider time,
+        IAnsiConsole console)
+    {
+        _closer = new RunCloser(journal, ownership, time);
+        _console = console;
+    }
+
+    public sealed class Settings : GlobalSettings
+    {
+        [CommandArgument(0, "<run>")]
+        [Description("The run to end, as 'team runs' names it.")]
+        public string Run { get; init; } = string.Empty;
+
+        [CommandOption("--yes")]
+        [Description("Close a run from an older build without asking, though it may still be going.")]
+        public bool Yes { get; init; }
+    }
+
+    /// <inheritdoc />
+    public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var output = new CommandOutput(_console, settings);
+
+        var judged = _closer.Judge(settings.Run);
+
+        if (judged.Failed)
+        {
+            return output.Fail(judged.Error!, judged.ExitCode);
+        }
+
+        var (_, liveness) = judged.Value;
+        var reason = Reason(liveness);
+        var confirmed = settings.Yes;
+
+        // Asked only where it would otherwise be refused for want of it, and
+        // never under a dry run, which changes nothing and so needs nobody's
+        // agreement.
+        if (liveness is Liveness.PossiblyNotResponding quiet && !confirmed && !settings.DryRun
+            && settings.AllowsPrompting)
+        {
+            if (!_console.Confirm(
+                $"Run {Markup.Escape(settings.Run)} has written nothing for {RunCloser.Quiet(quiet.Quiet)}, "
+                + "but it kept no owner, so it may still be going. Close it?", false))
+            {
+                output.WriteLine("[dim]Nothing was changed.[/]");
+
+                return CommandOutput.Success();
+            }
+
+            confirmed = true;
+        }
+
+        var closed = settings.DryRun
+            ? _closer.Preview(settings.Run, confirmed: true, reason)
+            : _closer.Close(settings.Run, confirmed, reason);
+
+        if (closed.Failed)
+        {
+            return output.Fail(closed.Error!, closed.ExitCode);
+        }
+
+        var done = closed.Value!;
+        var asks = liveness is Liveness.PossiblyNotResponding && !confirmed;
+
+        if (output.IsJson)
+        {
+            output.WriteJson(new
+            {
+                dryRun = settings.DryRun,
+                run = done.RunId,
+                team = done.Team,
+                ended = done.Ended,
+                ending = done.Ending,
+                needsYes = settings.DryRun && asks,
+            });
+
+            return CommandOutput.Success();
+        }
+
+        var verb = settings.DryRun ? "Would close" : "Closed";
+
+        output.WriteLine(
+            $"{(settings.DryRun ? "[dim]" : "[green]+[/] ")}{verb} [bold]{Markup.Escape(done.RunId)}[/]"
+            + (done.Team is { Length: > 0 } ? $" [dim]({Markup.Escape(done.Team)})[/]" : string.Empty)
+            + $"{(settings.DryRun ? "[/]" : string.Empty)}: {Markup.Escape(done.Ending)}");
+
+        foreach (var node in done.Ended)
+        {
+            output.WriteLine($"  [dim]{(settings.DryRun ? "would end" : "ended")}[/] {Markup.Escape(node)}");
+        }
+
+        if (settings.DryRun)
+        {
+            output.WriteBlankLine();
+            output.WriteLine(asks
+                ? "[dim]Nothing was changed. It would ask first, or take --yes.[/]"
+                : "[dim]Nothing was changed.[/]");
+        }
+        else
+        {
+            output.WriteBlankLine();
+            output.WriteLine(
+                $"[dim]Remove it with[/] loadout team runs remove {Markup.Escape(done.RunId)}"
+                + $" [dim]or pick it up with[/] loadout team resume {Markup.Escape(done.RunId)}");
+        }
+
+        return CommandOutput.Success();
+    }
+
+    /// <summary>Why, for the ending the journal keeps.</summary>
+    private static string Reason(Liveness liveness) => liveness switch
+    {
+        Liveness.NotResponding { LastOwner: { } owner } =>
+            $"process {owner.ProcessId.ToString(CultureInfo.InvariantCulture)} driving it had gone",
+        Liveness.NotResponding => "the process driving it had gone",
+        Liveness.PossiblyNotResponding quiet => $"nothing written for {RunCloser.Quiet(quiet.Quiet)}",
+        _ => "closed by hand",
+    };
 }

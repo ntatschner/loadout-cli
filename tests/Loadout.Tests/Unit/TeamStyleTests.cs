@@ -28,6 +28,11 @@ public sealed class TeamStyleTests
         TeamStyle.Colour(Event(kind, data)).Should().Be(colour);
 
     [Fact]
+    public void Abandoned_finish_is_yellow() =>
+        TeamStyle.Colour(Event("run.finished", """{"ended":"abandoned: closed by hand","outcome":"abandoned"}""", node: null))
+            .Should().Be("yellow", "a run somebody ended for it did not finish on its own");
+
+    [Fact]
     public void The_words_are_the_same_with_the_colour_taken_off()
     {
         var entry = Event("node.asked", """{"tool":"Bash","target":"rm [x]"}""");
