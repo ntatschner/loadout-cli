@@ -55,6 +55,12 @@ public static class TriggerVerbs
 
     /// <summary>A person changed what a triggered run may spend: set aside the new figure, within the rule's cap.</summary>
     public const string Raise = "raise";
+
+    /// <summary>
+    /// A person carried on from a triggered run that ended short: set aside what
+    /// the run after it may spend, within the same rule's cap, or refuse.
+    /// </summary>
+    public const string Follow = "follow";
 }
 
 /// <summary>

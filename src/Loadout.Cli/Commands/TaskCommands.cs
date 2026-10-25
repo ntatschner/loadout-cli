@@ -998,17 +998,20 @@ public sealed class TaskShowCommand : AsyncCommand<TaskShowCommand.Settings>
     private readonly ITaskService _tasks;
     private readonly IProjectService _projects;
     private readonly Core.Ideas.IIdeaService _ideas;
+    private readonly Core.Teams.IRunJournal _journal;
     private readonly IAnsiConsole _console;
 
     public TaskShowCommand(
         ITaskService tasks,
         IProjectService projects,
         Core.Ideas.IIdeaService ideas,
+        Core.Teams.IRunJournal journal,
         IAnsiConsole console)
     {
         _tasks = tasks;
         _projects = projects;
         _ideas = ideas;
+        _journal = journal;
         _console = console;
     }
 
@@ -1065,6 +1068,12 @@ public sealed class TaskShowCommand : AsyncCommand<TaskShowCommand.Settings>
             : null;
         var accepted = record is { Succeeded: true } ? record.Value!.Accepted : null;
 
+        // The team runs started for it, as the chains that carrying on from a
+        // run that ended short makes: each run beside the one it followed.
+        var chains = slug is null
+            ? []
+            : new Core.Teams.BlockedRunReader(_journal).ChainsFor(slug, task.Id);
+
         if (output.IsJson)
         {
             // The task as every surface writes it, beside the list's revision,
@@ -1075,6 +1084,17 @@ public sealed class TaskShowCommand : AsyncCommand<TaskShowCommand.Settings>
                 revision = read.Value.Revision,
                 task = TaskOperations.Json(task),
                 idea = accepted is null ? null : new { plan = accepted.PlanPath, accepted = accepted.AcceptedUtc, by = accepted.AcceptedBy },
+                runs = chains.Select(chain => chain.Select(run => new
+                {
+                    id = run.RunId,
+                    team = run.Team,
+                    started = run.Started,
+                    ended = run.Ended,
+                    outcome = Spelt(run),
+                    follows = run.Follows,
+                    resolved = run.Resolved?.Action,
+                    next = run.Resolved?.Next,
+                })),
             });
 
             return CommandOutput.Success();
@@ -1103,6 +1123,9 @@ public sealed class TaskShowCommand : AsyncCommand<TaskShowCommand.Settings>
         Section(output, "Note", task.Note);
         Section(output, "Detail", task.Detail);
         Section(output, "Done when", string.Join('\n', task.DoneWhen.Select(one => $"- {one}")));
+        Section(output, "Runs", string.Join('\n', chains.Select(chain => string.Join(
+            " -> ",
+            chain.Select(run => $"{run.RunId} ({Spelt(run) ?? "?"}" + (run.Resolved is { } dealt ? $", {dealt.Action}" : string.Empty) + ")")))));
 
         output.WriteBlankLine();
         output.WriteLine("[bold]History[/]");
@@ -1128,6 +1151,9 @@ public sealed class TaskShowCommand : AsyncCommand<TaskShowCommand.Settings>
 
         return CommandOutput.Success();
     }
+
+    private static string? Spelt(Core.Teams.RunSummary run) =>
+        Core.Teams.RunOutcomes.Of(run) is { } outcome ? Core.Teams.RunOutcomes.Spell(outcome) : null;
 
     private static void Section(CommandOutput output, string heading, string text)
     {

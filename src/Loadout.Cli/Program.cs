@@ -911,6 +911,17 @@ public static class Program
                 schedule.AddCommand<TeamScheduleRemoveCommand>("remove");
             });
 
+            // Runs that ended short of their done-when, and deciding what
+            // happens to each. Studio's Blocked section runs these.
+            team.AddBranch("blocked", blocked =>
+            {
+                blocked.SetDescription("Runs that ended short of their done-when, and what to do about each.");
+                blocked.SetDefaultCommand<TeamBlockedListCommand>();
+                blocked.AddCommand<TeamBlockedListCommand>("list");
+                blocked.AddCommand<TeamBlockedShowCommand>("show");
+                blocked.AddCommand<TeamBlockedResolveCommand>("resolve");
+            });
+
             team.AddBranch("queue", queue =>
             {
                 queue.SetDescription("A team's queue of fully specified tasks, worked through one run at a time.");

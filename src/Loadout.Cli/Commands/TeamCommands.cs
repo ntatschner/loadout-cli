@@ -1592,6 +1592,13 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         /// </remarks>
         [CommandOption("--origin <TEXT>", IsHidden = true)]
         public string? Origin { get; init; }
+
+        /// <summary>The run this one carries on from, after it ended short of its done-when.</summary>
+        [CommandOption("--follows <RUN>")]
+        [Description(
+            "Carry on from a run that ended short of its done-when. The lead is told how it ended, what stopped it "
+            + "and what was decided about it, and the two runs are linked. 'team blocked resolve' passes this for you.")]
+        public string? Follows { get; init; }
     }
 
     /// <summary>
@@ -1679,6 +1686,7 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             MachineBudget: MachineBudget(machine),
             Task: settings.Task is { Length: > 0 } task ? task.Trim() : null,
             Origin: settings.Origin is { Length: > 0 } origin ? origin.Trim() : null,
+            Follows: settings.Follows is { Length: > 0 } follows ? follows.Trim() : null,
 
             // Here and not in the runner, for the reason the rest of this is:
             // every way a run starts - this command, the dashboard, a schedule,

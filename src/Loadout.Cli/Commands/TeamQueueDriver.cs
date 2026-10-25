@@ -139,6 +139,7 @@ public sealed class TeamQueueDriver
             "--project", item.Project,
             "--task", item.Task,
             "--work-in", worktree,
+            .. item.Follows is { Length: > 0 } follows ? (string[])["--follows", follows] : [],
             .. autonomy is { Length: > 0 } given ? (string[])["--autonomy", given] : [],
             .. unattended ? (string[])["--non-interactive"] : [],
         ];

@@ -126,6 +126,9 @@
 | `loadout team runs\|status\|log` | What the runs did: where each node got to, and everything one wrote down |
 | `loadout team runs remove\|prune` | Forget runs you are done with, one by one or by age, count or how they ended. They go to the bin, not away |
 | `loadout team runs restore <run>` | Put a run back from the bin. Refused while a run with that identifier exists |
+| `loadout team blocked list\|show <run>` | Runs that ended short of their done-when (blocked, failed, limited, unrecorded, or whose process died), each with a suggested action and the reason for it |
+| `loadout team blocked resolve <run> --action <action>` | Decide what happens to one: `carry-on`, `raise` (limited runs only, with `--rounds` or `--usd`), `requeue`, `edit-requeue`, `set-aside` or `drop`. Carrying on starts a run that follows it, and the old run is linked to the new one |
+| `loadout team run <team> "<goal>" --follows <run>` | Carry on from a run that ended short: its lead is told how that one ended, what stopped it and what you said |
 | `loadout team bin` | What is in the bin: each run and team, when it was removed, how many days it has left and its size |
 | `loadout team bin empty [--older-than <age>]` | Delete what is in the bin for good, all of it or only what is older than the age. Asks first, and needs `--yes` where nobody can be asked |
 | `loadout team outbox` | The files a run delivered, resolved from the commits its nodes reported |

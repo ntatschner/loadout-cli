@@ -245,6 +245,94 @@ public sealed partial class TriggerSpine
             Reason: $"a person changed what the run may spend from ${aside.Usd:0.00} to ${usd:0.00}", Request: request));
     }
 
+    /// <summary>
+    /// Whether a run carrying on from one a rule started may spend
+    /// <paramref name="usd"/>, charged to the same rule, and the entries that
+    /// set it aside and count it as a start when it may.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The rule's cap is the only control over what a rule spends, and carrying
+    /// on is not a way round it: the figure has to fit the headroom the rule has
+    /// left in its window, counting every run of it still in flight. Too much is
+    /// refused with how much too much, and nothing is set aside, so the person
+    /// can raise the cap on the rule's own page on purpose and try again.
+    /// </para>
+    /// <para>
+    /// Set aside under a reservation of its own, like any start the rule makes,
+    /// so the daemon settles it when the run ends and two carry-ons cannot both
+    /// fit into headroom meant for one.
+    /// </para>
+    /// </remarks>
+    /// <returns>
+    /// The problem and the amount over the cap when refused, or the entries to
+    /// write.
+    /// </returns>
+    public static (string? Problem, decimal Over, IReadOnlyList<TriggerEntry> Entries) Following(
+        SpendLedger ledger, TriggerRule rule, string reservation, decimal usd, DateTimeOffset now, string? request = null)
+    {
+        ArgumentNullException.ThrowIfNull(ledger);
+        ArgumentNullException.ThrowIfNull(rule);
+
+        var standing = ledger.Standing(rule, now);
+
+        if (standing.Paused)
+        {
+            return ($"{rule.Id} is paused, so nothing it started can be carried on until it is resumed", 0m, []);
+        }
+
+        if (standing.Headroom is { } headroom && usd > headroom)
+        {
+            var over = usd - headroom;
+
+            return (
+                $"${over:0.00} over this window's cap for {rule.Id}: it may spend ${rule.CapUsd:0.00}, with "
+                + $"${standing.Landed:0.00} spent and ${standing.Reserved:0.00} set aside, which leaves ${headroom:0.00}",
+                over,
+                []);
+        }
+
+        return (null, 0m,
+        [
+            new TriggerEntry(
+                now, TriggerEntryKinds.Reserved, Rule: rule.Id, Version: rule.Version, Usd: usd, Reservation: reservation,
+                Reason: $"a person carried on from a run it started, with ${usd:0.00}", Request: request),
+            new TriggerEntry(
+                now, TriggerEntryKinds.Started, Rule: rule.Id, Version: rule.Version, Reservation: reservation,
+                Reason: "carried on from a run that ended short", Request: request),
+        ]);
+    }
+
+    private async Task<TriggerAnswer> FollowAsync(string request, string ruleId, string reservation, decimal usd, CancellationToken ct)
+    {
+        var listed = await _rules.ListAsync(ct).ConfigureAwait(false);
+
+        if (listed.Failed)
+        {
+            return new TriggerAnswer(request, false, listed.Error!);
+        }
+
+        if (listed.Value!.FirstOrDefault(one => string.Equals(one.Rule.Id, ruleId, StringComparison.OrdinalIgnoreCase))
+            is not { } found)
+        {
+            return new TriggerAnswer(request, false, $"'{ruleId}', which started the run, is gone, so its cap cannot be checked.");
+        }
+
+        var (problem, _, entries) = Following(Ledger, found.Rule, reservation, usd, _time.GetUtcNow(), request);
+
+        if (problem is not null)
+        {
+            return new TriggerAnswer(request, false, problem);
+        }
+
+        foreach (var entry in entries)
+        {
+            Write(entry);
+        }
+
+        return new TriggerAnswer(request, true, $"Applied by the daemon: ${usd:0.00} is set aside under '{found.Rule.Id}' for the run that carries on.");
+    }
+
     private async Task<TriggerAnswer> RaiseAsync(string request, string reservation, decimal usd, CancellationToken ct)
     {
         if (Ledger.SetAside(reservation) is not { } aside)

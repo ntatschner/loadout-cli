@@ -303,6 +303,55 @@ public sealed class TriggerApprovalTests : IDisposable
         entry!.Usd.Should().Be(20m);
     }
 
+    [Fact]
+    public async Task Carrying_on_from_a_triggered_run_is_charged_to_its_rule_and_refused_past_the_cap()
+    {
+        await SaveAsync(Rule());
+        var spine = Spine();
+
+        // The rule has 10.00 a window and has already spent 7.00 of it.
+        await spine.ApplyAsync(new TriggerAsk("q0", TriggerVerbs.Follow, RuleId: "review", Reservation: "f0", Usd: 7m), CancellationToken.None);
+
+        var greedy = await spine.ApplyAsync(
+            new TriggerAsk("q1", TriggerVerbs.Follow, RuleId: "review", Reservation: "f1", Usd: 4.20m), CancellationToken.None);
+
+        greedy.Applied.Should().BeFalse();
+        greedy.Message.Should().Contain("$1.20 over this window's cap");
+        spine.Ledger.SetAside("f1").Should().BeNull("a refusal sets nothing aside");
+
+        var fits = await spine.ApplyAsync(
+            new TriggerAsk("q2", TriggerVerbs.Follow, RuleId: "review", Reservation: "f2", Usd: 3m), CancellationToken.None);
+
+        fits.Applied.Should().BeTrue(fits.Message);
+        spine.Ledger.Standing(Rule(), Now).Reserved.Should().Be(10m);
+        spine.Ledger.Standing(Rule(), Now).Runs.Should().Be(2, "each carry-on counts as a start of the rule");
+
+        // Two carry-ons cannot both fit into headroom meant for one.
+        var second = await spine.ApplyAsync(
+            new TriggerAsk("q3", TriggerVerbs.Follow, RuleId: "review", Reservation: "f3", Usd: 0.01m), CancellationToken.None);
+
+        second.Applied.Should().BeFalse();
+    }
+
+    [Fact]
+    public void The_follow_check_says_how_much_over_and_writes_nothing_when_refused()
+    {
+        var ledger = new SpendLedger();
+        ledger.Apply(new TriggerEntry(Now, TriggerEntryKinds.Landed, Rule: "review", Usd: 8m, Reservation: "r0"));
+
+        var (problem, over, entries) = TriggerSpine.Following(ledger, Rule(), "f1", 5m, Now);
+
+        problem.Should().Contain("$3.00 over");
+        over.Should().Be(3m);
+        entries.Should().BeEmpty();
+
+        var (fine, _, written) = TriggerSpine.Following(ledger, Rule(), "f2", 2m, Now);
+
+        fine.Should().BeNull();
+        written.Select(one => one.Kind).Should().Equal(TriggerEntryKinds.Reserved, TriggerEntryKinds.Started);
+        written.Should().OnlyContain(one => one.Reservation == "f2" && one.Rule == "review");
+    }
+
     private TriggerSpine Spine() => new(_rules, _journal, _actions, _clock);
 
     private async Task SaveAsync(TriggerRule rule) => (await _rules.SaveAsync(rule)).Succeeded.Should().BeTrue();
