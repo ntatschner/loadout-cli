@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using Loadout.Platform.Abstractions;
+using Loadout.Platform.Common;
 
 namespace Loadout.Core.Triggers;
 
@@ -103,7 +104,7 @@ public sealed record TriggerCredential(string Kind, string? Token, string? Finge
         }
 
         var ran = await processes.RunAsync(
-            new ProcessRequest(gh, ["auth", "token"], Environment.CurrentDirectory),
+            new ProcessRequest(gh, ["auth", "token"], Invocation.CurrentDirectory),
             TimeSpan.FromSeconds(20),
             ct).ConfigureAwait(false);
 

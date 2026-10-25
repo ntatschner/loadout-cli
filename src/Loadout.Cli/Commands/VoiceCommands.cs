@@ -8,6 +8,7 @@ using Loadout.Core.Workspace;
 using Loadout.Models;
 using Loadout.Models.Projects;
 using Loadout.Models.Voice;
+using Loadout.Platform.Common;
 using Loadout.Tui;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -338,11 +339,11 @@ public sealed class VoiceCheckCommand : VoiceCommandBase<VoiceCheckSettings>
         else
         {
             var root = await RepositoryAsync(project, settings.Repo, cancellationToken).ConfigureAwait(false)
-                ?? Directory.GetCurrentDirectory();
+                ?? Invocation.CurrentDirectory;
 
             foreach (var file in settings.Files)
             {
-                var path = Path.GetFullPath(file, Directory.GetCurrentDirectory());
+                var path = Path.GetFullPath(file, Invocation.CurrentDirectory);
 
                 if (!File.Exists(path))
                 {
@@ -499,7 +500,7 @@ public sealed class VoiceMarkCommand : VoiceCommandBase<VoiceMarkSettings>
 
         var project = await ProjectAsync(settings.Project, settings.Repo, cancellationToken).ConfigureAwait(false);
         var repository = await RepositoryAsync(project, settings.Repo, cancellationToken).ConfigureAwait(false)
-            ?? Directory.GetCurrentDirectory();
+            ?? Invocation.CurrentDirectory;
 
         if (settings.List)
         {

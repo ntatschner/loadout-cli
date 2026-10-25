@@ -157,6 +157,37 @@ internal static partial class NativeTerminal
     [LibraryImport(Libc, EntryPoint = "ptsname", SetLastError = true)]
     internal static partial nint SlaveName(int master);
 
+    /// <summary>
+    /// A path with every symbolic link along it resolved, as the kernel names
+    /// it, or null when it cannot be: what a process started in that directory
+    /// is told its working directory is.
+    /// </summary>
+    internal static string? RealPath(string path)
+    {
+        var resolved = ResolvePath(path, 0);
+
+        if (resolved == 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            return Marshal.PtrToStringUTF8(resolved);
+        }
+        finally
+        {
+            // Allocated by realpath, because no buffer was passed.
+            Free(resolved);
+        }
+    }
+
+    [LibraryImport(Libc, EntryPoint = "realpath", StringMarshalling = StringMarshalling.Utf8)]
+    private static partial nint ResolvePath(string path, nint resolved);
+
+    [LibraryImport(Libc, EntryPoint = "free")]
+    private static partial void Free(nint pointer);
+
     [LibraryImport(Libc, EntryPoint = "posix_spawn", SetLastError = true)]
     internal static partial int Spawn(
         out int pid,

@@ -5,6 +5,7 @@ using Loadout.Core.Tasks;
 using Loadout.Models;
 using Loadout.Models.Results;
 using Loadout.Models.Tasks;
+using Loadout.Platform.Common;
 using Loadout.Tui;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -139,7 +140,7 @@ internal static class BatchInput
     /// <summary>The JSON array from a file, or from standard input for <c>-</c> or when it is piped and no file is named.</summary>
     public static async Task<OperationResult<string>> ReadAsync(string? file, CancellationToken ct)
     {
-        if (file is "-" || (file is null && Console.IsInputRedirected))
+        if (file is "-" || (file is null && Invocation.IsInputRedirected))
         {
             return OperationResult<string>.Ok(await Console.In.ReadToEndAsync(ct).ConfigureAwait(false));
         }

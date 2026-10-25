@@ -6,6 +6,7 @@ using Loadout.Core.Workspace;
 using Loadout.Models;
 using Loadout.Models.Policies;
 using Loadout.Models.Results;
+using Loadout.Platform.Common;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using Loadout.Tui;
@@ -192,7 +193,7 @@ public sealed class MigrateCommand : AsyncCommand<MigrateCommand.Settings>
     private async Task<OperationResult<(string RepositoryPath, string Slug)>> ResolveAsync(
         Settings settings)
     {
-        var directory = settings.Repo ?? Directory.GetCurrentDirectory();
+        var directory = settings.Repo ?? Invocation.CurrentDirectory;
 
         var resolution = settings.Project is not null
             ? await _projects.ResolveAsync(settings.Project).ConfigureAwait(false)

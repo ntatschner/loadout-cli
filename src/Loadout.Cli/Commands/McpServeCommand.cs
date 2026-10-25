@@ -8,6 +8,7 @@ using Loadout.Core.Teams;
 using Loadout.Core.Workspace;
 using Loadout.Core.Git;
 using Loadout.Models.Instructions;
+using Loadout.Platform.Common;
 using Loadout.Tui;
 using System.Reflection;
 using Loadout.Core;
@@ -461,7 +462,7 @@ public sealed class LoadoutTools
         var path = resolved.Succeeded
             ? SymbolTree.Of(
                 resolved.Value!,
-                _scope.Project is { Length: > 0 } ? null : Directory.GetCurrentDirectory())
+                _scope.Project is { Length: > 0 } ? null : Invocation.CurrentDirectory)
             : null;
 
         if (path is null)
@@ -528,7 +529,7 @@ public sealed class LoadoutTools
         var path = resolved.Succeeded
             ? SymbolTree.Of(
                 resolved.Value!,
-                _scope.Project is { Length: > 0 } ? null : Directory.GetCurrentDirectory())
+                _scope.Project is { Length: > 0 } ? null : Invocation.CurrentDirectory)
             : null;
 
         if (path is null)
@@ -1486,7 +1487,7 @@ public sealed class LoadoutTools
         }
 
         var here = await _projects
-            .ResolveFromDirectoryAsync(Directory.GetCurrentDirectory(), ct)
+            .ResolveFromDirectoryAsync(Invocation.CurrentDirectory, ct)
             .ConfigureAwait(false);
 
         return here.Succeeded ? here.Value!.Entry.Slug : null;

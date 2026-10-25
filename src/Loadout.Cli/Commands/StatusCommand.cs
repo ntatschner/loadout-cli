@@ -5,6 +5,7 @@ using Loadout.Core.Configuration;
 using Loadout.Core.Git;
 using Loadout.Core.Projects;
 using Loadout.Core.Workspace;
+using Loadout.Platform.Common;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using Loadout.Tui;
@@ -66,7 +67,7 @@ public sealed class StatusCommand : AsyncCommand<GlobalSettings>
         // The current repository is contextual information, so failing to find
         // one is normal: the user may be anywhere.
         var currentResult = await _projects
-            .ResolveFromDirectoryAsync(settings.Repo ?? Directory.GetCurrentDirectory())
+            .ResolveFromDirectoryAsync(settings.Repo ?? Invocation.CurrentDirectory)
             .ConfigureAwait(false);
 
         var current = currentResult.Succeeded ? currentResult.Value : null;

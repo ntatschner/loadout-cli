@@ -4,6 +4,7 @@ using Loadout.Core.Configuration;
 using Loadout.Core.Editors;
 using Loadout.Core.Projects;
 using Loadout.Models;
+using Loadout.Platform.Common;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using Loadout.Tui;
@@ -82,7 +83,7 @@ public sealed class CodeCommand : AsyncCommand<CodeCommand.Settings>
         var resolution = settings.Project is not null
             ? await _projects.ResolveAsync(settings.Project).ConfigureAwait(false)
             : await _projects
-                .ResolveFromDirectoryAsync(settings.Repo ?? Directory.GetCurrentDirectory())
+                .ResolveFromDirectoryAsync(settings.Repo ?? Invocation.CurrentDirectory)
                 .ConfigureAwait(false);
 
         if (resolution.Failed)

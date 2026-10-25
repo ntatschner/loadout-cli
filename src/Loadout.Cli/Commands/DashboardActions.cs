@@ -9,6 +9,7 @@ using Loadout.Core.Workspace;
 using Loadout.Models;
 using Loadout.Models.Instructions;
 using Loadout.Models.Results;
+using Loadout.Platform.Common;
 using Loadout.Tui;
 using Spectre.Console;
 
@@ -1086,7 +1087,7 @@ internal static partial class DashboardActions
             .ToList();
 
         var here = (await projects
-            .ResolveFromDirectoryAsync(Directory.GetCurrentDirectory(), ct)
+            .ResolveFromDirectoryAsync(Invocation.CurrentDirectory, ct)
             .ConfigureAwait(false)) is { Succeeded: true } found
             ? found.Value!.Entry.Slug
             : null;

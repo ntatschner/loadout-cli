@@ -1,3 +1,4 @@
+using Loadout.Platform.Common;
 using Loadout.Tui;
 using System.ComponentModel;
 using Loadout.Cli.Infrastructure;
@@ -63,7 +64,7 @@ public sealed class McpListCommand : AsyncCommand<McpSettings>
         }
 
         var installed = await _installed
-            .ReadAsync(settings.Repo ?? Directory.GetCurrentDirectory())
+            .ReadAsync(settings.Repo ?? Invocation.CurrentDirectory)
             .ConfigureAwait(false);
 
         var resolved = await _mcp.ResolveAsync(slug.Value!, installed).ConfigureAwait(false);
@@ -210,7 +211,7 @@ public sealed class McpAddCommand : AsyncCommand<McpAddSettings>
         // Read before writing, so the answer covers the connectors and plugins
         // the workspace cannot see. That is where the duplicates come from.
         var installed = await _installed
-            .ReadAsync(settings.Repo ?? Directory.GetCurrentDirectory())
+            .ReadAsync(settings.Repo ?? Invocation.CurrentDirectory)
             .ConfigureAwait(false);
 
         var resolved = await _mcp.ResolveAsync(slug.Value!, installed).ConfigureAwait(false);

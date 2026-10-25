@@ -87,4 +87,32 @@ public sealed class AgentCapabilityDetectionTests
         // rejects, which fails the launch outright.
         (await DetectsFileFlagAsync(WithoutIt)).Should().BeFalse();
     }
+
+    [Fact]
+    public async Task Adapters_sharing_a_launcher_ask_an_installed_agent_once()
+    {
+        // A real file, because only a binary that is there can be told apart
+        // from one that has changed since.
+        var binary = Path.Combine(Path.GetTempPath(), "claude-" + Guid.NewGuid().ToString("N"));
+
+        await File.WriteAllTextAsync(binary, "not really an agent");
+
+        try
+        {
+            var shared = new StubProcessLauncher(PlainHelp);
+            var other = new StubProcessLauncher(PlainHelp);
+
+            // As the daemon's commands each make their own, around one launcher.
+            await new ClaudeAdapter(new StubResolver(binary), shared, []).DetectAsync();
+            await new ClaudeAdapter(new StubResolver(binary), shared, []).DetectAsync();
+            await new ClaudeAdapter(new StubResolver(binary), other, []).DetectAsync();
+
+            shared.Requests.Should().HaveCount(2, "one detection is a version and a help, asked once for both adapters");
+            other.Requests.Should().HaveCount(2, "another launcher asks for itself");
+        }
+        finally
+        {
+            File.Delete(binary);
+        }
+    }
 }

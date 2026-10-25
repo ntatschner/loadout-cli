@@ -5,6 +5,7 @@ using Loadout.Core;
 using Loadout.Models;
 using Loadout.Platform;
 using Loadout.Platform.Abstractions;
+using Loadout.Platform.Common;
 using Loadout.Tui;
 using Microsoft.Extensions.DependencyInjection;
 using Spectre.Console;
@@ -32,7 +33,11 @@ public static class Program
     private static void Top<TCommand>(IConfigurator config, string name)
         where TCommand : class, ICommandLimiter<CommandSettings>
     {
-        KnownCommands.Add(name);
+        lock (KnownCommands)
+        {
+            KnownCommands.Add(name);
+        }
+
         Catalogue.Record(name, typeof(TCommand));
         config.AddCommand<TCommand>(name);
     }
@@ -40,7 +45,11 @@ public static class Program
     /// <summary>Registers a top-level branch and records its name.</summary>
     private static void TopBranch(IConfigurator config, string name, Action<Branch> configure)
     {
-        KnownCommands.Add(name);
+        lock (KnownCommands)
+        {
+            KnownCommands.Add(name);
+        }
+
         config.AddBranch<CommandSettings>(name, branch => configure(new Branch(branch, name)));
     }
 
@@ -230,7 +239,7 @@ public static class Program
     /// already, and this runs on every invocation - including the status line,
     /// which runs on every prompt of every session.
     /// </remarks>
-    private static AccessibleMode Accessible(string[] arguments, IServiceProvider provider)
+    internal static AccessibleMode Accessible(string[] arguments, IServiceProvider provider)
     {
         var asked = provider.GetRequiredService<IEnvironmentProvider>()
             .GetVariable(AccessibleMode.Variable);
@@ -239,7 +248,7 @@ public static class Program
             string.Equals(a, AccessibleMode.Flag, StringComparison.Ordinal)
             || a.StartsWith(AccessibleMode.Flag + "=", StringComparison.Ordinal));
 
-        if (!typed && string.IsNullOrEmpty(asked) && Console.IsOutputRedirected)
+        if (!typed && string.IsNullOrEmpty(asked) && Invocation.IsOutputRedirected)
         {
             return AccessibleMode.Off;
         }
@@ -327,6 +336,16 @@ public static class Program
             return (int)ExitCode.GeneralFailure;
         }
 
+        // A daemon of this version already has everything below running, so a
+        // command that cannot need this terminal is handed to it rather than
+        // started again here. Asked before anything else is built, because
+        // building it is most of what a short command costs.
+        if (passthrough.Length == 0
+            && await ForwardAsync(launcherArgs, services).ConfigureAwait(false) is { } forwarded)
+        {
+            return forwarded;
+        }
+
         services
             .AddCoreServices()
             .AddAgentServices();
@@ -353,11 +372,16 @@ public static class Program
 
         var registrar = new TypeRegistrar(services);
 
+        // Runs a command inside this process, each call from a copy of these
+        // registrations; the daemon runs everything Studio asks for through it.
+        var host = new CommandHost(Accessible);
+
+        services.AddSingleton(host);
+
         // Registered as a factory so it can run the very parser it is
         // registered into: the launcher hands a command back to the same
-        // CommandApp rather than carrying a second implementation of any of it.
-        services.AddSingleton<ICommandCatalogue>(_ =>
-            new CommandCatalogue((arguments, ct) => RunParserAsync(registrar, arguments, ct)));
+        // command tree rather than carrying a second implementation of any of it.
+        services.AddSingleton<ICommandCatalogue>(_ => new CommandCatalogue(host.RunAsync));
 
         // Registered rather than resolved and handed round, because the
         // interactive launcher builds from these same services and a prompt in
@@ -365,6 +389,10 @@ public static class Program
         services.AddSingleton(sp => Accessible(launcherArgs, sp));
         services.AddSingleton(sp => new ReadingProfile(
             sp.GetRequiredService<AccessibleMode>() is { IsOn: true } on ? on.Profile : null));
+
+        // Before any parser is configured, which adds every command to the
+        // collection it is handed.
+        host.Freeze(services);
 
         // Directories are created before any command runs so no command has to
         // guess whether its storage exists (spec section 16).
@@ -486,21 +514,42 @@ public static class Program
     }
 
     /// <summary>
-    /// Runs one command through a parser configured exactly like the real one.
-    /// <para>
-    /// A fresh CommandApp rather than the one already running: that one is
-    /// mid-invocation when the launcher is on screen, and Spectre's parser is
-    /// not built to be re-entered. Configuration is cheap and records nothing
-    /// twice, because the catalogue ignores a path it already holds.
-    /// </para>
+    /// The exit code of the command as a running daemon ran it, or null when
+    /// it runs here.
     /// </summary>
-    private static Task<int> RunParserAsync(TypeRegistrar registrar, string[] arguments, CancellationToken ct)
+    private static async Task<int?> ForwardAsync(string[] launcherArgs, IServiceCollection services)
     {
-        var app = new CommandApp(registrar);
+        if (launcherArgs.Length == 0
+            || services.LastOrDefault(one => one.ServiceType == typeof(IPlatformPaths))?.ImplementationInstance is not IPlatformPaths paths
+            || services.LastOrDefault(one => one.ServiceType == typeof(IProcessInspector))?.ImplementationInstance is not IProcessInspector processes)
+        {
+            return null;
+        }
 
-        app.Configure(config => Configure(config, showFullExceptions: false));
+        using var stopping = new CancellationTokenSource();
 
-        return app.RunAsync(arguments, ct);
+        // Ctrl+C ends the request, which the daemon takes as the terminal going
+        // and stops the command for.
+        ConsoleCancelEventHandler onCancel = (_, e) =>
+        {
+            e.Cancel = true;
+            stopping.Cancel();
+        };
+
+        Console.CancelKeyPress += onCancel;
+
+        try
+        {
+            return await Forwarding.TryAsync(Rewrite(launcherArgs), paths, processes, stopping.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (stopping.IsCancellationRequested)
+        {
+            return (int)ExitCode.Interrupted;
+        }
+        finally
+        {
+            Console.CancelKeyPress -= onCancel;
+        }
     }
 
     /// <summary>What running the launcher with no arguments should do.</summary>
@@ -563,7 +612,7 @@ public static class Program
         var wizard = provider.GetRequiredService<ISetupWizard>();
 
         var entry = PrepareInteractive(
-            !Console.IsOutputRedirected && !Console.IsInputRedirected,
+            !Invocation.IsOutputRedirected && !Invocation.IsInputRedirected,
             wizard.IsConfigured);
 
         switch (entry)
@@ -628,7 +677,7 @@ public static class Program
         return ["launch", .. args];
     }
 
-    private static void Configure(IConfigurator config, bool showFullExceptions, bool json = false)
+    internal static void Configure(IConfigurator config, bool showFullExceptions, bool json = false)
     {
         config.SetApplicationName("loadout");
         config.SetHelpProvider(new BranchHelp(config.Settings));

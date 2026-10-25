@@ -5,6 +5,7 @@ using Loadout.Core.Projects;
 using Loadout.Core.Workspace;
 using Loadout.Models;
 using Loadout.Models.Instructions;
+using Loadout.Platform.Common;
 using Loadout.Tui;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -88,7 +89,7 @@ public sealed class MemoryReviewCommand : AsyncCommand<MemoryReviewCommand.Setti
         var resolution = settings.Project is { Length: > 0 } handle
             ? await _projects.ResolveAsync(handle, cancellationToken).ConfigureAwait(false)
             : await _projects.ResolveFromDirectoryAsync(
-                settings.Repo ?? Directory.GetCurrentDirectory(), cancellationToken).ConfigureAwait(false);
+                settings.Repo ?? Invocation.CurrentDirectory, cancellationToken).ConfigureAwait(false);
 
         if (resolution.Failed)
         {
@@ -133,7 +134,7 @@ public sealed class MemoryReviewCommand : AsyncCommand<MemoryReviewCommand.Setti
         // Spec section 37: never a prompt where nobody can answer it. Listing
         // them is still worth something in a pipe — it is the audit's finding
         // with the topics named — so this reports rather than refusing.
-        if (settings.NonInteractive || System.Console.IsInputRedirected || settings.DryRun)
+        if (settings.NonInteractive || Invocation.IsInputRedirected || settings.DryRun)
         {
             output.WriteLine(
                 $"[bold]{stale.Count}[/] topic(s) nobody has revisited in "

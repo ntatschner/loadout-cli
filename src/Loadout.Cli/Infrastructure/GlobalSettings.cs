@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using Loadout.Platform.Common;
 using Spectre.Console.Cli;
 
 namespace Loadout.Cli.Infrastructure;
@@ -105,6 +106,6 @@ public class GlobalSettings : CommandSettings
     public bool AllowsPrompting =>
         !NonInteractive
         && !Json
-        && !Console.IsOutputRedirected
-        && !Console.IsInputRedirected;
+        && !Invocation.IsOutputRedirected
+        && !Invocation.IsInputRedirected;
 }

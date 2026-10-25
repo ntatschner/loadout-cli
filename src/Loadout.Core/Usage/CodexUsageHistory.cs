@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using Loadout.Core.Transcripts;
 using Loadout.Models.Results;
 using Loadout.Platform.Abstractions;
 
@@ -32,9 +33,26 @@ namespace Loadout.Core.Usage;
 /// </remarks>
 internal sealed class CodexUsageHistory : IUsageHistory
 {
-    private readonly IEnvironmentProvider _environment;
+    /// <summary>Every rollout's reading, kept for the life of the process.</summary>
+    /// <remarks>
+    /// Static for the reason <see cref="ClaudeUsageHistory"/>'s is. Raise the
+    /// version whenever <see cref="ParseAsync"/> or what it keeps changes.
+    /// </remarks>
+    private static readonly TranscriptReadings<CodexSession> Readings = new("codex", version: 1);
 
-    public CodexUsageHistory(IEnvironmentProvider environment) => _environment = environment;
+    private readonly IEnvironmentProvider _environment;
+    private readonly string? _kept;
+
+    /// <param name="environment">Where the agent's history is.</param>
+    /// <param name="paths">Where readings are kept between runs; none keeps them only in memory.</param>
+    public CodexUsageHistory(IEnvironmentProvider environment, IPlatformPaths? paths = null)
+    {
+        _environment = environment;
+        _kept = paths is null ? null : TranscriptReadingsDirectory.Under(paths.Paths.State);
+    }
+
+    /// <summary>Drops the readings held in memory, as a new process starts with none.</summary>
+    internal static void Forget() => Readings.Forget();
 
     /// <inheritdoc />
     public string Agent => "codex";
@@ -54,20 +72,19 @@ internal sealed class CodexUsageHistory : IUsageHistory
             return OperationResult<UsageScan>.Ok(new UsageScan([], UsageIntegrity.Empty));
         }
 
-        List<FileInfo> files;
+        List<FileInfo> listed;
 
         try
         {
-            files = new DirectoryInfo(Root)
-                .EnumerateFiles("*.jsonl", SearchOption.AllDirectories)
-                .Where(f => DateOnly.FromDateTime(f.LastWriteTimeUtc) >= since)
-                .ToList();
+            listed = [.. new DirectoryInfo(Root).EnumerateFiles("*.jsonl", SearchOption.AllDirectories)];
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return OperationResult<UsageScan>.Fail(
                 $"Could not read Codex's history at {Root}: {ex.Message}");
         }
+
+        var files = listed.Where(f => DateOnly.FromDateTime(f.LastWriteTimeUtc) >= since).ToList();
 
         var buckets = new Dictionary<(string Directory, DateOnly Day, string Model), UsageTotals>();
 
@@ -77,8 +94,10 @@ internal sealed class CodexUsageHistory : IUsageHistory
         {
             ct.ThrowIfCancellationRequested();
 
-            integrity += await ReadAsync(file, since, buckets, ct).ConfigureAwait(false);
+            integrity += Fold(file, await Readings.GetAsync(file, _kept, ParseAsync, ct).ConfigureAwait(false), since, buckets);
         }
+
+        Readings.Keep([.. listed.Select(file => file.FullName)], _kept);
 
         var rows = buckets
             .Select(entry => new UsageBucket(
@@ -93,11 +112,43 @@ internal sealed class CodexUsageHistory : IUsageHistory
     }
 
     /// <summary>Folds one session's final total into the running counts.</summary>
-    private static async Task<UsageIntegrity> ReadAsync(
+    private static UsageIntegrity Fold(
         FileInfo file,
+        CodexSession? session,
         DateOnly since,
-        Dictionary<(string, DateOnly, string), UsageTotals> buckets,
-        CancellationToken ct)
+        Dictionary<(string, DateOnly, string), UsageTotals> buckets)
+    {
+        if (session is null)
+        {
+            return new UsageIntegrity(FilesSkipped: 1);
+        }
+
+        if (session.Latest is not { } latest)
+        {
+            // A session that never reported. Read successfully, nothing to add.
+            return new UsageIntegrity(FilesRead: 1, RecordsUnrecognised: session.Unrecognised);
+        }
+
+        var when = session.Day ?? DateOnly.FromDateTime(file.LastWriteTimeUtc);
+
+        if (when >= since)
+        {
+            var key = (session.Directory, when, session.Model);
+
+            buckets[key] = buckets.TryGetValue(key, out var running)
+                ? running + latest
+                : latest;
+        }
+
+        return new UsageIntegrity(
+            FilesRead: 1,
+            RecordsCounted: 1,
+            RecordsRepeated: session.Repeated,
+            RecordsUnrecognised: session.Unrecognised);
+    }
+
+    /// <summary>What one rollout says about its session, or null when it could not be read.</summary>
+    private static async Task<CodexSession?> ParseAsync(FileInfo file, CancellationToken ct)
     {
         var directory = "unknown";
         var model = "unknown";
@@ -194,31 +245,10 @@ internal sealed class CodexUsageHistory : IUsageHistory
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return new UsageIntegrity(FilesSkipped: 1);
+            return null;
         }
 
-        if (latest is null)
-        {
-            // A session that never reported. Read successfully, nothing to add.
-            return new UsageIntegrity(FilesRead: 1, RecordsUnrecognised: unrecognised);
-        }
-
-        var when = day ?? DateOnly.FromDateTime(file.LastWriteTimeUtc);
-
-        if (when >= since)
-        {
-            var key = (directory, when, model);
-
-            buckets[key] = buckets.TryGetValue(key, out var running)
-                ? running + latest.Value
-                : latest.Value;
-        }
-
-        return new UsageIntegrity(
-            FilesRead: 1,
-            RecordsCounted: 1,
-            RecordsRepeated: repeated,
-            RecordsUnrecognised: unrecognised);
+        return new CodexSession(directory, model, day, latest, repeated, unrecognised);
     }
 
     /// <summary>
@@ -288,3 +318,13 @@ internal sealed class CodexUsageHistory : IUsageHistory
             : null;
     }
 }
+
+/// <summary>What one Codex rollout says about its session, on its own.</summary>
+/// <param name="Directory">The newest working directory it named.</param>
+/// <param name="Model">The newest model it named.</param>
+/// <param name="Day">The UTC day of its last reported total, when its line says.</param>
+/// <param name="Latest">Its last running total, or null for a session that never reported.</param>
+/// <param name="Repeated">Running totals superseded by a later one.</param>
+/// <param name="Unrecognised">Totals that held no field this build knows.</param>
+internal sealed record CodexSession(
+    string Directory, string Model, DateOnly? Day, UsageTotals? Latest, int Repeated, int Unrecognised);

@@ -7,6 +7,7 @@ using Loadout.Models.Diagnostics;
 using Loadout.Models.Platform;
 using Loadout.Models.Results;
 using Loadout.Platform.Abstractions;
+using Loadout.Platform.Common;
 
 namespace Loadout.Core.Diagnostics;
 
@@ -272,7 +273,7 @@ internal sealed class DoctorService : IDoctorService
     /// </summary>
     private async Task AddPolicyChecksAsync(List<DiagnosticCheck> checks, CancellationToken ct)
     {
-        var repository = Directory.GetCurrentDirectory();
+        var repository = Invocation.CurrentDirectory;
 
         var result = await _policies.CheckAsync(repository, ct).ConfigureAwait(false);
 

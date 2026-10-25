@@ -200,6 +200,20 @@ jobs:
         # says where inside that test the wait is.
         run: dotnet test --configuration Release --no-build --logger "trx;LogFileName=results.trx" --blame-hang --blame-hang-timeout 10m --blame-hang-dump-type mini
 
+      # Every Studio page against a warm Release daemon, each held to the half
+      # second it must answer within. One leg, because it measures the
+      # daemon rather than the platform, and Windows is where Studio is used
+      # most. Not yet a gate: a hosted runner is shared and slower than a
+      # desk, and a timing miss there would hold every release. A miss shows
+      # as a warning with each page's time in the log; make it blocking once
+      # enough runs show the margin holds.
+      - name: Time every Studio page
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        env:
+          LOADOUT_TIMED_PAGES: '1'
+        run: dotnet test --configuration Release --no-build --filter "FullyQualifiedName~TimedPagesContractTests" --logger "console;verbosity=detailed"
+
       # Only after a failure, and only on Windows, where the recurring one is
       # every spawned process exiting 0xC0000142 from some point in the run to
       # its end. That code is a process that could not connect to its console

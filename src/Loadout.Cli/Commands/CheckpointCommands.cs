@@ -3,6 +3,7 @@ using Loadout.Cli.Infrastructure;
 using Loadout.Core.Checkpoints;
 using Loadout.Core.Projects;
 using Loadout.Models;
+using Loadout.Platform.Common;
 using Loadout.Tui;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -390,5 +391,5 @@ internal static class CheckpointResolution
         settings.Project is { Length: > 0 } handle
             ? projects.ResolveAsync(handle, ct)
             : projects.ResolveFromDirectoryAsync(
-                settings.Repo ?? Directory.GetCurrentDirectory(), ct);
+                settings.Repo ?? Invocation.CurrentDirectory, ct);
 }

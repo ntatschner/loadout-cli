@@ -7,6 +7,7 @@ using Loadout.Core.Workspace;
 using Loadout.Models;
 using Loadout.Models.Instructions;
 using Loadout.Models.Projects;
+using Loadout.Platform.Common;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using Loadout.Tui;
@@ -91,7 +92,7 @@ public sealed class MemoryImportCommand : MemoryCommandBase<MemoryImportCommand.
         var resolution = settings.Project is not null
             ? await Projects.ResolveAsync(settings.Project).ConfigureAwait(false)
             : await Projects
-                .ResolveFromDirectoryAsync(settings.Repo ?? Directory.GetCurrentDirectory())
+                .ResolveFromDirectoryAsync(settings.Repo ?? Invocation.CurrentDirectory)
                 .ConfigureAwait(false);
 
         if (resolution.Failed)

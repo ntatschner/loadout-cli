@@ -90,6 +90,20 @@ public interface IProjectOverviewService
     Task<OperationResult<ProjectOverview>> DescribeAsync(
         ProjectResolution project,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Describes a project, leaving out which specialists it would be given
+    /// when <paramref name="specialists"/> is false.
+    /// </summary>
+    /// <remarks>
+    /// Working those out reads the repository through, which on a large
+    /// repository is most of what describing it costs; a caller that does not
+    /// show them should not wait for them.
+    /// </remarks>
+    Task<OperationResult<ProjectOverview>> DescribeAsync(
+        ProjectResolution project,
+        bool specialists,
+        CancellationToken ct = default) => DescribeAsync(project, ct);
 }
 
 /// <inheritdoc />
@@ -125,8 +139,14 @@ internal sealed class ProjectOverviewService : IProjectOverviewService
     }
 
     /// <inheritdoc />
+    public Task<OperationResult<ProjectOverview>> DescribeAsync(
+        ProjectResolution project,
+        CancellationToken ct = default) => DescribeAsync(project, specialists: true, ct);
+
+    /// <inheritdoc />
     public async Task<OperationResult<ProjectOverview>> DescribeAsync(
         ProjectResolution project,
+        bool specialists,
         CancellationToken ct = default)
     {
         var slug = project.Entry.Slug;
@@ -140,7 +160,12 @@ internal sealed class ProjectOverviewService : IProjectOverviewService
 
         if (path is not null)
         {
-            var state = await _git.GetStateAsync(path, ct).ConfigureAwait(false);
+            // Together: each is Git processes asking about the same clone, and
+            // neither needs the other's answer.
+            var stating = _git.GetStateAsync(path, ct);
+            var checking = _policies.CheckAsync(path, ct);
+
+            var state = await stating.ConfigureAwait(false);
 
             if (state.Succeeded)
             {
@@ -148,7 +173,7 @@ internal sealed class ProjectOverviewService : IProjectOverviewService
                 clean = state.Value.IsClean;
             }
 
-            var report = await _policies.CheckAsync(path, ct).ConfigureAwait(false);
+            var report = await checking.ConfigureAwait(false);
 
             if (report.Succeeded)
             {
@@ -199,9 +224,9 @@ internal sealed class ProjectOverviewService : IProjectOverviewService
             isProtected,
             tracked,
             hookNeedsUpgrade,
-            await _instructions
-                .DetectAsync(path, _workspace.LocalPath, slug, ct)
-                .ConfigureAwait(false),
+            specialists
+                ? await _instructions.DetectAsync(path, _workspace.LocalPath, slug, ct).ConfigureAwait(false)
+                : null,
             await RunningAsync(slug, ct).ConfigureAwait(false),
             manifest.Succeeded && manifest.Value!.Context.Tasks,
             manifest.Succeeded && manifest.Value!.Context.CodeMap));

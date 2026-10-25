@@ -8,6 +8,7 @@ using Loadout.Core.Tasks;
 using Loadout.Models;
 using Loadout.Models.Ideas;
 using Loadout.Models.Results;
+using Loadout.Platform.Common;
 using Loadout.Tui;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -218,7 +219,7 @@ public sealed class IdeaDumpAddCommand : AsyncCommand<IdeaDumpAddCommand.Setting
                 : (given, "pasted", null);
         }
 
-        if (settings.File is "-" || (settings.File is null && Console.IsInputRedirected))
+        if (settings.File is "-" || (settings.File is null && Invocation.IsInputRedirected))
         {
             var piped = await Console.In.ReadToEndAsync(ct).ConfigureAwait(false);
 

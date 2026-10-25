@@ -268,6 +268,59 @@ public sealed class DashboardCommandsTests : IAsyncLifetime
         throw new TimeoutException("The job never ended.");
     }
 
+    private static string Version() =>
+        (typeof(DashboardServer).Assembly
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+            .FirstOrDefault()?.InformationalVersion ?? "unknown").Split('+')[0];
+
+    private static string Typed(string version) =>
+        JsonSerializer.Serialize(new { version, words = new[] { "memory", "find", "build" }, directory = Path.GetTempPath(), width = 120, ansi = false, colours = 0 });
+
+    [Fact]
+    public async Task A_command_from_a_terminal_comes_back_as_it_was_written_and_how_it_ended()
+    {
+        _commands.Next = new StubProcessLauncher.StubPipedProcess("found one\nand another\n", exitCode: 3, error: "a warning");
+
+        var (status, text) = await SendAsync(HttpMethod.Post, RunApi.Root, Typed(Version()));
+
+        status.Should().Be(HttpStatusCode.OK, text);
+
+        var frames = text.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(line => JsonDocument.Parse(line).RootElement).ToList();
+
+        string.Concat(frames.Where(frame => frame.TryGetProperty("out", out _)).Select(frame => frame.GetProperty("out").GetString()))
+            .Should().Be("found one\nand another\n");
+        frames.Where(frame => frame.TryGetProperty("err", out _)).Select(frame => frame.GetProperty("err").GetString())
+            .Should().ContainSingle().Which.Should().Be("a warning\n");
+        frames[^1].GetProperty("exit").GetInt32().Should().Be(3);
+
+        _commands.Forwarded.Should().ContainSingle().Which.Width.Should().Be(120);
+        _ran.Should().BeEmpty("the page's log line is for the page's jobs");
+    }
+
+    [Fact]
+    public async Task A_launcher_of_another_version_is_told_to_run_it_itself()
+    {
+        var (status, _) = await SendAsync(HttpMethod.Post, RunApi.Root, Typed("0.0.1"));
+
+        status.Should().Be((HttpStatusCode)RunApi.OtherVersion);
+        _commands.Forwarded.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Running_a_command_for_the_command_line_needs_the_token_itself_in_a_header()
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{_root}{RunApi.Root}?token={_server.Token}")
+        {
+            Content = new StringContent(Typed(Version()), Encoding.UTF8, "application/json"),
+        };
+
+        using var response = await _client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden, "a page's link carries the token in the address, and a page must not reach this");
+        _commands.Forwarded.Should().BeEmpty();
+    }
+
     private async Task<(HttpStatusCode Status, string Text)> SendAsync(HttpMethod method, string path, string? body = null)
     {
         using var request = new HttpRequestMessage(method, _root + path);
@@ -309,6 +362,15 @@ public sealed class DashboardCommandsTests : IAsyncLifetime
             Started.Add(words);
 
             return Task.FromResult(OperationResult<IPipedProcess>.Ok(Next));
+        }
+
+        public List<ForwardedTerminal> Forwarded { get; } = [];
+
+        public IPipedProcess? Forward(IReadOnlyList<string> words, ForwardedTerminal terminal)
+        {
+            Forwarded.Add(terminal);
+
+            return Next;
         }
     }
 

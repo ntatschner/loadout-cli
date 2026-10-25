@@ -1,6 +1,7 @@
 using Loadout.Core.Projects;
 using Loadout.Models.Projects;
 using Loadout.Models.Results;
+using Loadout.Platform.Common;
 
 namespace Loadout.Cli.Infrastructure;
 
@@ -23,5 +24,5 @@ internal static class ProjectHandle
         CancellationToken ct) =>
         project is { Length: > 0 } handle
             ? projects.ResolveAsync(handle, ct)
-            : projects.ResolveFromDirectoryAsync(repo ?? Directory.GetCurrentDirectory(), ct);
+            : projects.ResolveFromDirectoryAsync(repo ?? Invocation.CurrentDirectory, ct);
 }

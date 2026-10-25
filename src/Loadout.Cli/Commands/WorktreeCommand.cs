@@ -1,3 +1,4 @@
+using Loadout.Platform.Common;
 using Loadout.Tui;
 using System.ComponentModel;
 using Loadout.Cli.Infrastructure;
@@ -45,7 +46,7 @@ public sealed class WorktreeListCommand : AsyncCommand<WorktreeListCommand.Setti
     {
         var output = new CommandOutput(_console, settings);
 
-        var directory = settings.Repo ?? Directory.GetCurrentDirectory();
+        var directory = settings.Repo ?? Invocation.CurrentDirectory;
 
         var resolution = settings.Project is not null
             ? await _projects.ResolveAsync(settings.Project).ConfigureAwait(false)

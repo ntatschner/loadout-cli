@@ -3,6 +3,7 @@ using Loadout.Cli.Infrastructure;
 using Loadout.Core.Projects;
 using Loadout.Core.Usage;
 using Loadout.Models;
+using Loadout.Platform.Common;
 using Loadout.Tui;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -64,7 +65,7 @@ public sealed class SpendRefreshCommand : AsyncCommand<SpendRefreshCommand.Setti
         var resolution = settings.Project is { Length: > 0 } handle
             ? await _projects.ResolveAsync(handle, cancellationToken).ConfigureAwait(false)
             : await _projects.ResolveFromDirectoryAsync(
-                settings.Repo ?? Directory.GetCurrentDirectory(), cancellationToken)
+                settings.Repo ?? Invocation.CurrentDirectory, cancellationToken)
                 .ConfigureAwait(false);
 
         if (resolution.Failed)

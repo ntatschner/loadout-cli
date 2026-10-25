@@ -4,6 +4,7 @@ using Loadout.Core.Instructions;
 using Loadout.Core.Projects;
 using Loadout.Core.Workspace;
 using Loadout.Models;
+using Loadout.Platform.Common;
 using Loadout.Tui;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -77,7 +78,7 @@ public sealed class MemoryFindCommand : AsyncCommand<MemoryFindCommand.Settings>
         var resolution = settings.Project is not null
             ? await _projects.ResolveAsync(settings.Project, cancellationToken).ConfigureAwait(false)
             : await _projects.ResolveFromDirectoryAsync(
-                settings.Repo ?? Directory.GetCurrentDirectory(), cancellationToken).ConfigureAwait(false);
+                settings.Repo ?? Invocation.CurrentDirectory, cancellationToken).ConfigureAwait(false);
 
         if (resolution.Failed)
         {

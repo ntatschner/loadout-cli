@@ -60,13 +60,19 @@ internal sealed class SessionHistoryService : ISessionHistoryService
     /// </summary>
     private readonly IHeadlessBackfill? _backfill;
 
+    /// <summary>Where which directory belongs to which project is kept between runs, or null for nowhere.</summary>
+    private readonly string? _kept;
+
     public SessionHistoryService(
         IEnumerable<ISessionHistory> histories,
         IDeclaredSessionHistories declared,
         IProjectService projects,
         ILaunchLedger ledger,
-        IHeadlessBackfill? backfill = null)
+        IHeadlessBackfill? backfill = null,
+        Loadout.Platform.Abstractions.IPlatformPaths? paths = null)
     {
+        _kept = paths is null ? null : DirectoryProjects.Under(paths.Paths.State);
+
         ArgumentNullException.ThrowIfNull(declared);
 
         // Described agents first, and a compiled-in reader of the same name
@@ -205,6 +211,7 @@ internal sealed class SessionHistoryService : ISessionHistoryService
             OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
 
         var attributed = new List<AgentSession>(sessions.Count);
+        var slugOf = await DirectoryProjects.AskingAsync(_projects, _kept, ct).ConfigureAwait(false);
 
         foreach (var session in sessions)
         {
@@ -212,13 +219,9 @@ internal sealed class SessionHistoryService : ISessionHistoryService
 
             if (!resolved.TryGetValue(session.Directory, out var slug))
             {
-                var result = await _projects
-                    .ResolveFromDirectoryAsync(session.Directory, ct)
-                    .ConfigureAwait(false);
-
                 // Not belonging to a registered project is normal: agents get
                 // run in scratch directories all the time.
-                slug = result.Succeeded ? result.Value?.Entry.Slug : null;
+                slug = await slugOf(session.Directory).ConfigureAwait(false);
 
                 resolved[session.Directory] = slug;
             }

@@ -54,7 +54,7 @@ public abstract class TerminalProviderBase : ITerminalProvider
             {
                 // Redirected streams mean the launcher is in a pipe or a CI
                 // job, where spec section 37 forbids menus from appearing.
-                return !Console.IsOutputRedirected && !Console.IsInputRedirected;
+                return !Invocation.IsOutputRedirected && !Invocation.IsInputRedirected;
             }
             catch (IOException)
             {

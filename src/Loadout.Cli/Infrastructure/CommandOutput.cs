@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using Loadout.Core.Security;
 using Loadout.Models;
 using Loadout.Models.Results;
+using Loadout.Platform.Common;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
@@ -77,7 +78,7 @@ public sealed class CommandOutput
     /// </remarks>
     public void Meanwhile(string markup)
     {
-        if (_settings.Json || _settings.Quiet || Console.IsOutputRedirected)
+        if (_settings.Json || _settings.Quiet || Invocation.IsOutputRedirected)
         {
             return;
         }
@@ -88,7 +89,7 @@ public sealed class CommandOutput
     public bool CanOpenAWindow =>
         !_settings.NonInteractive
         && !_settings.Json
-        && !Console.IsOutputRedirected;
+        && !Invocation.IsOutputRedirected;
 
     /// <summary>Writes a line only when extra detail was asked for.</summary>
     public void WriteVerbose(string markup)

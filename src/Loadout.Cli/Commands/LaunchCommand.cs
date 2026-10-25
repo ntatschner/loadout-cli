@@ -2,6 +2,7 @@ using System.ComponentModel;
 using Loadout.Agents;
 using Loadout.Cli.Infrastructure;
 using Loadout.Core.Projects;
+using Loadout.Platform.Common;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using Loadout.Tui;
@@ -174,7 +175,7 @@ public sealed class HereCommand : AsyncCommand<HereCommand.Settings>
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(_console, settings);
-        var directory = settings.Repo ?? Directory.GetCurrentDirectory();
+        var directory = settings.Repo ?? Invocation.CurrentDirectory;
 
         var resolveResult = await _projects.ResolveFromDirectoryAsync(directory).ConfigureAwait(false);
         if (resolveResult.Failed)

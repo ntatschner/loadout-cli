@@ -5,6 +5,7 @@ using Loadout.Core.Sessions;
 using Loadout.Models;
 using Loadout.Models.Agents;
 using Loadout.Models.Results;
+using Loadout.Platform.Common;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using Loadout.Tui;
@@ -409,7 +410,7 @@ public sealed class ResumeCommand : AsyncCommand<ResumeSettings>
             return sessions[0];
         }
 
-        if (settings.NonInteractive || Console.IsInputRedirected || Console.IsOutputRedirected)
+        if (settings.NonInteractive || Invocation.IsInputRedirected || Invocation.IsOutputRedirected)
         {
             // Spec section 37: no menu where nobody can answer it.
             output.WriteLine(
