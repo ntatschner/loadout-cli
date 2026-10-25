@@ -578,6 +578,7 @@ public sealed partial class TeamRunner : ITeamRunner
     private readonly BriefRequestsStep _briefRequests;
     private readonly FeedbackStep _feedback;
     private readonly CloseRunStep _close;
+    private readonly Core.Teams.IRunOwnership? _ownership;
 
     /// <summary>
     /// The project service and the git manager are optional so a caller that
@@ -585,7 +586,9 @@ public sealed partial class TeamRunner : ITeamRunner
     /// says so rather than appearing to. The child lifetime is optional for
     /// the same reason, and a run that has one says so when it is the weaker
     /// kind. Without the task service a run is still recorded in its own
-    /// journal, and only the project's task list goes without it.
+    /// journal, and only the project's task list goes without it. Without
+    /// the run ownership nothing holds a run while it goes, and a run whose
+    /// process died cannot be told from one still going.
     /// </summary>
     public TeamRunner(
         IAgentLauncher launcher,
@@ -595,10 +598,12 @@ public sealed partial class TeamRunner : ITeamRunner
         Core.Git.IGitManager? git = null,
         IChildLifetime? lifetime = null,
         Core.Tasks.ITaskService? tasks = null,
-        Core.Tools.IToolRegistry? tools = null)
+        Core.Tools.IToolRegistry? tools = null,
+        Core.Teams.IRunOwnership? ownership = null)
     {
         _paths = paths;
         _time = time;
+        _ownership = ownership;
 
         // Some steps are shared: the lead, the workers and the resolver are
         // all started through the same sessions, and the opening and the
@@ -610,7 +615,7 @@ public sealed partial class TeamRunner : ITeamRunner
         _watchAsks = new WatchAsksStep(time);
         _workers = new StartWorkersStep(sessions, new ReviewTreeStep(projects, git), fold, git);
         _open = new OpenRunStep(paths, time, lifetime, projects, sessions, declare);
-        _limits = new RoundLimitsStep(time);
+        _limits = new RoundLimitsStep(time, ownership);
         _leadReport = new LeadReportStep(sessions);
         _briefRequests = new BriefRequestsStep(new DecideStep(time));
         _feedback = new FeedbackStep();
@@ -651,6 +656,31 @@ public sealed partial class TeamRunner : ITeamRunner
 
         var directory = RunDirectory(runId);
         Directory.CreateDirectory(directory);
+
+        // Before anything is written, on a new run and a reopened one alike,
+        // so two coordinators picking up one run at the same moment cannot
+        // both carry on. Held until the method returns, which is after the
+        // close has written run.finished: the lock going is what says the
+        // process that drove the run has gone.
+        IDisposable? owner = null;
+
+        if (_ownership is not null)
+        {
+            var taken = _ownership.Take(directory);
+
+            // Passed on as the take said it. Another process holding the run
+            // is one reason; a lock file that could not be opened or written
+            // is another, and calling that an owner sends somebody looking for
+            // a process that is not there.
+            if (taken.Failed)
+            {
+                return OperationResult<TeamRunOutcome>.Fail(taken.Error!, taken.ExitCode);
+            }
+
+            owner = taken.Value;
+        }
+
+        using var holding = owner;
 
         // Made before the first node starts, so a declaration that tells one
         // to write there is not telling it to make a directory first.
@@ -697,6 +727,7 @@ public sealed partial class TeamRunner : ITeamRunner
             Resuming = resuming,
             LeadBrief = opening.LeadBrief,
             Criteria = opening.Criteria,
+            Owner = owner,
         };
 
         var journal = new JournalWriter(Path.Combine(directory, "journal.jsonl"), runId, _time);

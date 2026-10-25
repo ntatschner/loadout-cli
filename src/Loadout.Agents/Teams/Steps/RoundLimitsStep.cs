@@ -9,10 +9,12 @@ namespace Loadout.Agents.Teams.Steps;
 internal sealed class RoundLimitsStep
 {
     private readonly TimeProvider _time;
+    private readonly IRunOwnership? _ownership;
 
-    public RoundLimitsStep(TimeProvider time)
+    public RoundLimitsStep(TimeProvider time, IRunOwnership? ownership = null)
     {
         _time = time;
+        _ownership = ownership;
     }
 
     /// <summary>
@@ -119,6 +121,14 @@ internal sealed class RoundLimitsStep
 
             await journal.WriteAsync("run.resumed", null, new { round = run.Rounds + 1 }, ct)
                 .ConfigureAwait(false);
+
+            // The same process, which never let the run go, so this only says
+            // again that it has it: a hold can last longer than anybody would
+            // guess a live run goes quiet for.
+            if (_ownership is not null && run.Owner is { } held)
+            {
+                _ownership.Touch(held);
+            }
         }
 
         // Anything said to the lead while it was working, handed over
