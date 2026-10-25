@@ -65,6 +65,11 @@ public sealed class Invocation
     /// run in the daemon said the path it was handed, which is not the same
     /// answer. Windows answers with the path as it was set, links and all, so
     /// it is left alone there.
+    /// <para>
+    /// Asked of libc's realpath, which is the kernel's own answer, rather than
+    /// worked out by following each link: an attempt that did that passed on
+    /// Linux and still left <c>/var</c> unresolved on macOS.
+    /// </para>
     /// </remarks>
     internal static string Physical(string directory)
     {
@@ -75,22 +80,9 @@ public sealed class Invocation
 
         try
         {
-            var full = Path.GetFullPath(directory);
-            var resolved = Path.GetPathRoot(full) ?? "/";
-
-            foreach (var part in full[resolved.Length..].Split('/', StringSplitOptions.RemoveEmptyEntries))
-            {
-                var next = Path.Combine(resolved, part);
-                var info = new DirectoryInfo(next);
-
-                resolved = info.LinkTarget is not null && info.ResolveLinkTarget(returnFinalTarget: true) is { } target
-                    ? target.FullName
-                    : next;
-            }
-
-            return resolved;
+            return Unix.NativeTerminal.RealPath(Path.GetFullPath(directory)) ?? directory;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
         {
             return directory;
         }

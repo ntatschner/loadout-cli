@@ -109,7 +109,9 @@ public sealed class CommandHostTests
 
         using (invocation.Enter())
         {
-            Invocation.CurrentDirectory.Should().Be(directory);
+            // As a process started there would be told it, which on macOS is
+            // the temporary directory with its link resolved.
+            Invocation.CurrentDirectory.Should().Be(Invocation.Physical(directory));
             Invocation.IsOutputRedirected.Should().BeTrue("a captured call's output is a pipe, as a child's was");
             Invocation.IsInputRedirected.Should().BeTrue();
         }
