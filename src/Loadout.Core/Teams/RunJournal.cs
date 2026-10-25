@@ -412,6 +412,21 @@ public sealed record RunSummary(
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// The run this one carries on from, or null for a run started afresh.
+    /// </summary>
+    /// <remarks>
+    /// Written once, when it starts. With <see cref="Resolved"/> on the run
+    /// before it, it is how a task's runs are read back as one chain.
+    /// </remarks>
+    public string? Follows { get; init; }
+
+    /// <summary>
+    /// What somebody decided to do about this run after it ended short of its
+    /// done-when, or null where nobody has.
+    /// </summary>
+    public RunResolution? Resolved { get; init; }
+
+    /// <summary>
     /// What the lead last said about each of the run's criteria.
     /// </summary>
     /// <remarks>
@@ -996,6 +1011,8 @@ public sealed class RunJournal : IRunJournal
         string? path = null;
         string? task = null;
         string? origin = null;
+        string? follows = null;
+        RunResolution? resolved = null;
         decimal? budget = null;
         var uncapped = false;
         var quiet = 0;
@@ -1063,6 +1080,10 @@ public sealed class RunJournal : IRunJournal
                     // a trigger names its rule and the money it set aside, which
                     // is how it finds the run again to see what it spent.
                     origin = entry.Text("origin");
+
+                    // The run this one carries on from, when somebody dealt
+                    // with a run that missed its done-when by starting another.
+                    follows = entry.Text("follows");
                     budget = entry.Number("budget");
                     uncapped = Uncapped(entry);
                     started = entry.At;
@@ -1077,6 +1098,10 @@ public sealed class RunJournal : IRunJournal
                     finished = null;
                     ended = null;
                     outcome = null;
+
+                    // Dealt with as it ended; going again, it may end another
+                    // way and need dealing with again.
+                    resolved = null;
                     cost = 0m;
                     limit = (int)(entry.Number("rounds") ?? limit);
 
@@ -1297,6 +1322,25 @@ public sealed class RunJournal : IRunJournal
                     conflicts++;
                     break;
 
+                // Somebody decided what to do about a run that ended short of
+                // its done-when. The latest decision is the one that stands.
+                case "run.resolved" when entry.Text("action") is { Length: > 0 } action:
+                    resolved = new RunResolution(
+                        entry.At,
+                        action,
+                        entry.Text("by") ?? string.Empty,
+                        entry.Text("answer"),
+                        entry.Text("next"),
+                        entry.Text("cap"),
+                        entry.Number("figure"));
+                    break;
+
+                // A decision whose run never started, taken back so the run is
+                // waiting on a person again.
+                case "run.unresolved":
+                    resolved = null;
+                    break;
+
                 case "merge.done" when entry.Text("branch") is { Length: > 0 } branch:
                     if (!merged.Contains(branch, StringComparer.Ordinal))
                     {
@@ -1350,6 +1394,8 @@ public sealed class RunJournal : IRunJournal
             origin)
         {
             Readings = readings,
+            Follows = follows,
+            Resolved = resolved,
         };
     }
 
@@ -1422,6 +1468,10 @@ public sealed class RunJournal : IRunJournal
                 + (entry.Text("session") is { Length: > 0 } ? ", the lead resuming its own session" : ", with a fresh lead told where it got to"),
             "run.budget" => (Uncapped(entry) ? "budget cap taken off" : $"budget set to ${entry.Number("budget"):0.00}")
                 + (entry.Text("by") is { Length: > 0 } by ? $" by {by}" : string.Empty),
+            "run.resolved" => $"dealt with: {entry.Text("action")}"
+                + (entry.Text("next") is { Length: > 0 } next ? $", carried on as {next}" : string.Empty)
+                + (entry.Text("by") is { Length: > 0 } resolvedBy ? $" by {resolvedBy}" : string.Empty),
+            "run.unresolved" => $"waiting on you again: {entry.Text("why")}",
             "node.doing" => entry.Text("doing") ?? "working",
             "node.said" => entry.Text("line") ?? "working",
             // The three lines one decision writes. A node stops and says what

@@ -7,6 +7,7 @@
   // one that draws rooms.
   import { onDestroy, untrack } from 'svelte';
   import Bin from '../lib/components/Bin.svelte';
+  import BlockedRuns from '../lib/components/BlockedRuns.svelte';
   import CommandAction from '../lib/components/CommandAction.svelte';
   import Dialog from '../lib/components/Dialog.svelte';
   import HaloButton from '../lib/components/HaloButton.svelte';
@@ -32,6 +33,7 @@
   import { approvalNeeds, attentionNeeds, type TriggerApproval, type TriggerSources, type TriggerStale, type TriggerStanding } from '../lib/triggers';
   import { boardOf, boardRunsOf, boardTeamsOf, gateOf, keptRuns, needsOf, startedRun, summaryOf } from '../lib/teamsData';
   import { reveal } from '../lib/reveal.svelte';
+  import { resolveLine, resolveWords, type BlockedChoice, type BlockedRead } from '../lib/blocked';
   import type { Act, Prune } from '../lib/teams';
 
   let { rest }: { rest: string[] } = $props();
@@ -368,6 +370,36 @@
       () => loadRemedies(remedyTeam),
     );
 
+  /* ---------- runs that ended short of their done-when ---------- */
+
+  let blocked = $state<BlockedRead[] | null>(null);
+
+  // Read on the overview as well, for the line that points here: the
+  // overview is where a bad night is noticed, and this is where it is dealt with.
+  $effect(() => {
+    if (place === 'blocked' || !place) {
+      untrack(() => void loadBlocked());
+    }
+  });
+
+  async function loadBlocked() {
+    try {
+      blocked = (await readJson<{ runs: BlockedRead[] }>('team blocked list')).runs;
+    } catch (error) {
+      fail(error);
+    }
+  }
+
+  // Resolves to what the command said, or throws with its refusal, which the
+  // section shows under the run it was about.
+  async function resolveBlocked(run: BlockedRead, choice: BlockedChoice): Promise<string> {
+    const job = await runJob('team blocked resolve', resolveWords(run, choice));
+
+    void loadBlocked();
+
+    return (job.output ?? '').trim() || `Done: ${resolveLine(run, choice)}`;
+  }
+
   /* ---------- the bin ---------- */
 
   let bin = $state<{ days: number; entries: { kind: 'run' | 'team'; name: string; team: string; binned: string; goes: string | null; unmerged: string[]; bytes: number }[] } | null>(null);
@@ -442,6 +474,7 @@
   const PLACES = [
     { key: null, label: 'Runs and teams' },
     { key: 'remedies', label: 'Remedies' },
+    { key: 'blocked', label: 'Blocked' },
     { key: 'bin', label: 'The bin' },
     { key: 'tools', label: 'Shared tools' },
     { key: 'wiring', label: 'Calls for help and the webhook' },
@@ -550,6 +583,9 @@
 
   {#if !place}
     <NeedsYou items={needs} />
+    {#if blocked?.length}
+      <p class="calm">{blocked.length} run{blocked.length === 1 ? '' : 's'} ended short of {blocked.length === 1 ? 'its' : 'their'} done-when and {blocked.length === 1 ? 'is' : 'are'} waiting on you: <a href="#teams/+blocked">see Blocked</a>.</p>
+    {/if}
 
     <ListToolbar noun="runs" query={ledger.text} shape={ledger.shape} shown={filtering ? shownRuns.length : null} recorded={filtering ? studio.runs.length : null} problem={ledger.problem} onchange={(query) => void ledger.ask(query)} />
 
@@ -683,6 +719,18 @@
         {/each}
       {/if}
     {/if}
+  {:else if place === 'blocked'}
+    <h2 class="topicname">Blocked</h2>
+    <p class="calm">Runs that ended without meeting their done-when: blocked, failed, out of rounds or money, ended without saying, or whose process went away. Each has a suggestion and the reason for it; nothing happens until you confirm.</p>
+    {#if blocked}
+      <BlockedRuns runs={blocked} disabledReason={watch} onresolve={resolveBlocked} />
+      <p class="calm small">From <code class="ls-cmd">loadout team blocked list</code>.</p>
+    {:else}
+      <p class="calm" role="status">Reading…</p>
+    {/if}
+    <div class="acts">
+      <CommandAction path="team blocked show" title="One run in full: how it ended, what stopped it, how far it got" label="Show" />
+    </div>
   {:else if place === 'bin'}
     <h2 class="topicname">The bin</h2>
     {#if bin}

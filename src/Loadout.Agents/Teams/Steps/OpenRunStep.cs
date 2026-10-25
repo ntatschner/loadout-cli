@@ -123,6 +123,24 @@ internal sealed class OpenRunStep
                 ExitCode.InvalidArguments), string.Empty, null);
         }
 
+        // Carrying on from another run starts a run of its own; picking one up
+        // reopens the old one. Both at once would be two answers to one run.
+        if (request.Follows is { Length: > 0 } follows)
+        {
+            if (request.Resuming is { Length: > 0 })
+            {
+                return (OperationResult<TeamRunOutcome>.Fail(
+                    "A run is either picked up or carried on from, not both.", ExitCode.InvalidArguments), string.Empty, null);
+            }
+
+            var earlier = RunFollowing.Read(new RunJournal(_paths), follows);
+
+            if (earlier.Failed)
+            {
+                return (OperationResult<TeamRunOutcome>.Fail(earlier.Error!, earlier.ExitCode), string.Empty, null);
+            }
+        }
+
         // Picking up an ended run rather than starting one. Read before
         // anything is made, so a run that cannot be picked up changes nothing.
         RunResumption? resuming = null;
@@ -326,6 +344,7 @@ internal sealed class OpenRunStep
                     path = where,
                     task = request.Task,
                     origin = request.Origin,
+                    follows = request.Follows,
 
                     // What it may spend, so a page watching it can say where the
                     // spend stands rather than only what it has cost. No cap is
@@ -340,6 +359,22 @@ internal sealed class OpenRunStep
                         : null,
                 },
                 ct).ConfigureAwait(false);
+
+            // The run carried on from names this one, so either end of the
+            // link can be found from the other. Whatever was decided about it
+            // stands; this adds only which run came of it. A run carried on
+            // from by hand, with nothing decided, reads as carried on.
+            if (request.Follows is { Length: > 0 } follows)
+            {
+                var journals = new RunJournal(_paths);
+                var decided = journals.Summarise(follows).Value?.Resolved;
+
+                new BlockedRunReader(journals).Record(
+                    follows,
+                    (decided ?? new RunResolution(_time.GetUtcNow(), BlockedActions.Spell(BlockedAction.CarryOn), Environment.UserName))
+                        with { At = _time.GetUtcNow(), Next = runId },
+                    again: true);
+            }
 
             // Said once, at the start, so anybody reading the run back knows
             // these were the team's and not something the person typed.

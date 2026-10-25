@@ -67,6 +67,12 @@ public sealed class QueueItem
 
     /// <summary>When it was added.</summary>
     public DateTimeOffset AddedUtc { get; set; }
+
+    /// <summary>
+    /// The run it was put back after, when it was re-queued from the Blocked
+    /// section, so the run it becomes carries on from that one. Empty otherwise.
+    /// </summary>
+    public string Follows { get; set; } = string.Empty;
 }
 
 /// <summary>Where a run the queue started got to.</summary>

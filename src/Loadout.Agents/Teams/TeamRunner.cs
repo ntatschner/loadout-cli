@@ -106,6 +106,10 @@ namespace Loadout.Agents.Teams;
 /// What started the run where something other than a person did, written to
 /// its journal as <see cref="Loadout.Core.Triggers.RunOrigin"/> reads it.
 /// </param>
+/// <param name="Follows">
+/// The run this one carries on from, after it ended short of its done-when:
+/// its lead is told how that one ended and what the person said about it.
+/// </param>
 public sealed record TeamRunRequest(
     string ProjectHandle,
     TeamDefinition Team,
@@ -131,7 +135,8 @@ public sealed record TeamRunRequest(
     string? Task = null,
     StandingCriteria? Standing = null,
     string? OnTimeout = null,
-    string? Origin = null);
+    string? Origin = null,
+    string? Follows = null);
 
 /// <summary>
 /// A project's standing done-when criteria as they reach one run.
@@ -727,7 +732,7 @@ public sealed partial class TeamRunner : ITeamRunner
         try
         {
             run.Prompt = resuming is null
-                ? Render(run.LeadBrief)
+                ? Render(run.LeadBrief) + Previously(request)
                 : Picking(resuming, request, lead.Plan, run.LeadBrief, RunControl.Cap(directory).Or(StartingCap(request, team)).Usd, [.. run.ClosedAtEnd, .. run.Retired]);
 
             while (true)
@@ -1206,6 +1211,21 @@ public sealed partial class TeamRunner : ITeamRunner
         + "that might already exist, search it: `loadout tools search <words>` or "
         + "`loadout_tools_search`. Use `show` for the detail. Submit a tool, idea, bug or lesson "
         + "with `loadout_tools_submit`, and say what you used with `loadout_tools_used`.";
+
+    /// <summary>
+    /// For a run carrying on from another, what the lead is told about that
+    /// one; empty for a run started afresh.
+    /// </summary>
+    /// <remarks>
+    /// After the brief rather than in it, because the brief is the run's own
+    /// and travels as JSON to every node it briefs. This is for the lead's
+    /// first turn alone.
+    /// </remarks>
+    private string Previously(TeamRunRequest request) =>
+        request.Follows is { Length: > 0 } follows
+        && RunFollowing.Read(new RunJournal(_paths), follows) is { Succeeded: true, Value: { } earlier }
+            ? Environment.NewLine + earlier.Previously()
+            : string.Empty;
 
     /// <summary>The brief as the node reads it: the prose first, the JSON beside it, the contract last.</summary>
     internal static string Render(Brief brief)

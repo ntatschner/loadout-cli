@@ -100,7 +100,8 @@ public sealed partial class TeamRunnerTests : IDisposable
         StandingCriteria? standing = null,
         string? onTimeout = null,
         string? origin = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? follows = null)
     {
         return await new TeamRunner(
             _launcher,
@@ -114,7 +115,7 @@ public sealed partial class TeamRunnerTests : IDisposable
                 "Add --since to loadout usage.", autonomy, dryRun, MaxRounds: rounds, Offline: true,
                 Criteria: criteria, TakeRecommendationAfter: takeRecommendationAfter,
                 Budget: budget, MachineBudget: machineBudget, Task: task, Standing: standing,
-                OnTimeout: onTimeout, Origin: origin),
+                OnTimeout: onTimeout, Origin: origin, Follows: follows),
             console ?? _console,
             ct);
     }
@@ -249,6 +250,53 @@ public sealed partial class TeamRunnerTests : IDisposable
         prompt.Should().Contain("\"contract\":\"brief/1\"");
         prompt.Should().Contain("outward actions allowed: none");
         prompt.TrimEnd().Should().EndWith("Status done needs evidence.", "the contract is the last thing the node reads");
+    }
+
+    [Fact]
+    public async Task A_run_carrying_on_from_another_tells_its_lead_how_that_one_ended_and_links_the_two()
+    {
+        // The run before: blocked, with a final report saying on what, and a
+        // person's answer written down when they chose to carry on.
+        const string before = "20261025-0900-aaaa";
+        var directory = Path.Combine(_paths.Paths.State, "teams", "runs", before);
+        Directory.CreateDirectory(directory);
+        await File.WriteAllLinesAsync(Path.Combine(directory, "journal.jsonl"),
+        [
+            """{"at":"2026-10-25T09:00:00+00:00","run":"r","node":null,"kind":"run.started","data":{"team":"iterating-project","goal":"Add --since to loadout usage.","autonomy":"supervised","rounds":5,"project":"demo"}}""",
+            """{"at":"2026-10-25T10:00:00+00:00","run":"r","node":null,"kind":"run.finished","data":{"ended":"blocked","cost":1.5,"rounds":2,"merged":[]}}""",
+        ]);
+        await File.WriteAllTextAsync(Path.Combine(directory, "final-report.json"), ReportReader.Write(new Report(
+            "lead", ReportStatus.Blocked, "Parsed the flag; stuck on the window.", [], [], [],
+            Blocker: new ReportBlocker("no agreed meaning for --since", "a person saying whether it is inclusive"))));
+        new BlockedRunReader(new RunJournal(_paths))
+            .Record(before, new RunResolution(DateTimeOffset.UtcNow, "carry-on", "nrtat", "Inclusive of the day given."))
+            .Succeeded.Should().BeTrue();
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.05m));
+
+        var outcome = (await RunAsync(follows: before)).Value!;
+
+        var prompt = _launcher.Written("role.project-lead")[0];
+        prompt.Should().Contain("## Previously").And.Contain(before)
+            .And.Contain("no agreed meaning for --since")
+            .And.Contain("Inclusive of the day given.");
+
+        var journal = new RunJournal(_paths);
+        journal.Summarise(outcome.RunId).Value!.Follows.Should().Be(before);
+
+        var earlier = journal.Summarise(before).Value!;
+        earlier.Resolved!.Next.Should().Be(outcome.RunId, "the run carried on from names the run that came of it");
+        earlier.Resolved.Answer.Should().Be("Inclusive of the day given.", "naming the next run keeps what was decided");
+    }
+
+    [Fact]
+    public async Task A_run_cannot_carry_on_from_one_that_is_not_there()
+    {
+        var refused = await RunAsync(follows: "20261025-0900-ffff");
+
+        refused.Succeeded.Should().BeFalse();
+        refused.Error.Should().Contain("nothing to carry on from");
+        _launcher.Requests.Should().BeEmpty();
     }
 
     [Fact]
