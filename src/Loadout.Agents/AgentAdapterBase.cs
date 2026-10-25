@@ -83,16 +83,55 @@ public abstract class AgentAdapterBase : IAgentAdapter
             // Cancellation is not applied to a shared probe: cancelling one
             // caller's wait must not poison the answer for the next. A probe
             // has its own timeout, so a wait is bounded either way.
-            _detection ??= DetectOnceAsync();
+            _detection ??= Remembered();
 
             return _detection;
         }
     }
 
-    private async Task<AgentDescriptor> DetectOnceAsync()
+    /// <summary>How long a detection is shared across adapters before the agent is asked again.</summary>
+    /// <remarks>
+    /// An agent updated in place - a package manager rewriting what sits
+    /// behind the same launcher script - leaves the file found on the path
+    /// unchanged, so the time is the only thing that notices it.
+    /// </remarks>
+    internal static readonly TimeSpan Shared = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// Detections already made with each process launcher, by adapter, binary
+    /// and when the binary was last written.
+    /// </summary>
+    /// <remarks>
+    /// Inside the daemon every command gets services of its own, adapters
+    /// included, so remembering on the adapter alone started both agents again
+    /// for every page that asked which were installed - most of what the spend
+    /// page waited for. Keyed on the launcher as well, which the daemon's
+    /// commands share and every test makes for itself.
+    /// </remarks>
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IProcessLauncher,
+        System.Collections.Concurrent.ConcurrentDictionary<string, (Task<AgentDescriptor> Detection, DateTime At)>> Detections = new();
+
+    private Task<AgentDescriptor> Remembered()
     {
         var executable = Resolver.Resolve(ExecutableName, ConfiguredSearchPaths);
 
+        if (executable is null || !File.Exists(executable))
+        {
+            return DetectOnceAsync(executable);
+        }
+
+        var key = $"{GetType().FullName}|{Name}|{executable}|{File.GetLastWriteTimeUtc(executable).Ticks}";
+        var now = DateTime.UtcNow;
+
+        return Detections.GetOrCreateValue(Processes).AddOrUpdate(
+            key,
+            _ => (DetectOnceAsync(executable), now),
+            (_, known) => now - known.At < Shared && !known.Detection.IsFaulted ? known : (DetectOnceAsync(executable), now))
+            .Detection;
+    }
+
+    private async Task<AgentDescriptor> DetectOnceAsync(string? executable)
+    {
         if (executable is null)
         {
             return AgentDescriptor.NotInstalled(Name, DisplayName);
