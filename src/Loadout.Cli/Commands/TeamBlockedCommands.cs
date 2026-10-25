@@ -46,7 +46,12 @@ internal static class BlockedReading
     /// </para>
     /// </remarks>
     public static async Task<BlockedRunReader> ReaderAsync(
-        IRunJournal journal, IQueueService queues, IProcessInspector processes, CancellationToken ct)
+        IRunJournal journal,
+        IQueueService queues,
+        IProcessInspector processes,
+        IRunOwnership ownership,
+        DateTimeOffset now,
+        CancellationToken ct)
     {
         var dead = new HashSet<string>(StringComparer.Ordinal);
         var going = journal.List(BlockedRunReader.Looked)
@@ -73,8 +78,18 @@ internal static class BlockedReading
             }
         }
 
-        return new BlockedRunReader(journal, run => dead.Contains(run.RunId));
+        return new BlockedRunReader(journal, run => dead.Contains(run.RunId) || Gone(run, ownership, now));
     }
+
+    /// <summary>Whether the run's owner lock was taken and is now free, so whatever drove it has ended.</summary>
+    /// <remarks>
+    /// Only that, not a run that has merely gone quiet with no owner record:
+    /// that is a guess about a run from an older build, which closing asks
+    /// about first, and carrying on from a run that is still going would put
+    /// two leads on one task.
+    /// </remarks>
+    internal static bool Gone(RunSummary run, IRunOwnership ownership, DateTimeOffset now) =>
+        TeamStyle.LivenessOf(run, ownership, now) is Liveness.NotResponding;
 
     /// <summary>One blocked run as JSON, the same for the list, one run, and Studio.</summary>
     public static object Json(BlockedRun one) => new
@@ -129,13 +144,18 @@ public sealed class TeamBlockedListCommand : AsyncCommand<TeamSettings>
     private readonly IRunJournal _journal;
     private readonly IQueueService _queues;
     private readonly IProcessInspector _processes;
+    private readonly IRunOwnership _ownership;
+    private readonly TimeProvider _time;
     private readonly IAnsiConsole _console;
 
-    public TeamBlockedListCommand(IRunJournal journal, IQueueService queues, IProcessInspector processes, IAnsiConsole console)
+    public TeamBlockedListCommand(
+        IRunJournal journal, IQueueService queues, IProcessInspector processes, IRunOwnership ownership, TimeProvider time, IAnsiConsole console)
     {
         _journal = journal;
         _queues = queues;
         _processes = processes;
+        _ownership = ownership;
+        _time = time;
         _console = console;
     }
 
@@ -145,7 +165,7 @@ public sealed class TeamBlockedListCommand : AsyncCommand<TeamSettings>
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(_console, settings);
-        var reader = await BlockedReading.ReaderAsync(_journal, _queues, _processes, cancellationToken).ConfigureAwait(false);
+        var reader = await BlockedReading.ReaderAsync(_journal, _queues, _processes, _ownership, _time.GetUtcNow(), cancellationToken).ConfigureAwait(false);
         var blocked = reader.List(settings.Project);
 
         if (output.IsJson)
@@ -192,13 +212,18 @@ public sealed class TeamBlockedShowCommand : AsyncCommand<TeamBlockedShowCommand
     private readonly IRunJournal _journal;
     private readonly IQueueService _queues;
     private readonly IProcessInspector _processes;
+    private readonly IRunOwnership _ownership;
+    private readonly TimeProvider _time;
     private readonly IAnsiConsole _console;
 
-    public TeamBlockedShowCommand(IRunJournal journal, IQueueService queues, IProcessInspector processes, IAnsiConsole console)
+    public TeamBlockedShowCommand(
+        IRunJournal journal, IQueueService queues, IProcessInspector processes, IRunOwnership ownership, TimeProvider time, IAnsiConsole console)
     {
         _journal = journal;
         _queues = queues;
         _processes = processes;
+        _ownership = ownership;
+        _time = time;
         _console = console;
     }
 
@@ -215,7 +240,7 @@ public sealed class TeamBlockedShowCommand : AsyncCommand<TeamBlockedShowCommand
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(_console, settings);
-        var reader = await BlockedReading.ReaderAsync(_journal, _queues, _processes, cancellationToken).ConfigureAwait(false);
+        var reader = await BlockedReading.ReaderAsync(_journal, _queues, _processes, _ownership, _time.GetUtcNow(), cancellationToken).ConfigureAwait(false);
         var found = reader.Find(settings.Run.Trim());
 
         if (found.Failed)
@@ -346,6 +371,7 @@ public sealed class TeamBlockedResolveCommand : AsyncCommand<TeamBlockedResolveC
     private readonly ITaskService _tasks;
     private readonly IProjectService _projects;
     private readonly IProcessInspector _processes;
+    private readonly IRunOwnership _ownership;
     private readonly IProcessLauncher _launcher;
     private readonly IPlatformPaths _paths;
     private readonly YamlStore _yaml;
@@ -359,6 +385,7 @@ public sealed class TeamBlockedResolveCommand : AsyncCommand<TeamBlockedResolveC
         ITaskService tasks,
         IProjectService projects,
         IProcessInspector processes,
+        IRunOwnership ownership,
         IProcessLauncher launcher,
         IPlatformPaths paths,
         YamlStore yaml,
@@ -371,6 +398,7 @@ public sealed class TeamBlockedResolveCommand : AsyncCommand<TeamBlockedResolveC
         _tasks = tasks;
         _projects = projects;
         _processes = processes;
+        _ownership = ownership;
         _launcher = launcher;
         _paths = paths;
         _yaml = yaml;
@@ -433,7 +461,7 @@ public sealed class TeamBlockedResolveCommand : AsyncCommand<TeamBlockedResolveC
                 ExitCode.InvalidArguments);
         }
 
-        var reader = await BlockedReading.ReaderAsync(_journal, _queues, _processes, cancellationToken).ConfigureAwait(false);
+        var reader = await BlockedReading.ReaderAsync(_journal, _queues, _processes, _ownership, _time.GetUtcNow(), cancellationToken).ConfigureAwait(false);
         var found = reader.Find(settings.Run.Trim());
 
         if (found.Failed)
