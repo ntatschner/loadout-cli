@@ -92,6 +92,13 @@ public static class RunOutcomes
             return RunOutcome.Stopped;
         }
 
+        // "abandoned: <reason>", written by team runs close for a run whose
+        // driver had gone.
+        if (Starts(said, "abandoned"))
+        {
+            return RunOutcome.Abandoned;
+        }
+
         // A run halted for taking an outward action its brief did not allow
         // did not deliver, and is filed with the rest of what did not. The
         // sentence beside it is what says it was a refusal rather than a

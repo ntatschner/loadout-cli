@@ -28,7 +28,7 @@
 
   let { keptDays = 30, entries, disabledReason = undefined, onrestore = undefined, onempty = undefined, onprune = undefined }: Props = $props();
 
-  const ENDS = ['any ending', 'failed', 'stopped', 'limited', 'blocked', 'done', 'needs-decision', 'unrecorded'];
+  const ENDS = ['any ending', 'failed', 'stopped', 'abandoned', 'limited', 'blocked', 'done', 'needs-decision', 'unrecorded'];
 
   let gone = $state<string[]>([]);
   let said = $state('');

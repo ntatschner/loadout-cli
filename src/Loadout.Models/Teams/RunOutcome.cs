@@ -56,4 +56,14 @@ public enum RunOutcome
     /// exactly "no finish written".
     /// </remarks>
     [JsonStringEnumMemberName("unrecorded")] Unrecorded,
+
+    /// <summary>
+    /// Somebody ended it after the process driving it had gone.
+    /// </summary>
+    /// <remarks>
+    /// The run never wrote its own finish, so this one was written for it,
+    /// by <c>team runs close</c>. The problem was whatever killed it; ending
+    /// the record is somebody dealing with that.
+    /// </remarks>
+    [JsonStringEnumMemberName("abandoned")] Abandoned,
 }
