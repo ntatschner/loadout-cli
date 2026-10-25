@@ -429,11 +429,17 @@ internal static partial class DashboardActions
                     "Something is still driving that run, so it was not ended.",
                 ExitCode.PolicyViolation =>
                     "That was refused by a rule. The terminal serving this page has which one.",
-                ExitCode.InvalidArguments when action.Verb == "close" =>
+                // Unconfirmed, the one refusal worth asking about is a run that
+                // may still be going. Confirmed, what is left is a run that has
+                // already ended or an id that is not a run.
+                ExitCode.InvalidArguments when action.Verb == "close" && !action.Confirmed =>
                     "That run may still be going. Confirm to end it.",
+                ExitCode.InvalidArguments when action.Verb == "close" =>
+                    "That run has already ended, or is not a run this can end. The terminal serving "
+                    + "this page says which.",
                 ExitCode.GeneralFailure when action.Verb == "close" =>
-                    "That run's owner file could not be read, so there is no telling whether something "
-                    + "still drives it, and it was not ended. The terminal serving this page says why.",
+                    "That run was not ended: its owner file could not be read, or its journal could not "
+                    + "be written. The terminal serving this page says which, and why.",
                 ExitCode.InvalidArguments when action.Verb == "pickup" =>
                     "That run cannot be picked up as it is: it has not ended, or it would stop again "
                     + "at once. Give it more money in the budget box. The terminal serving this page "

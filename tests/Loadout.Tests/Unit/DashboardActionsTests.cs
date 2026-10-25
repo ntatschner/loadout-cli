@@ -55,12 +55,28 @@ public sealed class DashboardActionsTests
     }
 
     [Fact]
-    public async Task Close_refused_for_an_unreadable_owner_says_so()
+    public async Task Confirmed_close_refused_as_invalid_says_the_run_has_ended_or_is_not_one()
     {
         var refused = await DashboardActions.RanAsync(
-            new Refusing(ExitCode.GeneralFailure), TimeProvider.System, new RunAction(Run, "close"), Quiet(), CancellationToken.None);
+            new Refusing(ExitCode.InvalidArguments), TimeProvider.System, new RunAction(Run, "close", Confirmed: true), Quiet(), CancellationToken.None);
 
-        refused.Error.Should().Contain("owner file could not be read");
+        refused.Failed.Should().BeTrue();
+        refused.Error.Should().Contain("already ended")
+            .And.Contain("not a run")
+            .And.Contain("terminal serving this page")
+            .And.NotContain("Confirm", "it was confirmed, and asking again would loop");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Close_refused_by_a_general_failure_names_the_owner_file_and_the_journal(bool confirmed)
+    {
+        var refused = await DashboardActions.RanAsync(
+            new Refusing(ExitCode.GeneralFailure), TimeProvider.System, new RunAction(Run, "close", Confirmed: confirmed), Quiet(), CancellationToken.None);
+
+        refused.Error.Should().Contain("owner file could not be read")
+            .And.Contain("journal could not be written");
     }
 
     private static CommandOutput Quiet() =>

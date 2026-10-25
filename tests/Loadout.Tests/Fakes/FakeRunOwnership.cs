@@ -34,6 +34,12 @@ public sealed class FakeRunOwnership : IRunOwnership
     /// <summary>Directories whose take is refused, as if another process owned them.</summary>
     public HashSet<string> Refused { get; } = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Directories whose take fails for a reason other than another owner,
+    /// as if the lock file could not be opened, with the error and code to fail with.
+    /// </summary>
+    public Dictionary<string, (string Error, ExitCode Code)> Broken { get; } = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Says what reading a run directory finds, until something takes it.</summary>
     public FakeRunOwnership Script(string runDirectory, OwnerReading reading)
     {
@@ -46,6 +52,11 @@ public sealed class FakeRunOwnership : IRunOwnership
     public OperationResult<IDisposable> Take(string runDirectory)
     {
         Taken.Add(runDirectory);
+
+        if (Broken.TryGetValue(runDirectory, out var broken))
+        {
+            return OperationResult<IDisposable>.Fail(broken.Error, broken.Code);
+        }
 
         if (Refused.Contains(runDirectory)
             || (_readings.TryGetValue(runDirectory, out var now) && now is OwnerReading.Held))

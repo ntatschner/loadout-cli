@@ -110,11 +110,16 @@ public sealed class RunCloser
 
         var taken = _ownership.Take(run.Directory);
 
+        // Only a take refused for another owner means something took the run
+        // back. Anything else, such as a lock file that could not be opened,
+        // is its own failure and says so in its own words.
         if (taken.Failed)
         {
-            return OperationResult<RunClosed>.Fail(
-                $"Something took run {runId} back while it was being closed, so it was left alone. {taken.Error}",
-                ExitCode.PolicyViolation);
+            return taken.ExitCode == ExitCode.PolicyViolation
+                ? OperationResult<RunClosed>.Fail(
+                    $"Something took run {runId} back while it was being closed, so it was left alone. {taken.Error}",
+                    ExitCode.PolicyViolation)
+                : OperationResult<RunClosed>.Fail(taken.Error!, taken.ExitCode);
         }
 
         using (taken.Value!)

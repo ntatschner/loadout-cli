@@ -121,6 +121,35 @@ public sealed class RunCloserTests : IDisposable
     }
 
     [Fact]
+    public void Close_passes_through_a_take_that_failed_for_its_own_reason()
+    {
+        var directory = Write(Started, Lead, Worker);
+        _owners.Script(directory, new OwnerReading.Free(_owners.Owner));
+        _owners.Broken[directory] = ("Access to the path 'owner.lock' is denied.", ExitCode.GeneralFailure);
+        var before = File.ReadAllText(Journal(directory));
+
+        var refused = Closer().Close(RunId, confirmed: false, "test");
+
+        refused.Failed.Should().BeTrue();
+        refused.ExitCode.Should().Be(ExitCode.GeneralFailure, "nothing took the run back; the lock could not be opened");
+        refused.Error.Should().Be("Access to the path 'owner.lock' is denied.");
+        File.ReadAllText(Journal(directory)).Should().Be(before);
+    }
+
+    [Fact]
+    public void Close_refused_when_something_took_the_run_back()
+    {
+        var directory = Write(Started, Lead, Worker);
+        _owners.Script(directory, new OwnerReading.Free(_owners.Owner));
+        _owners.Refused.Add(directory);
+
+        var refused = Closer().Close(RunId, confirmed: false, "test");
+
+        refused.ExitCode.Should().Be(ExitCode.PolicyViolation);
+        refused.Error.Should().StartWith($"Something took run {RunId} back");
+    }
+
+    [Fact]
     public void Close_of_old_quiet_run_needs_confirmation()
     {
         var directory = Quiet(Write(Started, Lead));
