@@ -49,8 +49,51 @@ public sealed class Invocation
         Output = output;
         Error = error;
         Input = input;
-        WorkingDirectory = directory;
+        WorkingDirectory = Physical(directory);
         ToTerminal = toTerminal;
+    }
+
+    /// <summary>
+    /// A directory as a process started in it would be told it is: on Unix,
+    /// with every symbolic link along it resolved.
+    /// </summary>
+    /// <remarks>
+    /// A Unix process asks the kernel where it is, and the kernel answers with
+    /// the real path. On macOS the temporary directory is under <c>/var</c>,
+    /// which is a link to <c>/private/var</c>, so a child started in
+    /// <c>/var/folders/…</c> said <c>/private/var/folders/…</c>, and a command
+    /// run in the daemon said the path it was handed, which is not the same
+    /// answer. Windows answers with the path as it was set, links and all, so
+    /// it is left alone there.
+    /// </remarks>
+    internal static string Physical(string directory)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return directory;
+        }
+
+        try
+        {
+            var full = Path.GetFullPath(directory);
+            var resolved = Path.GetPathRoot(full) ?? "/";
+
+            foreach (var part in full[resolved.Length..].Split('/', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var next = Path.Combine(resolved, part);
+                var info = new DirectoryInfo(next);
+
+                resolved = info.LinkTarget is not null && info.ResolveLinkTarget(returnFinalTarget: true) is { } target
+                    ? target.FullName
+                    : next;
+            }
+
+            return resolved;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return directory;
+        }
     }
 
     /// <summary>The invocation this call is part of, or null on the command line.</summary>
