@@ -79,6 +79,41 @@ public sealed class DashboardActionsTests
             .And.Contain("journal could not be written");
     }
 
+    [Fact]
+    public void Pick_up_with_answers_passes_one_joined_answer_each_in_order()
+    {
+        Typed(new RunAction(Run, "pickup", Answers: ["- by hand", "yes"]))
+            .Should().Be($"team resume {Run} --answer=- by hand --answer=yes");
+    }
+
+    [Fact]
+    public void Pick_up_without_answers_says_so()
+    {
+        Typed(new RunAction(Run, "pickup", WithoutAnswers: true)).Should().Be($"team resume {Run} --without-answers");
+    }
+
+    [Fact]
+    public void The_page_s_answers_and_its_choice_to_carry_on_without_are_read_by_name()
+    {
+        using var body = System.Text.Json.JsonDocument.Parse("""{"answers":["By hand","Yes"],"withoutAnswers":true,"budget":"40"}""");
+
+        var action = DashboardServer.ActionFrom(Run, "pickup", body.RootElement);
+
+        action.Answers.Should().Equal("By hand", "Yes");
+        action.WithoutAnswers.Should().BeTrue();
+        action.Budget.Should().Be("40");
+    }
+
+    [Fact]
+    public async Task A_pick_up_refused_for_unanswered_questions_says_to_answer_them()
+    {
+        var refused = await DashboardActions.RanAsync(
+            new Refusing(ExitCode.TerminalRequired), TimeProvider.System, new RunAction(Run, "pickup"), Quiet(), CancellationToken.None);
+
+        refused.Failed.Should().BeTrue();
+        refused.Error.Should().Contain("questions only you can answer").And.Contain("carry on without answering");
+    }
+
     private static CommandOutput Quiet() =>
         new(AnsiConsole.Create(new AnsiConsoleSettings
         {

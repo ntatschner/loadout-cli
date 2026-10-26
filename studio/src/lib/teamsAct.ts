@@ -37,7 +37,8 @@ export const runLines = {
   stop: (run: string) => `$ loadout team halt ${run}`,
   budget: (run: string, usd: string) => `$ loadout team budget ${run} --usd ${usd || '<figure or none>'}`,
   message: (run: string, message: string) => `$ loadout team message ${run} --message ${quoted(message || '…')}`,
-  pickUp: (run: string) => `$ loadout team resume ${run}`,
+  pickUp: (run: string, answers: string[] = [], without = false) =>
+    `$ loadout team resume ${run}${answers.map((one) => ` --answer ${quoted(one)}`).join('')}${without ? ' --without-answers' : ''}`,
   forget: (run: string) => `$ loadout team runs remove ${run}`,
   close: (run: string) => `$ loadout team runs close ${run}`,
   pr: (run: string, node: string) => `$ loadout team pr ${run} --node ${node} --draft`,
@@ -46,7 +47,15 @@ export const runLines = {
 export const hold = (run: string) => studio.perform(() => api.runs.act(run, 'pause'), 'It holds after this round', runLines.hold(run));
 export const carryOn = (run: string) => studio.perform(() => api.runs.act(run, 'resume'), 'It carries on', runLines.carryOn(run));
 export const stop = (run: string) => studio.perform(() => api.runs.act(run, 'stop'), 'It stops after this round', runLines.stop(run));
-export const pickUp = (run: string) => studio.perform(() => api.runs.act(run, 'pickup'), 'Picked up where it stopped', runLines.pickUp(run));
+// One answer per question it stopped on, in order, or none at all and a
+// choice to carry on without: the command refuses a run with questions open
+// and neither, rather than hand its lead the same questions again.
+export const pickUp = (run: string, answers: string[] = [], without = false) =>
+  studio.perform(
+    () => api.runs.act(run, 'pickup', answers.length > 0 ? { answers } : without ? { withoutAnswers: true } : {}),
+    answers.length > 0 ? 'Picked up with your answers' : without ? 'Picked up without answers' : 'Picked up where it stopped',
+    runLines.pickUp(run, answers, without),
+  );
 export const forget = (run: string) => studio.perform(() => api.runs.act(run, 'forget'), 'Forgotten, to the bin', runLines.forget(run));
 export const close = (run: string, confirmed: boolean) =>
   studio.perform(() => api.runs.act(run, 'close', { confirmed }), 'Ended: nothing was driving it', runLines.close(run) + (confirmed ? ' --yes' : ''));

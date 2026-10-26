@@ -69,7 +69,8 @@ public sealed class DashboardVerbContractTests
         Room: "- The Back Office",
         Node: "implementer/1",
         Instead: "- do the other thing",
-        Budget: "40");
+        Budget: "40",
+        Answers: ["- merge them by hand", "yes"]);
 
     [BuiltCliTheory]
     [MemberData(nameof(Verbs))]
@@ -104,6 +105,24 @@ public sealed class DashboardVerbContractTests
     /// fills that the line above does not: it types --think-again in place
     /// of --answer.
     /// </summary>
+    [BuiltCliFact]
+    public async Task Picking_up_without_answers_from_the_page_is_a_command_line_the_parser_accepts()
+    {
+        var (command, arguments) = DashboardActions.Maps(
+            new RunAction("20260101-0000-0000", "pickup", WithoutAnswers: true));
+
+        arguments.Should().Contain("--without-answers").And.NotContain(one => one.StartsWith("--answer", StringComparison.Ordinal));
+
+        using var loadout = new LoadoutProcess();
+
+        var run = await loadout.RunAsync([.. command.Split(' '), .. arguments, "--non-interactive", "--dry-run"]);
+
+        var everything = run.StandardOutput + run.StandardError;
+
+        everything.Should().NotContain("Unknown option");
+        everything.Should().NotContain("Unexpected option");
+    }
+
     [BuiltCliFact]
     public async Task Think_again_from_the_page_is_a_command_line_the_parser_accepts()
     {

@@ -516,6 +516,33 @@ Not yet: the run cannot push or open the pull request itself, and does not
 combine its nodes' branches into one for you. Both wait on the pull request
 work in "we need a way to", which will carry them out once you grant them.
 
+### Picking up a run that stopped on questions
+
+A lead that stops on questions has stopped because only you can answer them.
+Picking the run up without the answers hands it the same questions and
+nothing new, and it asks again or gives up, paying for a turn either way.
+
+So `team resume` on such a run shows the questions first. At a terminal it
+puts each one to you, with the lead's options and its recommendation first,
+or your own words. Elsewhere you answer them on the command line, one
+`--answer` per question in the order they are listed:
+
+```
+loadout team resume 20261023-1740-2677 \
+  --answer "Merge them through the gate" --answer "Yes, as built"
+```
+
+With nobody to ask and no answers, it refuses and lists the questions, rather
+than picking the run up quietly. If you really mean to carry on without
+answering, say so with `--without-answers`: the lead is told you chose not to,
+and decides what it can itself. Each answer reaches the lead beside its
+question, and goes in the journal as a decision, so the run no longer reads as
+waiting on it.
+
+Studio's **Pick it up where it stopped** does the same: on a run with
+questions open it shows them first, each filled in with what the lead
+recommended, and **Carry on without answering** is a choice of its own.
+
 ### What became of each one
 
 When `team run` ends it prints one block per criterion, and `team status` and

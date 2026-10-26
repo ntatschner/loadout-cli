@@ -29,7 +29,7 @@ vi.mock('./state.svelte', () => ({
   },
 }));
 
-const { answerGate } = await import('./teamsAct');
+const { answerGate, pickUp } = await import('./teamsAct');
 
 describe('answerGate', () => {
   it('sends an answer with its reason, and shows the same command', async () => {
@@ -55,5 +55,34 @@ describe('answerGate', () => {
 
     expect(sent[0].body).toEqual({ gate: 'g3', thinkAgain: true });
     expect(said[0]).toBe('$ loadout team gate r1 --gate g3 --think-again --by dashboard');
+  });
+});
+
+describe('pickUp', () => {
+  it('sends one answer per question, in order, and shows each as --answer', async () => {
+    sent.length = 0;
+    said.length = 0;
+    await pickUp('r1', ['Merge through the gate', '-- yes, as built']);
+
+    expect(sent).toEqual([{ run: 'r1', verb: 'pickup', body: { answers: ['Merge through the gate', '-- yes, as built'] } }]);
+    expect(said).toEqual(['$ loadout team resume r1 --answer "Merge through the gate" --answer "-- yes, as built"']);
+  });
+
+  it('sends carrying on without answers as its own flag, with no answers beside it', async () => {
+    sent.length = 0;
+    said.length = 0;
+    await pickUp('r1', [], true);
+
+    expect(sent).toEqual([{ run: 'r1', verb: 'pickup', body: { withoutAnswers: true } }]);
+    expect(said).toEqual(['$ loadout team resume r1 --without-answers']);
+  });
+
+  it('sends nothing extra for a run that stopped on no questions', async () => {
+    sent.length = 0;
+    said.length = 0;
+    await pickUp('r1');
+
+    expect(sent).toEqual([{ run: 'r1', verb: 'pickup', body: {} }]);
+    expect(said).toEqual(['$ loadout team resume r1']);
   });
 });

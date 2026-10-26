@@ -786,6 +786,43 @@ public sealed class DashboardServer : IDisposable
                 ? value.GetString()
                 : null;
 
+    /// <summary>
+    /// What the page asked be done to a run, read field by field from what it
+    /// sent.
+    /// </summary>
+    /// <remarks>
+    /// Its own function so a test can hold every field to its name. A field
+    /// the page sends and this never reads arrives as nothing, the command runs
+    /// with its default, and the page is told it worked.
+    /// </remarks>
+    internal static RunAction ActionFrom(string run, string verb, JsonElement? asked) => new(
+        run,
+        verb,
+        Text(asked, "gate"),
+        Text(asked, "answer"),
+        Text(asked, "reason"),
+        Text(asked, "message"),
+        Text(asked, "room"),
+        Text(asked, "node"),
+        Text(asked, "instead"),
+        Text(asked, "budget"),
+
+        // A flag rather than an answer, because "Think again" is not one
+        // of the lead's options and the page should not have to know the
+        // words the runner listens for.
+        Flag(asked, "thinkAgain"),
+        Flag(asked, "confirmed"),
+        Texts(asked, "answers"),
+        Flag(asked, "withoutAnswers"));
+
+    /// <summary>A list of strings out of a request body, in order, or null where it sent none.</summary>
+    private static IReadOnlyList<string>? Texts(JsonElement? body, string name) =>
+        body is { ValueKind: JsonValueKind.Object } given
+            && given.TryGetProperty(name, out var value)
+            && value.ValueKind == JsonValueKind.Array
+                ? [.. value.EnumerateArray().Where(one => one.ValueKind == JsonValueKind.String).Select(one => one.GetString()!)]
+                : null;
+
     /// <summary>One true-or-false out of a request body: true only when it says true.</summary>
     private static bool Flag(JsonElement? body, string name) =>
         body is { ValueKind: JsonValueKind.Object } given
@@ -870,25 +907,7 @@ public sealed class DashboardServer : IDisposable
             return;
         }
 
-        var action = new RunAction(
-            Uri.UnescapeDataString(run),
-            verb,
-            Text(asked, "gate"),
-            Text(asked, "answer"),
-            Text(asked, "reason"),
-            Text(asked, "message"),
-            Text(asked, "room"),
-            Text(asked, "node"),
-            Text(asked, "instead"),
-            Text(asked, "budget"),
-
-            // A flag rather than an answer, because "Think again" is not one
-            // of the lead's options and the page should not have to know the
-            // words the runner listens for.
-            Flag(asked, "thinkAgain"),
-            Flag(asked, "confirmed"));
-
-        var done = await Act(action, ct).ConfigureAwait(false);
+        var done = await Act(ActionFrom(Uri.UnescapeDataString(run), verb, asked), ct).ConfigureAwait(false);
 
         await WriteAsync(
             context,
@@ -3187,6 +3206,32 @@ public sealed class DashboardServer : IDisposable
 
         // What the lead took the goal to mean, beside the goal itself.
         run.GoalUnderstood,
+
+        // The questions an ended run stopped on and nobody answered, so
+        // picking it up can show them and take the answers rather than hand
+        // the lead the same questions again. Empty while it runs.
+        questions = RunQuestions.Open(run).Select(one => new
+        {
+            question = one.Question,
+            options = one.Options,
+            recommendation = one.Recommendation,
+        }),
+
+        // What it handed to a person when nothing left was its to do, and
+        // what has been checked since. Null for a run that never handed over.
+        handover = RunHandovers.IsHandover(run.Ended) && run.Handover is { } handed
+            ? new
+            {
+                items = handed.Items.Select(one => new
+                {
+                    criterion = one.Criterion,
+                    needs = CriterionTags.Spell(one.Needs),
+                    todo = one.ToDo,
+                    checkedBy = one.CheckedBy,
+                }),
+                branches = handed.Branches,
+            }
+            : null,
         cost = run.CostUsd,
         run.Rounds,
         run.RoundLimit,

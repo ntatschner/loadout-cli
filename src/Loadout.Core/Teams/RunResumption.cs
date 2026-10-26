@@ -52,6 +52,12 @@ public sealed record RunResumption(
     /// </summary>
     public bool ReadingsAccepted { get; init; }
 
+    /// <summary>
+    /// The questions the lead asked in its last report and nobody answered,
+    /// which a pick-up shows and takes the answers to.
+    /// </summary>
+    public IReadOnlyList<Loadout.Models.Teams.ReportQuestion> Questions { get; init; } = [];
+
     /// <summary>The lead's node name: the first node the run launched.</summary>
     public string? Lead => Summary.Nodes.Count > 0 ? Summary.Nodes[0].Node : null;
 
@@ -238,6 +244,7 @@ public sealed record RunResumption(
             standing)
         {
             ReadingsAccepted = readingsAccepted,
+            Questions = RunQuestions.Open(summary),
         }, null);
     }
 

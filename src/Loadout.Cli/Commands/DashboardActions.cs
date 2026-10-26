@@ -441,10 +441,13 @@ internal static partial class DashboardActions
                 ExitCode.GeneralFailure when action.Verb == "close" =>
                     "That run was not ended: its owner file could not be read, or its journal could not "
                     + "be written. The terminal serving this page says which, and why.",
+                ExitCode.TerminalRequired when action.Verb == "pickup" =>
+                    "That run stopped on questions only you can answer. Answer each, or choose to carry "
+                    + "on without answering.",
                 ExitCode.InvalidArguments when action.Verb == "pickup" =>
-                    "That run cannot be picked up as it is: it has not ended, or it would stop again "
-                    + "at once. Give it more money in the budget box. The terminal serving this page "
-                    + "says which.",
+                    "That run cannot be picked up as it is: it has not ended, it would stop again at "
+                    + "once, or the answers do not match its questions. Give it more money in the budget "
+                    + "box, or answer each question. The terminal serving this page says which.",
                 ExitCode.InvalidArguments =>
                     "That is not something this can be asked of that run.",
                 _ => $"'{command}' ended with exit code {code}. The terminal serving this page "
@@ -1165,6 +1168,20 @@ internal static partial class DashboardActions
         if (action.Message is { Length: > 0 } message)
         {
             arguments.Add(Joined("--message", message));
+        }
+
+        // Joined, because an answer is prose and may start with a dash, and
+        // every one sent, empty ones too: the command counts them against the
+        // questions, and one dropped here would shift the rest onto the wrong
+        // question.
+        foreach (var answer in action.Answers ?? [])
+        {
+            arguments.Add(Joined("--answer", answer));
+        }
+
+        if (action.WithoutAnswers)
+        {
+            arguments.Add("--without-answers");
         }
 
         return arguments;
