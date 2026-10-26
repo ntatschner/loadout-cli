@@ -17,10 +17,12 @@ internal sealed record LeadTurn(string? Ended, bool Reminded, Report? Report);
 internal sealed class LeadReportStep
 {
     private readonly NodeSessions _sessions;
+    private readonly IntegrateStep _integrate;
 
-    public LeadReportStep(NodeSessions sessions)
+    public LeadReportStep(NodeSessions sessions, IntegrateStep integrate)
     {
         _sessions = sessions;
+        _integrate = integrate;
     }
 
     public async Task<LeadTurn> RunAsync(RunContext run, JournalWriter journal, CancellationToken ct)
@@ -166,6 +168,10 @@ internal sealed class LeadReportStep
             && held is { Count: > 0 }
             && RunHandovers.Decide(Open(run, held, report), tags) is { Count: > 0 } handed)
         {
+            // Before the handover is written, so it names the one branch the
+            // person is to push where the node branches could be combined.
+            var branches = await _integrate.RunAsync(run, journal, ct).ConfigureAwait(false);
+
             await journal.WriteAsync(
                 "run.handover",
                 team.Lead,
@@ -178,7 +184,7 @@ internal sealed class LeadReportStep
                         todo = one.ToDo,
                         tagged = one.By,
                     }),
-                    branches = run.Branches.Values.Distinct(StringComparer.Ordinal),
+                    branches,
                 },
                 ct).ConfigureAwait(false);
 

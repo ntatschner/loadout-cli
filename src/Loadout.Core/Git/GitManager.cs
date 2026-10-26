@@ -860,19 +860,9 @@ internal sealed class GitManager : IGitManager
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentException.ThrowIfNullOrWhiteSpace(branch);
 
-        var parent = Path.GetDirectoryName(Path.GetFullPath(path));
-
-        if (parent is { Length: > 0 })
+        if (ParentOf(path) is { } refused)
         {
-            try
-            {
-                Directory.CreateDirectory(parent);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                return OperationResult<GitWorktree>.Fail(
-                    $"The worktree's directory could not be made at '{parent}': {ex.Message}");
-            }
+            return OperationResult<GitWorktree>.Fail(refused);
         }
 
         // -b creates the branch, so an existing name fails rather than
@@ -890,6 +880,53 @@ internal sealed class GitManager : IGitManager
         return result.Failed
             ? OperationResult<GitWorktree>.Fail(result.Error!)
             : OperationResult<GitWorktree>.Ok(new GitWorktree(Path.GetFullPath(path), branch, IsPrimary: false));
+    }
+
+    /// <inheritdoc />
+    public async Task<OperationResult<GitWorktree>> AddDetachedWorktreeAsync(
+        string repositoryPath,
+        string path,
+        string baseRef,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(repositoryPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentException.ThrowIfNullOrWhiteSpace(baseRef);
+
+        if (ParentOf(path) is { } refused)
+        {
+            return OperationResult<GitWorktree>.Fail(refused);
+        }
+
+        var result = await RunAsync(
+            repositoryPath, ["worktree", "add", "--detach", path, baseRef], LocalOperationTimeout, ct)
+            .ConfigureAwait(false);
+
+        return result.Failed
+            ? OperationResult<GitWorktree>.Fail(result.Error!)
+            : OperationResult<GitWorktree>.Ok(new GitWorktree(Path.GetFullPath(path), null, IsPrimary: false));
+    }
+
+    /// <summary>Makes a new tree's parent directory, or says why it could not.</summary>
+    private static string? ParentOf(string path)
+    {
+        var parent = Path.GetDirectoryName(Path.GetFullPath(path));
+
+        if (parent is not { Length: > 0 })
+        {
+            return null;
+        }
+
+        try
+        {
+            Directory.CreateDirectory(parent);
+
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return $"The worktree's directory could not be made at '{parent}': {ex.Message}";
+        }
     }
 
     /// <inheritdoc />
