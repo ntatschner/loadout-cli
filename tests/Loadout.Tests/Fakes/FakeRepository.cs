@@ -83,6 +83,9 @@ public sealed class FakeGit : IGitManager
     /// <summary>Every branch a merge was attempted for, in order.</summary>
     public List<string> Merges { get; } = [];
 
+    /// <summary>Where each merge in <see cref="Merges"/> was made, in the same order.</summary>
+    public List<string> MergedIn { get; } = [];
+
     /// <summary>Every branch deleted after it landed.</summary>
     public List<string> Deleted { get; } = [];
 
@@ -121,6 +124,7 @@ public sealed class FakeGit : IGitManager
     public Task<OperationResult<GitMerge>> MergeAsync(string repositoryPath, string branch, CancellationToken ct = default)
     {
         Merges.Add(branch);
+        MergedIn.Add(repositoryPath);
 
         return Task.FromResult(_merges.Count > 0
             ? _merges.Dequeue()
@@ -190,8 +194,15 @@ public sealed class FakeGit : IGitManager
     public Task<OperationResult<bool>> CommitPathsAsync(string repositoryPath, string message, IReadOnlyList<string> paths, CancellationToken ct = default) =>
         throw new NotSupportedException("the nodes commit their own work");
 
-    public Task<OperationResult> CreateBranchAsync(string repositoryPath, string branchName, CancellationToken ct = default) =>
-        throw new NotSupportedException("a worktree brings its own branch");
+    /// <summary>Every branch made, as "where:branch".</summary>
+    public List<string> Created { get; } = [];
+
+    public Task<OperationResult> CreateBranchAsync(string repositoryPath, string branchName, CancellationToken ct = default)
+    {
+        Created.Add($"{repositoryPath}:{branchName}");
+
+        return Task.FromResult(OperationResult.Ok());
+    }
 
     public Task<OperationResult<IReadOnlyList<string>>> ListChangedFilesAsync(string repositoryPath, CancellationToken ct = default) =>
         Task.FromResult(OperationResult<IReadOnlyList<string>>.Ok([]));
@@ -263,6 +274,17 @@ public sealed class FakeGit : IGitManager
     public Task<OperationResult<GitWorktree>> AddWorktreeAsync(
         string repositoryPath, string path, string branch, string? baseRef = null, CancellationToken ct = default) =>
         Task.FromResult(OperationResult<GitWorktree>.Ok(new GitWorktree(path, branch, IsPrimary: false)));
+
+    /// <summary>Every tree added on no branch, as "path@base".</summary>
+    public List<string> Detached { get; } = [];
+
+    public Task<OperationResult<GitWorktree>> AddDetachedWorktreeAsync(
+        string repositoryPath, string path, string baseRef, CancellationToken ct = default)
+    {
+        Detached.Add($"{path}@{baseRef}");
+
+        return Task.FromResult(OperationResult<GitWorktree>.Ok(new GitWorktree(path, null, IsPrimary: false)));
+    }
 
     public Task<OperationResult<IReadOnlyList<string>>> ListFilesAsync(
         string repositoryPath, IReadOnlyList<string> patterns, GitFileSet fileSet, CancellationToken ct = default) =>
