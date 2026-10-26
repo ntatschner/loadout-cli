@@ -205,6 +205,8 @@ public sealed class DashboardSessionsTests : IAsyncLifetime
         var listed = await _client.GetFromJsonAsync<JsonElement>(_root + SessionsApi.Root);
         listed.EnumerateArray().Select(one => one.GetProperty("id").GetString()).Should().Equal(id);
         listed[0].GetProperty("ended").GetBoolean().Should().BeTrue();
+        listed[0].GetProperty("endedAt").GetDateTimeOffset().Should().BeCloseTo(DateTimeOffset.UtcNow, TimeSpan.FromMinutes(1),
+            "Studio measures how long a failed session stays on its map from here");
 
         using var forgotten = await _client.DeleteAsync($"{_root}{SessionsApi.Root}/{id}");
         forgotten.StatusCode.Should().Be(HttpStatusCode.NoContent, "an ended session can still be forgotten");

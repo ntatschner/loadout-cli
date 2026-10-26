@@ -19,6 +19,8 @@ public sealed class StudioConfigKeysTests
     [InlineData("studio-density", "compact")]
     [InlineData("studio-motion", "none")]
     [InlineData("studio-idle-after", "25")]
+    [InlineData("studio-map-scope", "all")]
+    [InlineData("studio-map-scope", "inflight")]
     public void Each_takes_the_values_it_offers_and_reads_them_back(string key, string value)
     {
         var (config, machine) = Fresh();
@@ -39,6 +41,7 @@ public sealed class StudioConfigKeysTests
     [InlineData("studio-idle-after", "0")]
     [InlineData("studio-idle-after", "1441")]
     [InlineData("studio-idle-after", "ten")]
+    [InlineData("studio-map-scope", "everything")]
     public void A_value_it_does_not_offer_is_refused(string key, string value)
     {
         var (config, machine) = Fresh();
@@ -53,6 +56,7 @@ public sealed class StudioConfigKeysTests
     [InlineData("studio-theme")]
     [InlineData("studio-layout-lens")]
     [InlineData("studio-idle-after")]
+    [InlineData("studio-map-scope")]
     public void An_empty_value_unsets_it(string key)
     {
         var (config, machine) = Fresh();

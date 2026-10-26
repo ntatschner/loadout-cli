@@ -120,6 +120,8 @@ public sealed class HostedSessionTests
         using var window = session.Attach();
         await NextAsync(window);
 
+        session.EndedAt.Should().BeNull();
+
         terminal.Say("bye");
         terminal.Exit(3);
 
@@ -129,6 +131,8 @@ public sealed class HostedSessionTests
 
         session.HasEnded.Should().BeTrue();
         session.ExitCode.Should().Be(3);
+        session.EndedAt.Should().NotBeNull("Studio keeps a failed session on its map for a day from when it ended")
+            .And.BeOnOrAfter(session.StartedAt);
 
         using var late = session.Attach();
         Text(await NextAsync(late)).Should().Be("bye");

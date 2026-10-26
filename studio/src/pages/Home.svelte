@@ -15,7 +15,7 @@
   import { actionsFor } from '../lib/actions';
   import { command } from '../lib/commands';
   import { LENS_PANELS, MAP_PANELS, PANEL_NAMES, hide, move, place, readLayout, saved, show, type Layout } from '../lib/layout';
-  import { clockOf, type Work } from '../lib/lines';
+  import { clockOf, hiddenOf, inFlight, type Work } from '../lib/lines';
   import { router } from '../lib/router.svelte';
   import { reveal, revealParts } from '../lib/reveal.svelte';
   import { rankUrgent, wordFor } from '../lib/signals';
@@ -47,7 +47,19 @@
   const focus = $derived(lines.find((line) => line.id === focusId) ?? rankUrgent(lines)[0] ?? lines[0]);
   const index = $derived(focus ? lines.indexOf(focus) : -1);
   const ranked = $derived(rankUrgent(lines));
-  const pickedLine = $derived(lines.find((line) => line.id === picked) ?? lines[0]);
+
+  // The tube map alone narrows to work in flight; every other panel keeps
+  // the lot. Chosen here at once, and kept as studio-map-scope.
+  let scopeChosen = $state<'inflight' | 'all' | null>(null);
+  const scope = $derived(scopeChosen ?? studio.prefs?.mapScope ?? 'inflight');
+  const drawn = $derived(scope === 'all' ? lines : inFlight(lines, studio.now));
+  const hidden = $derived(hiddenOf(lines, drawn));
+  const pickedLine = $derived(drawn.find((line) => line.id === picked) ?? drawn[0]);
+
+  function scopeTo(next: 'inflight' | 'all') {
+    scopeChosen = next;
+    void studio.setPreference('studio-map-scope', next);
+  }
 
   const lens: Layout = $derived(readLayout(studio.prefs?.layoutLens, LENS_PANELS));
   const map: Layout = $derived(readLayout(studio.prefs?.layoutMap, MAP_PANELS));
@@ -290,7 +302,20 @@
           {:else if panel === 'status'}
             <NetworkStatus {lines} clock={clockOf(new Date(studio.now).toISOString())} {oldest} />
           {:else if panel === 'map'}
-            <TubeMap {lines} bind:picked idleAfter={studio.idleAfter} />
+            <div class="mapscope">
+              <div class="views" role="group" aria-label="What the map draws">
+                <button type="button" aria-pressed={scope === 'inflight' ? 'true' : 'false'} onclick={() => scopeTo('inflight')}>In flight</button>
+                <button type="button" aria-pressed={scope === 'all' ? 'true' : 'false'} onclick={() => scopeTo('all')}>Everything</button>
+              </div>
+              {#if scope === 'inflight' && hidden}
+                <span class="calm small">{lines.length - drawn.length} hidden</span>
+              {/if}
+            </div>
+            {#if drawn.length}
+              <TubeMap lines={drawn} bind:picked idleAfter={studio.idleAfter} />
+            {:else}
+              <p class="calm">Nothing in flight. {hidden} {lines.length - drawn.length === 1 ? 'is' : 'are'} off the map. <a href="#home" onclick={(event) => { event.preventDefault(); scopeTo('all'); }}>Show everything</a></p>
+            {/if}
           {:else if panel === 'strip' && pickedLine}
             <LineStrip
               line={pickedLine}
