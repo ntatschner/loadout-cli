@@ -149,7 +149,7 @@ internal static partial class DashboardActions
     internal static readonly string[] Verbs =
     [
         "gate", "gates", "message", "stop", "forget", "close", "pause", "resume", "name", "pr", "say", "budget", "pickup",
-        "restore", "purge", "restore-team", "purge-team",
+        "check", "restore", "purge", "restore-team", "purge-team",
         "daemon-pause", "daemon-resume", "daemon-restart",
     ];
 
@@ -180,6 +180,12 @@ internal static partial class DashboardActions
             // run carry on: that one lifts a hold on a live run, and this one
             // carries on a run that has ended.
             "pickup" => ("team resume", PickUp(action)),
+
+            // Ticking off what a run handed over. No --by: the command takes
+            // the name of whoever is signed in, which for a page served on this
+            // machine is the person looking at it, and that is whose name the
+            // review evidence should carry.
+            "check" => ("team handover", [action.Run, .. (action.Checks ?? []).Select(one => Joined("--check", one))]),
 
             // No --yes: naming a run is agreeing to it, so the command does not
             // ask and does not take the option. The page asks, by name, before
@@ -392,16 +398,24 @@ internal static partial class DashboardActions
             return OperationResult.Fail("Say what it may spend.", ExitCode.InvalidArguments);
         }
 
+        // Without one the command only lists the handover and succeeds, and
+        // the page would say something was ticked when nothing was.
+        if (action.Verb == "check" && action.Checks is not { Count: > 0 })
+        {
+            return OperationResult.Fail("Say which to tick off.", ExitCode.InvalidArguments);
+        }
+
         // Said where whoever started the server can see it. A page that can
         // stop a run should not be able to stop one silently.
         output.WriteLine(
             $"[dim]{time.GetUtcNow().ToLocalTime():HH:mm}[/] from the dashboard: "
             + $"{Markup.Escape(command)} {Markup.Escape(action.Run)}");
 
-        // Picking a run up runs it, for as long as it takes. Watched only long
-        // enough to catch a refusal, like starting one, rather than holding the
-        // page's request open for an hour.
-        var code = action.Verb == "pickup"
+        // Picking a run up runs it, for as long as it takes, and so does the
+        // last tick of a handover, which judges the run again. Watched only
+        // long enough to catch a refusal, like starting one, rather than
+        // holding the page's request open for an hour.
+        var code = action.Verb is "pickup" or "check"
             ? await InBackgroundAsync(commands, time, command, [.. arguments, "--non-interactive"], output, ct)
                 .ConfigureAwait(false)
             : await commands
@@ -444,6 +458,9 @@ internal static partial class DashboardActions
                 ExitCode.TerminalRequired when action.Verb == "pickup" =>
                     "That run stopped on questions only you can answer. Answer each, or choose to carry "
                     + "on without answering.",
+                ExitCode.InvalidArguments when action.Verb == "check" =>
+                    "That is not one it handed over, or the run is not waiting on a check any more. "
+                    + "The terminal serving this page says which.",
                 ExitCode.InvalidArguments when action.Verb == "pickup" =>
                     "That run cannot be picked up as it is: it has not ended, it would stop again at "
                     + "once, or the answers do not match its questions. Give it more money in the budget "

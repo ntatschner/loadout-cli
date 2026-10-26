@@ -284,6 +284,10 @@ public sealed record ChoosableDoneWhen(string Text, IReadOnlyList<string> Teams)
 /// For such a run: carry on without answering, which is
 /// <c>team resume --without-answers</c>.
 /// </param>
+/// <param name="Checks">
+/// For a run that handed criteria over: which to tick off as done, by number,
+/// which is <c>team handover --check</c> for each.
+/// </param>
 /// <remarks>
 /// One shape for all five because they all end the same way: the daemon runs
 /// the command somebody would have typed. Nothing here decides what any of
@@ -303,7 +307,8 @@ public sealed record RunAction(
     bool ThinkAgain = false,
     bool Confirmed = false,
     IReadOnlyList<string>? Answers = null,
-    bool WithoutAnswers = false);
+    bool WithoutAnswers = false,
+    IReadOnlyList<string>? Checks = null);
 
 /// <summary>
 /// Letting something outside this machine start a run.

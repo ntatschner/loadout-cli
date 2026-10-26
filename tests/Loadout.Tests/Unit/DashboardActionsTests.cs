@@ -114,6 +114,44 @@ public sealed class DashboardActionsTests
         refused.Error.Should().Contain("questions only you can answer").And.Contain("carry on without answering");
     }
 
+    [Fact]
+    public void Ticking_off_a_handover_passes_one_joined_check_each_and_no_name()
+    {
+        Typed(new RunAction(Run, "check", Checks: ["2", "- by hand"]))
+            .Should().Be($"team handover {Run} --check=2 --check=- by hand");
+    }
+
+    [Fact]
+    public void The_page_s_checks_are_read_by_name()
+    {
+        using var body = System.Text.Json.JsonDocument.Parse("""{"checks":["1","3"]}""");
+
+        DashboardServer.ActionFrom(Run, "check", body.RootElement).Checks.Should().Equal("1", "3");
+    }
+
+    [Fact]
+    public async Task A_tick_with_nothing_named_is_refused_before_anything_runs()
+    {
+        var commands = new Refusing(ExitCode.Success);
+
+        var refused = await DashboardActions.RanAsync(
+            commands, TimeProvider.System, new RunAction(Run, "check", Checks: []), Quiet(), CancellationToken.None);
+
+        refused.Failed.Should().BeTrue();
+        refused.Error.Should().Be("Say which to tick off.");
+        commands.Ran.Should().BeEmpty("listing the handover would succeed and read as ticked");
+    }
+
+    [Fact]
+    public async Task A_refused_tick_says_it_is_not_one_handed_over()
+    {
+        var refused = await DashboardActions.RanAsync(
+            new Refusing(ExitCode.InvalidArguments), TimeProvider.System, new RunAction(Run, "check", Checks: ["9"]), Quiet(), CancellationToken.None);
+
+        refused.Failed.Should().BeTrue();
+        refused.Error.Should().Contain("not one it handed over");
+    }
+
     private static CommandOutput Quiet() =>
         new(AnsiConsole.Create(new AnsiConsoleSettings
         {
@@ -125,7 +163,13 @@ public sealed class DashboardActionsTests
     {
         public IReadOnlyList<CatalogueEntry> Commands => [];
 
-        public Task<int> RunAsync(string path, IReadOnlyList<string> arguments, CancellationToken ct = default) =>
-            Task.FromResult((int)code);
+        public List<string> Ran { get; } = [];
+
+        public Task<int> RunAsync(string path, IReadOnlyList<string> arguments, CancellationToken ct = default)
+        {
+            Ran.Add(path);
+
+            return Task.FromResult((int)code);
+        }
     }
 }

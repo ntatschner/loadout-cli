@@ -29,7 +29,7 @@ vi.mock('./state.svelte', () => ({
   },
 }));
 
-const { answerGate, pickUp } = await import('./teamsAct');
+const { answerGate, checkOff, pickUp } = await import('./teamsAct');
 
 describe('answerGate', () => {
   it('sends an answer with its reason, and shows the same command', async () => {
@@ -84,5 +84,16 @@ describe('pickUp', () => {
 
     expect(sent).toEqual([{ run: 'r1', verb: 'pickup', body: {} }]);
     expect(said).toEqual(['$ loadout team resume r1']);
+  });
+});
+
+describe('checkOff', () => {
+  it('sends the number ticked as checks, and shows it as --check', async () => {
+    sent.length = 0;
+    said.length = 0;
+    await checkOff('r1', 2);
+
+    expect(sent).toEqual([{ run: 'r1', verb: 'check', body: { checks: ['2'] } }]);
+    expect(said).toEqual(['$ loadout team handover r1 --check 2']);
   });
 });

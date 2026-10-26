@@ -813,7 +813,8 @@ public sealed class DashboardServer : IDisposable
         Flag(asked, "thinkAgain"),
         Flag(asked, "confirmed"),
         Texts(asked, "answers"),
-        Flag(asked, "withoutAnswers"));
+        Flag(asked, "withoutAnswers"),
+        Texts(asked, "checks"));
 
     /// <summary>A list of strings out of a request body, in order, or null where it sent none.</summary>
     private static IReadOnlyList<string>? Texts(JsonElement? body, string name) =>

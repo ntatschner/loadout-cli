@@ -70,7 +70,8 @@ public sealed class DashboardVerbContractTests
         Node: "implementer/1",
         Instead: "- do the other thing",
         Budget: "40",
-        Answers: ["- merge them by hand", "yes"]);
+        Answers: ["- merge them by hand", "yes"],
+        Checks: ["1", "- End run checked by hand"]);
 
     [BuiltCliTheory]
     [MemberData(nameof(Verbs))]
