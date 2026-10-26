@@ -102,7 +102,7 @@ public sealed record BlockedRaise(BlockedCap Cap, decimal Figure, decimal Used)
 
 /// <summary>A run that ended short of its done-when and has not been dealt with.</summary>
 /// <param name="Run">The run.</param>
-/// <param name="Kind">How it ended: <c>blocked</c>, <c>failed</c>, <c>limited</c>, <c>unrecorded</c> or <c>dead</c>.</param>
+/// <param name="Kind">How it ended: <c>blocked</c>, <c>failed</c>, <c>limited</c>, <c>unrecorded</c>, <c>dead</c> or <c>handover</c>.</param>
 /// <param name="Cap">For a limited run, what it ran out of.</param>
 /// <param name="Lead">What its lead last said, or null where it never reported.</param>
 /// <param name="Chain">How many runs in a row on its task, this one included, have ended without getting there.</param>
@@ -190,6 +190,12 @@ public static class BlockedActions
 /// nothing else will ever end it.
 /// </para>
 /// <para>
+/// A run that handed criteria over is in too, although its outcome is
+/// needs-decision. Its process has exited, so nothing is asking anybody, and
+/// without a place here it would vanish from view until somebody went
+/// looking for it.
+/// </para>
+/// <para>
 /// The suggestion is a fixed rule table, first match wins, rather than a
 /// model's judgement. The person confirms it either way, and a rule they can
 /// read the reason for is one they can disagree with.
@@ -226,6 +232,13 @@ public static class BlockedRuns
         if (run.Running)
         {
             return dead ? "dead" : null;
+        }
+
+        // Only while something is left to tick. One with every item ticked is
+        // judged again, and is not waiting on anybody.
+        if (RunHandovers.IsHandover(run.Ended) && run.Handover is { Items.Count: > 0, Settled: false })
+        {
+            return "handover";
         }
 
         return RunOutcomes.Of(run) switch
@@ -309,7 +322,10 @@ public static class BlockedRuns
 
         // A run needs a team and a project to carry on with. A run from
         // before either was written down cannot be carried on, only filed.
-        var carries = run.Team.Length > 0 && run.Project is { Length: > 0 };
+        // Not a run that handed over: carrying it on gives its lead a turn
+        // with nothing in it that is the lead's to do, and it hands the same
+        // criteria over again, paid for.
+        var carries = run.Team.Length > 0 && run.Project is { Length: > 0 } && facts.Kind != "handover";
         var tasked = run.Task is { Length: > 0 } && run.Project is { Length: > 0 };
 
         if (carries)
@@ -363,6 +379,19 @@ public static class BlockedRuns
 
     private sealed record Rule(string Name, BlockedAction Action, Func<Facts, bool> Matches, Func<Facts, string> Reason);
 
+    private static string HandedOver(RunSummary run)
+    {
+        var handover = run.Handover!;
+        var open = handover.Open;
+        var first = open[0];
+        var number = handover.Items.ToList().IndexOf(first) + 1;
+
+        return $"Nothing left is the run's to do. It handed {open.Count} criterion(s) to you, starting with: "
+            + $"{first.Criterion.TrimEnd('.')}. {first.ToDo.TrimEnd('.')}. Tick each off on its page, or with "
+            + $"'loadout team handover {run.RunId} --check {number}', and once every one is ticked it is judged again. "
+            + "Set it aside only to file it without doing that.";
+    }
+
     private static string Money(decimal usd) => "$" + usd.ToString("0.00", CultureInfo.InvariantCulture);
 
     /// <summary>
@@ -372,6 +401,13 @@ public static class BlockedRuns
     /// </summary>
     private static readonly IReadOnlyList<Rule> Rules =
     [
+        // First, and above the chain: a run that handed over did not fall
+        // short of anything another run could do, so it is not one more of
+        // the same. What it needs is the person doing what it handed them.
+        new("handover", BlockedAction.SetAside,
+            facts => facts.Kind == "handover",
+            facts => HandedOver(facts.Run)),
+
         // Before anything else: past the limit, carrying on again is the one
         // thing not to suggest, however the run ended.
         new("chain", BlockedAction.SetAside,

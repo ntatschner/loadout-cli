@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Loadout.Core.Teams;
+using Loadout.Models.Teams;
 using Xunit;
 
 namespace Loadout.Tests.Unit;
@@ -261,5 +262,44 @@ public sealed class BlockedRunsTests
         var none = new Loadout.Tests.Fakes.FakeRunOwnership();
 
         Loadout.Cli.Commands.BlockedReading.Gone(run, none, At.AddDays(2)).Should().BeFalse();
+    }
+
+    private static RunSummary HandedOver(params bool[] ticked) =>
+        Run(RunHandovers.EndedOpening + " 2 criterion(s) the run cannot meet itself", outcome: "needs-decision") with
+        {
+            Handover = new RunHandover(
+            [
+                new HandoverItem("Green on the Unix CI legs", CriterionNeeds.Ci, "Push it and see CI pass.", "keyword")
+                {
+                    CheckedBy = ticked.ElementAtOrDefault(0) ? "nrtat" : null,
+                },
+                new HandoverItem("End run checked by hand in Studio", CriterionNeeds.Person, "Press End run on a dead run.", "lead")
+                {
+                    CheckedBy = ticked.ElementAtOrDefault(1) ? "nrtat" : null,
+                },
+            ],
+            ["teams-20261025-0900-ab12"]),
+        };
+
+    [Fact]
+    public void A_run_that_handed_over_is_held_while_anything_is_left_to_tick()
+    {
+        // Its outcome is needs-decision, which is left out as already asking
+        // somebody. A handover's process has exited, so nobody is being asked.
+        BlockedRuns.KindOf(HandedOver()).Should().Be("handover");
+        BlockedRuns.KindOf(HandedOver(true)).Should().Be("handover");
+        BlockedRuns.KindOf(HandedOver(true, true)).Should().BeNull("every item is ticked, so it is judged again");
+    }
+
+    [Fact]
+    public void A_run_that_handed_over_is_told_to_tick_what_is_open_and_never_offered_carrying_on()
+    {
+        var judged = BlockedRuns.Judge(HandedOver(true), null, chain: BlockedRuns.ChainLimit)!;
+
+        judged.Suggested.Rule.Should().Be("handover", "a handover is not one more short run, whatever the chain");
+        judged.Suggested.Reason.Should().Contain("1 criterion(s)")
+            .And.Contain("End run checked by hand in Studio")
+            .And.Contain("loadout team handover 20261025-0900-ab12 --check 2");
+        judged.Offered.Should().NotContain(BlockedAction.CarryOn).And.NotContain(BlockedAction.Raise);
     }
 }

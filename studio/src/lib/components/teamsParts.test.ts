@@ -5,6 +5,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { createRawSnippet, tick } from 'svelte';
 import Bin from './Bin.svelte';
+import BlockedRuns from './BlockedRuns.svelte';
+import type { BlockedRead } from '../blocked';
 import Gate from './Gate.svelte';
 import Handover from './Handover.svelte';
 import Outbox from './Outbox.svelte';
@@ -242,5 +244,44 @@ describe('Handover', () => {
     render(Handover, { run: 'r1', items });
 
     expect(screen.getByText('$ loadout team handover r1 --check 2 · the last one, so it is judged again')).toBeTruthy();
+  });
+});
+
+describe('BlockedRuns', () => {
+  const handedOver: BlockedRead = {
+    id: '20261025-0900-ab12',
+    team: 'iterating-project',
+    project: 'loadout-cli',
+    task: 'fix-login',
+    goal: 'Fix the login',
+    kind: 'handover',
+    ended: 'needs-decision: handed over 2 criterion(s) the run cannot meet itself',
+    cost: 4.8,
+    budget: 5,
+    rounds: 3,
+    roundLimit: 6,
+    origin: null,
+    follows: null,
+    chain: 1,
+    merged: [],
+    unmerged: ['teams-20261025-0900-ab12'],
+    lead: null,
+    suggested: { action: 'set-aside', label: 'Set aside', reason: 'Nothing left is the run’s to do.', rule: 'handover' },
+    offered: [{ action: 'set-aside', label: 'Set aside' }],
+    raise: null,
+  };
+
+  it('sends a run that handed over to its page to tick them off, rather than suggesting setting it aside', () => {
+    render(BlockedRuns, { runs: [handedOver], onresolve: async () => 'done' });
+
+    expect(screen.getByRole('link', { name: 'Tick them off on its page' }).getAttribute('href')).toBe('#teams/20261025-0900-ab12');
+    expect(screen.queryByText(/Suggested: Set aside/)).toBeNull();
+  });
+
+  it('still suggests for any other kind', () => {
+    render(BlockedRuns, { runs: [{ ...handedOver, kind: 'blocked' }], onresolve: async () => 'done' });
+
+    expect(screen.queryByRole('link', { name: 'Tick them off on its page' })).toBeNull();
+    expect(screen.getByText(/Suggested: Set aside/)).toBeTruthy();
   });
 });
