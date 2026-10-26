@@ -8,6 +8,7 @@
   import Dialog from '../lib/components/Dialog.svelte';
   import DoneWhen from '../lib/components/DoneWhen.svelte';
   import Gate from '../lib/components/Gate.svelte';
+  import Handover from '../lib/components/Handover.svelte';
   import HaloButton from '../lib/components/HaloButton.svelte';
   import Journal from '../lib/components/Journal.svelte';
   import Outbox from '../lib/components/Outbox.svelte';
@@ -23,7 +24,7 @@
   import { runJob } from '../lib/jobs';
   import { router } from '../lib/router.svelte';
   import { studio } from '../lib/state.svelte';
-  import { answerGate, carryOn, close, forget, hold, pickUp, runLines, setBudget, stop, tellLead } from '../lib/teamsAct';
+  import { answerGate, carryOn, checkOff, close, forget, hold, pickUp, runLines, setBudget, stop, tellLead } from '../lib/teamsAct';
   import { criteriaOf, crewOf, duration, gateOf, livenessOf, runWord, shapeOf, summaryOf, unowned } from '../lib/teamsData';
   import { money, type JournalLine } from '../lib/teams';
 
@@ -351,6 +352,10 @@
       {#key gate.id}
         <Gate {...gateOf(run, gate)} run={run.id} disabledReason={watch} onanswer={(send) => answerGate(run.id, gate.id, send)} />
       {/key}
+    {/if}
+
+    {#if run.handover?.items.length && !run.running}
+      <Handover run={run.id} items={run.handover.items} branches={run.handover.branches} disabledReason={watch} oncheck={(number) => checkOff(run.id, number)} />
     {/if}
 
     {#each run.attention.filter((one) => one.kind !== 'asking') as one, index (index)}

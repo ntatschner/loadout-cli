@@ -522,6 +522,10 @@ somebody else). Once every one is ticked, the run is judged again through
 decides what comes back to the repository as it would have. A run picked up
 before then keeps what you ticked, and its lead is told those count as met.
 
+In Studio, the run's page lists the same items above everything else, with
+**Done: tick it off** beside each one still open. It runs the same
+`team handover --check` command, in the name you are signed in as.
+
 Not yet: the run cannot push or open the pull request itself. That waits on
 the pull request work in "we need a way to", which will carry it out once you
 grant it. Once a run you ticked off ends done, the merge gate takes each

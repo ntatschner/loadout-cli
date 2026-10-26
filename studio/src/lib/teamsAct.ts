@@ -42,6 +42,7 @@ export const runLines = {
   forget: (run: string) => `$ loadout team runs remove ${run}`,
   close: (run: string) => `$ loadout team runs close ${run}`,
   pr: (run: string, node: string) => `$ loadout team pr ${run} --node ${node} --draft`,
+  check: (run: string, number: number) => `$ loadout team handover ${run} --check ${number}`,
 };
 
 export const hold = (run: string) => studio.perform(() => api.runs.act(run, 'pause'), 'It holds after this round', runLines.hold(run));
@@ -56,6 +57,10 @@ export const pickUp = (run: string, answers: string[] = [], without = false) =>
     answers.length > 0 ? 'Picked up with your answers' : without ? 'Picked up without answers' : 'Picked up where it stopped',
     runLines.pickUp(run, answers, without),
   );
+// One item of what a run handed over, by its number. The last one ticked
+// judges the run again, which the daemon starts and does not wait out.
+export const checkOff = (run: string, number: number) =>
+  studio.perform(() => api.runs.act(run, 'check', { checks: [String(number)] }), `Ticked off: number ${number}`, runLines.check(run, number));
 export const forget = (run: string) => studio.perform(() => api.runs.act(run, 'forget'), 'Forgotten, to the bin', runLines.forget(run));
 export const close = (run: string, confirmed: boolean) =>
   studio.perform(() => api.runs.act(run, 'close', { confirmed }), 'Ended: nothing was driving it', runLines.close(run) + (confirmed ? ' --yes' : ''));

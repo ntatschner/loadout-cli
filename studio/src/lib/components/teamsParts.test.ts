@@ -6,6 +6,7 @@ import { fireEvent, render, screen } from '@testing-library/svelte';
 import { createRawSnippet, tick } from 'svelte';
 import Bin from './Bin.svelte';
 import Gate from './Gate.svelte';
+import Handover from './Handover.svelte';
 import Outbox from './Outbox.svelte';
 import RunDepths from './RunDepths.svelte';
 
@@ -215,5 +216,31 @@ describe('Bin', () => {
       'Moves the runs older than 30d to the bin, never the newest 20, and never one still going or one that left a branch nothing merged.',
     );
     expect(screen.getByText('$ loadout team runs prune --older-than 30d --keep 20 --dry-run')).toBeTruthy();
+  });
+});
+
+describe('Handover', () => {
+  const items = [
+    { criterion: 'Green on the Unix CI legs', needs: 'needs-ci', todo: 'Push it and wait for CI.', checkedBy: 'nigel' },
+    { criterion: 'End run checked by hand in Studio', needs: 'needs-person', todo: 'Press End run on a dead run.', checkedBy: null },
+  ];
+
+  it('offers a tick only on what is still open, by its number in the list', async () => {
+    const oncheck = vi.fn(() => true);
+    render(Handover, { run: 'r1', items, branches: ['teams-r1-implementer-1'], oncheck });
+
+    const ticks = screen.getAllByRole('button', { name: /tick it off/ });
+    expect(ticks).toHaveLength(1);
+    expect(screen.getByText('✓ checked by nigel')).toBeTruthy();
+
+    await fireEvent.click(ticks[0]);
+
+    expect(oncheck).toHaveBeenCalledWith(2);
+  });
+
+  it('says the last open one judges the run again', () => {
+    render(Handover, { run: 'r1', items });
+
+    expect(screen.getByText('$ loadout team handover r1 --check 2 · the last one, so it is judged again')).toBeTruthy();
   });
 });
