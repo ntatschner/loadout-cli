@@ -460,6 +460,62 @@ or one with nobody at a terminal or a dashboard, writes the readings down and
 carries on, and the journal says they stood with nobody to ask. A run picked up
 with `team resume` is not asked again once its readings were accepted.
 
+### What only you can do
+
+Some criteria no run can meet on its own. A team run never pushes, so "the
+contract test passes on the Unix CI legs" needs you to push, and "End run
+works in Studio" needs you to look. A run that had three criteria met and two
+of these left used to stop blocked, get picked up, find nothing to do, and
+stop again, paying for a lead turn each time.
+
+So every reading also says what the criterion needs: `local` for something the
+run can do on this machine, or `needs-push`, `needs-ci` or `needs-person`, with
+a sentence saying what you would have to do. The readings question shows each
+tag beside its reading, so you see before any worker starts which ones the run
+will hand back to you:
+
+```
+ • "the suite passes" read as: the whole suite, on a fresh clone [local]
+ • "End run works in Studio" read as: the button ends a dead run
+   [needs-person: Check End run by hand in Studio. The run will hand this one to you.]
+```
+
+A criterion the lead leaves untagged is tagged from its wording: one that says
+CI or GitHub Actions needs CI, one that says it is checked by hand or manually
+needs a person, and one that says it is pushed or has a pull request needs a
+push. Everything else is local. The rule matches phrases rather than single
+words, so "push notification" and `pr explain` are left alone, and it is what
+covers a run nobody is watching.
+
+When the lead accounts for the criteria, asks for no more work, and every one
+still open needs a push, CI or you, the run ends there with outcome
+`needs-decision` rather than taking another round. It says what it handed over
+and where the work is:
+
+```
+loadout team handover 20261023-1740-2677
+
+20261023-1740-2677 handed over 2 criterion(s) only you can meet:
+
+  1. [ ] End run works in Studio (needs-person)
+        Check End run by hand in Studio.
+  2. [ ] The contract test passes on Windows and Unix CI (needs-ci, from its wording)
+        Push the run's work so CI runs, and see that it passes.
+
+The work is on teams-20261023-1740-2677-implementer-1, ...
+```
+
+Do what each one says, then tick it off with `--check` and its number. Each
+tick goes in the run's journal as review evidence in your name (`--by` names
+somebody else). Once every one is ticked, the run is judged again through
+`team resume` without a turn for the lead: it ends done, and the merge gate
+decides what comes back to the repository as it would have. A run picked up
+before then keeps what you ticked, and its lead is told those count as met.
+
+Not yet: the run cannot push or open the pull request itself, and does not
+combine its nodes' branches into one for you. Both wait on the pull request
+work in "we need a way to", which will carry them out once you grant them.
+
 ### What became of each one
 
 When `team run` ends it prints one block per criterion, and `team status` and

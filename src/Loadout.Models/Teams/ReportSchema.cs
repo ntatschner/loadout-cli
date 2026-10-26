@@ -90,7 +90,9 @@ public static class ReportSchema
               "type": "object", "additionalProperties": false, "required": ["criterion", "reading"],
               "properties": {
                 "criterion": { "type": "string" },
-                "reading": { "type": "string" } } } },
+                "reading": { "type": "string" },
+                "needs": { "enum": ["local", "needs-push", "needs-ci", "needs-person"] },
+                "handover": { "type": "string" } } } },
             "coverage": { "type": "array", "items": {
               "type": "object", "additionalProperties": false, "required": ["criterion", "verdict"],
               "properties": {

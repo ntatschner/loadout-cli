@@ -184,6 +184,16 @@ public sealed class TeamResumeCommand : AsyncCommand<TeamResumeCommand.Settings>
             asked,
             settings.Rounds);
 
+        // A run whose handover has every criterion checked is judged again
+        // without a lead turn, so it spends nothing and takes no round: what
+        // it ran out of does not stop it.
+        var rejudging = RunHandovers.Settled(summary) is not null;
+
+        if (rejudging && refused is not null)
+        {
+            (cap, rounds, refused) = (RunControl.Cap(directory), summary.RoundLimit, null);
+        }
+
         if (refused is not null)
         {
             return output.Fail(refused, ExitCode.InvalidArguments);
@@ -241,7 +251,9 @@ public sealed class TeamResumeCommand : AsyncCommand<TeamResumeCommand.Settings>
                 + $"{Markup.Escape(summary.Ended ?? "without saying why")})[/]");
 
             output.WriteLine(
-                resuming.LeadSession is { Length: > 0 }
+                rejudging
+                    ? "[dim]Everything it handed over has been checked, so it is judged again without a turn for the lead.[/]"
+                    : resuming.LeadSession is { Length: > 0 }
                     ? "[dim]The lead resumes its own session.[/]"
                     : "[dim]This run recorded no session for its lead, so a new one is told where it got to.[/]");
 
@@ -254,7 +266,7 @@ public sealed class TeamResumeCommand : AsyncCommand<TeamResumeCommand.Settings>
 
             // Before anything is spent, because the budget is only checked
             // between rounds and a long lead's one turn can pass it on its own.
-            if (resuming.LikelyCost(spent, cap.Usd) is { } likely)
+            if (!rejudging && resuming.LikelyCost(spent, cap.Usd) is { } likely)
             {
                 output.WriteLine($"[yellow]{Markup.Escape(likely)}[/]");
             }

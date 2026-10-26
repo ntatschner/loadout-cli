@@ -86,7 +86,7 @@ internal sealed class BriefRequestsStep
 
         if (!run.ReadingsAccepted && run.Asking && requests.Count > 0 && run.LastReadings is { Count: > 0 })
         {
-            var decided = await _decide.RunAsync(run, journal, [TeamRunner.ReadingsQuestion(run.LastReadings)], GateKind.Readings, ct)
+            var decided = await _decide.RunAsync(run, journal, [TeamRunner.ReadingsQuestion(run.LastReadings, run.LastTags)], GateKind.Readings, ct)
                 .ConfigureAwait(false);
 
             if (decided is null)

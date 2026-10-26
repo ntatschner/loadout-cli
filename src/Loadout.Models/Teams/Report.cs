@@ -142,9 +142,46 @@ public sealed record ReportCoverage(
 /// <summary>How the lead reads one of the run's criteria.</summary>
 /// <param name="Criterion">The criterion, repeated back exactly as the run gave it.</param>
 /// <param name="Reading">What the lead takes it to mean, in a sentence or two.</param>
+/// <param name="Needs">
+/// What meeting it takes: something the run can do on this machine, or a push,
+/// a CI run or a person's own check, none of which a run can do for itself.
+/// Optional, because a lead may not say and runs before it was asked never
+/// did; a criterion left untagged is tagged by a fixed keyword rule instead.
+/// </param>
+/// <param name="Handover">
+/// For one the run cannot meet itself, what the person has to do, in a
+/// sentence: "check End run by hand in Studio", "push the branch so the Unix
+/// CI legs run".
+/// </param>
 public sealed record ReportReading(
     [property: JsonPropertyName("criterion")] string Criterion,
-    [property: JsonPropertyName("reading")] string Reading);
+    [property: JsonPropertyName("reading")] string Reading,
+    [property: JsonPropertyName("needs")] CriterionNeeds? Needs = null,
+    [property: JsonPropertyName("handover")] string? Handover = null);
+
+/// <summary>What meeting one of a run's criteria takes.</summary>
+/// <remarks>
+/// A team run never pushes and merges only when it ends done, so a criterion
+/// that needs CI, a push or somebody's own eyes is one it can work towards and
+/// never meet. Run 20261023-1740-2677 had two such and its other three met,
+/// stopped blocked, and spent another round each time it was picked up finding
+/// nothing to do.
+/// </remarks>
+[JsonConverter(typeof(JsonStringEnumConverter<CriterionNeeds>))]
+public enum CriterionNeeds
+{
+    /// <summary>The run can meet it on this machine.</summary>
+    [JsonStringEnumMemberName("local")] Local,
+
+    /// <summary>It needs the work pushed, or a pull request opened.</summary>
+    [JsonStringEnumMemberName("needs-push")] Push,
+
+    /// <summary>It needs a CI run, which needs a push first.</summary>
+    [JsonStringEnumMemberName("needs-ci")] Ci,
+
+    /// <summary>It needs a person to check it by hand.</summary>
+    [JsonStringEnumMemberName("needs-person")] Person,
+}
 
 /// <summary>What became of one criterion.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter<CoverageVerdict>))]

@@ -87,6 +87,15 @@ internal sealed class RunContext
     /// <summary>How the lead last said it reads each criterion.</summary>
     public Dictionary<string, string>? LastReadings { get; set; }
 
+    /// <summary>
+    /// The criteria a person checked by hand in a handover before the run was
+    /// picked up again, which count as met whatever the lead says of them.
+    /// </summary>
+    public HashSet<string> CheckedByHand { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>What each criterion needs, as of the lead's last report.</summary>
+    public Dictionary<string, Core.Teams.CriterionTag> LastTags { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Whether somebody has let workers start on the lead's readings.</summary>
     public bool ReadingsAccepted { get; set; }
 

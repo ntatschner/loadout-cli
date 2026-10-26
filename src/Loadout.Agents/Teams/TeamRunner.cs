@@ -766,7 +766,33 @@ public sealed partial class TeamRunner : ITeamRunner
                 ? Render(run.LeadBrief) + Previously(request)
                 : Picking(resuming, request, lead.Plan, run.LeadBrief, RunControl.Cap(directory).Or(StartingCap(request, team)).Usd, [.. run.ClosedAtEnd, .. run.Retired]);
 
-            while (true)
+            // Judged again without a word to the lead: it handed over because
+            // nothing left was its to do, and a person has since checked every
+            // one of those. What is left is the close - the merge gate and the
+            // ending - which is not the lead's either.
+            var rejudged = false;
+
+            if (resuming is not null && RunHandovers.Settled(resuming.Summary) is { } settled)
+            {
+                rejudged = true;
+
+                await journal.WriteAsync(
+                    "run.rejudged",
+                    null,
+                    new
+                    {
+                        criteria = settled.Items.Select(one => one.Criterion),
+                        by = settled.Items.Select(one => one.CheckedBy).Distinct(StringComparer.Ordinal),
+                    },
+                    ct).ConfigureAwait(false);
+
+                console.Note("Every criterion the run handed over has been checked by hand, so it is judged done.");
+
+                run.Final = Rejudged(resuming.LastReport, settled);
+                run.Ended = "done";
+            }
+
+            while (!rejudged)
             {
                 if (await _limits.RunAsync(run, journal, ct).ConfigureAwait(false) is not null)
                 {
@@ -858,6 +884,9 @@ public sealed partial class TeamRunner : ITeamRunner
     {
         "done" => TaskState.Done,
         "blocked" => TaskState.Blocked,
+
+        // Waiting on a person as surely as a blocked run is.
+        _ when RunHandovers.IsHandover(ended) => TaskState.Blocked,
         _ => TaskState.Doing,
     };
 
@@ -1552,11 +1581,53 @@ public sealed partial class TeamRunner : ITeamRunner
         return read;
     }
 
+    /// <summary>
+    /// What each criterion the run holds it to needs, keyed by the criterion
+    /// in the run's own words: the lead's tag where its reading gave one, else
+    /// the keyword rule's, else local.
+    /// </summary>
+    /// <remarks>
+    /// Every criterion, read or not, so a lead that skipped one still has it
+    /// tagged by its wording.
+    /// </remarks>
+    internal static Dictionary<string, CriterionTag> Tagged(Report report, IReadOnlyList<string>? held)
+    {
+        var tags = new Dictionary<string, CriterionTag>(StringComparer.OrdinalIgnoreCase);
+
+        if (held is not { Count: > 0 })
+        {
+            return tags;
+        }
+
+        var said = new Dictionary<string, ReportReading>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var one in report.Readings ?? [])
+        {
+            said.TryAdd(one.Criterion?.Trim() ?? string.Empty, one);
+        }
+
+        foreach (var criterion in held)
+        {
+            var reading = said.GetValueOrDefault(criterion.Trim());
+
+            tags[criterion] = CriterionTags.Of(criterion, reading?.Needs, reading?.Handover);
+        }
+
+        return tags;
+    }
+
     /// <summary>How the readings question begins, which is what it is known by.</summary>
     internal const string ReadingsQuestionStart = "Before any worker starts:";
 
     /// <summary>The question that holds a run for its lead's readings.</summary>
-    internal static ReportQuestion ReadingsQuestion(IReadOnlyDictionary<string, string> readings)
+    /// <param name="readings">How the lead reads each criterion.</param>
+    /// <param name="tags">
+    /// What each needs, shown beside it, because a criterion tagged as one the
+    /// run cannot meet is one the run will hand back to you rather than work on.
+    /// </param>
+    internal static ReportQuestion ReadingsQuestion(
+        IReadOnlyDictionary<string, string> readings,
+        IReadOnlyDictionary<string, CriterionTag>? tags = null)
     {
         var text = new StringBuilder(
             ReadingsQuestionStart + " is this how you mean the done-when? The lead is saying how it "
@@ -1565,6 +1636,14 @@ public sealed partial class TeamRunner : ITeamRunner
         foreach (var (criterion, reading) in readings)
         {
             text.Append($" • \"{criterion}\" read as: {reading}");
+
+            if (tags is not null && tags.TryGetValue(criterion, out var tag))
+            {
+                text.Append(tag.Local
+                    ? $" [{CriterionTags.Spell(tag.Needs)}]"
+                    : $" [{CriterionTags.Spell(tag.Needs)}{(tag.By == "keyword" ? ", from its wording" : string.Empty)}: "
+                      + $"{CriterionTags.ToDo(tag)} The run will hand this one to you.]");
+            }
         }
 
         text.Append($" Choose {ThinkAgain} to have it read them again before anything starts.");
@@ -1651,6 +1730,45 @@ public sealed partial class TeamRunner : ITeamRunner
     }
 
     /// <summary>
+    /// The lead's last report, with every criterion a person checked by hand
+    /// recorded as met on their word, as the run's final one.
+    /// </summary>
+    internal static Report Rejudged(string? last, RunHandover handover)
+    {
+        var report = last is { Length: > 0 } && ReportReader.Read(last) is { Succeeded: true, Value: { } read }
+            ? read
+            : new Report("lead", ReportStatus.Done, "Judged again after a person's checks.", [], [], []);
+
+        var ticked = handover.Items
+            .Where(one => one.Checked)
+            .ToDictionary(one => one.Criterion.Trim(), StringComparer.OrdinalIgnoreCase);
+
+        var coverage = (report.Coverage ?? [])
+            .Select(one => ticked.TryGetValue(one.Criterion?.Trim() ?? string.Empty, out var item)
+                ? one with { Verdict = CoverageVerdict.Met, Because = $"Checked by hand by {item.CheckedBy}: {item.ToDo}" }
+                : one)
+            .ToList();
+
+        // A criterion the lead never wrote an entry for, but a person checked,
+        // is met as surely as one it did.
+        coverage.AddRange(ticked.Values
+            .Where(item => !coverage.Any(one => string.Equals(one.Criterion?.Trim(), item.Criterion.Trim(), StringComparison.OrdinalIgnoreCase)))
+            .Select(item => new ReportCoverage(item.Criterion, CoverageVerdict.Met, $"Checked by hand by {item.CheckedBy}: {item.ToDo}")));
+
+        return report with
+        {
+            Status = ReportStatus.Done,
+            Coverage = coverage,
+            Evidence =
+            [
+                .. report.Evidence,
+                .. ticked.Values.Select(item => new ReportEvidence(
+                    EvidenceKind.Review, $"checked by hand by {item.CheckedBy}", EvidenceResult.Pass, item.Criterion)),
+            ],
+        };
+    }
+
+    /// <summary>
     /// What a lead is told when an ended run is picked up.
     /// </summary>
     /// <remarks>
@@ -1725,6 +1843,20 @@ public sealed partial class TeamRunner : ITeamRunner
             foreach (var one in unanswered)
             {
                 text.AppendLine($"- {one.Question}");
+            }
+
+            text.AppendLine();
+        }
+
+        // Shown as met in the summary, so named here: the lead's own last
+        // report still says otherwise, and it should not work on them again.
+        if (summary.CheckedByHand.Count > 0)
+        {
+            text.AppendLine("A person has checked these by hand, and they count as met:").AppendLine();
+
+            foreach (var (criterion, by) in summary.CheckedByHand)
+            {
+                text.AppendLine($"- {criterion} (checked by {by})");
             }
 
             text.AppendLine();
