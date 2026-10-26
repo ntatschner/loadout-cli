@@ -100,6 +100,14 @@ public sealed class TeamResumeCommand : AsyncCommand<TeamResumeCommand.Settings>
         [CommandOption("--model <MODEL>")]
         [Description("A model for every node from now on, written as the agent spells it.")]
         public string? Model { get; init; }
+
+        [CommandOption("--answer <TEXT>")]
+        [Description("An answer to a question the lead stopped on. Give one per question, in the order they are listed.")]
+        public string[] Answer { get; init; } = [];
+
+        [CommandOption("--without-answers")]
+        [Description("Carry on without answering the questions the lead stopped on. It is told you chose not to.")]
+        public bool WithoutAnswers { get; init; }
     }
 
     /// <inheritdoc />
@@ -127,6 +135,40 @@ public sealed class TeamResumeCommand : AsyncCommand<TeamResumeCommand.Settings>
         }
 
         var summary = resuming.Summary;
+
+        // The questions it stopped on, answered before anything is spent or
+        // anything else is looked up: refusing them needs only the run. A
+        // run judged again takes no lead turn, so there is nobody to tell.
+        var open = RunHandovers.Settled(summary) is not null ? [] : resuming.Questions;
+        var pairing = RunQuestions.Pair(open, settings.Answer, settings.WithoutAnswers);
+
+        if (pairing.Refusal is { } unpaired)
+        {
+            return output.Fail(unpaired, pairing.Code);
+        }
+
+        var answers = pairing.Answers;
+
+        if (pairing.Ask && settings.DryRun)
+        {
+            // Changes nothing, so it asks nothing either; it says what it would.
+            if (!output.IsJson)
+            {
+                output.WriteLine("[dim]It would ask you first:[/]");
+                output.WriteLine(Markup.Escape(RunQuestions.Listed(open)));
+            }
+        }
+        else if (pairing.Ask)
+        {
+            if (!settings.AllowsPrompting)
+            {
+                // Not quietly picked up: run 20261023-1740-2677 was, twice,
+                // and its lead found the same questions and nothing new.
+                return output.Fail(RunQuestions.Unanswered(run, open), ExitCode.TerminalRequired);
+            }
+
+            answers = Ask(open);
+        }
 
         if (summary.Project is not { Length: > 0 } slug)
         {
@@ -230,6 +272,8 @@ public sealed class TeamResumeCommand : AsyncCommand<TeamResumeCommand.Settings>
             TrustedTools: machine.Value?.Teams.TrustedTools,
             Resuming: run,
             ResumeMessage: settings.Message is { Length: > 0 } said ? said.Trim() : null,
+            ResumeAnswers: answers,
+            WithoutAnswers: settings.WithoutAnswers,
 
             // The team's rule. A wait the run was started with on the command
             // line is not carried over: the journal records it for reading, not
@@ -264,6 +308,17 @@ public sealed class TeamResumeCommand : AsyncCommand<TeamResumeCommand.Settings>
                 + (rounds > 0 ? $" of {rounds}" : string.Empty)
                 + ".[/]");
 
+            foreach (var (question, answer) in answers ?? [])
+            {
+                output.WriteLine($"[dim]Asked:[/] {Markup.Escape(question)}");
+                output.WriteLine($"[dim]  You answered:[/] {Markup.Escape(answer)}");
+            }
+
+            if (settings.WithoutAnswers && open.Count > 0)
+            {
+                output.WriteLine($"[dim]Carrying on without answering {open.Count} question(s); the lead is told so.[/]");
+            }
+
             // Before anything is spent, because the budget is only checked
             // between rounds and a long lead's one turn can pass it on its own.
             if (!rejudging && resuming.LikelyCost(spent, cap.Usd) is { } likely)
@@ -275,6 +330,42 @@ public sealed class TeamResumeCommand : AsyncCommand<TeamResumeCommand.Settings>
         return await TeamRunCommand.DriveAsync(
             _runner, _console, _reading, _git, _paths, _processes,
             output, settings, request, project, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>The term offered for an answer in the person's own words.</summary>
+    internal const string SomethingElse = "Something else…";
+
+    /// <summary>
+    /// Puts each open question to the person at the terminal: the lead's
+    /// options, its recommendation first, or their own words.
+    /// </summary>
+    private IReadOnlyList<ResumeAnswer> Ask(IReadOnlyList<ReportQuestion> open)
+    {
+        var answers = new List<ResumeAnswer>();
+
+        _console.MarkupLine($"[bold]The lead stopped on {open.Count} question(s) only you can answer.[/]");
+
+        foreach (var one in open)
+        {
+            var choices = (one.Options ?? [])
+                .OrderBy(option => string.Equals(option, one.Recommendation, StringComparison.Ordinal) ? 0 : 1)
+                .Append(SomethingElse)
+                .ToList();
+
+            var chosen = _console.Prompt(new SelectionPrompt<string>()
+                .Title(Markup.Escape(one.Question) + (one.Recommendation is { Length: > 0 } r ? $" [dim](recommended: {Markup.Escape(r)})[/]" : string.Empty))
+                .AddChoices(choices)
+                .UseConverter(Markup.Escape));
+
+            if (chosen == SomethingElse)
+            {
+                chosen = _console.Prompt(new TextPrompt<string>("Your answer:"));
+            }
+
+            answers.Add(new ResumeAnswer(one.Question.Trim(), chosen.Trim()));
+        }
+
+        return answers;
     }
 
     /// <summary>

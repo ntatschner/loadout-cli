@@ -448,6 +448,10 @@ export interface Run {
   autonomy?: string;
   cost?: number;
   readings?: { criterion: string; reading: string }[];
+  /** The questions an ended run stopped on and nobody answered. Empty while it runs. */
+  questions?: { question: string; options: string[]; recommendation: string }[];
+  /** What it handed to a person when nothing left was its to do, or null. */
+  handover?: { items: { criterion: string; needs: string; todo: string; checkedBy: string | null }[]; branches: string[] } | null;
   goalUnderstood?: string | null;
   merged?: string[];
   atMostRemainingSeconds?: number | null;
@@ -468,7 +472,7 @@ export interface Runs {
 export const runs = {
   list: () => call<Runs>('GET', '/api/runs'),
   /** POST /api/runs/{run}/{verb}, the classic page's own route, which runs the command for the verb. */
-  act: (run: string, verb: string, body: Record<string, string | boolean> = {}) =>
+  act: (run: string, verb: string, body: Record<string, string | boolean | string[]> = {}) =>
     call<string>('POST', `/api/runs/${encodeURIComponent(run)}/${verb}`, body),
 };
 

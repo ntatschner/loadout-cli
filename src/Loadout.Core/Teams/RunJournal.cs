@@ -476,6 +476,12 @@ public sealed record RunSummary(
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// The questions decided since the lead's last report, in their words. A
+    /// question in that report and not here was never answered.
+    /// </summary>
+    public IReadOnlySet<string> Answered { get; init; } = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>
     /// What the lead last said about each of the run's criteria.
     /// </summary>
     /// <remarks>
@@ -1090,6 +1096,10 @@ public sealed class RunJournal : IRunJournal
         RunHandover? handover = null;
         var checks = new Dictionary<string, (string By, DateTimeOffset At)>(StringComparer.OrdinalIgnoreCase);
 
+        // The questions somebody decided since the lead last reported, so the
+        // ones in that report still open can be told from the ones answered.
+        var answered = new HashSet<string>(StringComparer.Ordinal);
+
         // Where the criteria came from, so each coverage row can say. The
         // project's are named in their own event; the rest come from whoever
         // last agreed them, or from the start of the run.
@@ -1289,6 +1299,13 @@ public sealed class RunJournal : IRunJournal
                     break;
 
                 case "report.checked" when entry.Node is { Length: > 0 } reported:
+                    // A new report from the lead asks its questions afresh, so
+                    // only an answer given after it answers one of them.
+                    if (nodes.Count > 0 && string.Equals(nodes.Keys.First(), reported, StringComparison.Ordinal))
+                    {
+                        answered.Clear();
+                    }
+
                     // Onto the exchange that produced it rather than beside it.
                     // The verdict arrives as its own event a moment later, and
                     // a turn whose outcome sits in a different row is a turn
@@ -1380,6 +1397,10 @@ public sealed class RunJournal : IRunJournal
 
                 // Somebody decided what to do about a run that ended short of
                 // its done-when. The latest decision is the one that stands.
+                case "decision" when entry.Text("question") is { Length: > 0 } decided:
+                    answered.Add(decided.Trim());
+                    break;
+
                 case "run.handover":
                     handover = new RunHandover(entry.Handed(), entry.Words("branches"));
                     break;
@@ -1474,6 +1495,7 @@ public sealed class RunJournal : IRunJournal
                     ],
                 },
             CheckedByHand = checks.ToDictionary(one => one.Key, one => one.Value.By, StringComparer.OrdinalIgnoreCase),
+            Answered = answered,
         };
     }
 

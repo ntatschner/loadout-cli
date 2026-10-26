@@ -110,6 +110,14 @@ namespace Loadout.Agents.Teams;
 /// The run this one carries on from, after it ended short of its done-when:
 /// its lead is told how that one ended and what the person said about it.
 /// </param>
+/// <param name="ResumeAnswers">
+/// For a run picked up after stopping on questions, each question its lead left
+/// open beside the person's answer.
+/// </param>
+/// <param name="WithoutAnswers">
+/// For such a run, that the person chose to carry on without answering, which
+/// the lead is told rather than left to find the same questions again.
+/// </param>
 public sealed record TeamRunRequest(
     string ProjectHandle,
     TeamDefinition Team,
@@ -136,7 +144,9 @@ public sealed record TeamRunRequest(
     StandingCriteria? Standing = null,
     string? OnTimeout = null,
     string? Origin = null,
-    string? Follows = null);
+    string? Follows = null,
+    IReadOnlyList<ResumeAnswer>? ResumeAnswers = null,
+    bool WithoutAnswers = false);
 
 /// <summary>
 /// A project's standing done-when criteria as they reach one run.
@@ -770,6 +780,14 @@ public sealed partial class TeamRunner : ITeamRunner
             // nothing left was its to do, and a person has since checked every
             // one of those. What is left is the close - the merge gate and the
             // ending - which is not the lead's either.
+            // Written down as decisions, the way a question answered while the
+            // run was going is, so the run reads afterwards as answered.
+            foreach (var (question, answer) in request.ResumeAnswers ?? [])
+            {
+                await journal.WriteAsync(
+                    "decision", null, new { question, answer, by = "person", at = "pick-up" }, ct).ConfigureAwait(false);
+            }
+
             var rejudged = false;
 
             if (resuming is not null && RunHandovers.Settled(resuming.Summary) is { } settled)
@@ -1816,6 +1834,34 @@ public sealed partial class TeamRunner : ITeamRunner
         if (request.ResumeMessage is { Length: > 0 } said)
         {
             text.AppendLine("The person running this team says:").AppendLine().AppendLine(said.Trim()).AppendLine();
+        }
+
+        // Each beside its answer, because the questions are why it stopped and
+        // a lead handed the answers alone has to guess which goes with which.
+        if (request.ResumeAnswers is { Count: > 0 } answers)
+        {
+            text.AppendLine("## Your questions, answered").AppendLine();
+            text.AppendLine("The run stopped on these. The person running this team has answered each:").AppendLine();
+
+            foreach (var (question, answer) in answers)
+            {
+                text.AppendLine($"- Question: {question}").AppendLine($"  Answer: {answer}");
+            }
+
+            text.AppendLine();
+        }
+        else if (request.WithoutAnswers && resuming.Questions.Count > 0)
+        {
+            text.AppendLine(
+                "The person chose to carry on without answering the questions you stopped on. Decide them "
+                + "yourself where you can, and say what you decided; ask again only what you cannot:").AppendLine();
+
+            foreach (var one in resuming.Questions)
+            {
+                text.AppendLine($"- {one.Question}");
+            }
+
+            text.AppendLine();
         }
 
         if (!own)

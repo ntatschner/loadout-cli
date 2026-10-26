@@ -276,6 +276,14 @@ public sealed record ChoosableDoneWhen(string Text, IReadOnlyList<string> Teams)
 /// For ending a run: somebody agreed to end one that may still be going,
 /// which is <c>team runs close --yes</c>.
 /// </param>
+/// <param name="Answers">
+/// For picking up a run that stopped on questions: one answer per question, in
+/// order, which is <c>team resume --answer</c> for each.
+/// </param>
+/// <param name="WithoutAnswers">
+/// For such a run: carry on without answering, which is
+/// <c>team resume --without-answers</c>.
+/// </param>
 /// <remarks>
 /// One shape for all five because they all end the same way: the daemon runs
 /// the command somebody would have typed. Nothing here decides what any of
@@ -293,7 +301,9 @@ public sealed record RunAction(
     string? Instead = null,
     string? Budget = null,
     bool ThinkAgain = false,
-    bool Confirmed = false);
+    bool Confirmed = false,
+    IReadOnlyList<string>? Answers = null,
+    bool WithoutAnswers = false);
 
 /// <summary>
 /// Letting something outside this machine start a run.

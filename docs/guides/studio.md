@@ -439,7 +439,9 @@ Under each answer is the `loadout team gate` command it runs.
 Below that are the runs going, each with **Hold after this round**, **Let it
 carry on** and **Stop after this round**, and the ones that ended, with **Run it
 again** (which opens Start a run filled in, and starts nothing), **Pick it up
-where it stopped** and **Forget it**. Above both is the task board's search
+where it stopped** and **Forget it**. A run that stopped on questions shows
+them first when you pick it up, each filled in with what the lead
+recommended, with **Carry on without answering** as a choice of its own. Above both is the task board's search
 box, taking the query `loadout team runs --filter` takes, such as
 `team:release-crew cost:>2 sort:-cost`. It narrows those two lists and never
 **Needs you**, because something waiting on you shouldn't be hidden by a

@@ -41,6 +41,20 @@
   let budget = $state('');
   let changing = $state(false);
   let forgetting = $state(false);
+
+  // Picking up a run that stopped on questions: one answer each, starting
+  // from what the lead recommended, or a separate choice to carry on without.
+  let picking = $state(false);
+  let answers = $state<string[]>([]);
+
+  function startPickUp(of: Run) {
+    if (of.questions?.length) {
+      answers = of.questions.map((one) => one.recommendation ?? '');
+      picking = true;
+    } else {
+      void pickUp(of.id);
+    }
+  }
   let ending = $state(false);
   const badge = $derived(run ? livenessOf(run) : null);
 
@@ -386,7 +400,7 @@
               <HaloButton label="Stop after this round" kind="danger" size="small" cmd={runLines.stop(run.id)} disabledReason={watch} onpress={() => void stop(run.id)} />
             {:else}
               <HaloButton label="Run it again" size="small" cmd="opens Start a run, filled from this run · starts nothing" onpress={() => onagain?.(run)} />
-              <HaloButton label="Pick it up where it stopped" size="small" cmd={runLines.pickUp(run.id)} disabledReason={watch} onpress={() => void pickUp(run.id)} />
+              <HaloButton label="Pick it up where it stopped" size="small" cmd={run.questions?.length ? 'shows the questions it stopped on first · starts nothing' : runLines.pickUp(run.id)} disabledReason={watch} onpress={() => startPickUp(run)} />
               <HaloButton label="Forget it" kind="danger" size="small" cmd={runLines.forget(run.id)} disabledReason={watch} onpress={() => (forgetting = true)} />
             {/if}
           </div>
@@ -513,6 +527,48 @@
       <label class="lab" for="run-budget">US dollars, or none</label>
       <input id="run-budget" name="run-budget" class="ls-text" type="text" autocomplete="off" placeholder={summary?.cap ? String(summary.cap) : 'none'} bind:value={budget} />
     </div>
+  </Dialog>
+{/if}
+
+{#if picking && run?.questions?.length}
+  <Dialog
+    title="It stopped on questions only you can answer"
+    why="Each answer goes to the lead beside its question. Carrying on without them tells the lead you chose not to answer."
+    actions={[
+      {
+        label: 'Pick it up with these answers',
+        kind: 'needs',
+        cmd: runLines.pickUp(run.id, answers.map((one) => one.trim())),
+        disabledReason: answers.every((one) => one.trim().length > 0) ? undefined : 'an answer for each question',
+        onpress: () => void pickUp(run!.id, answers.map((one) => one.trim())).then((ok) => ok && (picking = false)),
+      },
+      {
+        label: 'Carry on without answering',
+        cmd: runLines.pickUp(run.id, [], true),
+        onpress: () => void pickUp(run!.id, [], true).then((ok) => ok && (picking = false)),
+      },
+    ]}
+    onclose={() => (picking = false)}
+  >
+    {#each run.questions as one, i (i)}
+      <div class="ls-field">
+        <label class="lab" for={`pick-answer-${i}`}>{one.question}</label>
+        {#if one.options?.length}
+          <div class="ls-answers" role="group" aria-label="The lead's options">
+            {#each one.options as option (option)}
+              <HaloButton
+                label={option === one.recommendation ? `${option} (recommended)` : option}
+                size="small"
+                solid={answers[i] === option}
+                cmd="puts this answer in the box · sends nothing"
+                onpress={() => (answers[i] = option)}
+              />
+            {/each}
+          </div>
+        {/if}
+        <input id={`pick-answer-${i}`} name={`pick-answer-${i}`} class="ls-text" type="text" autocomplete="off" bind:value={answers[i]} />
+      </div>
+    {/each}
   </Dialog>
 {/if}
 

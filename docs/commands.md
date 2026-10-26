@@ -162,7 +162,7 @@
 | `loadout team message` | Say something to a run's lead, read at its next round |
 | `loadout team halt` | Stop a run after its current round, hold it, or let it carry on |
 | `loadout team budget` | Change what a running team may spend in all, from its next round on: a figure, or `none` for no cap |
-| `loadout team resume` | Pick up a team run that has ended, where it stopped: `--usd` for more money or `none` for no cap, `--rounds` for more rounds, `--message` for the lead. Says what the lead's next turn is likely to cost first |
+| `loadout team resume` | Pick up a team run that has ended, where it stopped: `--usd` for more money or `none` for no cap, `--rounds` for more rounds, `--message` for the lead, one `--answer` per question the lead stopped on, or `--without-answers` to carry on without. Refuses a run with questions open and neither when nobody can be asked. Says what the lead's next turn is likely to cost first |
 | `loadout team handover` | What a run handed to you because only you could do it: a push, a CI run, or a check by hand. `--check <n>` ticks one off as review evidence in your name; once every one is ticked the run is judged again and ends done |
 | `loadout team name` | Name a run's room, or clear the name to get the worked-out one back |
 | `loadout team pr` | Open a pull request for what one node of a run produced |
