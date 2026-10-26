@@ -70,7 +70,9 @@ public static class RunOutcomes
             return RunOutcome.Blocked;
         }
 
-        if (Same(said, "needs-decision"))
+        // "needs-decision: handed over N criterion(s) ...", a run that ended
+        // because what was left needed a push, CI or a person.
+        if (Same(said, "needs-decision") || Starts(said, "needs-decision:"))
         {
             return RunOutcome.NeedsDecision;
         }

@@ -533,6 +533,12 @@ internal sealed class OpenRunStep
         run.LastReadings = null;
         run.ReadingsAccepted = resuming?.ReadingsAccepted ?? false;
 
+        // What a person checked by hand in a handover stays checked: the lead
+        // picking the run up cannot see it, and would otherwise report it unmet
+        // and have it handed over again.
+        run.CheckedByHand = new HashSet<string>(
+            resuming?.Summary.CheckedByHand.Keys ?? [], StringComparer.OrdinalIgnoreCase);
+
         run.Slug = slug;
         run.ForTask = forTask;
         run.Lead = lead;

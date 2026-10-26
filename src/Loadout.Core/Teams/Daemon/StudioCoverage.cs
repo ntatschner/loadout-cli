@@ -164,6 +164,7 @@ public static class StudioCoverage
         ["team remove"] = new("teams", StudioEffect.Changes),
         ["team run"] = new("teams", StudioEffect.Changes),
         ["team resume"] = new("teams", StudioEffect.Changes),
+        ["team handover"] = Terminal("ticks off by hand what a run handed over and judges it again; the Teams page shows a handed-over run's ending but has no list to tick yet"),
         ["team runs"] = new("teams", StudioEffect.Reads),
         ["team runs remove"] = new("teams", StudioEffect.Changes),
         ["team runs prune"] = new("teams", StudioEffect.Changes),

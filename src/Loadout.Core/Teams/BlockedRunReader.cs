@@ -245,71 +245,22 @@ public sealed class BlockedRunReader
     {
         ArgumentNullException.ThrowIfNull(resolution);
 
-        if (!RunJournal.Names(runId))
-        {
-            return OperationResult.Fail($"'{runId}' is not a run identifier.", ExitCode.InvalidArguments);
-        }
+        var written = RunJournalAppend.Append(_journal, runId, resolution.At, run =>
+            !again && run.Resolved is not null
+                ? OperationResult<IReadOnlyList<RunJournalAppend.Line>>.Fail(NotBlocked(run), ExitCode.InvalidArguments)
+                : OperationResult<IReadOnlyList<RunJournalAppend.Line>>.Ok(
+                [
+                    new("run.resolved", new
+                    {
+                        action = resolution.Action,
+                        by = resolution.By,
+                        answer = resolution.Answer,
+                        next = resolution.Next,
+                        cap = resolution.Cap,
+                        figure = resolution.Figure,
+                    }),
+                ]));
 
-        var path = Path.Combine(_journal.DirectoryOf(runId), "journal.jsonl");
-
-        if (!File.Exists(path))
-        {
-            return OperationResult.Fail($"No run named '{runId}' on this machine.", ExitCode.ProjectNotFound);
-        }
-
-        try
-        {
-            using var file = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
-            using var reader = new StreamReader(file, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
-
-            var events = new List<RunEvent>();
-
-            while (reader.ReadLine() is { } line)
-            {
-                if (RunJournal.Parse(line) is { } parsed)
-                {
-                    events.Add(parsed);
-                }
-            }
-
-            var run = RunJournal.Fold(runId, _journal.DirectoryOf(runId), events);
-
-            if (!again && run.Resolved is not null)
-            {
-                return OperationResult.Fail(NotBlocked(run), ExitCode.InvalidArguments);
-            }
-
-            // A journal whose last line was cut short gets its own line, so
-            // this one is not glued to the end of it.
-            var opening = file.Length > 0 && LastByte(file) != '\n' ? "\n" : string.Empty;
-
-            var line2 = opening + RunJournalLine.Serialize(resolution.At, runId, null, "run.resolved", new
-            {
-                action = resolution.Action,
-                by = resolution.By,
-                answer = resolution.Answer,
-                next = resolution.Next,
-                cap = resolution.Cap,
-                figure = resolution.Figure,
-            }) + "\n";
-
-            file.Seek(0, SeekOrigin.End);
-            var bytes = Encoding.UTF8.GetBytes(line2);
-            file.Write(bytes, 0, bytes.Length);
-            file.Flush(flushToDisk: true);
-
-            return OperationResult.Ok();
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return OperationResult.Fail($"The run's journal could not be written: {ex.Message}");
-        }
-    }
-
-    private static int LastByte(FileStream file)
-    {
-        file.Seek(-1, SeekOrigin.End);
-
-        return file.ReadByte();
+        return written.Failed ? OperationResult.Fail(written.Error!, written.ExitCode) : OperationResult.Ok();
     }
 }

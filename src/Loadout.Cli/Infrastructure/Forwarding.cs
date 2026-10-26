@@ -47,7 +47,7 @@ internal static class Forwarding
 
         // Work attached to this terminal for as long as it takes, which must
         // not go with the daemon when it restarts.
-        "team run", "team resume",
+        "team run", "team resume", "team handover",
 
         // Replace or control the daemon itself.
         "update", "daemon", "daemon stop", "daemon restart", "daemon pause", "daemon resume", "daemon continue",

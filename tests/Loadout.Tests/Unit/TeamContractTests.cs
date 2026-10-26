@@ -88,6 +88,41 @@ public sealed class TeamContractTests
     }
 
     [Fact]
+    public void A_reading_s_tag_is_written_as_the_schema_spells_it_and_reads_back()
+    {
+        var report = new Report(
+            "lead", ReportStatus.Blocked, "Two need you.", [], [], [],
+            Readings:
+            [
+                new ReportReading("the suite passes", "the whole suite", CriterionNeeds.Local),
+                new ReportReading("CI is green on Unix", "the Unix legs pass", CriterionNeeds.Ci, "push the branch"),
+                new ReportReading("End run works in Studio", "checked by hand", CriterionNeeds.Person, "check End run in Studio"),
+                new ReportReading("the PR is open", "a draft PR", CriterionNeeds.Push),
+                new ReportReading("untagged", "said nothing"),
+            ]);
+
+        var json = ReportReader.Write(report);
+
+        json.Should().Contain("\"needs\":\"needs-ci\"").And.Contain("\"needs\":\"needs-person\"")
+            .And.Contain("\"needs\":\"needs-push\"").And.Contain("\"needs\":\"local\"")
+            .And.Contain("\"handover\":\"push the branch\"");
+
+        var read = ReportReader.Read(json);
+
+        read.Succeeded.Should().BeTrue(read.Error);
+        read.Value.Should().BeEquivalentTo(report);
+
+        // Every word the record writes is one the schema allows, and no more.
+        using var schema = JsonDocument.Parse(ReportSchema.Version1);
+
+        schema.RootElement.GetProperty("properties").GetProperty("readings").GetProperty("items")
+            .GetProperty("properties").GetProperty("needs").GetProperty("enum").EnumerateArray()
+            .Select(one => one.GetString())
+            .Should().BeEquivalentTo(Enum.GetValues<CriterionNeeds>()
+                .Select(one => JsonSerializer.Serialize(one).Trim('"')));
+    }
+
+    [Fact]
     public void A_brief_is_written_with_the_names_the_roles_use()
     {
         var json = ReportReader.Write(ImplementerBrief);

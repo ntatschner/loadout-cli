@@ -159,6 +159,40 @@ public sealed record RunEvent(DateTimeOffset At, string? Node, string Kind, Json
     }
 
     /// <summary>
+    /// The criteria a <c>run.handover</c> event handed to a person, in the
+    /// order written. Entries with no criterion are left out.
+    /// </summary>
+    public IReadOnlyList<HandoverItem> Handed()
+    {
+        if (Data.ValueKind != JsonValueKind.Object
+            || !Data.TryGetProperty("items", out var value)
+            || value.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        var items = new List<HandoverItem>();
+
+        foreach (var one in value.EnumerateArray())
+        {
+            if (one.ValueKind != JsonValueKind.Object || Said(one, "criterion") is not { Length: > 0 } criterion)
+            {
+                continue;
+            }
+
+            CriterionTags.TryParse(Said(one, "needs"), out var needs);
+
+            items.Add(new HandoverItem(
+                criterion,
+                needs,
+                Said(one, "todo") ?? CriterionTags.ToDo(new CriterionTag(needs, "default")),
+                Said(one, "tagged") ?? "lead"));
+        }
+
+        return items;
+    }
+
+    /// <summary>
     /// A list of two-string objects from the event's data, such as the
     /// readings a lead gave, in the order written. Entries missing either
     /// string are left out.
@@ -425,6 +459,21 @@ public sealed record RunSummary(
     /// done-when, or null where nobody has.
     /// </summary>
     public RunResolution? Resolved { get; init; }
+
+    /// <summary>
+    /// What the run handed to a person when nothing left was something it could
+    /// do, with each criterion they have since checked, or null where it never
+    /// handed anything over.
+    /// </summary>
+    public RunHandover? Handover { get; init; }
+
+    /// <summary>
+    /// Every criterion a person has checked by hand in one of the run's
+    /// handovers, and who, by the criterion. They count as met for the rest of
+    /// the run, whatever the lead says of them next.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> CheckedByHand { get; init; } =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// What the lead last said about each of the run's criteria.
@@ -1034,6 +1083,13 @@ public sealed class RunJournal : IRunJournal
         IReadOnlyList<RunCovered> covered = [];
         string? goalUnderstood = null;
 
+        // What the run last handed to a person, with each check ticked off
+        // as it was written after it. Kept when the run is picked up again,
+        // because what somebody checked stays checked; a later handover
+        // replaces it.
+        RunHandover? handover = null;
+        var checks = new Dictionary<string, (string By, DateTimeOffset At)>(StringComparer.OrdinalIgnoreCase);
+
         // Where the criteria came from, so each coverage row can say. The
         // project's are named in their own event; the rest come from whoever
         // last agreed them, or from the start of the run.
@@ -1324,6 +1380,16 @@ public sealed class RunJournal : IRunJournal
 
                 // Somebody decided what to do about a run that ended short of
                 // its done-when. The latest decision is the one that stands.
+                case "run.handover":
+                    handover = new RunHandover(entry.Handed(), entry.Words("branches"));
+                    break;
+
+                // A person saying a handed-over criterion is met, which is
+                // review evidence in their name. The first check stands.
+                case "criterion.checked" when entry.Text("criterion") is { Length: > 0 } ticked:
+                    checks.TryAdd(ticked.Trim(), (entry.Text("by") ?? "somebody", entry.At));
+                    break;
+
                 case "run.resolved" when entry.Text("action") is { Length: > 0 } action:
                     resolved = new RunResolution(
                         entry.At,
@@ -1383,7 +1449,7 @@ public sealed class RunJournal : IRunJournal
             turns,
             timeline,
             conflicts,
-            [.. covered.Select(one => one with
+            [.. covered.Select(one => Checked(one, checks) with
             {
                 Source = fromProject.Contains(one.Criterion.Trim()) ? "project" : agreedBy,
             })],
@@ -1396,8 +1462,34 @@ public sealed class RunJournal : IRunJournal
             Readings = readings,
             Follows = follows,
             Resolved = resolved,
+            Handover = handover is null
+                ? null
+                : handover with
+                {
+                    Items =
+                    [
+                        .. handover.Items.Select(one => checks.TryGetValue(one.Criterion.Trim(), out var ticked)
+                            ? one with { CheckedBy = ticked.By, CheckedAt = ticked.At }
+                            : one),
+                    ],
+                },
+            CheckedByHand = checks.ToDictionary(one => one.Key, one => one.Value.By, StringComparer.OrdinalIgnoreCase),
         };
     }
+
+    /// <summary>
+    /// A criterion as the lead last reported it, or as met where a person has
+    /// since checked it by hand in a handover.
+    /// </summary>
+    private static RunCovered Checked(RunCovered covered, IReadOnlyDictionary<string, (string By, DateTimeOffset At)> checks) =>
+        checks.TryGetValue(covered.Criterion.Trim(), out var ticked)
+            ? covered with
+            {
+                Verdict = "met",
+                Because = $"Checked by hand by {ticked.By} at "
+                    + ticked.At.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture),
+            }
+            : covered;
 
     /// <summary>Whether a budget event said the cap was taken off.</summary>
     private static bool Uncapped(RunEvent entry) =>
@@ -1472,6 +1564,9 @@ public sealed class RunJournal : IRunJournal
                 + (entry.Text("next") is { Length: > 0 } next ? $", carried on as {next}" : string.Empty)
                 + (entry.Text("by") is { Length: > 0 } resolvedBy ? $" by {resolvedBy}" : string.Empty),
             "run.unresolved" => $"waiting on you again: {entry.Text("why")}",
+            "run.handover" => "handed over what only you can do: "
+                + string.Join("; ", entry.Handed().Select(one => $"{one.Criterion} ({CriterionTags.Spell(one.Needs)}) - {one.ToDo}")),
+            "criterion.checked" => $"checked by hand by {entry.Text("by") ?? "somebody"}: {entry.Text("criterion")}",
             "node.doing" => entry.Text("doing") ?? "working",
             "node.said" => entry.Text("line") ?? "working",
             // The three lines one decision writes. A node stops and says what
