@@ -1075,6 +1075,7 @@ public static class Program
         });
         Top<ResumeCommand>(config, "resume");
         Top<FindCommand>(config, "find");
+        Top<AskCommand>(config, "ask");
         Top<UsageCommand>(config, "usage");
         Top<LaunchesCommand>(config, "launches");
 

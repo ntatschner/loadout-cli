@@ -170,6 +170,7 @@ public static class ServiceRegistration
         services.AddSingleton<Usage.ISpendWatch, Usage.SpendWatch>();
         services.AddSingleton<Usage.ISpendNoticeStore, Usage.SpendNoticeStore>();
         services.AddSingleton<Tasks.ITaskService, Tasks.TaskService>();
+        services.AddSingleton<Ask.IAskService, Ask.AskService>();
         services.AddSingleton<Tasks.ITaskActivityReader, Tasks.TaskActivityReader>();
         services.AddSingleton<Ideas.IIdeaService, Ideas.IdeaService>();
         services.AddSingleton<Ideas.IIdeaLocks, Ideas.IdeaLocks>();

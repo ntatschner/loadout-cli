@@ -297,6 +297,7 @@ public static class StudioCoverage
         // The palette's search, on every page. Placed with Home, where the
         // palette is first met.
         ["find"] = new("home", StudioEffect.Reads),
+        ["ask"] = Terminal("answers in a terminal until Studio's palette asks the daemon directly, with plans to approve beside their cap"),
         ["usage"] = new("spend", StudioEffect.Reads),
         ["launches"] = new("spend", StudioEffect.Reads),
         ["instructions list"] = new("context", StudioEffect.Reads),
