@@ -576,6 +576,15 @@ public static class ConfigKeys
             Group: Groups.Studio,
             WhenUnset: "the layout as drawn: Network status, the map, the picked line"),
 
+        new("studio-map-scope",
+            "What Studio's tube map draws: inflight (work going on, and failed runs and sessions for a day) or all",
+            (c, _) => c.Studio.MapScope ?? string.Empty,
+            (c, _, v) => c.Studio.MapScope = Optional(v, "inflight", "all"),
+            false,
+            Sample: "all",
+            Group: Groups.Studio,
+            WhenUnset: "inflight: ideas, finished runs and sessions that ended cleanly stay off the map"),
+
         new("studio-theme",
             "Studio's theme: dark, light, hc-dark or hc-light",
             (c, _) => c.Studio.Theme ?? string.Empty,

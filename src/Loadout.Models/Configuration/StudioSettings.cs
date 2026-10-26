@@ -39,6 +39,12 @@ public sealed class StudioSettings
     /// <summary>full, reduced or none. Null is full; the operating system's reduced motion still wins.</summary>
     public string? Motion { get; set; }
 
+    /// <summary>
+    /// What Studio's tube map draws: inflight (live work, and failures for a
+    /// day) or all (every line Home has). Null is inflight.
+    /// </summary>
+    public string? MapScope { get; set; }
+
     /// <summary>Minutes a working session is quiet before Studio reads it as idle. Null is ten.</summary>
     public int? IdleAfter { get; set; }
 

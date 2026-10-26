@@ -146,6 +146,8 @@ export interface Preferences {
   idleAfter: number;
   layoutLens: string | null;
   layoutMap: string | null;
+  /** What the tube map draws: work in flight, or every line. Missing from an older daemon, which reads as 'inflight'. */
+  mapScope?: 'inflight' | 'all';
   panels: { lens: string[]; map: string[] };
   /** Each list's saved query, by view; null where nothing is saved and the list opens with its default. */
   views?: Record<string, string | null>;
@@ -170,6 +172,8 @@ export interface Session {
   startedAt: string;
   ended: boolean;
   exitCode: number | null;
+  /** When it ended; missing while it runs, and from a daemon older than this field. */
+  endedAt?: string | null;
   viewers: number;
   columns: number;
   rows: number;

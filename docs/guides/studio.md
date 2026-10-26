@@ -75,6 +75,12 @@ and **Map** switch between them.
 - **Map** draws every piece of work as a line through its stages, with *Needs
   you* as the interchange each one passes through. Pick a line and it's drawn
   straight below, with its checks, its last events and what you can do.
+  It opens on **In flight**: live sessions, runs going or waiting for you, and
+  tasks you're doing or are blocked on. Failed runs and sessions that ended
+  with an error stay for a day so you see them. Ideas and finished work
+  aren't drawn, and the map says how many it left off. **Everything** draws
+  the lot, and the choice is kept as `studio-map-scope`. Only the map
+  narrows, so the Lens still shows everything.
 
 **Edit layout** lets you rearrange either view in place. Drag a panel by its
 name or use its arrows, hide what you don't use, and **Add back** what you hid.
@@ -290,6 +296,7 @@ loadout config set studio-accent violet
 loadout config set studio-density roomy
 loadout config set studio-motion reduced
 loadout config set studio-halo gyroscope
+loadout config set studio-map-scope all
 loadout config set studio-idle-after 20
 loadout config set studio-background-limit 60
 ```
