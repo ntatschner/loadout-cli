@@ -181,6 +181,55 @@ export function linesOf(
   return [...runs, ...sessions, ...ideas, ...tasks].map((line, index) => ({ ...line, code: String((index % 8) + 1) }));
 }
 
+const DAY = 24 * 60;
+
+/** Whether a line is work going on, or a failure from the last day, rather than something settled. */
+function going(line: Work, now: number): boolean {
+  if (line.run) {
+    const run = line.run;
+
+    return run.running || run.waitingForYou || (run.outcome === 'failed' && !!run.finished && minutesOf(run.finished, now) < DAY);
+  }
+
+  if (line.session) {
+    const session = line.session;
+
+    // No exit code reads as a clean end, and no end time as a day ago: a
+    // session the daemon lost track of is not a failure to keep in view.
+    return !session.ended || (!!session.exitCode && !!session.endedAt && minutesOf(session.endedAt, now) < DAY);
+  }
+
+  // linesOf gives only tasks being done or blocked, and an idea is never in
+  // flight: it is shaped on the Ideas page, not worked.
+  return line.kind === 'task';
+}
+
+/**
+ * What the tube map draws while it shows only work in flight: live sessions,
+ * runs going or waiting for you, tasks being done or blocked, and for a day,
+ * failed runs and sessions that ended with a non-zero exit code. Coded again
+ * in drawing order, as linesOf does, so the lines drawn keep eight apart.
+ */
+export function inFlight(lines: Work[], now = Date.now()): Work[] {
+  return lines.filter((line) => going(line, now)).map((line, index) => ({ ...line, code: String((index % 8) + 1) }));
+}
+
+/** What inFlight left off, as a phrase: '4 ideas and 2 team runs'. Empty when nothing was. */
+export function hiddenOf(all: Work[], drawn: Work[]): string {
+  const shown = new Set(drawn.map((line) => line.id));
+  const counts = new Map<WorkKind, number>();
+
+  for (const line of all) {
+    if (!shown.has(line.id)) {
+      counts.set(line.kind, (counts.get(line.kind) ?? 0) + 1);
+    }
+  }
+
+  const parts = [...counts].map(([kind, n]) => `${n} ${kind}${n === 1 ? '' : 's'}`);
+
+  return parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}` : (parts[0] ?? '');
+}
+
 function clockOf(iso: string | null | undefined): string | undefined {
   if (!iso) {
     return undefined;

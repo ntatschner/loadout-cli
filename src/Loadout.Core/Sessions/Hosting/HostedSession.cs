@@ -68,6 +68,7 @@ public sealed class HostedSession : IAsyncDisposable
     private bool _ended;
     private int _disposed;
     private int? _exitCode;
+    private DateTimeOffset? _endedAt;
     private string? _label;
     private int _columns;
     private int _rows;
@@ -136,6 +137,16 @@ public sealed class HostedSession : IAsyncDisposable
     public int? ExitCode
     {
         get { lock (_gate) { return _exitCode; } }
+    }
+
+    /// <summary>
+    /// When the child ended, or null while it runs. Studio keeps a session
+    /// that failed on its map for a day from here, as it does a failed run
+    /// from when it finished.
+    /// </summary>
+    public DateTimeOffset? EndedAt
+    {
+        get { lock (_gate) { return _endedAt; } }
     }
 
     /// <summary>How many windows are watching.</summary>
@@ -441,6 +452,7 @@ public sealed class HostedSession : IAsyncDisposable
         {
             _ended = true;
             _exitCode = code;
+            _endedAt = DateTimeOffset.UtcNow;
             _holder = null;
 
             foreach (var attachment in _attached)

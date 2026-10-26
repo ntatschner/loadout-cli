@@ -324,6 +324,7 @@ internal static class SessionsApi
             lastOutputAt = session.LastOutputAt,
             ended = session.HasEnded,
             exitCode = session.ExitCode,
+            endedAt = session.EndedAt,
             viewers = session.Viewers,
             columns = session.Size.Columns,
             rows = session.Size.Rows,
