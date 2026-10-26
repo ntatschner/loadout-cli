@@ -2412,16 +2412,36 @@ reaches it. That is `team run --work-in <worktree>`, which takes only a worktree
 of the project's own repository. The worktree is removed once the run has ended
 and its work is somewhere; the branch is always kept.
 
-**A run that meets its done-when** pushes its branch and opens a **draft** pull
-request, but only if you have said it may: `team queue settings --draft-prs on`.
-It is off until you turn it on, and Studio says so first whenever it is on. The
-pull request's description lists the done-when you confirmed and how the lead
-last read each one, so whoever reviews it in the morning judges it against what
-was agreed. Without the grant the branch stays on this machine. Either way the
-task is left **blocked**, with a line in its history saying where the work is:
-done is for when it is merged. When a draft the queue opened is merged, the
-daemon notices within a quarter of an hour and marks the task done. Merging, and
-every other outward action, is still yours.
+**A run that meets its done-when** pushes its branch and opens a pull request,
+but only if you have said it may. The pull request mode is `draft`, `ready` or
+`none`, and you can set it in three places. The narrowest one that says
+anything wins:
+
+- **The queued task**: `team queue add <team> <task> --pr-mode ready`, for one
+  task that should go straight to review.
+- **The queue**: `team queue settings <team> --pr-mode draft`. `--draft-prs on`
+  still works and means the same as `--pr-mode draft`, and `--draft-prs off`
+  means `none`. `--pr-mode inherit` takes the queue's own mode away, so each
+  project's applies.
+- **The project**: `pr_mode` under `delivery` in the project's `project.yaml`
+  in the workspace, edited by hand for now:
+
+  ```yaml
+  delivery:
+    pr_mode: ready
+  ```
+
+If none of them says anything, no pull request is opened. A word that isn't a
+mode is skipped, as if it weren't there, so a misspelt `pr_mode` can only mean
+fewer pull requests, never one you didn't ask for. Studio says so first
+whenever a queue may open drafts. The pull request's description lists the
+done-when you confirmed and how the lead last read each one, so whoever reviews
+it in the morning judges it against what was agreed. With no pull request the
+branch stays on this machine, and the task's history says which level decided
+that. Either way the task is left **blocked**, with a line in its history saying
+where the work is: done is for when it is merged. When a pull request the queue
+opened is merged, the daemon notices within a quarter of an hour and marks the
+task done. Merging, and every other outward action, is still yours.
 
 **A run that fails** - blocked, over budget, stopped, or whose process died -
 leaves the task blocked with the run and the reason in its history, and is not

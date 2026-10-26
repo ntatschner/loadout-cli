@@ -26,6 +26,8 @@
     windowRuns?: number | null;
     heldCap: number;
     draftPullRequests: boolean;
+    /** draft, ready or none; absent when the queue leaves it to each project. */
+    prMode?: string | null;
   }
 
   export interface QueueWindowRow {
@@ -346,7 +348,12 @@
     </form>
   {/if}
 
-  {#if settings.draftPullRequests}
+  {#if settings.prMode === 'ready'}
+    <div class="grant on" role="note">
+      <p>It may push a branch and open a <strong>pull request ready for review</strong> when a queued run meets its done-when. Merging still needs you.</p>
+      <HaloButton label="Stop that" size="small" kind="danger" cmd={`$ loadout team queue settings ${team} --pr-mode none`} {disabledReason} onpress={() => void act('team queue settings', [team, '--pr-mode', 'none'], `${whose(team)} queue opens no pull requests`)} />
+    </div>
+  {:else if settings.draftPullRequests}
     <div class="grant on" role="note">
       <p>It may push a branch and open a <strong>draft pull request</strong> when a queued run meets its done-when. Merging still needs you.</p>
       <HaloButton label="Stop that" size="small" kind="danger" cmd={`$ loadout team queue settings ${team} --draft-prs off`} {disabledReason} onpress={() => void act('team queue settings', [team, '--draft-prs', 'off'], `${whose(team)} queue opens no pull requests`)} />

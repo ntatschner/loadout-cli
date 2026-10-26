@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using Loadout.Cli.Infrastructure;
+using Loadout.Core.Delivery;
 using Loadout.Core.Instructions;
 using Loadout.Core.Projects;
 using Loadout.Core.Tasks;
@@ -72,7 +73,8 @@ internal static class TeamQueueing
 
     /// <summary>One item, in a line.</summary>
     public static string Describe(QueueItem item) =>
-        $"{item.Task} on {item.Project}" + (item.After.Length > 0 ? $", after {item.After}" : string.Empty);
+        $"{item.Task} on {item.Project}" + (item.After.Length > 0 ? $", after {item.After}" : string.Empty)
+        + (item.PrMode.Length > 0 ? $", pull request {item.PrMode}" : string.Empty);
 
     /// <summary>The item a task names, by its id and, when given, its project.</summary>
     public static QueueItem? Find(TeamQueue queue, string task, string? project) =>
@@ -148,6 +150,10 @@ public sealed class TeamQueueAddCommand : AsyncCommand<TeamQueueAddCommand.Setti
         [CommandOption("--by <WHO>")]
         [Description("Who is adding it. Defaults to this machine's user.")]
         public string? By { get; init; }
+
+        [CommandOption("--pr-mode <MODE>")]
+        [Description("draft, ready or none: what this task's run does about a pull request when it meets its done-when, over the queue's and the project's.")]
+        public string? PrMode { get; init; }
     }
 
     /// <inheritdoc />
@@ -167,6 +173,11 @@ public sealed class TeamQueueAddCommand : AsyncCommand<TeamQueueAddCommand.Setti
         }
 
         var slug = resolution.Value!.Entry.Slug;
+
+        if (!PullRequestModes.TryParse(settings.PrMode, out var mode))
+        {
+            return output.Fail(PullRequestModes.Refusal(settings.PrMode!), ExitCode.InvalidArguments);
+        }
 
         var (team, refused) = await TeamQueueing
             .TeamAsync(_teams, _library, _workspace, _projects, settings, cancellationToken)
@@ -193,6 +204,7 @@ public sealed class TeamQueueAddCommand : AsyncCommand<TeamQueueAddCommand.Setti
                 : string.Empty,
             AddedBy = settings.By is { Length: > 0 } who ? who : Environment.UserName,
             AddedUtc = _time.GetUtcNow(),
+            PrMode = mode is { } chosen ? PullRequestModes.Word(chosen) : string.Empty,
         };
 
         string? Admit(TeamQueue queue)
@@ -254,7 +266,15 @@ public sealed class TeamQueueAddCommand : AsyncCommand<TeamQueueAddCommand.Setti
 
         if (output.IsJson)
         {
-            output.WriteJson(new { team, task = item.Task, project = item.Project, after = item.After, position = saved.Value!.Items.Count });
+            output.WriteJson(new
+            {
+                team,
+                task = item.Task,
+                project = item.Project,
+                after = item.After,
+                prMode = item.PrMode.Length > 0 ? item.PrMode : null,
+                position = saved.Value!.Items.Count,
+            });
 
             return CommandOutput.Success();
         }
@@ -435,7 +455,8 @@ public sealed class TeamQueueListCommand : AsyncCommand<TeamQueueSettings>
         windowUsd = settings.WindowUsd.Length > 0 ? settings.WindowUsd : null,
         windowRuns = settings.WindowRuns,
         heldCap = settings.HeldCap,
-        draftPullRequests = settings.DraftPullRequests,
+        draftPullRequests = PullRequestModes.OfQueue(settings) == PullRequestMode.Draft,
+        prMode = PullRequestModes.OfQueue(settings) is { } mode ? PullRequestModes.Word(mode) : null,
     };
 
     internal static string Spell(QueueSettings settings) =>
@@ -444,7 +465,13 @@ public sealed class TeamQueueListCommand : AsyncCommand<TeamQueueSettings>
             (settings.WindowUsd.Length > 0 ? $"${settings.WindowUsd} a window" : "no spending cap of its own"),
             (settings.WindowRuns is { } most ? $"{most} run(s) a window" : "no cap on runs"),
             $"at most {settings.HeldCap} held",
-            settings.DraftPullRequests ? "may open draft pull requests" : "opens no pull requests");
+            PullRequestModes.OfQueue(settings) switch
+            {
+                PullRequestMode.Draft => "may open draft pull requests",
+                PullRequestMode.Ready => "may open pull requests ready for review",
+                PullRequestMode.None => "opens no pull requests",
+                _ => "opens pull requests as each project says",
+            });
 }
 
 /// <summary>Moves an item to another place in the queue.</summary>
@@ -665,10 +692,13 @@ public sealed class TeamQueueRemoveCommand : AsyncCommand<TeamQueueRemoveCommand
 }
 
 /// <summary>Sets a queue's limits and grants.</summary>
-[Description("Set a team queue's limits and grants: what a window may spend, how many runs it may start, how many may wait at once, and whether it may open draft pull requests.")]
+[Description("Set a team queue's limits and grants: what a window may spend, how many runs it may start, how many may wait at once, and whether it may open pull requests.")]
 [CommandMeta(CommandCategory.Start, Intent = "team queue settings cap budget window grant draft pull request", Mutates = true)]
 public sealed class TeamQueueSettingsCommand : AsyncCommand<TeamQueueSettingsCommand.Settings>
 {
+    /// <summary>The --pr-mode word that clears the queue's own mode, so each project's applies.</summary>
+    internal const string InheritWord = "inherit";
+
     private readonly IQueueService _queues;
     private readonly IProjectService _projects;
     private readonly ITeamCatalogue _teams;
@@ -707,8 +737,12 @@ public sealed class TeamQueueSettingsCommand : AsyncCommand<TeamQueueSettingsCom
         public int? HeldCap { get; init; }
 
         [CommandOption("--draft-prs <ON|OFF>")]
-        [Description("Whether a queued run that meets its done-when may push its branch and open a draft pull request. Off unless turned on.")]
+        [Description("The same as --pr-mode draft when on, and --pr-mode none when off.")]
         public string? DraftPrs { get; init; }
+
+        [CommandOption("--pr-mode <MODE>")]
+        [Description("draft, ready or none: whether a queued run that meets its done-when pushes its branch and opens a pull request. inherit takes each project's. Inherit unless set.")]
+        public string? PrMode { get; init; }
     }
 
     /// <inheritdoc />
@@ -762,6 +796,28 @@ public sealed class TeamQueueSettingsCommand : AsyncCommand<TeamQueueSettingsCom
             return output.Fail($"'{settings.DraftPrs}' is not on or off.", ExitCode.InvalidArguments);
         }
 
+        if (settings.DraftPrs is not null && settings.PrMode is not null)
+        {
+            return output.Fail("Give --pr-mode or --draft-prs, not both.", ExitCode.InvalidArguments);
+        }
+
+        var inherit = string.Equals(settings.PrMode?.Trim(), InheritWord, StringComparison.OrdinalIgnoreCase);
+        PullRequestMode? mode = draft switch
+        {
+            true => PullRequestMode.Draft,
+            false => PullRequestMode.None,
+            null => null,
+        };
+
+        if (settings.PrMode is { } typedMode && !inherit)
+        {
+            if (!PullRequestModes.TryParse(typedMode, out mode) || mode is null)
+            {
+                return output.Fail(
+                    $"'{typedMode}' is not a pull request mode. Give draft, ready, none or {InheritWord}.", ExitCode.InvalidArguments);
+            }
+        }
+
         var (team, refused) = await TeamQueueing
             .TeamAsync(_teams, _library, _workspace, _projects, settings, cancellationToken)
             .ConfigureAwait(false);
@@ -792,9 +848,17 @@ public sealed class TeamQueueSettingsCommand : AsyncCommand<TeamQueueSettingsCom
                 into.HeldCap = held;
             }
 
-            if (draft is { } grant)
+            // Either way the old grant goes, so the mode is the only thing
+            // left saying what the queue does.
+            if (inherit)
             {
-                into.DraftPullRequests = grant;
+                into.PrMode = string.Empty;
+                into.DraftPullRequests = false;
+            }
+            else if (mode is { } chosen)
+            {
+                into.PrMode = PullRequestModes.Word(chosen);
+                into.DraftPullRequests = false;
             }
         }
 
