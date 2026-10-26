@@ -72,7 +72,11 @@
             {#each run.lead.questions as question (question)} Asked: {question}{/each}
           </p>
         {/if}
-        <p class="suggested"><b>Suggested: {run.suggested.label}.</b> {run.suggested.reason}</p>
+        {#if run.kind === 'handover'}
+          <p class="suggested"><b>It handed over what only you can do.</b> {run.suggested.reason} <a href={`#teams/${encodeURIComponent(run.id)}`}>Tick them off on its page</a>.</p>
+        {:else}
+          <p class="suggested"><b>Suggested: {run.suggested.label}.</b> {run.suggested.reason}</p>
+        {/if}
 
         <fieldset>
           <legend>What to do</legend>

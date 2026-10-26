@@ -526,6 +526,12 @@ In Studio, the run's page lists the same items above everything else, with
 **Done: tick it off** beside each one still open. It runs the same
 `team handover --check` command, in the name you are signed in as.
 
+Until every one is ticked, the run is listed by `loadout team blocked` and in
+Studio's Blocked section as `handover`, with a link to its page. It is offered
+setting aside or dropping, never carrying on. Carrying on would give the lead a
+turn with nothing in it that is the lead's to do, and it would hand the same
+criteria over again.
+
 Not yet: the run cannot push or open the pull request itself. That waits on
 the pull request work in "we need a way to", which will carry it out once you
 grant it. Once a run you ticked off ends done, the merge gate takes each
