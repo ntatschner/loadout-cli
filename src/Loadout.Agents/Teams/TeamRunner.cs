@@ -626,7 +626,7 @@ public sealed partial class TeamRunner : ITeamRunner
         _workers = new StartWorkersStep(sessions, new ReviewTreeStep(projects, git), fold, git);
         _open = new OpenRunStep(paths, time, lifetime, projects, sessions, declare);
         _limits = new RoundLimitsStep(time, ownership);
-        _leadReport = new LeadReportStep(sessions);
+        _leadReport = new LeadReportStep(sessions, new IntegrateStep(projects, git, paths));
         _briefRequests = new BriefRequestsStep(new DecideStep(time));
         _feedback = new FeedbackStep();
         _close = new CloseRunStep(fold, new MergeStep(projects, git, paths, new TidyStep(git), _workers), declare);

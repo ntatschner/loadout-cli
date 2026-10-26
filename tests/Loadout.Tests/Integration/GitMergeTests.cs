@@ -231,6 +231,52 @@ public sealed class GitMergeTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Branches_combined_in_a_tree_on_no_branch_leave_the_repository_as_it_was()
+    {
+        // What a run does when it hands over: one node's branch checked out on
+        // no branch, the next merged into it, and a branch made only at the end.
+        await BranchAsync("teams-run-one", "pong.txt", "pong");
+        await BranchAsync("teams-run-two", "ping.txt", "ping");
+
+        var before = (await GitAsync("rev-parse", "HEAD")).Trim();
+        var tree = Path.Combine(_root, "combining");
+
+        var added = await _git.AddDetachedWorktreeAsync(_repository, tree, "teams-run-one");
+        added.Succeeded.Should().BeTrue(added.Error);
+        added.Value!.Branch.Should().BeNull();
+
+        var merged = await _git.MergeAsync(tree, "teams-run-two");
+        merged.Succeeded.Should().BeTrue(merged.Error);
+        merged.Value!.Merged.Should().BeTrue();
+
+        (await _git.CreateBranchAsync(tree, "teams-run")).Succeeded.Should().BeTrue();
+        (await _git.RemoveWorktreeAsync(_repository, tree)).Succeeded.Should().BeTrue();
+
+        (await GitAsync("rev-parse", "HEAD")).Trim().Should().Be(before, "the repository's own branch is never moved");
+        (await GitAsync("status", "--porcelain")).Trim().Should().BeEmpty();
+        (await GitAsync("ls-tree", "--name-only", "teams-run")).Should().Contain("pong.txt").And.Contain("ping.txt");
+        Directory.Exists(tree).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task A_conflict_in_a_tree_on_no_branch_leaves_no_branch_once_the_tree_is_gone()
+    {
+        await BranchAsync("teams-run-one", "same.txt", "one");
+        await BranchAsync("teams-run-two", "same.txt", "two");
+
+        var branches = await GitAsync("branch", "--list");
+        var tree = Path.Combine(_root, "combining");
+
+        (await _git.AddDetachedWorktreeAsync(_repository, tree, "teams-run-one")).Succeeded.Should().BeTrue();
+
+        var merged = await _git.MergeAsync(tree, "teams-run-two");
+        merged.Value!.Merged.Should().BeFalse();
+
+        (await _git.RemoveWorktreeAsync(_repository, tree)).Succeeded.Should().BeTrue("an undone merge leaves nothing to force");
+        (await GitAsync("branch", "--list")).Should().Be(branches, "giving up made no branch and removed none");
+    }
+
+    [Fact]
     public async Task A_branch_ahead_of_the_main_one_arrives_as_a_fast_forward()
     {
         await BranchAsync("teams/run/one", "pong.txt", "pong");

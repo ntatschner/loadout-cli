@@ -350,6 +350,26 @@ public interface IGitManager
         CancellationToken ct = default);
 
     /// <summary>
+    /// Adds a linked working tree at a commit, on no branch.
+    /// </summary>
+    /// <remarks>
+    /// For work that should leave a branch behind only if it all goes
+    /// through. Whatever is committed here belongs to no branch until one is
+    /// made at it, so giving up means removing the tree and nothing else:
+    /// there is no half-made branch to delete, and no forced delete that could
+    /// one day take somebody's commits with it.
+    /// </remarks>
+    /// <param name="repositoryPath">The repository to add it to.</param>
+    /// <param name="path">Where the new tree goes. Its parent is created if missing.</param>
+    /// <param name="baseRef">The commit or branch to check out there.</param>
+    /// <param name="ct">Cancellation token.</param>
+    Task<OperationResult<GitWorktree>> AddDetachedWorktreeAsync(
+        string repositoryPath,
+        string path,
+        string baseRef,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Merges a branch into whatever the repository has checked out,
     /// preferring to move the pointer rather than make a commit.
     /// </summary>

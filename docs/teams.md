@@ -502,8 +502,18 @@ loadout team handover 20261023-1740-2677
   2. [ ] The contract test passes on Windows and Unix CI (needs-ci, from its wording)
         Push the run's work so CI runs, and see that it passes.
 
-The work is on teams-20261023-1740-2677-implementer-1, ...
+The work is on teams-20261023-1740-2677
 ```
+
+Where the work is on more than one node's branch, the run combines them into
+one, `teams-<run>`, before it hands over, so there is one branch to push and
+one CI run to wait for. It does this in a tree of its own under Loadout's
+state directory, starting from the first node's branch and merging the rest
+in. Your checkout is never touched. If two of them conflict, nothing is made,
+the handover names each node's branch as it is, and the run says which files
+conflicted. A run picked up and handed over again reuses `teams-<run>` if it
+is at the same commit, and otherwise makes `teams-<run>-2`. It never moves a
+branch you may already have pushed.
 
 Do what each one says, then tick it off with `--check` and its number. Each
 tick goes in the run's journal as review evidence in your name (`--by` names
@@ -512,9 +522,11 @@ somebody else). Once every one is ticked, the run is judged again through
 decides what comes back to the repository as it would have. A run picked up
 before then keeps what you ticked, and its lead is told those count as met.
 
-Not yet: the run cannot push or open the pull request itself, and does not
-combine its nodes' branches into one for you. Both wait on the pull request
-work in "we need a way to", which will carry them out once you grant them.
+Not yet: the run cannot push or open the pull request itself. That waits on
+the pull request work in "we need a way to", which will carry it out once you
+grant it. Once a run you ticked off ends done, the merge gate takes each
+node's branch into your repository as before. The combined branch is left
+where it is, for you to delete once it has landed.
 
 ### Picking up a run that stopped on questions
 
