@@ -3,6 +3,7 @@
 // and the reasons a run wants you. Ported from the design system's bundle.js
 // (Gate, Spend, NeedsYou). Kept apart from the components so what a press
 // runs can be checked without a page.
+import type { PermissionParts } from './api';
 import { quoted } from './commands';
 
 /**
@@ -253,6 +254,8 @@ export interface GateShown {
   brief?: string;
   proposal?: string[];
   held?: string[];
+  /** A permission's parts, drawn in place of the question where present. */
+  ask?: PermissionParts | null;
   disabledReason?: string;
   onanswer?: (answer: GateAnswer) => Promise<boolean | void> | boolean | void;
 }

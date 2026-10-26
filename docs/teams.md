@@ -221,6 +221,26 @@ edit it. So it may ask for things and it may never grant them.
   may ask, and what no rule covers is refused as before. A question nobody
   answers within five minutes is refused too, and says that is why rather than
   blaming the role.
+- **The question says what the node is trying to do before it shows the
+  command.** It used to be the raw command and nothing else, so you had to read
+  the shell to know what you were agreeing to. Now it opens with a plain line:
+  for a shell command, the agent's own description of it, and for Edit, Write,
+  Read, WebFetch and the other built-in tools, fixed wording such as
+  "implementer (builder) wants to change src/Foo.cs". Then it names the part of
+  a chained command the role refused, warns if the command writes, deletes,
+  pushes or uses the network, and shows the command on its own. The terminal,
+  the dashboard, Studio and the notices on your phone all show it that way. The
+  description is the agent's word, so it is cleaned of line breaks, backticks
+  and anything that looks like a secret, cut at 120 characters, and never shown
+  without the command. The warnings come from the command, whatever the
+  description says, so "read only: list the files" over `rm -rf src` still says
+  it deletes. They are word lists, and they miss things: a script that pushes
+  inside itself reads as running a script. Every call is checked against them,
+  including the allowed ones, and the result goes in the node's record, so you
+  can see whether they flag too much. MCP tools keep the old sentence, and so
+  does a question written by a build from before this. "Don't ask again" names
+  what it agrees to in words too, as "'git status' commands", while the rule
+  it stores is the same as before.
 - **A worker's settings are screened** exactly as a launch's are, by the same
   code: a node cannot be given a setting a launch could not.
 

@@ -119,6 +119,7 @@ export function gateOf(run: Run, gate: RunGate): GateShown {
     options: gate.options,
     recommendation: gate.recommendation,
     timer: timerWords(gate),
+    ask: gate.ask ?? null,
   };
 
   switch (kind) {

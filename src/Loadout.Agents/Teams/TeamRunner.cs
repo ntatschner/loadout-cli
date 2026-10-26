@@ -310,7 +310,7 @@ public interface ITeamConsole
     {
         ArgumentNullException.ThrowIfNull(ask);
 
-        var allowed = await ConfirmAsync(ask.Question, ct).ConfigureAwait(false);
+        var allowed = await ConfirmAsync(AskWording.View(ask)?.Text.TrimEnd('?') ?? ask.Question, ct).ConfigureAwait(false);
 
         return new AskAnswer(allowed, NodePermissions.Told(allowed, null), Chosen: allowed ? "yes" : "no");
     }

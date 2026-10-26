@@ -243,6 +243,19 @@ public sealed record QuestionTimer(DateTimeOffset At, string Does)
 /// <paramref name="Until"/> alone told somebody the run would stop when in
 /// fact it would carry on without them.
 /// </param>
+/// <param name="Said">
+/// What the call does, as the end of "wants to ...", worked out where the
+/// call's input was still to hand: the agent's own description of a shell
+/// command, cleaned, or fixed wording for a built-in tool. Null on an ask
+/// written before it was carried and on a tool with no wording, both of which
+/// keep the sentence they always had. <see cref="Target"/> stays the redacted
+/// command, because that is what a "don't ask again" rule is matched against.
+/// </param>
+/// <param name="Blocked">The part of a chained command the role refused.</param>
+/// <param name="Flags">
+/// What the command writes, deletes, pushes or reaches, from the command and
+/// never from the description: see <see cref="AskWording.Flags"/>.
+/// </param>
 /// <remarks>
 /// One shape for all three because they are one thing to whoever is answering:
 /// the run has stopped and wants a person. They were separate while only a
@@ -261,7 +274,10 @@ public sealed record PendingAsk(
     IReadOnlyList<string>? Options = null,
     string? Recommendation = null,
     DateTimeOffset? Until = null,
-    QuestionTimer? Timer = null)
+    QuestionTimer? Timer = null,
+    string? Said = null,
+    string? Blocked = null,
+    IReadOnlyList<string>? Flags = null)
 {
     /// <summary>The question, as a person reads it.</summary>
     /// <remarks>
@@ -277,7 +293,7 @@ public sealed record PendingAsk(
     public string Question =>
         Asked is { Length: > 0 } said
             ? said
-            : $"{Node} ({Role}) wants to use {Tool}"
+            : AskWording.Question(this) ?? $"{Node} ({Role}) wants to use {Tool}"
                 + (Target is { Length: > 0 } ? $" for '{Target}'" : string.Empty)
                 + ". Nothing in its role allows that. Let it";
 
@@ -342,11 +358,16 @@ public sealed record AskAnswer(
 /// The remedy this was about, where it was about one, so whoever is asked is
 /// asked about the remedy rather than about Bash.
 /// </param>
+/// <param name="Blocked">
+/// The part of a chained command that was refused, so whoever is asked is
+/// told which one. Null for a single command, where it is the whole of it.
+/// </param>
 public sealed record PermissionDecision(
     bool Allowed,
     string Reason,
     string? Rule = null,
-    RemedyStanding? Remedy = null);
+    RemedyStanding? Remedy = null,
+    string? Blocked = null);
 
 /// <summary>
 /// Decides what a node may do when its agent stops to ask.
@@ -476,6 +497,8 @@ public static partial class NodePermissions
                 Target = Clean(ask.Target),
                 Asked = Clean(ask.Asked),
                 Recommendation = Clean(ask.Recommendation),
+                Said = Clean(ask.Said),
+                Blocked = Clean(ask.Blocked),
             };
 
             Directory.CreateDirectory(directory);
@@ -915,7 +938,8 @@ public static partial class NodePermissions
                 return new PermissionDecision(
                     false,
                     $"'{Shorten(part)}' writes a file with >, and the {policy.Role} role may not write "
-                    + "files. Report what you needed and why, and let whoever briefed you decide.");
+                    + "files. Report what you needed and why, and let whoever briefed you decide.",
+                    Blocked: several ? Shorten(part) : null);
             }
 
             var one = DecideOne(policy, tool, WithoutDirectory(words));
@@ -923,7 +947,7 @@ public static partial class NodePermissions
             if (!one.Allowed)
             {
                 return several
-                    ? one with { Reason = $"Part of that command, '{Shorten(words)}': {one.Reason}" }
+                    ? one with { Reason = $"Part of that command, '{Shorten(words)}': {one.Reason}", Blocked = Shorten(words) }
                     : one;
             }
 
@@ -1065,7 +1089,13 @@ public static partial class NodePermissions
     public static string AgreedFileName(string role) => $"agreed-{Safe(role)}.jsonl";
 
     /// <summary>The option that allows a call and stops asking about ones like it.</summary>
-    public static string AlwaysOption(string rule) => $"yes, and don't ask again for {rule}";
+    /// <remarks>
+    /// The rule in words - "'git status' commands" rather than
+    /// "Bash(git status:*)" - while the rule stored is the rule itself. Both
+    /// ends of an answer build this from the same rule, so a chosen option is
+    /// still recognised.
+    /// </remarks>
+    public static string AlwaysOption(string rule) => $"yes, and don't ask again for {AskWording.Rule(rule)}";
 
     /// <summary>What the node is told when the person allowed it.</summary>
     public const string AllowedOnce = "The person running this team allowed it, for this call only.";

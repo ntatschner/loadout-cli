@@ -699,7 +699,7 @@ public sealed class LoadoutTools
         // written twice is written differently the second time.
         if (policy is not null && NodePermissions.Askable(policy, decision))
         {
-            decision = await AskedAsync(policy, tool_name, inputJson, tool_use_id, decision.Remedy)
+            decision = await AskedAsync(policy, tool_name, inputJson, tool_use_id, decision.Remedy, decision.Blocked)
                 .ConfigureAwait(false);
         }
 
@@ -739,7 +739,8 @@ public sealed class LoadoutTools
         string tool,
         string? inputJson,
         string? toolUseId,
-        RemedyStanding? remedy = null)
+        RemedyStanding? remedy = null,
+        string? blocked = null)
     {
         var directory = Path.GetDirectoryName(_scope.PolicyPath!);
 
@@ -778,7 +779,14 @@ public sealed class LoadoutTools
             // what it does, what it assumes and how you would know it worked.
             Kind: remedy is null ? "permission" : "remedy",
             Asked: remedy?.Asking(policy.Node, policy.Role),
-            Options: rule is null ? null : ["yes", NodePermissions.AlwaysOption(rule), "no"]);
+            Options: rule is null ? null : ["yes", NodePermissions.AlwaysOption(rule), "no"],
+
+            // The plain line, the part refused and what the command does,
+            // worked out here because this is the last place the call's whole
+            // input is to hand. Every surface reads them from the file.
+            Said: remedy is null ? AskWording.Said(tool, inputJson) : null,
+            Blocked: blocked is { Length: > 0 } part ? Loadout.Core.Security.SecretRedactor.Redact(part) : null,
+            Flags: AskWording.Flags(tool, NodePermissions.Target(inputJson)) is { Count: > 0 } flags ? flags : null);
 
         var answer = await NodePermissions
             .AskAsync(directory, ask, _time)
@@ -850,6 +858,11 @@ public sealed class LoadoutTools
                 allowed = decision.Allowed,
                 rule = decision.Rule,
                 reason = decision.Reason,
+
+                // Worked out for allowed calls as well as asked ones, so the
+                // record shows whether the word lists flag too much before
+                // anybody has learnt to ignore them.
+                flags = AskWording.Flags(tool, NodePermissions.Target(inputJson)) is { Count: > 0 } flags ? flags : null,
                 toolUseId,
             });
 
