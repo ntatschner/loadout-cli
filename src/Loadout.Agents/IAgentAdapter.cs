@@ -88,6 +88,11 @@ namespace Loadout.Agents;
 /// whose agent has no way to say so ignores it, and that conversation is
 /// resumed with nothing carried over.
 /// </param>
+/// <param name="RemoteControl">
+/// Whether to switch on the agent's own remote control for this session.
+/// Already settled by the launcher against what the agent advertises, so an
+/// adapter only places its switch; it is never set for a headless session.
+/// </param>
 public sealed record AgentLaunchContext(
     ProjectResolution Project,
     string WorkingDirectory,
@@ -108,7 +113,8 @@ public sealed record AgentLaunchContext(
     IReadOnlyList<string>? ReachableDirectories = null,
     string? OpeningPrompt = null,
     string? StudioSession = null,
-    bool LinksSession = false);
+    bool LinksSession = false,
+    bool RemoteControl = false);
 
 /// <summary>A fully resolved launch, ready to be handed to the process layer.</summary>
 /// <param name="Executable">Absolute path to the agent binary.</param>

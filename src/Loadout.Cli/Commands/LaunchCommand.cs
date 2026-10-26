@@ -70,6 +70,18 @@ public sealed class LaunchCommand : AsyncCommand<LaunchCommand.Settings>
         [CommandOption("--without <ID>")]
         [Description("Never load this specialist for this launch. Repeatable.")]
         public string[] Without { get; init; } = [];
+
+        [CommandOption("--remote")]
+        [Description(RemoteControlOption.OnDescription)]
+        public bool Remote { get; init; }
+
+        [CommandOption("--no-remote")]
+        [Description(RemoteControlOption.OffDescription)]
+        public bool NoRemote { get; init; }
+
+        /// <inheritdoc />
+        public override ValidationResult Validate() =>
+            RemoteControlOption.Validate(Remote, NoRemote, base.Validate);
     }
 
     /// <inheritdoc />
@@ -92,7 +104,8 @@ public sealed class LaunchCommand : AsyncCommand<LaunchCommand.Settings>
             ExcludedSpecialists: settings.Without,
             Mode: settings.Mode,
             DryRun: settings.DryRun,
-            TaskId: settings.TaskId);
+            TaskId: settings.TaskId,
+            RemoteControl: RemoteControlOption.From(settings.Remote, settings.NoRemote));
 
         var result = await _launcher.LaunchAsync(request, cancellationToken).ConfigureAwait(false);
         if (result.Failed)
@@ -169,6 +182,18 @@ public sealed class HereCommand : AsyncCommand<HereCommand.Settings>
         [CommandOption("--without <ID>")]
         [Description("Never load this specialist for this launch. Repeatable.")]
         public string[] Without { get; init; } = [];
+
+        [CommandOption("--remote")]
+        [Description(RemoteControlOption.OnDescription)]
+        public bool Remote { get; init; }
+
+        [CommandOption("--no-remote")]
+        [Description(RemoteControlOption.OffDescription)]
+        public bool NoRemote { get; init; }
+
+        /// <inheritdoc />
+        public override ValidationResult Validate() =>
+            RemoteControlOption.Validate(Remote, NoRemote, base.Validate);
     }
 
     /// <inheritdoc />
@@ -202,7 +227,8 @@ public sealed class HereCommand : AsyncCommand<HereCommand.Settings>
             ExcludedSpecialists: settings.Without,
             Mode: settings.Mode,
             DryRun: settings.DryRun,
-            TaskId: settings.TaskId);
+            TaskId: settings.TaskId,
+            RemoteControl: RemoteControlOption.From(settings.Remote, settings.NoRemote));
 
         var result = await _launcher.LaunchAsync(request, cancellationToken).ConfigureAwait(false);
         if (result.Failed)

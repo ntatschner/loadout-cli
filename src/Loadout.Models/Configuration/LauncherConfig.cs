@@ -30,6 +30,8 @@ public sealed class LauncherConfig
 
     public AgentToolSettings AgentTools { get; set; } = new();
 
+    public RemoteControlSettings RemoteControl { get; set; } = new();
+
     public InstructionContextSettings InstructionContext { get; set; } = new();
 
     /// <summary>Explicit extra directories to search for agent executables (spec section 65).</summary>
@@ -263,6 +265,20 @@ public sealed class AgentToolSettings
 {
     /// <summary>Whether the launcher serves its own tools to the agent it starts.</summary>
     public bool Enabled { get; set; } = true;
+}
+
+/// <summary>
+/// Whether sessions start with the agent's own remote control on.
+/// </summary>
+/// <remarks>
+/// Off unless set. The agent does the remoting, through its own service, so
+/// switching this on sends nothing anywhere through Loadout; it is the agent's
+/// switch, passed for every session so nobody has to remember it.
+/// </remarks>
+public sealed class RemoteControlSettings
+{
+    /// <summary>Whether interactive sessions start with remote control on.</summary>
+    public bool Enabled { get; set; }
 }
 
 public sealed class TelemetrySettings

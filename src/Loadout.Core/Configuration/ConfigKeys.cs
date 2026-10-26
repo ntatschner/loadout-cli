@@ -245,6 +245,13 @@ public static class ConfigKeys
             Group: Groups.Agents,
             IsFlag: true),
 
+        new("remote-control",
+            "Start sessions with the agent's own remote control on. The agent does the remoting; --remote and --no-remote override it for one launch",
+            (c, _) => Boolean(c.RemoteControl.Enabled),
+            (c, _, v) => c.RemoteControl.Enabled = Flag(v), false,
+            Group: Groups.Agents,
+            IsFlag: true),
+
         new("statusline-project", "Show the project slug in the agent status line",
             (c, _) => Boolean(c.Statusline.ShowProject),
             (c, _, v) => c.Statusline.ShowProject = Flag(v), false,

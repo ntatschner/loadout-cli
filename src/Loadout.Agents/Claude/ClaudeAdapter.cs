@@ -111,6 +111,10 @@ public sealed class ClaudeAdapter : AgentAdapterBase
             [ScreenReaderMode] = ["--ax-screen-reader"],
             [StrictMcp] = ["--strict-mcp-config"],
 
+            // Claude Code's own Remote Control, which puts the session in
+            // claude.ai/code and the Claude app. Claude Code does the remoting.
+            [AgentCapabilities.RemoteControl] = ["--remote-control"],
+
             // The positional prompt, as the usage line spells it:
             // "claude [options] [command] [prompt]".
             [OpeningPrompt] = ["[prompt]"],
@@ -156,6 +160,7 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         var arguments = new List<string>();
         var warnings = new List<string>();
 
+        AddRemoteControl(context, arguments);
         AddResume(context, descriptor, arguments, warnings);
         AddMcpServers(context, descriptor, arguments, warnings);
         await AddSettingsAsync(context, descriptor, arguments, warnings, ct).ConfigureAwait(false);
@@ -214,6 +219,26 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         "CLAUDE_CODE_BRIDGE_SESSION_ID",
         "CLAUDE_CODE_SESSION_ATTENDED",
     ];
+
+    /// <summary>
+    /// Switches on Claude Code's Remote Control, named after the project so
+    /// the session is recognisable in the Claude app.
+    /// </summary>
+    /// <remarks>
+    /// The name is always given. The option takes an optional value, so a bare
+    /// <c>--remote-control</c> followed by a passthrough argument that is not
+    /// an option would take that argument as its name.
+    /// </remarks>
+    private static void AddRemoteControl(AgentLaunchContext context, List<string> arguments)
+    {
+        if (!context.RemoteControl || context.Headless is not null)
+        {
+            return;
+        }
+
+        arguments.Add("--remote-control");
+        arguments.Add(context.Project.Entry.Name);
+    }
 
     /// <summary>
     /// Hands Claude the MCP servers the workspace declares for this project.

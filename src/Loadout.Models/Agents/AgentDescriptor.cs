@@ -78,4 +78,15 @@ public static class AgentCapabilities
     /// refused before anything starts rather than found out mid-run.
     /// </remarks>
     public const string Headless = "headless";
+
+    /// <summary>
+    /// The agent can make an interactive session reachable from elsewhere
+    /// through its own remote control, such as Claude Code's Remote Control.
+    /// </summary>
+    /// <remarks>
+    /// The agent does the remoting, not the launcher: all a launch does is
+    /// pass the agent's own switch. An agent without it is warned about when
+    /// the machine's default asked for it and refused when this session did.
+    /// </remarks>
+    public const string RemoteControl = "remote_control";
 }
