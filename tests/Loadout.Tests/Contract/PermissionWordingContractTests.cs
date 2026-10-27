@@ -72,4 +72,47 @@ public sealed class PermissionWordingContractTests
 
         JsonDocument.Parse(text).RootElement.GetProperty("behavior").GetString().Should().Be("deny");
     }
+
+    [BuiltCliFact]
+    public async Task The_question_waits_as_long_as_the_machine_says()
+    {
+        using var loadout = new LoadoutProcess();
+        var set = await loadout.RunAsync("config", "set", "team-permission-wait", "11");
+        set.ExitCode.Should().Be(0, set.StandardError);
+
+        var run = Path.Combine(loadout.Home, "run");
+        var policy = await NodePermissions.WriteAsync(
+            run,
+            new NodePolicy("20261026-1200-abcd", "implementer", "builder", ["Bash(ls:*)"], [], Ask: true));
+
+        using var session = await McpServerContractTests.StartAsync(loadout.Talking("mcp", "serve", "--policy", policy));
+
+        var before = DateTimeOffset.UtcNow;
+        var calling = session.RequestAsync("tools/call", new
+        {
+            name = "loadout_permission",
+            arguments = new { tool_name = "Bash", input = new { command = "rm -rf build" }, tool_use_id = "toolu_1" },
+        });
+
+        PendingAsk? asked = null;
+
+        for (var tries = 0; tries < 200 && asked is null; tries++)
+        {
+            asked = NodePermissions.Pending(run).FirstOrDefault();
+
+            if (asked is null)
+            {
+                await Task.Delay(100);
+            }
+        }
+
+        asked.Should().NotBeNull("the question has to be put where a person will find it");
+
+        // What the dashboard counts down to: eleven minutes, not the five it
+        // would be with nothing set.
+        asked!.Until.Should().BeCloseTo(before.AddMinutes(11), TimeSpan.FromMinutes(1));
+
+        await NodePermissions.AnswerAsync(run, asked.Id, new AskAnswer(false, NodePermissions.Told(false, null), "no"));
+        await calling;
+    }
 }

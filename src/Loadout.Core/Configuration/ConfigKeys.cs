@@ -90,8 +90,10 @@ public static class ConfigKeys
 
         // Apart from the machine's other settings, which ran off a page at
         // eighty by twenty-four once the trigger journal had a limit of its
-        // own; how long things are kept is one question in any case.
-        public const string Keeping = "Keeping and pruning";
+        // own; how long things are kept is one question in any case. How long
+        // a run waits for you joined it for the same two reasons: the machine's
+        // page was full again, and it is the same question asked of a run.
+        public const string Keeping = "Waiting and keeping";
         public const string Accessibility = "Accessibility";
         public const string Studio = "Studio";
 
@@ -486,6 +488,24 @@ public static class ConfigKeys
             Sample: "https://desk.example.ts.net:4800",
             Group: Groups.Machine,
             WhenUnset: "the address the dashboard is serving on, which only this machine can open"),
+
+        new("team-permission-wait",
+            "Minutes a node stopped mid-turn waits to be told whether it may use a tool, before it is refused",
+            (_, m) => m.Teams.PermissionWaitMinutes?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty,
+            (_, m, v) => m.Teams.PermissionWaitMinutes = v.Trim().Length == 0 ? null : Minutes(v),
+            true,
+            Sample: "30",
+            Group: Groups.Keeping,
+            WhenUnset: "5 minutes, or 30 where a link address is set, since then the answer comes by phone"),
+
+        new("team-question-wait",
+            "Minutes a lead's question, a gate or a brief waits for a person, before the run stops at it",
+            (_, m) => m.Teams.QuestionWaitMinutes?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty,
+            (_, m, v) => m.Teams.QuestionWaitMinutes = v.Trim().Length == 0 ? null : Minutes(v),
+            true,
+            Sample: "120",
+            Group: Groups.Keeping,
+            WhenUnset: "60 minutes"),
 
         new("team-office-set",
             "Which set of office art the dashboard's building is drawn from",

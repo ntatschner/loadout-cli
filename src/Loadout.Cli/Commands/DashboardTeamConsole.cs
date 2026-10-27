@@ -32,13 +32,21 @@ public sealed class DashboardTeamConsole : ITeamConsole
 {
     private readonly TimeProvider _time;
     private readonly Action<string> _note;
+    private readonly TimeSpan _wait;
 
     private string? _directory;
 
-    public DashboardTeamConsole(TimeProvider time, Action<string> note)
+    /// <param name="time">The clock.</param>
+    /// <param name="note">Told what the console is doing, for the run's output.</param>
+    /// <param name="wait">
+    /// How long a question waits for a person: the machine's
+    /// <c>team-question-wait</c>, or an hour where none is given.
+    /// </param>
+    public DashboardTeamConsole(TimeProvider time, Action<string> note, TimeSpan? wait = null)
     {
         _time = time;
         _note = note;
+        _wait = wait ?? NodePermissions.PersonPatience;
     }
 
     /// <inheritdoc />
@@ -99,7 +107,7 @@ public sealed class DashboardTeamConsole : ITeamConsole
 
             // The wait for somebody who has to read this before they can answer
             // it, which is not the wait for a node stopped mid-turn.
-            NodePermissions.PersonPatience,
+            _wait,
             ct).ConfigureAwait(false);
 
         return answer?.Allowed ?? false;
@@ -152,7 +160,7 @@ public sealed class DashboardTeamConsole : ITeamConsole
 
             // The wait for somebody who has to read this before they can answer
             // it, which is not the wait for a node stopped mid-turn.
-            NodePermissions.PersonPatience,
+            _wait,
             ct).ConfigureAwait(false);
 
         if (answer is null || !answer.Allowed)
@@ -213,7 +221,7 @@ public sealed class DashboardTeamConsole : ITeamConsole
 
             // The wait for somebody who has to read this before they can answer
             // it, which is not the wait for a node stopped mid-turn.
-            NodePermissions.PersonPatience,
+            _wait,
             ct).ConfigureAwait(false);
 
         // Nobody answered, or somebody chose to stop. Both end the run, and

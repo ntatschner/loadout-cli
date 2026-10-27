@@ -219,8 +219,13 @@ edit it. So it may ask for things and it may never grant them.
   could be asked past would make every deny list a suggestion. Where nobody is
   watching — an autonomous run, or any run down a pipe — nodes are not told they
   may ask, and what no rule covers is refused as before. A question nobody
-  answers within five minutes is refused too, and says that is why rather than
-  blaming the role.
+  answers in time is refused too, and says that is why rather than blaming the
+  role. In time means five minutes, or thirty once a link address is set,
+  because then the answer comes by phone from a notice. Change it with
+  `loadout config set team-permission-wait <minutes>`. A lead's question, a
+  gate or a brief waits an hour (`team-question-wait`). Both are read when the
+  question is asked, so a change applies to the next one, and the dashboard
+  counts down to whichever applies.
 - **The question says what the node is trying to do before it shows the
   command.** It used to be the raw command and nothing else, so you had to read
   the shell to know what you were agreeing to. Now it opens with a plain line:

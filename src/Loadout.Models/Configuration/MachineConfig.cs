@@ -250,6 +250,18 @@ public sealed class MachineTeams
     public string LinkAddress { get; set; } = string.Empty;
 
     /// <summary>
+    /// Minutes a node stopped mid-turn waits to be told whether it may use a
+    /// tool, or null for the default: 5, or 30 where a link address is set.
+    /// </summary>
+    public int? PermissionWaitMinutes { get; set; }
+
+    /// <summary>
+    /// Minutes a question, gate or brief put to a person waits, or null for
+    /// the default of 60.
+    /// </summary>
+    public int? QuestionWaitMinutes { get; set; }
+
+    /// <summary>
     /// Which set of office art the dashboard's building is drawn from, or empty
     /// for the one Loadout ships.
     /// </summary>
