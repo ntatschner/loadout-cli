@@ -48,6 +48,7 @@ public static class ServiceRegistration
         services.AddSingleton<Ideas.IDetachedLauncher, Ideas.DetachedLauncher>();
         services.AddSingleton<Ideas.IIdeaRefiner, Ideas.IdeaRefiner>();
         services.AddSingleton<Ideas.IDumpSplitter, Ideas.DumpSplitter>();
+        services.AddSingleton<Core.Ask.IAskAgent, Ask.AskAgentRound>();
         services.AddSingleton<Tasks.IDoneWhenProposer, Tasks.DoneWhenProposer>();
         services.AddSingleton<Core.Voice.VoiceEvidenceGatherer>();
         services.AddSingleton<Voice.IVoiceLearner, Voice.VoiceLearner>();

@@ -299,7 +299,8 @@ public static class StudioCoverage
         // palette is first met.
         ["find"] = new("home", StudioEffect.Reads),
         // Asked from the palette with a leading '?', which is on every page.
-        ["ask"] = new("home", StudioEffect.Reads),
+        // Reads unless the agent is asked, which spends a turn.
+        ["ask"] = new("home", StudioEffect.Changes, ChangesOnlyWith: ["--use-agent"]),
         ["usage"] = new("spend", StudioEffect.Reads),
         ["launches"] = new("spend", StudioEffect.Reads),
         ["instructions list"] = new("context", StudioEffect.Reads),

@@ -16,7 +16,7 @@
   import Sessions from './pages/Sessions.svelte';
   import LaunchSheet from './pages/LaunchSheet.svelte';
   import { search } from './lib/search';
-  import { approvePlan, askLoadout, type PaletteAsk } from './lib/ask';
+  import { approvePlan, askAgent, askLoadout, type PaletteAsk } from './lib/ask';
   import { conversation } from './lib/askConversation.svelte';
   import { commands } from './lib/api';
   import { runJob } from './lib/jobs';
@@ -237,6 +237,7 @@
   const paletteAsk: PaletteAsk = {
     conversation,
     asker: askLoadout,
+    agent: (query, resume) => askAgent(query, resume),
     approve: (plan, team, cap) =>
       approvePlan(plan, team, cap, {
         start: (path, words) => commands.run(path, words),

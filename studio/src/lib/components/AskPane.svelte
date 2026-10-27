@@ -10,11 +10,13 @@
     asking: boolean;
     /** Asks a near miss as it stands. */
     onrewrite: (rewrite: string) => void;
+    /** Asks the agent the request as it was typed. */
+    onagent: (query: string) => void;
     approve: (plan: AskPlan, team: string | null, cap: string) => Promise<string>;
     onclear: () => void;
   }
 
-  let { turns, asking, onrewrite, approve, onclear }: Props = $props();
+  let { turns, asking, onrewrite, onagent, approve, onclear }: Props = $props();
 </script>
 
 <div class="ls-ask" aria-live="polite">
@@ -33,7 +35,9 @@
         <p class="wait">Asking…</p>
       {:else}
         {@const reply = turn.reply}
-        <p class="badge">{reply.answeredBy === 'agent' ? 'Answered by the agent' : 'Answered by Loadout'}</p>
+        <p class="badge">
+          {#if reply.answeredBy === 'agent'}Answered by the agent{#if reply.agentCostUsd !== null}, for {usd(reply.agentCostUsd)}{/if}{:else}Answered by Loadout{/if}
+        </p>
         <p class="a">{reply.summary}</p>
         {#if reply.spend}
           <ul class="models" aria-label="By model">
@@ -58,6 +62,14 @@
             {#each reply.nearMisses as near (near.rewrite)}
               <li><button type="button" class="ls-opt" onclick={() => onrewrite(near.rewrite)}><span class="g" aria-hidden="true">?</span><span class="t">{near.rewrite}</span></button></li>
             {/each}
+            {#if reply.agentOffer}
+              <li>
+                <button type="button" class="ls-opt" disabled={asking} onclick={() => onagent(turn.query)}>
+                  <span class="g" aria-hidden="true">✦</span><span class="t">Ask the agent instead, for about {usd(reply.agentOffer.estimatedUsd)}</span>
+                  <span class="s">{reply.agentOffer.basis}. It only reads; anything it proposes comes back as a plan.</span>
+                </button>
+              </li>
+            {/if}
           </ul>
         {/if}
       {/if}

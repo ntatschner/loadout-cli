@@ -15,12 +15,16 @@ namespace Loadout.Agents.Ideas;
 /// <param name="AgentName">The agent to run, or null for the machine's default.</param>
 /// <param name="Model">The model to ask for, or null for the agent's own default.</param>
 /// <param name="DryRun">Build the invocation and start nothing.</param>
+/// <param name="McpConfigFiles">MCP server declarations to connect, and no others. None by default.</param>
+/// <param name="ResumeSessionId">The agent's own conversation to carry on, or null to start a new one.</param>
 public sealed record DetachedLaunchRequest(
     string WorkingDirectory,
     string Purpose,
     string? AgentName = null,
     string? Model = null,
-    bool DryRun = false);
+    bool DryRun = false,
+    IReadOnlyList<string>? McpConfigFiles = null,
+    string? ResumeSessionId = null);
 
 /// <summary>
 /// Starts an agent headlessly with none of a project's launch around it: no
@@ -142,6 +146,8 @@ internal sealed class DetachedLauncher : IDetachedLauncher
                 runtimeDirectory,
                 WorkspacePath: null,
                 PassthroughArguments: [],
+                ResumeSessionId: request.ResumeSessionId,
+                McpConfigFiles: request.McpConfigFiles,
                 Model: request.Model,
                 Headless: options);
 
@@ -180,6 +186,15 @@ internal sealed class DetachedLauncher : IDetachedLauncher
                 return OperationResult<HeadlessLaunch>.Ok(new HeadlessLaunch(
                     plan, warnings, preflight, request.Purpose, adapter.Value.Name,
                     launchId: null, session: null, complete: (_, _) => Task.CompletedTask));
+            }
+
+            // A round's transcript is put away when it ends, so the agent's
+            // own resume picker does not offer it; carrying one on means
+            // putting it back first, or the agent finds nothing to resume and
+            // ends the turn with an error before it starts.
+            if (request.ResumeSessionId is { Length: > 0 } resuming)
+            {
+                _transcripts.Restore(adapter.Value.Name, resuming);
             }
 
             var started = await _processes.StartPipedAsync(

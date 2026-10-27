@@ -1,7 +1,8 @@
 // Ask Loadout from the palette: '?' and a request in plain words, answered by
 // 'loadout ask' through the daemon. Anything that would start something comes
 // back as a plan, carried out only when somebody approves it here.
-import { readJson } from './api';
+import { readJson, type Job } from './api';
+import { runJob } from './jobs';
 import type { AskConversation } from './askConversation.svelte';
 
 export type AskShape = 'spend' | 'tasks' | 'team-queue' | 'terminals';
@@ -56,6 +57,12 @@ export interface AskReply {
   tasks: AskTask[];
   plan: AskPlan | null;
   nearMisses: { shape: AskShape; rewrite: string }[];
+  /** What asking the agent instead would cost, roughly, when nothing was placed. */
+  agentOffer: { estimatedUsd: number; basis: string } | null;
+  /** What the agent's turn cost, when it answered. Never part of a plan's cap. */
+  agentCostUsd: number | null;
+  /** The agent's conversation, for asking it the next request in the same one. */
+  agentSession: string | null;
 }
 
 /** One request and what came back, or why nothing did. */
@@ -81,6 +88,23 @@ export async function askLoadout(query: string): Promise<AskReply> {
   return arrived(await readJson<unknown>('ask', [`--query=${query}`]));
 }
 
+/** How long an agent turn may take before the page stops waiting for it. */
+export const AGENT_PATIENCE = 300_000;
+
+/**
+ * Asks the agent, because somebody chose to. A job rather than a read: it
+ * spends a turn, so a watch-only Studio refuses it.
+ */
+export async function askAgent(
+  query: string,
+  resume: string | null,
+  run: (path: string, words: string[], patience: number) => Promise<Job> = runJob,
+): Promise<AskReply> {
+  const job = await run('ask', ['--use-agent', `--query=${query}`, ...(resume ? ['--resume', resume] : []), '--json'], AGENT_PATIENCE);
+
+  return arrived(JSON.parse(job.output ?? 'null'));
+}
+
 /**
  * A reply as the command wrote it, with what it left out filled in. A
  * command's --json leaves out every property that is null, so a plan with
@@ -99,6 +123,9 @@ export function arrived(wire: unknown): AskReply {
     summary: reply.summary,
     tasks: reply.tasks ?? [],
     nearMisses: reply.nearMisses ?? [],
+    agentOffer: reply.agentOffer ?? null,
+    agentCostUsd: reply.agentCostUsd ?? null,
+    agentSession: reply.agentSession ?? null,
     spend: spend
       ? {
           estimate: true,
@@ -178,6 +205,8 @@ export function usd(amount: number): string {
 export interface PaletteAsk {
   conversation: AskConversation;
   asker: (query: string) => Promise<AskReply>;
+  /** Asks the agent, carrying on its conversation when there is one. */
+  agent: (query: string, resume: string | null) => Promise<AskReply>;
   approve: (plan: AskPlan, team: string | null, cap: string) => Promise<string>;
 }
 

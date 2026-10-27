@@ -25,6 +25,7 @@ public sealed class AskServiceTests : IDisposable
     private readonly TemporaryWorkspace _space = new();
     private readonly ConfigurationService _configuration;
     private readonly RecordingUsage _usage = new();
+    private readonly ScriptedAgent _agent = new();
     private readonly AskService _ask;
 
     public AskServiceTests()
@@ -44,7 +45,8 @@ public sealed class AskServiceTests : IDisposable
             new SpecialistLibrary(),
             _space.Workspace,
             _space.Paths,
-            new FixedTime(Now));
+            new FixedTime(Now),
+            _agent);
     }
 
     public void Dispose() => _space.Dispose();
@@ -181,6 +183,84 @@ public sealed class AskServiceTests : IDisposable
         var log = await File.ReadAllTextAsync(AskService.UnplacedLog(_space.Paths));
 
         log.Should().Contain("who broke the build").And.NotContain("ghp_abcdefghijklmnopqrstuvwxyz0123456789");
+    }
+
+    [Fact]
+    public async Task A_request_it_cannot_place_offers_the_agent_at_a_first_guess_and_never_asks_it()
+    {
+        await RegisterAsync("alpha");
+
+        var reply = await AskAsync("who broke the build");
+
+        reply.AgentOffer.Should().Be(new AskAgentOffer(AskService.FirstGuessUsd, "a first guess, until the agent has been asked a few times"));
+        _agent.Asked.Should().BeEmpty("the agent runs only when somebody chooses it");
+    }
+
+    [Fact]
+    public async Task What_the_agent_proposes_becomes_the_same_plan_with_its_cost_kept_apart()
+    {
+        await RegisterAsync("alpha");
+        await TaskAsync("alpha", "small", "Rename a flag", doneWhen: 1);
+
+        _agent.Next = new AskAgentTurn(null, new AskRequest(AskShape.TeamQueue, Count: 1, Pick: Core.Tasks.TaskPick.Easy, Team: "bug-hunt", Start: true), 0.12m, "session-1");
+
+        var byAgent = await _ask.AskAgentAsync("get the bug people going on something small", null);
+        var byParser = await AskAsync("queue one easy task for bug-hunt and start it");
+
+        byAgent.Succeeded.Should().BeTrue(byAgent.Error);
+
+        var reply = byAgent.Value!;
+
+        reply.Kind.Should().Be(AskReplyKind.Plan);
+        reply.AnsweredBy.Should().Be("agent");
+        reply.AgentCostUsd.Should().Be(0.12m);
+        reply.AgentSession.Should().Be("session-1");
+        reply.Plan!.Steps.Select(step => step.Says).Should().Equal(byParser.Plan!.Steps.Select(step => step.Says));
+        reply.Plan.Cap.IsSet.Should().BeFalse("the agent's turn is not part of the plan's cap");
+    }
+
+    [Fact]
+    public async Task An_answer_in_words_comes_back_as_the_agents_and_a_follow_up_carries_its_conversation_on()
+    {
+        await RegisterAsync("alpha");
+
+        _agent.Next = new AskAgentTurn("Nobody broke it; it was never built.", null, 0.05m, "session-2");
+
+        var reply = (await _ask.AskAgentAsync("who broke the build", "session-1")).Value!;
+
+        reply.Kind.Should().Be(AskReplyKind.Answer);
+        reply.Summary.Should().Be("Nobody broke it; it was never built.");
+        _agent.Asked.Should().ContainSingle().Which.Resume.Should().Be("session-1");
+        _agent.Asked[0].Context.Project.Should().Be("alpha");
+    }
+
+    [Fact]
+    public async Task The_estimate_follows_what_recent_turns_cost()
+    {
+        await RegisterAsync("alpha");
+
+        foreach (var cost in new[] { 0.10m, 0.30m, 0.20m })
+        {
+            _agent.Next = new AskAgentTurn("ok", null, cost, null);
+            (await _ask.AskAgentAsync("anything", null)).Succeeded.Should().BeTrue();
+        }
+
+        _ask.Estimate().Should().Be(new AskAgentOffer(0.20m, "the middle of the last 3 turn(s)"));
+    }
+
+    /// <summary>An agent that answers with whatever it is given next, and remembers each time it was asked.</summary>
+    private sealed class ScriptedAgent : IAskAgent
+    {
+        public AskAgentTurn Next { get; set; } = new("ok", null, 0m, null);
+
+        public List<(string Query, AskAgentContext Context, string? Resume)> Asked { get; } = [];
+
+        public Task<OperationResult<AskAgentTurn>> AskAsync(string query, AskAgentContext context, string? resumeSessionId, CancellationToken ct = default)
+        {
+            Asked.Add((query, context, resumeSessionId));
+
+            return Task.FromResult(OperationResult<AskAgentTurn>.Ok(Next));
+        }
     }
 
     /// <summary>A usage service that answers with whatever models it is given, and remembers what it was asked.</summary>

@@ -24,12 +24,16 @@ const PLAN: AskPlan = {
 };
 
 function reply(query: string, extra: Partial<AskReply> = {}): AskReply {
-  return { query, kind: 'answer', answeredBy: 'loadout', summary: `Answer to ${query}`, spend: null, tasks: [], plan: null, nearMisses: [], ...extra };
+  return { query, kind: 'answer', answeredBy: 'loadout', summary: `Answer to ${query}`, spend: null, tasks: [], plan: null, nearMisses: [], agentOffer: null, agentCostUsd: null, agentSession: null, ...extra };
 }
 
-function setup(asker: PaletteAsk['asker'], approve: PaletteAsk['approve'] = vi.fn(async () => 'done')) {
+function setup(
+  asker: PaletteAsk['asker'],
+  approve: PaletteAsk['approve'] = vi.fn(async () => 'done'),
+  agent: PaletteAsk['agent'] = vi.fn(async (query: string) => reply(query, { answeredBy: 'agent' })),
+) {
   const conversation = new AskConversation();
-  const ask: PaletteAsk = { conversation, asker, approve };
+  const ask: PaletteAsk = { conversation, asker, approve, agent };
   const onclose = vi.fn();
 
   render(CommandPalette, { groups: [{ name: 'Go to', items: [{ key: 'home', label: 'Home', sub: 'page' }] }], ask, onclose });
@@ -205,5 +209,69 @@ describe('a reply as the command sends it', () => {
     expect(reply.plan!.steps[0].task).toBeNull();
     expect(reply.spend).toBeNull();
     expect(startingCap(reply.plan!)).toBe('');
+  });
+});
+
+describe('the agent, only when chosen', () => {
+  const unplaced = (query: string) =>
+    reply(query, { kind: 'unplaced', nearMisses: [{ shape: 'tasks', rewrite: 'list 5 open tasks across all projects' }], agentOffer: { estimatedUsd: 0.25, basis: 'a first guess' } });
+
+  it('offers the agent with its rough cost, and asks it nothing until that row is chosen', async () => {
+    const agent = vi.fn(async (query: string) => reply(query, { answeredBy: 'agent', agentCostUsd: 0.12, agentSession: 's-1', summary: 'Nobody broke it.' }));
+    const { box } = setup(async (query) => unplaced(query), undefined, agent);
+
+    await fireEvent.input(box, { target: { value: '? who broke the build' } });
+    await fireEvent.keyDown(box, { key: 'Enter' });
+
+    const row = await screen.findByRole('button', { name: /Ask the agent instead, for about \$0\.25/ });
+    expect(agent).not.toHaveBeenCalled();
+
+    await fireEvent.click(row);
+
+    expect(agent).toHaveBeenCalledWith('who broke the build', null);
+    expect(await screen.findByText('Nobody broke it.')).toBeTruthy();
+    expect(screen.getByText(/Answered by the agent, for \$0\.12/)).toBeTruthy();
+
+    // A second request the agent is chosen for carries its conversation on.
+    await fireEvent.input(box, { target: { value: '? and who fixed it' } });
+    await fireEvent.keyDown(box, { key: 'Enter' });
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /Ask the agent instead/ })).toHaveLength(2));
+    await fireEvent.click(screen.getAllByRole('button', { name: /Ask the agent instead/ })[1]);
+
+    expect(agent).toHaveBeenLastCalledWith('and who fixed it', 's-1');
+  });
+
+  it("carries the agent's conversation on to the next request, until it is cleared", async () => {
+    const conversation = new AskConversation();
+    const agent = vi.fn(async (query: string, resume: string | null) => reply(query, { answeredBy: 'agent', agentSession: resume ?? 's-1' }));
+
+    await conversation.ask('first', (query) => agent(query, conversation.agentSession));
+    await conversation.ask('second', (query) => agent(query, conversation.agentSession));
+
+    expect(agent.mock.calls).toEqual([['first', null], ['second', 's-1']]);
+
+    conversation.clear();
+    expect(conversation.agentSession).toBeNull();
+  });
+
+  it('asks the agent as a job, with the session to carry on, and fills in what the reply left out', async () => {
+    const { askAgent } = await import('../ask');
+    const run = vi.fn(async () => ({ output: JSON.stringify({ query: 'q', kind: 'answer', answeredBy: 'agent', summary: 'done', agentCostUsd: 0.1 }) }) as never);
+
+    const answered = await askAgent('q', 's-9', run);
+
+    expect(run).toHaveBeenCalledWith('ask', ['--use-agent', '--query=q', '--resume', 's-9', '--json'], 300_000);
+    expect(answered.agentSession).toBeNull();
+    expect(answered.agentCostUsd).toBe(0.1);
+  });
+
+  it('offers no agent row when the reply carries no offer', async () => {
+    const { box } = setup(async (query) => reply(query, { kind: 'unplaced', nearMisses: [{ shape: 'spend', rewrite: 'how much did I spend in the last 7 days across all projects' }] }));
+
+    await fireEvent.input(box, { target: { value: '? hello' } });
+    await fireEvent.keyDown(box, { key: 'Enter' });
+    await screen.findByRole('button', { name: /how much did I spend/ });
+
+    expect(screen.queryByRole('button', { name: /Ask the agent/ })).toBeNull();
   });
 });

@@ -6,6 +6,8 @@ import type { AskReply, AskTurn } from './ask';
 export class AskConversation {
   turns = $state<AskTurn[]>([]);
   asking = $state(false);
+  /** The agent's conversation, once it has been asked, so a follow-up carries it on. */
+  agentSession = $state<string | null>(null);
   #next = 1;
 
   /** Asks, adding the request at once and its reply, or why there was none, when it comes. */
@@ -17,6 +19,10 @@ export class AskConversation {
 
     try {
       const reply = await asker(query);
+
+      if (reply.agentSession) {
+        this.agentSession = reply.agentSession;
+      }
 
       this.turns = this.turns.map((turn) => (turn.id === id ? { ...turn, reply } : turn));
     } catch (error) {
@@ -30,6 +36,7 @@ export class AskConversation {
 
   clear(): void {
     this.turns = [];
+    this.agentSession = null;
   }
 }
 

@@ -49,6 +49,14 @@ public sealed class AskCommand : AsyncCommand<AskCommand.Settings>
         [Description("The request as one option, for one starting with a minus, or as Studio sends it: --query=\"-5 tasks\".")]
         public string? Option { get; init; }
 
+        [CommandOption("--use-agent")]
+        [Description("Ask the configured agent instead, with tools that only read. It costs a turn, shown in the answer; anything it proposes is a plan, as Loadout's own are.")]
+        public bool UseAgent { get; init; }
+
+        [CommandOption("--resume <SESSION>")]
+        [Description("With --use-agent, carry on the agent's conversation from an earlier answer, as its agentSession gave it.")]
+        public string? Resume { get; init; }
+
         public string Query => Option ?? string.Join(' ', Words);
 
         public override ValidationResult Validate() =>
@@ -56,7 +64,9 @@ public sealed class AskCommand : AsyncCommand<AskCommand.Settings>
                 ? ValidationResult.Error("Give the request once: after the command, or as --query, not both.")
                 : Words.Length == 0 && string.IsNullOrWhiteSpace(Option)
                     ? ValidationResult.Error("Say what to ask: loadout ask how much did I spend this week")
-                    : base.Validate();
+                    : Resume is not null && !UseAgent
+                        ? ValidationResult.Error("--resume carries on the agent's conversation, so it goes with --use-agent.")
+                        : base.Validate();
     }
 
     /// <inheritdoc />
@@ -66,7 +76,14 @@ public sealed class AskCommand : AsyncCommand<AskCommand.Settings>
 
         var output = new CommandOutput(_console, settings);
 
-        var result = await _ask.AskAsync(settings.Query, cancellationToken).ConfigureAwait(false);
+        if (settings.UseAgent && !output.IsJson)
+        {
+            output.Meanwhile("[dim]Asking the agent. This takes a little while and costs a turn.[/]");
+        }
+
+        var result = settings.UseAgent
+            ? await _ask.AskAgentAsync(settings.Query, settings.Resume, cancellationToken).ConfigureAwait(false)
+            : await _ask.AskAsync(settings.Query, cancellationToken).ConfigureAwait(false);
 
         if (result.Failed)
         {
@@ -80,6 +97,11 @@ public sealed class AskCommand : AsyncCommand<AskCommand.Settings>
             output.WriteJson(Json(reply));
 
             return CommandOutput.Success();
+        }
+
+        if (reply.AnsweredBy == "agent")
+        {
+            output.WriteLine($"[dim]Answered by the agent, for {(reply.AgentCostUsd is { } spent ? Usd(spent) : "an unknown cost")}.[/]");
         }
 
         output.WriteLine(Markup.Escape(reply.Summary));
@@ -141,6 +163,18 @@ public sealed class AskCommand : AsyncCommand<AskCommand.Settings>
         foreach (var near in reply.NearMisses)
         {
             output.WriteLine($"  [dim]try[/] loadout ask {Markup.Escape(near.Rewrite)}");
+        }
+
+        if (reply.AgentOffer is { } offer)
+        {
+            output.WriteLine(
+                $"  [dim]or ask the agent, for about {Usd(offer.EstimatedUsd)} ({Markup.Escape(offer.Basis)}):[/] "
+                + $"loadout ask --use-agent {Markup.Escape(settings.Query)}");
+        }
+
+        if (reply.AgentSession is { } session)
+        {
+            output.WriteLine($"[dim]To carry on with the agent:[/] loadout ask --use-agent --resume {Markup.Escape(session)} <request>");
         }
 
         return CommandOutput.Success();
@@ -222,6 +256,9 @@ public sealed class AskCommand : AsyncCommand<AskCommand.Settings>
             }
             : null,
         nearMisses = reply.NearMisses.Select(near => new { shape = Shape(near.Shape), rewrite = near.Rewrite }),
+        agentOffer = reply.AgentOffer is { } offer ? new { estimatedUsd = offer.EstimatedUsd, basis = offer.Basis } : null,
+        agentCostUsd = reply.AgentCostUsd,
+        agentSession = reply.AgentSession,
     };
 
     private static object Task(RankedTask ranked) => new

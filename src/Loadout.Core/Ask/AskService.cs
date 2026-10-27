@@ -133,6 +133,9 @@ public sealed record AskPlan(
 /// <param name="Tasks">Tasks listed or ranked, for a task request.</param>
 /// <param name="Plan">The plan, for a request that starts something.</param>
 /// <param name="NearMisses">The closest built-in requests, when nothing was placed.</param>
+/// <param name="AgentOffer">What asking the agent instead would cost, roughly, when nothing was placed and an agent can be asked.</param>
+/// <param name="AgentCostUsd">What the agent's turn cost, when the agent was asked. Never part of a plan's cap.</param>
+/// <param name="AgentSession">The agent's conversation, for asking it the next request in the same one.</param>
 public sealed record AskReply(
     string Query,
     AskReplyKind Kind,
@@ -142,7 +145,15 @@ public sealed record AskReply(
     AskSpend? Spend,
     IReadOnlyList<RankedTask> Tasks,
     AskPlan? Plan,
-    IReadOnlyList<AskNearMiss> NearMisses);
+    IReadOnlyList<AskNearMiss> NearMisses,
+    AskAgentOffer? AgentOffer = null,
+    decimal? AgentCostUsd = null,
+    string? AgentSession = null);
+
+/// <summary>What asking the agent would cost, before it is asked.</summary>
+/// <param name="EstimatedUsd">The guess.</param>
+/// <param name="Basis">Where the guess comes from, in words.</param>
+public sealed record AskAgentOffer(decimal EstimatedUsd, string Basis);
 
 /// <summary>Answers a typed request with Loadout's own logic.</summary>
 public interface IAskService
@@ -151,6 +162,15 @@ public interface IAskService
     /// <param name="query">What was typed.</param>
     /// <param name="ct">Cancels a scan of a large history.</param>
     Task<OperationResult<AskReply>> AskAsync(string query, CancellationToken ct = default);
+
+    /// <summary>
+    /// Asks the agent, because somebody chose to. Its request is run as one
+    /// Loadout placed would be; it never acts.
+    /// </summary>
+    /// <param name="query">What was typed.</param>
+    /// <param name="resumeSessionId">The agent's conversation to carry on, or null for a new one.</param>
+    /// <param name="ct">Cancels the round.</param>
+    Task<OperationResult<AskReply>> AskAgentAsync(string query, string? resumeSessionId, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -187,6 +207,7 @@ internal sealed class AskService : IAskService
     private readonly IWorkspaceManager _workspace;
     private readonly IPlatformPaths _paths;
     private readonly TimeProvider _time;
+    private readonly IAskAgent? _agent;
 
     public AskService(
         IUsageService usage,
@@ -197,8 +218,10 @@ internal sealed class AskService : IAskService
         ISpecialistLibrary library,
         IWorkspaceManager workspace,
         IPlatformPaths paths,
-        TimeProvider time)
+        TimeProvider time,
+        IAskAgent? agent = null)
     {
+        _agent = agent;
         _teams = teams;
         _library = library;
         _workspace = workspace;
@@ -213,6 +236,16 @@ internal sealed class AskService : IAskService
     /// <summary>Where requests that could not be placed are kept, one JSON object a line.</summary>
     internal static string UnplacedLog(IPlatformPaths paths) =>
         Path.Combine(paths.Paths.State, "ask", "unplaced.jsonl");
+
+    /// <summary>What each agent turn cost, one JSON object a line, for the next estimate.</summary>
+    internal static string AgentLog(IPlatformPaths paths) =>
+        Path.Combine(paths.Paths.State, "ask", "agent-turns.jsonl");
+
+    /// <summary>The guess offered before there is any history to go on.</summary>
+    internal const decimal FirstGuessUsd = 0.25m;
+
+    /// <summary>How many recent turns the estimate is taken from.</summary>
+    internal const int EstimatedFrom = 10;
 
     /// <inheritdoc />
     public async Task<OperationResult<AskReply>> AskAsync(
@@ -257,8 +290,100 @@ internal sealed class AskService : IAskService
                 null,
                 [],
                 null,
-                placement.NearMisses));
+                placement.NearMisses,
+                AgentOffer: _agent is null ? null : Estimate()));
         }
+
+        return await RunAsync(query, request, projects, teams, now, ct).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<OperationResult<AskReply>> AskAgentAsync(
+        string query,
+        string? resumeSessionId,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        if (AskParser.Normalise(query).Length == 0)
+        {
+            return OperationResult<AskReply>.Fail("Ask something first.", ExitCode.InvalidArguments);
+        }
+
+        if (_agent is null)
+        {
+            return OperationResult<AskReply>.Fail("No agent can be asked from here.", ExitCode.AgentUnavailable);
+        }
+
+        var listed = await _projects.ListAsync(ct).ConfigureAwait(false);
+
+        if (listed.Failed)
+        {
+            return OperationResult<AskReply>.Fail(listed.Error!, listed.ExitCode);
+        }
+
+        var projects = listed.Value!
+            .Select(project => (project.Entry.Slug, (IReadOnlyList<string>)[project.Entry.Name, .. project.Entry.Aliases]))
+            .ToList();
+
+        if (projects.Count == 0)
+        {
+            return OperationResult<AskReply>.Fail(
+                "There are no projects registered, so there is nothing for the agent to read about.",
+                ExitCode.ProjectNotFound);
+        }
+
+        var teams = await TeamsAsync(ct).ConfigureAwait(false);
+        var now = _time.GetLocalNow();
+        var today = DateOnly.FromDateTime(now.DateTime);
+        var vocabulary = new AskVocabulary(projects, teams);
+
+        // Its tools read about one project: the one the request names, when
+        // the parser found one, or else the one used most recently, which the
+        // project list puts first.
+        var about = AskParser.Place(query, vocabulary, today).Request?.Project ?? projects[0].Slug;
+
+        var turned = await _agent.AskAsync(query, new AskAgentContext(vocabulary, today, about), resumeSessionId, ct)
+            .ConfigureAwait(false);
+
+        if (turned.Failed)
+        {
+            return OperationResult<AskReply>.Fail(turned.Error!, turned.ExitCode);
+        }
+
+        var turn = turned.Value!;
+
+        Spent(turn.CostUsd, now);
+
+        if (turn.Request is not { } request)
+        {
+            return OperationResult<AskReply>.Ok(new AskReply(
+                query, AskReplyKind.Answer, "agent", turn.Answer ?? string.Empty, null, null, [], null, [],
+                AgentCostUsd: turn.CostUsd, AgentSession: turn.SessionId));
+        }
+
+        var ran = await RunAsync(query, request, projects, teams, now, ct).ConfigureAwait(false);
+
+        return ran.Failed
+            ? ran
+            : OperationResult<AskReply>.Ok(ran.Value! with
+            {
+                AnsweredBy = "agent",
+                AgentCostUsd = turn.CostUsd,
+                AgentSession = turn.SessionId,
+            });
+    }
+
+    /// <summary>Runs a placed request, whoever placed it.</summary>
+    private async Task<OperationResult<AskReply>> RunAsync(
+        string query,
+        AskRequest request,
+        List<(string Slug, IReadOnlyList<string> Names)> projects,
+        IReadOnlyList<string> teams,
+        DateTimeOffset now,
+        CancellationToken ct)
+    {
+        var today = DateOnly.FromDateTime(now.DateTime);
 
         return request.Shape switch
         {
@@ -266,6 +391,71 @@ internal sealed class AskService : IAskService
             AskShape.Tasks => await TasksAsync(query, request, projects, now, ct).ConfigureAwait(false),
             _ => await PlanAsync(query, request, projects, teams, now, ct).ConfigureAwait(false),
         };
+    }
+
+    /// <summary>
+    /// What the next agent turn will cost, roughly: the middle of the last
+    /// few, or a first guess until there are any.
+    /// </summary>
+    internal AskAgentOffer Estimate()
+    {
+        var costs = new List<decimal>();
+
+        try
+        {
+            if (File.Exists(AgentLog(_paths)))
+            {
+                foreach (var line in File.ReadLines(AgentLog(_paths)).TakeLast(EstimatedFrom))
+                {
+                    try
+                    {
+                        using var document = JsonDocument.Parse(line);
+
+                        if (document.RootElement.TryGetProperty("costUsd", out var cost) && cost.TryGetDecimal(out var usd))
+                        {
+                            costs.Add(usd);
+                        }
+                    }
+                    catch (JsonException)
+                    {
+                        // A torn line is one fewer turn to go on, nothing more.
+                    }
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            costs.Clear();
+        }
+
+        if (costs.Count == 0)
+        {
+            return new AskAgentOffer(FirstGuessUsd, "a first guess, until the agent has been asked a few times");
+        }
+
+        costs.Sort();
+
+        var middle = costs.Count % 2 == 1
+            ? costs[costs.Count / 2]
+            : (costs[(costs.Count / 2) - 1] + costs[costs.Count / 2]) / 2;
+
+        return new AskAgentOffer(middle, $"the middle of the last {costs.Count} turn(s)");
+    }
+
+    /// <summary>Notes what an agent turn cost. Best effort: losing one only makes the next guess rougher.</summary>
+    private void Spent(decimal costUsd, DateTimeOffset now)
+    {
+        try
+        {
+            var log = AgentLog(_paths);
+
+            Directory.CreateDirectory(Path.GetDirectoryName(log)!);
+            File.AppendAllText(log, JsonSerializer.Serialize(new { utc = now.ToUniversalTime(), costUsd }) + "\n");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The estimate goes on what it has.
+        }
     }
 
     private async Task<OperationResult<AskReply>> SpendAsync(

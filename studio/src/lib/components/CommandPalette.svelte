@@ -161,6 +161,7 @@
         turns={ask.conversation.turns}
         asking={ask.conversation.asking}
         onrewrite={(rewrite) => askNow(rewrite)}
+        onagent={(asked) => void ask.conversation.ask(asked, (query) => ask.agent(query, ask.conversation.agentSession))}
         approve={ask.approve}
         onclear={() => ask.conversation.clear()}
       />

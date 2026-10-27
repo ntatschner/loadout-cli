@@ -42,13 +42,15 @@ public static class SelfServerConfig
     /// the agent's permission questions from. Null for an ordinary session,
     /// where a person at the keyboard answers their own.
     /// </param>
+    /// <param name="readOnly">Serve only the tools that read, for an agent that may look and not act.</param>
     public static IReadOnlyList<string> Write(
         bool enabled,
         string slug,
         string runtimeDirectory,
         List<string> warnings,
         string? executablePath = null,
-        string? policyPath = null)
+        string? policyPath = null,
+        bool readOnly = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(slug);
         ArgumentException.ThrowIfNullOrWhiteSpace(runtimeDirectory);
@@ -104,9 +106,12 @@ public static class SelfServerConfig
         // The prefix first: under the development host the executable is
         // dotnet and the assembly has to be its first argument, before any of
         // the launcher's own.
-        string[] args = policyPath is { Length: > 0 }
-            ? [.. prefix, "mcp", "serve", "--project", slug, "--policy", policyPath]
-            : [.. prefix, "mcp", "serve", "--project", slug];
+        string[] args =
+        [
+            .. prefix, "mcp", "serve", "--project", slug,
+            .. policyPath is { Length: > 0 } ? (string[])["--policy", policyPath] : [],
+            .. readOnly ? (string[])["--read-only"] : [],
+        ];
 
         var document = new
         {
