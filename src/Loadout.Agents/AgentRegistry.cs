@@ -1,6 +1,7 @@
 using Loadout.Agents.Claude;
 using Loadout.Agents.Codex;
 using Loadout.Agents.Generic;
+using Loadout.Agents.Grok;
 using Loadout.Models;
 using Loadout.Models.Agents;
 using Loadout.Models.Configuration;
@@ -36,6 +37,7 @@ public sealed class AgentRegistry : IAgentRegistry
         {
             new ClaudeAdapter(resolver, processes, searchPaths),
             new CodexAdapter(resolver, processes, searchPaths),
+            new GrokAdapter(resolver, processes, searchPaths),
         };
 
         // Configured agents are added after the built-ins but can override one

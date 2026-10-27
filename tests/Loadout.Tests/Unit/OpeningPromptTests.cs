@@ -2,6 +2,7 @@ using FluentAssertions;
 using Loadout.Agents;
 using Loadout.Agents.Claude;
 using Loadout.Agents.Codex;
+using Loadout.Agents.Grok;
 using Loadout.Models.Projects;
 using Loadout.Tests.Fakes;
 using Xunit;
@@ -35,6 +36,13 @@ public sealed class OpeningPromptTests : IDisposable
         Usage: codex [OPTIONS] [PROMPT]
                codex [OPTIONS] <COMMAND> [ARGS]
           -m, --model <MODEL>
+        """;
+
+    private const string GrokHelp = """
+        Usage: grok [options] [prompt]
+          --cwd <path>
+          --model <model>
+          --rules <text>
         """;
 
     private readonly string _runtime =
@@ -125,6 +133,20 @@ public sealed class OpeningPromptTests : IDisposable
         var adapter = new CodexAdapter(
             new StubResolver(Path.Combine(Path.GetTempPath(), "codex")),
             new StubProcessLauncher(CodexHelp),
+            []);
+
+        var result = await adapter.BuildInvocationAsync(Context("Onboard this project"));
+
+        result.Succeeded.Should().BeTrue(result.Error);
+        result.Value!.Arguments.TakeLast(2).Should().Equal("--", "Onboard this project");
+    }
+
+    [Fact]
+    public async Task Grok_is_started_with_its_first_message_too()
+    {
+        var adapter = new GrokAdapter(
+            new StubResolver(Path.Combine(Path.GetTempPath(), "grok")),
+            new StubProcessLauncher(GrokHelp),
             []);
 
         var result = await adapter.BuildInvocationAsync(Context("Onboard this project"));
