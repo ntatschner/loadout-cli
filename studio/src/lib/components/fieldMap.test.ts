@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import FieldMap from './FieldMap.svelte';
+import { readFileSync } from 'node:fs';
 
 /** Lets the deferred first draw happen. */
 async function drawn() {
@@ -62,5 +63,44 @@ describe('FieldMap', () => {
     vi.advanceTimersByTime(60);
     await tick();
     expect(document.querySelector('.ls-fieldmap svg')!.getAttribute('viewBox')).toMatch(/^0 0 500 /);
+  });
+});
+
+describe('the field map’s CSS', () => {
+  const css = readFileSync('src/styles/components.css', 'utf-8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, selector, body]) => ({ selector: selector.trim(), body }));
+
+  it('moves only under data-fieldmap="map-scan"', () => {
+    const moving = rules.filter((rule) => /animation:\s*lsField/.test(rule.body));
+
+    expect(moving.map((rule) => rule.selector)).toEqual([
+      '[data-fieldmap="map-scan"] .ls-fieldmap .scan',
+      '[data-fieldmap="map-scan"] .ls-fieldmap .ixg',
+    ]);
+    expect(moving[0].body).toMatch(/lsFieldScan 24s linear infinite/);
+    expect(rules.find((rule) => rule.selector === '[data-fieldmap="map-scan"] .ls-fieldmap .scanzone')?.body).toMatch(/display:\s*block/);
+    expect(rules.find((rule) => rule.selector === '.ls-fieldmap .scanzone')?.body).toMatch(/display:\s*none/);
+  });
+
+  it('stops under the system’s reduced motion as well', () => {
+    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{ \.ls-fieldmap \.scanzone \{ display: none !important; \} \.ls-fieldmap \.scan, \.ls-fieldmap \.ixg \{ animation: none !important; \} \}/);
+  });
+
+  it('shows nothing under plain or unset, nor in print', () => {
+    expect(rules.find((rule) => rule.selector === ':root:not([data-fieldmap="map"]):not([data-fieldmap="map-scan"]) .ls-fieldmap')?.body).toMatch(/display:\s*none/);
+    expect(css).toMatch(/@media print \{ \.ls-fieldmap \{ display: none !important; \} \}/);
+  });
+
+  it('leaves the terminal its own opaque ground', () => {
+    const tokens = JSON.parse(readFileSync('../design/studio/studio.tokens.json', 'utf-8'));
+    const grounds = Object.values(tokens.color['term-bg'].$extensions['studio.themes'] as Record<string, string>);
+
+    expect(rules.find((rule) => rule.selector === '.ls-term')?.body).toMatch(/background:\s*var\(--term-bg\)/);
+    expect(grounds).toHaveLength(4);
+    grounds.forEach((ground) => expect(ground).toMatch(/^#[0-9a-f]{6}$/i));
+  });
+
+  it('sits on the ground layer, under everything', () => {
+    expect(rules.find((rule) => rule.selector === '.ls-fieldmap')?.body).toMatch(/position:\s*fixed;\s*inset:\s*0;\s*z-index:\s*var\(--z-ground\)/);
   });
 });

@@ -7,7 +7,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 const SHEETS = ['src/styles/components.css', 'src/styles/pages.css', 'src/styles/studio.css'];
 
 /** The layers from the bottom up, as tokens.css and studio.tokens.json document them. */
-const ORDER = ['z-page', 'z-rail', 'z-modebar', 'z-focus', 'z-rail-open', 'z-menu', 'z-scrim', 'z-dialog', 'z-toast', 'z-skip', 'z-ambient'];
+const ORDER = ['z-ground', 'z-page', 'z-rail', 'z-modebar', 'z-focus', 'z-rail-open', 'z-menu', 'z-scrim', 'z-dialog', 'z-toast', 'z-skip', 'z-ambient'];
 
 /** Stacking inside one component, which never reaches another region of the screen. */
 const LOCAL: Record<string, number> = {

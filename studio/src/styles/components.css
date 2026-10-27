@@ -1841,3 +1841,38 @@ a.ls-ptile:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px;
 .ls-sblock .when.stale { color: var(--needs-text); }
 .ls-sblock .src { font-family: var(--font-sans); font-size: 11px; color: var(--muted); }
 .ls-sblock .specs { font-family: var(--font-mono); font-size: 12px; }
+
+/* ---------- FieldMap: an embossed survey map behind every page ---------- */
+/* What shows is resolveBackdrop()'s, written as data-fieldmap on <html>: plain, map or map-scan. Nothing else here decides it. */
+.ls-fieldmap { position: fixed; inset: 0; z-index: var(--z-ground); pointer-events: none; overflow: hidden; contain: strict; --fm-scan-left: 76px;
+  /* Measured: on its worst pixel (an index contour, its edges, a grid line and the scan together) every text colour stays 4.5:1 or better, in every accent. */
+  --fm-hi: color-mix(in srgb, var(--ink-strong) 4%, transparent);
+  --fm-lo: color-mix(in srgb, #000 30%, transparent);
+  --fm-line: color-mix(in srgb, var(--accent) 4%, transparent);
+  --fm-index: color-mix(in srgb, var(--accent) 7%, transparent);
+  --fm-grid: color-mix(in srgb, var(--ink-soft) 4%, transparent);
+  --fm-ref: color-mix(in srgb, var(--ink-soft) 14%, transparent);
+  --fm-scan: color-mix(in srgb, var(--ink-strong) 10%, transparent); }
+[data-theme="light"] .ls-fieldmap { --fm-hi: color-mix(in srgb, #fff 85%, transparent); --fm-lo: color-mix(in srgb, var(--ink-strong) 4.5%, transparent); --fm-line: color-mix(in srgb, var(--accent) 5.5%, transparent); --fm-index: color-mix(in srgb, var(--accent) 7%, transparent); --fm-grid: color-mix(in srgb, var(--ink-soft) 4.5%, transparent); --fm-ref: color-mix(in srgb, var(--ink-soft) 12%, transparent); --fm-scan: color-mix(in srgb, #fff 92%, transparent); }
+:root:not([data-fieldmap="map"]):not([data-fieldmap="map-scan"]) .ls-fieldmap { display: none; }
+.ls-fieldmap > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.ls-fieldmap .hi { stroke: var(--fm-hi); }
+.ls-fieldmap .lo { stroke: var(--fm-lo); }
+.ls-fieldmap .ln { stroke: var(--fm-line); }
+.ls-fieldmap .ix { stroke: var(--fm-index); }
+.ls-fieldmap .grid { stroke: var(--fm-grid); stroke-dasharray: 2 6; }
+.ls-fieldmap .ref { fill: var(--fm-ref); font-family: var(--font-mono); font-size: 10px; letter-spacing: .18em; }
+/* The scan covers the page area only, from the rail's collapsed edge, so it never shows through the rail or the Pages tab. Its map is shifted back by the same amount, so its lines sit on the map's. */
+.ls-fieldmap .scanzone { display: none; position: absolute; top: 0; bottom: 0; right: 0; left: var(--fm-scan-left); overflow: hidden; }
+.ls-fieldmap .scan { position: absolute; top: 0; height: 100%; left: calc(-1 * var(--fm-scan-left)); width: calc(100% + var(--fm-scan-left)); }
+.ls-fieldmap .scan .ln, .ls-fieldmap .scan .ix { stroke: var(--fm-scan); }
+@media (max-width: 599px) { .ls-fieldmap { --fm-scan-left: 34px; } }
+:root:has(.ls-nav.narrow) .ls-fieldmap { --fm-scan-left: 34px; }
+[data-fieldmap="map-scan"] .ls-fieldmap .scanzone { display: block; }
+[data-fieldmap="map-scan"] .ls-fieldmap .scan { -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 45%, #000 55%, transparent 100%); mask-image: linear-gradient(180deg, transparent 0, #000 45%, #000 55%, transparent 100%); -webkit-mask-size: 100% 34%; mask-size: 100% 34%; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; animation: lsFieldScan 24s linear infinite; }
+[data-fieldmap="map-scan"] .ls-fieldmap .ixg { animation: lsFieldBreathe 9s ease-in-out infinite; }
+@keyframes lsFieldScan { from { -webkit-mask-position: 0 -40%; mask-position: 0 -40%; } to { -webkit-mask-position: 0 140%; mask-position: 0 140%; } }
+@keyframes lsFieldBreathe { 50% { opacity: .55; } }
+/* A second guard: resolveBackdrop() already stills the map under reduced motion. */
+@media (prefers-reduced-motion: reduce) { .ls-fieldmap .scanzone { display: none !important; } .ls-fieldmap .scan, .ls-fieldmap .ixg { animation: none !important; } }
+@media print { .ls-fieldmap { display: none !important; } }
