@@ -193,7 +193,10 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             line => console.WriteLine(line),
             // A tab renamed in Studio names the agent's own conversation
             // too, through whatever command its adapter says does that.
-            (agent, name) => agents.Resolve(agent) is { Succeeded: true, Value: { } adapter } ? adapter.RenameInput(name) : null);
+            (agent, name) => agents.Resolve(agent) is { Succeeded: true, Value: { } adapter } ? adapter.RenameInput(name) : null,
+            // Where each hosted session's status line leaves what Claude
+            // knows about it, for Studio to draw.
+            StatusesOf(paths));
         _ideas = ideas;
         _dumps = dumps;
         _launcher = launcher;
@@ -518,6 +521,11 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             // opened after a restart can still offer to resume one.
             Loadout.Core.Sessions.Hosting.SessionSignals.Prune(
                 Loadout.Core.Sessions.Hosting.SessionSignals.Directory(_paths.Paths.State), _time.GetUtcNow());
+
+            // Status snapshots are no use once their session has gone, which
+            // a daemon that stopped took with it.
+            Loadout.Core.Sessions.Hosting.SessionStatus.Prune(
+                Loadout.Core.Sessions.Hosting.SessionStatus.Directory(_paths.Paths.State), _time.GetUtcNow());
             _sessions.Changed += HostedChanged;
 
             // Which page the address opens, read each time so setting it is
@@ -895,6 +903,10 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     /// <summary>Where hosted sessions' hooks report, or null for a daemon built without paths.</summary>
     private static string? SignalsOf(IPlatformPaths? paths) =>
         paths?.Paths is { } where ? Loadout.Core.Sessions.Hosting.SessionSignals.Directory(where.State) : null;
+
+    /// <summary>Where hosted sessions' status lines leave their snapshots, or null for a daemon built without paths.</summary>
+    private static string? StatusesOf(IPlatformPaths? paths) =>
+        paths?.Paths is { } where ? Loadout.Core.Sessions.Hosting.SessionStatus.Directory(where.State) : null;
     private readonly Loadout.Core.Instructions.IMemoryService _memory;
     private readonly Loadout.Core.Sessions.LaunchSheet _sheet;
     private readonly Loadout.Core.Instructions.IMemoryImporter _importer;

@@ -1799,3 +1799,40 @@ a.ls-ptile:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px;
 
 /* The actions pane has a set height, so its rows were squeezed below a two- or three-line command and overlapped: each row is as tall as it needs. */
 .ls-apane { grid-auto-rows: max-content; }
+
+/* ---------- A hosted session's status ---------- */
+/* The context mark on a tab or a Pure row: a short beam and the figure. */
+.ls-ctx { --c: var(--moving); display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); white-space: nowrap; }
+.ls-ctx .beam, .ls-sstrip .beam { position: relative; display: inline-block; width: 28px; height: 4px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--rule); overflow: hidden; }
+.ls-ctx .beam > i, .ls-sstrip .beam > i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--c); }
+.ls-ctx b { font-weight: 400; font-variant-numeric: tabular-nums; }
+.ls-ctx.warn { --c: var(--needs); color: var(--needs-text); }
+.ls-ctx.urgent { --c: var(--bad); color: var(--bad-text); font-weight: 600; }
+.ls-ctx .bang { font-weight: 700; }
+.ls-stabs [role="tab"] .ls-ctx { grid-row: 1; grid-column: 3; justify-self: end; }
+.ls-stabs [role="tab"]:has(.ls-ctx) .k { grid-row: 2; }
+.ls-desk [role="option"] .ls-ctx { grid-row: 1; grid-column: 3; justify-self: end; }
+.ls-desk [role="option"]:has(.ls-ctx) .w { grid-row: 2; }
+/* The strip on the terminal's foot. */
+.ls-term .foot { box-shadow: inset 0 1px 0 var(--rule); }
+.ls-sstrip { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; min-height: 30px; padding: 4px 12px; font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+.ls-sstrip .k { color: var(--subtle); }
+.ls-sstrip b { font-weight: 400; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.ls-sstrip .model { color: var(--ink-soft); }
+.ls-sstrip .gauge { --c: var(--moving); display: inline-flex; align-items: center; gap: 6px; }
+.ls-sstrip .gauge.warn { --c: var(--needs); }
+.ls-sstrip .gauge.warn b, .ls-sstrip .gauge.warn em { color: var(--needs-text); }
+.ls-sstrip .gauge.urgent { --c: var(--bad); }
+.ls-sstrip .gauge.urgent b, .ls-sstrip .gauge.urgent em { color: var(--bad-text); font-weight: 600; }
+.ls-sstrip em { font-style: normal; }
+.ls-sstrip .grow { flex: 1 1 auto; }
+.ls-sstrip.stale .when { color: var(--needs-text); }
+.ls-sstrip.stale > :not(.when):not(.grow):not(.ls-vh) { opacity: .6; }
+/* The fuller block in a session's Details. */
+.ls-sblock { display: grid; gap: 12px; }
+.ls-sblock h2 { margin: 0; }
+.ls-sblock h3 { margin: 4px 0 0; font-size: 11px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.ls-sblock .when { margin: 0; font-size: 12.5px; color: var(--muted); }
+.ls-sblock .when.stale { color: var(--needs-text); }
+.ls-sblock .src { font-family: var(--font-sans); font-size: 11px; color: var(--muted); }
+.ls-sblock .specs { font-family: var(--font-mono); font-size: 12px; }

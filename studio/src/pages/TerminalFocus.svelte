@@ -12,6 +12,7 @@
   import { studio } from '../lib/state.svelte';
   import { deckLaunch } from '../lib/reveal.svelte';
   import { wordFor } from '../lib/signals';
+  import { contextPercent } from '../lib/status';
   import { TABS_KEY, arrange, clear, hide, prune, readTabs, unhide, withOrder, type TabState } from '../lib/tabs';
   import { readSplit, SPLIT_KEYS } from '../lib/splits';
   import type { DeckLayout, DeckSession, DeckSlots } from '../lib/modes';
@@ -64,6 +65,7 @@
         namesAgent: !!line.session?.namesAgent,
         kind: line.session?.kind ?? 'launch',
         project: line.session?.project ?? null,
+        context: line.session?.ended ? null : contextPercent(line.session?.status),
       };
     }),
   );

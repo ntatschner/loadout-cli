@@ -8,6 +8,7 @@
   // the terminal that has the keyboard, and Studio never types into a
   // session for you.
   import { onMount } from 'svelte';
+  import StatusStrip from './StatusStrip.svelte';
   import Terminal from './Terminal.svelte';
   import { sessions as sessionsApi, terminalAddress, type Session } from '../api';
   import { studio } from '../state.svelte';
@@ -255,4 +256,9 @@
   onresize={resized}
   onretry={() => void reconnect()}
   ondrawn={(drawn) => (renderer = drawn)}
+  foot={session?.status && !session.ended ? statusFoot : undefined}
 />
+
+{#snippet statusFoot()}
+  {#if session?.status}<StatusStrip status={session.status} now={studio.now} />{/if}
+{/snippet}
