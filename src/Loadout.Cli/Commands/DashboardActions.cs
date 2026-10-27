@@ -96,7 +96,7 @@ internal static partial class DashboardActions
             // page only ever sends these names; anything else falls through
             // to "no such setting" below.
             "studio-halo" or "studio-layout-lens" or "studio-layout-map" or "studio-map-scope" or "studio-theme" or "studio-accent"
-                or "studio-density" or "studio-motion" or "studio-idle-after"
+                or "studio-density" or "studio-motion" or "studio-backdrop" or "studio-idle-after"
                 => ("config set", [change.What, change.Value ?? string.Empty]),
 
             // A list's saved query, which can start with a minus, so it goes

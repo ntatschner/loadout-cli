@@ -61,6 +61,14 @@ public sealed class SettingsPaneTests
         Line(new SettingsChange("notify", Off: true)).Should().Be("team notify clear");
     }
 
+    [Theory]
+    [InlineData("studio-motion", "reduced")]
+    [InlineData("studio-backdrop", "map-animated")]
+    public void Studios_own_settings_type_config_set_under_their_own_names(string key, string value)
+    {
+        Line(new SettingsChange(key, value)).Should().Be($"config set {key} {value}");
+    }
+
     [Fact]
     public void A_setting_nothing_knows_about_is_refused_rather_than_guessed_at()
     {

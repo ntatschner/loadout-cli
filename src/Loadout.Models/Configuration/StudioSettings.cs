@@ -40,6 +40,13 @@ public sealed class StudioSettings
     public string? Motion { get; set; }
 
     /// <summary>
+    /// What is behind every page: plain, map (the field map, still) or
+    /// map-animated. Null is plain. Pure Focus, Ambient and high contrast
+    /// show the plain ground whatever this says.
+    /// </summary>
+    public string? Backdrop { get; set; }
+
+    /// <summary>
     /// What Studio's tube map draws: inflight (live work, and failures for a
     /// day) or all (every line Home has). Null is inflight.
     /// </summary>

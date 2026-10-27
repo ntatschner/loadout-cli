@@ -678,6 +678,15 @@ public static class ConfigKeys
             Group: Groups.Studio,
             WhenUnset: "full, lowered to reduced when your system asks for less"),
 
+        new("studio-backdrop",
+            "Studio's backdrop, behind every page: plain, map (the field map, still) or map-animated. The map only moves under full motion and stops while anything waits for you. Pure Focus, Ambient and high contrast keep the plain ground",
+            (c, _) => c.Studio.Backdrop ?? string.Empty,
+            (c, _, v) => c.Studio.Backdrop = Optional(v, "plain", "map", "map-animated"),
+            false,
+            Sample: "map-animated",
+            Group: Groups.Studio,
+            WhenUnset: "plain, today's ground"),
+
         new("studio-idle-after",
             "Minutes a working session is quiet before Studio reads it as idle",
             (c, _) => c.Studio.IdleAfter is { } minutes
