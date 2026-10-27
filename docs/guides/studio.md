@@ -531,6 +531,13 @@ round further, or **Only save the answers** to come back to it. Each answer is
 its own `loadout idea answer`, listed before you send. A round runs on the
 daemon, so you can leave the page; a toast says when it's finished.
 
+Under each question is what it relates to and why it's being asked, and a
+round that only asked questions shows what the agent understood above them,
+so you can come back to them later without the rest of the history. A question
+whose subject has changed since, a note you took back or a layer the next
+revision reworked, says **Possibly outdated** and why. Answer it again, or
+press **It still stands** to keep the answer you gave.
+
 ![Ideas in Studio: the shelf of ideas by project on the left, and the workbench for one: where it stands, from captured to accepted, what the agent understood, and its questions, one answered and one offering two options, the recommended one marked.](../images/studio-ideas.png)
 
 Once there's a plan, each layer shows its options side by side with what's for

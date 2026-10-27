@@ -27,7 +27,7 @@
   import { holdPlace } from '../lib/holdPlace';
   import { runJob } from '../lib/jobs';
   import { router } from '../lib/router.svelte';
-  import { acceptWords, doneWhenLines, doneWhenWords, arrivalIn, gaps, keepUnchanged, needsChoice, nextStop, sendAnswers, stateWord, stopTarget, stopWords, type Arrival, type DumpItem, type Question } from '../lib/ideas';
+  import { acceptWords, doneWhenLines, doneWhenWords, arrivalIn, gaps, keepUnchanged, needsChoice, nextStop, sendAnswers, stateWord, stopTarget, stopWords, type Arrival, type DumpItem, type Question, type Round } from '../lib/ideas';
   import { studio } from '../lib/state.svelte';
   import { ideaHref, listHref, movedSaid, whereSaid } from '../lib/tasks';
   import { toasts } from '../lib/toasts.svelte';
@@ -90,6 +90,8 @@
     stage: string;
     ask: string;
     questions: Question[];
+    rounds?: Round[];
+    outdated?: number;
     plan: {
       revision: number;
       title: string;
@@ -716,8 +718,8 @@
 
       {#if idea.questions.length && !idea.accepted}
         <section class="pblock" aria-labelledby="iq">
-          <h2 class="ls-zone" id="iq" tabindex="-1" data-anchor="zone:questions">Questions for you</h2>
-          <QuestionSet id={idea.id} {where} questions={idea.questions} disabledReason={refused} ondraft={(answers, sent) => ((drafted = answers), (sentAnswers = sent))} onsend={(answers, refine) => sendAnswers(idea!.id, where, answers, refine, (operations) => batch(idea!.id, where, operations), act)} />
+          <h2 class="ls-zone" id="iq" tabindex="-1" data-anchor="zone:questions">Questions for you{#if idea.outdated}<span class="outdated-count">{` · ${idea.outdated} possibly outdated`}</span>{/if}</h2>
+          <QuestionSet id={idea.id} {where} questions={idea.questions} rounds={idea.rounds} disabledReason={refused} ondraft={(answers, sent) => ((drafted = answers), (sentAnswers = sent))} onsend={(answers, refine) => sendAnswers(idea!.id, where, answers, refine, (operations) => batch(idea!.id, where, operations), act)} />
         </section>
       {/if}
 

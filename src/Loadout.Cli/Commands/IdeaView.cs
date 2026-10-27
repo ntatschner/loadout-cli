@@ -35,10 +35,17 @@ internal static class IdeaView
     {
         ArgumentNullException.ThrowIfNull(idea);
 
-        return idea.Running ? "[blue]round running[/]"
+        return (idea.Running ? "[blue]round running[/]"
             : idea.Failure is not null ? "[red]last round failed[/]"
-            : Marked(idea.Stage, idea.Unanswered);
+            : Marked(idea.Stage, idea.Unanswered)) + Outdated(idea.Outdated);
     }
+
+    /// <summary>
+    /// <c>, 2 possibly outdated</c>, or nothing: said in a list so answers
+    /// needing another look are seen without opening each idea.
+    /// </summary>
+    public static string Outdated(int count) =>
+        count > 0 ? $"[yellow], {count} possibly outdated[/]" : string.Empty;
 
     /// <summary>An agent and model as a person reads them.</summary>
     public static string Asked(string agent, string model) =>
@@ -93,7 +100,7 @@ internal static class IdeaView
         var stage = IdeaWork.StageOf(record);
 
         output.WriteLine(
-            $"[bold]{Markup.Escape(place.Id)}[/] on {Markup.Escape(place.Where)}  {Marked(stage, IdeaWork.Unanswered(record).Count)}");
+            $"[bold]{Markup.Escape(place.Id)}[/] on {Markup.Escape(place.Where)}  {Marked(stage, IdeaWork.Unanswered(record).Count)}{Outdated(IdeaWork.OutdatedCount(record))}");
         output.WriteLine($"[dim]{Markup.Escape(record.Ask)}[/]");
 
         if (IdeaWork.FailureOf(record) is { } failed)
@@ -121,16 +128,36 @@ internal static class IdeaView
             }
         }
 
-        var questions = record.Rounds.SelectMany(round => round.Questions).ToList();
-
-        if (questions.Count > 0)
+        if (record.Rounds.Any(round => round.Questions.Count > 0))
         {
             output.WriteBlankLine();
             output.WriteLine("[bold]Questions[/]");
+        }
 
-            foreach (var question in questions)
+        foreach (var round in record.Rounds)
+        {
+            // What the agent took the idea to be when it asked, so the
+            // questions can be read against it later.
+            if (round.Understanding.Length > 0 && round.Questions.Count > 0)
             {
+                output.WriteLine($"  [dim]Understood as: {Markup.Escape(round.Understanding)}[/]");
+            }
+
+            foreach (var question in round.Questions)
+            {
+                var about = IdeaWork.About(record, question);
+
                 output.WriteLine($"  [bold]{question.Id}[/] {Markup.Escape(question.Question)}");
+
+                if (about.Line is { } line)
+                {
+                    output.WriteLine($"     [dim]{Markup.Escape(line)}[/]");
+                }
+
+                if (about.Outdated is { } outdated)
+                {
+                    output.WriteLine($"     [yellow]possibly outdated: {Markup.Escape(outdated)}[/] [dim](answering again clears it)[/]");
+                }
 
                 if (question.Answer.Length > 0)
                 {

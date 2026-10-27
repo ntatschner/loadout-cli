@@ -160,6 +160,35 @@ public sealed class IdeaServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task A_question_s_reference_survives_the_file_and_answering_again_clears_its_outdated_marker()
+    {
+        var idea = (await _ideas.CaptureAsync(null, "Status page", "me")).Value!;
+        var place = new IdeaPlace(null, idea.Id);
+        await _ideas.RecordReplyAsync(place, Plan());
+        await _ideas.RecordReplyAsync(place, new IdeaReply
+        {
+            Contract = IdeaSchema.Version,
+            Understanding = "A page that keeps checks.",
+            Questions = [new IdeaReply.ReplyQuestion { Question = "Alerts by email?", RelatesTo = "A1", Context = "Alerts need a channel." }],
+        });
+        (await _ideas.AnswerAsync(place, "Q1", "yes")).Succeeded.Should().BeTrue();
+
+        var reworked = Plan();
+        reworked.Plan!.Additions[0].Why = "So you hear first, by phone.";
+        await _ideas.RecordReplyAsync(place, reworked);
+
+        var read = (await _ideas.ReadAsync(place)).Value!;
+        read.Rounds[0].Understanding.Should().Be("A page that keeps checks.");
+        read.Rounds[0].Questions[0].Snapshot!.Name.Should().Be("Alerts", "the snapshot is written to the file and read back");
+        IdeaWork.Outdated(read, read.Rounds[0].Questions[0]).Should().Be("addition Alerts changed in revision 2");
+
+        (await _ideas.AnswerAsync(place, "Q1", "yes")).Succeeded.Should().BeTrue("the same answer again says it still stands");
+
+        var after = (await _ideas.ReadAsync(place)).Value!;
+        IdeaWork.Outdated(after, after.Rounds[0].Questions[0]).Should().BeNull();
+    }
+
+    [Fact]
     public async Task Pieces_that_do_not_exist_are_refused_with_the_ones_that_do()
     {
         var idea = (await _ideas.CaptureAsync(null, "Status page", "me")).Value!;

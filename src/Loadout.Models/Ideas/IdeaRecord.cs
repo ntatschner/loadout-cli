@@ -126,6 +126,13 @@ public sealed class IdeaRound
     /// </summary>
     public int Revision { get; set; }
 
+    /// <summary>
+    /// What the agent took the idea to be when it asked these, kept only for a
+    /// round that asked and proposed nothing: a plan carries its own, and a
+    /// round with none would leave nothing to read the questions against later.
+    /// </summary>
+    public string Understanding { get; set; } = string.Empty;
+
     public List<IdeaQuestion> Questions { get; set; } = [];
 }
 
@@ -148,6 +155,51 @@ public sealed class IdeaQuestion
 
     /// <summary>The person's answer, or empty while it is waiting for one.</summary>
     public string Answer { get; set; } = string.Empty;
+
+    /// <summary>
+    /// What the question is about, by id: <c>ask</c>, a note such as <c>N2</c>,
+    /// a layer or option such as <c>L1</c> or <c>L1b</c>, an addition such as
+    /// <c>A2</c> or an earlier question such as <c>Q3</c>. Empty when it is
+    /// about nothing in particular, and in records written before idea/3.
+    /// </summary>
+    public string RelatesTo { get; set; } = string.Empty;
+
+    /// <summary>One line saying what the question is in aid of, so it can be answered without the history.</summary>
+    public string Context { get; set; } = string.Empty;
+
+    /// <summary>
+    /// What <see cref="RelatesTo"/> was when the question was asked or last
+    /// answered, so a later change to it can be noticed. Null when it relates
+    /// to nothing.
+    /// </summary>
+    public IdeaSnapshot? Snapshot { get; set; }
+}
+
+/// <summary>What a question's subject was when it was asked or last answered.</summary>
+/// <remarks>
+/// A layer or addition is kept by name as well as id, because ids are
+/// positions within one revision and a later revision is free to reorder: a
+/// layer found by name and unchanged is the same layer, wherever it now sits.
+/// </remarks>
+public sealed class IdeaSnapshot
+{
+    /// <summary>A layer's name or an addition's title; empty for the ask, a note or a question.</summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>An option's title, when the subject is one option of a layer.</summary>
+    public string Option { get; set; } = string.Empty;
+
+    /// <summary>Its text then: a note's words, a layer's purpose and options, a question and its answer.</summary>
+    public string Text { get; set; } = string.Empty;
+
+    /// <summary>The plan revision it was taken from, or 0 for something that is not in a plan.</summary>
+    public int Revision { get; set; }
+
+    /// <summary>
+    /// True when the subject was already gone when this was taken: answered
+    /// after a note was removed, say. Still gone later is not a change.
+    /// </summary>
+    public bool Missing { get; set; }
 }
 
 /// <summary>What the agent proposes, and what the person has made of each piece.</summary>

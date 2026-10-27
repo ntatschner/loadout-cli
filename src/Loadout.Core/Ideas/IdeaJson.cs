@@ -48,15 +48,43 @@ public static class IdeaJson
                 agent = last.Agent.Length > 0 ? last.Agent : null,
                 model = last.Model.Length > 0 ? last.Model : null,
             },
-            questions = record.Rounds.SelectMany(round => round.Questions).Select(q => new
+            questions = record.Rounds.SelectMany((round, at) => round.Questions.Select(q => (q, at))).Select(one =>
             {
-                id = q.Id,
-                question = q.Question,
-                why = q.Why,
-                options = q.Options,
-                recommendation = q.Recommendation,
-                answer = q.Answer.Length > 0 ? q.Answer : null,
+                var (q, at) = one;
+                var about = IdeaWork.About(record, q);
+
+                return new
+                {
+                    id = q.Id,
+                    round = at + 1,
+                    question = q.Question,
+                    why = q.Why,
+                    options = q.Options,
+                    recommendation = q.Recommendation,
+                    answer = q.Answer.Length > 0 ? q.Answer : null,
+                    relatesTo = q.RelatesTo.Length > 0 ? q.RelatesTo : null,
+                    about = about.Label,
+                    context = q.Context.Length > 0 ? q.Context : null,
+                    snapshot = q.Snapshot is not { } then ? null : new
+                    {
+                        name = then.Name.Length > 0 ? then.Name : null,
+                        option = then.Option.Length > 0 ? then.Option : null,
+                        text = then.Text,
+                        revision = then.Revision,
+                        missing = then.Missing,
+                    },
+                    outdated = about.Outdated,
+                };
             }),
+            rounds = record.Rounds.Select((round, at) => new
+            {
+                round = at + 1,
+                asked = round.AskedUtc,
+                revision = round.Revision,
+                understanding = round.Understanding.Length > 0 ? round.Understanding : null,
+                questions = round.Questions.Select(q => q.Id),
+            }),
+            outdated = IdeaWork.OutdatedCount(record),
             notes = record.Notes.Select(note => new
             {
                 id = note.Id,

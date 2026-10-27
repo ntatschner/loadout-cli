@@ -33,6 +33,7 @@ public sealed record IdeaPlace(string? Project, string Id)
 /// <param name="Failure">The latest round that went wrong, or null.</param>
 /// <param name="Running">True while a round on it is running on this machine.</param>
 /// <param name="Moved">Where it was moved from, or null when it has stayed where it was dropped in.</param>
+/// <param name="Outdated">How many of its questions may have been overtaken by a change since they were asked.</param>
 public sealed record IdeaSummary(
     IdeaPlace Place,
     string Title,
@@ -43,7 +44,8 @@ public sealed record IdeaSummary(
     int Unanswered,
     IdeaAttempt? Failure = null,
     bool Running = false,
-    TaskMove? Moved = null);
+    TaskMove? Moved = null,
+    int Outdated = 0);
 
 /// <summary>What accepting an idea did.</summary>
 /// <param name="Task">The task it became.</param>
@@ -414,7 +416,8 @@ internal sealed partial class IdeaService : IIdeaService
                     record is null ? 0 : IdeaWork.Unanswered(record).Count,
                     record is null ? null : IdeaWork.FailureOf(record),
                     _locks.Held(place),
-                    item.Moved));
+                    item.Moved,
+                    record is null ? 0 : IdeaWork.OutdatedCount(record)));
             }
         }
 
@@ -542,6 +545,10 @@ internal sealed partial class IdeaService : IIdeaService
             }
 
             asked.Answer = answer.Trim();
+
+            // Answered against what is there now, so what it relates to is
+            // taken again: giving the same answer is how one says it still stands.
+            IdeaWork.Retake(record, asked);
 
             return null;
         });
