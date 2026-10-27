@@ -20,6 +20,7 @@ internal static class StudioPreferences
         accent = studio?.Accent ?? "cyan",
         density = studio?.Density ?? "comfortable",
         motion = studio?.Motion ?? "full",
+        backdrop = studio?.Backdrop ?? "plain",
         idleAfter = studio?.IdleAfter ?? 10,
         layoutLens = studio?.LayoutLens,
         layoutMap = studio?.LayoutMap,

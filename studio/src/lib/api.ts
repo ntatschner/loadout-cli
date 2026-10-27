@@ -144,6 +144,8 @@ export interface Preferences {
   accent: string;
   density: string;
   motion: string;
+  /** plain, map or map-animated: what is behind every page. */
+  backdrop: string;
   idleAfter: number;
   layoutLens: string | null;
   layoutMap: string | null;

@@ -169,6 +169,16 @@ setting. Your system's reduced motion always wins over `studio-motion`. Every
 state on it is a word and a glyph as well as a colour, and every action can be
 reached from the keyboard, through the palette on **Ctrl K**.
 
+The field map, `studio-backdrop`, is off unless you turn it on, and some
+things override it whatever it says. Both high-contrast themes, Pure Focus and
+Ambient keep the plain ground. Reduced motion, from Studio or from your system,
+stills the map, and so does anything waiting for you. The map is hidden from
+screen readers and never takes focus. Its levels were measured rather than
+guessed: on the worst pixel, where an index contour, its edge and a grid line
+meet, every text colour stays at 4.5:1 or better in Dark and Light with every
+accent. The lowest is 4.52:1, in Light. A test fails if a level or a colour
+token moves below that.
+
 A session's terminal takes Tab and the arrow keys for the agent, so **Ctrl ]**
 gives the keyboard back to the page. The terminal's sixteen colours meet 4.5:1
 in every theme and 7:1 in the high-contrast ones, and an agent's own colours
@@ -252,6 +262,8 @@ can't check it.
 | Studio: a question answered from the keyboard alone, through the palette | Done in a browser |
 | Studio: its components' keyboard behaviour (tabs, radios, pickers, dialogs, the palette, the rail) | Tested, in jsdom |
 | Studio: axe-core, and text contrast in its four themes | **Not run** |
+| Studio's field map: text contrast on its worst pixel, Dark and Light, every accent | Measured by a unit test from the tokens; lowest 4.52:1 |
+| Studio's field map: still under reduced motion, plain in Pure Focus, Ambient and high contrast | Checked in a browser; the scan pausing while something waits is tested in jsdom only |
 | Studio's terminal: Ctrl ] leaving it, the contrast floor per theme, the screen-reader mode under the preset | Tested, in jsdom, with xterm.js stubbed |
 | Studio's terminal with a screen reader reading it | **Not tested** |
 | Studio's modes and Pure Focus: their keys, the switcher, the deck's keys, the desk's keys and the command bar | Tested, in jsdom |

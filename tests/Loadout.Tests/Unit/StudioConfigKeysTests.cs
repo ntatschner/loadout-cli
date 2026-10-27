@@ -6,7 +6,7 @@ using Xunit;
 namespace Loadout.Tests.Unit;
 
 /// <summary>
-/// Studio's eight settings, as 'loadout config set' takes them: the values
+/// Studio's nine settings, as 'loadout config set' takes them: the values
 /// each allows, an empty value unsetting it, and a layout checked before it is
 /// kept, since the key can be set by hand.
 /// </summary>
@@ -18,6 +18,9 @@ public sealed class StudioConfigKeysTests
     [InlineData("studio-accent", "violet")]
     [InlineData("studio-density", "compact")]
     [InlineData("studio-motion", "none")]
+    [InlineData("studio-backdrop", "plain")]
+    [InlineData("studio-backdrop", "map")]
+    [InlineData("studio-backdrop", "map-animated")]
     [InlineData("studio-idle-after", "25")]
     [InlineData("studio-map-scope", "all")]
     [InlineData("studio-map-scope", "inflight")]
@@ -38,6 +41,8 @@ public sealed class StudioConfigKeysTests
     [InlineData("studio-accent", "orange")]
     [InlineData("studio-density", "tight")]
     [InlineData("studio-motion", "some")]
+    [InlineData("studio-backdrop", "background")]
+    [InlineData("studio-backdrop", "map-scan")]
     [InlineData("studio-idle-after", "0")]
     [InlineData("studio-idle-after", "1441")]
     [InlineData("studio-idle-after", "ten")]
@@ -54,6 +59,7 @@ public sealed class StudioConfigKeysTests
     [Theory]
     [InlineData("studio-halo")]
     [InlineData("studio-theme")]
+    [InlineData("studio-backdrop")]
     [InlineData("studio-layout-lens")]
     [InlineData("studio-idle-after")]
     [InlineData("studio-map-scope")]

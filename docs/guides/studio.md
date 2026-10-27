@@ -288,6 +288,17 @@ contrast light; with no theme set, Studio follows your system's colour scheme
 and contrast. If your system asks for reduced motion, that always wins, whatever
 you choose here.
 
+**Background** puts a field map behind every page if you want one: contour
+lines, a grid and map references pressed into the ground, the same map on
+every visit. It carries no data; it's there to look at. Plain is the default.
+Field map, animated adds one slow scan line every 24 seconds, but only under
+full motion, and it stops the moment anything is waiting for you, so the page
+is still while something needs you. Pure Focus, Ambient and both high-contrast
+themes keep the plain ground whatever you set, and a terminal always keeps its
+own. Where the map shows, the rail and the mode bar get an embossed edge, and
+the rail turns solid again when it widens, so its labels never sit over page
+text.
+
 They're kept in Loadout's config, not the browser:
 
 ```sh
@@ -295,6 +306,7 @@ loadout config set studio-theme hc-dark
 loadout config set studio-accent violet
 loadout config set studio-density roomy
 loadout config set studio-motion reduced
+loadout config set studio-backdrop map-animated
 loadout config set studio-halo gyroscope
 loadout config set studio-map-scope all
 loadout config set studio-idle-after 20
