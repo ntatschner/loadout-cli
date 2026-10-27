@@ -76,6 +76,24 @@ public sealed class AskWordingTests
     }
 
     [Fact]
+    public void The_brief_question_keeps_the_line_and_the_warning_and_leaves_the_command_to_the_dialog()
+    {
+        var input = Input(new { command = Chained, description = "List the build output" });
+        var ask = Asked("Bash", input, NodePermissions.Decide(Builder, "Bash", input));
+
+        ask.Brief.Should().Be(
+            "implementer (builder) wants to list the build output. Careful: the command deletes files. Let it?");
+    }
+
+    [Fact]
+    public void An_ask_with_no_wording_is_brief_as_it_always_was()
+    {
+        var ask = Asked("mcp__github__create_issue", Input(new { title = "x" }));
+
+        ask.Brief.Should().Be(ask.Asking);
+    }
+
+    [Fact]
     public void A_description_claiming_to_only_read_does_not_hide_a_delete()
     {
         var input = Input(new { command = "rm -rf src", description = "Read only: list the files" });

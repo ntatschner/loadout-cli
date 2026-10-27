@@ -353,7 +353,7 @@ export class Studio {
     if (['brief', 'done-when', 'readings', 'budget'].includes(gate.kind)) {
       this.#asked.set(line.id, toasts.add({
         level: 'needs',
-        text: `${line.where} asks: ${gate.question}`,
+        text: `${line.where} asks: ${gate.brief ?? gate.question}`,
         actions: [{ label: 'Go to the question', cmd: 'opens the run · changes nothing', onpress: () => reveal({ kind: 'run', id: line.ref }) }],
       }));
 
@@ -364,8 +364,10 @@ export class Studio {
 
     this.#asked.set(line.id, toasts.add({
       level: 'needs',
-      text: `${line.where} asks: ${gate.question}`,
-      cmd: line.project ?? '',
+      // The words without the command, and the command on its own line below
+      // them, so a toast that can say yes still shows what yes runs.
+      text: `${line.where} asks: ${gate.brief ?? gate.question}`,
+      cmd: gate.ask?.command ?? line.project ?? '',
       actions: this.watchOnly
         ? []
         : answers.map((answer, index) => ({

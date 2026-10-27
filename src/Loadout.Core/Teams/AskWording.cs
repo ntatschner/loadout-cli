@@ -47,6 +47,31 @@ public sealed record AskView(
         }
     }
 
+    /// <summary>
+    /// The line and the warnings, as a question: what a list of things waiting
+    /// shows, where the command and the refused part are one click away.
+    /// </summary>
+    /// <remarks>
+    /// The rail, the event history and the Teams window's run view showed the
+    /// whole one-sentence question, command and all, and a long command made
+    /// every one of them a paragraph. The warnings stay because they are what
+    /// somebody glancing at a list most needs to see.
+    /// </remarks>
+    public string Brief
+    {
+        get
+        {
+            var text = new StringBuilder(Line).Append('.');
+
+            if (Careful(Flags) is { } careful)
+            {
+                text.Append(' ').Append(careful);
+            }
+
+            return text.Append(" Let it?").ToString();
+        }
+    }
+
     /// <summary>The warnings as one sentence, or null where there are none.</summary>
     public static string? Careful(IReadOnlyList<string>? flags) =>
         flags is { Count: > 0 }

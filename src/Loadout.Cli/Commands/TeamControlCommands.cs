@@ -164,7 +164,7 @@ public sealed class TeamGateCommand : AsyncCommand<TeamGateCommand.Settings>
 
             foreach (var one in waiting)
             {
-                output.WriteLine($"  [bold]{Markup.Escape(one.Id)}[/]  {Markup.Escape(one.Asking)}");
+                output.WriteLine($"  [bold]{Markup.Escape(one.Id)}[/]  {Markup.Escape(one.Brief)}");
             }
 
             return output.Fail("Say which with --gate.", ExitCode.InvalidArguments);

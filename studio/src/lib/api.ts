@@ -400,6 +400,8 @@ export interface RunGate {
   node: string;
   role: string;
   question: string;
+  /** The question without a permission's command, for a list or a toast. Missing from an older daemon. */
+  brief?: string;
   options: string[];
   recommendation: string | null;
   at: string;

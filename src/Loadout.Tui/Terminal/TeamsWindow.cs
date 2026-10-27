@@ -545,7 +545,7 @@ internal sealed class TeamsWindow : Window
         foreach (var gate in run.Waiting)
         {
             lines.Add(string.Empty);
-            lines.Add($"Waiting for you: {gate.Question}");
+            lines.Add($"Waiting for you: {gate.Brief}");
 
             if (Countdown(gate, _time.GetUtcNow()) is { Length: > 0 } counting)
             {

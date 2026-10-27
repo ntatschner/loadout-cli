@@ -94,7 +94,7 @@ public static class QueueSettling
             ? new QueueStanding(
                 QueueRunState.Held,
                 summary.RunId,
-                $"waiting for an answer: {summary.Waiting[0].Asking}",
+                $"waiting for an answer: {summary.Waiting[0].Brief}",
                 summary.CostUsd)
             : new QueueStanding(QueueRunState.Running, summary.RunId, string.Empty, summary.CostUsd);
     }

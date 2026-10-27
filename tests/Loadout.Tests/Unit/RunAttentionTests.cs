@@ -130,6 +130,19 @@ public sealed class RunAttentionTests
     }
 
     [Fact]
+    public void A_worded_permission_reaches_the_rail_without_its_command()
+    {
+        // The rail and the notices say what is waiting; the command is for
+        // the dialog that answers it, and a long one made the rail unreadable.
+        var asking = RunAttention.For(
+            Run(gates: [Gate() with { Target = "ls build && rm -rf build", Said = "list the build output", Blocked = "rm -rf build", Flags = [AskWording.Deletes] }]),
+            Noon);
+
+        asking.Should().ContainSingle().Which.Detail.Should().Be(
+            "implementer/1 (role.implementer) wants to list the build output. Careful: the command deletes files. Let it?");
+    }
+
+    [Fact]
     public void A_question_the_lead_wrote_reaches_the_rail_with_one_question_mark()
     {
         var asking = RunAttention.For(Run(gates: [Gate() with { Asked = "Merge now?" }]), Noon);

@@ -154,7 +154,7 @@ public static class RunAttention
         {
             reasons.Add(new Attention(
                 AttentionKind.Asking,
-                gate.Asking,
+                gate.Brief,
                 "you answer it",
                 gate.Id));
         }
