@@ -654,8 +654,11 @@ Filling is per setting, not per section — a project that pins a model for
 **Two things are deliberately absent.** Nothing that reaches off this machine
 has a default: the rule everywhere else here is that outward-facing things are
 confirmed rather than switched on for you, and a default is the opposite of
-confirming. And remote control isn't here at all — it doesn't exist in Loadout
-yet, so a setting to enable it automatically would be a setting for nothing.
+confirming. And remote control isn't here: it's a machine-wide setting,
+`remote-control`, rather than something filled into each project, because it's
+about where you are rather than what the project is. The agent does that
+remoting, not Loadout; [Launching a session](guides/launching.md#remote-control)
+has the rest.
 
 ## Pinning a model
 

@@ -87,6 +87,12 @@ namespace Loadout.Agents;
 /// first in the context, and the ledger records the link. An id the project
 /// does not have, or one already finished, stops the launch.
 /// </param>
+/// <param name="RemoteControl">
+/// Remote control asked for this session (true), refused for it (false), or
+/// left to the machine's <c>remote-control</c> setting (null). Asking for it
+/// here on an agent that cannot do it stops the launch; the default only
+/// warns.
+/// </param>
 public sealed record LaunchRequest(
     string ProjectHandle,
     string? AgentName = null,
@@ -110,7 +116,8 @@ public sealed record LaunchRequest(
     IReadOnlyList<string>? ReachableDirectories = null,
     string? WorktreeFrom = null,
     string? OpeningPrompt = null,
-    string? TaskId = null);
+    string? TaskId = null,
+    bool? RemoteControl = null);
 
 /// <summary>How a launch ended.</summary>
 /// <param name="AgentExitCode">The agent's own exit status, propagated per spec section 40.</param>
@@ -811,6 +818,22 @@ public sealed class AgentLauncher : IAgentLauncher
                 + "and local configuration cannot put back what it takes away.");
         }
 
+        // Settled here, against what the agent advertises, so a launch that
+        // asked for remote control on an agent without it is refused before
+        // anything starts rather than found out from a phone.
+        var remote = RemoteControlPolicy.Decide(
+            request.RemoteControl, config.RemoteControl.Enabled, descriptor, headless is not null);
+
+        if (remote.Refusal is { } refusal)
+        {
+            return OperationResult<Prepared>.Fail(refusal, Models.ExitCode.AgentUnavailable);
+        }
+
+        if (remote.Warning is { } remoteWarning)
+        {
+            warnings.Add(remoteWarning);
+        }
+
         var context = new AgentLaunchContext(
             project,
             workingDirectory,
@@ -894,7 +917,8 @@ public sealed class AgentLauncher : IAgentLauncher
             // A person's conversation is written down against its launch, so
             // resuming it later knows what it was for. A node's already is,
             // through its own protocol.
-            LinksSession: headless is null);
+            LinksSession: headless is null,
+            RemoteControl: remote.On);
 
         var invocationResult = await adapter.BuildInvocationAsync(context, ct).ConfigureAwait(false);
         if (invocationResult.Failed)

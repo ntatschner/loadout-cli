@@ -93,6 +93,37 @@ it as unfinished when it may not be. The same happens however the session is
 started: from here, from Studio's **Start**, or from **Work on its tasks…** in
 the launcher's Project menu.
 
+### Remote control
+
+Claude Code can make a session reachable from claude.ai/code and the Claude
+app, so you can carry on with it away from the desk. Loadout can switch that on
+for you:
+
+```sh
+loadout config set remote-control true   # every session from now on
+loadout starstats --remote               # this one only
+loadout starstats --no-remote            # not this one, whatever the setting says
+```
+
+Loadout does none of the remoting. It passes the agent's own switch
+(`--remote-control`, named after the project, for Claude Code) and that's all;
+where your conversation goes from there is the agent's business and its
+account's. That's why this one may be on by default when nothing else that
+reaches off the machine is: it isn't Loadout reaching anywhere.
+
+Not every agent has it. Codex doesn't, and nor does an older Claude Code. With
+the setting on, those sessions start without it and say so. Asking with
+`--remote` is refused instead, because you've said you mean to reach this
+session from somewhere else, and finding out from your phone that you can't is
+worse than finding out now. An agent you've described in `config.yaml` can
+declare its own switch as `remote_control_arguments`. `loadout doctor` says
+whether the setting is on and which installed agents can do it. What it can't
+tell is whether you're signed in with an account that has Remote Control;
+Claude Code says so itself when the session starts.
+
+It applies to sessions you start. A team's nodes run without a terminal, which
+remote control can't attach to.
+
 To see the whole launch described without starting anything:
 
 ```sh
