@@ -321,6 +321,18 @@
   --ease-out: cubic-bezier(.22,1,.36,1);
   --ease-travel: cubic-bezier(.65,0,.35,1);
   --recede: 0.72;
+  --z-ground: -1;
+  --z-page: 10;
+  --z-rail: 20;
+  --z-modebar: 30;
+  --z-focus: 40;
+  --z-rail-open: 50;
+  --z-menu: 55;
+  --z-scrim: 60;
+  --z-dialog: 61;
+  --z-toast: 70;
+  --z-skip: 80;
+  --z-ambient: 90;
   --font-sans: "Saira", system-ui, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Menlo, monospace;
 }

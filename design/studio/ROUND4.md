@@ -124,6 +124,7 @@ Don't reopen these.
   - `ConfigKeys` (with its description and default);
   - `StudioPreferences.Read` and the `Preferences` type;
   - the allow-list in `DashboardActions`.
+- RedAlert's edge and line sit on the `z-toast` layer, over every page and over dialogs. The line still steps aside while a dialog is open.
 - Mount RedAlert once in `App.svelte`. Feed it `studio.waiting` (with stalled runs) and the unseen problems. **Go to it** uses `goWaiting()`.
 
 # Part 3: Launch against a recorded task

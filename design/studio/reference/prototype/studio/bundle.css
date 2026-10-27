@@ -213,7 +213,7 @@
 [data-theme="hc-dark"] .ls-progress .bg, [data-theme="hc-light"] .ls-progress .bg { stroke: var(--control-edge); stroke-width: 2; }
 
 /* ---------- Toasts: top right, four levels, folding after dur-toast-fold ---------- */
-.ls-toasts { position: fixed; top: 18px; right: 24px; z-index: 30; width: min(390px, calc(100% - 32px)); display: grid; gap: 8px; justify-items: end; }
+.ls-toasts { position: fixed; top: 18px; right: 24px; z-index: var(--z-toast); width: min(390px, calc(100% - 32px)); display: grid; gap: 8px; justify-items: end; }
 .ls-toast { --c: var(--moving); position: relative; width: 100%; padding: 12px 14px 12px 18px; background: var(--surface); box-shadow: inset 3px 0 0 var(--c), 0 0 0 1px var(--rule), 0 16px 36px -18px var(--cgf), var(--shadow-float); }
 .ls-toast.done { --c: var(--good); } .ls-toast.info { --c: var(--moving); }
 .ls-toast.needs { --c: var(--needs); background: var(--needs-wash); box-shadow: inset 4px 0 0 var(--c), 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent), 0 0 40px -12px var(--cgf), var(--shadow-float); }
@@ -250,8 +250,8 @@
   --cg: color-mix(in srgb, var(--c, var(--accent)) calc(var(--glow-on) * var(--glow-strength)), transparent);
   --cgf: color-mix(in srgb, var(--c, var(--accent)) calc(var(--glow-on) * 100%), transparent);
 }
-.ls-railnav { --c: var(--accent); position: fixed; left: 0; top: 0; bottom: 0; z-index: 8; width: 76px; overflow: hidden; display: flex; flex-direction: column; gap: 2px; padding: 14px 0; background: var(--ground); box-shadow: inset -1px 0 0 var(--line-c), 8px 0 30px -20px var(--cgf); transition: width var(--dur-base) var(--ease-out), box-shadow var(--dur-base); }
-.ls-railnav:hover, .ls-railnav:focus-within { width: var(--rail-width-open); box-shadow: inset -1px 0 0 color-mix(in srgb, var(--accent) 55%, transparent), 30px 0 70px 16px var(--scrim), 8px 0 30px -20px var(--cgf); }
+.ls-railnav { --c: var(--accent); position: fixed; left: 0; top: 0; bottom: 0; z-index: var(--z-rail); width: 76px; overflow: hidden; display: flex; flex-direction: column; gap: 2px; padding: 14px 0; background: var(--ground); box-shadow: inset -1px 0 0 var(--line-c), 8px 0 30px -20px var(--cgf); transition: width var(--dur-base) var(--ease-out), box-shadow var(--dur-base); }
+.ls-railnav:hover, .ls-railnav:focus-within { z-index: var(--z-rail-open); width: var(--rail-width-open); box-shadow: inset -1px 0 0 color-mix(in srgb, var(--accent) 55%, transparent), 30px 0 70px 16px var(--scrim), 8px 0 30px -20px var(--cgf); }
 .ls-railnav .mark { display: flex; align-items: center; gap: 16px; padding: 6px 0 12px 22px; white-space: nowrap; }
 .ls-railnav .mark i { width: 32px; height: 32px; border-radius: 50%; flex: none; box-shadow: 0 0 0 1.5px var(--accent), 0 0 14px var(--cgf); background: radial-gradient(circle, var(--accent) 22%, transparent 26%); }
 .ls-railnav .mark b { font-size: 16px; font-weight: 500; letter-spacing: .4em; color: var(--ink-strong); opacity: 0; transition: opacity var(--dur-quick); }
@@ -271,10 +271,10 @@
 .ls-rl.need .f { color: var(--needs-text); }
 .ls-rl.search { margin-bottom: 8px; box-shadow: inset 0 -1px 0 var(--rule); }
 [data-theme="hc-dark"] .ls-railnav, [data-theme="hc-light"] .ls-railnav { box-shadow: inset -2px 0 0 var(--rule); }
-.ls-pagestab { display: none; position: absolute; left: 0; top: 14px; z-index: 6; place-items: center; width: 34px; min-height: 96px; padding: 10px 0; border: 0; background: color-mix(in srgb, var(--accent) 12%, var(--ground)); color: var(--ink-strong); font: inherit; font-family: var(--font-sans); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; writing-mode: vertical-rl; cursor: pointer; box-shadow: inset -2px 0 0 var(--accent); }
+.ls-pagestab { display: none; position: absolute; left: 0; top: 14px; z-index: var(--z-rail-open); place-items: center; width: 34px; min-height: 96px; padding: 10px 0; border: 0; background: color-mix(in srgb, var(--accent) 12%, var(--ground)); color: var(--ink-strong); font: inherit; font-family: var(--font-sans); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; writing-mode: vertical-rl; cursor: pointer; box-shadow: inset -2px 0 0 var(--accent); }
 .ls-pagestab:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.ls-slidescrim { position: absolute; inset: 0; z-index: 9; background: var(--scrim); }
-.ls-slide { position: absolute; left: 0; top: 0; bottom: 0; z-index: 10; width: min(270px, 84%); padding: 14px 0; overflow: auto; background: var(--surface); box-shadow: inset -1px 0 0 var(--line-c), 12px 0 40px -18px var(--cgf), var(--shadow-float); }
+.ls-slidescrim { position: absolute; inset: 0; z-index: var(--z-rail-open); background: var(--scrim); }
+.ls-slide { position: absolute; left: 0; top: 0; bottom: 0; z-index: var(--z-rail-open); width: min(270px, 84%); padding: 14px 0; overflow: auto; background: var(--surface); box-shadow: inset -1px 0 0 var(--line-c), 12px 0 40px -18px var(--cgf), var(--shadow-float); }
 .ls-slide .close { display: flex; align-items: center; gap: 10px; min-height: 44px; margin: 0 0 6px 20px; padding: 0 12px 0 0; border: 0; background: none; color: var(--ink-soft); font: inherit; font-family: var(--font-sans); font-size: 12px; letter-spacing: .2em; text-transform: uppercase; cursor: pointer; }
 .ls-slide .close span { font-size: 20px; letter-spacing: 0; color: var(--accent-text); }
 .ls-slide .close:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
@@ -284,8 +284,8 @@
 @media (max-width: 599px) { .ls-railnav { display: none; } .ls-pagestab { display: grid; } }
 
 /* ---------- Dialog: a projected panel ---------- */
-.ls-scrim { position: fixed; inset: 0; z-index: 20; background: var(--scrim); }
-.ls-dialog { --c: var(--accent); position: fixed; left: 50%; top: 80px; z-index: 21; width: min(700px, calc(100% - 32px)); max-height: calc(100% - 110px); overflow: auto; transform: translateX(-50%); padding: calc(var(--space-6) * var(--density)) calc(var(--space-6) * var(--density)) calc(var(--space-5) * var(--density)); background: var(--surface); box-shadow: inset 0 1.5px 0 var(--c), inset 0 -1.5px 0 var(--c), 0 0 0 1px var(--rule), 0 0 70px -16px var(--cgf), var(--shadow-float); }
+.ls-scrim { position: fixed; inset: 0; z-index: var(--z-scrim); background: var(--scrim); }
+.ls-dialog { --c: var(--accent); position: fixed; left: 50%; top: 80px; z-index: var(--z-dialog); width: min(700px, calc(100% - 32px)); max-height: calc(100% - 110px); overflow: auto; transform: translateX(-50%); padding: calc(var(--space-6) * var(--density)) calc(var(--space-6) * var(--density)) calc(var(--space-5) * var(--density)); background: var(--surface); box-shadow: inset 0 1.5px 0 var(--c), inset 0 -1.5px 0 var(--c), 0 0 0 1px var(--rule), 0 0 70px -16px var(--cgf), var(--shadow-float); }
 .ls-dialog.danger { --c: var(--bad); }
 .ls-dialog.anim { animation: lsProject .7s var(--ease-out) both; }
 .ls-dialog.anim > * { animation: lsPin .45s .4s both; }
@@ -308,7 +308,7 @@
 .ls-picker .chev { grid-row: 1 / span 2; grid-column: 2; color: var(--accent-text); font-size: 12px; }
 .ls-picker:hover, .ls-picker:focus-visible { background: color-mix(in srgb, var(--accent) 12%, transparent); outline: none; box-shadow: inset 3px 0 0 var(--focus), 0 0 0 2px var(--accent); }
 [data-theme="hc-dark"] .ls-picker, [data-theme="hc-light"] .ls-picker { box-shadow: inset 3px 0 0 var(--accent), inset 0 0 0 1px var(--control-edge); }
-.ls-pop { --c: var(--accent); position: absolute; left: 0; top: calc(100% + 24px); z-index: 15; min-width: 280px; max-width: min(380px, 80vw); padding: 8px 0; background: var(--surface); box-shadow: inset 0 1px 0 var(--accent), 0 0 0 1px var(--rule), 0 18px 40px -18px var(--cgf), var(--shadow-float); }
+.ls-pop { --c: var(--accent); position: absolute; left: 0; top: calc(100% + 24px); z-index: var(--z-page); min-width: 280px; max-width: min(380px, 80vw); padding: 8px 0; background: var(--surface); box-shadow: inset 0 1px 0 var(--accent), 0 0 0 1px var(--rule), 0 18px 40px -18px var(--cgf), var(--shadow-float); }
 .ls-pop::before { content: ""; position: absolute; left: 22px; top: -24px; width: 2px; height: 24px; background: linear-gradient(var(--accent), color-mix(in srgb, var(--accent) 50%, transparent)); box-shadow: 0 0 8px var(--cgf); }
 .ls-pop::after { content: ""; position: absolute; left: 18px; top: -30px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--cgf); }
 .ls-pop.anim::before { animation: lsTether .22s ease-out both; }
@@ -1087,7 +1087,7 @@ html[data-vt="fade"]::view-transition-group(*) { animation-duration: 0s; }
 @media (prefers-reduced-motion: reduce) { .ls-quiet li, .ls-quiet li::before { animation: none !important; } }
 
 /* ---------- FocusFrame: one thing, the whole screen ---------- */
-.ls-focus { --c: var(--accent); position: fixed; inset: var(--ls-focus-top, 0px) 0 0 0; z-index: 30; display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--ground); view-transition-name: ls-focus; }
+.ls-focus { --c: var(--accent); position: fixed; inset: var(--ls-focus-top, 0px) 0 0 0; z-index: var(--z-focus); display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--ground); view-transition-name: ls-focus; }
 .ls-focus.from { animation: lsFocusGrow .55s var(--ease-travel) both; }
 @keyframes lsFocusGrow { from { clip-path: inset(var(--ft, 40%) var(--fr, 10%) var(--fb, 40%) var(--fl, 10%)); opacity: .4; } to { clip-path: inset(0); opacity: 1; } }
 .ls-focus .fhead { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; min-height: 56px; padding: 8px max(20px, env(safe-area-inset-right, 0px)) 8px max(20px, env(safe-area-inset-left, 0px)); box-shadow: inset 0 -1px 0 var(--rule); }
@@ -1195,7 +1195,7 @@ html[data-vt="fade"]::view-transition-group(*) { animation-duration: 0s; }
 .ls-cmdbar .hints { display: inline-flex; align-items: center; gap: 12px; font-size: 12px; color: var(--muted); white-space: nowrap; }
 .ls-cmdbar .hints span { display: inline-flex; align-items: center; gap: 5px; }
 @media (max-width: 699px) { .ls-cmdbar .hints { display: none; } }
-.ls-cmdbar [role="listbox"] { position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); z-index: 20; margin: 0; padding: 4px; list-style: none; max-height: 360px; overflow: auto; background: var(--surface); box-shadow: inset 0 0 0 1px var(--control-edge), var(--shadow-float); }
+.ls-cmdbar [role="listbox"] { position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); z-index: var(--z-page); margin: 0; padding: 4px; list-style: none; max-height: 360px; overflow: auto; background: var(--surface); box-shadow: inset 0 0 0 1px var(--control-edge), var(--shadow-float); }
 .ls-cmdbar [role="listbox"][hidden] { display: none; }
 .ls-cmdbar [role="option"] { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 1px 12px; align-items: center; min-height: 40px; padding: 4px 8px; cursor: pointer; }
 .ls-cmdbar [role="option"] .k { grid-row: 1 / span 2; font-size: 10.5px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
@@ -1745,7 +1745,7 @@ a.ls-ptile:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px;
 .ls-refused .none { margin: 0; font-size: 14px; color: var(--muted); }
 
 /* ---------- RedAlert: the page's edge lights when something needs you ---------- */
-.ls-alert { --c: var(--needs); position: fixed; inset: 0; z-index: 70; pointer-events: none; }
+.ls-alert { --c: var(--needs); position: fixed; inset: 0; z-index: var(--z-toast); pointer-events: none; }
 .ls-alert[hidden] { display: none; }
 .ls-alert.problem { --c: var(--bad); }
 .ls-alert .edge { position: absolute; inset: 0; box-shadow: inset 0 0 0 3px var(--c), inset 0 0 calc(140px * var(--glow-on, 1) + 40px) -10px color-mix(in srgb, var(--c) 55%, transparent); animation: lsAlertBreathe 2.4s ease-in-out infinite; }
@@ -1794,7 +1794,7 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 .ls-value .how { margin: 0; padding: 10px 12px; font-size: 13px; color: var(--ink-soft); box-shadow: inset 2px 0 0 var(--rule); max-width: 80ch; }
 
 /* ---------- FieldMap: an embossed survey map behind every page ---------- */
-.ls-fieldmap { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; contain: strict;
+.ls-fieldmap { position: fixed; inset: 0; z-index: var(--z-ground); pointer-events: none; overflow: hidden; contain: strict;
   /* Measured: on its worst pixel (an index contour, its edge, a grid line and the scan together) every text colour stays 4.5:1 or better, in every accent. */
   --fm-hi: color-mix(in srgb, var(--ink-strong) 4%, transparent);
   --fm-lo: color-mix(in srgb, #000 30%, transparent);

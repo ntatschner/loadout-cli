@@ -84,6 +84,7 @@ Port these exactly. If you change a token, a level or a theme, measure again the
 
 ## Studio
 
+- **A layer for the map.** Add `z-ground` (-1, "Behind the page: the field map") to the `layer` tokens in `studio.tokens.json` and `tokens.css`. It is already in this folder's copies; keep it when you regenerate them. Nothing else uses it.
 - **`lib/studio.ts`:** add `Background` (`'plain' | 'map' | 'map-animated'`), `BACKGROUNDS` and `setBackground()`. It sets `data-background` on `<html>`, and an unknown value falls back to `map`, as in the reference.
 - **`lib/api.ts`:** add `background: string` to `Preferences`.
 - **`state.svelte.ts`:** in `applyPrefs()`, add `setBackground(prefs?.background ?? 'map')`. Then the map is right before the first page draws, and a change in Appearance applies at once.
@@ -107,7 +108,7 @@ Port these exactly. If you change a token, a level or a theme, measure again the
   - the gating selectors as written: the scan and the breathing only under `[data-background="map-animated"][data-motion="full"]:not([data-mode="pure"]):not([data-theme^="hc"])`, and both stopped under `prefers-reduced-motion: reduce`;
   - the `display: none` for `plain` and both high-contrast themes;
   - the rail and mode bar rules, including the solid rail when it widens.
-- **Nothing may paint the ground over the map.** It is `position: fixed; z-index: -1`, so it shows only because `body` paints the ground on the canvas and nothing between `body` and the page does. Keep the ground on `body`, and don't give `main.page`, the mode wrappers or the deck an opaque background.
+- **Nothing may paint the ground over the map.** It is `position: fixed; z-index: var(--z-ground)` (-1), so it shows only because `body` paints the ground on the canvas and nothing between `body` and the page does. Keep the ground on `body`, and don't give `main.page`, the mode wrappers or the deck an opaque background.
 - **Appearance:** add a **Background** group after Motion: Plain, Field map, still, and Field map, animated. Under it, one line: "The animated map moves only under full motion, and never in Pure Focus. High contrast keeps the plain ground." The group shows its command, `loadout config set studio-background <value>`, like the others.
 - **The command palette's Appearance entry:** add "background" to its sub-line.
 

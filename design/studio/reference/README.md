@@ -133,6 +133,11 @@ Loadout Studio is the design system for Studio: the app Loadout serves on this m
 - Controls are `control` (44px) tall, small ones `control-sm` (36px), the start rail `control-lg` (60px).
 - Pages start `rail-width` (84px) in, beside the side rail. Below 600px the rail hides behind a Pages tab and the page runs to a 16px (`space-4`) gutter. Nothing ever scrolls sideways at 320px.
 
+### Layers
+
+- Everything fixed to the screen, or able to overlap another region of it, stacks on one scale of `layer` tokens, from the bottom up: `z-ground` (-1, the field map behind the page), `z-page` (10, popovers and suggestions that belong to the page), `z-rail` (20), `z-modebar` (30), `z-focus` (40, Focus view), `z-rail-open` (50, the widened rail and the Pages slide-in, over the mode bar), `z-menu` (55), `z-scrim` (60) and `z-dialog` (61), `z-toast` (70, toasts and Red Alert, over dialogs too), `z-skip` (80) and `z-ambient` (90, which covers the screen).
+- A bare number is only for stacking inside one component, such as a badge over its card.
+
 ### Shape
 
 - Studio is square: panels, rails, toasts, tabs and the start rail use `radius-none`. Rings, glyph discs and orbiters use `radius-round`; meter tracks use `radius-pill`; signal marks use `radius-chip`.
