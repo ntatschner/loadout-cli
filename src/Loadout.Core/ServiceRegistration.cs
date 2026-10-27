@@ -28,6 +28,7 @@ public static class ServiceRegistration
         services.AddSingleton<IConfigurationService, ConfigurationService>();
         services.AddSingleton<IGitManager, GitManager>();
         services.AddSingleton<IPullRequestReader, GhPullRequestReader>();
+        services.AddSingleton<IRepositoryHost, GhRepositoryHost>();
         services.AddSingleton<IWorkspaceManager, WorkspaceManager>();
         services.AddSingleton<IProjectCheckouts, ProjectCheckouts>();
         services.AddSingleton<IProjectService, ProjectService>();

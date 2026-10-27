@@ -73,6 +73,12 @@ public sealed class QueueItem
     /// section, so the run it becomes carries on from that one. Empty otherwise.
     /// </summary>
     public string Follows { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The pull request mode for this task alone - <c>draft</c>, <c>ready</c>
+    /// or <c>none</c> - or empty to take the queue's or the project's.
+    /// </summary>
+    public string PrMode { get; set; } = string.Empty;
 }
 
 /// <summary>Where a run the queue started got to.</summary>
@@ -128,7 +134,13 @@ public sealed class QueueRun
     /// <summary>The branch its work is on.</summary>
     public string Branch { get; set; } = string.Empty;
 
-    /// <summary>The draft pull request it opened, when it opened one.</summary>
+    /// <summary>
+    /// The pull request mode its queued item asked for, carried over because
+    /// the item leaves the queue when the run starts. Empty when it asked for none.
+    /// </summary>
+    public string PrMode { get; set; } = string.Empty;
+
+    /// <summary>The pull request it opened, when it opened one.</summary>
     public string PullRequest { get; set; } = string.Empty;
 
     /// <summary>Whether what happened after it ended - the pull request, the task - has been done.</summary>
@@ -156,9 +168,21 @@ public sealed class QueueSettings
     /// Whether a queued run that meets its done-when may push its branch and open a draft pull request.
     /// </summary>
     /// <remarks>
-    /// Off until a person turns it on, and kept here where it can be seen and
-    /// turned off again. Nothing else outward is granted by it: merges and
-    /// every other outward action still wait for a person.
+    /// The grant queues had before <see cref="PrMode"/>, still read as
+    /// <c>draft</c> when <see cref="PrMode"/> is empty so a queue set up then
+    /// keeps working. Setting the mode clears it.
     /// </remarks>
     public bool DraftPullRequests { get; set; }
+
+    /// <summary>
+    /// Whether a queued run that meets its done-when pushes its branch and
+    /// opens a pull request: <c>draft</c>, <c>ready</c> or <c>none</c>, or
+    /// empty to take the project's.
+    /// </summary>
+    /// <remarks>
+    /// Kept here where it can be seen and turned off again. Nothing else
+    /// outward is granted by it: merges and every other outward action still
+    /// wait for a person.
+    /// </remarks>
+    public string PrMode { get; set; } = string.Empty;
 }

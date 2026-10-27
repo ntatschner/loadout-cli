@@ -2,6 +2,7 @@ using FluentAssertions;
 using Loadout.Cli.Commands;
 using Loadout.Core.Git;
 using Loadout.Core.Teams;
+using Loadout.Models.Projects;
 using Loadout.Models.Results;
 using Loadout.Models.Tasks;
 using Loadout.Models.Teams;
@@ -47,7 +48,8 @@ public sealed class TeamQueueDriverTests : IDisposable
 
         _driver = new TeamQueueDriver(
             _queues, _schedules, _space.Tasks, _journal, new FakeProjects("website", repository), _git,
-            _launcher, _processes, new StubResolver("gh"), _pulls, _space.Paths, _clock);
+            _launcher, _processes, new GhRepositoryHost(_launcher, new StubResolver("gh")), _pulls, _space.Workspace,
+            _space.Paths, _clock);
     }
 
     public void Dispose() => _space.Dispose();
@@ -59,9 +61,15 @@ public sealed class TeamQueueDriverTests : IDisposable
         return new DateTimeOffset(at, TimeZoneInfo.Local.GetUtcOffset(at));
     }
 
-    private async Task ReadyAsync(bool draftPullRequests = false)
+    private async Task ReadyAsync(
+        bool draftPullRequests = false, string queueMode = "", string itemMode = "", string projectMode = "")
     {
-        await _space.ProjectAsync("website");
+        (await _space.Workspace.WriteProjectAsync(new ProjectManifest
+        {
+            Slug = "website",
+            Name = "website",
+            Delivery = new ProjectDelivery { PrMode = projectMode },
+        })).Succeeded.Should().BeTrue();
         await _space.Tasks.DeclareAsync(
             "website", "login", TaskState.Open, "nigel", "Fix the login", doneWhen: ["the suite passes"]);
 
@@ -77,8 +85,9 @@ public sealed class TeamQueueDriverTests : IDisposable
 
         (await _queues.UpdateAsync("builders", queue =>
         {
-            queue.Items.Add(new QueueItem { Task = "login", Project = "website" });
+            queue.Items.Add(new QueueItem { Task = "login", Project = "website", PrMode = itemMode });
             queue.Settings.DraftPullRequests = draftPullRequests;
+            queue.Settings.PrMode = queueMode;
 
             return null;
         })).Succeeded.Should().BeTrue();
@@ -214,6 +223,74 @@ public sealed class TeamQueueDriverTests : IDisposable
         _git.Pushed.Should().BeEmpty();
         _launcher.Requests.Should().NotContain(one => one.Executable == "gh");
         (await TaskAsync()).History.Last().Reason.Should().Contain($"on branch {run.Branch}, kept on this machine");
+    }
+
+    [Fact]
+    public async Task A_project_set_to_ready_opens_a_pull_request_that_is_not_a_draft()
+    {
+        await ReadyAsync(projectMode: "ready");
+        await PassAsync();
+
+        var run = (await QueueAsync()).Runs.Single();
+        _journal.Add(QueueSettlingTests.Summary("r1", "done", finished: true) with { Started = _clock.Now });
+
+        await PassAsync();
+
+        _git.Pushed.Should().Equal(run.Branch);
+
+        var gh = _launcher.Requests.Single(one => one.Executable == "gh");
+        gh.Arguments.Should().ContainInOrder("pr", "create", "--head", run.Branch);
+        gh.Arguments.Should().NotContain("--draft");
+
+        (await QueueAsync()).Runs.Single().PullRequest.Should().Be("https://github.com/o/website/pull/42");
+        (await TaskAsync()).History.Last().Reason.Should().Contain("Pull request: https://github.com/o/website/pull/42");
+    }
+
+    [Fact]
+    public async Task Without_gh_the_branch_is_not_pushed_for_a_pull_request_that_could_never_open()
+    {
+        var driver = new TeamQueueDriver(
+            _queues, _schedules, _space.Tasks, _journal, new FakeProjects("website", _space.Scratch("website")), _git,
+            _launcher, _processes, new GhRepositoryHost(_launcher, new StubResolver(null)), _pulls, _space.Workspace,
+            _space.Paths, _clock);
+
+        await ReadyAsync(projectMode: "ready");
+        await driver.PassAsync(true, _said.Add, (_, _) => Task.CompletedTask, CancellationToken.None);
+        _journal.Add(QueueSettlingTests.Summary("r1", "done", finished: true) with { Started = _clock.Now });
+
+        await driver.PassAsync(true, _said.Add, (_, _) => Task.CompletedTask, CancellationToken.None);
+
+        _git.Pushed.Should().BeEmpty();
+        (await TaskAsync()).History.Last().Reason.Should().Contain("the GitHub CLI is not on PATH");
+    }
+
+    [Fact]
+    public async Task The_queue_saying_none_overrides_a_project_set_to_ready_and_says_which_level_decided()
+    {
+        await ReadyAsync(queueMode: "none", projectMode: "ready");
+        await PassAsync();
+        _journal.Add(QueueSettlingTests.Summary("r1", "done", finished: true) with { Started = _clock.Now });
+
+        await PassAsync();
+
+        _git.Pushed.Should().BeEmpty();
+        _launcher.Requests.Should().NotContain(one => one.Executable == "gh");
+        (await TaskAsync()).History.Last().Reason.Should().Contain("the queue asks for no pull request");
+    }
+
+    [Fact]
+    public async Task A_queued_task_asking_for_ready_overrides_a_queue_granted_drafts()
+    {
+        await ReadyAsync(draftPullRequests: true, itemMode: "ready");
+        await PassAsync();
+
+        var run = (await QueueAsync()).Runs.Single();
+        run.PrMode.Should().Be("ready", "the item's mode has to outlive the item, which leaves the queue when its run starts");
+        _journal.Add(QueueSettlingTests.Summary("r1", "done", finished: true) with { Started = _clock.Now });
+
+        await PassAsync();
+
+        _launcher.Requests.Single(one => one.Executable == "gh").Arguments.Should().NotContain("--draft");
     }
 
     [Fact]

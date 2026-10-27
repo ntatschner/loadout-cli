@@ -68,6 +68,31 @@ public sealed class ProjectManifest
 
     /// <summary>What every team run on this project is held to, beyond its own.</summary>
     public ProjectTeams Teams { get; set; } = new();
+
+    /// <summary>How work done for this project is handed back: its pull requests.</summary>
+    public ProjectDelivery Delivery { get; set; } = new();
+}
+
+/// <summary>
+/// How this project wants work that was done for it handed back.
+/// </summary>
+/// <remarks>
+/// A default that a team's queue, and a single queued task, can override. In
+/// the manifest because it is the project's choice, made once and reviewed
+/// with the rest of it.
+/// </remarks>
+public sealed class ProjectDelivery
+{
+    /// <summary>
+    /// Whether a queued run that meets its done-when opens a pull request:
+    /// <c>draft</c>, <c>ready</c> or <c>none</c>, or empty to leave it to the queue.
+    /// </summary>
+    /// <remarks>
+    /// Kept as the word somebody typed, so a manifest with a misspelt value
+    /// still loads and the misspelling can be named, rather than the whole
+    /// project failing to read.
+    /// </remarks>
+    public string PrMode { get; set; } = string.Empty;
 }
 
 /// <summary>
