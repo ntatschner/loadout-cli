@@ -569,7 +569,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
   function halo(o, k) { return key(S.HaloButton(o), k || ("hb-" + o.label)); }
 
   /* ---------- routing ---------- */
-  var PAGES = [["home", "Home"], ["sessions", "Sessions"], ["ideas", "Ideas"], ["teams", "Teams"], ["memory", "Memory"], ["context", "Context"], ["spend", "Spend"], ["projects", "Projects"], ["settings", "Settings"]];
+  var PAGES = [["home", "Home"], ["sessions", "Sessions"], ["ideas", "Ideas"], ["teams", "Teams"], ["events", "Events"], ["memory", "Memory"], ["context", "Context"], ["spend", "Spend"], ["projects", "Projects"], ["commands", "Commands"], ["settings", "Settings"]];
   var ELSEWHERE = { ideas: ["Ideas", "$ loadout idea list", "Ideas you are shaping, a round at a time."], teams: ["Teams", "$ loadout team list", "Teams and their runs."], memory: ["Memory", "$ loadout memory list starstats", "What each project remembers, by topic."],
     context: ["Context", "$ loadout instructions explain", "What a session reads before it starts, and what it costs in tokens."], spend: ["Spend", "$ loadout usage", "Tokens used, by day, project and model."], projects: ["Projects", "$ loadout project list", "The projects Loadout knows on this machine."] };
   function route() { var h = (location.hash || "#home").slice(1); return h || "home"; }
@@ -583,10 +583,12 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     var running = ST.lines.filter(function (l) { return l.kind === "session" && l.stage === 2 && !l.waiting; }).length;
     var facts = { home: [w.length ? w.length + " waiting on you" : "all calm", !!w.length], sessions: [sw ? sw + " waiting on you" : running + " running", !!sw], ideas: [IDEAS.filter(function (x) { return !x.accepted; }).length + " being shaped", IDEAS.some(function (x) { return ideaWord(x) === "waiting for you"; })],
       teams: [teamsWaiting() ? teamsWaiting() + " waiting on you" : "all calm", !!teamsWaiting()], memory: [Object.keys(MEM).reduce(function (n, k) { return n + MEM[k].project.length + MEM[k].user.length + MEM[k].machine.length; }, 0) + " topics", false], context: ["2,403 tokens", false], spend: ["11.3M tokens this month", false], projects: [PROJ.length + " projects", false], settings: ["", false] };
+    plcRailFacts(facts); if (/^(events|commands)\b/.test(r)) { cur = r.split(/[/?]/)[0]; }
     var nav = document.getElementById("nav"); nav.textContent = "";
     var rail = S.SideRail({ current: cur, onSearch: openPalette, pages: PAGES.map(function (p) { return { key: p[0], name: p[1], fact: facts[p[0]][0], need: facts[p[0]][1], href: "#" + p[0] }; }) });
     var foot = el("button", { type: "button", "class": "ls-rl ls-appearance", onclick: openAppearance, "data-k": "appearance" }, [svgIcon("M10 3a7 7 0 1 0 0 14a3.5 3.5 0 0 1 0-7a3.5 3.5 0 0 0 0-7z M10 3a7 7 0 0 1 0 14"), el("span", { "class": "n", text: "Appearance" }), el("span", { "class": "f", text: themeName() })]);
     rail.querySelector(".ls-railnav").appendChild(foot);
+    plcRailIcons(rail);
     nav.appendChild(rail);
     renderModebar();
   }
@@ -2182,44 +2184,225 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
   }
 
   /* ===== Projects: a wall of projects; a picked one opens as a dossier under it ===== */
-  function renderProjects(main, r) {
-    var parts = r.split("/"), sel = parts[1] || null;
-    pageHead(main, "Projects", PROJ.length + " known · " + PROJ.filter(function (p) { return p.available; }).length + " on this machine");
-    var wall = el("div", { "class": "ls-pwall" + (sel ? " compact" : "") });
-    PROJ.forEach(function (p) {
-      var ts = TASKS[p.id] || [], f = (HEALTH[p.id] || []).filter(function (x) { return x.fixable; }).length, ideas = IDEAS.filter(function (x) { return x.list === p.id && !x.accepted; }).length;
-      wall.appendChild(key(S.ProjectTile({ project: p, href: "#projects/" + p.id, picked: sel === p.id, doing: ts.filter(function (t) { return t.state === "doing"; }).length, blocked: ts.filter(function (t) { return t.state === "blocked"; }).length, findings: p.available ? f : undefined, ideas: ideas }), "pt-" + p.id));
+  /* Older tasks the lists keep: the releases loadout-cli has made, done, so every task across projects runs to more than a page. */
+  (function () { for (var n = 64; n >= 20; n--) { var d = new Date(2026, 9, 10 - (64 - n) * 5); TASKS["loadout-cli"].push({ id: "release-0" + n, title: "Release 0." + n + ".0", state: "done", kind: "release", declaredBy: "release-crew", declared: d.getDate() + " " + d.toLocaleString("en-GB", { month: "short" }), note: null }); } })();
+  /* What left a list, kept apart from its tasks, and where a moved task came from. */
+  var PLC_AWAY = { starstats: [{ id: "laptop-setup", title: "Set the new laptop up with Loadout", to: null, at: "14 Oct" }] };
+  (TASKS["~"] || []).forEach(function (t) { if (t.id === "laptop-setup") { t.moved = { from: "starstats", at: "14 Oct" }; } });
+  /* What 'task show' adds that a list leaves out. */
+  var PLC_DETAIL = {
+    "memory-import-notice": "The notice after `loadout memory import` says *imported 0 topics* when it imported some.\n\nIt counts before the import rather than after.",
+    "new-bucket": "Uploads go to `starstats-uploads-eu` from the next release.\n\n- copy what is there\n- switch the writer\n- keep the old bucket read-only for a month",
+    "upload-retries": "Three attempts with exponential backoff, and a test for each failure the client can return."
+  };
+  function plcWhereSaid(p) { return p || "the workspace-wide list"; }
+  function plcWhereOf(p) { return p ? ["--project", p] : ["--global"]; }
+  function plcIsoDay(d) { var t = Date.parse((d || "17 Oct") + " 2026 10:00"); return isNaN(t) ? new Date(2026, 9, 1, 10).toISOString() : new Date(t).toISOString(); }
+  /* One task in full, as 'task show --json' gives it. */
+  function plcShown(t, project) {
+    var hist = [{ state: "open", by: t.declaredBy || null, at: plcIsoDay(t.declared), reason: null }];
+    if (t.state !== "open") { hist.push({ state: t.state, by: t.state === "done" && t.declaredBy ? t.declaredBy : "you", at: new Date(Date.parse(plcIsoDay(t.declared)) + 864e5).toISOString(), reason: t.note || null }); }
+    return { id: t.id, title: t.title, state: t.state, declaredBy: t.declaredBy, declared: t.declared, note: t.note, project: project, detail: PLC_DETAIL[t.id] || "", history: hist, idea: null };
+  }
+  var PLC_TD = null;
+  function plcBase(r) { var p = r.split("/"); return p[0] + (p[1] ? "/" + p[1] : ""); }
+  /* The task an address opens over the place: #projects/<slug>/task/<id>, #projects/+tasks/task/<id>, #projects/+every/task/<slug or ~>/<id>. */
+  function plcTaskAt(parts) {
+    if (parts[2] !== "task") { return null; }
+    if (parts[1] === "+every") { return parts[3] && parts[4] ? { project: parts[3] === "~" ? null : parts[3], id: parts[4] } : null; }
+    return parts[3] ? { project: parts[1] === "+tasks" ? null : parts[1], id: parts[3] } : null;
+  }
+  function plcOpenTask(at) {
+    var key = (at.project || "~") + "/" + at.id;
+    if (PLC_TD && PLC_TD.key === key && PLC_TD.td.el && PLC_TD.td.el.isConnected) { return; }
+    var t = (TASKS[at.project || "~"] || []).filter(function (x) { return x.id === at.id; })[0];
+    var td = S.TaskDetail({ task: { id: at.id, title: t ? t.title : "", state: t ? t.state : "", project: at.project }, shown: t ? plcShown(t, at.project) : null,
+      problem: t ? null : "There is no task " + at.id + " on " + plcWhereSaid(at.project) + ".",
+      onidea: function (href) { go(href.slice(1)); },
+      onclose: function () { PLC_TD = null; if (route().indexOf("/task/") >= 0) { try { history.replaceState(null, "", "#" + plcBase(route())); } catch (e) { /* the address keeps the task */ } } } });
+    PLC_TD = { key: key, td: td };
+  }
+  /* Opens one task over its board and puts it in the address, so a reload or a link reopens it. */
+  function plcReadTask(t, place) {
+    var at = { project: place === "+every" ? (t.project || null) : (place === "+tasks" ? null : place), id: t.id };
+    var parts = place === "+every" ? [place, "task", at.project || "~", t.id] : [place, "task", t.id];
+    try { history.replaceState(null, "", "#projects/" + parts.join("/")); } catch (e) { /* opened without the address */ }
+    plcOpenTask(at);
+  }
+  /* The same search, filter and sort over every list, read the way the daemon reads a list query:
+     field:value (or value,value), -field:value, sort:field or sort:-field, and plain words. */
+  var PLC_Q = { wall: "", every: "" }, PLC_TOOLS = [], PLC_PAGE = 1, PLC_EVERY_LIMIT = 50;
+  var PLC_PROJECT_FIELDS = [{ name: "id", type: "text", description: "the project's slug", choices: [] }, { name: "name", type: "text", description: "what it is called", choices: [] }, { name: "agent", type: "text", description: "the agent it launches", choices: [] },
+    { name: "where", type: "choice", description: "whether it is on this machine", choices: ["here", "elsewhere"] }, { name: "pinned", type: "choice", description: "whether it is pinned", choices: ["yes", "no"] }, { name: "launches", type: "number", description: "how often it has been launched", choices: [] }];
+  var PLC_TASK_FIELDS = [{ name: "id", type: "text", description: "the task's id", choices: [] }, { name: "title", type: "text", description: "what the task is", choices: [] }, { name: "state", type: "choice", description: "where it stands", choices: ["open", "doing", "blocked", "done", "dropped"] },
+    { name: "kind", type: "choice", description: "work, or an idea", choices: ["task", "idea"] }, { name: "project", type: "text", description: "the project whose list it is on, or global for the workspace-wide one", choices: [] }, { name: "by", type: "text", description: "who declared it last", choices: [] }, { name: "note", type: "text", description: "the note beside it", choices: [] }];
+  function plcProjGet(p, f) { return f === "where" ? (p.available ? "here" : "elsewhere") : f === "pinned" ? (p.pinned ? "yes" : "no") : f === "agent" ? p.defaultAgent : f === "launches" ? p.launchCount : p[f]; }
+  function plcTaskGet(t, f) { return f === "by" ? t.declaredBy : f === "kind" ? (t.kind === "idea" ? "idea" : "task") : f === "project" ? (t.project || "global") : t[f]; }
+  function plcQuery(items, query, fields, get, noun) {
+    var parts = String(query || "").trim().split(/\s+/).filter(Boolean), out = items.slice(), sort = null, problem = null;
+    parts.forEach(function (p) {
+      var m = /^(-?)([a-z]+):(.*)$/.exec(p);
+      if (m && m[2] === "sort") { sort = m[3]; return; }
+      if (m) {
+        var fd = fields.filter(function (f) { return f.name === m[2]; })[0];
+        if (!fd) { problem = "There is no field " + m[2] + " to filter " + noun + " on. The fields are " + fields.map(function (f) { return f.name; }).join(", ") + "."; return; }
+        var vals = m[3].toLowerCase().split(",").filter(Boolean);
+        out = out.filter(function (x) { var v = String(get(x, m[2]) === undefined || get(x, m[2]) === null ? "" : get(x, m[2])).toLowerCase(), hit = vals.some(function (w) { return fd.type === "text" ? v.indexOf(w) >= 0 : v === w; }); return m[1] ? !hit : hit; });
+        return;
+      }
+      var w = p.toLowerCase();
+      out = out.filter(function (x) { return fields.some(function (f) { return f.type === "text" && String(get(x, f.name) || "").toLowerCase().indexOf(w) >= 0; }); });
     });
-    [["+add", "Add a repository you have", "loadout project add"], ["+new", "Make a new project", "loadout project new"], ["+find", "Find repositories and stray memory", "loadout project discover"]].forEach(function (x) { wall.appendChild(S.ProjectTile({ place: x[1], sub: x[2], href: "#projects/" + x[0] })); });
-    main.appendChild(wall);
-    main.appendChild(el("p", { "class": "ls-from" }, ["The same as ", el("code", { text: "$ loadout project list" }), " or ", el("code", { text: "loadout list" }), ". Also: ", el("a", { href: "#projects/+tasks", text: "tasks for no project yet" }), " · ", el("a", { href: "#projects/+workspace", text: "the workspace" }), "."]));
-    var p = sel ? proj(sel) : null;
-    if (p) { return dossier(main, p); }
-    if (sel === "+add") { return placePage(main, "Add a repository you have", C.placeAdd()); }
-    if (sel === "+new") { return placePage(main, "Make a new project", C.placeNew()); }
-    if (sel === "+find") { return placePage(main, "Find repositories and stray memory", C.placeFind()); }
-    if (sel === "+tasks") {
-      main.appendChild(block("z-gt", "Tasks for no project yet", [el("p", { "class": "calm", style: "margin: 0 0 10px; font-size: 14px", text: "The workspace-wide list, for work that does not belong to a project yet." }), S.TaskBoard({ tasks: TASKS["~"], where: ["--global"], from: "$ loadout task list --global --all", onDeclare: function (t, n) { said(t.title + ": " + n, "$ loadout task declare " + t.id + " " + n + " --global"); } }).el, taskNew("~"), C.taskMove(TASKS["~"], ["--global"])]));
-      return;
+    if (sort) {
+      var desc = sort.charAt(0) === "-", k = desc ? sort.slice(1) : sort;
+      if (!fields.some(function (f) { return f.name === k; })) { problem = "There is no field " + k + " to sort " + noun + " by."; }
+      else { out.sort(function (a, b) { var x = get(a, k), y = get(b, k), c = typeof x === "number" && typeof y === "number" ? x - y : String(x || "").localeCompare(String(y || "")); return desc ? -c : c; }); }
     }
-    if (sel === "+workspace") {
-      main.appendChild(block("z-ws", "The workspace", [el("p", { "class": "calm", style: "margin: 0 0 12px; font-size: 14px", text: "Where projects, memory, specialists and tasks are kept, and synced between your machines." }),
-        el("dl", { "class": "ls-rules" }, [el("dt", { text: "Remote" }), el("dd", { text: "github.com/ntatschner/loadout-workspace" }), el("dt", { text: "Here" }), el("dd", { text: "~/.loadout/workspace" }), el("dt", { text: "Projects" }), el("dd", { text: "3" })]), from("$ loadout workspace status"),
+    return { items: out, parts: parts, problem: problem };
+  }
+  function plcTool(noun, query, fields, shown, recorded, problem, slash, key, onchange) {
+    var tb = S.ListToolbar({ noun: noun, query: query, shape: { text: query, parts: String(query || "").trim().split(/\s+/).filter(Boolean), fields: fields, defaultQuery: "" }, shown: shown, recorded: recorded, problem: problem, slash: slash, onchange: onchange });
+    var box = tb.el.querySelector("input"); if (box) { box.setAttribute("data-k", "lt-" + key); }
+    PLC_TOOLS.push(tb); return tb;
+  }
+  /* A board as main's TaskBoard draws it: Start and Start with options… on a card a session can start from, Details and history, what moved here and what moved away, and, across lists, each card's own list. */
+  function plcBoard(o) {
+    var tasks = o.tasks, b = S.TaskBoard({ tasks: tasks, where: o.mixed ? [] : o.where, from: o.from, onDeclare: o.onDeclare });
+    function order() { var list = []; ["open", "doing", "blocked"].forEach(function (s) { list = list.concat(tasks.filter(function (t) { return t.state === s; })); }); return list.concat(tasks.filter(function (t) { return t.state === "done" || t.state === "dropped"; })); }
+    function inject() {
+      var list = order();
+      Array.prototype.forEach.call(b.el.querySelectorAll("article.task"), function (a, i) {
+        var t = list[i]; if (!t || a.getAttribute("data-plc")) { return; }
+        a.setAttribute("data-plc", "1");
+        var go = a.querySelector(".go"); if (go) { go.parentNode.removeChild(go); }
+        var moves = a.querySelector(".moves"), tx = a.querySelector(".tx"), list_ = o.mixed ? (t.project || null) : (o.where[0] === "--project" ? o.where[1] : null);
+        if (o.mixed) { Array.prototype.forEach.call(moves.querySelectorAll("code"), function (c) { c.textContent += " " + plcWhereOf(t.project).join(" "); }); if (tx) { tx.textContent = plcWhereSaid(t.project) + " · " + tx.textContent; } }
+        if (t.moved && tx) { tx.parentNode.insertBefore(el("span", { "class": "came", text: "Moved here from " + plcWhereSaid(t.moved.from) + ", " + t.moved.at }), tx.nextSibling); }
+        var into = o.mixed ? t.project : o.project;
+        if (into && o.onStart && t.state !== "dropped") {
+          moves.insertBefore(halo({ label: "Start with options…", size: "small", cmd: "opens the launch sheet with this task chosen", onPress: function () { o.onStart(t, true); } }, "tb-opt-" + t.id), moves.firstChild);
+          moves.insertBefore(halo({ label: "Start", size: "small", solid: true, cmd: "$ loadout launch " + into + " --task-id " + t.id, onPress: function () { o.onStart(t, false); } }, "tb-go-" + t.id), moves.firstChild);
+        }
+        moves.appendChild(halo({ label: PLC_DETAIL[t.id] ? "Details and history" : "History", size: "small", cmd: "$ loadout task show " + [t.id].concat(plcWhereOf(list_)).join(" "), onPress: function () { o.onRead(t); } }, "tb-read-" + t.id));
+      });
+      if (o.paged) { Array.prototype.forEach.call(b.el.querySelectorAll(".col .empty"), function (p) { p.textContent = "None on this page."; }); }
+      if ((o.away || []).length && !b.el.querySelector(".plcaway")) {
+        var from_ = b.el.querySelector(":scope > .ls-from"), sec = el("section", { "class": "plcaway", "aria-labelledby": "tb-away-" + o.key }, [el("h4", { id: "tb-away-" + o.key, text: "Moved away" }), el("ul", {}, o.away.map(function (g) {
+          return el("li", {}, [(g.title || g.id) + " moved to " + plcWhereSaid(g.to) + ", " + g.at + ". ", el("a", { href: g.to ? "#projects/" + g.to : "#projects/+tasks", text: "Show it" })]); }))]);
+        b.el.insertBefore(sec, from_);
+      }
+    }
+    inject();
+    new MutationObserver(inject).observe(b.el, { childList: true });
+    return b.el;
+  }
+  /* Starts a session on a task, at once or through the launch sheet. The launch moves open or blocked work to doing itself. */
+  function plcStart(project, t, withOptions) {
+    if (withOptions) { sessionOnTask(project, t); return; }
+    said("Started a session on " + t.title, "$ loadout launch " + project + " --task-id " + t.id, "done");
+    (TASKS[project] || []).concat([t]).forEach(function (x) { if (x.id === t.id && (x.state === "open" || x.state === "blocked")) { x.state = "doing"; } });
+    bump();
+  }
+  /* Conversations from both agents' own history, as 'loadout sessions' lists them: Sessions owns the history; a project shows its own five. */
+  function plcAgo(min) { return new Date(plcNow().getTime() - min * 6e4).toISOString(); }
+  var PLC_CONV = [
+    { agent: "claude", id: "3b9e7d21", title: "add a retry to the upload step", project: "loadout-cli", registered: true, directory: "~/code/loadout-cli", branch: "main", at: 2, launchedFor: { launch: "l-0412", task: "add a retry to the upload step", taskId: null, mode: "implement", profile: null, worktree: null }, running: "hosted:s2" },
+    { agent: "claude", id: "9a41c0ee", title: "review the memory compress change", project: "loadout-cli", registered: true, directory: "~/code/loadout-cli", branch: "memory-compress", at: 25, launchedFor: { launch: "l-0409", task: "review the memory compress change", taskId: null, mode: "review", profile: null, worktree: null }, running: "none" },
+    { agent: "codex", id: "019a2f7c", title: "port the help text to the new renderer", project: "loadout-cli", registered: true, directory: "~/code/loadout-cli-feature-x", branch: "feature-x", at: 190, launchedFor: { launch: "l-0401", task: "port the help text to the new renderer", taskId: null, mode: "implement", profile: null, worktree: "feature-x" }, running: "elsewhere" },
+    { agent: "claude", id: "77d0b5a2", title: "what does the office need from the daemon", project: "loadout-cli", registered: true, directory: "~/code/loadout-cli", branch: "main", at: 1500, launchedFor: null, running: "none" },
+    { agent: "claude", id: "c51e9f30", title: "Fix the memory import notice", project: "loadout-cli", registered: true, directory: "~/code/loadout-cli", branch: "main", at: 2900, launchedFor: { launch: "l-0388", task: "Fix the memory import notice", taskId: "memory-import-notice", mode: null, profile: "release", worktree: null }, running: "none" },
+    { agent: "claude", id: "e2c4a817", title: "why is this postgres query so slow", project: "starstats", registered: true, directory: "~/code/starstats", branch: "feature/new-bucket", at: 4, launchedFor: { launch: "l-0413", task: "why is this postgres query so slow", taskId: null, mode: "investigate", profile: null, worktree: null }, running: "hosted:s1" },
+    { agent: "codex", id: "019a3310", title: "tidy the deploy script", project: "starstats", registered: true, directory: "~/code/starstats", branch: "feature/new-bucket", at: 9, launchedFor: { launch: "l-0411", task: "tidy the deploy script", taskId: null, mode: "implement", profile: null, worktree: null }, running: "hosted:s3" },
+    { agent: "claude", id: "51aa09d4", title: "the upload test that fails on CI", project: "starstats", registered: true, directory: "~/code/starstats", branch: "main", at: 1700, launchedFor: { launch: "l-0397", task: "the upload test that fails on CI", taskId: null, mode: "investigate", profile: null, worktree: null }, running: "none" }
+  ];
+  function plcConvs(project) { return PLC_CONV.filter(function (c) { return c.project === project; }).map(function (c) { return Object.assign({}, c, { lastActive: plcAgo(c.at) }); }); }
+  function renderProjects(main, r) {
+    PLC_TOOLS.forEach(function (t) { t.destroy(); }); PLC_TOOLS = [];
+    var parts = r.split("/"), sel = parts[1] || null, slug = sel && sel.charAt(0) !== "+" ? sel : null, place = sel && sel.charAt(0) === "+" ? sel.slice(1) : null, ready = plcRead("projects");
+    var reading = plcTaskAt(parts);
+    if (!reading && PLC_TD) { PLC_TD.td.close(); PLC_TD = null; }
+    var shown = plcQuery(PROJ, PLC_Q.wall, PLC_PROJECT_FIELDS, plcProjGet, "projects");
+    function headFact() { return !ready ? "the projects Loadout knows" : shown.items.length !== PROJ.length ? PROJ.length + " known · " + shown.items.length + " shown" : PROJ.length + " known · " + PROJ.filter(function (p) { return p.available; }).length + " on this machine"; }
+    pageHead(main, "Projects", headFact());
+    var head = main.lastChild;
+    var wall = el("div", { "class": "ls-pwall" + (sel ? " compact" : "") });
+    function paintWall() {
+      wall.textContent = "";
+      if (!ready) { wall.appendChild(el("p", { "class": "calm", role: "status", text: "Reading…" })); }
+      else {
+        shown.items.forEach(function (p) {
+          var ts = TASKS[p.id] || [], f = (HEALTH[p.id] || []).filter(function (x) { return x.fixable; }).length, ideas = IDEAS.filter(function (x) { return x.list === p.id && !x.accepted; }).length;
+          wall.appendChild(key(S.ProjectTile({ project: p, href: "#projects/" + p.id, picked: sel === p.id, doing: ts.filter(function (t) { return t.state === "doing"; }).length, blocked: ts.filter(function (t) { return t.state === "blocked"; }).length, findings: p.available ? f : undefined, ideas: ideas }), "pt-" + p.id));
+        });
+      }
+      [["+add", "Add a repository you have", "loadout project add"], ["+new", "Make a new project", "loadout project new"], ["+find", "Find repositories and stray memory", "loadout project discover"]].forEach(function (x) { wall.appendChild(S.ProjectTile({ place: x[1], sub: x[2], href: "#projects/" + x[0], picked: sel === x[0] })); });
+    }
+    paintWall();
+    var tool = plcTool("projects", PLC_Q.wall, PLC_PROJECT_FIELDS, ready ? shown.items.length : null, ready ? PROJ.length : null, shown.problem, !slug && place !== "tasks" && place !== "every", "wall", function (q) {
+      PLC_Q.wall = q; shown = plcQuery(PROJ, q, PLC_PROJECT_FIELDS, plcProjGet, "projects"); paintWall();
+      tool.set({ query: q, shown: shown.items.length, recorded: PROJ.length, problem: shown.problem });
+      var f = head.querySelector(".fact"); if (f) { f.textContent = headFact(); }
+    });
+    main.appendChild(tool.el);
+    var cur = function (k) { return place === k ? "page" : null; };
+    main.appendChild(el("nav", { "aria-label": "Projects" }, [wall, el("p", { "class": "ls-from" }, ["The same as ", el("code", { text: "$ loadout project list" }), " or ", el("code", { text: "loadout list" }), ". Also ",
+      el("a", { href: "#projects/+every", "aria-current": cur("every"), text: "every task, across projects" }), ", ", el("a", { href: "#projects/+tasks", "aria-current": cur("tasks"), text: "tasks for no project yet" }), " and ", el("a", { href: "#projects/+workspace", "aria-current": cur("workspace"), text: "the workspace" }), "."])]));
+    var p = slug ? proj(slug) : null;
+    if (p) { dossier(main, p); }
+    else if (slug) { main.appendChild(el("p", { "class": "calm", text: "Loadout knows no project " + slug + ". The wall above has every one it does." })); }
+    else if (sel === "+add") { placePage(main, "Add a repository you have", C.placeAdd()); }
+    else if (sel === "+new") { placePage(main, "Make a new project", C.placeNew()); }
+    else if (sel === "+find") { placePage(main, "Find repositories and stray memory", C.placeFind()); }
+    else if (sel === "+tasks") {
+      var gl = TASKS["~"], gq = PLC_Q["tasks:~"] || "", gs = plcQuery(gl, gq, PLC_TASK_FIELDS, plcTaskGet, "tasks"), gbox = el("div", {});
+      var gpaint = function () { gbox.textContent = ""; gbox.appendChild(plcBoard({ key: "global", tasks: gs.items, where: ["--global"], from: "$ loadout task list --global --all", away: PLC_AWAY["~"], onRead: function (t) { plcReadTask(t, "+tasks"); }, onDeclare: function (t, n) { said(t.title + ": " + S.TASK_MOVE[n].toLowerCase(), "$ loadout task declare " + t.id + " " + n + " --global"); } })); };
+      var gt = plcTool("tasks", gq, PLC_TASK_FIELDS, gs.items.length, gl.length, gs.problem, true, "global", function (q) { PLC_Q["tasks:~"] = q; gs = plcQuery(gl, q, PLC_TASK_FIELDS, plcTaskGet, "tasks"); gpaint(); gt.set({ query: q, shown: gs.items.length, recorded: gl.length, problem: gs.problem }); });
+      gpaint();
+      main.appendChild(block("z-gt", "Tasks for no project yet", [el("p", { "class": "lead", text: "The workspace-wide list, for work that does not belong to a project yet." }), gt.el, gbox, taskNew("~", "Record one"), C.taskMove(TASKS["~"], ["--global"])]));
+    }
+    else if (sel === "+every") { plcEvery(main); }
+    else if (sel === "+workspace") {
+      var ws = { remote: "github.com/ntatschner/loadout-workspace", localPath: "~/.loadout/workspace", cloned: true, projects: PROJ.length };
+      main.appendChild(block("z-ws", "The workspace", [el("p", { "class": "lead", text: "Where projects, memory, specialists and tasks are kept, and synced between your machines." }),
+        el("dl", { "class": "ls-rules" }, [el("dt", { text: "Remote" }), el("dd", { text: ws.remote || "none: this machine only" }), el("dt", { text: "Here" }), el("dd", {}, [el("code", { text: ws.localPath }), ws.cloned ? "" : " · not cloned yet"]), el("dt", { text: "Projects" }), el("dd", { text: String(ws.projects) })]), from("$ loadout workspace status"),
         C.workspace()]));
-      return;
     }
+    if (reading) { plcOpenTask(reading); }
+  }
+  /* Every list as one board, a page at a time, narrowed with project:<slug> or project:global. */
+  function plcEvery(main) {
+    var rank = { open: 0, doing: 1, blocked: 2, done: 3, dropped: 4 };
+    /* The list's default order: by state, then project, then id. */
+    var all = allTasks().concat((TASKS["~"] || []).map(function (t) { return Object.assign({ project: null }, t); })).sort(function (x, y) { return (rank[x.state] - rank[y.state]) || String(x.project || "~").localeCompare(String(y.project || "~")) || x.id.localeCompare(y.id); });
+    var q = PLC_Q.every, res = plcQuery(all, q, PLC_TASK_FIELDS, plcTaskGet, "tasks"), pages = Math.max(1, Math.ceil(res.items.length / PLC_EVERY_LIMIT));
+    if (PLC_PAGE > pages) { PLC_PAGE = 1; }
+    var box = el("div", {});
+    function paint() {
+      box.textContent = "";
+      var page = res.items.slice((PLC_PAGE - 1) * PLC_EVERY_LIMIT, PLC_PAGE * PLC_EVERY_LIMIT);
+      box.appendChild(plcBoard({ key: "every", tasks: page, where: [], mixed: true, paged: pages > 1, from: "$ loadout task list --every-list --all", onStart: function (t, opt) { plcStart(t.project, t, opt); }, onRead: function (t) { plcReadTask(t, "+every"); },
+        onDeclare: function (t, n) { said(t.title + ": " + S.TASK_MOVE[n].toLowerCase(), "$ loadout task declare " + [t.id, n].concat(plcWhereOf(t.project)).join(" ")); (TASKS[t.project || "~"] || []).forEach(function (x) { if (x.id === t.id) { x.state = n; } }); } }));
+      if (pages > 1) {
+        box.appendChild(el("nav", { "class": "ls-pager", "aria-label": "Pages of tasks" }, [el("span", { role: "status", text: "Page " + PLC_PAGE + " of " + pages + ", " + res.items.length + " in all." }),
+          halo({ label: "Previous page", size: "small", disabledReason: PLC_PAGE <= 1 ? "This is the first page." : null, onPress: function () { PLC_PAGE--; paint(); } }, "pg-prev"),
+          halo({ label: "Next page", size: "small", disabledReason: PLC_PAGE >= pages ? "This is the last page." : null, onPress: function () { PLC_PAGE++; paint(); } }, "pg-next")]));
+      }
+    }
+    var tb = plcTool("tasks", q, PLC_TASK_FIELDS, res.items.length, all.length, res.problem, true, "every", function (nq) { PLC_Q.every = nq; PLC_PAGE = 1; res = plcQuery(all, nq, PLC_TASK_FIELDS, plcTaskGet, "tasks"); pages = Math.max(1, Math.ceil(res.items.length / PLC_EVERY_LIMIT)); paint(); tb.set({ query: nq, shown: res.items.length, recorded: all.length, problem: res.problem }); });
+    paint();
+    main.appendChild(block("z-ev", "Every task, across projects", [el("p", { "class": "lead" }, ["Every project's list and the workspace-wide one, as one board. Narrow it to one with ", el("code", { text: "project:" }), " and its slug, or ", el("code", { text: "project:global" }), "."]), tb.el, box]));
   }
   function placePage(main, title, node) { main.appendChild(block("z-place", title, [node])); }
-  function taskNew(where) {
+  function taskNew(where, label) {
     var id = "", title = "", box = el("form", { "class": "tasknew", onsubmit: function (e) { e.preventDefault(); } });
-    var a = el("input", { "class": "ls-text", id: "tn-title", placeholder: "Retry the upload with backoff", oninput: function () { title = a.value.trim(); if (!idTouched) { id = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 28); b.value = id; } paint(); } });
-    var idTouched = false, b = el("input", { "class": "ls-text", id: "tn-id", placeholder: "upload-retries", oninput: function () { idTouched = true; id = b.value.trim(); paint(); } });
-    box.appendChild(el("div", { "class": "ls-field" }, [el("label", { "class": "lab", "for": "tn-title", text: "Record a task" }), a]));
+    var a = el("input", { "class": "ls-text", id: "tn-title", placeholder: "What needs doing", autocomplete: "off", oninput: function () { title = a.value.trim(); paint(); } });
+    var b = el("input", { "class": "ls-text", id: "tn-id", placeholder: "a-short-id", autocomplete: "off", spellcheck: "false", oninput: function () { id = b.value.trim(); paint(); } });
+    box.appendChild(el("div", { "class": "ls-field" }, [el("label", { "class": "lab", "for": "tn-title", text: label || "Record a task" }), a]));
     box.appendChild(el("div", { "class": "ls-field" }, [el("label", { "class": "lab", "for": "tn-id", text: "Its id" }), b]));
     var act = el("div", {}); box.appendChild(act);
     function paint() {
       act.textContent = ""; var w = where === "~" ? ["--global"] : ["--project", where], ln = "$ loadout task declare " + (id || "<id>") + " open --title " + (title ? S.shellQuote(title) : "<title>") + " " + w.join(" ");
-      act.appendChild(halo({ label: "Record it", size: "small", solid: true, cmd: ln, disabledReason: title && id ? null : "give it a title and an id", onPress: function () { TASKS[where].push({ id: id, title: title, state: "open", kind: "", declaredBy: "you", declared: "17 Oct", note: null }); said("Recorded " + title, ln, "done"); bump(); } }, "tn-go"));
+      act.appendChild(halo({ label: "Record it", size: "small", solid: !!(title && id), cmd: ln, disabledReason: !title ? "say what needs doing" : !id ? "give it an id" : null, onPress: function () { TASKS[where].push({ id: id, title: title, state: "open", kind: "", declaredBy: "you", declared: "17 Oct", note: null }); said("Recorded " + title, ln, "done"); bump(); } }, "tn-go"));
     }
     paint();
     return box;
@@ -2227,22 +2410,31 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
   function dossier(main, p) {
     var d = el("article", { "class": "dossier", "aria-labelledby": "z-dos" });
     d.appendChild(el("div", { "class": "dhead" }, [el("h2", { id: "z-dos", text: p.name }), el("span", { "class": "slug", text: p.id + (p.aliases.length ? " · also " + p.aliases.join(", ") : "") })]));
+    var trees = p.worktrees.length > 1 ? el("ul", { "class": "plctrees" }, p.worktrees.map(function (w) { return el("li", {}, [el("code", { text: w[0] }), " · " + w[1] + (w[2] ? " · the main one" : "")]); })) : "just the one";
     d.appendChild(el("dl", { "class": "facts" }, [
-      ["Where", p.available ? p.path : "not on this machine"], ["Branch", p.branch ? p.branch + (p.clean === false ? " · uncommitted changes" : " · clean") : "—"], ["Remote", p.remote || "none recorded"], ["Agent", p.defaultAgent],
-      ["Launched", p.launchCount + " times"], ["Profiles", p.profiles.join(", ") || "none"], ["Every session also gets", p.context.join(", ") || "nothing extra"], ["Working trees", p.worktrees.length > 1 ? p.worktrees.map(function (w) { return w[1] + (w[2] ? " (the main one)" : ""); }).join(", ") : (p.worktrees.length ? "one" : "—")]
-    ].map(function (f) { return el("div", {}, [el("dt", { text: f[0] }), el("dd", { text: f[1] })]); })));
+      ["Where", p.available ? el("code", { text: p.path }) : "not on this machine"], ["Branch", (p.branch || "none") + (p.clean === false ? " · uncommitted changes" : p.clean ? " · clean" : "")], ["Remote", p.remote || "none recorded"], ["Agent", p.defaultAgent],
+      ["Launched", p.launchCount + " time" + (p.launchCount === 1 ? "" : "s")], ["Profiles", p.profiles.join(", ") || "none"], ["Every session also gets", p.context.join(", ") || "nothing extra"], ["Working trees", trees]
+    ].map(function (f) { return el("div", { "class": f[0] === "Working trees" && p.worktrees.length > 1 ? "wide" : null }, [el("dt", { text: f[0] }), el("dd", {}, [f[1]])]); })));
+    d.appendChild(el("p", { "class": "ls-from" }, ["From ", el("code", { text: "$ loadout project show " + p.id }), " and ", el("code", { text: "$ loadout project worktrees " + p.id }), "."]));
     d.appendChild(S.Command({ why: "The same, in a terminal:", command: "$ loadout project show " + p.id }));
-    d.appendChild(from("$ loadout project show " + p.id + " and loadout project worktrees " + p.id));
     var grid = el("div", { "class": "dgrid" });
-    var tasks = TASKS[p.id] || [];
-    grid.appendChild(block("z-dt", "What is being worked on", [S.TaskBoard({ tasks: tasks, where: ["--project", p.id], from: "$ loadout task list --project " + p.id + " --all", onSession: p.available ? function (t) { sessionOnTask(p.id, t); } : null, onRun: p.available ? function (t) { runOnTask(p.id, t); } : null, onDeclare: function (t, n) { said(t.title + ": " + S.TASK_MOVE[n].toLowerCase(), "$ loadout task declare " + t.id + " " + n + " --project " + p.id); PV++; } }).el, taskNew(p.id)], "wide"));
-    var hs = HEALTH[p.id] || [], fx = hs.filter(function (f) { return f.fixable; }).length;
-    var hb = block("z-dh", "Health", p.available ? [S.HealthList({ findings: hs, from: "$ loadout drift " + p.id + " and loadout repo check " + p.id, noneText: "Nothing has drifted." })] : [el("p", { "class": "calm", text: "Not on this machine, so there is nothing here to check. Clone it to see its health." })]);
-    if (fx) { hb.appendChild(C.drift(p, fx, function () { HEALTH[p.id] = hs.filter(function (f) { return !f.fixable; }); said("Put " + fx + " right", "$ loadout drift " + p.id + " --fix --yes", "done"); bump(); })); }
+    var tasks = TASKS[p.id] || [], tk = "tasks:" + p.id, tq = PLC_Q[tk] || "", ts = plcQuery(tasks, tq, PLC_TASK_FIELDS, plcTaskGet, "tasks"), tbox = el("div", {});
+    function tpaint() { tbox.textContent = ""; tbox.appendChild(plcBoard({ key: p.id, tasks: ts.items, where: ["--project", p.id], project: p.available ? p.id : null, away: PLC_AWAY[p.id], from: "$ loadout task list --project " + p.id + " --all", onStart: function (t, opt) { plcStart(p.id, t, opt); }, onRead: function (t) { plcReadTask(t, p.id); }, onDeclare: function (t, n) { said(t.title + ": " + S.TASK_MOVE[n].toLowerCase(), "$ loadout task declare " + t.id + " " + n + " --project " + p.id); PV++; } })); }
+    var tt = plcTool("tasks", tq, PLC_TASK_FIELDS, ts.items.length, tasks.length, ts.problem, true, "tasks-" + p.id, function (q) { PLC_Q[tk] = q; ts = plcQuery(tasks, q, PLC_TASK_FIELDS, plcTaskGet, "tasks"); tpaint(); tt.set({ query: q, shown: ts.items.length, recorded: tasks.length, problem: ts.problem }); });
+    tpaint();
+    grid.appendChild(block("z-dt", "What is being worked on", [tt.el, tbox, taskNew(p.id)], "wide"));
+    var hs = HEALTH[p.id] || [], fx = hs.filter(function (f) { return f.fixable; }).length, checked = plcRead("health-" + p.id);
+    var hb = block("z-dh", "Health", !p.available ? [el("p", { "class": "calm", text: "Not on this machine, so there is nothing here to check. Clone it to see its health." })] : !checked ? [el("p", { "class": "calm", role: "status", text: "Checking…" })] : [S.HealthList({ findings: hs, from: "$ loadout drift " + p.id + " and loadout repo check " + p.id, noneText: "Nothing has drifted." })]);
+    if (fx && checked && p.available) { hb.appendChild(C.drift(p, fx, function () { HEALTH[p.id] = hs.filter(function (f) { return !f.fixable; }); said("Put " + fx + " right", "$ loadout drift " + p.id + " --fix --yes", "done"); bump(); })); }
     grid.appendChild(hb);
+    var conv = S.ConversationList({ conversations: plcConvs(p.id).slice(0, 5), label: "Recent conversations in " + p.id, inProject: true, now: plcNow().getTime(),
+      onchanges: function (c) { openLaunch({ project: c.project, resume: c }); },
+      onresume: function (c) { said("Resumed ‘" + c.title + "’ in a terminal here", "$ loadout resume " + c.id + " --project " + c.project, "done"); return null; },
+      onopen: function (s) { go("session-" + s); } });
+    grid.appendChild(block("z-drc", "Recent conversations", [conv.el]));
     d.appendChild(grid);
-d.appendChild(block("z-ddo", "Do", [C.dossierDo(p, tasks)]));
-    d.appendChild(block("z-dfg", "Forget project", [el("p", { "class": "lead", text: "Forget it on this machine only, or from the Loadout workspace for every machine, and choose what goes with it. Its repository and code are never touched." }), halo({ label: "Forget project\u2026", kind: "danger", size: "small", cmd: "opens the dialog \u00b7 changes nothing yet", onPress: function () { openForget(p); } }, "p-forget")]));
+    d.appendChild(block("z-ddo", "Do", [C.dossierDo(p, tasks)]));
+    d.appendChild(block("z-dfg", "Forget project", [el("p", { "class": "lead", text: "Loadout can forget " + p.name + " on this machine only, or from the workspace for every machine. Its repository and code are never touched." }), halo({ label: "Forget project…", kind: "danger", size: "small", cmd: "opens what it would run · $ loadout project remove " + p.id, onPress: function () { openForget(p); } }, "p-forget")]));
     main.appendChild(d);
   }
 
@@ -2426,30 +2618,69 @@ d.appendChild(block("z-ddo", "Do", [C.dossierDo(p, tasks)]));
       { name: "studio-idle-after", value: "", description: "Minutes before a quiet session reads idle.", machineLocal: false, flag: false, whenUnset: "10" },
       { name: "studio-layout-lens", value: "", description: "Home's Lens layout, as Edit layout saved it.", machineLocal: false, flag: false, whenUnset: "as it came" } ] }
   ];
-  var SSECT = [["studio", "Studio", "how it looks, keys, signing in"], ["loadout", "Loadout's settings", "every loadout config setting"], ["agents", "Agents and packs", "MCP servers, secrets, packs"], ["safety", "Backups and safety", "backups, checkpoints, protections"], ["daemon", "The daemon", "running · starts at log-in"], ["machine", "This machine", "doctor: 1 to put right"]];
-  var DAEMON = { held: false, autostart: true };
+  var SSECT = [["studio", "Studio", "how it looks, keys, signing in"], ["loadout", "Loadout's settings", "every loadout config setting"], ["agents", "Agents and packs", "MCP servers, secrets, packs"], ["safety", "Backups and safety", "backups, checkpoints, protections"], ["daemon", "The daemon", "running, starts at log-in"], ["machine", "This machine", "how it stands"]];
+  var DAEMON = { held: false, autostart: true, entry: "~/.config/systemd/user/loadout-team-daemon.service", oldName: true };
+  /* The daemon's update state, as GET /api/v1/update gives it (main's api.ts UpdateState). */
+  var UPD = { current: "0.65.0", available: "0.65.1", isNewer: true, notes: "https://github.com/ntatschner/loadout-cli/releases/tag/v0.65.1", checkedAt: new Date(2026, 9, 17, 9, 31).toISOString(), problem: null, channel: "archive", canRollBack: true, automatic: true, runs: 1, hosted: 3, pending: null };
+  /* What this machine's doctor says, as 'loadout doctor --json' gives it. */
+  var DOCTOR = { verdict: "DEGRADED", checks: [{ name: "dotnet", severity: "ok", detail: "10.0.100" }, { name: "git", severity: "ok", detail: "2.47.1" }, { name: "shell integration", severity: "Warning", detail: "the zsh completion is out of date", fixable: true }, { name: "credential store", severity: "ok", detail: "the system keyring" }] };
+  function setWhen(at) { return new Date(at).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }); }
+  function setPlural(n, one) { return n + " " + one + (n === 1 ? "" : "s"); }
+  function setSub(k, sub) { return k === "daemon" ? (UPD.pending ? "an update is pending" : UPD.isNewer ? UPD.available + " is available" : DAEMON.autostart ? "starts when you log in" : "does not start at log-in") : sub; }
+  /* Version and updates: what is installed, what is out, and putting it in place through 'loadout update' (main's Settings.svelte). */
+  function setUpdates() {
+    var kids = [];
+    if (!UPD) { return [el("p", { "class": "calm" }, ["This server does not look for updates. In a terminal: ", el("code", { text: "loadout update" })])]; }
+    kids.push(el("p", { "class": "vline" }, [el("b", { text: UPD.current }), UPD.isNewer ? el("span", {}, [", and ", el("b", { text: UPD.available }), " is available."]) : UPD.available ? el("span", { text: ", the newest release." }) : null]));
+    if (UPD.pending) { kids.push(el("p", { "class": "updnote", role: "status", text: "Update pending: " + UPD.pending.described + ". " + (UPD.pending.now ? "The daemon is restarting now." : UPD.runs ? "It restarts once " + (UPD.runs === 1 ? "the run it started has" : "the " + UPD.runs + " runs it started have") + " finished, and starts nothing new meanwhile." : "The daemon is restarting.") + " This page comes back when it does." })); }
+    if (UPD.isNewer && UPD.notes) { kids.push(/^https?:\/\/\S+$/.test(UPD.notes.trim()) ? el("p", {}, [el("a", { href: UPD.notes.trim(), target: "_blank", rel: "noopener", text: "What is new in " + UPD.available })]) : el("details", { "class": "notes" }, [el("summary", { text: "What is new in " + UPD.available }), el("p", { text: UPD.notes })])); }
+    if (UPD.problem) { kids.push(el("p", { "class": "updnote", text: "The last look at the release feed did not work: " + UPD.problem })); }
+    kids.push(el("p", { "class": "ls-from", text: (UPD.checkedAt ? "Looked at the release feed " + setWhen(UPD.checkedAt) : "Not looked at the release feed yet") + (UPD.automatic ? "; the daemon looks once a day." : "; the daemon does not look by itself, because updates-check-automatically is off.") + " " +
+      (UPD.channel === "installer" ? "This copy was installed by the MSI, so an update runs the newer MSI while the daemon is down." : "This copy was unpacked from a release archive, so an update puts the new binary in place and keeps the old one for Roll back.") }));
+    var acts = el("div", { "class": "ls-answers flush" });
+    acts.appendChild(halo({ label: UPD.checking ? "Looking…" : "Check now", size: "small", cmd: "$ loadout update --check", disabledReason: UPD.checking ? "Already looking" : null, onPress: function () {
+      UPD.checking = true; bump(); setTimeout(function () { UPD.checking = false; UPD.checkedAt = plcNow().toISOString(); UPD.problem = null; said(UPD.isNewer ? UPD.available + " is available" : UPD.current + " is the newest release", "$ loadout update --check"); bump(); }, 900); } }, "upd-check"));
+    function ask(kind) {
+      var words = kind === "roll-back" ? ["--roll-back", "--restart-daemon", "--yes"] : ["--restart-daemon", "--yes"];
+      var cut = [UPD.runs ? "the " + setPlural(UPD.runs, "run") + " it started" : "", UPD.hosted ? "the " + setPlural(UPD.hosted, "session") + " it hosts" : ""].filter(Boolean).join(" and ");
+      var why = (kind === "install" ? "The daemon restarts on " + UPD.available + (UPD.channel === "installer" ? ", running the MSI while it is down" : ", and if that version does not start, the one before is put back") + "." : "The daemon restarts on the version before this one.")
+        + (cut ? " Waiting lets " + cut + " carry on until the runs have finished, and nothing new starts meanwhile; restarting now ends " + cut + " at once." : " Nothing is running that a restart would end.") + " This page comes back when the daemon does.";
+      function pend(now) {
+        var line = "$ loadout update " + words.concat(now ? ["--now"] : []).join(" ");
+        UPD.pending = { kind: kind, version: kind === "install" ? UPD.available : null, now: now, described: kind === "install" ? "updating to " + UPD.available : "rolling back from " + UPD.current };
+        said(now ? "The daemon is restarting for the update. This page comes back when it does." : "The update waits for the run the daemon started to finish.", line); bump();
+      }
+      S.Dialog({ title: kind === "install" ? "Install " + UPD.available + " and restart the daemon?" : "Roll back and restart the daemon?", why: why, role: "alertdialog",
+        actions: [{ label: "Restart when its runs finish", size: "small", cmd: "$ loadout update " + words.join(" "), onPress: function () { pend(false); } }, { label: "Restart now", kind: "danger", size: "small", cmd: "$ loadout update " + words.concat(["--now"]).join(" "), onPress: function () { pend(true); } }] }).open();
+    }
+    if (UPD.isNewer && !UPD.pending) { acts.appendChild(halo({ label: "Install and restart", kind: "needs", size: "small", cmd: "$ loadout update --restart-daemon --yes", onPress: function () { ask("install"); } }, "upd-install")); }
+    if (UPD.canRollBack && !UPD.pending) { acts.appendChild(halo({ label: "Roll back", size: "small", cmd: "$ loadout update --roll-back --restart-daemon --yes", onPress: function () { ask("roll-back"); } }, "upd-back")); }
+    kids.push(acts);
+    return kids;
+  }
   function renderSettings(main, r) {
     var sec = r.split("/")[1] || "studio";
+    if (!SSECT.some(function (s) { return s[0] === sec; })) { sec = "studio"; }
     pageHead(main, "Settings", "Studio, Loadout and this machine");
     var two = el("div", { "class": "setwrap" }), idx = el("nav", { "class": "setidx", "aria-label": "Settings sections" });
-    idx.appendChild(el("ul", {}, SSECT.map(function (s) { return el("li", {}, [el("a", { href: "#settings/" + s[0], "aria-current": sec === s[0] ? "page" : null, "data-k": "set-" + s[0] }, [el("span", { "class": "t", text: s[1] }), el("span", { "class": "x", text: s[0] === "daemon" ? (DAEMON.held ? "schedules held" : "running") + " · " + (DAEMON.autostart ? "starts at log-in" : "started by hand") : s[2] })])]); })));
+    idx.appendChild(el("ul", {}, SSECT.map(function (s) { return el("li", {}, [el("a", { href: "#settings/" + s[0], "aria-current": sec === s[0] ? "page" : null, "data-k": "set-" + s[0] }, [el("span", { "class": "t", text: s[1] }), el("span", { "class": "x", text: setSub(s[0], s[2]) })])]); })));
     two.appendChild(idx);
     var pane = el("div", { "class": "setpane" }); two.appendChild(pane); main.appendChild(two);
     if (sec === "studio") {
       pane.appendChild(block("z-sa", "Appearance", [appearanceForm()]));
       pane.appendChild(block("z-sl", "Layouts", [el("p", { "class": "lead", text: "Home's Lens and Map are edited in place, from Edit layout on Home. These put them back as they came." }), el("div", { "class": "ls-answers" }, [halo({ label: "Reset the Lens", size: "small", cmd: "$ loadout config set studio-layout-lens \"\"", onPress: function () { said("The Lens is back as it came", "$ loadout config set studio-layout-lens \"\""); } }), halo({ label: "Reset the Map", size: "small", cmd: "$ loadout config set studio-layout-map \"\"", onPress: function () { said("The Map is back as it came", "$ loadout config set studio-layout-map \"\""); } })])]));
       var idle = el("input", { "class": "ls-text", type: "number", id: "s-idle", min: "1", max: "1440", value: "10", style: "max-width: 120px", "data-k": "s-idle", oninput: function () { il.textContent = "$ loadout config set studio-idle-after " + (idle.value || "10"); } }), il = el("code", { "class": "ls-cmd", text: "$ loadout config set studio-idle-after 10" });
-      pane.appendChild(block("z-sk", "Ambient, keys and alerts", [S.Switch({ label: "Red Alert", sub: "light the page\u2019s edge when something needs you \u00b7 $ loadout config set studio-red-alert " + (P.redAlert ? "off" : "on"), checked: !!P.redAlert, onChange: function (v) { P.redAlert = v; savePrefs(); refreshAlert(); said(v ? "Red Alert is on: the page\u2019s edge lights when something needs you" : "Red Alert is off", "$ loadout config set studio-red-alert " + (v ? "on" : "off")); } }), S.Switch({ label: "Single-letter shortcuts", sub: "A for Ambient, N for a new session · kept in this browser", checked: P.keys, onChange: function (v) { P.keys = v; savePrefs(); } }), S.Switch({ label: "Ambient fills the screen", sub: "kept in this browser", checked: !!P.ambFull, onChange: function (v) { P.ambFull = v; savePrefs(); } }), el("div", { "class": "ls-field", style: "margin-top: 10px" }, [el("label", { "class": "lab", "for": "s-idle", text: "A quiet session reads idle after, in minutes" }), idle, il])]));
+      pane.appendChild(block("z-sk", "Ambient, keys and alerts", [S.Switch({ label: "Red Alert", sub: "light the page’s edge when something needs you · $ loadout config set studio-red-alert " + (P.redAlert ? "off" : "on"), checked: !!P.redAlert, onChange: function (v) { P.redAlert = v; savePrefs(); refreshAlert(); said(v ? "Red Alert is on: the page’s edge lights when something needs you" : "Red Alert is off", "$ loadout config set studio-red-alert " + (v ? "on" : "off")); } }), S.Switch({ label: "Single-letter shortcuts", sub: "A for Ambient, N for a new session · kept in this browser", checked: P.keys, onChange: function (v) { P.keys = v; savePrefs(); } }), S.Switch({ label: "Ambient fills the screen", sub: "kept in this browser", checked: !!P.ambFull, onChange: function (v) { P.ambFull = v; savePrefs(); } }), el("div", { "class": "ls-field", style: "margin-top: 10px" }, [el("label", { "class": "lab", "for": "s-idle", text: "A quiet session reads idle after, in minutes" }), idle, il])]));
       pane.appendChild(block("z-ss", "Signing in", [el("p", { "class": "lead" }, ["This browser is signed in to Studio on port 4417. Signing out signs out every browser on this machine; open Studio again with ", el("code", { "class": "ls-cmd", text: "$ loadout dashboard --open --studio" }), "."]), halo({ label: "Sign out every browser", kind: "danger", size: "small", cmd: "$ loadout dashboard sign-out", onPress: function () { S.Dialog({ title: "Sign every browser out?", why: "Every browser signed in to Studio or the dashboard on this machine is signed out, this one included. Nothing else changes.", danger: true, role: "alertdialog", actions: [{ label: "Sign out", kind: "danger", cmd: "$ loadout dashboard sign-out", onPress: function () { said("This prototype stays signed in. In Studio, this page now asks you to open it again.", "$ loadout dashboard sign-out"); } }] }).open(); } }, "s-signout")]));
       pane.appendChild(block("z-st", "Done in a terminal", [el("p", { "class": "lead", text: "These are only ever done where you type, so that nothing a page can press reads a secret back or makes an agreement for you." }),
-        S.TerminalOnly({ title: "Set or change the team attach passphrase", why: "It sets the passphrase this page must be given separately, so it cannot be set from the page it guards.", command: "$ loadout team attach set", fact: "Team attach passphrase: set" }),
+        S.TerminalOnly({ title: "The passphrase for typing at a team's node", why: "It " + cmdOf("team attach set").reach.reason + ".", command: "$ loadout team attach set", fact: "Passphrase: set" }),
         S.TerminalOnly({ title: "Agree to a tool's tests running on this machine", why: "Agreeing to a tool's tests is made in a terminal on purpose.", command: "$ loadout tools verify <tool> --agree" }),
-        S.TerminalOnly({ title: "Store a secret", why: "It asks for the value at a masked prompt, so the secret never sits in a page or a command line.", command: "$ loadout secret set <name>" })]));
-      pane.appendChild(block("z-sab", "About", [el("dl", { "class": "ls-rules" }, [el("dt", { text: "Version" }), el("dd", { text: "0.66.0" }), el("dt", { text: "Platform" }), el("dd", { text: "linux-x64" }), el("dt", { text: "Terminal" }), el("dd", { text: "available" })])]));
+        S.TerminalOnly({ title: "Store a secret", why: "It " + cmdOf("secret set").reach.reason + ".", command: "$ loadout secret set" })]));
+      pane.appendChild(block("z-sab", "About", [el("dl", { "class": "ls-rules" }, [el("dt", { text: "Version" }), el("dd", { text: UPD.current }), el("dt", { text: "Platform" }), el("dd", { text: "linux-x64" }), el("dt", { text: "Terminal" }), el("dd", { text: "posix_spawn" })])]));
       return;
     }
     if (sec === "loadout") {
-      pane.appendChild(block("z-slo", "Loadout's settings", [el("p", { "class": "lead", text: "Every setting loadout config knows, in the groups the terminal's Settings screen uses, each changed where it is shown." }), S.ConfigList({ groups: CONFIG, onSet: function (n, v) { said("Set " + n + (v === "" ? " back to its default" : " to " + v), "$ loadout config set " + n + " " + (v === "" ? "\"\"" : S.shellQuote(v)), "done"); }, onExplain: function (s) { return "$ loadout config get " + s.name + " --explain\n" + s.name + " = " + (s.value || "(unset)") + "\n" + s.description + (s.whenUnset ? "\nUnset, it uses " + s.whenUnset + "." : "") + (s.machineLocal ? "\nKept on this machine only." : "\nSynced with the workspace."); } }).el,
+      pane.appendChild(block("z-slo", "Loadout's settings", [el("p", { "class": "lead", text: "Every setting loadout config knows, in the groups the terminal's Settings screen uses, each changed where it is shown." }), plcRead("config") ? S.ConfigList({ groups: CONFIG, onSet: function (n, v) { said("Set " + n + (v === "" ? " back to its default" : " to " + v), "$ loadout config set " + n + " " + (v === "" ? "\"\"" : S.shellQuote(v)), "done"); }, onExplain: function (s) { return "$ loadout config get " + s.name + " --explain\n" + s.name + " = " + (s.value || "(unset)") + "\n" + s.description + (s.whenUnset ? "\nUnset, it uses " + s.whenUnset + "." : "") + (s.machineLocal ? "\nKept on this machine only." : "\nSynced with the workspace."); } }).el : el("p", { "class": "calm", role: "status", text: "Reading…" }),
         C.configFile()]));
       return;
     }
@@ -2466,20 +2697,25 @@ d.appendChild(block("z-ddo", "Do", [C.dossierDo(p, tasks)]));
       return;
     }
     if (sec === "daemon") {
-      var st = el("div", { "class": "dstat" }, [S.Signal(DAEMON.held ? "held" : "running", { big: true }), el("div", {}, [el("b", { text: DAEMON.held ? "Running, schedules held" : "Running" }), el("p", { text: "It serves this page, hosts its sessions and fires scheduled team runs. Stopping or restarting it ends the sessions it hosts." }), el("p", { "class": "x", text: (DAEMON.autostart ? "It starts when you log in, from ~/.config/systemd/user/loadout-daemon.service." : "It does not start when you log in.") })])]);
+      var held = DAEMON.held;
+      var st = el("div", { "class": "dstat" }, [S.Signal(held ? "held" : "running", { big: true }), el("div", {}, [el("b", { text: held ? "Running, with its schedules held" : held === false ? "Running, its schedules free to fire" : "Running" }), el("p", { text: "The daemon serves this page, hosts its sessions and fires scheduled team runs. Stopping or restarting it ends the sessions it hosts." }),
+        el("p", { "class": "x", text: (DAEMON.autostart ? "It starts when you log in" : "It does not start when you log in") + (DAEMON.entry ? ", from " + DAEMON.entry : "") + "." + (DAEMON.oldName ? " The entry uses the old name, team daemon; enabling it again rewrites it." : "") })])]);
       var acts = el("div", { "class": "ls-answers" });
-      acts.appendChild(DAEMON.held ? halo({ label: "Let the schedules fire", size: "small", solid: true, cmd: "$ loadout daemon resume", onPress: function () { DAEMON.held = false; said("The schedules fire again", "$ loadout daemon resume"); bump(); } }, "d-res") : halo({ label: "Hold the schedules", size: "small", cmd: "$ loadout daemon pause", onPress: function () { DAEMON.held = true; said("The schedules are held. Runs already going carry on.", "$ loadout daemon pause"); bump(); } }, "d-hold"));
-      function ends(label, cmd, kind) { return halo({ label: label, size: "small", kind: kind, cmd: cmd, onPress: function () { S.Dialog({ title: label + "?", why: "It ends the 3 sessions it hosts: their terminals close. Team runs pick up where they were when it is back.", danger: kind === "danger", role: "alertdialog", actions: [{ label: label, kind: kind || "", cmd: cmd, onPress: function () { said("In Studio, this page reconnects when the daemon is back.", cmd); } }] }).open(); } }); }
-      acts.appendChild(ends("Restart it", "$ loadout daemon restart", ""));
-      acts.appendChild(ends("Stop it", "$ loadout daemon stop", "danger"));
-      acts.appendChild(DAEMON.autostart ? halo({ label: "Stop it starting at log-in", size: "small", cmd: "$ loadout daemon autostart disable", onPress: function () { DAEMON.autostart = false; said("It no longer starts when you log in", "$ loadout daemon autostart disable"); bump(); } }) : halo({ label: "Start it at log-in", size: "small", cmd: "$ loadout daemon autostart enable", onPress: function () { DAEMON.autostart = true; said("It starts when you log in", "$ loadout daemon autostart enable"); bump(); } }));
-      pane.appendChild(block("z-sd", "The daemon", [st, acts, from("$ loadout daemon autostart show"), el("p", { "class": "ls-from" }, [el("code", { text: "$ loadout daemon continue" }), " does the same as Let the schedules fire."])]));
+      if (held !== true) { acts.appendChild(halo({ label: "Hold the schedules", size: "small", cmd: "$ loadout daemon pause", onPress: function () { DAEMON.held = true; said("The schedules are held. Runs already going carry on.", "$ loadout daemon pause"); bump(); } }, "d-hold")); }
+      if (held !== false) { acts.appendChild(halo({ label: "Let the schedules fire", size: "small", cmd: "$ loadout daemon resume", onPress: function () { DAEMON.held = false; said("The schedules fire again", "$ loadout daemon resume"); bump(); } }, "d-res")); }
+      function ends(label, cmd, kind, why) { return halo({ label: label, size: "small", kind: kind, cmd: cmd, onPress: function () { S.Dialog({ title: (kind === "danger" ? "Stop" : "Restart") + " the daemon?", why: why, danger: kind === "danger", role: "alertdialog", actions: [{ label: label, kind: kind || "", cmd: cmd, onPress: function () { said("In Studio, this page reconnects when the daemon is back.", cmd); } }] }).open(); } }); }
+      acts.appendChild(ends("Restart it", "$ loadout daemon restart", "", "It ends the sessions the daemon hosts, then starts again with the same settings once the runs it started have finished. This page comes back when it does."));
+      acts.appendChild(ends("Stop it", "$ loadout daemon stop", "danger", "It ends the sessions the daemon hosts once the runs it started have finished. This page stops answering until the daemon is started again."));
+      acts.appendChild(DAEMON.autostart ? halo({ label: "Stop it starting at log-in", size: "small", cmd: "$ loadout daemon autostart disable", onPress: function () { DAEMON.autostart = false; said("It no longer starts when you log in", "$ loadout daemon autostart disable"); bump(); } }) : halo({ label: "Start it at log-in", size: "small", cmd: "$ loadout daemon autostart enable", onPress: function () { DAEMON.autostart = true; DAEMON.oldName = false; DAEMON.entry = "~/.config/systemd/user/loadout-daemon.service"; said("It starts when you log in", "$ loadout daemon autostart enable"); bump(); } }));
+      pane.appendChild(block("z-sd", "The daemon", [st, el("p", { "class": "ls-from" }, ["From ", el("code", { text: "$ loadout daemon autostart show" }), "; whether the schedules are held, from the daemon itself."]), acts,
+        el("div", { "class": "plcgap" }, [S.ActionRow({ title: "Let the schedules fire, by its other name", actions: [{ label: "Let them fire", cmd: "$ loadout daemon continue", onPress: function () { DAEMON.held = false; said("The schedules fire again", "$ loadout daemon continue"); bump(); } }] })])]));
+      pane.appendChild(block("z-su", "Version and updates", setUpdates()));
       return;
     }
     if (sec === "machine") {
-      pane.appendChild(block("z-smc", "How this machine stands", [S.HealthList({ findings: [{ name: "dotnet", severity: "ok", detail: "10.0.100" }, { name: "git", severity: "ok", detail: "2.47.1" }, { name: "shell integration", severity: "Warning", detail: "the zsh completion is out of date", fixable: true }, { name: "credential store", severity: "ok", detail: "the system keyring" }], from: "$ loadout doctor" }),
-        C.doctor()]));
-      pane.appendChild(block("z-smo", "More", [C.machineMore()]));
+      var fixable = DOCTOR.checks.some(function (c) { return c.fixable; });
+      pane.appendChild(block("z-smc", "How this machine stands", (plcRead("doctor") ? [S.HealthList({ findings: DOCTOR.checks, verdict: DOCTOR.verdict, from: "$ loadout doctor" })] : [el("p", { "class": "calm", role: "status", text: "Checking…" })]).concat([C.doctor(fixable)])));
+      pane.appendChild(block("z-smo", "More", [C.machineMore(), el("p", { "class": "ls-from" }, ["Every command also has a form on the ", el("a", { href: "#commands", text: "Commands" }), " page."])]));
     }
   }
 
@@ -2558,7 +2794,7 @@ d.appendChild(block("z-ddo", "Do", [C.dossierDo(p, tasks)]));
   }
 
   /* ===== Spend: one number, where it went, and what is running ===== */
-  var SPEND = { by: "project", days: "30" };
+  var SPEND = { by: "project", days: "30", month: null };
   function usageFor(by, days) {
     var k = { "1": 0.04, "7": 0.26, "30": 1, "90": 2.7 }[days] || 1;
     var totals = { input: 4.2e6 * k, output: 1.9e6 * k, thinking: 0.6e6 * k, cacheRead: 38.5e6 * k, total: 45.2e6 * k, billedInputEquivalent: 11.3e6 * k, savedFraction: 0.74, cacheHitFraction: 0.9 };
@@ -2572,27 +2808,36 @@ d.appendChild(block("z-ddo", "Do", [C.dossierDo(p, tasks)]));
   }
   function renderSpend(main, rr) {
     if ((rr || "").indexOf("spend/value") === 0) { pageHead(main, "Spend", "what the agents have used, and what Loadout did for you"); main.appendChild(spendTabs("value")); var vb = el("div", { "class": "pblock hero" }); renderValue(vb); main.appendChild(vb); return; }
-    var u = usageFor(SPEND.by, SPEND.days), words = ["--by", SPEND.by, "--days", SPEND.days];
+    var u = usageFor(SPEND.by, SPEND.days), words = ["--by", SPEND.by, "--days", SPEND.days], ready = plcRead("spend");
+    /* The rail says what the last 30 days cost, from this read when it is that one. */
+    if (ready && SPEND.days === "30" && SPEND.month !== u.totals.billedInputEquivalent) { SPEND.month = u.totals.billedInputEquivalent; setTimeout(renderNav, 0); }
     var per = el("div", { "class": "seg", role: "radiogroup", "aria-label": "Over the last" }, [["1", "day"], ["7", "week"], ["30", "30 days"], ["90", "90 days"]].map(function (p) { return el("button", { type: "button", role: "radio", "aria-checked": SPEND.days === p[0] ? "true" : "false", "data-k": "sp-d" + p[0], text: p[1], onclick: function () { SPEND.days = p[0]; bump(); } }); }));
     var bySel = el("select", { "class": "ls-text", id: "sp-by", "data-k": "sp-by", onchange: function () { SPEND.by = bySel.value; bump(); } }, ["project", "day", "model", "agent"].map(function (b) { return el("option", { value: b, text: b }); })); bySel.value = SPEND.by;
     pageHead(main, "Spend", "what the agents have used, in tokens, and where", [el("div", { "class": "spctl" }, [el("span", { "class": "lab", text: "Over the last" }), per])]);
     main.appendChild(spendTabs("cost"));
-    main.appendChild(block("z-pt", "Tokens", [S.TokenSplit({ totals: u.totals, since: u.since, complete: u.complete, from: "$ loadout usage " + words.join(" ") })], "hero"));
+    main.appendChild(block("z-pt", "Tokens", [ready ? S.TokenSplit({ totals: u.totals, since: u.since, complete: u.complete, from: "$ loadout usage " + words.join(" ") }) : el("p", { "class": "calm", role: "status", text: "Reading the transcripts…" })], "hero"));
     var cols = el("div", { "class": "spgrid" });
-    cols.appendChild(block("z-pb", "Where it went", [el("div", { "class": "psel inline" }, [el("label", { "for": "sp-by", text: "By" }), bySel]), S.SpendBars({ by: SPEND.by, groups: u.groups, label: "Billed input by " + SPEND.by })], "wide"));
-    var running = ST.lines.filter(function (l) { return l.kind === "session" && l.stage === 2; });
-    cols.appendChild(block("z-pr", "Running now", [running.length ? el("ul", { "class": "plain live" }, running.map(function (l) { return el("li", {}, [S.Signal(wordOf(l)), el("span", {}, [el("b", { text: l.where }), " · " + (l.agent || "claude") + " · " + (l.mins || 0) + " min"])]); })) : el("p", { "class": "calm", text: "No sessions are running." }), from("$ loadout running")]));
+    cols.appendChild(block("z-pb", "Where it went", [el("div", { "class": "psel inline" }, [el("label", { "for": "sp-by", text: "By" }), bySel]), ready ? S.SpendBars({ by: SPEND.by, groups: u.groups, label: "Tokens billed as input by " + SPEND.by }) : null], "wide"));
+    /* What 'loadout running' lists: every agent session this machine has running, Studio's or not. */
+    var running = ST.lines.filter(function (l) { return l.kind === "session" && l.stage === 2; }).map(function (l) { return { state: l.waiting ? "waiting" : "working", project: l.where, agent: l.agent || "claude", secs: (l.mins || 0) * 60, headless: false }; }).concat([{ state: "working", project: "loadout-cli", agent: "claude", secs: 95, headless: true }]);
+    var mins = function (s) { return s < 120 ? s + "s" : Math.round(s / 60) + " min"; };
+    cols.appendChild(block("z-pr", "Running now", [running.length ? el("ul", { "class": "rowsx" }, running.map(function (x) { return el("li", {}, [S.Signal(x.state), el("b", { text: x.project }), el("span", { text: x.agent + " · " + mins(x.secs) + (x.headless ? " · headless" : "") })]); })) : el("p", { "class": "lead", text: "No sessions are running." }), from("$ loadout running")]));
     main.appendChild(cols);
     var three = el("div", { "class": "spgrid" });
-    three.appendChild(block("z-pl", "Launched this week", [el("ul", { "class": "plain" }, [["loadout-cli", "claude", "implement", "add a retry to the upload step", "today 13:21", "1,456 of 8,000"], ["starstats", "claude", "investigate", "why is this postgres query so slow", "today 13:30", "2,140 of 8,000"], ["starstats", "codex", "implement", "tidy the deploy script", "today 13:08", "1,120 of 8,000"], ["loadout-cli", "claude", "review", "review the memory compress change", "15 Oct", "1,890 of 8,000"]].map(function (x) { return el("li", {}, [el("b", { text: x[3] }), el("span", { "class": "x", text: [x[0], x[1], x[2], x[4], "started with " + x[5] + " tokens"].join(" · ") })]); })), from("$ loadout launches --days 7")]));
-    three.appendChild(block("z-ps", "Recent sessions", [el("ul", { "class": "plain" }, ST.recent.map(function (r) { return el("li", {}, [el("b", { text: r[3] }), el("span", { "class": "x", text: [r[1], r[2], r[0]].join(" · ") })]); })), from("$ loadout sessions --limit 12"),
-      C.resume()]));
-    main.appendChild(three);
-    main.appendChild(block("z-pa", "What agents reported", [el("p", { "class": "lead", text: "Not collecting. Launched agents report their own usage only while the receiver runs." }), S.TerminalOnly({ title: "Run the receiver", why: "It is a server that runs until Ctrl+C.", command: "$ loadout telemetry serve" }), from("$ loadout telemetry status")]));
-    main.appendChild(block("z-pm", "This machine", [el("dl", { "class": "ls-rules" }, [el("dt", { text: "Projects" }), el("dd", { text: "3 registered · 2 here · 1 elsewhere only" }), el("dt", { text: "Workspace" }), el("dd", { text: "set up and cloned" }), el("dt", { text: "Agents" }), el("dd", { text: "claude 2.1.302 · codex 0.9.1 · claude by default" })]), from("$ loadout status"),
+    var launches = [["loadout-cli", "claude", "implement", "add a retry to the upload step", "17 Oct, 13:21", 1456, 8000], ["starstats", "claude", "investigate", "why is this postgres query so slow", "17 Oct, 13:30", 2140, 8000], ["starstats", "codex", "implement", "tidy the deploy script", "17 Oct, 13:08", 1120, 8000], ["loadout-cli", "claude", "review", "review the memory compress change", "15 Oct, 16:02", 1890, 8000], ["home-lab", "codex", "advise", null, "12 Oct, 09:14", 640, 6000]];
+    var sess = [{ agent: "claude", id: "3b9e7d21", title: "add a retry to the upload step", directory: "~/code/loadout-cli", branch: "main", at: "17 Oct, 13:52" }, { agent: "claude", id: "e2c4a817", title: "why is this postgres query so slow", directory: "~/code/starstats", branch: "feature/new-bucket", at: "17 Oct, 13:50" },
+      { agent: "codex", id: "019a3310", title: "tidy the deploy script", directory: "~/code/starstats", branch: "feature/new-bucket", at: "17 Oct, 13:45" }, { agent: "claude", id: "9a41c0ee", title: "review the memory compress change", directory: "~/code/loadout-cli", branch: "memory-compress", at: "17 Oct, 13:40" }, { agent: "claude", id: "5f0c22aa", title: null, directory: "~/Downloads/scratch", branch: null, at: "16 Oct, 21:12" }];
+    three.appendChild(block("z-pl", "Launched this week", [launches.length ? el("ul", { "class": "rowsx" }, launches.map(function (x) { return el("li", {}, [el("b", { text: x[0] }), el("span", { text: x[1] + " · " + x[2] + (x[3] ? " · " + x[3] : "") }), el("span", { text: x[4] }), el("code", { text: "started with " + S.tokens(x[5]) + " of " + S.tokens(x[6]) })]); })) : el("p", { "class": "lead", text: "Nothing launched this week." }), from("$ loadout launches --days 7"),
+      el("h2", { "class": "ls-zone sub-zone", id: "z-ps", text: "Recent sessions" }), sess.length ? el("ul", { "class": "rowsx" }, sess.map(function (x) { return el("li", {}, [el("b", { text: x.title || x.id }), el("span", { text: x.agent }), el("code", { text: x.directory }), x.branch ? el("span", { text: x.branch }) : null, el("span", { text: x.at })]); })) : el("p", { "class": "lead", text: "No sessions found." }), from("$ loadout sessions --limit 12"),
+      C.resume(sess)], "wide"));
+    var side = el("div", {});
+    var tel = { enabled: true, endpoint: "http://127.0.0.1:4318", sessions: 12, tokens: 1240000, usd: 18.4 };
+    side.appendChild(block("z-pa", "What agents reported", [el("p", { "class": "lead", text: tel.enabled ? "Collecting at " + tel.endpoint + ": " + tel.sessions + " sessions, " + S.tokens(tel.tokens) + " tokens, $" + tel.usd.toFixed(2) + " at list rates." : "Not collecting. Launched agents report their own usage only while the receiver runs." }), from("$ loadout telemetry status"), S.TerminalOnly({ title: "Run the receiver", why: "It " + cmdOf("telemetry serve").reach.reason + ".", command: "$ loadout telemetry serve" })]));
+    side.appendChild(block("z-pm", "This machine", [el("dl", { "class": "ls-rules" }, [el("dt", { text: "Projects" }), el("dd", { text: "3 registered · 2 here · 1 elsewhere only" }), el("dt", { text: "Workspace" }), el("dd", { text: "set up and cloned" }), el("dt", { text: "Agents" }), el("dd", { text: "claude 2.1.302 · codex 0.9.1 · gemini (not installed) · claude by default" })]), from("$ loadout status"),
       C.usage()]));
+    three.appendChild(side);
+    main.appendChild(three);
   }
-
 
   /* ---------- the six pages in every mode: beside in Terminals and Teams, a quiet column in Minimal, a desk in Pure ---------- */
   var BESIDE = null, PAGE_NAMES = { "teams-office": "Office", ideas: "Ideas", projects: "Projects", context: "Context", settings: "Settings", memory: "Memory", spend: "Spend" };
@@ -3121,14 +3366,14 @@ d.appendChild(block("z-ddo", "Do", [C.dossierDo(p, tasks)]));
 
   /* Settings */
   C.configFile = function () {
-    return el("div", {}, [S.Readout({ path: "config edit", extra: ["--path-only"], title: "The settings file itself", view: "list", params: [{ name: "--machine", label: "This machine's own settings instead", kind: "flag" }],
+    return el("div", {}, [S.Readout({ path: "config edit", extra: ["--path-only"], title: "The configuration file itself", readLabel: "Show where", view: "list", params: [{ name: "--machine", label: "This machine's own settings instead", kind: "flag" }],
       load: function (v) { return [{ name: v["--machine"] ? "~/.local/share/loadout/machines.yaml" : "~/.config/loadout/config.yaml", sub: "where it is" }]; } }).el,
       S.ActionRow({ actions: [{ label: "Open it", cmd: "$ loadout config edit", said: "Opened in your editor", onPress: function () { said("Opened the settings file", "$ loadout config edit"); } }] })]);
   };
   C.mcp = function () {
     var servers = [{ name: "github", sub: "npx @modelcontextprotocol/server-github", facts: ["stdio", "every project"] }, { name: "docs-search", sub: "https://docs.internal/mcp", facts: ["http", "every project"] }];
     function row(x) { return Object.assign({}, x, { actions: [{ label: "Remove", danger: true, cmd: "$ loadout mcp remove " + x.name + " --global", ask: "Remove " + x.name + "? Agents stop loading its tools.", yes: "Remove it", removes: true, said: function (it) { said("Removed " + it.name, "$ loadout mcp remove " + it.name + " --global"); return "Removed " + it.name; } }] }); }
-    return S.ItemList({ label: "MCP servers", one: "server", many: "servers", why: "The servers every project's agent loads. A project's own are on its Context page.", readCmd: "$ loadout mcp list --global --json", asOf: "read just now",
+    return S.ItemList({ label: "MCP servers", one: "server", many: "servers", why: "The servers every project's agent loads. A project's own are on its Context page.", empty: "None for every project.", readCmd: "$ loadout mcp list --global --json", asOf: "read just now",
       items: servers.map(row),
       add: { label: "Add a server", form: { path: "mcp add", label: "Add it", dryRun: true,
         fields: [{ name: "NAME", label: "Name", required: true, placeholder: "github", hint: "Its tools carry this as a prefix." }, { name: "COMMAND-OR-URL", label: "Where it runs", required: true, placeholder: "https://… or npx some-server", hint: "An https:// address, or the command that starts it." },
@@ -3151,18 +3396,21 @@ d.appendChild(block("z-ddo", "Do", [C.dossierDo(p, tasks)]));
       if (!p.approved) { acts.push({ label: "Approve", cmd: "$ loadout pack approve " + p.name, ask: "Approve " + p.name + " at its pinned commit? Approve only once you have read it: its specialists start loading on this machine.", yes: "Approve it", said: function (it) { it.approved = true; said("Approved " + it.name + " here", "$ loadout pack approve " + it.name, "done"); return "Approved"; } }); }
       acts.push({ label: "Update", cmd: "$ loadout pack update " + p.name, ask: "Move " + p.name + "'s pin to what " + p.ref + " points at now? It stops loading until you approve it again.", yes: "Update it", said: "Updated: approve it again once you have read it" });
       acts.push({ label: "Remove", danger: true, cmd: "$ loadout pack remove " + p.name, ask: "Stop declaring " + p.name + "? This machine forgets its approval too.", yes: "Remove it", removes: true, said: "Removed" });
-      return { name: p.name, sub: p.sub, word: p.approved ? "done" : "waiting for you", facts: ["@ " + p.ref, p.approved ? "approved here" : "not approved here"], actions: acts };
+      return { name: p.name, sub: p.sub + " @ " + p.ref, word: p.approved ? "done" : "waiting for you", facts: [p.approved ? "approved here" : "not approved here"], actions: acts };
     }
-    return S.ItemList({ label: "Specialist packs", one: "pack", many: "packs", why: "Specialists and skills from other repositories. Fetching one is not approving it.", readCmd: "$ loadout pack list --json", asOf: "read just now", items: packs.map(row),
+    return S.ItemList({ label: "Specialist packs", one: "pack", many: "packs", why: "Fetching a pack is not approving it: approve one only once you have read it.", empty: "No packs declared.", readCmd: "$ loadout pack list --json", asOf: "read just now", items: packs.map(row),
       add: { label: "Add a pack", form: { path: "pack add", label: "Add it", dryRun: true, fields: [{ name: "name", label: "What to call it here", required: true, placeholder: "house-style" }, { name: "remote", label: "Where it lives", required: true, placeholder: "github.com/you/pack" }, { name: "--ref", label: "Branch or tag to pin", placeholder: "main", more: true }], onRun: did("Declared the pack") },
         toItem: function (v) { return row({ name: v.name, sub: v.remote, approved: false, ref: v["--ref"] || "main" }); } } }).el;
   };
   C.backups = function () {
-    var sets = [{ id: "20261016-2214-migrate", op: "migrate", when: "16 Oct 22:14", files: 41 }, { id: "20261012-0930-memory-compress", op: "memory compress", when: "12 Oct 09:30", files: 3 }];
-    return S.ItemList({ label: "Backups", one: "set", many: "sets", why: "Taken before anything that changes many files at once, so it can be undone.", readCmd: "$ loadout backup list --json", asOf: "read just now",
-      items: sets.map(function (b) { return { name: b.id, sub: "before " + b.op, facts: [b.when, b.files + " files"], actions: [
+    var sets = [{ id: "20261016-2214-migrate", op: "migrate", detail: "loadout-cli", when: "16 Oct 2026, 22:14", files: 41, creates: 2 }, { id: "20261012-0930-memory-compress", op: "memory compress", detail: "starstats", when: "12 Oct 2026, 09:30", files: 3, creates: 0 }];
+    var shown = sets.slice(0, 20);
+    return el("div", { "class": "cstack" }, [S.ItemList({ label: "Backups", one: "set", many: "sets", why: "Taken before anything that changes many files at once, so it can be undone.", empty: "No backups yet.", readCmd: "$ loadout backup list --json", asOf: "read just now",
+      items: shown.map(function (b) { return { name: b.id, sub: b.op + (b.detail ? " \u00b7 " + b.detail : ""), facts: [b.when, b.files + " file" + (b.files === 1 ? "" : "s") + (b.creates ? ", " + b.creates + " created" : "")], actions: [
         { label: "What it would undo", cmd: "$ loadout backup restore " + b.id + " --json", onPress: function () { return tbl(["File", "What happens"], [["projects/loadout-cli/agents/claude/instructions.md", "restored"], ["projects/loadout-cli/memory/build-quirks.md", "restored"], ["projects/loadout-cli/rules/release.md", "removed: it did not exist then"]]); }, said: "Previewed: nothing changed" },
-        { label: "Restore it", cmd: "$ loadout backup restore " + b.id + " --apply", ask: "Restore " + b.files + " files from before " + b.op + "? The current state is snapshotted first, so this can be undone too.", yes: "Restore them", said: function () { said("Restored " + b.files + " files", "$ loadout backup restore " + b.id + " --apply", "done"); return "Restored"; } }] }; }) }).el;
+        { label: "Restore it", cmd: "$ loadout backup restore " + b.id + " --apply", ask: "Restore " + b.files + " files from before " + b.op + "? The current state is snapshotted first, so this can be undone too.", yes: "Restore them", said: function () { said("Restored " + b.files + " files", "$ loadout backup restore " + b.id + " --apply", "done"); return "Restored"; } }] }; }) }).el,
+      sets.length > 20 ? el("p", { "class": "ls-from", text: "The " + (sets.length - 20) + " oldest are left out here." }) : null,
+      para("It only reports what it would put back until --apply is ticked.")]);
   };
   C.checkpoints = function () {
     var data = { "loadout-cli": [{ name: "before-the-rename", because: "about to rename the config keys", when: "15 Oct", commit: "a3f9e12", dirty: false }, { name: "studio-0.66", because: "the release", when: "11 Oct", commit: "77c0b41", dirty: true }], starstats: [] };
@@ -3184,17 +3432,17 @@ d.appendChild(block("z-ddo", "Do", [C.dossierDo(p, tasks)]));
   C.protection = function () {
     var where = { name: "project", label: "Where", kind: "choice", required: true, value: "loadout-cli", options: PICKP.concat([["@all", "every project on this machine"]]), flags: { "@all": "--all" } };
     return el("div", { "class": "cstack" }, [
-      S.ActionForm({ path: "protect", title: "Keep AI tooling files out of commits", why: "Installs a pre-commit hook that refuses them.", label: "Protect it", dryRun: true,
+      S.ActionForm({ path: "protect", title: "Install the Git protections", why: "A pre-commit hook that refuses AI tooling files, or the global Git excludes.", label: "Protect it", dryRun: true,
         fields: [Object.assign({}, where, { options: where.options.concat([["@global", "the global Git exclude file instead"]]), flags: { "@all": "--all", "@global": "--global" } }), { name: "--remove", label: "Take the protection off instead", kind: "flag" },
           { name: "--refresh-hook", label: "Install Claude's after-edit hook instead", kind: "flag", hint: "Keeps the symbol index current, in the project's own Claude settings.", more: true }], onRun: did("Protected it") }).el,
       S.ActionForm({ path: "migrate", title: "Move existing AI tooling files into the workspace", why: "Tracked files are copied, not removed. A backup is taken first.", label: "Move them", previewWith: ["--dry-run"], applyWith: ["--yes"], ask: "Move these files into the workspace? A backup is taken first.", yes: "Move them",
         fields: [{ name: "project", label: "Project", kind: "choice", required: true, value: "loadout-cli", options: PICKP }, { name: "--include-ignored", label: "Also move files Git already ignores", kind: "flag", more: true }],
         onRun: function (v, info) { said(info.preview ? "Previewed the move" : "Moved 4 files into the workspace", info.line); return info.preview ? tbl(["From", "To", "How"], [[".claude/settings.json", "projects/" + v.project + "/agents/claude/settings.json", "copied (tracked)"], ["CLAUDE.local.md", "projects/" + v.project + "/agents/claude/local.md", "moved"]]) : null; } }).el]);
   };
-  C.doctor = function () {
+  C.doctor = function (fixable) {
     return el("div", { "class": "cstack" }, [
-      S.ActionForm({ path: "doctor", title: "Put right what can be put right", why: "One of these Loadout can fix itself.", label: "Put it right", previewWith: ["--fix", "--dry-run"], applyWith: ["--fix", "--yes"], ask: "Rewrite the zsh completion file?", yes: "Rewrite it",
-        onRun: function (v, info) { said(info.preview ? "Previewed 1 fix" : "Put 1 thing right", info.line, info.preview ? null : "done"); return info.preview ? tbl(["Fix", "What it changes"], [["shell completion", "rewrites ~/.zsh/_loadout"]]) : null; } }).el,
+      fixable ? S.ActionForm({ path: "doctor", title: "Put right what can be put right", why: "One of these Loadout can fix itself.", label: "Put it right", previewWith: ["--fix", "--dry-run"], applyWith: ["--fix", "--yes"], ask: "Rewrite the zsh completion file?", yes: "Rewrite it",
+        onRun: function (v, info) { said(info.preview ? "Previewed 1 fix" : "Put 1 thing right", info.line, info.preview ? null : "done"); if (!info.preview) { DOCTOR.checks.forEach(function (c) { if (c.fixable) { c.fixable = false; c.severity = "ok"; c.detail = "the zsh completion is current"; } }); DOCTOR.verdict = "HEALTHY"; setTimeout(bump, 600); } return info.preview ? tbl(["Fix", "What it changes"], [["shell completion", "rewrites ~/.zsh/_loadout"]]) : null; } }).el : null,
       S.ActionForm({ path: "doctor", title: "Write the findings to a file to send someone", label: "Write it", fields: [{ name: "--bundle", label: "Where", placeholder: "this directory", always: true, hint: "A folder or a file name. Left empty, it goes in the current directory." }], onRun: did("Wrote the diagnostics file") }).el]);
   };
   C.machineMore = function () {
@@ -3206,8 +3454,8 @@ d.appendChild(block("z-ddo", "Do", [C.dossierDo(p, tasks)]));
           { name: "--register-discovered", label: "Register every repository it finds", kind: "flag", more: true }, { name: "--migrate", label: "Apply the migration plan", kind: "flag", more: true }, { name: "--include-ignored", label: "Include files Git ignores when migrating", kind: "flag", more: true }, { name: "--global-excludes", label: "Set the global Git excludes without asking", kind: "flag", more: true },
           { name: "--update-feed", label: "Where to look for new versions", more: true }, { name: "--no-update-feed", label: "Never look for new versions here", kind: "flag", more: true }],
         onRun: did("Opened setup in a terminal") }).el,
-      S.ActionForm({ path: "desktop", title: "The desktop entry", why: "So the launcher shows in your applications menu.", label: "Install it", dryRun: true, fields: [{ name: "--remove", label: "Remove it instead", kind: "flag" }, { name: "--executable", label: "Path to record in it", placeholder: "the running launcher", more: true }], onRun: did("Done") }).el,
-      S.Readout({ path: "commands", title: "Everything Loadout can do", view: "table", params: [{ name: "--search", label: "Find", placeholder: "backup" }, { name: "--all", label: "Include sub-commands", kind: "flag", value: true }],
+      S.ActionForm({ path: "desktop", title: "The desktop entry for the launcher", why: "So the launcher shows in your applications menu.", label: "Install it", dryRun: true, fields: [{ name: "--remove", label: "Remove it instead", kind: "flag" }, { name: "--executable", label: "Path to record in it", placeholder: "the running launcher", more: true }], onRun: did("Done") }).el,
+      S.Readout({ path: "commands", title: "Everything Loadout can do, as the terminal lists it", readLabel: "List them", view: "table", params: [{ name: "--search", label: "Find", placeholder: "backup" }, { name: "--all", label: "Include sub-commands", kind: "flag", value: true }],
         columns: [{ key: "path", label: "Command" }, { key: "description", label: "What it is for" }, { key: "where", label: "In Studio" }],
         load: function (v) { var all = [{ path: "backup restore", description: "Restore a backup set", where: "Settings · Backups" }, { path: "pack add", description: "Declare a specialist pack", where: "Settings · Packs" }, { path: "memory write", description: "Record a durable fact", where: "Memory" }, { path: "secret set", description: "Store a secret", where: "a terminal" }]; var q = (v["--search"] || "").toLowerCase(); return all.filter(function (x) { return !q || (x.path + x.description).toLowerCase().indexOf(q) >= 0; }); } }).el,
       ]);
@@ -3241,20 +3489,18 @@ d.appendChild(block("z-ddo", "Do", [C.dossierDo(p, tasks)]));
   };
 
   /* Spend */
-  C.resume = function () {
-    var sess = [{ id: "s1", title: "why is this postgres query so slow", sub: "starstats · claude · 2 h ago" }, { id: "s4", title: "tidy the deploy script", sub: "starstats · codex · yesterday" }];
-    function form(id) { return { path: "resume", effect: "session", label: "Resume it", fields: [{ name: "SESSION", label: "Session", value: id, fixed: true }, { name: "--task", label: "What it is for now", placeholder: "carried over" }, { name: "--mode", label: "Posture", kind: "choice", options: MODES4, unset: "carried over" },
-      { name: "--task-id", label: "A recorded task it is for now", more: true }, { name: "--worktree", label: "Reopen it in this worktree", more: true }, { name: "--fresh", label: "Carry nothing over", kind: "flag", more: true }, { name: "--remote", label: "With the agent's remote control on", kind: "flag", more: true }, { name: "--no-remote", label: "With remote control off", kind: "flag", more: true }], onRun: did("Opened it in a terminal") }; }
-    return el("div", { "class": "cstack" }, [S.ItemList({ title: "Pick up a session where it stopped", one: "session", many: "sessions", readCmd: "$ loadout sessions --all --json", items: sess.map(function (x) { return { name: x.title, sub: x.sub, actions: [{ label: "Resume it", cmd: "$ loadout resume " + x.id, said: "Opened it in a terminal", onPress: function () { said("Resumed in a terminal", "$ loadout resume " + x.id); } }, { label: "Resume with changes", cmd: "opens the options", form: form(x.id) }] }; }) }).el,
-      S.ActionRow({ actions: [{ label: "Resume the last one", glyph: "▸", cmd: "$ loadout resume --last", said: "Opened it in a terminal" }] })]);
+  C.resume = function (sess) {
+    return S.ActionForm({ path: "resume", title: "Resume a session in a terminal here", why: "It asks as it goes, so it opens in a terminal Studio hosts.", effect: "session", label: "Resume it",
+      fields: [{ name: "SESSION", label: "Session", kind: "choice", options: (sess || []).map(function (x) { return [x.id, (x.title || x.id) + " \u00b7 " + x.agent]; }), unset: "the picker, in the terminal" }, { name: "--last", label: "The most recent one", kind: "flag" }, { name: "--task", label: "What it is for now", placeholder: "carried over" }, { name: "--mode", label: "Posture", kind: "choice", options: MODES4, unset: "carried over" },
+        { name: "--task-id", label: "A recorded task it is for now", more: true }, { name: "--worktree", label: "Reopen it in this worktree", more: true }, { name: "--fresh", label: "Carry nothing over", kind: "flag", more: true }, { name: "--remote", label: "With the agent's remote control on", kind: "flag", more: true }, { name: "--no-remote", label: "With remote control off", kind: "flag", more: true }], onRun: did("Opened it in a terminal") }).el;
   };
   C.usage = function () {
-    return el("div", { "class": "cstack" }, [S.Readout({ path: "usage", title: "Usage your own way", view: "table", params: [{ name: "--by", label: "By", kind: "choice", options: [["project", "project"], ["day", "day"], ["model", "model"], ["agent", "agent"]], value: "model", required: true }, { name: "--days", label: "Over the last", kind: "choice", options: [["7", "7 days"], ["30", "30 days"], ["90", "90 days"]], value: "30", required: true }, { name: "--project", label: "Only this project", kind: "choice", options: PICKP }],
+    return el("div", { "class": "cstack" }, [S.Readout({ path: "usage", title: "Usage your own way: by model, a project, or as a table", readLabel: "Show", view: "table", params: [{ name: "--by", label: "By", kind: "choice", options: [["project", "project"], ["day", "day"], ["model", "model"], ["agent", "agent"]], value: "model", required: true }, { name: "--days", label: "Over the last", kind: "choice", options: [["7", "7 days"], ["30", "30 days"], ["90", "90 days"]], value: "30", required: true }, { name: "--project", label: "Only this project", kind: "choice", options: PICKP }],
       columns: [{ key: "name", label: "Name" }, { key: "total", label: "Tokens", num: true }, { key: "cached", label: "From cache", num: true }],
       load: function (v) { var by = v["--by"]; return by === "model" ? [{ name: "opus", total: "6.1M", cached: "71%" }, { name: "sonnet", total: "4.9M", cached: "64%" }, { name: "haiku", total: "0.3M", cached: "12%" }] : by === "agent" ? [{ name: "claude", total: "10.2M", cached: "68%" }, { name: "codex", total: "1.1M", cached: "40%" }] : by === "day" ? [{ name: "today", total: "0.6M", cached: "70%" }, { name: "yesterday", total: "0.9M", cached: "66%" }] : [{ name: "loadout-cli", total: "7.4M", cached: "69%" }, { name: "starstats", total: "3.9M", cached: "61%" }]; } }).el,
       S.ActionForm({ path: "usage", title: "As a report to send someone", label: "Make it", effect: "reads", fields: [{ name: "--format", label: "As", kind: "choice", options: [["markdown", "Markdown"], ["csv", "CSV"]], value: "markdown", required: true }, { name: "--by", label: "By", kind: "choice", options: ["project", "day", "model", "agent"], more: true }, { name: "--days", label: "Days", kind: "number", placeholder: "30", more: true }],
         onRun: function (v) { return v["--format"] === "csv" ? S.CsvTable("project,tokens\nloadout-cli,7400000\nstarstats,3900000") : S.Markdown("| Project | Tokens |\n|---|---|\n| loadout-cli | 7.4M |\n| starstats | 3.9M |"); } }).el,
-      S.ActionForm({ path: "spend refresh", title: "Where spending stands, for the status line", why: "Works out the warnings the status line shows.", label: "Work it out again", fields: [{ name: "--project", label: "Project", kind: "choice", options: PICKP, value: "loadout-cli", required: true }], dryRun: true,
+      S.ActionForm({ path: "spend refresh", title: "Work out where spending stands for the status line", why: "Works out the warnings the status line shows.", label: "Refresh it", fields: [{ name: "--project", label: "Project", kind: "choice", options: PICKP, value: "loadout-cli", required: true }], dryRun: true,
         onRun: function (v, info) { said("Worked it out again", info.line); return info.preview ? null : el("p", { "class": "calm", text: "One warning: 82% of this month's budget is used." }); } }).el]);
   };
 
@@ -3278,7 +3524,7 @@ d.appendChild(block("z-ddo", "Do", [C.dossierDo(p, tasks)]));
 
   /* Projects */
   C.workspace = function () {
-    return el("div", { "class": "cstack" }, [S.ActionRow({ actions: [{ label: "Bring it up to date", glyph: "↻", cmd: "$ loadout workspace sync", said: "Up to date: 3 changes pulled", onPress: function () { said("Synced: 3 changes pulled", "$ loadout workspace sync"); } }, { label: "Open its folder", cmd: "$ loadout workspace open", said: "Opened", onPress: function () { said("Opened the workspace folder", "$ loadout workspace open"); } }] }),
+    return el("div", { "class": "cstack" }, [S.ActionRow({ actions: [{ label: "Bring in what other machines saved", glyph: "↻", cmd: "$ loadout workspace sync", said: "Up to date: 3 changes pulled", onPress: function () { said("Synced: 3 changes pulled", "$ loadout workspace sync"); } }, { label: "Open its folder", cmd: "$ loadout workspace open", said: "Opened", onPress: function () { said("Opened the workspace folder", "$ loadout workspace open"); } }] }),
       S.ActionForm({ path: "workspace save", title: "Save and push what changed here", label: "Save it", dryRun: true, fields: [{ name: "--message", label: "Project to name in the commit", placeholder: "optional" }, { name: "--project", label: "Only this project's files", kind: "choice", options: PICKP, more: true }, { name: "--local", label: "Commit without pushing", kind: "flag", more: true }],
         onRun: function (v, info) { said(info.preview ? "Previewed: 4 changes would be saved" : "Saved 4 changes and pushed", info.line); return null; } }).el]);
   };
@@ -3309,30 +3555,33 @@ d.appendChild(block("z-ddo", "Do", [C.dossierDo(p, tasks)]));
   C.dossierDo = function (p, tasks) {
     var kids = [];
     if (p.available) {
-      kids.push(S.ActionRow({ title: "Open it", actions: [{ label: "In the editor", cmd: "$ loadout code " + p.id, said: "Opened in the editor", onPress: function () { said("Opened " + p.id + " in the editor", "$ loadout code " + p.id); } }, { label: "Its folder", cmd: "$ loadout project open " + p.id, said: "Opened its folder" }] }));
+      kids.push(el("h4", { "class": "ctl-h", text: "Open it" }));
+      kids.push(S.ActionRow({ actions: [{ label: "In the editor", cmd: "$ loadout code " + p.id, said: "Opened in the editor", onPress: function () { said("Opened " + p.id + " in the editor", "$ loadout code " + p.id); } }, { label: "Its folder", cmd: "$ loadout project open " + p.id, said: "Opened its folder" }] }));
       kids.push(S.ActionForm({ path: "code", title: "Open it with another editor profile", label: "Open it", compact: true, fields: [{ name: "project", label: "Project", value: p.id, fixed: true }, { name: "--editor-profile", label: "Editor profile", required: true, placeholder: "work" }], onRun: did("Opened it") }).el);
     } else {
+      kids.push(el("h4", { "class": "ctl-h", text: "Open it" }));
       kids.push(S.ActionForm({ path: "project clone", title: "Clone it onto this machine", label: "Clone it", dryRun: true, fields: [{ name: "project", label: "Project", value: p.id, fixed: true }, { name: "destination", label: "Where to put it", placeholder: "beside your other projects" }], onRun: did("Cloned it") }).el);
     }
     kids.push(S.ActionForm({ path: "project onboard", title: "Onboard it with an agent", why: "An agent session that learns the project and writes down what it finds.", effect: "session", fields: [{ name: "project", label: "Project", value: p.id, fixed: true }, { name: "--mode", label: "Posture", kind: "choice", options: MODES4, value: "investigate", required: true }], onRun: did("Opened onboarding in a terminal") }).el);
     kids.push(S.ActionRow({ actions: [{ label: "Skip onboarding", cmd: "$ loadout project onboard " + p.id + " --skip", said: "Recorded that it is not being onboarded" }] }));
-    kids.push(el("h4", { "class": "ctl-h", text: "What every session here also gets" }));
+    kids.push(el("h4", { "class": "ctl-h", text: "Change how it is set up" }));
+    kids.push(el("p", { "class": "calm", style: "margin: 0; font-size: 14px", text: "Change what every session also gets" }));
     kids.push(S.SettingRow({ label: "Its recorded tasks", sub: "Open, doing and blocked tasks go in front of every session.", kind: "switch", value: "on", setCmd: function (v) { return "$ loadout project context tasks " + v + " --project " + p.id; } }));
     kids.push(S.SettingRow({ label: "A map of the code", sub: "A short outline of where things are.", kind: "switch", value: "off", setCmd: function (v) { return "$ loadout project context code-map " + v + " --project " + p.id; } }));
     kids.push(S.Readout({ path: "project proposal", extra: [p.id], title: "A proposed change to its settings", view: "list", data: [{ name: "+ agent: codex", sub: "proposed by an onboarding session, 2 days ago" }, { name: "- agent: claude", sub: "" }] }).el);
     kids.push(S.ActionRow({ actions: [{ label: "Apply it", cmd: "$ loadout project proposal " + p.id + " --apply", ask: "Write the proposal over project.yaml?", yes: "Apply it", said: "Applied" }, { label: "Discard it", danger: true, cmd: "$ loadout project proposal " + p.id + " --discard", ask: "Discard the proposal?", yes: "Discard it", said: "Discarded" }] }));
     kids.push(S.ActionForm({ path: "project relocate", title: "It has moved on this machine", label: "Point at it", dryRun: true, fields: [{ name: "project", label: "Project", value: p.id, fixed: true }, { name: "path", label: "Where it is now", required: true, placeholder: "~/code/" + p.id }], onRun: did("Pointed it at the new place") }).el);
-    kids.push(S.ActionRow({ title: "The repository", actions: [{ label: "Record which project it is", cmd: "$ loadout project link " + p.id, said: "Linked" }] }));
-    if (tasks.length) { kids.push(S.ActionForm({ path: "task remove", title: "Forget a task entirely", why: "To say a task is done or dropped, move it on the board instead.", label: "Forget it", danger: true, ask: "Forget this task entirely? Nothing brings it back.", yes: "Forget it", dryRun: true, fields: [{ name: "id", label: "Task", kind: "choice", required: true, options: tasks.map(function (t) { return [t.id, t.title]; }) }, { name: "--project", label: "Project", value: p.id, fixed: true }], onRun: did("Forgot the task") }).el); }
+    kids.push(S.ActionRow({ title: "Record in the repository which project it is", actions: [{ label: "Record it", cmd: "$ loadout project link " + p.id, said: "Linked" }] }));
+    kids.push(S.Readout({ path: "repo check", extra: [p.id], title: "Check the repository for AI tooling files", view: "findings", data: { verdict: "compliant", findings: [{ name: "pre-commit hook", severity: "ok", detail: "installed" }, { name: "global excludes", severity: "ok", detail: "set" }] } }).el);
     if (tasks.length) { kids.push(C.taskMove(tasks, ["--project", p.id])); }
-    kids.push(S.Readout({ path: "repo check", extra: [p.id], title: "AI tooling files in its repository", view: "findings", data: { verdict: "compliant", findings: [{ name: "pre-commit hook", severity: "ok", detail: "installed" }, { name: "global excludes", severity: "ok", detail: "set" }] } }).el);
+    if (tasks.length) { kids.push(S.ActionForm({ path: "task remove", title: "Forget a task entirely", why: "Moving a task to done or dropped is on the board.", label: "Forget it", danger: true, ask: "Forget this task entirely? Nothing brings it back.", yes: "Forget it", dryRun: true, fields: [{ name: "id", label: "Task", kind: "choice", required: true, options: tasks.map(function (t) { return [t.id, t.title]; }) }, { name: "--project", label: "Project", value: p.id, fixed: true }], onRun: did("Forgot the task") }).el); }
     return el("div", { "class": "cstack" }, kids);
   };
 
   C.taskMove = function (tasks, where) {
     var global = where[0] === "--global", here = global ? null : where[1];
-    return S.ActionForm({ path: "task move", title: global ? "Move one onto the project it belongs to" : "Move a task to another project, or the workspace-wide list", why: "Its plan and its record go with it.", label: "Move it", dryRun: true,
-      fields: [{ name: "id", label: "Task", kind: "choice", required: true, options: tasks.map(function (t) { return [t.id, t.title]; }) }, global ? { name: "--global", label: "From", value: true, kind: "flag", fixed: true } : { name: "--project", label: "From", value: here, fixed: true },
+    return S.ActionForm({ path: "task move", title: global ? "Move one onto the project it belongs to" : "Move a task to another project, or the workspace-wide list", why: "Its plan and record go with it.", label: "Move it", dryRun: true,
+      fields: [{ name: "id", label: "Task", kind: "choice", required: true, options: tasks.filter(function (t) { return t.state !== "done" || t.kind !== "release"; }).map(function (t) { return [t.id, t.title]; }) }, global ? { name: "--global", label: "From", value: true, kind: "flag", fixed: true } : { name: "--project", label: "From", value: here, fixed: true },
         { name: "--to", label: "To", kind: "choice", required: true, options: PICKP.filter(function (x) { return x[0] !== here; }).concat(global ? [] : [["@global", "the workspace-wide list"]]), flags: { "@global": "--to-global" } }], onRun: did("Moved the task") }).el;
   };
 
@@ -3474,6 +3723,522 @@ d.appendChild(block("z-ddo", "Do", [C.dossierDo(p, tasks)]));
     return S.Readout({ path: "team capabilities", title: "What a team’s declarations can ask for", readLabel: "Show", lazy: true, view: "table", columns: [{ key: "id", label: "Capability" }, { key: "summary", label: "What it is" }, { key: "gate", label: "Asks first" }], data: [{ id: "pr.open", summary: "open a pull request", gate: "yes" }, { id: "tests.run", summary: "run the test suite", gate: "no" }, { id: "deploy.staging", summary: "deploy to staging", gate: "yes" }] }).el;
   };
 
+  /* ---------- places: Events and Commands, two whole pages, with the bits Settings, Spend and Projects share ---------- */
+  /* The page's own styles, kept beside the functions that use them. */
+  (function () {
+    var css = [
+      ".evfilter { display: flex; flex-wrap: wrap; gap: 14px 28px; margin: 0 0 22px; }",
+      ".evfilter .seg button[aria-pressed=\"true\"] { background: var(--tint-picked-c); color: var(--ink-strong); box-shadow: inset 0 -2px 0 var(--accent); }",
+      ".evboxes { display: flex; flex-wrap: wrap; align-items: end; gap: 10px 18px; min-width: 0; max-width: 100%; }",
+      ".evboxes label { display: flex; flex-direction: column; gap: 4px; min-width: 0; max-width: 100%; }",
+      ".evboxes .lab { font-size: 12px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }",
+      ".evboxes input.ls-text { min-height: 36px; width: 22ch; max-width: 100%; }",
+      ".evboxes .evunread { flex-direction: row; align-items: center; gap: 8px; min-height: 36px; font-size: 13px; color: var(--ink-soft); }",
+      ".evday { margin-bottom: 18px; }",
+      ".evlist { list-style: none; margin: 0; padding: 0; max-width: 76ch; }",
+      ".evrow { display: grid; grid-template-columns: 1.5em 3.6em minmax(0, 1fr) auto; gap: 4px 10px; align-items: baseline; padding: 8px 0; border-bottom: 1px solid var(--rule); }",
+      ".evrow .mark { font-family: var(--font-mono); text-align: center; color: var(--muted); }",
+      ".evrow[data-level=\"needs\"] .mark { color: var(--needs-text); }",
+      ".evrow[data-level=\"problem\"] .mark { color: var(--bad-text); }",
+      ".evrow[data-level=\"done\"] .mark { color: var(--good); }",
+      ".evrow .when { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }",
+      ".evrow .what { min-width: 0; }",
+      ".evrow .what p { margin: 0; }",
+      ".evrow .title { font-size: 15px; line-height: 1.4; color: var(--ink); overflow-wrap: anywhere; }",
+      ".evrow.unread .title { color: var(--ink-strong); font-weight: 500; }",
+      ".evrow.unread .when::after { content: ' \\2022'; color: var(--accent-text); }",
+      ".evrow .detail { font-size: 13px; color: var(--ink-soft); overflow-wrap: anywhere; }",
+      ".evrow .meta { display: flex; flex-wrap: wrap; gap: 2px 12px; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }",
+      ".evrow .meta .open { color: var(--needs-text); }",
+      ".evrow.cleared .title, .evrow.cleared .detail { color: var(--muted); }",
+      ".evrow .acts { display: flex; gap: 12px; font-size: 13px; white-space: nowrap; }",
+      ".evrow .acts a { color: var(--accent-text); }",
+      ".evrow .acts .link { border: 0; padding: 0; background: none; color: var(--accent-text); font: inherit; cursor: pointer; text-decoration: underline; }",
+      "@media (max-width: 600px) { .evrow { grid-template-columns: 1.5em minmax(0, 1fr); } .evrow .when, .evrow .what, .evrow .acts { grid-column: 2; } }",
+      ".cmdwrap { display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); gap: 32px; align-items: start; }",
+      "@media (max-width: 900px) { .cmdwrap { grid-template-columns: minmax(0, 1fr); gap: 22px; } }",
+      ".cmdside { display: grid; gap: 14px; min-width: 0; align-content: start; }",
+      ".cmdside .find input { width: 100%; }",
+      ".cmdside .store .ls-zone { margin-bottom: 6px; }",
+      ".cmdfold > summary { cursor: pointer; list-style: none; padding: 4px 0; }",
+      ".cmdfold > summary::-webkit-details-marker { display: none; }",
+      ".cmdfold > summary::before { content: '\\25B8'; display: inline-block; width: 1.2em; color: var(--muted); }",
+      ".cmdfold[open] > summary::before { content: '\\25BE'; }",
+      ".cmdfold > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }",
+      ".cmdfold > summary .ls-zone { display: inline; margin: 0; }",
+      ".cmdfold .count { margin-left: 6px; font-family: var(--font-mono); font-size: 12px; letter-spacing: 0; color: var(--muted); }",
+      ".cmdside .srow { min-height: 44px; }",
+      ".cmdside .srow[aria-current=\"page\"] { background: var(--tint-picked-c); box-shadow: inset 3px 0 0 var(--accent); }",
+      ".cmdmain { display: grid; gap: 14px; min-width: 0; align-content: start; }",
+      ".cmdmain-form { display: grid; gap: 14px; min-width: 0; }",
+      ".cmdmain .effect { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }",
+      ".cmdform { display: grid; gap: 14px; max-width: 72ch; min-width: 0; }",
+      ".cmdform .fld { display: grid; gap: 4px; min-width: 0; }",
+      ".cmdform .fld .lab { font-size: 13px; color: var(--ink-soft); }",
+      ".cmdform .chk { display: flex; gap: 8px; align-items: baseline; font-size: 13.5px; color: var(--ink-soft); min-width: 0; overflow-wrap: anywhere; }",
+      ".cmdform .chk input { flex: none; }",
+      ".cmdform .calm.small, .cmdmain .calm.small { font-size: 12.5px; }",
+      ".cmdform code.ls-cmd { font-family: var(--font-mono); font-size: 12.5px; color: var(--ink-strong); }",
+      ".cmdform details.more > summary { cursor: pointer; font-size: 13.5px; color: var(--accent-text); }",
+      ".cmdform details.more[open] { display: grid; gap: 14px; }",
+      ".cmdform .ls-answers, .cmdmain .ls-answers { margin: 0; }",
+      ".ls-pager { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-top: 12px; font-size: 13.5px; color: var(--ink-soft); }",
+      ".ls-tboard .came { display: block; font-size: 12px; color: var(--muted); }",
+      ".plcaway { margin-top: 14px; }",
+      ".plcaway h4 { margin: 0 0 6px; font-size: 12px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-soft); }",
+      ".plcaway ul { margin: 0; padding: 0 0 0 18px; font-size: 13.5px; color: var(--ink-soft); }",
+      ".plcaway a { color: var(--accent-text); }",
+      ".vline { margin: 0 0 8px; font-size: 15px; color: var(--ink-soft); }",
+      ".vline b { font-weight: 500; color: var(--ink-strong); }",
+      ".updnote { margin: 0 0 10px; padding: 10px 14px; font-size: 13.5px; color: var(--ink); background: var(--surface); box-shadow: inset 3px 0 0 var(--needs); }",
+      ".pblock details.notes { margin: 0 0 10px; font-size: 13.5px; color: var(--ink-soft); }",
+      ".pblock details.notes summary { cursor: pointer; color: var(--accent-text); }",
+      ".plctrees { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }",
+      ".plctrees code { overflow-wrap: anywhere; }",
+      ".plcgap { margin-top: 16px; }",
+      ".pblock .ls-zone.sub-zone { margin-top: 24px; }",
+      /* Stage 14's Splitter took TokenSplit's class name, ls-split, and lays it out as a divider: Spend's token split is put back until the bundle renames one of them. */
+      ".ls-split:not([role=\"separator\"]) { position: static; z-index: auto; place-items: normal; touch-action: auto; }"
+    ].join("\n");
+    var s = document.createElement("style"); s.setAttribute("data-area", "places"); s.textContent = css; document.head.appendChild(s);
+  })();
+
+  /* The clock the example data reads against: 17 October, at Home's clock. */
+  function plcNow() { return new Date(2026, 9, 17, Math.floor(ST.clock / 60), ST.clock % 60); }
+  function plcHm(at) { return new Date(at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }); }
+  /* A page that reads from the daemon says "Reading…" until it has: here, once, for a moment. */
+  var PLC_READ = {};
+  function plcRead(key) {
+    if (PLC_READ[key] === true) { return true; }
+    if (!PLC_READ[key]) { PLC_READ[key] = setTimeout(function () { PLC_READ[key] = true; bump(); }, 450); }
+    return false;
+  }
+  /* The two whole pages stay put between the script's ticks, as the six pages do: they redraw when their own data changes. */
+  function plcSteady(r) { return r === "events" || r.indexOf("events?") === 0 || r === "commands" || r.indexOf("commands/") === 0; }
+  var PLC_ICONS = { events: "M6 12.5 V8.5 A4 4 0 0 1 14 8.5 V12.5 L15.5 14.5 H4.5 Z M8.5 16.5 A1.5 1.5 0 0 0 11.5 16.5", commands: "M4 6 L9 10 L4 14 M11 14.5 H16" };
+  /* SideRail draws Home's icon for a page it has none for; Events and Commands get main's own. */
+  function plcRailIcons(rail) {
+    Object.keys(PLC_ICONS).forEach(function (k) {
+      Array.prototype.forEach.call(rail.querySelectorAll('a[href="#' + k + '"] svg'), function (svg) {
+        var p = svg.querySelector("path"); if (p) { p.setAttribute("d", PLC_ICONS[k]); }
+      });
+    });
+  }
+  /* The rail's facts for the pages here, as main's App.svelte says them. */
+  function plcRailFacts(facts) {
+    var u = evtUnread(), running = CMD_JOBS.filter(function (j) { return j.state === "running"; }).length;
+    facts.events = [u ? u + " unread" : "what needed you", !!u];
+    facts.commands = [running ? running + " running" : "everything else", false];
+    facts.spend = [SPEND.month === null ? "tokens and cost" : S.tokens(SPEND.month) + " tokens this month", false];
+    facts.settings = [UPD.pending ? "update pending" : UPD.isNewer ? UPD.available + " available" : "", false];
+  }
+
+  /* ===== Events: what needed you over the last month, and what you did about it (main's pages/Events.svelte) ===== */
+  var EVT_LEVELS = ["needs", "problem", "done", "info"], EVT_SOURCES = ["run", "session", "daemon", "notice"], EVT_DIRS = ["to-me", "by-me", "any"];
+  var EVT_LEVEL_WORDS = { needs: "Needs you", problem: "Problems", done: "Done", info: "For your information" };
+  var EVT_SOURCE_WORDS = { run: "Team runs", session: "Sessions", daemon: "The daemon", notice: "Notices sent" };
+  var EVT_DIR_WORDS = { "to-me": "Said to you", "by-me": "Done by you", any: "Both" };
+  var EVT_SINCE = [["", "All kept"], ["1h", "The last hour"], ["1d", "The last day"], ["7d", "The last week"]];
+  var EVT_MARKS = { needs: "?", problem: "!", done: "✓", info: "·" };
+  /* The kinds that are reasons, which clear themselves; everything else is a moment, which never does. */
+  var EVT_REASONS = ["asking", "going-nowhere", "quiet", "spending", "waiting", "approval"];
+  var EVT_KEPT = 30, EVT_LIMIT = 200;
+  function evtAt(day, hm) { var p = hm.split(":"); return new Date(2026, 9, day, +p[0], +p[1]).toISOString(); }
+  function evtE(id, day, hm, level, source, direction, kind, title, more, cleared, read) {
+    return { event: Object.assign({ id: id, at: evtAt(day, hm), level: level, source: source, direction: direction, kind: kind, title: title }, more || {}), cleared: cleared ? evtAt(cleared[0], cleared[1]) : null, read: !!read };
+  }
+  /* What 'loadout events --json' gives, in the shape main's api.ts FeedItem has. */
+  var EVT_ITEMS = [
+    evtE("e41", 17, "13:52", "needs", "run", "to-me", "asking", "iterating-project asks which name the date option takes", { detail: "Add --since to loadout usage · --since or --from · round 2", project: "loadout-cli", run: "20261017-1402-ab3f" }),
+    evtE("e40", 17, "13:47", "problem", "run", "to-me", "going-nowhere", "Find why the upload hangs on retry is going nowhere", { detail: "No node has said anything for 25 minutes", project: "starstats", run: "20261017-0950-5c1e" }, [17, "13:58"]),
+    evtE("e39", 17, "13:30", "info", "session", "to-me", "started", "why is this postgres query so slow started", { detail: "investigate · Claude Code", project: "starstats", session: "s1" }, null, true),
+    evtE("e38", 17, "13:21", "info", "session", "to-me", "started", "add a retry to the upload step started", { detail: "implement · Claude Code", project: "loadout-cli", session: "s2" }, null, true),
+    evtE("e37", 17, "13:15", "done", "run", "by-me", "answered", "You answered release-crew: run the release checks first", { detail: "Release 0.66.0 · gate g1", project: "loadout-cli", run: "20261017-1314-9c0d" }, null, true),
+    evtE("e36", 17, "13:14", "info", "run", "to-me", "started", "release-crew started round 1", { detail: "Release 0.66.0", project: "loadout-cli", run: "20261017-1314-9c0d" }, null, true),
+    evtE("e35", 17, "11:05", "needs", "session", "to-me", "approval", "tidy the deploy script needs approval", { detail: "Codex · starstats", project: "starstats", session: "s3" }, [17, "11:05"], true),
+    evtE("e34", 17, "10:12", "info", "notice", "to-me", "notice-sent", "Sent bug-hunt's call for help to Slack", { detail: "#builds · it asked which retry test to trust", project: "starstats" }, null, true),
+    evtE("e33", 17, "09:51", "done", "session", "by-me", "ended", "You ended the session on the flaky upload test", { detail: "Claude Code · starstats", project: "starstats" }, null, true),
+    evtE("e32", 16, "23:41", "done", "run", "to-me", "ended", "Check the docs against the code ended done", { detail: "4 of 4 done-when met · $2.10", project: "loadout-cli", run: "20261016-2300-0b9a" }, null, true),
+    evtE("e31", 16, "23:00", "info", "run", "to-me", "started", "docs-crew started on a schedule", { detail: "nightly-docs · Check the docs against the code", project: "loadout-cli", run: "20261016-2300-0b9a" }, null, true),
+    evtE("e30", 16, "17:20", "problem", "daemon", "to-me", "schedule-refused", "on-commit-bugs could not start: bug-hunt has spent today's budget", { detail: "It fires again at the next commit" }, null, false),
+    evtE("e29", 16, "16:02", "needs", "run", "to-me", "spending", "Release 0.65.1 has spent 80% of its budget", { detail: "$8.00 of $10.00", project: "loadout-cli" }, [16, "16:40"], true),
+    evtE("e28", 16, "16:41", "done", "run", "by-me", "budget", "You raised Release 0.65.1's budget to $14.00", { detail: "$ loadout team budget --usd 14", project: "loadout-cli" }, null, true),
+    evtE("e27", 16, "09:30", "info", "daemon", "to-me", "started", "The daemon started", { detail: "0.65.0 · Studio on port 4417" }, null, true),
+    evtE("e26", 14, "18:44", "problem", "session", "to-me", "failed", "tidy the deploy script exited with an error", { detail: "exit code 1", project: "starstats" }, null, true),
+    evtE("e25", 14, "10:15", "done", "run", "by-me", "answered", "You approved the push of v0.65.0", { detail: "release-crew · gate g3", project: "loadout-cli" }, null, true),
+    evtE("e24", 14, "10:09", "needs", "run", "to-me", "asking", "release-crew asks: push the tag v0.65.0 to origin?", { detail: "Release 0.65.0 · round 3", project: "loadout-cli" }, [14, "10:15"], true)
+  ];
+  var EVT = { live: {} };
+  /* What is happening now becomes history as it happens: the script's question, approval and failed round. */
+  function evtLive() {
+    var out = [], t1 = line("t1"), s2 = line("s2"), i1 = line("i1");
+    function keep(id, on, made) {
+      if (on && !EVT.live[id]) { EVT.live[id] = { at: plcNow().toISOString(), read: false, cleared: null }; }
+      var k = EVT.live[id]; if (!k) { return; }
+      if (!on && !k.cleared) { k.cleared = plcNow().toISOString(); }
+      out.push({ event: Object.assign({ id: id, at: k.at }, made), cleared: k.cleared, read: k.read, live: k });
+    }
+    keep("live-gate", !!(t1 && t1.waiting), { level: "needs", source: "run", direction: "to-me", kind: "asking", title: "release-crew asks: push the tag v0.66.0 to origin?", detail: "Release 0.66.0 · round 3", project: "loadout-cli", run: "20261017-1314-9c0d" });
+    keep("live-approval", !!(s2 && s2.waiting), { level: "needs", source: "session", direction: "to-me", kind: "approval", title: "add a retry to the upload step needs approval", detail: "Claude Code · loadout-cli · answer it in the terminal", project: "loadout-cli", session: "s2" });
+    keep("live-failed", !!(i1 && i1.failed), { level: "problem", source: "daemon", direction: "to-me", kind: "round-failed", title: "Run the launcher in a browser: round 3 failed", detail: "Codex · loadout-cli", project: "loadout-cli" });
+    return out;
+  }
+  function evtAll() { return evtLive().concat(EVT_ITEMS).sort(function (a, b) { return Date.parse(b.event.at) - Date.parse(a.event.at); }); }
+  /* What the rail and the head count: unread things that needed you or went wrong. */
+  function evtUnread() { return evtAll().filter(function (it) { return !it.read && it.event.direction === "to-me" && (it.event.level === "needs" || it.event.level === "problem"); }).length; }
+  function evtMarkRead(it) { it.read = true; if (it.live) { it.live.read = true; } }
+  /* The filter, as the address holds it after '?', in the form 'loadout events --filter' takes. */
+  function evtParse(q) {
+    var read = new URLSearchParams(String(q || "").replace(/^\?/, ""));
+    var words = function (k) { return (read.get(k) || "").split(",").map(function (x) { return x.trim().toLowerCase(); }).filter(Boolean); };
+    var dir = (read.get("direction") || "to-me").toLowerCase();
+    return { levels: EVT_LEVELS.filter(function (x) { return words("level").indexOf(x) >= 0; }), project: read.get("project") || "", sources: EVT_SOURCES.filter(function (x) { return words("source").indexOf(x) >= 0; }),
+      direction: EVT_DIRS.indexOf(dir) >= 0 ? dir : "to-me", since: read.get("since") || "", until: read.get("until") || "", unread: ["true", "1", ""].indexOf(read.has("unread") ? read.get("unread") : "false") >= 0, text: read.get("text") || "" };
+  }
+  function evtFormat(f) {
+    var parts = [];
+    function add(k, v) { if (v) { parts.push(k + "=" + encodeURIComponent(v)); } }
+    add("level", EVT_LEVELS.filter(function (x) { return f.levels.indexOf(x) >= 0; }).join(","));
+    add("project", f.project.trim()); add("source", EVT_SOURCES.filter(function (x) { return f.sources.indexOf(x) >= 0; }).join(","));
+    add("direction", f.direction === "to-me" ? "" : f.direction); add("since", f.since.trim()); add("until", f.until.trim()); add("unread", f.unread ? "true" : ""); add("text", f.text.trim());
+    return parts.join("&");
+  }
+  function evtSinceMs(s) { var m = /^(\d+)([hdw])$/.exec(s), now = plcNow().getTime(); if (m) { return now - (+m[1]) * { h: 36e5, d: 864e5, w: 6048e5 }[m[2]]; } var d = Date.parse(s); return isNaN(d) ? null : d; }
+  function evtMatch(it, f) {
+    var e = it.event;
+    if (f.levels.length && f.levels.indexOf(e.level) < 0) { return false; }
+    if (f.sources.length && f.sources.indexOf(e.source) < 0) { return false; }
+    if (f.direction !== "any" && e.direction !== f.direction) { return false; }
+    if (f.project && e.project !== f.project) { return false; }
+    if (f.text && e.title.toLowerCase().indexOf(f.text.toLowerCase()) < 0) { return false; }
+    if (f.unread && it.read) { return false; }
+    if (f.since) { var lim = evtSinceMs(f.since); if (lim !== null && Date.parse(e.at) < lim) { return false; } }
+    if (f.until) { var to = evtSinceMs(f.until); if (to !== null && Date.parse(e.at) > to) { return false; } }
+    return true;
+  }
+  /* The list cut into days, newest first, each headed as somebody would say it. */
+  function evtByDay(items) {
+    var days = [], today = plcNow(); today.setHours(0, 0, 0, 0);
+    items.forEach(function (it) {
+      var at = new Date(it.event.at), start = new Date(at); start.setHours(0, 0, 0, 0);
+      var back = Math.round((today - start) / 864e5), day = back === 0 ? "Today" : back === 1 ? "Yesterday" : at.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+      if (days.length && days[days.length - 1].day === day) { days[days.length - 1].items.push(it); } else { days.push({ day: day, items: [it] }); }
+    });
+    return days;
+  }
+  /* How long a reason stayed true, as the row says it. */
+  function evtResolved(it) {
+    if (!it.cleared) { return null; }
+    var m = Math.max(0, Math.round((Date.parse(it.cleared) - Date.parse(it.event.at)) / 6e4));
+    if (m < 1) { return "resolved within a minute"; }
+    if (m < 60) { return "resolved " + m + "m later"; }
+    var h = Math.floor(m / 60); return h < 24 ? "resolved " + h + "h " + (m % 60) + "m later" : "resolved " + Math.floor(h / 24) + "d later";
+  }
+  function evtOutstanding(it) { return EVT_REASONS.indexOf(it.event.kind) >= 0 && !it.cleared; }
+  /* Where it happened, as a prototype address. */
+  function evtLink(e) { return e.run ? "#run-" + e.run : e.session ? "#session-" + e.session : null; }
+  function renderEvents(main, r) {
+    var q = r.indexOf("?") >= 0 ? r.slice(r.indexOf("?") + 1) : "", f = evtParse(q), unread = evtUnread();
+    /* The canonical spelling goes back in the address, as the daemon's does. */
+    var canon = evtFormat(f); if (canon !== q) { try { history.replaceState(null, "", "#events" + (canon ? "?" + canon : "")); } catch (e) { /* the address stays as typed */ } q = canon; }
+    function change(next) { var n = Object.assign({}, f, next), s = evtFormat(n); try { history.replaceState(null, "", "#events" + (s ? "?" + s : "")); } catch (e) { location.hash = "events" + (s ? "?" + s : ""); return; } bump(); }
+    function toggle(list, one) { return list.indexOf(one) >= 0 ? list.filter(function (x) { return x !== one; }) : list.concat([one]); }
+    pageHead(main, "Events", null, [halo({ label: "Mark all read", size: "small", cmd: "$ loadout events --mark-read", disabledReason: unread ? null : "Nothing is unread", onPress: function () { evtAll().forEach(evtMarkRead); said("Marked everything read", "$ loadout events --mark-read", "done"); bump(); } }, "ev-all")]);
+    var fact = el("span", { "class": "fact" + (unread ? " need" : ""), text: unread ? unread + " unread need you or went wrong" : "what needed you, and what you did" });
+    main.lastChild.firstChild.appendChild(fact);
+    function seg(id, label, kids) { return el("div", { "class": "spctl" }, [el("span", { "class": "lab", id: id, text: label })].concat([kids])); }
+    var form = el("form", { "class": "evfilter", "aria-label": "Filter the events", onsubmit: function (e) { e.preventDefault(); } }, [
+      seg("ev-level", "Show", el("div", { "class": "seg", role: "group", "aria-labelledby": "ev-level" }, EVT_LEVELS.map(function (x) { return el("button", { type: "button", "aria-pressed": f.levels.indexOf(x) >= 0 ? "true" : "false", "data-k": "ev-l-" + x, text: EVT_LEVEL_WORDS[x], onclick: function () { change({ levels: toggle(f.levels, x) }); } }); }))),
+      seg("ev-direction", "Which way", el("div", { "class": "seg", role: "radiogroup", "aria-labelledby": "ev-direction" }, EVT_DIRS.map(function (x) { return el("button", { type: "button", role: "radio", "aria-checked": f.direction === x ? "true" : "false", "data-k": "ev-d-" + x, text: EVT_DIR_WORDS[x], onclick: function () { change({ direction: x }); } }); }))),
+      seg("ev-since", "Over", el("div", { "class": "seg", role: "radiogroup", "aria-labelledby": "ev-since" }, EVT_SINCE.map(function (x) { return el("button", { type: "button", role: "radio", "aria-checked": f.since === x[0] ? "true" : "false", "data-k": "ev-s-" + x[0], text: x[1], onclick: function () { change({ since: x[0] }); } }); })
+        .concat(f.since && !EVT_SINCE.some(function (x) { return x[0] === f.since; }) ? [el("button", { type: "button", role: "radio", "aria-checked": "true", text: "since " + f.since })] : []))),
+      seg("ev-source", "From", el("div", { "class": "seg", role: "group", "aria-labelledby": "ev-source" }, EVT_SOURCES.map(function (x) { return el("button", { type: "button", "aria-pressed": f.sources.indexOf(x) >= 0 ? "true" : "false", "data-k": "ev-f-" + x, text: EVT_SOURCE_WORDS[x], onclick: function () { change({ sources: toggle(f.sources, x) }); } }); })))
+    ]);
+    var seen = []; evtAll().forEach(function (it) { if (it.event.project && seen.indexOf(it.event.project) < 0) { seen.push(it.event.project); } }); seen.sort();
+    var typing, proj = el("input", { type: "text", "class": "ls-text", name: "project", list: "ev-projects", placeholder: "Every project", autocomplete: "off", "data-k": "ev-project", onchange: function () { change({ project: proj.value }); } });
+    proj.value = f.project;
+    var text = el("input", { type: "search", "class": "ls-text", name: "text", placeholder: "Words in the title", autocomplete: "off", "data-k": "ev-text", oninput: function () { clearTimeout(typing); typing = setTimeout(function () { change({ text: text.value }); }, 250); } });
+    text.value = f.text;
+    var un = el("input", { type: "checkbox", name: "unread", "data-k": "ev-unread", onchange: function () { change({ unread: un.checked }); } }); un.checked = f.unread;
+    form.appendChild(el("div", { "class": "evboxes" }, [el("label", {}, [el("span", { "class": "lab", text: "Project" }), proj, el("datalist", { id: "ev-projects" }, seen.map(function (p) { return el("option", { value: p }); }))]),
+      el("label", {}, [el("span", { "class": "lab", text: "Title has" }), text]), el("label", { "class": "evunread" }, [un, el("span", { text: "Unread only" })])]));
+    main.appendChild(form);
+    if (!plcRead("events")) { main.appendChild(el("p", { "class": "calm", role: "status", text: "Reading the history…" })); return; }
+    var matched = evtAll().filter(function (it) { return evtMatch(it, f); }), shown = matched.slice(0, EVT_LIMIT);
+    if (!shown.length) {
+      main.appendChild(el("p", { "class": "calm", text: (q ? "Nothing matches." : "Nothing has needed you yet.") + " The daemon records what needs you while it runs, and keeps it " + (EVT_KEPT ? EVT_KEPT + " days" : "until the history reaches its size limit") + "." }));
+      main.appendChild(from("$ loadout events" + (q ? " --filter " + S.shellQuote(q) : "")));
+      return;
+    }
+    evtByDay(shown).forEach(function (d, di) {
+      var id = "ev-day-" + di;
+      main.appendChild(el("section", { "class": "pblock evday", "aria-labelledby": id }, [zone("", d.day, id), el("ul", { "class": "evlist" }, d.items.map(function (it) {
+        var e = it.event, link = evtLink(e), res = evtResolved(it);
+        var acts = el("span", { "class": "acts" }, [link ? el("a", { href: link, "data-k": "ev-go-" + e.id, text: "Go to it", onclick: function () { evtMarkRead(it); } }) : null,
+          !it.read ? el("button", { type: "button", "class": "link", "data-k": "ev-r-" + e.id, text: "Mark read", onclick: function () { evtMarkRead(it); said("Marked read: " + e.title, "$ loadout events --mark-read --filter " + S.shellQuote("text=" + e.title)); bump(); } }) : null]);
+        return el("li", { "class": "evrow" + (it.cleared ? " cleared" : "") + (it.read ? "" : " unread"), "data-level": e.level }, [
+          el("span", { "class": "mark", "aria-hidden": "true", text: EVT_MARKS[e.level] }), el("span", { "class": "when", text: plcHm(e.at) }),
+          el("div", { "class": "what" }, [el("p", { "class": "title" }, [!it.read ? el("span", { "class": "ls-sr", text: "Unread: " }) : null, el("span", { "class": "ls-sr", text: EVT_LEVEL_WORDS[e.level] + ": " }), e.title]),
+            e.detail ? el("p", { "class": "detail", text: e.detail }) : null,
+            el("p", { "class": "meta" }, [e.project ? el("span", { text: e.project }) : null, e.direction === "by-me" ? el("span", { text: "you" }) : null, res ? el("span", { "class": "resolved", text: res }) : evtOutstanding(it) ? el("span", { "class": "open", text: "still open" }) : null])]),
+          acts]);
+      }))]));
+    });
+    if (matched.length > shown.length) { main.appendChild(el("p", { "class": "calm", text: shown.length + " of " + matched.length + " shown, newest first. Narrow the filter to see older ones." })); }
+    main.appendChild(from("$ loadout events" + (q ? " --filter " + S.shellQuote(q) : "")));
+  }
+
+  /* ===== Commands: everything Loadout can do, each with a form built from its own options (main's pages/Commands.svelte, CommandForm.svelte) ===== */
+  function cmdArg(name, required, description, many) { return { name: name, position: 0, required: !!required, many: !!many, description: description || "" }; }
+  function cmdOpt(name, kind, description, more) { return Object.assign({ name: name, short: null, kind: kind, valueName: null, description: description, required: false, global: false, choices: [] }, more || {}); }
+  function cmdVal(name, valueName, description, more) { return cmdOpt(name, "value", description, Object.assign({ valueName: valueName }, more || {})); }
+  /* What every command has, as GlobalSettings declares it; --non-interactive is never offered, since a job cannot be asked. */
+  var CMD_GLOBAL = [cmdOpt("--json", "flag", "Emit machine-readable JSON instead of formatted output.", { global: true }), cmdOpt("--quiet", "flag", "Suppress informational output; errors are still reported.", { global: true, short: "-q" }),
+    cmdOpt("--verbose", "flag", "Show additional detail.", { global: true, short: "-v" }), cmdOpt("--debug", "flag", "Show diagnostic detail, including full exception text.", { global: true }),
+    cmdOpt("--dry-run", "flag", "Show what would happen and change nothing.", { global: true }), cmdOpt("--accessible", "optional", "Write output for a named accessibility profile: screen-reader, low-vision, colour-blind, dyslexia, adhd or plain-language.", { global: true, valueName: "PRESET" }),
+    cmdOpt("--non-interactive", "flag", "Never prompt. Fails instead of asking a question.", { global: true }), cmdOpt("--offline", "flag", "Do not contact the network; use the cached workspace.", { global: true }),
+    cmdOpt("--no-sync", "flag", "Skip the workspace synchronisation for this invocation.", { global: true }), cmdVal("--profile", "PROFILE", "Context profile to load, for example database or frontend.", { global: true }),
+    cmdVal("--agent", "AGENT", "Agent to launch, overriding the project and global defaults.", { global: true }), cmdVal("--repo", "PATH", "Repository path to operate on, instead of the current directory.", { global: true })];
+  function cmdC(path, category, description, effect, args, opts, more) {
+    more = more || {};
+    return { path: path, description: description, category: category, example: "", runnable: more.runnable !== false, reach: { page: more.page || "commands", effect: effect, reason: more.reason || null, changesOnlyWith: more.only || null }, arguments: args || [], options: (opts || []).concat(more.runnable === false ? [] : CMD_GLOBAL) };
+  }
+  var CMD_MODES = { choices: ["advise", "investigate", "implement", "review"] };
+  /* A share of the catalogue 'GET /api/v1/commands' serves: about two hundred there, these here, in the areas the terminal's own list uses. */
+  var CMD_CAT = [
+    cmdC("launch", "Start and continue", "Launch an agent against a project", "session", [cmdArg("PROJECT", true, "The project, by slug or alias.")], [cmdVal("--task", "TEXT", "What the session is for, in a sentence."), cmdVal("--task-id", "ID", "A recorded task the session is for."), cmdVal("--mode", "MODE", "The posture it takes.", CMD_MODES), cmdVal("--worktree", "NAME", "Open it in this working tree.")], { page: "sessions" }),
+    cmdC("here", "Start and continue", "Launch the agent for the current repository", "terminalOnly", [], [], { reason: "launches the agent for the directory a terminal is in, and a page has no current directory" }),
+    cmdC("resume", "Start and continue", "Reopen a previous session, with a picker when none is named", "session", [cmdArg("SESSION", false, "The session's id, as loadout sessions lists it.")], [cmdOpt("--last", "flag", "The most recent one."), cmdVal("--project", "PROJECT", "The project it belongs to."), cmdVal("--task", "TEXT", "What it is for now."), cmdOpt("--fresh", "flag", "Carry nothing over.")], { page: "spend" }),
+    cmdC("sessions", "Start and continue", "List recent agent sessions across every agent, newest first", "reads", [], [cmdVal("--limit", "COUNT", "How many to list."), cmdOpt("--all", "flag", "Every agent's, not only the default's.")], { page: "spend" }),
+    cmdC("running", "Start and continue", "The sessions running now, and how long each has been quiet", "reads", [], [], { page: "spend" }),
+    cmdC("find", "Start and continue", "Search tasks, ideas, sessions, team runs and projects at once", "reads", [cmdArg("QUERY", true, "Words, or the list query: kind:task state:open login.")], [cmdVal("--limit", "COUNT", "How many hits in each group.")]),
+    cmdC("ask", "Start and continue", "Ask in plain words, answered from Loadout's own records", "changes", [cmdArg("REQUEST", true, "What you want to know or do.")], [cmdOpt("--use-agent", "flag", "Ask the configured agent instead, because you chose to.")], { page: "home", only: ["--use-agent"] }),
+    cmdC("team", "Start and continue", "Run a team of agents against a project", "reads", [], [], { runnable: false }),
+    cmdC("team run", "Start and continue", "Run a team: a lead that briefs workers and reports to you", "changes", [cmdArg("TEAM", true, "The team, by name."), cmdArg("GOAL", true, "What the run is for.")], [cmdVal("--project", "PROJECT", "The project it works on."), cmdOpt("--done-when", "values", "What the run is judged on, one each.", { valueName: "CONDITION" }), cmdVal("--usd", "FIGURE", "What it may spend in all: a figure, or none for no cap."), cmdVal("--rounds", "COUNT", "Rounds at most."), cmdVal("--task", "ID", "A recorded task it is for.")], { page: "teams" }),
+    cmdC("team list", "Start and continue", "The teams this machine can run", "reads", [], [cmdVal("--project", "PROJECT", "Only the teams this project can run.")], { page: "teams" }),
+    cmdC("team blocked list", "Start and continue", "Runs that ended short of their done-when, each with a suggestion", "reads", [], [], { page: "teams" }),
+    cmdC("team bin empty", "Start and continue", "Delete what is in the bin for good", "changes", [], [cmdVal("--older-than", "AGE", "Only what is older than this, as 30d."), cmdOpt("--yes", "flag", "Do not ask first.")], { page: "teams" }),
+    cmdC("team attach set", "Start and continue", "Set the passphrase that lets the dashboard type at a running node", "terminalOnly", [], [], { reason: "sets the passphrase this page must be given separately, so it cannot be set from the page it guards" }),
+    cmdC("dashboard pair", "Start and continue", "Sign a phone in at the link address", "terminalOnly", [], [], { reason: "prints a sign-in link that lets whoever opens it in, which belongs on one screen rather than in a job's kept output" }),
+    cmdC("project", "Projects", "Manage project registration", "reads", [], [], { runnable: false }),
+    cmdC("project list", "Projects", "List registered projects", "reads", [], [cmdVal("--filter", "QUERY", "Keep only what the query matches."), cmdVal("--sort", "FIELDS", "Order by these fields.")], { page: "projects" }),
+    cmdC("project add", "Projects", "Register a Git repository on this machine", "changes", [cmdArg("PATH", true, "Where the repository is.")], [cmdVal("--slug", "SLUG", "Its slug, if not from the remote or the folder.")], { page: "projects" }),
+    cmdC("project show", "Projects", "One project's facts", "reads", [cmdArg("PROJECT", true, "The project, by slug or alias.")], [], { page: "projects" }),
+    cmdC("project remove", "Projects", "Forget a project, here or everywhere", "changes", [cmdArg("PROJECT", true, "The project, by slug or alias.")], [cmdOpt("--everywhere", "flag", "From the workspace, for every machine."), cmdOpt("--yes", "flag", "Do not ask first.")], { page: "projects" }),
+    cmdC("project onboard", "Projects", "Onboard a project now in an agent session you watch", "session", [cmdArg("PROJECT", false, "The project; the current one when left out.")], [cmdOpt("--skip", "flag", "Record that it is skipped instead."), cmdVal("--mode", "MODE", "The posture the session takes.", CMD_MODES)], { page: "projects" }),
+    cmdC("task list", "Projects", "What is being worked on, on a project or the workspace-wide list", "reads", [], [cmdVal("--project", "PROJECT", "The project's list."), cmdOpt("--global", "flag", "The workspace-wide list."), cmdOpt("--all", "flag", "Done and dropped as well."), cmdOpt("--every-list", "flag", "Every list as one."), cmdVal("--filter", "QUERY", "Keep only what the query matches."), cmdVal("--limit", "COUNT", "A page of this many."), cmdVal("--page", "NUMBER", "Which page.")], { page: "projects" }),
+    cmdC("task declare", "Projects", "Record a task, or move one to another state", "changes", [cmdArg("ID", true, "A short id."), cmdArg("STATE", true, "open, doing, blocked, done or dropped.")], [cmdVal("--title", "LINE", "One line of 72 characters at most."), cmdVal("--detail", "TEXT", "The full description."), cmdVal("--project", "PROJECT", "The project's list."), cmdOpt("--global", "flag", "The workspace-wide list."), cmdOpt("--done-when", "values", "What must be true for it to be finished, one each.", { valueName: "CONDITION" }), cmdVal("--note", "TEXT", "A note, such as why it is blocked.")], { page: "projects" }),
+    cmdC("task show", "Projects", "One task in full: its detail, note and history", "terminalOnly", [cmdArg("ID", true, "The task's id.")], [], { reason: "prints one task for a terminal or a script; Studio's task board opens each task in full through the same command, in a dialog rather than a form" }),
+    cmdC("task apply", "Projects", "Make several changes at once from a JSON array", "terminalOnly", [cmdArg("FILE", true, "The file, or - for standard input.")], [], { reason: "reads its changes from a file or standard input, which a page has neither of; Studio makes the same changes through its own batch route" }),
+    cmdC("start", "Projects", "Make your first project, step by step, with an agent", "session", [], [cmdVal("--starter", "KIND", "What to start from.", { choices: ["web-page", "checklist", "own-idea"] }), cmdVal("--name", "NAME", "What to call it.")], { page: "projects" }),
+    cmdC("doctor", "Health and repair", "Platform, Git, workspace, secret and agent diagnostics", "changes", [], [cmdOpt("--fix", "flag", "Put right what it can."), cmdOpt("--yes", "flag", "Do not ask first."), cmdOpt("--bundle", "optional", "Write the findings to one file to send somebody.", { valueName: "PATH" })], { page: "settings", only: ["--fix"] }),
+    cmdC("status", "Health and repair", "Summary of workspace, projects and agents", "reads", [], [], { page: "spend" }),
+    cmdC("events", "Health and repair", "What needed you over the last month and what you did about it", "changes", [], [cmdVal("--filter", "QUERY", "The filters Studio's Events page uses."), cmdOpt("--mark-read", "flag", "Mark what it shows as read."), cmdVal("--limit", "COUNT", "How many to show.")], { page: "events", only: ["--mark-read"] }),
+    cmdC("drift", "Health and repair", "Where projects have drifted from their recorded configuration", "changes", [cmdArg("PROJECT", false, "One project; every project when left out.")], [cmdOpt("--fix", "flag", "Put right what can be put right."), cmdOpt("--yes", "flag", "Do not ask first."), cmdOpt("--quiet-clean", "flag", "Only list projects that drifted.")], { page: "projects", only: ["--fix"] }),
+    cmdC("repo check", "Health and repair", "Check a repository for tracked AI tooling files", "reads", [cmdArg("PROJECT", false, "One project's repository.")], [cmdOpt("--all", "flag", "Every registered repository.")], { page: "projects" }),
+    cmdC("workspace status", "Workspace and lifecycle", "Where the workspace is, and what has changed in it", "reads", [], [], { page: "projects" }),
+    cmdC("workspace sync", "Workspace and lifecycle", "Bring in what other machines saved", "changes", [], [], { page: "projects" }),
+    cmdC("workspace save", "Workspace and lifecycle", "Save and push what changed here", "changes", [], [cmdVal("--message", "TEXT", "The commit message."), cmdVal("--project", "PROJECT", "Only this project's files."), cmdOpt("--local", "flag", "Commit without pushing.")], { page: "projects" }),
+    cmdC("update", "Workspace and lifecycle", "Check the release source and install a newer build", "changes", [], [cmdOpt("--check", "flag", "Only look."), cmdOpt("--roll-back", "flag", "Go back to the version before."), cmdOpt("--restart-daemon", "flag", "Restart the daemon onto it."), cmdOpt("--now", "flag", "Restart without waiting for its runs."), cmdOpt("--yes", "flag", "Install without asking.")], { page: "settings", only: ["--yes"] }),
+    cmdC("setup", "Workspace and lifecycle", "Configure the launcher on this machine", "session", [], [cmdOpt("--force", "flag", "Even though it is set up already."), cmdVal("--remote", "URL", "The workspace remote.")], { page: "settings" }),
+    cmdC("daemon", "Workspace and lifecycle", "Stay running: fire the scheduled runs and serve the dashboard", "terminalOnly", [], [], { reason: "is the daemon serving this page" }),
+    cmdC("daemon restart", "Workspace and lifecycle", "Restart the daemon once its runs finish", "changes", [], [cmdOpt("--now", "flag", "Do not wait for its runs.")], { page: "settings" }),
+    cmdC("daemon pause", "Workspace and lifecycle", "Hold the daemon's schedules", "changes", [], [], { page: "settings" }),
+    cmdC("memory list", "Agent configuration", "A project's memory topics, by store", "reads", [cmdArg("PROJECT", true, "The project.")], [], { page: "memory" }),
+    cmdC("memory write", "Agent configuration", "Record a durable fact", "changes", [cmdArg("PROJECT", true, "The project.")], [cmdVal("--topic", "NAME", "The topic it belongs to."), cmdVal("--fact", "TEXT", "The fact, in a sentence."), cmdVal("--scope", "SCOPE", "Where it is true.", { choices: ["project", "user", "machine"] }), cmdOpt("--separate", "flag", "Start a new topic even though one covers similar ground.")], { page: "memory" }),
+    cmdC("memory review", "Agent configuration", "Walk the topics nobody has revisited, and keep or expire each", "session", [cmdArg("PROJECT", false, "The project.")], [], { page: "memory" }),
+    cmdC("instructions explain", "Agent configuration", "Which specialists a task would load, and why", "reads", [cmdArg("PROJECT", true, "The project.")], [cmdVal("--task", "TEXT", "The task, in a sentence."), cmdVal("--mode", "MODE", "The posture.", CMD_MODES)], { page: "context" }),
+    cmdC("mcp list", "Agent configuration", "The MCP servers a project loads, and what clashes", "reads", [cmdArg("PROJECT", false, "The project.")], [cmdOpt("--global", "flag", "The servers every project loads.")], { page: "settings" }),
+    cmdC("mcp add", "Agent configuration", "Add an MCP server", "changes", [cmdArg("NAME", true, "Its tools carry this as a prefix."), cmdArg("COMMAND-OR-URL", true, "An https:// address, or the command that starts it.")], [cmdOpt("--arg", "values", "For a command: its arguments.", { valueName: "ARG" }), cmdOpt("--global", "flag", "For every project."), cmdOpt("--force", "flag", "Even though it clashes with one already declared.")], { page: "settings" }),
+    cmdC("mcp serve", "Agent configuration", "Serve the launcher's own tools to an agent", "terminalOnly", [], [], { reason: "is the MCP server, speaking a protocol on standard input and output to an agent" }),
+    cmdC("voice learn", "Agent configuration", "Learn writing rules from your own writing, then accept, edit or reject each", "session", [], [cmdVal("--guide", "NAME", "The guide it learns against.")], { page: "context" }),
+    cmdC("secret set", "Safety", "Store a credential in the OS keystore", "terminalOnly", [cmdArg("NAME", true, "The secret's name.")], [], { reason: "asks for the value at a masked prompt, so the secret never sits in a page or a command line" }),
+    cmdC("secret test", "Safety", "Check a reference resolves, never showing the value", "reads", [cmdArg("REFERENCE", true, "As anthropic/default.")], [], { page: "settings" }),
+    cmdC("protect", "Safety", "Install a pre-commit hook, or --global Git excludes", "changes", [cmdArg("PROJECT", false, "The project.")], [cmdOpt("--global", "flag", "The global Git exclude file instead."), cmdOpt("--remove", "flag", "Take the protection off.")], { page: "settings" }),
+    cmdC("backup restore", "Safety", "Undo an operation that changed files", "changes", [cmdArg("ID", true, "The backup set, as backup list shows it.")], [cmdOpt("--apply", "flag", "Put the files back, rather than say what it would.")], { page: "settings", only: ["--apply"] }),
+    cmdC("checkpoint create", "Safety", "Mark where a project stands, under a name you can return to", "changes", [cmdArg("NAME", true, "Letters, digits, dots, dashes and underscores.")], [cmdVal("--project", "PROJECT", "The project."), cmdVal("--because", "TEXT", "A sentence for whoever reads the list later.")], { page: "settings" }),
+    cmdC("completion", "Integration", "Emit a completion script", "terminalOnly", [cmdArg("SHELL", true, "bash, zsh, fish or pwsh.")], [], { reason: "writes a shell completion script for a shell to read" }),
+    cmdC("code", "Integration", "Open a project in the editor, under the profile its agent uses", "changes", [cmdArg("PROJECT", false, "The project.")], [cmdVal("--editor-profile", "NAME", "Another editor profile.")], { page: "projects" }),
+    cmdC("desktop", "Integration", "Install the Start Menu or .desktop entry", "changes", [], [cmdOpt("--remove", "flag", "Remove it instead.")], { page: "settings" }),
+    cmdC("telemetry serve", "Integration", "Receive, locally, what launched agents report about their own usage", "terminalOnly", [], [], { reason: "is a server that runs until Ctrl+C" }),
+    cmdC("statusline install", "Integration", "Put the project, branch and context spent in the agent's status line", "terminalOnly", [], [], { reason: "changes the agent's own settings file to call the status line, which belongs in the terminal the agent runs in" }),
+    cmdC("config set", "Administration", "Change a launcher setting", "changes", [cmdArg("NAME", true, "The setting."), cmdArg("VALUE", true, "Its new value; empty puts it back.")], [cmdOpt("--machine", "flag", "This machine's own settings.")], { page: "settings" }),
+    cmdC("config edit", "Administration", "Open the settings file, or say where it is", "changes", [], [cmdOpt("--path-only", "flag", "Only say where it is."), cmdOpt("--machine", "flag", "This machine's own settings instead.")], { page: "settings" }),
+    cmdC("commands", "Administration", "List everything the launcher can do, grouped by what it is for", "reads", [], [cmdVal("--search", "WORDS", "Only commands that match."), cmdOpt("--all", "flag", "Include sub-commands.")], { page: "settings" }),
+    cmdC("usage", "Administration", "What the agents have spent, by project, day, model or agent", "reads", [], [cmdVal("--by", "GROUP", "How to group it.", { choices: ["project", "day", "model", "agent"] }), cmdVal("--days", "COUNT", "Over the last this many days."), cmdVal("--project", "PROJECT", "Only this project."), cmdVal("--format", "FORMAT", "Written to send somebody.", { choices: ["markdown", "csv"] })], { page: "spend" })
+  ];
+  function cmdOf(path) { return CMD_CAT.filter(function (c) { return c.path === path; })[0] || null; }
+  /* The jobs Studio has run, newest first, as 'GET /api/v1/jobs' lists them. */
+  function cmdT(hm, s) { var p = hm.split(":"); return new Date(2026, 9, 17, +p[0], +p[1], s || 0).toISOString(); }
+  var CMD_JOBS = [
+    { id: "j7", path: "doctor", line: "loadout doctor", state: "done", exitCode: 0, startedAt: cmdT("13:41"), endedAt: cmdT("13:41", 2), truncated: false, output: "dotnet             ok       10.0.100\ngit                ok       2.47.1\nshell integration  warning  the zsh completion is out of date · can be put right\ncredential store   ok       the system keyring\n\n1 warning. loadout doctor --fix puts it right.", error: null },
+    { id: "j6", path: "task list", line: "loadout task list --project starstats --json", state: "done", exitCode: 0, startedAt: cmdT("13:12"), endedAt: cmdT("13:12", 1), truncated: false, output: JSON.stringify({ project: "starstats", tasks: [{ id: "upload-retries", state: "open", title: "Retry the upload with backoff" }, { id: "new-bucket", state: "blocked", title: "Move uploads to the new bucket", note: "Waiting on access to the new bucket" }] }), error: null },
+    { id: "j5", path: "workspace sync", line: "loadout workspace sync", state: "failed", exitCode: 1, startedAt: cmdT("12:02"), endedAt: cmdT("12:02", 4), truncated: false, output: "Pulling github.com/ntatschner/loadout-workspace…", error: "fatal: could not read from remote repository: the connection timed out.\nNothing was changed; the workspace is as it was." },
+    { id: "j4", path: "memory audit", line: "loadout memory audit loadout-cli --apply", state: "cancelled", exitCode: null, startedAt: cmdT("11:30"), endedAt: cmdT("11:30", 9), truncated: false, output: null, error: null }
+  ];
+  var CMD = { find: "", values: {}, next: 8 };
+  function cmdJob(id) { return CMD_JOBS.filter(function (j) { return j.id === id; })[0] || null; }
+  /* The words after the command's own name, and the line as typed, as main's commandLine.ts makes them. */
+  function cmdText(v) { return typeof v === "string" ? v.trim() : ""; }
+  function cmdLines(v) { return String(v || "").split("\n").map(function (x) { return x.trim(); }).filter(Boolean); }
+  function cmdJoined(name, value) { return value.charAt(0) === "-" ? [name + "=" + value] : [name, value]; }
+  function cmdWords(c, v) {
+    var w = [];
+    c.arguments.forEach(function (a) { var t = cmdText(v[a.name]); w.push.apply(w, a.many ? cmdLines(t) : t ? [t] : []); });
+    c.options.forEach(function (o) {
+      var x = v[o.name];
+      if (o.kind === "flag") { if (x === true) { w.push(o.name); } }
+      else if (o.kind === "optional") { if (cmdText(x)) { w.push(o.name + "=" + cmdText(x)); } else if (x === true) { w.push(o.name); } }
+      else if (o.kind === "values") { cmdLines(cmdText(x)).forEach(function (one) { w.push.apply(w, cmdJoined(o.name, one)); }); }
+      else if (cmdText(x)) { w.push.apply(w, cmdJoined(o.name, cmdText(x))); }
+    });
+    return w;
+  }
+  function cmdProblem(c, v) {
+    for (var i = 0; i < c.arguments.length; i++) {
+      var a = c.arguments[i], t = cmdText(v[a.name]);
+      if (a.required && !t) { return c.path + " needs its " + a.name.toLowerCase() + "."; }
+      var ws = a.many ? cmdLines(t) : t ? [t] : [];
+      for (var j = 0; j < ws.length; j++) { if (ws[j].charAt(0) === "-") { return "A " + a.name.toLowerCase() + " cannot start with a dash: the command would read it as an option."; } }
+    }
+    for (var k = 0; k < c.options.length; k++) { var o = c.options[k]; if (o.required && !cmdText(v[o.name]) && v[o.name] !== true) { return c.path + " needs " + o.name + "."; } }
+    return null;
+  }
+  function cmdReads(c, words) {
+    if (c.reach.effect === "reads" || words.indexOf("--dry-run") >= 0) { return true; }
+    var acting = c.reach.changesOnlyWith || [];
+    return c.reach.effect === "changes" && acting.length > 0 && !words.some(function (w) { return acting.indexOf(w.split("=")[0]) >= 0; });
+  }
+  function cmdQuote(w) { return /^[A-Za-z0-9\-_./:=@,+%]+$/.test(w) ? w : "'" + w.replace(/'/g, "'\\''") + "'"; }
+  function cmdLine(path, words) { return "$ loadout " + [path].concat(words.map(cmdQuote)).join(" "); }
+  var CMD_EFFECT = { reads: "reads only", changes: "changes something", session: "starts a session", terminalOnly: "terminal only" };
+  /* What the made-up command says when it ends: something like what the real one prints. */
+  function cmdOutput(c, words) {
+    var dry = words.indexOf("--dry-run") >= 0, json = words.indexOf("--json") >= 0;
+    if (c.path === "status") { return json ? JSON.stringify({ workspace: { configured: true, cloned: true }, projects: { registered: 3, availableLocally: 2, remoteOnly: 1 }, defaultAgent: "claude" }) : "Workspace  set up and cloned\nProjects   3 registered · 2 here · 1 elsewhere only\nAgents     claude 2.1.302 · codex 0.9.1 · claude by default"; }
+    if (c.path === "running") { return json ? JSON.stringify(ST.lines.filter(function (l) { return l.kind === "session" && l.stage === 2; }).map(function (l) { return { project: l.where, agent: l.agent, state: l.waiting ? "waiting" : "working", elapsedSeconds: (l.mins || 0) * 60, headless: false }; })) : ST.lines.filter(function (l) { return l.kind === "session" && l.stage === 2; }).map(function (l) { return l.where + "  " + l.agent + "  " + (l.mins || 0) + " min  " + (l.waiting ? "waiting" : "working"); }).join("\n"); }
+    if (c.path === "task list") { var pi = words.indexOf("--project"), p = pi >= 0 ? words[pi + 1] : null, ts = p ? (TASKS[p] || []) : TASKS["~"]; return json ? JSON.stringify({ project: p, tasks: ts.map(function (t) { return { id: t.id, state: t.state, title: t.title }; }) }) : ts.map(function (t) { return t.state + "  " + t.id + "  " + t.title; }).join("\n") || "No tasks."; }
+    if (c.path === "project list") { return json ? JSON.stringify(PROJ.map(function (x) { return { id: x.id, name: x.name, available: x.available, path: x.path }; })) : PROJ.map(function (x) { return x.id + "  " + (x.available ? x.path : "not on this machine"); }).join("\n"); }
+    if (c.path === "find") { return "Tasks\n  upload-retries  Retry the upload with backoff  · loadout task show upload-retries --project starstats\nSessions\n  why is this postgres query so slow  · loadout resume 7f3a2c1e"; }
+    if (c.reach.effect === "reads" || cmdReads(c, words)) { return dry ? "Dry run: " + c.path + " would change nothing it has not said above." : json ? JSON.stringify({ command: c.path, ok: true }) : c.description + ": as it stands, nothing to report."; }
+    return dry ? "Dry run: nothing was changed.\nloadout " + [c.path].concat(words).join(" ") + " would " + c.description.charAt(0).toLowerCase() + c.description.slice(1) + "." : "Done.";
+  }
+  function cmdRun(c, words) {
+    var now = plcNow(), job = { id: "j" + (CMD.next++), path: c.path, line: cmdLine(c.path, words).slice(2), state: "running", exitCode: null, startedAt: now.toISOString(), endedAt: null, truncated: false, output: null, error: null };
+    CMD_JOBS.unshift(job);
+    setTimeout(function () { if (job.state !== "running") { return; } job.state = "done"; job.exitCode = 0; job.endedAt = new Date(now.getTime() + 1400).toISOString(); job.output = cmdOutput(c, words); bump(); }, 1400);
+    return job;
+  }
+  function cmdStateWord(s) { return s === "cancelled" ? "stopped" : s; }
+  function cmdHref(path) { return "#commands/" + path.split(" ").map(encodeURIComponent).join("/"); }
+  /* One command's form: its arguments and options as it declares them, the line it will run as it is filled in, and Run (with Preview for one that changes something). */
+  function cmdForm(c) {
+    var box = el("div", { "class": "cmdmain-form" }), v = CMD.values[c.path] = CMD.values[c.path] || {};
+    var id = function (name) { return "f-" + c.path.replace(/[^a-z0-9]/gi, "-") + "-" + name.replace(/[^a-z0-9]/gi, "-"); };
+    box.appendChild(el("p", { "class": "calm" }, [c.description + " ", el("span", { "class": "effect", text: "· " + CMD_EFFECT[c.reach.effect] })]));
+    if (c.reach.effect === "terminalOnly") { box.appendChild(S.TerminalOnly({ title: "Studio does not run this", why: "It " + c.reach.reason + ".", command: "$ loadout " + c.path })); return box; }
+    if (c.reach.effect === "session" && c.path === "launch") {
+      box.appendChild(el("p", { "class": "calm", text: "This starts an agent session. Studio hosts sessions from Sessions, where you can type into them." }));
+      box.appendChild(el("div", { "class": "ls-answers flush" }, [halo({ label: "Start a session…", solid: true, size: "small", cmd: "opens New session", onPress: function () { openLaunch(); } }, "cmd-launch")]));
+      box.appendChild(S.Command({ why: "Or in a terminal:", command: "$ loadout " + c.path }));
+      return box;
+    }
+    if (!c.runnable) { box.appendChild(el("p", { "class": "calm", text: "This groups the commands under it. Choose one of them." })); return box; }
+    var asks = c.reach.effect === "session";
+    if (asks) { box.appendChild(el("p", { "class": "calm", text: "It asks as it goes, so it opens in a terminal Studio hosts, where you answer it. Closing the page leaves it running." })); }
+    var form = el("form", { "class": "cmdform", onsubmit: function (e) { e.preventDefault(); var w = cmdWords(c, v); if (cmdProblem(c, v)) { return; } if (asks) { open(w); } else { run(w, false); } } });
+    function field(o) {
+      var fid = id(o.name), inp;
+      if (o.kind === "flag") {
+        inp = el("input", { type: "checkbox", id: fid, "data-k": fid, onchange: function () { v[o.name] = inp.checked; paint(); } }); inp.checked = v[o.name] === true;
+        return el("label", { "class": "chk" }, [inp, " ", el("span", {}, [el("code", { "class": "ls-cmd", text: o.name }), " " + o.description])]);
+      }
+      if (o.choices.length) {
+        inp = el("select", { id: fid, "class": "ls-text", "data-k": fid, onchange: function () { v[o.name] = inp.value; paint(); } }, [el("option", { value: "", text: "not given" })].concat(o.choices.map(function (ch) { return el("option", { value: ch, text: ch }); })));
+        inp.value = v[o.name] || "";
+        return el("label", { "class": "fld", "for": fid }, [el("span", { "class": "lab" }, [el("code", { "class": "ls-cmd", text: o.name }), o.required ? "" : " (optional)"]), inp, el("span", { "class": "calm small", text: o.description })]);
+      }
+      var many = o.kind === "values";
+      inp = el(many ? "textarea" : "input", { id: fid, "class": "ls-text", rows: many ? "2" : null, autocomplete: "off", spellcheck: "false", "data-k": fid, oninput: function () { v[o.name] = inp.value; paint(); } }); inp.value = v[o.name] || "";
+      return el("label", { "class": "fld", "for": fid }, [el("span", { "class": "lab" }, [el("code", { "class": "ls-cmd", text: o.name }), (o.valueName ? " " + o.valueName.toLowerCase() : "") + (o.required ? "" : " (optional)")]), inp,
+        el("span", { "class": "calm small", text: many ? "One on each line. " + o.description : (o.kind === "optional" ? "Leave it empty to give it with no value. " : "") + o.description })]);
+    }
+    c.arguments.forEach(function (a) {
+      var fid = id(a.name), inp = el(a.many ? "textarea" : "input", { id: fid, "class": "ls-text", rows: a.many ? "3" : null, autocomplete: "off", spellcheck: "false", "data-k": fid, oninput: function () { v[a.name] = inp.value; paint(); } }); inp.value = v[a.name] || "";
+      form.appendChild(el("label", { "class": "fld", "for": fid }, [el("span", { "class": "lab", text: a.name.toLowerCase() + (a.required ? "" : " (optional)") }), inp, a.many ? el("span", { "class": "calm small", text: "One on each line. " + a.description }) : a.description ? el("span", { "class": "calm small", text: a.description }) : null]));
+    });
+    c.options.filter(function (o) { return !o.global; }).forEach(function (o) { form.appendChild(field(o)); });
+    var every = c.options.filter(function (o) { return o.global && o.name !== "--non-interactive"; });
+    if (every.length) { var more = el("details", { "class": "more" }, [el("summary", { text: "Options every command has" })].concat(every.map(field))); if (every.some(function (o) { return v[o.name]; })) { more.open = true; } form.appendChild(more); }
+    var lineBox = el("div", {}), acts = el("div", { "class": "ls-answers flush" });
+    form.appendChild(lineBox); form.appendChild(acts); box.appendChild(form);
+    function open(w) { said("Opened " + c.path + " in a terminal Studio hosts. Closing the page leaves it running.", cmdLine(c.path, w), "done"); }
+    function run(w, preview) { var job = cmdRun(c, preview && w.indexOf("--dry-run") < 0 ? w.concat(["--dry-run"]) : w); go("commands/run/" + job.id); }
+    function paint() {
+      var w = cmdWords(c, v), notYet = cmdProblem(c, v), reads = cmdReads(c, w), acting = c.reach.effect === "changes" ? (c.reach.changesOnlyWith || []) : [];
+      var previewable = !reads && c.options.some(function (o) { return o.name === "--dry-run"; });
+      var runCmd = reads ? (acting.length ? "reads only · changes with " + acting.join(" or ") : "reads only") : "changes something";
+      lineBox.textContent = ""; lineBox.appendChild(S.Command({ why: "It runs:", command: cmdLine(c.path, w) }));
+      var k = document.activeElement && acts.contains(document.activeElement) ? document.activeElement.getAttribute("data-k") : null;
+      acts.textContent = "";
+      if (asks) { acts.appendChild(halo({ label: "Open it in a terminal", solid: true, size: "small", cmd: "opens a terminal here, hosted by the daemon", disabledReason: notYet, onPress: function () { open(w); } }, "cmd-open")); }
+      else {
+        if (previewable) { acts.appendChild(halo({ label: "Preview", size: "small", cmd: "adds --dry-run · changes nothing", disabledReason: notYet, onPress: function () { run(w, true); } }, "cmd-preview")); }
+        acts.appendChild(halo({ label: "Run", solid: reads, kind: reads ? "" : "needs", size: "small", cmd: runCmd, disabledReason: notYet, onPress: function () { run(w, false); } }, "cmd-run"));
+      }
+      if (k) { var n = acts.querySelector('[data-k="' + k + '"]'); if (n) { n.focus(); } }
+    }
+    paint();
+    return box;
+  }
+  function renderCommands(main, r) {
+    var rest = r.split("/").slice(1).map(function (x) { try { return decodeURIComponent(x); } catch (e) { return x; } });
+    var jobId = rest[0] === "run" ? (rest[1] || null) : null, job = jobId ? cmdJob(jobId) : null;
+    var path = rest[0] === "run" ? (job ? job.path : "") : rest.join(" "), chosen = cmdOf(path), ready = plcRead("commands");
+    pageHead(main, "Commands", "everything Loadout can do, each with the line it runs");
+    var wrap = el("div", { "class": "cmdwrap" }), side = el("aside", { "class": "cmdside", "aria-label": "Commands" }), body = el("section", { "class": "cmdmain", "aria-label": "Command" });
+    var find = el("input", { type: "search", "class": "ls-text", name: "find", placeholder: "Find a command", autocomplete: "off", "data-k": "cmd-find", oninput: function () { CMD.find = find.value; list(); } });
+    find.value = CMD.find;
+    side.appendChild(el("label", { "class": "find" }, [el("span", { "class": "ls-sr", text: "Find a command" }), find]));
+    if (CMD_JOBS.length) {
+      side.appendChild(el("section", { "class": "store", "aria-labelledby": "cm-recent" }, [zone("", "Run from here", "cm-recent"), el("ul", { "class": "slist" }, CMD_JOBS.slice(0, 8).map(function (j) {
+        return el("li", {}, [el("a", { "class": "srow", href: "#commands/run/" + j.id, "aria-current": jobId === j.id ? "page" : null, "data-k": "cm-j-" + j.id }, [el("span", { "class": "t", text: j.path }), el("span", { "class": "x", text: cmdStateWord(j.state) + " · " + plcHm(j.startedAt) })])]);
+      }))]));
+    }
+    var folds = el("div", {}); side.appendChild(folds);
+    /* Folded by area, since two hundred commands at once is a wall: the chosen command's area is open, and every area opens while finding. */
+    function list() {
+      folds.textContent = "";
+      if (!ready) { folds.appendChild(el("p", { "class": "calm", role: "status", text: "Reading…" })); return; }
+      var words = CMD.find.trim().toLowerCase().split(/\s+/).filter(Boolean), groups = [], by = {};
+      CMD_CAT.filter(function (c) { var hay = (c.path + " " + c.description).toLowerCase(); return words.every(function (w) { return hay.indexOf(w) >= 0; }); }).forEach(function (c) {
+        var g = c.category || "Other"; if (!by[g]) { by[g] = []; groups.push(g); } by[g].push(c);
+      });
+      if (!groups.length) { folds.appendChild(el("p", { "class": "calm", text: "Nothing matches." })); return; }
+      groups.forEach(function (g, gi) {
+        var d = el("details", { "class": "store cmdfold" }, [el("summary", {}, [el("h2", { "class": "ls-zone" }, [g + " ", el("span", { "class": "count", text: String(by[g].length) })])]), el("ul", { "class": "slist" }, by[g].map(function (c) {
+          return el("li", {}, [el("a", { "class": "srow", href: cmdHref(c.path), "aria-current": !jobId && path === c.path ? "page" : null, "data-k": "cm-c-" + c.path }, [el("span", { "class": "t", text: c.path }), el("span", { "class": "x", text: c.description })])]);
+        }))]);
+        if (words.length || by[g].some(function (c) { return c.path === path; })) { d.open = true; }
+        folds.appendChild(d);
+      });
+    }
+    list();
+    if (jobId) {
+      if (!job) { body.appendChild(el("p", { "class": "offline", role: "alert", text: "There is no job " + jobId + " here: jobs last until the daemon restarts." })); }
+      else {
+        var jr = S.JobResult({ job: job, onagain: function (j) { go(cmdHref(j.path).slice(1)); }, oncancel: function (j) { j.state = "cancelled"; j.endedAt = plcNow().toISOString(); said("Stopped " + j.path, "stops it and anything it started"); bump(); } });
+        body.appendChild(jr.el);
+      }
+    } else if (chosen) {
+      body.appendChild(el("h2", { "class": "topicname", text: "loadout " + chosen.path }));
+      body.appendChild(cmdForm(chosen));
+    } else if (ready) {
+      body.appendChild(el("p", { "class": "calm", text: "Choose a command to see what it takes and run it. Each area's own page does these better as it is built; this reaches everything in the meantime." }));
+    }
+    wrap.appendChild(side); wrap.appendChild(body); main.appendChild(wrap);
+  }
+
   /* ---------- placeholder pages ---------- */
   function renderElsewhere(main, r) {
     if (r === "settings") { main.appendChild(el("div", { "class": "head" }, [el("h1", { text: "Settings" })])); main.appendChild(el("section", { "class": "placeholder", "aria-labelledby": "z-app" }, [zone("", "Appearance", "z-app"), appearanceForm()])); return; }
@@ -3501,7 +4266,7 @@ d.appendChild(block("z-ddo", "Do", [C.dossierDo(p, tasks)]));
     var deckRoute = P.mode === "terminals" && (rr === "home" || rr === "sessions" || rr.indexOf("session-") === 0 || pagesRoute(rr) || rr === "teams-office");
     if (deckRoute && DECK && DECK.route === rr && document.getElementById("main").childNodes.length) { refreshDeck(); if (pagesRoute(rr)) { refreshBeside(); } renderNav(); renderAmbient(); return; }
     if (!deckRoute) { DECK = null; }
-    var steady = teamsRoute(rr) || pagesRoute(rr) || (P.mode === "teams" && rr === "home") || (P.mode === "minimal" && rr === "home" && FOCUS);
+    var steady = teamsRoute(rr) || pagesRoute(rr) || plcSteady(rr) || (P.mode === "teams" && rr === "home") || (P.mode === "minimal" && rr === "home" && FOCUS);
     if (steady && sig === lastTeams && document.getElementById("main").childNodes.length) { renderNav(); renderAmbient(); return; }
     lastTeams = steady ? sig : "";
     if (!teamsRoute(rr) && DEPTHS) { DEPTHS.unbind(); DEPTHS = null; }
@@ -3540,6 +4305,8 @@ d.appendChild(block("z-ddo", "Do", [C.dossierDo(p, tasks)]));
     else if (r === "settings" || r.indexOf("settings/") === 0) { renderSettings(main, r); }
     else if (r === "memory" || r.indexOf("memory/") === 0) { renderMemory(main, r); }
     else if (r === "spend" || r.indexOf("spend/") === 0) { renderSpend(main, r); }
+    else if (r === "events" || r.indexOf("events?") === 0) { renderEvents(main, r); }
+    else if (r === "commands" || r.indexOf("commands/") === 0) { renderCommands(main, r); }
     else { renderElsewhere(main, r); }
     main.appendChild(el("p", { "class": "sample", text: "Example data and scripted agents: this prototype doesn't talk to Loadout. Every command shown is the real one." }));
     if (k) { var n = k === "home-task" ? document.getElementById("home-task") : document.querySelector('[data-k="' + CSS.escape(k) + '"]'); if (n) { n.focus({ preventScroll: true }); if (caret !== undefined && n.setSelectionRange && caret !== null) { try { n.setSelectionRange(caret, caret); } catch (e) { /* not a text field */ } } } }
