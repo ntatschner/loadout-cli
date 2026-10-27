@@ -194,7 +194,7 @@ public sealed class TeamNotifyTestCommand : AsyncCommand<GlobalSettings>
             "loadout team status",
             teams!.NotifyChat,
             address,
-            cancellationToken).ConfigureAwait(false);
+            ct: cancellationToken).ConfigureAwait(false);
 
         if (!sent)
         {

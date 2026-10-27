@@ -3260,6 +3260,14 @@ public sealed class DashboardServer : IDisposable
             // When the run answers it itself, and how, for a timed question.
             // Sooner than the wait above, and the one to count down to.
             timer = gate.Timer is { } timer ? new { at = timer.At, does = timer.Does } : null,
+
+            // A permission's parts, so a page can show the plain line, what was
+            // refused and the warnings above the command set apart, rather than
+            // one sentence with the shell in the middle of it. All null for a
+            // question with no wording, which shows its question as before.
+            ask = AskWording.View(gate) is { } view
+                ? new { line = view.Line, command = view.Command, blocked = view.Blocked, flags = view.Flags, careful = AskView.Careful(view.Flags) }
+                : null,
         }),
 
         // Where the spend stands, which the design asked for and the list

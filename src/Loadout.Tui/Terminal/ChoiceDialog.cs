@@ -23,7 +23,15 @@ internal sealed class ChoiceDialog : Window
     /// <summary>Which answer was picked, or null if the question was dismissed.</summary>
     internal int? ChosenIndex { get; private set; }
 
-    internal ChoiceDialog(string question, IReadOnlyList<string> choices, IApplication application)
+    /// <param name="question">The title: the question in one line.</param>
+    /// <param name="choices">What may be chosen.</param>
+    /// <param name="application">The application it runs in.</param>
+    /// <param name="detail">
+    /// Lines to show above the choices, for a question with more to it than a
+    /// title holds: a permission's plain line, what was refused and the command
+    /// set apart. Null shows the choices alone.
+    /// </param>
+    internal ChoiceDialog(string question, IReadOnlyList<string> choices, IApplication application, string? detail = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(question);
         ArgumentNullException.ThrowIfNull(choices);
@@ -34,10 +42,14 @@ internal sealed class ChoiceDialog : Window
         Title = question;
         BorderStyle = LauncherTheme.Lines;
 
+        var about = detail is { Length: > 0 } text
+            ? new Label { X = 1, Y = 1, Width = Dim.Fill(1), Height = text.Split('\n').Length, Text = text }
+            : null;
+
         _choices = new ListView
         {
             X = 1,
-            Y = 1,
+            Y = about is null ? 1 : Pos.Bottom(about) + 1,
             Width = Dim.Fill(1),
             Height = Dim.Fill(3),
         };
@@ -59,6 +71,11 @@ internal sealed class ChoiceDialog : Window
 
         this.Bind(Key.Esc, Command.Quit);
         AddCommand(Command.Quit, () => { _application.RequestStop(this); return true; });
+
+        if (about is not null)
+        {
+            Add(about);
+        }
 
         Add(_choices, choose, cancel);
     }

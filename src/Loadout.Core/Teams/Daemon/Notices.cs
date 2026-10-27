@@ -106,13 +106,16 @@ public sealed class Notices
 
         foreach (var (run, reason, key) in fresh)
         {
+            var (detail, command) = Spoken(run, reason);
+
             var landed = await PostAsync(
                     kind,
                     Notifier.Title(run, reason),
-                    reason.Detail,
+                    detail,
                     linkTo(run),
                     chat,
                     address,
+                    command,
                     ct).ConfigureAwait(false);
 
             told?.Invoke(run, reason, landed);
@@ -141,6 +144,30 @@ public sealed class Notices
         return sent;
     }
 
+    /// <summary>
+    /// What a notice says, and the command to set apart from it where it is a
+    /// permission with one.
+    /// </summary>
+    /// <remarks>
+    /// Two parts on a phone: the plain line - who wants to do what, what was
+    /// refused, what the command does - and then the command on its own. The
+    /// whole question as one sentence buried the words in shell.
+    /// </remarks>
+    internal static (string Detail, string? Command) Spoken(RunSummary run, Attention reason)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        ArgumentNullException.ThrowIfNull(reason);
+
+        if (reason.Kind == AttentionKind.Asking
+            && run.Waiting.FirstOrDefault(gate => string.Equals(gate.Id, reason.About, StringComparison.Ordinal)) is { } asked
+            && AskWording.View(asked) is { Command: { Length: > 0 } command } view)
+        {
+            return (view.Summary + " Let it?", command);
+        }
+
+        return (reason.Detail, null);
+    }
+
     /// <summary>Sends one, and says whether it landed.</summary>
     /// <remarks>
     /// Failures are swallowed on purpose. A chat service being down is not a
@@ -154,6 +181,7 @@ public sealed class Notices
         string link,
         string? chat,
         string address,
+        string? command = null,
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(address))
@@ -164,7 +192,7 @@ public sealed class Notices
         try
         {
             using var body = new StringContent(
-                Notifier.Body(kind, title, detail, link, chat),
+                Notifier.Body(kind, title, detail, link, chat, command),
                 Encoding.UTF8,
                 "application/json");
 

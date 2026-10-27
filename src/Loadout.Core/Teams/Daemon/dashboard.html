@@ -1155,6 +1155,9 @@
   [data-theme^="contrast"] .lk-gate { border: 2px solid var(--s); }
   .lk-gate-kind { display: flex; align-items: center; gap: var(--space-2); margin: 0; font-size: 0.8125rem; font-weight: 750; color: var(--s); }
   .lk-gate-question { margin: 0; font-size: 1.0625rem; line-height: 1.55; font-weight: 600; }
+  .lk-gate-refused { margin: 0; font-size: 0.875rem; }
+  .lk-gate-careful { margin: 0; font-size: 0.875rem; font-weight: 700; color: var(--s); }
+  .lk-gate-command { margin: 0; padding: var(--space-3); border-radius: var(--radius-sm); background: var(--surface-1); font-size: 0.8125rem; white-space: pre-wrap; overflow-wrap: anywhere; }
   .lk-gate-options { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
   .lk-gate-options li { padding: var(--space-3); border-radius: var(--radius-sm); background: var(--surface-1); font-size: 0.875rem; }
   .lk-gate-options li[data-recommended="true"] { box-shadow: inset 0 0 0 1px var(--accent-text); }
@@ -14592,8 +14595,42 @@
 
       var asked = document.createElement("p");
       asked.className = "asked lk-gate-question";
-      asked.textContent = asking(gate.question);
-      card.appendChild(asked);
+
+      /*
+        A permission with wording: the plain line, what its role refused, the
+        warnings, then the command on its own, so the shell is not the middle
+        of the sentence somebody has to answer. The warnings come from the
+        command, never the agent's description of it, and sit above the
+        buttons. Everything goes in as text, never as markup.
+      */
+      if (gate.ask) {
+        asked.textContent = gate.ask.line + ".";
+        card.appendChild(asked);
+
+        var refused = document.createElement("p");
+        refused.className = "lk-gate-refused";
+        refused.textContent = gate.ask.blocked
+          ? "Not allowed by its role: " + gate.ask.blocked
+          : "Nothing in its role allows that.";
+        card.appendChild(refused);
+
+        if (gate.ask.careful) {
+          var careful = document.createElement("p");
+          careful.className = "lk-gate-careful";
+          careful.textContent = gate.ask.careful;
+          card.appendChild(careful);
+        }
+
+        if (gate.ask.command) {
+          var command = document.createElement("pre");
+          command.className = "lk-gate-command";
+          command.textContent = gate.ask.command;
+          card.appendChild(command);
+        }
+      } else {
+        asked.textContent = asking(gate.question);
+        card.appendChild(asked);
+      }
 
       /*
         How long is left, which the page never said. The run stops waiting and

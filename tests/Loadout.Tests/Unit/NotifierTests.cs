@@ -156,4 +156,107 @@ public sealed class NotifierTests
     {
         Notices.KindOf(word).Should().BeNull();
     }
+
+    // A command that tries to end a code block early and to be read as markup.
+    private const string Hostile = "echo ``` <b>&amp; done";
+
+    private const string Plain = "implementer (builder) wants to list the build output. Nothing in its role allows that. Let it?";
+
+    private static string Text(NoticeKind kind, string command = Hostile) =>
+        JsonDocument.Parse(Notifier.Body(kind, Title, Plain, Link, "1", command)).RootElement
+            .GetProperty(kind == NoticeKind.Discord ? "content" : "text").GetString()!;
+
+    [Fact]
+    public void Slack_puts_the_plain_line_first_and_the_command_in_a_block_it_cannot_close()
+    {
+        var text = Text(NoticeKind.Slack);
+
+        text.IndexOf(Plain, StringComparison.Ordinal).Should().BeLessThan(text.IndexOf("```", StringComparison.Ordinal));
+
+        // Exactly the opening and closing fence: the command's own three
+        // backticks are broken so they cannot end the block.
+        System.Text.RegularExpressions.Regex.Matches(text, "```").Count.Should().Be(2);
+
+        // Slack reads &, < and > as its own, so they arrive escaped and show
+        // as themselves.
+        text.Should().Contain("&lt;b&gt;&amp;amp;");
+        text.Should().NotContain("<b>");
+    }
+
+    [Fact]
+    public void Discord_puts_the_plain_line_first_and_the_command_in_a_block_it_cannot_close()
+    {
+        var text = Text(NoticeKind.Discord);
+
+        text.Should().StartWith(Title + "\n" + Plain + "\n```\n");
+        System.Text.RegularExpressions.Regex.Matches(text, "```").Count.Should().Be(2);
+
+        // No entities in Discord: the text is the text.
+        text.Should().Contain("<b>&amp; done");
+    }
+
+    [Fact]
+    public void Teams_puts_the_command_in_a_code_span_longer_than_any_backticks_inside_it()
+    {
+        var text = Text(NoticeKind.Teams);
+
+        text.Should().StartWith(Plain + "\n\n");
+        text.Should().Contain("````" + Hostile + "````");
+    }
+
+    [Fact]
+    public void Telegram_escapes_everything_before_asking_for_HTML()
+    {
+        var body = JsonDocument.Parse(Notifier.Body(NoticeKind.Telegram, Title, Plain, Link, "1", Hostile)).RootElement;
+        var text = body.GetProperty("text").GetString()!;
+
+        body.GetProperty("parse_mode").GetString().Should().Be("HTML");
+        text.Should().Contain("<pre>echo ``` &lt;b&gt;&amp;amp; done</pre>");
+
+        // The only tags in it are the ones put there.
+        System.Text.RegularExpressions.Regex.Matches(text, "<[a-z/]").Count.Should().Be(2);
+        text.IndexOf(Plain, StringComparison.Ordinal).Should().BeLessThan(text.IndexOf("<pre>", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void The_generic_shape_carries_the_command_as_its_own_field()
+    {
+        var body = JsonDocument.Parse(Notifier.Body(NoticeKind.Generic, Title, Plain, Link, null, Hostile)).RootElement;
+
+        body.GetProperty("detail").GetString().Should().Be(Plain);
+        body.GetProperty("command").GetString().Should().Be(Hostile);
+    }
+
+    [Theory]
+    [InlineData(NoticeKind.Slack)]
+    [InlineData(NoticeKind.Discord)]
+    [InlineData(NoticeKind.Teams)]
+    [InlineData(NoticeKind.Telegram)]
+    public void A_long_command_is_cut_and_says_where_the_rest_is(NoticeKind kind)
+    {
+        var command = new string('x', 2000);
+        var text = Text(kind, command);
+
+        text.Should().NotContain(command);
+        text.Should().Contain(new string('x', Notifier.CommandLimit) + "…");
+        text.Should().Contain(Notifier.CutShort);
+    }
+
+    [Fact]
+    public void A_waiting_permission_is_spoken_as_words_then_its_command()
+    {
+        var gate = new PendingAsk(
+            "implementer-1", "implementer", "builder", "Bash", "ls build && rm -rf build", DateTimeOffset.UtcNow,
+            Said: "list the build output", Blocked: "rm -rf build", Flags: [AskWording.Deletes]);
+        var run = new RunSummary(
+            "20260918-1000-aaaa", "d", "docs-crew", "goal", "supervised",
+            DateTimeOffset.UtcNow, null, null, 0m, 1, [], [], [], Gates: [gate]);
+
+        var (detail, command) = Notices.Spoken(run, new Attention(AttentionKind.Asking, gate.Asking, "you answer it", gate.Id));
+
+        detail.Should().Be(
+            "implementer (builder) wants to list the build output. Its role does not allow 'rm -rf build'. "
+            + "Careful: the command deletes files. Let it?");
+        command.Should().Be("ls build && rm -rf build");
+    }
 }

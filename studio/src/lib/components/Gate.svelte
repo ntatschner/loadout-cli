@@ -8,6 +8,7 @@
   import { untrack } from 'svelte';
   import HaloButton from './HaloButton.svelte';
   import { GATE_WORDS, gateButtons, type GateAnswer, type GateKind } from '../teams';
+  import type { PermissionParts } from '../api';
 
   interface Props {
     kind: GateKind;
@@ -26,6 +27,8 @@
     proposal?: string[];
     /** proposal: the project's own criteria, held whatever is answered. */
     held?: string[];
+    /** A permission's parts: drawn as the plain line, what was refused, the warnings, then the command apart. */
+    ask?: PermissionParts | null;
     compact?: boolean;
     disabledReason?: string;
     /** Sends the answer; resolves false where it was not taken, and the Gate stays open. */
@@ -46,6 +49,7 @@
     brief = '',
     proposal = [],
     held = [],
+    ask = null,
     compact = false,
     disabledReason = undefined,
     onanswer = undefined,
@@ -84,7 +88,15 @@
 
 <section class={`ls-gate ${kind}`} class:compact class:answered={!!said} role="group" aria-labelledby={id}>
   <span class="who">{who}</span>
-  <p class="q" {id}>{question}</p>
+  {#if ask}
+    <!-- The warnings come from the command, never from the agent's own description of it. -->
+    <p class="q" {id}>{ask.line}.</p>
+    <p class="refused">{ask.blocked ? `Not allowed by its role: ${ask.blocked}` : 'Nothing in its role allows that.'}</p>
+    {#if ask.careful}<p class="careful">{ask.careful}</p>{/if}
+    {#if ask.command}<pre class="command">{ask.command}</pre>{/if}
+  {:else}
+    <p class="q" {id}>{question}</p>
+  {/if}
 
   {#if kind === 'readings' && readings.length}
     <ul class="readings">
