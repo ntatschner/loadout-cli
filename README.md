@@ -8,7 +8,7 @@
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-informational)](https://github.com/ntatschner/loadout-cli/releases/latest)
 
 Loadout is a workbench for coding agents. It starts the one you already use —
-Claude Code, Codex or one you define — and looks after everything around it.
+Claude Code, Codex, Grok CLI or one you define — and looks after everything around it.
 It doesn't replace the agent, and it won't install one for you.
 
 On its own, your agent reads all of `CLAUDE.md` or `AGENTS.md` every session.
@@ -22,7 +22,7 @@ browser. A run without a budget won't start.
 
 ## Start here
 
-- **You already use Claude Code or Codex.** Read on, then follow
+- **You already use Claude Code, Codex or Grok CLI.** Read on, then follow
   [your first run](docs/guides/first-run.md). Four commands get you going.
 - **You're new to AI and not a programmer.** Start with
   [Loadout in plain words](docs/plain/README.md). It explains what a coding
@@ -219,6 +219,7 @@ If you use one, what you hear is worth more than any of the above.
 | --- | --- |
 | **Claude Code** | The compiled context as a system prompt, session listing and resume, MCP servers per project, and a status line with project, branch and context usage |
 | **Codex** | The compiled context as `AGENTS.md` in an ephemeral `CODEX_HOME`, session listing and resume. No status line, because Codex has no equivalent |
+| **Grok CLI** | The compiled context via `--rules`, working directory, session resume, sandbox and permission-mode tightening, `--allow`/`--deny` tool rules and streaming JSON headless runs |
 | **Anything else** | Define it under `custom_agents` in `config.yaml` — executable, arguments and environment. No code change needed |
 
 `loadout code <project>` opens the repository in your editor under the profile

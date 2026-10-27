@@ -73,6 +73,7 @@ public sealed class SpecialistProviderTests : IDisposable
                     StringComparison.Ordinal))
             .Where(p => p.Contains("Claude", StringComparison.Ordinal)
                 || p.Contains("Codex", StringComparison.Ordinal)
+                || p.Contains("Grok", StringComparison.Ordinal)
                 || p.Contains("Generic", StringComparison.Ordinal))
             .ToList();
 
@@ -106,6 +107,7 @@ public sealed class SpecialistProviderTests : IDisposable
         {
             Path.Combine(agents, "Claude", "ClaudeAdapter.cs"),
             Path.Combine(agents, "Codex", "CodexAdapter.cs"),
+            Path.Combine(agents, "Grok", "GrokAdapter.cs"),
             Path.Combine(agents, "Generic", "GenericAgentAdapter.cs"),
         })
         {
