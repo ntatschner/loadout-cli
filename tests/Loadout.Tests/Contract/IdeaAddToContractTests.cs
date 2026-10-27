@@ -294,6 +294,48 @@ public sealed class IdeaAddToContractTests
     }
 
     [BuiltCliFact]
+    public async Task A_question_about_a_note_says_so_and_is_marked_possibly_outdated_once_the_note_is_removed()
+    {
+        using var loadout = new LoadoutProcess();
+        var project = await TaskTraceContractTests.Registered(loadout, "repository");
+        await Write(loadout, project, "asking", """
+            id: asking
+            ask: A status page for the home lab.
+            notes:
+            - id: N1
+              text: It should work offline.
+              by: me
+              added_utc: 2026-10-19T09:00:00.0000000+00:00
+            notes_numbered: 1
+            rounds:
+            - revision: 0
+              understanding: A page that works without the network.
+              questions:
+              - id: Q1
+                question: Offline for how long?
+                relates_to: N1
+                context: How much to cache depends on it.
+                snapshot:
+                  text: It should work offline.
+            """);
+
+        var before = await loadout.RunAsync("idea", "show", "asking", "--project", project);
+
+        before.ExitCode.Should().Be(0, before.StandardError);
+        before.StandardOutput.Should().Contain("Relates to N1: How much to cache depends on it.")
+            .And.Contain("Understood as: A page that works without the network.")
+            .And.NotContain("possibly outdated");
+
+        (await loadout.RunAsync("idea", "note", "remove", "asking", "N1", "--project", project)).ExitCode.Should().Be(0);
+
+        var after = await loadout.RunAsync("idea", "show", "asking", "--project", project, "--json");
+
+        after.ExitCode.Should().Be(0, after.StandardError);
+        after.Json().GetProperty("questions")[0].GetProperty("outdated").GetString().Should().Be("N1 was removed");
+        after.Json().GetProperty("outdated").GetInt32().Should().Be(1);
+    }
+
+    [BuiltCliFact]
     public async Task To_with_id_is_refused()
     {
         using var loadout = new LoadoutProcess();

@@ -4,7 +4,7 @@
   // needs something or has stopped, a bar underneath that says so in words.
   // Built on xterm.js, themed from the term-* tokens. It only draws and
   // takes keys: the page that holds it owns the connection.
-  import { onMount } from 'svelte';
+  import { onMount, type Snippet } from 'svelte';
   import { Terminal } from '@xterm/xterm';
   import { FitAddon } from '@xterm/addon-fit';
   import { WebglAddon } from '@xterm/addon-webgl';
@@ -39,6 +39,8 @@
     onretry?: () => void;
     /** Told how the screen is drawn: webgl, or dom where WebGL could not start. */
     ondrawn?: (renderer: string) => void;
+    /** A row on the terminal's foot, under the screen: the session's status. */
+    foot?: Snippet;
   }
 
   let {
@@ -55,6 +57,7 @@
     onresize = undefined,
     onretry = undefined,
     ondrawn = undefined,
+    foot = undefined,
   }: Props = $props();
 
   const shown = $derived(TERMINAL_STATES[status]);
@@ -472,4 +475,5 @@
       {/if}
     {/if}
   </div>
+  {#if foot}<div class="foot">{@render foot()}</div>{/if}
 </section>

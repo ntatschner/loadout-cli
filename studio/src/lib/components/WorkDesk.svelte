@@ -10,6 +10,7 @@
   import { onMount, tick, type Snippet } from 'svelte';
   import ActionPane from './ActionPane.svelte';
   import CommandBar from './CommandBar.svelte';
+  import ContextMark from './ContextMark.svelte';
   import KeyHelp from './KeyHelp.svelte';
   import Signal from './Signal.svelte';
   import Splitter from './Splitter.svelte';
@@ -287,7 +288,7 @@
                 void openView();
               }}
             >
-              {#if item.word}<Signal word={item.word} />{:else}<span class="nosig" aria-hidden="true"></span>{/if}<span class="t">{item.title}</span><span class="x">{item.meta}</span>{#if item.word}<span class="w">{item.word}</span>{/if}
+              {#if item.word}<Signal word={item.word} />{:else}<span class="nosig" aria-hidden="true"></span>{/if}<span class="t">{item.title}</span><span class="x">{item.meta}</span>{#if item.context !== undefined && item.context !== null}<ContextMark percent={item.context} />{/if}{#if item.word}<span class="w">{item.word}</span>{/if}
             </li>
           {/each}
         {:else}

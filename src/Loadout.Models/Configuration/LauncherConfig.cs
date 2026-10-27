@@ -32,6 +32,8 @@ public sealed class LauncherConfig
 
     public RemoteControlSettings RemoteControl { get; set; } = new();
 
+    public AttributionSettings Attribution { get; set; } = new();
+
     public InstructionContextSettings InstructionContext { get; set; } = new();
 
     /// <summary>Explicit extra directories to search for agent executables (spec section 65).</summary>
@@ -207,6 +209,19 @@ public sealed class StatuslineSettings
     public string? LastCommitAfter { get; set; }
 
     /// <summary>
+    /// What Claude's own line shows in a session Studio hosts, where Studio
+    /// draws the status itself: <c>off</c>, <c>minimal</c> (a short line of
+    /// the launcher's), or <c>full</c> (the person's own status line command,
+    /// or the launcher's full line where they have none).
+    /// </summary>
+    /// <remarks>
+    /// Off by default: the terminal gets its row back, and nobody reads the
+    /// same facts twice. Read each time the line is drawn, so a change applies
+    /// at the next redraw without starting the session again.
+    /// </remarks>
+    public string StudioTerminal { get; set; } = "off";
+
+    /// <summary>
     /// A copy that shares nothing with this one. A copy written out member by
     /// member drops every setting added after it was written, silently.
     /// </summary>
@@ -279,6 +294,22 @@ public sealed class RemoteControlSettings
 {
     /// <summary>Whether interactive sessions start with remote control on.</summary>
     public bool Enabled { get; set; }
+}
+
+/// <summary>
+/// Whether an agent's own attribution trailers are left as the agent writes them.
+/// </summary>
+/// <remarks>
+/// Off unless set, so Loadout clears them. Claude Code's own instructions ask
+/// for a Co-Authored-By line on every commit and a footer on every pull
+/// request, and somebody whose rules say otherwise then reads the agent
+/// explaining, launch after launch, why it is leaving them out. Clearing the
+/// setting removes the instruction, so there is nothing to explain.
+/// </remarks>
+public sealed class AttributionSettings
+{
+    /// <summary>Whether the agent adds its own commit and pull request attribution.</summary>
+    public bool Keep { get; set; }
 }
 
 public sealed class TelemetrySettings
@@ -356,6 +387,18 @@ public sealed class InstructionContextSettings
     /// over <c>default-agent</c>.
     /// </remarks>
     public string DefaultStyle { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Whether launched agents are told to follow their instructions without
+    /// saying that they are.
+    /// </summary>
+    /// <remarks>
+    /// On by default. An agent handed rules tends to announce each one as it
+    /// applies it, and a sentence saying a rule was followed costs the reader
+    /// attention and tells them nothing. Off is offered for the same reason
+    /// as <see cref="Specialists"/>: it changes what every session is told.
+    /// </remarks>
+    public bool QuietRules { get; set; } = true;
 }
 
 /// <summary>Connection details for the central agent-workspaces repository (spec section 10).</summary>

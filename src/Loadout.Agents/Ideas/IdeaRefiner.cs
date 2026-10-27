@@ -163,7 +163,7 @@ internal sealed class IdeaRefiner : IIdeaRefiner
                 choice.Model,
                 request.DryRun),
             Allowed,
-            IdeaSchema.Version2,
+            IdeaSchema.Version3,
             IdeaSchema.Version,
             IdeaWork.Prompt(record, hints, target),
             IdeaReply.Read,

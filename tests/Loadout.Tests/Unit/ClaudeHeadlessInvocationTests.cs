@@ -175,7 +175,10 @@ public sealed class ClaudeHeadlessInvocationTests
             Path.GetTempPath(),
             null,
             [],
-            Headless: headless);
+            Headless: headless,
+            // Attribution kept, so the hooks switch is the only setting and
+            // goes inline; the attribution is ClaudeSettingsScreeningTests'.
+            KeepAttribution: true);
 
         var result = await adapter.BuildInvocationAsync(context);
 

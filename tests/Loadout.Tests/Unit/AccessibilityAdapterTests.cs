@@ -92,7 +92,10 @@ public sealed class AccessibilityAdapterTests : IDisposable
             null,
             [],
             Headless: headless,
-            Accessibility: profile);
+            Accessibility: profile,
+            // Attribution kept, so the only reason for a settings file is
+            // the one this test is about.
+            KeepAttribution: true);
 
     [Fact]
     public async Task A_person_who_has_set_nothing_gets_the_launch_they_always_got()

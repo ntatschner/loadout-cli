@@ -252,6 +252,13 @@ public static class ConfigKeys
             Group: Groups.Agents,
             IsFlag: true),
 
+        new("attribution-trailers",
+            "Let the agent add its own Co-Authored-By and pull request attribution. Off clears Claude Code's",
+            (c, _) => Boolean(c.Attribution.Keep),
+            (c, _, v) => c.Attribution.Keep = Flag(v), false,
+            Group: Groups.Agents,
+            IsFlag: true),
+
         new("statusline-project", "Show the project slug in the agent status line",
             (c, _) => Boolean(c.Statusline.ShowProject),
             (c, _, v) => c.Statusline.ShowProject = Flag(v), false,
@@ -291,6 +298,13 @@ public static class ConfigKeys
         new("statusline-separator", "Text drawn between status line segments",
             (c, _) => c.Statusline.Separator,
             (c, _, v) => c.Statusline.Separator = v, false,
+            Group: Groups.Statusline),
+
+        new("statusline-in-studio",
+            "In a session Studio hosts, what Claude's own line shows: off, minimal or full (your own status line, kept working)",
+            (c, _) => c.Statusline.StudioTerminal,
+            (c, _, v) => c.Statusline.StudioTerminal = OneOf(v, "off", "minimal", "full"), false,
+            Sample: "full",
             Group: Groups.Statusline),
 
         new("statusline-waiting", "Show what the session is waiting on, and since when",
@@ -383,6 +397,12 @@ public static class ConfigKeys
             Sample: "work",
             Group: Groups.Instructions,
             WhenUnset: "only your personal and codebase styles, unless a project chooses one"),
+
+        new("quiet-rules", "Tell launched agents to follow their rules without saying so",
+            (c, _) => Boolean(c.InstructionContext.QuietRules),
+            (c, _, v) => c.InstructionContext.QuietRules = Flag(v), false,
+            Group: Groups.Instructions,
+            IsFlag: true),
 
         new("telemetry", "Tell launched agents to report token usage to this machine",
             (c, _) => Boolean(c.Telemetry.Enabled),

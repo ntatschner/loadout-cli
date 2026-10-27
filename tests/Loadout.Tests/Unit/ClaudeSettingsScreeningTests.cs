@@ -51,7 +51,8 @@ public sealed class ClaudeSettingsScreeningTests : IDisposable
     private async Task<AgentInvocation> BuildAsync(
         IReadOnlyList<string>? allowedHooks = null,
         IReadOnlyList<string>? preApproved = null,
-        Loadout.Models.Agents.HeadlessOptions? headless = null)
+        Loadout.Models.Agents.HeadlessOptions? headless = null,
+        bool keepAttribution = false)
     {
         const string Help = """
             Usage: claude [options]
@@ -77,7 +78,8 @@ public sealed class ClaudeSettingsScreeningTests : IDisposable
             new ProjectManifest { Slug = "demo", Name = "Demo" },
             PreApprovedCommands: preApproved,
             AllowedHooks: allowedHooks,
-            Headless: headless);
+            Headless: headless,
+            KeepAttribution: keepAttribution);
 
         var result = await adapter.BuildInvocationAsync(context);
 
@@ -128,10 +130,63 @@ public sealed class ClaudeSettingsScreeningTests : IDisposable
         await File.WriteAllTextAsync(
             _settings, """{ "permissions": { "deny": ["Bash(sudo:*)"] }, "theme": "dark" }""");
 
-        var invocation = await BuildAsync();
+        // Attribution kept, or clearing it would be a reason to copy the file.
+        var invocation = await BuildAsync(keepAttribution: true);
 
         SettingsArgument(invocation).Should().Be(_settings);
         invocation.Warnings.Should().NotContain(w => w.Contains("settings.json"));
+    }
+
+    [Fact]
+    public async Task Claudes_own_attribution_is_cleared_in_a_copy_when_the_project_has_no_settings()
+    {
+        var invocation = await BuildAsync();
+
+        var handed = SettingsArgument(invocation);
+
+        handed.Should().NotBeNull("the attribution has to be said somewhere");
+        Path.GetDirectoryName(handed).Should().Be(_runtime);
+        File.Exists(_settings).Should().BeFalse("nothing is written into the workspace, which travels");
+
+        var document = JsonNode.Parse(await File.ReadAllTextAsync(handed!))!.AsObject();
+
+        document["attribution"]!["commit"]!.GetValue<string>().Should().BeEmpty();
+        document["attribution"]!["pr"]!.GetValue<string>().Should().BeEmpty();
+        document["includeCoAuthoredBy"]!.GetValue<bool>().Should().BeFalse("the key older builds read");
+        invocation.Warnings.Should().NotContain(w => w.Contains("settings", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_node_has_its_attribution_cleared_beside_its_hooks()
+    {
+        // A node commits as well, so it gets the same as a person's session.
+        var invocation = await BuildAsync(headless: new Loadout.Models.Agents.HeadlessOptions());
+
+        var document = JsonNode.Parse(await File.ReadAllTextAsync(SettingsArgument(invocation)!))!.AsObject();
+
+        document["attribution"]!["commit"]!.GetValue<string>().Should().BeEmpty();
+        document["disableAllHooks"]!.GetValue<bool>().Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Somebody_who_keeps_attribution_is_handed_no_settings_for_it()
+    {
+        var invocation = await BuildAsync(keepAttribution: true);
+
+        invocation.Arguments.Should().NotContain("--settings");
+    }
+
+    [Fact]
+    public async Task A_project_that_says_what_its_attribution_is_keeps_it()
+    {
+        const string Original = """{ "attribution": { "commit": "Assisted-by: Claude" } }""";
+        await File.WriteAllTextAsync(_settings, Original);
+
+        var invocation = await BuildAsync();
+
+        // Nothing loosens and nothing is added, so the file goes as it is.
+        SettingsArgument(invocation).Should().Be(_settings);
+        (await File.ReadAllTextAsync(_settings)).Should().Be(Original);
     }
 
     [Fact]

@@ -118,8 +118,12 @@ internal sealed class DialogIdeaPrompts : IIdeaPrompts
 
         offered.Add(Own);
 
+        var about = IdeaWork.About(record, question);
+
         var picked = Pick(
             $"{question.Id}  {question.Question}"
+            + (about.Line is { } line ? $"\n{line}" : string.Empty)
+            + (about.Outdated is { } outdated ? $"\nPossibly outdated: {outdated}. Answering again clears it." : string.Empty)
             + (question.Why.Length > 0 ? $"\n\nWhy it matters: {question.Why}" : string.Empty)
             + (question.Recommendation.Length > 0 ? $"\nRecommended: {question.Recommendation}" : string.Empty),
             offered);

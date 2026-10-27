@@ -43,10 +43,15 @@ public static partial class RuleAuditor
     /// compiler would read them.
     /// </param>
     /// <param name="slug">Project being audited.</param>
+    /// <param name="memoryPaths">
+    /// Absolute paths to the memory topics a session can be pointed at, read
+    /// only for wording that invites narration. None when omitted.
+    /// </param>
     public static RuleAudit Audit(
         IReadOnlyList<RuleDocument> rules,
         IReadOnlyList<string> coreInstructionPaths,
-        string slug)
+        string slug,
+        IReadOnlyList<string>? memoryPaths = null)
     {
         var findings = new List<RuleFinding>();
         var coreBytes = 0L;
@@ -88,12 +93,23 @@ public static partial class RuleAuditor
             }
 
             AuditImports(findings, path, text);
+            AuditNarration(findings, null, Path.GetFileName(path), text);
             coreLines.AddRange(InstructionLines(text));
         }
 
         AuditIndividualRules(findings, rules);
         AuditDuplication(findings, rules, coreLines);
         AuditGlobOverlap(findings, rules);
+
+        foreach (var rule in rules)
+        {
+            AuditNarration(findings, rule.Name, Path.GetFileName(rule.Path), ReadOr(rule.Path, rule.Body));
+        }
+
+        foreach (var path in memoryPaths ?? [])
+        {
+            AuditNarration(findings, null, $"memory/{Path.GetFileName(path)}", ReadOr(path, null));
+        }
 
         var budget = new InstructionBudget(
             coreBytes,
@@ -170,6 +186,60 @@ public static partial class RuleAuditor
                     $"sets alwaysApply: true and also declares globs ({string.Join(", ", rule.Globs)}). "
                     + "The globs are decorative: it loads every session. Drop one or the other."));
             }
+        }
+    }
+
+    /// <summary>
+    /// Finds wording that asks the agent to explain itself rather than simply
+    /// do what is written.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// "This overrides the session default" is true and is also an invitation:
+    /// an agent told that one instruction beats another tends to say, every
+    /// time, which one it chose and why. The same goes for "confirm that you"
+    /// and "tell me when you". A plain directive, such as "Do not add
+    /// Co-Authored-By trailers", is followed without comment.
+    /// </para>
+    /// <para>
+    /// A short list of phrasings, not a judgement of every sentence, so it
+    /// misses paraphrases. That is the price of a check that runs on every
+    /// doctor without asking a model anything. A warning, because the wording
+    /// costs attention rather than correctness.
+    /// </para>
+    /// </remarks>
+    private static void AuditNarration(
+        List<RuleFinding> findings,
+        string? rule,
+        string file,
+        string? text)
+    {
+        if (text is null)
+        {
+            return;
+        }
+
+        foreach (var (number, line) in NumberedInstructionLines(text))
+        {
+            if (InvitesNarration().IsMatch(line))
+            {
+                findings.Add(new RuleFinding(rule, RuleFindingSeverity.Warning, "invites-narration",
+                    $"'{file}' line {number} invites the agent to say it is following it: "
+                    + $"\"{Truncate(line)}\". Write it as a plain directive, such as \"Do not "
+                    + "add Co-Authored-By trailers\", and it is followed without comment."));
+            }
+        }
+    }
+
+    private static string? ReadOr(string path, string? fallback)
+    {
+        try
+        {
+            return File.Exists(path) ? File.ReadAllText(path) : fallback;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return fallback;
         }
     }
 
@@ -253,12 +323,22 @@ public static partial class RuleAuditor
     /// The instruction-bearing lines of a document: bullets and prose, with
     /// headings, code fences and blank lines left out.
     /// </summary>
-    private static IEnumerable<string> InstructionLines(string text)
+    private static IEnumerable<string> InstructionLines(string text) =>
+        NumberedInstructionLines(text).Select(numbered => numbered.Line);
+
+    /// <summary>
+    /// <see cref="InstructionLines"/> with each line's number in the file, so
+    /// a finding can say where to look.
+    /// </summary>
+    private static IEnumerable<(int Number, string Line)> NumberedInstructionLines(string text)
     {
         var inFence = false;
+        var number = 0;
 
         foreach (var raw in text.Split('\n'))
         {
+            number++;
+
             var line = raw.Trim();
 
             if (line.StartsWith("```", StringComparison.Ordinal))
@@ -275,7 +355,7 @@ public static partial class RuleAuditor
                 continue;
             }
 
-            yield return line;
+            yield return (number, line);
         }
     }
 
@@ -295,4 +375,18 @@ public static partial class RuleAuditor
 
     [GeneratedRegex(@"[^a-z0-9 ]+", RegexOptions.None, 1000)]
     private static partial Regex NonComparable();
+
+    /// <summary>
+    /// The phrasings that ask an agent to explain its compliance: one rule
+    /// said to override another, or a request to be told that it was followed.
+    /// </summary>
+    [GeneratedRegex(
+        @"\b(?:this|it|which) overrides\b"
+        + @"|\boverrides? (?:the|any|your) (?:session|system|default)"
+        + @"|\bignore (?:the|any) (?:session |system )?default"
+        + @"|\binstead of the (?:session|system) default"
+        + @"|\b(?:tell|show) me (?:when|that) you\b"
+        + @"|\bconfirm (?:that|when) you\b",
+        RegexOptions.IgnoreCase, 1000)]
+    private static partial Regex InvitesNarration();
 }

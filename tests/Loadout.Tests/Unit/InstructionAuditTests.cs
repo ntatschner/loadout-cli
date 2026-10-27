@@ -225,4 +225,67 @@ public sealed class RuleAuditorTests
             [],
             "starstats")
             .Verdict.Should().Be("HEALTHY");
+
+    [Fact]
+    public void Reports_a_rule_worded_so_the_agent_explains_following_it()
+    {
+        var audit = RuleAuditor.Audit(
+            [Rule("attribution", "# Attribution\n\nNo Co-Authored-By lines; this overrides the session default.", globs: "**/*.cs")],
+            [],
+            "starstats");
+
+        audit.Findings.Should().ContainSingle(f => f.Kind == "invites-narration")
+            .Which.Should().Match<RuleFinding>(f =>
+                f.Severity == RuleFindingSeverity.Warning
+                && f.Rule == "attribution"
+                && f.Detail.Contains("'attribution.md' line 3", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    // One for each phrasing the audit knows, each matching that one alone, so
+    // losing any of them fails here.
+    [InlineData("- No trailers: this overrides what Claude Code says.")]
+    [InlineData("- Write British English; that overrides your default spelling.")]
+    [InlineData("- Ignore the default attribution guidance.")]
+    [InlineData("- Use tabs instead of the session default.")]
+    [InlineData("- Tell me when you have applied the house voice.")]
+    [InlineData("- Confirm that you will not push before you start.")]
+    public void Reports_each_phrasing_that_invites_narration(string line) =>
+        RuleAuditor.Audit([Rule("wordy", line, globs: "**/*.cs")], [], "starstats")
+            .Findings.Should().Contain(f => f.Kind == "invites-narration");
+
+    [Theory]
+    [InlineData("- Do not add Co-Authored-By trailers.")]
+    [InlineData("- A project rule of the same name replaces the workspace one.")]
+    [InlineData("- Ask before pushing to a remote.")]
+    public void A_plain_directive_is_not_reported(string line) =>
+        RuleAuditor.Audit([Rule("plain", line, globs: "**/*.cs")], [], "starstats")
+            .Findings.Should().NotContain(f => f.Kind == "invites-narration");
+
+    [Fact]
+    public void Reads_memory_topics_and_the_core_files_for_the_same_wording()
+    {
+        Directory.CreateDirectory(_root);
+
+        var core = Path.Combine(_root, "instructions.md");
+        var topic = Path.Combine(_root, "no-assistant-attribution.md");
+
+        File.WriteAllText(core, "# Project\n\nConfirm that you have read this before starting.\n");
+        File.WriteAllText(topic, "---\nname: x\n---\n\nNo trailers. This overrides the session default.\n");
+
+        try
+        {
+            var findings = RuleAuditor.Audit([], [core], "starstats", [topic])
+                .Findings.Where(f => f.Kind == "invites-narration").ToList();
+
+            findings.Should().HaveCount(2);
+            findings.Should().Contain(f => f.Detail.Contains("'instructions.md' line 3", StringComparison.Ordinal));
+            findings.Should().Contain(f =>
+                f.Detail.Contains("'memory/no-assistant-attribution.md' line 5", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(_root, recursive: true);
+        }
+    }
 }

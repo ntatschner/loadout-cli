@@ -351,6 +351,11 @@ internal static class SessionsApi
             background,
             agentSession = agentSession ?? launch?.Resuming,
             resuming = launch?.Resuming,
+
+            // What the session's status line was last given by Claude: its
+            // context, cost and the plan's limits. Null until it has drawn,
+            // for a session that has ended, and for an agent with no such line.
+            status = sessions.StatusOf(session),
         };
     }
 

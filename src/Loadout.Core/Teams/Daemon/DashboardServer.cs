@@ -1675,11 +1675,13 @@ public sealed class DashboardServer : IDisposable
                 // What each session needs is part of it, so a hook saying an
                 // agent is waiting, and somebody typing the answer, both reach
                 // every open page without it asking; so does background work
-                // gone silent long enough to read as waiting for you.
+                // gone silent long enough to read as waiting for you. So does
+                // a new status snapshot, each time Claude redraws its line.
                 var sessionsNow = Sessions is null
                     ? string.Empty
                     : string.Join(';', Sessions.All.Select(one => Sessions.SignalOf(one) is var signal
                         ? one.Id + (one.HasEnded ? "!" : string.Empty) + "?" + signal.Needs + (signal.Background ? "~" : string.Empty)
+                            + "@" + Sessions.StatusStamp(one)?.Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture)
                             + "=" + one.Label
                         : string.Empty));
                 var runsNow = string.Join(';', _journal.List(40).Select(run => run + "=" + RunStamp(run)));

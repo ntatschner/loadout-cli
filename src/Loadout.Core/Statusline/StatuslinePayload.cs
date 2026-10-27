@@ -45,6 +45,12 @@ public sealed class StatuslinePayload
     public StatuslineCost? Cost { get; set; }
 
     /// <summary>
+    /// The plan's usage limits, sent only to subscribers or behind a gateway
+    /// with a spend limit, and only once there has been a response.
+    /// </summary>
+    public StatuslineRateLimits? RateLimits { get; set; }
+
+    /// <summary>
     /// Reads a payload, returning null rather than throwing on anything
     /// unexpected. The caller has no way to report a parse failure — its
     /// stdout is a single line on somebody's screen — so it must be able to
@@ -97,11 +103,68 @@ public sealed class StatuslineWorkspace
     public string? GitWorktree { get; set; }
 }
 
-/// <summary>What the session has cost so far. Only the time is read.</summary>
+/// <summary>What the session has cost so far.</summary>
 public sealed class StatuslineCost
 {
     /// <summary>How long the session has been open, in milliseconds.</summary>
     public long? TotalDurationMs { get; set; }
+
+    /// <summary>Claude's own estimate of what the session has cost, in US dollars.</summary>
+    public double? TotalCostUsd { get; set; }
+
+    public long? TotalLinesAdded { get; set; }
+
+    public long? TotalLinesRemoved { get; set; }
+}
+
+/// <summary>The plan's usage windows, each present only while its reset has not passed.</summary>
+public sealed class StatuslineRateLimits
+{
+    public StatuslineRateWindow? FiveHour { get; set; }
+
+    public StatuslineRateWindow? SevenDay { get; set; }
+
+    /// <summary>Behind a gateway, the fullest spend limit.</summary>
+    public StatuslineSpendLimit? SpendLimit { get; set; }
+}
+
+/// <summary>One usage window.</summary>
+public sealed class StatuslineRateWindow
+{
+    /// <summary>Share of the window used, 0 to 100.</summary>
+    public double? UsedPercentage { get; set; }
+
+    /// <summary>When the window resets, in Unix seconds.</summary>
+    public long? ResetsAt { get; set; }
+}
+
+/// <summary>A gateway's spend limit.</summary>
+public sealed class StatuslineSpendLimit
+{
+    /// <summary>Share of the limit used, which goes past 100 once it is exceeded.</summary>
+    public double? UsedPercentage { get; set; }
+
+    /// <summary>When its period resets, in Unix seconds.</summary>
+    public long? ResetsAt { get; set; }
+
+    public double? UsedUsd { get; set; }
+
+    public double? LimitUsd { get; set; }
+
+    /// <summary><c>daily</c>, <c>weekly</c> or <c>monthly</c>.</summary>
+    public string? Period { get; set; }
+}
+
+/// <summary>What the last request to the model was made of.</summary>
+public sealed class StatuslineCurrentUsage
+{
+    public long? InputTokens { get; set; }
+
+    public long? OutputTokens { get; set; }
+
+    public long? CacheCreationInputTokens { get; set; }
+
+    public long? CacheReadInputTokens { get; set; }
 }
 
 /// <summary>How much of the context window the session has spent.</summary>
@@ -112,6 +175,12 @@ public sealed class StatuslineContextWindow
     public long? TotalOutputTokens { get; set; }
 
     public long? ContextWindowSize { get; set; }
+
+    /// <summary>The last request's tokens, which Claude sends as null before the first.</summary>
+    public StatuslineCurrentUsage? CurrentUsage { get; set; }
+
+    /// <summary>Claude's own figure for the share of the window in use, 0 to 100, null before the first message.</summary>
+    public double? UsedPercentage { get; set; }
 
     /// <summary>
     /// Spent fraction, or null when either half is missing or nonsensical.

@@ -82,6 +82,7 @@ public sealed class HostedSessions : IAsyncDisposable
     private readonly IChildLifetime? _lifetime;
     private readonly IProcessTree? _tree;
     private readonly string? _signals;
+    private readonly string? _statuses;
     private readonly TimeProvider _time;
     private readonly Action<string>? _noted;
     private readonly Func<string, string, string?>? _renaming;
@@ -113,6 +114,10 @@ public sealed class HostedSessions : IAsyncDisposable
     /// what to type into that agent's prompt to name its conversation, or
     /// null where it cannot be. Null for nothing passed to any agent.
     /// </param>
+    /// <param name="statuses">
+    /// Where a hosted session's status line leaves what Claude knows about it
+    /// (<see cref="SessionStatus"/>), or null where nothing reads it.
+    /// </param>
     public HostedSessions(
         Func<IPseudoTerminal> terminals,
         Func<(string Command, IReadOnlyList<string> Prefix)?> launcher,
@@ -121,7 +126,8 @@ public sealed class HostedSessions : IAsyncDisposable
         string? signals = null,
         TimeProvider? time = null,
         Action<string>? noted = null,
-        Func<string, string, string?>? renaming = null)
+        Func<string, string, string?>? renaming = null,
+        string? statuses = null)
     {
         _terminals = terminals;
         _launcher = launcher;
@@ -131,6 +137,7 @@ public sealed class HostedSessions : IAsyncDisposable
         _time = time ?? TimeProvider.System;
         _noted = noted;
         _renaming = renaming;
+        _statuses = statuses;
     }
 
     /// <summary>
@@ -160,6 +167,29 @@ public sealed class HostedSessions : IAsyncDisposable
         }
 
         return (status is "background" ? null : status, status is "background", signal?.AgentSession);
+    }
+
+    /// <summary>
+    /// What the session's status line last handed over, or null where it has
+    /// not run, the session has ended, or nothing reads the snapshots.
+    /// </summary>
+    /// <remarks>
+    /// An ended session's figures describe a conversation that has stopped,
+    /// so the page is given none rather than a meter frozen at its last value.
+    /// </remarks>
+    public SessionStatusSnapshot? StatusOf(HostedSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+
+        return _statuses is null || session.HasEnded ? null : SessionStatus.Read(_statuses, session.Id);
+    }
+
+    /// <summary>When the session's snapshot was last written, for noticing a new one without reading it.</summary>
+    public DateTime? StatusStamp(HostedSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+
+        return _statuses is null || session.HasEnded ? null : SessionStatus.Stamp(_statuses, session.Id);
     }
 
     /// <summary>
@@ -238,6 +268,11 @@ public sealed class HostedSessions : IAsyncDisposable
         }
 
         SessionSignals.Remove(_signals, id);
+
+        if (_statuses is not null)
+        {
+            SessionStatus.Remove(_statuses, id);
+        }
 
         return true;
     }
@@ -539,6 +574,11 @@ public sealed class HostedSessions : IAsyncDisposable
         if (_signals is not null)
         {
             SessionSignals.Remove(_signals, found.Id);
+        }
+
+        if (_statuses is not null)
+        {
+            SessionStatus.Remove(_statuses, found.Id);
         }
 
         Changed?.Invoke();
