@@ -135,6 +135,43 @@ public sealed class ResolutionSnapshotTests : IDisposable
         evidence.Count(".ts").Should().Be(0, "node_modules must not count as this repository");
     }
 
+    [Fact]
+    public async Task A_session_asked_whether_work_is_finished_is_given_the_actually_done_skill()
+    {
+        var selected = await SelectedFor("check it is actually done before i pr it");
+
+        selected.Should().Contain("skill.actually-done");
+    }
+
+    [Fact]
+    public async Task An_unrelated_task_is_not_given_the_actually_done_skill()
+    {
+        // Every task ends with something being done, so the phrases have to be
+        // the question, not the word: "done" alone would fire on everything.
+        var selected = await SelectedFor("fix the null reference in the parser");
+
+        selected.Should().NotContain("skill.actually-done");
+    }
+
+    /// <summary>What a real .NET tree is given for a task, by specialist id.</summary>
+    private async Task<IReadOnlyList<string>> SelectedFor(string task)
+    {
+        var catalogue = await new SpecialistLibrary().LoadAsync(workspaceRoot: null);
+        var path = Shape.All.Single(shape => shape.Name == "dotnet-api").WriteTo(_root);
+
+        var evidence = await new RepositoryEvidenceReader().ReadAsync(path);
+
+        evidence.Succeeded.Should().BeTrue(evidence.Error);
+
+        var resolved = new SpecialistResolver().Resolve(new SpecialistRequest(
+            catalogue,
+            "implement",
+            task,
+            Evidence: evidence.Value));
+
+        return resolved.Selected.Select(selection => selection.Specialist.Id).ToList();
+    }
+
     /// <summary>Where the committed snapshot lives, found from the test binary.</summary>
     private static string FixturesDirectory()
     {
