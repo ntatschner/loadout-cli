@@ -21,12 +21,12 @@
 (function () {
   var S = window.LoadoutStudio;
   var frame = document.getElementById("frame");
-  S.setBackground("map-animated");
+  S.setBackdrop("map-animated");
   var M = S.FieldMap({ host: frame, width: 1150, height: 560 });
   M.el.style.position = "absolute"; M.el.style.zIndex = "0";
   frame.querySelector("nav").style.zIndex = "2"; frame.children[2].style.zIndex = "1";
   var pick = document.getElementById("pick");
-  pick.appendChild(S.ModePicker({ label: "Background", selected: 2, options: [{ name: "Plain" }, { name: "Field map, still" }, { name: "Field map, animated" }], onChange: function (n, i) { S.setBackground(S.BACKGROUNDS[i]); } }));
+  pick.appendChild(S.ModePicker({ label: "Background", selected: 2, options: [{ name: "Plain" }, { name: "Field map, still" }, { name: "Field map, animated" }], onChange: function (n, i) { S.setBackdrop(S.BACKDROPS[i]); } }));
 })();
 </script>
 </body>

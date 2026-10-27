@@ -69,7 +69,7 @@ If it's there already, treat it like the items in step 2.
 If `studio-embossed-background` isn't on the list:
 
 ```
-loadout idea add --id studio-embossed-background --text="Designed, not built. Don't start on this from this record; build it only when someone asks, from its brief. A military-style embossed background for Studio, animated with a static variant, and the same treatment for the nav. Designed in design/studio/BACKGROUND.md: a field map, plain / map / map-animated as studio-background, the scan only under full motion and never in Pure Focus, plain in high contrast." --project loadout-cli --by "studio design"
+loadout idea add --id studio-embossed-background --text="Designed, not built. Don't start on this from this record; build it only when someone asks, from its brief. A military-style embossed background for Studio, animated with a static variant, and the same treatment for the nav. Designed in design/studio/BACKGROUND.md: a field map, plain / map / map-animated as studio-backdrop, the scan only under full motion and never in Pure Focus, plain in high contrast." --project loadout-cli --by "studio design"
 ```
 
 `idea add` only records the idea. Don't run `idea refine` on it.

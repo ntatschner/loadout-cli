@@ -12,7 +12,7 @@ It is one piece of work: a new setting, the map itself, and the nav's edges. The
 |---|---|
 | `reference/README.md` | The brand book. Its **Background** section applies here. |
 | `reference/components/FieldMap/` | **New.** The README (what it is, the three settings, readability, the nav, cost) and a live `preview.html` with the three settings to switch between. |
-| `reference/components/bundle.css`, `bundle.js`, `index.d.ts` | The reference implementation. The FieldMap CSS is the block headed `FieldMap: an embossed survey map behind every page`, and the block after it is the nav. `index.d.ts` has `FieldMap`, `setBackground`, `BACKGROUNDS` and the `Background` type. Port it to Svelte; don't ship it as is. |
+| `reference/components/bundle.css`, `bundle.js`, `index.d.ts` | The reference implementation. The FieldMap CSS is the block headed `FieldMap: an embossed survey map behind every page`, and the block after it is the nav. `index.d.ts` has `FieldMap`, `setBackdrop`, `BACKDROPS` and the `Background` type. Port it to Svelte; don't ship it as is. |
 | `reference/prototype/index.html` | The behaviour to match. Every route shows the map. Appearance (the rail's last item) has **Background**, with its command. Switch Motion, Theme and the mode to see the map follow them. |
 
 The same material is published. If you have the Artifact tool, read it with `action: "read"`:
@@ -33,7 +33,7 @@ Don't reopen these. Ask me only if one turns out to be impossible.
 
   It is drawn from a fixed seed (1789), so it is the same map on every visit and every machine.
 - **Embossed, not drawn.** Each contour is drawn three times: a light edge offset up and left, a dark edge offset down and right, and the line in the accent.
-- **Three settings.** A new key, `studio-background`:
+- **Three settings.** A new key, `studio-backdrop`. It is named *backdrop*, not *background*, so it can't be mistaken for `studio-background-limit`, which is about sessions' background work. People see it as **Background** in Appearance:
 
   | Value | What shows |
   |---|---|
@@ -72,22 +72,22 @@ Port these exactly. If you change a token, a level or a theme, measure again the
 
 ## Server
 
-- Add `Background` to `StudioSettings` (`string?`; null is `map`).
-- Add `studio-background` in the three places a `studio-*` key needs:
+- Add `Backdrop` to `StudioSettings` (`string?`; null is `map`).
+- Add `studio-backdrop` in the three places a `studio-*` key needs:
   - **`ConfigKeys`**, beside `studio-motion`:
-    - the description, "Studio's background: plain, map (the field map, still) or map-animated. The map only moves under full motion, never in Pure Focus, and high contrast keeps the plain ground";
+    - the description, "Studio's backdrop, behind every page: plain, map (the field map, still) or map-animated. The map only moves under full motion, never in Pure Focus, and high contrast keeps the plain ground";
     - `Optional(v, "plain", "map", "map-animated")`, not machine-local;
     - `Sample: "map-animated"`, `Group: Groups.Studio`;
     - `WhenUnset: "map, the field map, still"`.
-  - **`StudioPreferences.Read`**: `background = studio?.Background ?? "map"`.
+  - **`StudioPreferences.Read`**: `backdrop = studio?.Backdrop ?? "map"`.
   - **The allow-list in `DashboardActions`.**
 
 ## Studio
 
 - **A layer for the map.** Add `z-ground` (-1, "Behind the page: the field map") to the `layer` tokens in `studio.tokens.json` and `tokens.css`. It is already in this folder's copies; keep it when you regenerate them. Nothing else uses it.
-- **`lib/studio.ts`:** add `Background` (`'plain' | 'map' | 'map-animated'`), `BACKGROUNDS` and `setBackground()`. It sets `data-background` on `<html>`, and an unknown value falls back to `map`, as in the reference.
-- **`lib/api.ts`:** add `background: string` to `Preferences`.
-- **`state.svelte.ts`:** in `applyPrefs()`, add `setBackground(prefs?.background ?? 'map')`. Then the map is right before the first page draws, and a change in Appearance applies at once.
+- **`lib/studio.ts`:** add `Backdrop` (`'plain' | 'map' | 'map-animated'`), `BACKDROPS` and `setBackdrop()`. It sets `data-backdrop` on `<html>`, and an unknown value falls back to `map`, as in the reference.
+- **`lib/api.ts`:** add `backdrop: string` to `Preferences`.
+- **`state.svelte.ts`:** in `applyPrefs()`, add `setBackdrop(prefs?.backdrop ?? 'map')`. Then the map is right before the first page draws, and a change in Appearance applies at once.
 - **`lib/fieldmap.ts`** (new): port the map's generation from `bundle.js`:
   - the seeded random numbers, the value noise and its three octaves;
   - the marching-squares contours, with every fifth level going to the index path;
@@ -105,11 +105,11 @@ Port these exactly. If you change a token, a level or a theme, measure again the
   - set the geometry with SVG attributes (`d`, `x`, `y`, `transform`, `stroke-width`) and the colour with classes.
 - **CSS:** port the two blocks into `styles/components.css`, the map and then the nav:
   - the `--fm-*` levels for Dark and Light;
-  - the gating selectors as written: the scan and the breathing only under `[data-background="map-animated"][data-motion="full"]:not([data-mode="pure"]):not([data-theme^="hc"])`, and both stopped under `prefers-reduced-motion: reduce`;
+  - the gating selectors as written: the scan and the breathing only under `[data-backdrop="map-animated"][data-motion="full"]:not([data-mode="pure"]):not([data-theme^="hc"])`, and both stopped under `prefers-reduced-motion: reduce`;
   - the `display: none` for `plain` and both high-contrast themes;
   - the rail and mode bar rules, including the solid rail when it widens.
 - **Nothing may paint the ground over the map.** It is `position: fixed; z-index: var(--z-ground)` (-1), so it shows only because `body` paints the ground on the canvas and nothing between `body` and the page does. Keep the ground on `body`, and don't give `main.page`, the mode wrappers or the deck an opaque background.
-- **Appearance:** add a **Background** group after Motion: Plain, Field map, still, and Field map, animated. Under it, one line: "The animated map moves only under full motion, and never in Pure Focus. High contrast keeps the plain ground." The group shows its command, `loadout config set studio-background <value>`, like the others.
+- **Appearance:** add a **Background** group after Motion: Plain, Field map, still, and Field map, animated. Under it, one line: "The animated map moves only under full motion, and never in Pure Focus. High contrast keeps the plain ground." The group shows its command, `loadout config set studio-backdrop <value>`, like the others.
 - **The command palette's Appearance entry:** add "background" to its sub-line.
 
 # Tests
@@ -117,8 +117,8 @@ Port these exactly. If you change a token, a level or a theme, measure again the
 Add or extend tests beside the existing ones.
 
 **Core**
-- `StudioConfigKeysTests`: `studio-background` takes `plain`, `map` and `map-animated` and reads them back, refuses anything else, unsets with an empty value, and isn't machine-local.
-- `DashboardStudioRoutesTests`: the preferences read gives `background: "map"` when unset, and the allow-list takes `studio-background`.
+- `StudioConfigKeysTests`: `studio-backdrop` takes `plain`, `map` and `map-animated` and reads them back, refuses anything else, unsets with an empty value, and isn't machine-local.
+- `DashboardStudioRoutesTests`: the preferences read gives `backdrop: "map"` when unset, and the allow-list takes `studio-backdrop`.
 
 **Studio**
 - `fieldmap.ts`:
@@ -126,8 +126,8 @@ Add or extend tests beside the existing ones.
   - a different seed gives different ones;
   - every fifth level is in `index`;
   - the references run A, B… and 01, 02….
-- `setBackground`: each value, and an unknown one falls back to `map`.
-- `applyPrefs` sets `data-background`, `map` when unset.
+- `setBackdrop`: each value, and an unknown one falls back to `map`.
+- `applyPrefs` sets `data-backdrop`, `map` when unset.
 - FieldMap is `aria-hidden`, holds its path data once (two `<path>` elements in `<defs>`, the rest `<use>`), and has no `style` attribute anywhere.
 - The CSS, the way `pureParts.test.ts` checks it:
   - the scan's animation appears only under the gating selector;
@@ -185,7 +185,7 @@ These records are claims with a name and a date. Work from what the workspace sa
 - Run only the commands below: `task list`, `task declare`, `idea add`, `memory show`, `memory write`, `memory replace` and `workspace save`. None of them starts anything. They write Loadout's records, and `workspace save` commits and pushes the workspace.
 - Don't run `idea refine`, `idea dump add`, `team run`, `team schedule add` or `launch` for any item here. (`loadout <project>` is `launch` too.) Don't start a session or a build for one, and don't change code for one. Never declare anything `doing` from this step.
 - An item that isn't built stays `open`, and its note **starts** with: "Designed, not built. Don't start on this from this record; build it only when someone asks, from its brief." Open tasks are listed in every new session's context, so that sentence is what tells a later session to leave it alone until it is asked.
-- To know what is built, look at `main` and your branch, not at this brief. For example, `studio-background` in `ConfigKeys` means `BACKGROUND.md` is built.
+- To know what is built, look at `main` and your branch, not at this brief. For example, `studio-backdrop` in `ConfigKeys` means `BACKGROUND.md` is built.
 - Every command here takes `--dry-run`. Run each once with it first, and check what it would write.
 
 1. **Read the list.** Run `loadout task list --project loadout-cli --all --json`. Ideas are tasks of kind `idea`, so they are in it too.
@@ -193,7 +193,7 @@ These records are claims with a name and a date. Work from what the workspace sa
 2. **The idea `studio-embossed-background`.**
    - If it exists, append to its note. `task declare` **replaces** the note and **sets the state**, so re-declare it with its **current state** and its **current note, then a blank line, then this**:
 
-     > Designed in design/studio/BACKGROUND.md: a field map (embossed survey map, fixed seed), plain / map / map-animated as `studio-background` (default map), the scan only under full motion and never in Pure Focus, plain in high contrast, levels measured to keep all text 4.5:1. The rail and the mode bar get an embossed edge with grid ticks; the rail is solid when it widens. Built on branch <your branch> in <the commits>; not merged yet.
+     > Designed in design/studio/BACKGROUND.md: a field map (embossed survey map, fixed seed), plain / map / map-animated as `studio-backdrop` (default map), the scan only under full motion and never in Pure Focus, plain in high contrast, levels measured to keep all text 4.5:1. The rail and the mode bar get an embossed edge with grid ticks; the rail is solid when it widens. Built on branch <your branch> in <the commits>; not merged yet.
 
      ```
      loadout task declare studio-embossed-background <its current state> --note "<its current note>
@@ -209,11 +209,11 @@ These records are claims with a name and a date. Work from what the workspace sa
      ```
 
 3. **The memory topic `studio-design`.** `loadout memory write` replaces a topic's facts rather than adding to them. So:
-   - if the topic exists, run `loadout memory show studio-design --project loadout-cli` and add one fact to its text: "BACKGROUND.md: the field map background (`studio-background`) and the nav's embossed edge; built on its branch." If an existing fact says `BACKGROUND.md` is not built, change it to say it is. Then save it with `loadout memory replace studio-design --project loadout-cli --file <the edited text> --expect <the version show printed>`.
+   - if the topic exists, run `loadout memory show studio-design --project loadout-cli` and add one fact to its text: "BACKGROUND.md: the field map background (`studio-backdrop`) and the nav's embossed edge; built on its branch." If an existing fact says `BACKGROUND.md` is not built, change it to say it is. Then save it with `loadout memory replace studio-design --project loadout-cli --file <the edited text> --expect <the version show printed>`.
    - if it doesn't exist, write it:
 
      ```
-     loadout memory write studio-design --description "Where Studio's designs and handoffs live" --fact "Studio's design system, prototype and handoffs are in design/studio/. Each brief (HANDOFF.md, NEXT.md, PAGES.md, ROUND4.md, BACKGROUND.md, OFFICE.md) names what is decided; don't reopen those decisions. A brief that isn't built is for later: don't start it unless asked." --fact "BACKGROUND.md: the field map background (studio-background) and the nav's embossed edge; built on its branch." --project loadout-cli
+     loadout memory write studio-design --description "Where Studio's designs and handoffs live" --fact "Studio's design system, prototype and handoffs are in design/studio/. Each brief (HANDOFF.md, NEXT.md, PAGES.md, ROUND4.md, BACKGROUND.md, OFFICE.md) names what is decided; don't reopen those decisions. A brief that isn't built is for later: don't start it unless asked." --fact "BACKGROUND.md: the field map background (studio-backdrop) and the nav's embossed edge; built on its branch." --project loadout-cli
      ```
 
      If it refuses because a similar topic already exists, add the two facts to that topic instead (`show`, then `replace`), and tell me which.

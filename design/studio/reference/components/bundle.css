@@ -1814,26 +1814,26 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 .ls-fieldmap .scan { display: none; }
 .ls-fieldmap .scan .ln, .ls-fieldmap .scan .ix { stroke: var(--fm-scan); }
 /* Animated only when asked for, under full motion, and never in Pure Focus. */
-[data-background="map-animated"][data-motion="full"]:not([data-mode="pure"]):not([data-theme^="hc"]) .ls-fieldmap .scan { display: block; -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 45%, #000 55%, transparent 100%); mask-image: linear-gradient(180deg, transparent 0, #000 45%, #000 55%, transparent 100%); -webkit-mask-size: 100% 34%; mask-size: 100% 34%; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; animation: lsFieldScan 16s linear infinite; }
-[data-background="map-animated"][data-motion="full"]:not([data-mode="pure"]):not([data-theme^="hc"]) .ls-fieldmap .ixg { animation: lsFieldBreathe 9s ease-in-out infinite; }
+[data-backdrop="map-animated"][data-motion="full"]:not([data-mode="pure"]):not([data-theme^="hc"]) .ls-fieldmap .scan { display: block; -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 45%, #000 55%, transparent 100%); mask-image: linear-gradient(180deg, transparent 0, #000 45%, #000 55%, transparent 100%); -webkit-mask-size: 100% 34%; mask-size: 100% 34%; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; animation: lsFieldScan 16s linear infinite; }
+[data-backdrop="map-animated"][data-motion="full"]:not([data-mode="pure"]):not([data-theme^="hc"]) .ls-fieldmap .ixg { animation: lsFieldBreathe 9s ease-in-out infinite; }
 @keyframes lsFieldScan { from { -webkit-mask-position: 0 -40%; mask-position: 0 -40%; } to { -webkit-mask-position: 0 140%; mask-position: 0 140%; } }
 @keyframes lsFieldBreathe { 50% { opacity: .55; } }
 @media (prefers-reduced-motion: reduce) { .ls-fieldmap .scan { display: none !important; } .ls-fieldmap .ixg { animation: none !important; } }
 /* Plain, and both high-contrast themes, keep the plain ground. */
-[data-background="plain"] .ls-fieldmap, [data-theme="hc-dark"] .ls-fieldmap, [data-theme="hc-light"] .ls-fieldmap { display: none; }
+[data-backdrop="plain"] .ls-fieldmap, [data-theme="hc-dark"] .ls-fieldmap, [data-theme="hc-light"] .ls-fieldmap { display: none; }
 
 /* ---------- The map carries on under the rail and the mode bar: only an embossed edge and grid ticks set them apart ---------- */
-[data-background^="map"]:not([data-theme^="hc"]) .ls-railnav {
+[data-backdrop^="map"]:not([data-theme^="hc"]) .ls-railnav {
   background: color-mix(in srgb, var(--ground) 58%, transparent);
   -webkit-backdrop-filter: blur(1.5px); backdrop-filter: blur(1.5px);
   box-shadow: inset -1px 0 0 color-mix(in srgb, #000 45%, transparent), inset -2px 0 0 color-mix(in srgb, var(--ink-strong) 10%, transparent), 8px 0 30px -20px var(--cgf);
 }
-[data-background^="map"]:not([data-theme^="hc"]) .ls-railnav::after { content: ""; position: absolute; top: 0; bottom: 0; right: 3px; width: 6px; pointer-events: none; background: repeating-linear-gradient(180deg, color-mix(in srgb, var(--ink-soft) 28%, transparent) 0 1px, transparent 1px 40px), repeating-linear-gradient(180deg, color-mix(in srgb, var(--ink-soft) 16%, transparent) 0 1px, transparent 1px 8px); background-size: 6px 100%, 3px 100%; background-repeat: no-repeat; background-position: right top, right top; }
+[data-backdrop^="map"]:not([data-theme^="hc"]) .ls-railnav::after { content: ""; position: absolute; top: 0; bottom: 0; right: 3px; width: 6px; pointer-events: none; background: repeating-linear-gradient(180deg, color-mix(in srgb, var(--ink-soft) 28%, transparent) 0 1px, transparent 1px 40px), repeating-linear-gradient(180deg, color-mix(in srgb, var(--ink-soft) 16%, transparent) 0 1px, transparent 1px 8px); background-size: 6px 100%, 3px 100%; background-repeat: no-repeat; background-position: right top, right top; }
 /* Widened over the page, the rail is solid again, so nothing on the page shows under its labels. */
-[data-background^="map"]:not([data-theme^="hc"]) .ls-railnav:hover, [data-background^="map"]:not([data-theme^="hc"]) .ls-railnav:focus-within { background: var(--ground); -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: inset -1px 0 0 color-mix(in srgb, var(--accent) 55%, transparent), 30px 0 70px 16px var(--scrim), 8px 0 30px -20px var(--cgf); }
-[data-theme="light"][data-background^="map"] .ls-railnav { box-shadow: inset -1px 0 0 color-mix(in srgb, var(--ink-strong) 14%, transparent), inset -2px 0 0 #fff, 8px 0 30px -20px var(--cgf); }
-[data-background^="map"]:not([data-theme^="hc"]) .ls-modebar { position: relative; }
-[data-background^="map"]:not([data-theme^="hc"]) .ls-modebar::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 7px; pointer-events: none; box-shadow: inset 0 -1px 0 color-mix(in srgb, #000 40%, transparent), inset 0 -2px 0 color-mix(in srgb, var(--ink-strong) 9%, transparent); background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--ink-soft) 28%, transparent) 0 1px, transparent 1px 40px) left bottom / 100% 6px no-repeat, repeating-linear-gradient(90deg, color-mix(in srgb, var(--ink-soft) 16%, transparent) 0 1px, transparent 1px 8px) left bottom / 100% 3px no-repeat; }
+[data-backdrop^="map"]:not([data-theme^="hc"]) .ls-railnav:hover, [data-backdrop^="map"]:not([data-theme^="hc"]) .ls-railnav:focus-within { background: var(--ground); -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: inset -1px 0 0 color-mix(in srgb, var(--accent) 55%, transparent), 30px 0 70px 16px var(--scrim), 8px 0 30px -20px var(--cgf); }
+[data-theme="light"][data-backdrop^="map"] .ls-railnav { box-shadow: inset -1px 0 0 color-mix(in srgb, var(--ink-strong) 14%, transparent), inset -2px 0 0 #fff, 8px 0 30px -20px var(--cgf); }
+[data-backdrop^="map"]:not([data-theme^="hc"]) .ls-modebar { position: relative; }
+[data-backdrop^="map"]:not([data-theme^="hc"]) .ls-modebar::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 7px; pointer-events: none; box-shadow: inset 0 -1px 0 color-mix(in srgb, #000 40%, transparent), inset 0 -2px 0 color-mix(in srgb, var(--ink-strong) 9%, transparent); background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--ink-soft) 28%, transparent) 0 1px, transparent 1px 40px) left bottom / 100% 6px no-repeat, repeating-linear-gradient(90deg, color-mix(in srgb, var(--ink-soft) 16%, transparent) 0 1px, transparent 1px 8px) left bottom / 100% 3px no-repeat; }
 
 /* ---------- OfficeView: Studio's frame round the shared office engine ---------- */
 .ls-office { container-type: inline-size; display: grid; grid-template-columns: minmax(0, 1fr); gap: calc(var(--space-3) * var(--density)); min-width: 0; }

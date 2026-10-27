@@ -277,7 +277,7 @@ These records are claims with a name and a date, and the list this session was g
 - Run only the commands below: `task list`, `task declare`, `idea add`, `memory show`, `memory write`, `memory replace` and `workspace save`. None of them starts anything. They write Loadout's records, and `workspace save` commits and pushes the workspace.
 - Don't run `idea refine`, `idea dump add`, `team run`, `team schedule add` or `launch` for any item here. (`loadout <project>` is `launch` too.) Don't start a session or a build for one, and don't change code for one. Never declare anything `doing` from this step.
 - An item that isn't built stays `open`, and its note **starts** with: "Designed, not built. Don't start on this from this record; build it only when someone asks, from its brief." Open tasks are listed in every new session's context, so that sentence is what tells a later session to leave it alone until it is asked.
-- To know what is built, look at `main` and your branch, not at this brief. For example, `studio-background` in `ConfigKeys` means `BACKGROUND.md` is built.
+- To know what is built, look at `main` and your branch, not at this brief. For example, `studio-backdrop` in `ConfigKeys` means `BACKGROUND.md` is built.
 - Every command here takes `--dry-run`. Run each once with it first, and check what it would write.
 
 1. **Read the list.** Run `loadout task list --project loadout-cli --all --json`. Ideas are tasks of kind `idea`, so they are in it too.
@@ -316,7 +316,7 @@ These records are claims with a name and a date, and the list this session was g
 4. **Record the next design round as an idea:**
 
    ```
-   loadout idea add --id studio-embossed-background --text="A military-style embossed background for Studio, animated with a static variant, and the same treatment for the nav, in keeping with Studio's theme. Designed, not built. Don't start on this from this record; build it only when someone asks, from its brief. Designed in design/studio/BACKGROUND.md: a field map, plain / map / map-animated as studio-background." --project loadout-cli --by "studio design"
+   loadout idea add --id studio-embossed-background --text="A military-style embossed background for Studio, animated with a static variant, and the same treatment for the nav, in keeping with Studio's theme. Designed, not built. Don't start on this from this record; build it only when someone asks, from its brief. Designed in design/studio/BACKGROUND.md: a field map, plain / map / map-animated as studio-backdrop." --project loadout-cli --by "studio design"
    ```
 
    Skip it if an idea with that id exists. `BACKGROUND.md`'s own last step appends to it.

@@ -3037,9 +3037,9 @@
   var NS = window.LoadoutStudio = window.LoadoutStudio || {};
   var SVGNS = "http://www.w3.org/2000/svg";
   function s(tag, attrs, kids) { var e = document.createElementNS(SVGNS, tag); Object.keys(attrs || {}).forEach(function (k) { if (attrs[k] !== null && attrs[k] !== undefined) { e.setAttribute(k, attrs[k]); } }); (kids || []).forEach(function (c) { if (c) { e.appendChild(c); } }); return e; }
-  var BACKGROUNDS = ["plain", "map", "map-animated"];
+  var BACKDROPS = ["plain", "map", "map-animated"];
   /** Plain ground, the field map still (the default), or the field map with its scan. */
-  function setBackground(v, el) { (el || document.documentElement).setAttribute("data-background", BACKGROUNDS.indexOf(v) >= 0 ? v : "map"); }
+  function setBackdrop(v, el) { (el || document.documentElement).setAttribute("data-backdrop", BACKDROPS.indexOf(v) >= 0 ? v : "map"); }
 
   /* A small deterministic value noise, so the map is the same on every visit. */
   function rng(seed) { var x = seed >>> 0 || 1; return function () { x ^= x << 13; x >>>= 0; x ^= x >>> 17; x ^= x << 5; x >>>= 0; return x / 4294967296; }; }
@@ -3109,7 +3109,7 @@
     return { el: el, redraw: draw, destroy: function () { window.removeEventListener("resize", onResize); el.remove(); } };
   }
 
-  Object.assign(NS, { FieldMap: FieldMap, setBackground: setBackground, BACKGROUNDS: BACKGROUNDS });
+  Object.assign(NS, { FieldMap: FieldMap, setBackdrop: setBackdrop, BACKDROPS: BACKDROPS });
 })();
 
 (function () {
