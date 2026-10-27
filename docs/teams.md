@@ -1880,14 +1880,18 @@ A cookie that lasts ninety days on a phone should not be able to do that. So
 notices at the link address open the classic page's list of runs, not
 Studio.
 
-The phone is known by the name it asked for, the `Host` header. A proxy in
-front of the dashboard must pass that header on unchanged. One that rewrites it
-to `127.0.0.1` makes the phone look like this machine, and this machine is
-allowed everything.
+The phone is known by the name it asked for. The proxy in front of the
+dashboard has to pass that name on in `X-Forwarded-Host`, which most proxies
+send or can be told to. Passing it in `Host` instead, unchanged, works only on
+Windows. Everywhere else the dashboard's listener refuses a host it was not
+bound to before Loadout sees the request. **A proxy that rewrites `Host` to
+`127.0.0.1` and sends no `X-Forwarded-Host` makes the phone look like this
+machine, and this machine is allowed everything.**
 
 **Not verified:** following the link from a real phone, through a real
-tailnet or proxy. The tests play the phone by sending requests that name the
-link address, against the real listener on Windows.
+tailnet or proxy, and which proxies send `X-Forwarded-Host` without being told
+to. The tests play the phone by sending requests that name the link address,
+against the real listener.
 
 The address lives in your operating system's credential store, never in a file
 — a Slack or Discord webhook address *is* the credential: anyone holding it can

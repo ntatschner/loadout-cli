@@ -4,6 +4,7 @@ using FluentAssertions;
 using Loadout.Core.Teams;
 using Loadout.Core.Teams.Daemon;
 using Loadout.Models.Results;
+using Loadout.Tests.Platform;
 using Xunit;
 
 namespace Loadout.Tests.Integration;
@@ -13,9 +14,11 @@ namespace Loadout.Tests.Integration;
 /// in there, read runs and answer them, and reach nothing else.
 /// </summary>
 /// <remarks>
-/// The phone is played by requests naming the link address as their Host,
-/// which is all the server has to go on: through a proxy on this machine they
-/// arrive from loopback like everything else.
+/// The phone is played by requests naming the link address in
+/// X-Forwarded-Host, as a proxy on this machine sends them, which is all the
+/// server has to go on: they arrive from loopback like everything else. Only
+/// Windows delivers a request naming the link address in Host itself to a
+/// listener bound to 127.0.0.1, so that route has a test of its own.
 /// </remarks>
 public sealed class DashboardLinkAddressTests : IAsyncLifetime
 {
@@ -220,12 +223,39 @@ public sealed class DashboardLinkAddressTests : IAsyncLifetime
         DashboardServer.Remotely(method, path).Should().Be(let);
     }
 
-    /// <summary>A request as the phone would send it: naming the link address as its host.</summary>
+    [WindowsFact]
+    public async Task A_proxy_that_keeps_the_host_reaches_the_link_address_on_windows()
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, _root + "/api/settings");
+        request.Headers.Host = Away;
+        request.Headers.Add("Cookie", $"{SignIn.CookieName}={_signIn.IssueCookie()}");
+
+        using var refused = await _client.SendAsync(request);
+
+        refused.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await refused.Content.ReadAsStringAsync()).Should().Contain("At the link address");
+    }
+
+    [Fact]
+    public async Task Only_the_first_forwarded_host_counts()
+    {
+        // Later values were added by proxies further along; the first is what
+        // the phone asked for.
+        var request = new HttpRequestMessage(HttpMethod.Get, _root + "/api/settings");
+        request.Headers.Add("X-Forwarded-Host", $"elsewhere.example, {Away}");
+        request.Headers.Add("Cookie", $"{SignIn.CookieName}={_signIn.IssueCookie()}");
+
+        using var response = await _client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK, "a request not at the link address is this machine's");
+    }
+
+    /// <summary>A request as a proxy would pass on the phone's: naming the link address as where it was meant for.</summary>
     private Task<HttpResponseMessage> SendAsync(
         HttpMethod method, string path, string? cookie, string? origin = null, string? body = null)
     {
         var request = new HttpRequestMessage(method, _root + path);
-        request.Headers.Host = Away;
+        request.Headers.Add("X-Forwarded-Host", Away);
 
         if (cookie is not null)
         {

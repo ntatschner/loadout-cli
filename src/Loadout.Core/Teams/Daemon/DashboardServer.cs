@@ -1269,14 +1269,32 @@ public sealed class DashboardServer : IDisposable
 
     /// <summary>Whether a request names the link address as its host.</summary>
     /// <remarks>
-    /// The Host header, because that is the name the phone asked for. A proxy
-    /// in front of the dashboard has to pass it on unchanged; one that
-    /// rewrites it to 127.0.0.1 makes the phone look like this machine.
+    /// <para>
+    /// Either header counts. A proxy that keeps the Host header says so in
+    /// Host, but only Windows delivers that to a listener bound to 127.0.0.1:
+    /// the listener everywhere else answers 404 for a host it was not bound
+    /// to, before any of this runs. A proxy that rewrites Host to this
+    /// machine says where the request was meant for in X-Forwarded-Host
+    /// instead, and that reaches the listener on every platform.
+    /// </para>
+    /// <para>
+    /// Trusting X-Forwarded-Host here can only hold a request to less, never
+    /// let it do more, because the link address is where the least is
+    /// allowed. A browser on this machine never sends it. A proxy that
+    /// rewrites Host and sends neither makes the phone look like this machine,
+    /// which the documentation warns about.
+    /// </para>
     /// </remarks>
     internal bool AtLink(HttpListenerRequest request) =>
         Link is { } link
-        && request.Headers["Host"] is { } host
-        && string.Equals(host, link.Authority, StringComparison.OrdinalIgnoreCase);
+        && (Names(request.Headers["Host"], link) || Names(FirstOf(request.Headers["X-Forwarded-Host"]), link));
+
+    private static bool Names(string? host, Uri link) =>
+        host is { Length: > 0 } && string.Equals(host.Trim(), link.Authority, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The first of a comma-separated header's values: the one the client sent, before any later proxy.</summary>
+    private static string? FirstOf(string? header) =>
+        header?.Split(',', 2)[0];
 
     /// <summary>Whether a request at the link address came from the page there, where it says.</summary>
     private bool FromLinkPage(HttpListenerRequest request) =>
