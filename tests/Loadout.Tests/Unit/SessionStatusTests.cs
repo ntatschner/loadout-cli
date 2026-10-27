@@ -283,7 +283,12 @@ public sealed class SessionStatusTests : IDisposable
             null,
             [],
             Headless: headless,
-            StudioSession: studioSession));
+            StudioSession: studioSession,
+
+            // Attribution kept, so the only thing that can make a settings
+            // file here is the status line: cleared trailers make one for
+            // every launch, and have tests of their own.
+            KeepAttribution: true));
 
         built.Succeeded.Should().BeTrue(built.Error);
 
