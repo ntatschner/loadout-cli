@@ -1,5 +1,7 @@
 # ActionDrawer
 
+> **Retired from pages.** Pages no longer offer commands in drawers: each command is a control made for it (ActionForm, ItemList, SettingRow, Readout, ActionRow; see Commands as controls in the brand book). ActionDrawer stays only for the Commands page, the expert catalogue of every command's full form.
+
 ActionDrawer is how a page offers a `loadout` command that is not its main action. It sits closed, one line: the title in words, `loadout <path>` under it, and its effect. Opened, it is the command's form, the exact line it will run (updated as you type), and its button. It replaces the open-ended "Do" lists: a page shows its main actions in place and keeps the rest in drawers, grouped.
 
 ## Effects

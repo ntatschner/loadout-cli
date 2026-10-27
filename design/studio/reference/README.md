@@ -90,13 +90,27 @@ Loadout Studio is the design system for Studio: the app Loadout serves on this m
   - **Settings** is a section index beside one section. Loadout's own settings are a searchable ConfigList, each changed where it is shown.
   - **Memory** is the stores on the left (StoreList), the topic edited in the middle (TopicEditor, which shows a clash beside your edit and never overwrites), and its health and tools on the right.
   - **Spend** is one number (TokenSplit), where it went (SpendBars), and what is running and was launched.
-- A page's main actions are in place. The rest of its commands are ActionDrawers: closed, one line each with the effect (reads only, changes something, starts a session, terminal only), and opened into the command's form, its exact line and its button.
+- Every command a page offers is a control made for it, in place (see Commands as controls). Nothing is a drawer of generic forms.
 - What is only ever done in a terminal (secrets, agreements, the attach passphrase, a server that runs until Ctrl+C) is a TerminalOnly block: the command, why, and Copy. Never a button that does it.
 - **In every mode.** The six pages follow the mode you are in:
   - **Terminals** and **Teams**: the page opens beside your terminals or the runs board (PageBeside), which stay live. Escape closes it.
   - **Minimal**: the page is one quiet column (QuietPage): one sentence, what needs you or has gone wrong, and Show everything for the rest.
   - **Pure**: the page is a WorkDesk, reached with G and a letter: I Ideas, P Projects, C Context, M Memory, U Spend (usage), O Settings (options).
 - **Forgetting a project** (ForgetProject) is on this machine only, or from the Loadout workspace for every machine, with optional cleanup that runs first and is shown command by command. The repository is never touched.
+
+### Commands as controls
+
+- Every command a page offers is a control made for it, never a form generated from its options. Choose the pattern by what the command does:
+  - **ActionForm**: a command that does one thing to things you name. Its common fields are in place, each labelled in plain words with the option it sets beside it (`--project`); the rest sit under More options with a count. Fields the page already knows (the project, the topic) are shown as facts, not inputs. Its exact line updates as you type, under the fields.
+  - **ItemList**: a thing that has members (servers, packs, backups, checkpoints, marks, handoffs). Each member is a row with its facts and its own buttons, each button with its exact command; Add opens the add form in place, and the new member joins the list. The list says where it was read from (`$ loadout mcp list --global --json`).
+  - **SettingRow**: one setting, shown as it stands, changed where it is shown: a switch, a choice or a value, then Set it and Clear it, each with its command. Unset says what applies instead.
+  - **Readout**: a read-only command, shown as a proper view drawn from its `--json` (figures, a table, a document, findings, or a list), with the parameters that change what it shows above it and Read it again. It never shows the raw output.
+  - **ActionRow**: commands that take nothing, as a row of buttons, each with its command.
+- **The effect decides the buttons.** A command that only reads has one button and says `reads only`. One that changes something has Preview (`adds --dry-run · changes nothing`) and the button that does it (`changes something`). One that does nothing without an option (`--apply`, `--fix --yes`, `--clean --apply`) previews without it and adds it to act: the option never appears as a checkbox beside a button that says it changes nothing. One that cannot be previewed says so under its button. One that asks as it goes, or starts an agent, opens in a terminal Studio hosts and says `starts a session`.
+- **Ask before what can't be taken back.** Removing, deleting, restoring over files, rotating a pin: a Dialog says what happens and what is kept (a backup, the repository), with a button that names the act. Danger is the Bad colour and the word, never the colour alone.
+- **Results land where you asked.** A success says what happened in a line under the control and in a toast with the command; a preview shows what would change as a table under it; a read shows its view. Failure says why in words.
+- **Terminal only stays terminal only.** Reading a secret back (a token shown once, such as `team webhook enable`), setting one, the attach passphrase, and agreements (`tools trust`, `tools verify --agree`) are TerminalOnly blocks, whatever control is beside them. Taking an agreement back may be a button.
+- **The Commands page is the expert catalogue.** It keeps every command's full form for people who think in commands. No page links to it as its way of doing something: if a page needs a command, the page gets a control for it.
 
 ### Red Alert
 

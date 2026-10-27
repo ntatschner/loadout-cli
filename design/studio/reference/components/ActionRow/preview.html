@@ -1,0 +1,24 @@
+<!-- @dsCard group="Commands as controls" height=360 width=1000 subtitle="Things done with one press, each with its line" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ActionRow</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .col { flex: 1 1 420px; min-width: 0; max-width: 640px; }
+</style>
+</head>
+<body class="ls">
+<div id="a"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  document.getElementById("a").appendChild(S.ActionRow({ title: "The workspace", why: "Your projects, memory and settings, kept in one repository.",
+    actions: [{ label: "Bring it up to date", glyph: "\u21bb", cmd: "$ loadout workspace sync", said: "Up to date: 3 changes pulled" }, { label: "Save it", cmd: "$ loadout workspace save", said: "Saved and pushed" }, { label: "Open the folder", cmd: "$ loadout workspace open", said: "Opened" }] }));
+})();
+</script>
+</body>
+</html>

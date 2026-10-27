@@ -357,6 +357,18 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
 [data-mode="minimal"] .qall .bench, [data-mode="minimal"] .qall .memgrid, [data-mode="minimal"] .qall .setwrap, [data-mode="minimal"] .qall .dgrid, [data-mode="minimal"] .qall .spgrid { grid-template-columns: minmax(0, 1fr); }
 [data-mode="minimal"] .qall .shelf, [data-mode="minimal"] .qall .setidx, [data-mode="minimal"] .qall .memgrid > .ls-stores { position: static; max-height: none; }
 [data-mode="minimal"] .qall .memside { grid-column: auto; }
+/* commands as controls: the prototype's own glue around the stage 13 patterns */
+.cstack { display: grid; gap: calc(var(--space-3) * var(--density)); min-width: 0; }
+.cstack > .ls-aform + .ls-aform, .cstack > .ls-readout + .ls-aform, .cstack > .ls-aform + .ls-readout, .cstack > .ls-ilist + .ls-aform, .cstack > .ls-aform + .ls-ilist, .cstack > .ls-readout + .ls-readout, .cstack > .ls-ilist + .ls-readout, .cstack > .ls-readout + .ls-ilist { margin-top: 0; }
+.ctl-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 12px; font-size: 13.5px; font-weight: 500; color: var(--ink-soft); }
+.ctl-pick .ls-text { width: auto; min-width: 12em; max-width: 100%; }
+.ctl-h { margin: 8px 0 0; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+.tw { overflow-x: auto; max-width: 100%; }
+.ctl-t { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.ctl-t th { text-align: left; font-size: 11.5px; font-weight: 500; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-soft); padding: 6px 10px 6px 0; box-shadow: inset 0 -1px 0 var(--rule); }
+.ctl-t td { padding: 7px 10px 7px 0; color: var(--ink); box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--rule) 60%, transparent); vertical-align: top; overflow-wrap: anywhere; }
+.ctl-pre { margin: 0; padding: 10px 12px; background: var(--surface-2); color: var(--ink); font-family: var(--font-mono); font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ok-line { margin: 0; color: var(--ink); }
 </style>
 
 <a class="skip" href="#main">Skip to the page</a>
@@ -900,7 +912,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
   }
   function teamsWaiting() { return TR.filter(function (r) { return runWord(r) === "waiting for you"; }).length; }
   function subnav(cur) {
-    return el("nav", { "class": "tsub", "aria-label": "Teams" }, [["teams", "Runs and teams"], ["teams-office", "Office"], ["teams-remedies", "Remedies"], ["teams-bin", "The bin"]].filter(function (x) { return x[0] !== "teams-office" || (P.mode !== "minimal" && P.mode !== "pure"); }).map(function (x) { return el("a", { href: "#" + x[0], "aria-current": cur === x[0] ? "page" : null, text: x[1] }); }));
+    return el("nav", { "class": "tsub", "aria-label": "Teams" }, [["teams", "Runs and teams"], ["teams-office", "Office"], ["teams-remedies", "Remedies"], ["teams-tools", "Shared tools"], ["teams-help", "Calls for help and the webhook"], ["teams-bin", "The bin"]].filter(function (x) { return x[0] !== "teams-office" || (P.mode !== "minimal" && P.mode !== "pure"); }).map(function (x) { return el("a", { href: "#" + x[0], "aria-current": cur === x[0] ? "page" : null, text: x[1] }); }));
   }
   function renderTeams(main) {
     var w = teamsWaiting(), running = TR.filter(function (r) { var x = runWord(r); return x !== "done" && x !== "stopped" && x !== "failed"; });
@@ -1029,6 +1041,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     right.appendChild(el("section", { "aria-labelledby": "z-truns" }, [zone("", "Its runs here", "z-truns")].concat(runs.length ? runs.map(function (r) { return S.RunCard({ href: "#run-" + r.id, run: runSummary(r) }); }) : [el("p", { "class": "calm", text: "It has not run on this machine." })])));
     grid.appendChild(left); grid.appendChild(right); main.appendChild(grid);
     if (!t.template) { main.appendChild(el("div", { "class": "tblock" }, [S.RoleRecord({ title: "How its roles have been doing", rows: [["role.implementer", "sonnet", 14, 31.2, 2.23, 86, 2], ["role.lead", "opus", 14, 28.9, 2.06, 100, 0], ["role.reviewer", "sonnet", 12, 7.1, 0.59, 92, 0], ["role.verifier", "sonnet", 11, 6.4, 0.58, 73, 14], ["role.planner", null, 3, 1.4, 0.47, 100, 0]], time: [["implementer/1", 4, 11, 2, 0], ["verifier/1", 2, 5, 1, 3], ["reviewer/1", 5, 1, 2, 0]] })])); }
+    main.appendChild(el("div", { "class": "tblock" }, [C.capabilities()]));
     main.appendChild(el("p", { "class": "calm", style: "margin-top: 14px; font-size: 12.5px" }, ["From ", el("code", { "class": "ls-cmd", text: "$ loadout team show " + t.name }), "."]));
   }
   function renderRemedies(main) {
@@ -1041,6 +1054,16 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
       requests: [{ id: "r1", node: "remediator/1", run: "20261017-0610-9e2f", asked: "asked 3 min ago", problem: "D: is at 97% and the nightly build will fail.", why: "this machine asks about every disk remedy, trusted or not" }], onRead: function () { toasts.add({ level: "info", text: "clear-build-cache.ps1, revision 2", cmd: "$ loadout team remedy show clear-build-cache --team system-watch --script" }); } }));
     list.appendChild(S.Remedy({ team: "system-watch", name: "restart-indexer", kind: "service", what: "Restarts the search indexer service.", assumes: "Windows, the service is named WSearch.", proves: "The service is running and answering afterwards.", revision: 1, rule: "trusted", trust: "trusted" }));
     main.appendChild(list);
+  }
+  function renderTools(main) {
+    main.appendChild(el("div", { "class": "head" }, [el("div", {}, [el("h1", { text: "Shared tools" }), el("span", { "class": "fact", text: "the catalogue every team draws on" })])]));
+    main.appendChild(subnav("teams-tools"));
+    main.appendChild(el("div", { style: "max-width: 900px" }, [C.tools()]));
+  }
+  function renderHelp(main) {
+    main.appendChild(el("div", { "class": "head" }, [el("div", {}, [el("h1", { text: "Calls for help and the webhook" }), el("span", { "class": "fact", text: "where a run that needs you says so" })])]));
+    main.appendChild(subnav("teams-help"));
+    main.appendChild(el("div", { style: "max-width: 900px" }, [C.help()]));
   }
   function renderBin(main) {
     main.appendChild(el("div", { "class": "head" }, [el("div", {}, [el("h1", { text: "The bin" }), el("span", { "class": "fact", text: TS.bin.length + " waiting to go for good" })])]));
@@ -1388,10 +1411,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     }
     if (x.plan && !x.accepted) { work.appendChild(block("z-iacc", "Accept it", [ideaAccept(x, where)])); }
     if (!x.accepted) {
-      work.appendChild(block("z-imore", "More", [S.ActionDrawers([{ items: [
-        { path: "idea refine", title: "Take it one round further", label: "Refine", open: !x.questions.length && !x.plan, fields: [{ name: "id", value: x.id, fixed: true }, { name: where[0], label: where[0] === "--global" ? "Workspace-wide" : "Project", value: where[0] === "--global" ? true : where[1], kind: where[0] === "--global" ? "flag" : "text", fixed: true }, { name: "--model", label: "Model", placeholder: "the default" }], onRun: function (v, info) { if (i1) { refine(); } said("Round started", info.line); setTimeout(bump, 400); return "A round is running on the daemon."; } },
-        { path: "idea improve", title: "Ask for the whole plan to be reworked", label: "Ask for it", fields: [{ name: "id", value: x.id, fixed: true }, { name: "piece", label: "Piece", value: "plan", fixed: true }, { name: "--request", label: "What should change", lines: 2, joined: true, required: true }, { name: where[0], label: "Project", value: where[1] || true, kind: where[1] ? "text" : "flag", fixed: true }], onRun: ran("the plan sent back") },
-        { path: "idea remove", title: "Forget this idea", label: "Forget it", danger: true, fields: [{ name: "id", value: x.id, fixed: true }, { name: where[0], label: "Project", value: where[1] || true, kind: where[1] ? "text" : "flag", fixed: true }], onRun: function (v, info) { IDEAS = IDEAS.filter(function (i) { return i.id !== x.id; }); said("Forgot " + x.title, info.line); setTimeout(function () { go("ideas"); }, 200); return "Forgotten."; } }] }])]));
+      work.appendChild(block("z-imore", "More", [C.ideaMore(x, where, function () { if (i1) { refine(); } setTimeout(bump, 400); })]));
     }
     work.appendChild(S.Command({ why: "The same, in a terminal:", command: "$ loadout idea show " + x.id + " " + where.join(" ") }));
   }
@@ -1431,7 +1451,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
   }
   function ideaDumps(work) {
     work.appendChild(el("div", { "class": "ihead" }, [el("h2", { text: "Notes kept elsewhere" }), el("p", { "class": "slug", text: "Paste notes from wherever you keep them, and an agent splits them into ideas and tasks. Nothing is recorded until you record the pieces." })]));
-    work.appendChild(S.ActionDrawers([{ items: [{ path: "idea dump add", title: "Drop notes in", label: "Drop them in", open: true, fields: [{ name: "--text", label: "The notes", lines: 5, joined: true, required: true }], onRun: function (v, info) { DUMPS.unshift({ id: "d" + (DUMPS.length + 4), source: "Pasted here", captured: "17 Oct", split: null, items: [] }); said("Dropped the notes in. Split them to see the pieces.", info.line); bump(); return "Dropped in."; } }] }]));
+    work.appendChild(C.ideaDump());
     DUMPS.forEach(function (d) { work.appendChild(S.NoteDump({ dump: d, onApply: function (ks) { d.items.forEach(function (it) { if (ks.indexOf(String(it.number)) >= 0) { it.recorded = true; } }); said("Recorded " + ks.length, "$ loadout idea dump apply " + d.id); bump(); }, onSplit: function () { said("Splitting " + d.id + " again", "$ loadout idea dump split " + d.id); }, onShow: function () { S.Dialog({ title: d.source, why: d.id + " · captured " + d.captured, content: el("pre", { "class": "dumpshow", text: d.items.map(function (i) { return i.excerpt || i.title; }).join("\n\n") }), cancelLabel: "Close" }).open(); } })); });
     work.appendChild(from("$ loadout idea dump list"));
   }
@@ -1450,21 +1470,21 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     main.appendChild(el("p", { "class": "ls-from" }, ["The same as ", el("code", { text: "$ loadout project list" }), " or ", el("code", { text: "loadout list" }), ". Also: ", el("a", { href: "#projects/+tasks", text: "tasks for no project yet" }), " · ", el("a", { href: "#projects/+workspace", text: "the workspace" }), "."]));
     var p = sel ? proj(sel) : null;
     if (p) { return dossier(main, p); }
-    if (sel === "+add") { return placePage(main, "Add a repository you have", [{ path: "project add", title: "Register a Git repository on this machine", open: true, fields: [{ name: "path", label: "Where it is", placeholder: "~/code/my-repo" }, { name: "--slug", label: "Slug", placeholder: "from the folder" }] }, { path: "project clone", title: "Clone a project the workspace knows but this machine does not have", fields: [{ name: "project", label: "Project", value: "home-lab", kind: "choice", options: ["home-lab"] }, { name: "destination", label: "Where to", placeholder: "the folder Loadout clones into" }] }]); }
-    if (sel === "+new") { return placePage(main, "Make a new project", [{ path: "project new", title: "A new project, empty or from one you have", open: true, fields: [{ name: "name", label: "Name", required: true }, { name: "--from", label: "From a project you have", kind: "choice", options: ["", "loadout-cli", "starstats"], value: "" }, { name: "--path", label: "Where", placeholder: "the default folder" }, { name: "--remote", label: "Remote", placeholder: "none" }] }, { path: "start", title: "Your first project, step by step with an agent", effect: "session" }]); }
-    if (sel === "+find") { return placePage(main, "Find repositories and stray memory", [{ path: "project discover", title: "Repositories under the folders Loadout looks in", effect: "reads", open: true }, { path: "project survey", title: "Agent memory no project accounts for", changesOnlyWith: ["--apply"], fields: [{ name: "--apply", label: "Bring it in, not only list it", kind: "flag" }] }, { path: "drift", title: "Where every project has drifted from what was recorded", changesOnlyWith: ["--fix"], fields: [{ name: "--fix", label: "Put right what can be put right", kind: "flag" }, { name: "--yes", label: "Without asking each time", kind: "flag" }] }, { path: "repo check", title: "AI tooling files tracked in a repository", effect: "reads" }]); }
+    if (sel === "+add") { return placePage(main, "Add a repository you have", C.placeAdd()); }
+    if (sel === "+new") { return placePage(main, "Make a new project", C.placeNew()); }
+    if (sel === "+find") { return placePage(main, "Find repositories and stray memory", C.placeFind()); }
     if (sel === "+tasks") {
-      main.appendChild(block("z-gt", "Tasks for no project yet", [el("p", { "class": "calm", style: "margin: 0 0 10px; font-size: 14px", text: "The workspace-wide list, for work that does not belong to a project yet." }), S.TaskBoard({ tasks: TASKS["~"], where: ["--global"], from: "$ loadout task list --global --all", onDeclare: function (t, n) { said(t.title + ": " + n, "$ loadout task declare " + t.id + " " + n + " --global"); } }).el, taskNew("~")]));
+      main.appendChild(block("z-gt", "Tasks for no project yet", [el("p", { "class": "calm", style: "margin: 0 0 10px; font-size: 14px", text: "The workspace-wide list, for work that does not belong to a project yet." }), S.TaskBoard({ tasks: TASKS["~"], where: ["--global"], from: "$ loadout task list --global --all", onDeclare: function (t, n) { said(t.title + ": " + n, "$ loadout task declare " + t.id + " " + n + " --global"); } }).el, taskNew("~"), C.taskMove(TASKS["~"], ["--global"])]));
       return;
     }
     if (sel === "+workspace") {
       main.appendChild(block("z-ws", "The workspace", [el("p", { "class": "calm", style: "margin: 0 0 12px; font-size: 14px", text: "Where projects, memory, specialists and tasks are kept, and synced between your machines." }),
         el("dl", { "class": "ls-rules" }, [el("dt", { text: "Remote" }), el("dd", { text: "github.com/ntatschner/loadout-workspace" }), el("dt", { text: "Here" }), el("dd", { text: "~/.loadout/workspace" }), el("dt", { text: "Projects" }), el("dd", { text: "3" })]), from("$ loadout workspace status"),
-        S.ActionDrawers([{ items: [{ path: "workspace sync", title: "Bring in what other machines saved", label: "Sync", onRun: ran("synced") }, { path: "workspace save", title: "Save and push what changed here", label: "Save", onRun: ran("saved") }, { path: "workspace open", title: "Open its folder", label: "Open", onRun: ran("opened") }] }])]));
+        C.workspace()]));
       return;
     }
   }
-  function placePage(main, title, items) { main.appendChild(block("z-place", title, [S.ActionDrawers([{ items: items.map(function (d) { return Object.assign({ onRun: ran(d.title.toLowerCase()) }, d); }) }])])); }
+  function placePage(main, title, node) { main.appendChild(block("z-place", title, [node])); }
   function taskNew(where) {
     var id = "", title = "", box = el("form", { "class": "tasknew", onsubmit: function (e) { e.preventDefault(); } });
     var a = el("input", { "class": "ls-text", id: "tn-title", placeholder: "Retry the upload with backoff", oninput: function () { title = a.value.trim(); if (!idTouched) { id = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 28); b.value = id; } paint(); } });
@@ -1493,20 +1513,10 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     grid.appendChild(block("z-dt", "What is being worked on", [S.TaskBoard({ tasks: tasks, where: ["--project", p.id], from: "$ loadout task list --project " + p.id + " --all", onSession: p.available ? function (t) { sessionOnTask(p.id, t); } : null, onRun: p.available ? function (t) { runOnTask(p.id, t); } : null, onDeclare: function (t, n) { said(t.title + ": " + S.TASK_MOVE[n].toLowerCase(), "$ loadout task declare " + t.id + " " + n + " --project " + p.id); PV++; } }).el, taskNew(p.id)], "wide"));
     var hs = HEALTH[p.id] || [], fx = hs.filter(function (f) { return f.fixable; }).length;
     var hb = block("z-dh", "Health", p.available ? [S.HealthList({ findings: hs, from: "$ loadout drift " + p.id + " and loadout repo check " + p.id, noneText: "Nothing has drifted." })] : [el("p", { "class": "calm", text: "Not on this machine, so there is nothing here to check. Clone it to see its health." })]);
-    if (fx) { hb.appendChild(S.ActionDrawers([{ items: [{ path: "drift", title: "Put right what can be put right", label: "Put it right", changesOnlyWith: ["--fix"], open: false, fields: [{ name: "PROJECT", label: "Project", value: p.id, fixed: true }, { name: "--fix", label: "Fix, not only report", kind: "flag", value: true }, { name: "--yes", label: "Without asking each time", kind: "flag", value: true }], onRun: function (v, info) { if (info.reads) { said("Read the drift. Nothing changed.", info.line); return "Read."; } HEALTH[p.id] = hs.filter(function (f) { return !f.fixable; }); said("Put " + fx + " right", info.line, "done"); bump(); return "Put right."; } }] }])); }
+    if (fx) { hb.appendChild(C.drift(p, fx, function () { HEALTH[p.id] = hs.filter(function (f) { return !f.fixable; }); said("Put " + fx + " right", "$ loadout drift " + p.id + " --fix --yes", "done"); bump(); })); }
     grid.appendChild(hb);
     d.appendChild(grid);
-    var groups = [];
-    groups.push({ name: "Open it", items: (p.available ? [{ path: "code", title: "Open it in the editor", label: "Open", fields: [{ name: "project", value: p.id, fixed: true }] }, { path: "project open", title: "Open its folder", label: "Open", fields: [{ name: "project", value: p.id, fixed: true }] }] : [{ path: "project clone", title: "Clone it onto this machine", open: true, fields: [{ name: "project", value: p.id, fixed: true }, { name: "destination", label: "Where to", placeholder: "the folder Loadout clones into" }] }]).concat([{ path: "project onboard", title: "Onboard it with an agent", effect: "session", fields: [{ name: "project", value: p.id, fixed: true }] }]) });
-    groups.push({ name: "Change how it is set up", items: [
-      { path: "project context", title: "Change what every session also gets", fields: [{ name: "--project", label: "Project", value: p.id, fixed: true }, { name: "key", label: "Key" }, { name: "value", label: "Value" }] },
-      { path: "project proposal", title: "A proposed change to its settings", changesOnlyWith: ["--apply", "--discard"], fields: [{ name: "project", value: p.id, fixed: true }, { name: "--apply", label: "Apply it", kind: "flag" }, { name: "--discard", label: "Discard it", kind: "flag" }] },
-      { path: "project relocate", title: "It has moved on this machine", fields: [{ name: "project", value: p.id, fixed: true }, { name: "path", label: "Where it is now", required: true }] },
-      { path: "project link", title: "Record in the repository which project it is", fields: [{ name: "project", value: p.id, fixed: true }] },
-      { path: "repo check", title: "Check the repository for AI tooling files", effect: "reads", fields: [{ name: "project", value: p.id, fixed: true }] }] });
-    groups[1].items.push({ path: "task remove", title: "Forget a task entirely", label: "Forget it", danger: true, why: "To say a task is done or dropped, move it on the board instead.", fields: [{ name: "id", label: "Task", kind: "choice", options: tasks.map(function (t) { return t.id; }) }, { name: "--project", value: p.id, fixed: true }] });
-    groups.forEach(function (g) { g.items.forEach(function (i) { i.onRun = i.onRun || ran(i.title.toLowerCase()); }); });
-    d.appendChild(block("z-ddo", "Do", [S.ActionDrawers(groups)]));
+d.appendChild(block("z-ddo", "Do", [C.dossierDo(p, tasks)]));
     d.appendChild(block("z-dfg", "Forget project", [el("p", { "class": "lead", text: "Forget it on this machine only, or from the Loadout workspace for every machine, and choose what goes with it. Its repository and code are never touched." }), halo({ label: "Forget project\u2026", kind: "danger", size: "small", cmd: "opens the dialog \u00b7 changes nothing yet", onPress: function () { openForget(p); } }, "p-forget")]));
     main.appendChild(d);
   }
@@ -1552,7 +1562,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
       form.appendChild(halo({ label: "Explain it", solid: true, size: "small", cmd: "$ loadout instructions explain " + words.join(" ") + " · reads only", onPress: function () { CX.task = ti.value; bump(); } }, "cx-go"));
       box.appendChild(form);
       box.appendChild(block("z-cl", "What a session on " + slug + " would load", [S.LoadStack({ selected: e.selected, omitted: e.omitted, conflicts: e.conflicts, tokenBudget: e.budget, href: function (id) { return SPECS[id] ? "#context/" + slug + "/specialist/" + id : null; } }), from("$ loadout instructions explain " + words.join(" "))]));
-      box.appendChild(S.ActionDrawers([{ items: [{ path: "instructions explain", title: "Compare it with another mode, task or profile", label: "Compare", effect: "reads", fields: [{ name: "task", label: "Task", placeholder: "optional" }, { name: "--project", value: slug, fixed: true }, { name: "--mode", label: "Mode", kind: "choice", options: ["implement", "advise", "investigate", "review"], value: "advise" }], onRun: ran("the comparison") }] }]));
+      box.appendChild(C.ctxCompare(slug));
       return;
     }
     if (sec === "specialists" || sec === "specialist") {
@@ -1560,7 +1570,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
       var grid = el("div", { "class": "specs" });
       Object.keys(SPECS).forEach(function (id) { var s = SPECS[id]; grid.appendChild(el("a", { "class": "spec", href: "#context/" + slug + "/specialist/" + id, "data-k": "sp-" + id }, [el("span", { "class": "k", text: s.kind + (s.always ? " · always" : "") }), el("b", { text: s.title }), el("span", { "class": "s", text: s.summary }), el("span", { "class": "n", text: s.tokens.toLocaleString("en-GB") + " tokens · " + s.origin })])); });
       box.appendChild(block("z-cs", "Specialists", [grid, from("$ loadout instructions list " + slug)]));
-      box.appendChild(S.ActionDrawers([{ items: [{ path: "instructions new", title: "Draft a new specialist or skill", fields: [{ name: "--project", value: slug, fixed: true }], onRun: ran("a draft") }, { path: "instructions export", title: "Copy a built-in one into the workspace to edit", fields: [{ name: "SPECIALIST", label: "Specialist", kind: "choice", options: Object.keys(SPECS) }], onRun: ran("copied") }] }]));
+      box.appendChild(C.ctxSpecialists(slug));
       return;
     }
     if (sec === "rules") {
@@ -1571,26 +1581,17 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
         from("$ loadout rules list " + slug + ", loadout rules budget " + slug + " and loadout rules audit " + slug)]));
       box.appendChild(block("z-cst", "Coding styles", [el("ul", { "class": "plain" }, [el("li", {}, [el("b", { text: "plain-csharp" }), " · ", S.Signal("met"), " in force · Records, no regions, early returns"]), el("li", {}, [el("b", { text: "dense-csharp" }), " · Fewer lines, more expression bodies"])]), from("$ loadout style list " + slug)]));
       box.appendChild(block("z-cpr", "Profiles", [el("ul", { "class": "plain" }, [el("li", {}, [el("b", { text: "release" }), " · Loads the release checklist and the changelog rules"])]), from("$ loadout profile list " + slug)]));
-      box.appendChild(block("z-csh", "Guidance for everybody", [el("p", { "class": "calm", style: "font-size: 14px", text: "Nothing here looks like it belongs to every project." }), from("$ loadout share candidates --project " + slug, ": guidance that never mentions this project.")]));
-      box.appendChild(S.ActionDrawers([{ items: [
-        { path: "style use", title: "Choose the style this project uses", label: "Use it", fields: [{ name: "style", label: "Style", kind: "choice", options: ["plain-csharp", "dense-csharp"] }, { name: "--project", value: slug, fixed: true }], onRun: ran("the style chosen") },
-        { path: "style show", title: "Read a coding style", label: "Show", effect: "reads", fields: [{ name: "style", label: "Style", kind: "choice", options: ["plain-csharp", "dense-csharp"] }, { name: "--project", value: slug, fixed: true }], onRun: ran("the style") },
-        { path: "rules split", title: "Split an oversized instruction file into scoped rules", changesOnlyWith: ["--apply"], fields: [{ name: "--from", label: "From", placeholder: "AGENTS.md" }, { name: "--apply", label: "Write the rules, not only show the split", kind: "flag" }], onRun: ran("the split") },
-        { path: "share promote", title: "Move guidance into the workspace's global layer", label: "Move it", changesOnlyWith: ["--apply"], fields: [{ name: "path", label: "File", required: true }, { name: "--apply", label: "Move it, not only show what would move", kind: "flag" }], onRun: ran("the move") }] }]));
+      box.appendChild(C.ctxRules(slug));
       return;
     }
     if (sec === "docs") {
       box.appendChild(block("z-cd", "Documents", [el("p", { "class": "lead", text: "38 documents checked; 2 places where they have come adrift." }), S.HealthList({ findings: [{ name: "docs/commands/usage.md:41", severity: "Warning", detail: "names --by week, which loadout usage does not have" }, { name: "README.md:112", severity: "Warning", detail: "links docs/teams.md, which was renamed docs/team-runs.md" }] }), from("$ loadout docs audit " + slug)]));
-      box.appendChild(S.ActionDrawers([{ items: [
-        { path: "docs find", title: "Where a type or member is declared", label: "Find it", effect: "reads", open: true, fields: [{ name: "name", label: "Type or member", placeholder: "StudioCoverage", required: true }, { name: "--project", value: slug, fixed: true }], onRun: ran("where it is declared") },
-        { path: "docs refresh", title: "Bring the symbol index up to date", fields: [{ name: "--project", value: slug, fixed: true }], onRun: ran("the index refreshed") },
-        { path: "docs export", title: "Write a reference or guide", fields: [{ name: "--project", value: slug, fixed: true }], onRun: ran("written") },
-        { path: "docs ci", title: "Write a CI workflow that regenerates them", fields: [{ name: "--project", value: slug, fixed: true }], onRun: ran("the workflow written") }] }]));
+      box.appendChild(C.ctxDocs(slug));
       return;
     }
     if (sec === "health") {
       box.appendChild(block("z-ch", "Health", [el("p", { "class": "lead", text: "6 specialists apply here, and 41 checks ran: 1 place where the project departs from what they ask." }), S.HealthList({ findings: [{ name: "practice.testing", severity: "Warning", detail: "tests/Loadout.Tests/UploadTests.cs has three behaviours in one test" }] }), el("p", { "class": "lead", text: "The library has 64 specialists: 0 errors, 1 warning." }), S.HealthList({ findings: [{ name: "design.cli", severity: "Warning", detail: "its summary is longer than 120 characters" }] }), from("$ loadout instructions audit --project " + slug + " and loadout instructions validate " + slug)]));
-      box.appendChild(S.ActionDrawers([{ items: [{ path: "instructions stats", title: "Which specialists launches actually reached", label: "Show", effect: "reads", fields: [{ name: "--project", value: slug, fixed: true }], onRun: ran("the stats") }, { path: "instructions probe", title: "How often sessions did what a specialist asks", onRun: ran("the probe") }] }]));
+      box.appendChild(C.ctxHealth(slug));
       return;
     }
     if (sec === "voice") {
@@ -1599,18 +1600,11 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
         el("ul", { "class": "plain" }, ["No em dashes · words · learned from 41 samples", "One idea per sentence · sentences · learned from 41 samples", "Say what was verified · sentences · learned from 18 samples"].map(function (t) { return el("li", { text: t }); })),
         from("$ loadout voice show --project " + slug, ". 4 learn runs so far, as loadout voice runs lists them."),
         el("p", { "class": "ls-from" }, ["Guides here: plain-english@3, house-style@1 (yours), from ", el("code", { text: "$ loadout voice guide list" }), "."])]));
-      box.appendChild(S.ActionDrawers([{ name: "Check and mark", items: [
-        { path: "voice check", title: "Check a message or a file against it", label: "Check it", effect: "reads", open: true, fields: [{ name: "--project", value: slug, fixed: true }], onRun: ran("the check") },
-        { path: "voice mark", title: "Mark writing as yours, so learning counts it", label: "Mark it", fields: [{ name: "--project", value: slug, fixed: true }], onRun: ran("marked") },
-        { path: "voice render", title: "Render it into the style specialist sessions load", label: "Render it", fields: [{ name: "--project", value: slug, fixed: true }], onRun: ran("rendered") }] },
-        { name: "Learn, ask as they go", items: [
-        { path: "voice learn", title: "Learn it from your own writing, rule by rule", effect: "session", why: "Learning asks you about each rule as it goes, so it opens in a terminal here.", fields: [{ name: "--project", value: slug, fixed: true }], onRun: ran("a terminal") },
-        { path: "voice guide draft", title: "Draft a new guide with an agent", effect: "session", onRun: ran("a terminal") }] },
-        { name: "Read", items: [{ path: "voice runs", title: "Past learn runs, with what each cost", label: "Show", effect: "reads", fields: [{ name: "--project", value: slug, fixed: true }], onRun: ran("the runs") }, { path: "voice guide show", title: "A guide's sources, checks and thresholds", label: "Show", effect: "reads", onRun: ran("the guide") }] }]));
+      box.appendChild(C.ctxVoice(slug));
       return;
     }
     if (sec === "handoff") {
-      box.appendChild(block("z-cho", "Handing over", [el("p", { "class": "lead", text: "A handoff is a note the next session reads first: what this one worked out, so it does not have to again." }), S.ActionDrawers([{ items: [{ path: "handoff", title: "Write or read a handoff", open: true, fields: [{ name: "project", value: slug, fixed: true }], onRun: ran("the handoff") }] }])]));
+      box.appendChild(block("z-cho", "Handing over", [el("p", { "class": "lead", text: "A handoff is a note the next session reads first: what this one worked out, so it does not have to again." }), C.ctxHandoff(slug)]));
     }
   }
   function specialistPage(box, slug, id) {
@@ -1622,7 +1616,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     box.appendChild(el("dl", { "class": "ls-rules" }, [el("dt", { text: "Loads" }), el("dd", { text: loads })]));
     box.appendChild(el("pre", { "class": "body", "aria-label": "What it says", tabindex: "0", text: s.body }));
     box.appendChild(S.Command({ why: "The same, in a terminal:", command: "$ loadout instructions show " + id + " --project " + slug }));
-    box.appendChild(S.ActionDrawers([{ items: [{ path: "instructions export", title: "Copy it into the workspace to edit", label: "Copy it", fields: [{ name: "SPECIALIST", value: id, fixed: true }, { name: "--project", value: slug, fixed: true }], onRun: ran("copied") }, { path: "instructions probe", title: "How often sessions did what it asks", label: "Measure it", fields: [{ name: "specialist", value: id, fixed: true }], onRun: ran("the probe") }] }]));
+    box.appendChild(C.specialist(id, slug));
   }
 
   /* ===== Settings: a section index on the left, one section at a time ===== */
@@ -1662,39 +1656,19 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     }
     if (sec === "loadout") {
       pane.appendChild(block("z-slo", "Loadout's settings", [el("p", { "class": "lead", text: "Every setting loadout config knows, in the groups the terminal's Settings screen uses, each changed where it is shown." }), S.ConfigList({ groups: CONFIG, onSet: function (n, v) { said("Set " + n + (v === "" ? " back to its default" : " to " + v), "$ loadout config set " + n + " " + (v === "" ? "\"\"" : S.shellQuote(v)), "done"); }, onExplain: function (s) { return "$ loadout config get " + s.name + " --explain\n" + s.name + " = " + (s.value || "(unset)") + "\n" + s.description + (s.whenUnset ? "\nUnset, it uses " + s.whenUnset + "." : "") + (s.machineLocal ? "\nKept on this machine only." : "\nSynced with the workspace."); } }).el,
-        S.ActionDrawers([{ items: [{ path: "config edit", title: "The configuration file itself", label: "Show where", fields: [{ name: "--path-only", label: "Only say where it is", kind: "flag", value: true }], onRun: function (v, info) { said("~/.loadout/config.json", info.line); return "~/.loadout/config.json"; } }] }])]));
+        C.configFile()]));
       return;
     }
     if (sec === "agents") {
-      pane.appendChild(block("z-sm", "MCP servers", [el("p", { "class": "lead", text: "The servers every project's agent loads. A project's own are on its Context page." }),
-        el("ul", { "class": "rowsx" }, [["github", "stdio", "npx @modelcontextprotocol/server-github", "global"], ["docs-search", "http", "https://docs.internal/mcp", "global"]].map(function (x) { return el("li", {}, [el("b", { text: x[0] }), el("span", { text: x[1] }), el("code", { text: x[2] }), el("span", { text: x[3] })]); })),
-        from("$ loadout mcp list --global"),
-        S.ActionDrawers([{ items: [{ path: "mcp add", title: "Add a server", fields: [{ name: "NAME", label: "Name", required: true }, { name: "COMMAND-OR-URL", label: "Command or URL", required: true }, { name: "--arg", label: "An argument", placeholder: "optional" }, { name: "--global", label: "For every project", kind: "flag", value: true, fixed: true }], onRun: ran("the server added") }, { path: "mcp remove", title: "Remove one", label: "Remove", danger: true, fields: [{ name: "NAME", label: "Name", kind: "choice", options: ["github", "docs-search"] }, { name: "--global", label: "For every project", kind: "flag", value: true, fixed: true }], onRun: ran("the server removed") }] }])]));
-      pane.appendChild(block("z-sse", "Secrets", [el("p", { "class": "lead", text: "Kept in this machine's credential store. Studio never shows one back." }),
-        S.TerminalOnly({ title: "Store one", why: "It asks for the value at a masked prompt, so the secret never sits in a page or a command line.", command: "$ loadout secret set <name>" }),
-        S.ActionDrawers([{ items: [{ path: "secret test", title: "Check a reference resolves", label: "Check it", effect: "reads", fields: [{ name: "reference", label: "Reference", placeholder: "secret:NUGET_KEY", required: true }], onRun: function (v, info) { said("It resolves. The value is not shown.", info.line); return "It resolves. The value is not shown."; } }, { path: "secret remove", title: "Remove one", label: "Remove", danger: true, onRun: ran("removed") }] }])]));
-      var packs = [{ name: "dotnet-pack", remote: "github.com/loadout-packs/dotnet", ref: "v3", approved: true }, { name: "infra", remote: "github.com/acme/infra-specialists", ref: "main", approved: false }];
-      pane.appendChild(block("z-sp", "Specialist packs", [el("ul", { "class": "rowsx" }, packs.map(function (p) { return el("li", {}, [el("b", { text: p.name }), el("code", { text: p.remote }), el("span", { text: "@ " + p.ref }), el("span", { "class": "ls-tag " + (p.approved ? "good" : "needs"), text: p.approved ? "approved here" : "not approved here" })]); })),
-        from("$ loadout pack list", ". Fetching a pack is not approving it: approve one only once you have read it."),
-        S.ActionDrawers([{ items: [
-          { path: "pack approve", title: "Approve a pack's pinned commit here", label: "Approve", fields: [{ name: "name", label: "Pack", kind: "choice", options: ["infra"] }], onRun: function (v, info) { packs[1].approved = true; said("Approved infra here", info.line, "done"); return "Approved."; } },
-          { path: "pack add", title: "Declare a pack", fields: [{ name: "name", label: "Name", required: true }, { name: "remote", label: "Remote", required: true }, { name: "--ref", label: "Ref", placeholder: "main" }], onRun: ran("declared") },
-          { path: "pack update", title: "Move a pack's pin to what its ref points at", label: "Update", fields: [{ name: "name", label: "Pack", kind: "choice", options: ["dotnet-pack", "infra"] }], onRun: ran("updated") },
-          { path: "pack remove", title: "Stop declaring one", label: "Remove", danger: true, fields: [{ name: "name", label: "Pack", kind: "choice", options: ["dotnet-pack", "infra"] }], onRun: ran("removed") }] }])]));
+      pane.appendChild(block("z-sm", "MCP servers", [C.mcp()]));
+      pane.appendChild(block("z-sse", "Secrets", [el("p", { "class": "lead", text: "Kept in this machine's credential store. Studio never shows one back." }), C.secrets()]));
+      pane.appendChild(block("z-sp", "Specialist packs", [C.packs()]));
       return;
     }
     if (sec === "safety") {
-      pane.appendChild(block("z-sb", "Backups", [el("p", { "class": "lead", text: "Taken before anything that changes many files at once, so it can be undone." }),
-        el("ul", { "class": "rowsx" }, [["20261016-2214-migrate", "migrate", "16 Oct 22:14", "41 files"], ["20261012-0930-memory-compress", "memory compress", "12 Oct 09:30", "3 files"]].map(function (x) { return el("li", {}, [el("code", { text: x[0] }), el("span", { text: x[1] }), el("span", { text: x[2] }), el("span", { text: x[3] })]); })),
-        from("$ loadout backup list"),
-        S.ActionDrawers([{ items: [{ path: "backup restore", title: "Undo what one was taken for", label: "Restore", changesOnlyWith: ["--apply"], why: "Without --apply it lists what it would put back, and changes nothing.", fields: [{ name: "id", label: "Backup", kind: "choice", options: ["20261016-2214-migrate", "20261012-0930-memory-compress"] }, { name: "--apply", label: "Put the files back", kind: "flag" }], onRun: ran("the restore") }] }])]));
-      pane.appendChild(block("z-sc", "Checkpoints", [el("p", { "class": "lead", text: "A name for where a project stands, to come back to." }),
-        S.ActionDrawers([{ items: [
-          { path: "checkpoint create", title: "Mark where a project stands", label: "Mark it", fields: [{ name: "name", label: "Name", placeholder: "before-the-rename", required: true }, { name: "--because", label: "Because", placeholder: "a sentence" }, { name: "--project", label: "Project", kind: "choice", options: ["loadout-cli", "starstats"] }], onRun: ran("marked") },
-          { path: "checkpoint list", title: "A project's checkpoints", label: "Show", effect: "reads", fields: [{ name: "--project", label: "Project", kind: "choice", options: ["loadout-cli", "starstats"] }], onRun: ran("the checkpoints") },
-          { path: "checkpoint restore", title: "Put a checkpoint's files back", label: "Restore", changesOnlyWith: ["--apply"], fields: [{ name: "name", label: "Checkpoint", required: true }, { name: "--apply", label: "Put the files back", kind: "flag" }, { name: "--project", label: "Project", kind: "choice", options: ["loadout-cli", "starstats"] }], onRun: ran("the restore") },
-          { path: "checkpoint remove", title: "Forget one", label: "Forget it", danger: true, fields: [{ name: "name", label: "Checkpoint", required: true }, { name: "--project", label: "Project", kind: "choice", options: ["loadout-cli", "starstats"] }], onRun: ran("forgotten") }] }])]));
-      pane.appendChild(block("z-sk2", "Keeping AI files out of repositories", [S.ActionDrawers([{ items: [{ path: "protect", title: "Install the Git protections", fields: [{ name: "project", label: "Project", kind: "choice", options: ["", "loadout-cli", "starstats"] }, { name: "--all", label: "Every project", kind: "flag" }], onRun: ran("protected") }, { path: "migrate", title: "Move existing AI tooling files into the workspace", fields: [{ name: "project", label: "Project", kind: "choice", options: ["", "loadout-cli", "starstats"] }], onRun: ran("moved") }] }])]));
+      pane.appendChild(block("z-sb", "Backups", [C.backups()]));
+      pane.appendChild(block("z-sc", "Checkpoints", [C.checkpoints()]));
+      pane.appendChild(block("z-sk2", "Keeping AI files out of repositories", [C.protection()]));
       return;
     }
     if (sec === "daemon") {
@@ -1705,16 +1679,13 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
       acts.appendChild(ends("Restart it", "$ loadout daemon restart", ""));
       acts.appendChild(ends("Stop it", "$ loadout daemon stop", "danger"));
       acts.appendChild(DAEMON.autostart ? halo({ label: "Stop it starting at log-in", size: "small", cmd: "$ loadout daemon autostart disable", onPress: function () { DAEMON.autostart = false; said("It no longer starts when you log in", "$ loadout daemon autostart disable"); bump(); } }) : halo({ label: "Start it at log-in", size: "small", cmd: "$ loadout daemon autostart enable", onPress: function () { DAEMON.autostart = true; said("It starts when you log in", "$ loadout daemon autostart enable"); bump(); } }));
-      pane.appendChild(block("z-sd", "The daemon", [st, acts, from("$ loadout daemon autostart show"), S.ActionDrawers([{ items: [{ path: "daemon continue", title: "Let the schedules fire, by its other name", label: "Let them fire", why: "The same as daemon resume.", onRun: function (v, info) { DAEMON.held = false; said("The schedules fire again", info.line); bump(); return "Done."; } }] }])]));
+      pane.appendChild(block("z-sd", "The daemon", [st, acts, from("$ loadout daemon autostart show"), el("p", { "class": "ls-from" }, [el("code", { text: "$ loadout daemon continue" }), " does the same as Let the schedules fire."])]));
       return;
     }
     if (sec === "machine") {
       pane.appendChild(block("z-smc", "How this machine stands", [S.HealthList({ findings: [{ name: "dotnet", severity: "ok", detail: "10.0.100" }, { name: "git", severity: "ok", detail: "2.47.1" }, { name: "shell integration", severity: "Warning", detail: "the zsh completion is out of date", fixable: true }, { name: "credential store", severity: "ok", detail: "the system keyring" }], from: "$ loadout doctor" }),
-        S.ActionDrawers([{ items: [{ path: "doctor", title: "Put right what can be put right", label: "Put it right", changesOnlyWith: ["--fix"], fields: [{ name: "--fix", label: "Fix, not only check", kind: "flag", value: true }, { name: "--yes", label: "Without asking each time", kind: "flag", value: true }], onRun: ran("put right") }] }])]));
-      pane.appendChild(block("z-smo", "More", [S.ActionDrawers([{ items: [
-        { path: "setup", title: "Set the launcher up on this machine again", effect: "session", why: "It asks as it goes, so it opens in a terminal Studio hosts.", onRun: ran("a terminal") },
-        { path: "desktop", title: "The desktop entry for the launcher", fields: [{ name: "--remove", label: "Remove it instead", kind: "flag" }], onRun: ran("the entry") },
-        { path: "commands", title: "Everything Loadout can do, as the terminal lists it", label: "List them", effect: "reads", onRun: ran("the list") }] }]), el("p", { "class": "ls-from", text: "Every command also has a form on the Commands page." })]));
+        C.doctor()]));
+      pane.appendChild(block("z-smo", "More", [C.machineMore()]));
     }
   }
 
@@ -1743,7 +1714,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
         onSave: function (text, version) { if (t.clash) { t.clash = false; var theirs = { name: t.name, scope: store, description: t.description, kind: t.kind, written: "17 Oct 14:02 · your other machine", version: "c90d13ab42", text: "Releases are cut from main.\nRun the suite with --configuration Release first.\nTag as v<major>.<minor>.<patch>; the tag push publishes.\nNuGet publishing needs the NUGET_KEY secret.\nThe changelog is written from the merged pull requests.\n" }; return { changed: theirs }; } t.text = text; t.version = Math.random().toString(16).slice(2, 12); t.written = "17 Oct"; return { saved: Object.assign({ scope: store }, t) }; },
         onSaved: function (x) { said("Saved " + x.name, "$ loadout workspace save · commits it to the workspace", "done"); } }).el);
       mid.appendChild(from("$ loadout memory show " + t.name + " --project " + slug + (store !== "project" ? " --scope " + store : ""), ": as stored."));
-      if (store === "project") { mid.appendChild(S.ActionDrawers([{ items: [{ path: "memory delete", title: "Delete this topic", label: "Delete it", danger: true, why: "A backup is taken first. Topics that link to it are named and left as they are.", fields: [{ name: "topic", value: t.name, fixed: true }, { name: "project", value: slug, fixed: true }, { name: "--yes", label: "Without asking", kind: "flag", value: true }], onRun: function (v, info) { m.project = m.project.filter(function (x) { return x !== t; }); said("Deleted " + t.name + ". A backup was taken first.", info.line); setTimeout(function () { go("memory/" + slug); }, 200); return "Deleted."; } }] }])); }
+      if (store === "project") { mid.appendChild(C.memoryDelete(t, slug, m)); }
     } else {
       mid.appendChild(el("div", { "class": "ihead" }, [el("h2", { text: "What " + slug + " remembers" }), el("p", { "class": "slug", text: "The topics on the left are loadout memory list " + slug + ". Choose one to read or edit it." })]));
       mid.appendChild(memFind(slug));
@@ -1752,13 +1723,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     var aud = slug === "loadout-cli" ? [{ name: "test-layout", severity: "Warning", detail: "differs from what the agent recorded outside the workspace", fixable: false }, { name: "studio-coverage", severity: "Info", detail: "not revisited in 9 days" }] : [];
     side.appendChild(block("z-mh", "Health", [S.HealthList({ verdict: aud.length ? "Needs a look" : "Clean", findings: aud, from: "$ loadout memory audit " + slug, noneText: "Every topic is in order." })]));
     if (t) { side.appendChild(memFind(slug)); }
-    side.appendChild(block("z-mdo", "Do", [S.ActionDrawers([{ items: [
-      { path: "memory write", title: "Record a fact", label: "Record it", fields: [{ name: "topic", label: "Topic", required: true }, { name: "--fact", label: "The fact", lines: 2, required: true }, { name: "--project", value: slug, fixed: true }], onRun: ran("recorded") },
-      { path: "memory audit", title: "Clean up what the audit found", label: "Clean it", changesOnlyWith: ["--apply"], fields: [{ name: "project", value: slug, fixed: true }, { name: "--clean", label: "Clean", kind: "flag", value: true }, { name: "--apply", label: "Do it, not only report", kind: "flag" }], onRun: ran("the clean-up") },
-      { path: "memory import", title: "Bring in what the agent recorded outside the workspace", label: "Import", changesOnlyWith: ["--apply"], fields: [{ name: "project", value: slug, fixed: true }, { name: "--apply", label: "Bring it in, not only report", kind: "flag" }], onRun: ran("the import") },
-      { path: "memory compress", title: "Move durable facts out of always-loaded instructions", label: "Compress", changesOnlyWith: ["--apply"], fields: [{ name: "PROJECT", label: "Project", value: slug, fixed: true }, { name: "--apply", label: "Move them, not only report", kind: "flag" }], onRun: ran("the compression") },
-      { path: "memory reindex", title: "Rebuild the index from the topics that exist", label: "Rebuild it", fields: [{ name: "project", value: slug, fixed: true }], onRun: ran("the index rebuilt") },
-      { path: "memory review", title: "Walk the topics nobody has revisited", effect: "session", why: "It asks you to keep or expire each, so it opens in a terminal here.", fields: [{ name: "project", value: slug, fixed: true }], onRun: ran("a terminal") }] }]), el("p", { "class": "ls-from", text: "Clean, import and compress only report what they would do until you tick --apply." })]));
+    side.appendChild(block("z-mdo", "Do", [C.memoryDo(slug)]));
     g.appendChild(side);
     main.appendChild(g);
   }
@@ -1806,11 +1771,11 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     var three = el("div", { "class": "spgrid" });
     three.appendChild(block("z-pl", "Launched this week", [el("ul", { "class": "plain" }, [["loadout-cli", "claude", "implement", "add a retry to the upload step", "today 13:21", "1,456 of 8,000"], ["starstats", "claude", "investigate", "why is this postgres query so slow", "today 13:30", "2,140 of 8,000"], ["starstats", "codex", "implement", "tidy the deploy script", "today 13:08", "1,120 of 8,000"], ["loadout-cli", "claude", "review", "review the memory compress change", "15 Oct", "1,890 of 8,000"]].map(function (x) { return el("li", {}, [el("b", { text: x[3] }), el("span", { "class": "x", text: [x[0], x[1], x[2], x[4], "started with " + x[5] + " tokens"].join(" · ") })]); })), from("$ loadout launches --days 7")]));
     three.appendChild(block("z-ps", "Recent sessions", [el("ul", { "class": "plain" }, ST.recent.map(function (r) { return el("li", {}, [el("b", { text: r[3] }), el("span", { "class": "x", text: [r[1], r[2], r[0]].join(" · ") })]); })), from("$ loadout sessions --limit 12"),
-      S.ActionDrawers([{ items: [{ path: "resume", title: "Resume a session in a terminal here", effect: "session", fields: [{ name: "--last", label: "The last one", kind: "flag", value: true }], onRun: ran("a terminal") }] }])]));
+      C.resume()]));
     main.appendChild(three);
     main.appendChild(block("z-pa", "What agents reported", [el("p", { "class": "lead", text: "Not collecting. Launched agents report their own usage only while the receiver runs." }), S.TerminalOnly({ title: "Run the receiver", why: "It is a server that runs until Ctrl+C.", command: "$ loadout telemetry serve" }), from("$ loadout telemetry status")]));
     main.appendChild(block("z-pm", "This machine", [el("dl", { "class": "ls-rules" }, [el("dt", { text: "Projects" }), el("dd", { text: "3 registered · 2 here · 1 elsewhere only" }), el("dt", { text: "Workspace" }), el("dd", { text: "set up and cloned" }), el("dt", { text: "Agents" }), el("dd", { text: "claude 2.1.302 · codex 0.9.1 · claude by default" })]), from("$ loadout status"),
-      S.ActionDrawers([{ items: [{ path: "usage", title: "Usage your own way: by model, a project, or as a table", label: "Show", effect: "reads", fields: [{ name: "--by", label: "By", kind: "choice", options: ["project", "day", "model", "agent"] }, { name: "--days", label: "Days", value: "30" }, { name: "--project", label: "Project", kind: "choice", options: ["", "loadout-cli", "starstats"] }, { name: "--format", label: "Format", placeholder: "table" }], onRun: ran("usage") }, { path: "spend refresh", title: "Work out where spending stands for the status line", label: "Refresh it", onRun: ran("refreshed") }] }])]));
+      C.usage()]));
   }
 
 
@@ -2313,6 +2278,362 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     return main;
   }
 
+
+  /* ---------- commands as controls: every command a page offers is a control made for it ---------- */
+  function did(words, level) { return function (v, info) { said((info.preview ? "Previewed: " : "") + words, info.line, level); return info.preview ? "Previewed. Nothing changed." : null; }; }
+  function tbl(cols, rows) { return el("div", { "class": "tw" }, [el("table", { "class": "ctl-t" }, [el("thead", {}, [el("tr", {}, cols.map(function (c) { return el("th", { text: c }); }))]), el("tbody", {}, rows.map(function (r) { return el("tr", {}, r.map(function (c) { return el("td", { text: String(c) }); })); }))])]); }
+  function para(t) { return el("p", { "class": "calm", text: t }); }
+  var PICKP = [["loadout-cli", "loadout-cli"], ["starstats", "starstats"], ["home-lab", "home-lab"]];
+  var MODES4 = [["advise", "advise"], ["investigate", "investigate"], ["implement", "implement"], ["review", "review"]];
+  var C = {};
+
+  /* Settings */
+  C.configFile = function () {
+    return el("div", {}, [S.Readout({ path: "config edit", extra: ["--path-only"], title: "The settings file itself", view: "list", params: [{ name: "--machine", label: "This machine's own settings instead", kind: "flag" }],
+      load: function (v) { return [{ name: v["--machine"] ? "~/.local/share/loadout/machines.yaml" : "~/.config/loadout/config.yaml", sub: "where it is" }]; } }).el,
+      S.ActionRow({ actions: [{ label: "Open it", cmd: "$ loadout config edit", said: "Opened in your editor", onPress: function () { said("Opened the settings file", "$ loadout config edit"); } }] })]);
+  };
+  C.mcp = function () {
+    var servers = [{ name: "github", sub: "npx @modelcontextprotocol/server-github", facts: ["stdio", "every project"] }, { name: "docs-search", sub: "https://docs.internal/mcp", facts: ["http", "every project"] }];
+    function row(x) { return Object.assign({}, x, { actions: [{ label: "Remove", danger: true, cmd: "$ loadout mcp remove " + x.name + " --global", ask: "Remove " + x.name + "? Agents stop loading its tools.", yes: "Remove it", removes: true, said: function (it) { said("Removed " + it.name, "$ loadout mcp remove " + it.name + " --global"); return "Removed " + it.name; } }] }); }
+    return S.ItemList({ label: "MCP servers", one: "server", many: "servers", why: "The servers every project's agent loads. A project's own are on its Context page.", readCmd: "$ loadout mcp list --global --json", asOf: "read just now",
+      items: servers.map(row),
+      add: { label: "Add a server", form: { path: "mcp add", label: "Add it", dryRun: true,
+        fields: [{ name: "NAME", label: "Name", required: true, placeholder: "github", hint: "Its tools carry this as a prefix." }, { name: "COMMAND-OR-URL", label: "Where it runs", required: true, placeholder: "https://… or npx some-server", hint: "An https:// address, or the command that starts it." },
+          { name: "--arg", label: "Arguments", kind: "lines", hint: "For a command: one a line." }, { name: "--global", label: "For every project", kind: "flag", value: true, fixed: true },
+          { name: "--force", label: "Add it even though it clashes with one already declared", kind: "flag", more: true }], onRun: did("Added the server") },
+        toItem: function (v) { return row({ name: v.NAME, sub: v["COMMAND-OR-URL"], facts: [/^https?:/.test(v["COMMAND-OR-URL"]) ? "http" : "stdio", "every project"] }); } } }).el;
+  };
+  C.secrets = function () {
+    return el("div", { "class": "cstack" }, [
+      S.TerminalOnly({ title: "Store one", why: "It asks for the value at a masked prompt, so the secret never sits in a page or a command line.", command: "$ loadout secret set <name>" }),
+      S.ActionForm({ path: "secret test", title: "Check a reference resolves", why: "It never shows the value, only whether there is one.", effect: "reads", label: "Check it", fields: [{ name: "reference", label: "Reference", required: true, placeholder: "anthropic/default" }],
+        onRun: function (v, info) { said("It resolves. The value is not shown.", info.line); return el("p", { "class": "ok-line", text: "✓ " + v.reference + " resolves through the keychain. The value is never shown." }); } }).el,
+      S.ActionForm({ path: "secret remove", title: "Remove one", label: "Remove it", danger: true, ask: "Remove this secret from the credential store? Anything that uses it stops working until it is set again.", yes: "Remove it", dryRun: true, fields: [{ name: "reference", label: "Reference", required: true, placeholder: "anthropic/default" }], onRun: did("Removed the secret") }).el,
+      para("There is no list of secrets yet: Loadout has no secret list command, so Studio can only check or remove one you name.")]);
+  };
+  C.packs = function () {
+    var packs = [{ name: "dotnet-pack", sub: "github.com/loadout-packs/dotnet", approved: true, ref: "v3" }, { name: "infra", sub: "github.com/acme/infra-specialists", approved: false, ref: "main" }];
+    function row(p) {
+      var acts = [];
+      if (!p.approved) { acts.push({ label: "Approve", cmd: "$ loadout pack approve " + p.name, ask: "Approve " + p.name + " at its pinned commit? Approve only once you have read it: its specialists start loading on this machine.", yes: "Approve it", said: function (it) { it.approved = true; said("Approved " + it.name + " here", "$ loadout pack approve " + it.name, "done"); return "Approved"; } }); }
+      acts.push({ label: "Update", cmd: "$ loadout pack update " + p.name, ask: "Move " + p.name + "'s pin to what " + p.ref + " points at now? It stops loading until you approve it again.", yes: "Update it", said: "Updated: approve it again once you have read it" });
+      acts.push({ label: "Remove", danger: true, cmd: "$ loadout pack remove " + p.name, ask: "Stop declaring " + p.name + "? This machine forgets its approval too.", yes: "Remove it", removes: true, said: "Removed" });
+      return { name: p.name, sub: p.sub, word: p.approved ? "done" : "waiting for you", facts: ["@ " + p.ref, p.approved ? "approved here" : "not approved here"], actions: acts };
+    }
+    return S.ItemList({ label: "Specialist packs", one: "pack", many: "packs", why: "Specialists and skills from other repositories. Fetching one is not approving it.", readCmd: "$ loadout pack list --json", asOf: "read just now", items: packs.map(row),
+      add: { label: "Add a pack", form: { path: "pack add", label: "Add it", dryRun: true, fields: [{ name: "name", label: "What to call it here", required: true, placeholder: "house-style" }, { name: "remote", label: "Where it lives", required: true, placeholder: "github.com/you/pack" }, { name: "--ref", label: "Branch or tag to pin", placeholder: "main", more: true }], onRun: did("Declared the pack") },
+        toItem: function (v) { return row({ name: v.name, sub: v.remote, approved: false, ref: v["--ref"] || "main" }); } } }).el;
+  };
+  C.backups = function () {
+    var sets = [{ id: "20261016-2214-migrate", op: "migrate", when: "16 Oct 22:14", files: 41 }, { id: "20261012-0930-memory-compress", op: "memory compress", when: "12 Oct 09:30", files: 3 }];
+    return S.ItemList({ label: "Backups", one: "set", many: "sets", why: "Taken before anything that changes many files at once, so it can be undone.", readCmd: "$ loadout backup list --json", asOf: "read just now",
+      items: sets.map(function (b) { return { name: b.id, sub: "before " + b.op, facts: [b.when, b.files + " files"], actions: [
+        { label: "What it would undo", cmd: "$ loadout backup restore " + b.id + " --json", onPress: function () { return tbl(["File", "What happens"], [["projects/loadout-cli/agents/claude/instructions.md", "restored"], ["projects/loadout-cli/memory/build-quirks.md", "restored"], ["projects/loadout-cli/rules/release.md", "removed: it did not exist then"]]); }, said: "Previewed: nothing changed" },
+        { label: "Restore it", cmd: "$ loadout backup restore " + b.id + " --apply", ask: "Restore " + b.files + " files from before " + b.op + "? The current state is snapshotted first, so this can be undone too.", yes: "Restore them", said: function () { said("Restored " + b.files + " files", "$ loadout backup restore " + b.id + " --apply", "done"); return "Restored"; } }] }; }) }).el;
+  };
+  C.checkpoints = function () {
+    var data = { "loadout-cli": [{ name: "before-the-rename", because: "about to rename the config keys", when: "15 Oct", commit: "a3f9e12", dirty: false }, { name: "studio-0.66", because: "the release", when: "11 Oct", commit: "77c0b41", dirty: true }], starstats: [] };
+    var cur = "loadout-cli", box = el("div", {});
+    function rows(proj) { return (data[proj] || []).map(function (c) { return { name: c.name, sub: c.because, facts: [c.when, c.commit + (c.dirty ? " · had changes" : "")], actions: [
+      { label: "What it would put back", cmd: "$ loadout checkpoint restore " + c.name + " --project " + proj, onPress: function () { return tbl(["File", "What happens"], [["projects/" + proj + "/handoffs/latest.md", "put back"], ["projects/" + proj + "/memory/build-quirks.md", "put back"]]); }, said: "Previewed: nothing changed" },
+      { label: "Put it back", cmd: "$ loadout checkpoint restore " + c.name + " --project " + proj + " --apply", ask: "Put " + c.name + "'s workspace files back? The repository itself is not reset.", yes: "Put them back", said: "Put back" },
+      { label: "Forget it", danger: true, cmd: "$ loadout checkpoint remove " + c.name + " --project " + proj, ask: "Forget " + c.name + "? The snapshot it pointed at is left alone.", yes: "Forget it", removes: true, said: "Forgotten" }] }; }); }
+    function paint() {
+      box.textContent = "";
+      box.appendChild(S.ItemList({ label: "Checkpoints", one: "checkpoint", many: "checkpoints", why: "A name for where a project stands, to come back to.", readCmd: "$ loadout checkpoint list --project " + cur + " --json", empty: "No checkpoints for " + cur + " yet.", items: rows(cur),
+        add: { label: "Mark where it stands", form: { path: "checkpoint create", label: "Mark it", dryRun: true, fields: [{ name: "name", label: "Name", required: true, placeholder: "before-the-rename", hint: "Letters, digits, dots, dashes and underscores." }, { name: "--because", label: "Why", placeholder: "a sentence for whoever reads the list later" }, { name: "--project", label: "Project", value: cur, fixed: true }], onRun: did("Marked it") },
+          toItem: function (v) { return { name: v.name, sub: v["--because"], facts: ["just now"], actions: [] }; } } }).el);
+    }
+    var pick = el("label", { "class": "ctl-pick" }, ["Project ", el("select", { "class": "ls-text", onchange: function (e) { cur = e.target.value; paint(); } }, PICKP.map(function (p) { return el("option", { value: p[0], text: p[1] }); }))]);
+    paint();
+    return el("div", {}, [pick, box]);
+  };
+  C.protection = function () {
+    var where = { name: "project", label: "Where", kind: "choice", required: true, value: "loadout-cli", options: PICKP.concat([["@all", "every project on this machine"]]), flags: { "@all": "--all" } };
+    return el("div", { "class": "cstack" }, [
+      S.ActionForm({ path: "protect", title: "Keep AI tooling files out of commits", why: "Installs a pre-commit hook that refuses them.", label: "Protect it", dryRun: true,
+        fields: [Object.assign({}, where, { options: where.options.concat([["@global", "the global Git exclude file instead"]]), flags: { "@all": "--all", "@global": "--global" } }), { name: "--remove", label: "Take the protection off instead", kind: "flag" },
+          { name: "--refresh-hook", label: "Install Claude's after-edit hook instead", kind: "flag", hint: "Keeps the symbol index current, in the project's own Claude settings.", more: true }], onRun: did("Protected it") }).el,
+      S.ActionForm({ path: "migrate", title: "Move existing AI tooling files into the workspace", why: "Tracked files are copied, not removed. A backup is taken first.", label: "Move them", previewWith: ["--dry-run"], applyWith: ["--yes"], ask: "Move these files into the workspace? A backup is taken first.", yes: "Move them",
+        fields: [{ name: "project", label: "Project", kind: "choice", required: true, value: "loadout-cli", options: PICKP }, { name: "--include-ignored", label: "Also move files Git already ignores", kind: "flag", more: true }],
+        onRun: function (v, info) { said(info.preview ? "Previewed the move" : "Moved 4 files into the workspace", info.line); return info.preview ? tbl(["From", "To", "How"], [[".claude/settings.json", "projects/" + v.project + "/agents/claude/settings.json", "copied (tracked)"], ["CLAUDE.local.md", "projects/" + v.project + "/agents/claude/local.md", "moved"]]) : null; } }).el]);
+  };
+  C.doctor = function () {
+    return el("div", { "class": "cstack" }, [
+      S.ActionForm({ path: "doctor", title: "Put right what can be put right", why: "One of these Loadout can fix itself.", label: "Put it right", previewWith: ["--fix", "--dry-run"], applyWith: ["--fix", "--yes"], ask: "Rewrite the zsh completion file?", yes: "Rewrite it",
+        onRun: function (v, info) { said(info.preview ? "Previewed 1 fix" : "Put 1 thing right", info.line, info.preview ? null : "done"); return info.preview ? tbl(["Fix", "What it changes"], [["shell completion", "rewrites ~/.zsh/_loadout"]]) : null; } }).el,
+      S.ActionForm({ path: "doctor", title: "Write the findings to a file to send someone", label: "Write it", fields: [{ name: "--bundle", label: "Where", placeholder: "this directory", always: true, hint: "A folder or a file name. Left empty, it goes in the current directory." }], onRun: did("Wrote the diagnostics file") }).el]);
+  };
+  C.machineMore = function () {
+    return el("div", { "class": "cstack" }, [
+      S.ActionForm({ path: "setup", title: "Set the launcher up on this machine again", why: "It asks as it goes, so it opens in a terminal Studio hosts.", effect: "session",
+        fields: [{ name: "--force", label: "Even though it is set up already", kind: "flag", value: true },
+          { name: "--use-existing", label: "Clone the workspace you already have", kind: "flag", more: true }, { name: "--create-new", label: "Make a new workspace", kind: "flag", more: true }, { name: "--local-only", label: "No central workspace", kind: "flag", more: true },
+          { name: "--remote", label: "Workspace remote", more: true }, { name: "--branch", label: "Branch", placeholder: "main", more: true }, { name: "--name", label: "Workspace name", more: true }, { name: "--github", label: "Publish a new one as a private GitHub repository", kind: "flag", more: true }, { name: "--stay-local", label: "Make it, publish it later", kind: "flag", more: true },
+          { name: "--register-discovered", label: "Register every repository it finds", kind: "flag", more: true }, { name: "--migrate", label: "Apply the migration plan", kind: "flag", more: true }, { name: "--include-ignored", label: "Include files Git ignores when migrating", kind: "flag", more: true }, { name: "--global-excludes", label: "Set the global Git excludes without asking", kind: "flag", more: true },
+          { name: "--update-feed", label: "Where to look for new versions", more: true }, { name: "--no-update-feed", label: "Never look for new versions here", kind: "flag", more: true }],
+        onRun: did("Opened setup in a terminal") }).el,
+      S.ActionForm({ path: "desktop", title: "The desktop entry", why: "So the launcher shows in your applications menu.", label: "Install it", dryRun: true, fields: [{ name: "--remove", label: "Remove it instead", kind: "flag" }, { name: "--executable", label: "Path to record in it", placeholder: "the running launcher", more: true }], onRun: did("Done") }).el,
+      S.Readout({ path: "commands", title: "Everything Loadout can do", view: "table", params: [{ name: "--search", label: "Find", placeholder: "backup" }, { name: "--all", label: "Include sub-commands", kind: "flag", value: true }],
+        columns: [{ key: "path", label: "Command" }, { key: "description", label: "What it is for" }, { key: "where", label: "In Studio" }],
+        load: function (v) { var all = [{ path: "backup restore", description: "Restore a backup set", where: "Settings · Backups" }, { path: "pack add", description: "Declare a specialist pack", where: "Settings · Packs" }, { path: "memory write", description: "Record a durable fact", where: "Memory" }, { path: "secret set", description: "Store a secret", where: "a terminal" }]; var q = (v["--search"] || "").toLowerCase(); return all.filter(function (x) { return !q || (x.path + x.description).toLowerCase().indexOf(q) >= 0; }); } }).el,
+      ]);
+  };
+
+  /* Memory */
+  C.memoryDelete = function (t, slug, m) {
+    return S.ActionForm({ path: "memory delete", title: "Delete this topic", why: "A backup is taken first. Topics that link to it are named and left as they are.", label: "Delete it", danger: true, previewWith: ["--dry-run"], applyWith: ["--yes"], ask: "Delete " + t.name + "? A backup is taken first.", yes: "Delete it",
+      fields: [{ name: "topic", label: "Topic", value: t.name, fixed: true }, { name: "project", label: "Project", value: slug, fixed: true }],
+      onRun: function (v, info) { if (info.preview) { said("Previewed: " + t.name + " has " + (t.facts || 3) + " facts; nothing links to it", info.line); return "Previewed. Nothing changed."; } m.project = m.project.filter(function (x) { return x !== t; }); said("Deleted " + t.name + ". A backup was taken first.", info.line); setTimeout(function () { go("memory/" + slug); }, 200); return "Deleted."; } }).el;
+  };
+  C.memoryDo = function (slug) {
+    return el("div", { "class": "cstack" }, [
+      S.ActionForm({ path: "memory write", title: "Record a fact", label: "Record it", dryRun: true,
+        fields: [{ name: "topic", label: "Topic", required: true, placeholder: "build-quirks" }, { name: "--fact", label: "The facts", kind: "lines", required: true, hint: "One a line. Each is recorded as it is." }, { name: "--project", label: "Project", value: slug, fixed: true },
+          { name: "--description", label: "What the topic covers", more: true }, { name: "--kind", label: "Kind", kind: "choice", options: ["project", "decision", "lesson", "reference"], more: true }, { name: "--scope", label: "Who it is true for", kind: "choice", options: [["project", "this project"], ["user", "you, everywhere"], ["machine", "only this machine"]], more: true }, { name: "--separate", label: "A new topic even if one covers it", kind: "flag", more: true }],
+        onRun: did("Recorded") }).el,
+      S.ActionForm({ path: "memory audit", title: "Clean up what it can", why: "Empty topics, repeated bullets and index lines that lead nowhere. A backup is taken first.", label: "Clean it", fields: [{ name: "project", label: "Project", value: slug, fixed: true }], previewWith: ["--clean"], applyWith: ["--clean", "--apply"], ask: "Clean up what the audit found? A backup is taken first.", yes: "Clean it",
+        onRun: function (v, info) { said(info.preview ? "Previewed the clean-up" : "Cleaned up", info.line); return info.preview ? tbl(["What", "Where"], [["dead index line", "MEMORY.md: old-deploy"], ["dead index line", "MEMORY.md: proxy-notes"]]) : null; } }).el,
+      S.ActionForm({ path: "memory import", title: "Bring in what an agent recorded outside the workspace", label: "Import it", applyWith: ["--apply"], ask: "Import these topics? A backup is taken first; the originals are copied, not moved.", yes: "Import them",
+        fields: [{ name: "project", label: "Project", value: slug, fixed: true }, { name: "--from", label: "From this folder instead", placeholder: "found by itself", more: true }, { name: "--all", label: "Every project on this machine instead", kind: "flag", more: true }],
+        onRun: function (v, info) { said(info.preview ? "Previewed the import" : "Imported 2 topics", info.line); return info.preview ? tbl(["Topic", "Facts", "What happens"], [["flaky-tests", 4, "imported"], ["deploy-notes", 2, "imported"], ["user-prefs", 1, "skipped: already here"]]) : null; } }).el,
+      S.ActionForm({ path: "memory compress", title: "Move durable facts out of always-loaded instructions", why: "Folds list-item facts from the instruction file into topics, so sessions load less.", label: "Compress it", applyWith: ["--apply"], ask: "Move 9 facts into 3 topics and shorten the instruction file? A backup is taken first.", yes: "Compress it",
+        fields: [{ name: "PROJECT", label: "Project", value: slug, fixed: true }, { name: "--min-facts", label: "Fewest facts for a topic", kind: "number", placeholder: "2", more: true }, { name: "--file", label: "Just this instruction file", placeholder: "the agent's instructions", more: true }],
+        onRun: function (v, info) { said(info.preview ? "Previewed: 9 facts, 1.4 KB saved" : "Compressed: 1.4 KB fewer always loaded", info.line); return info.preview ? tbl(["Topic", "Facts", "Kind"], [["build-quirks", 4, "project"], ["release-process", 3, "reference"], ["review-habits", 2, "lesson"]]) : null; } }).el,
+      S.ActionRow({ title: "The index", actions: [{ label: "Rebuild it", glyph: "↻", cmd: "$ loadout memory reindex " + slug, said: "Rebuilt MEMORY.md from the topics that exist", onPress: function () { said("Rebuilt the index", "$ loadout memory reindex " + slug); } }] }),
+      S.Readout({ path: "memory review", extra: [slug], title: "Topics nobody has revisited", view: "table", params: [{ name: "--older-than", label: "Not written to for", kind: "choice", options: [["3", "3 months"], ["6", "6 months"], ["12", "a year"]], value: "6", required: true }],
+        columns: [{ key: "name", label: "Topic" }, { key: "lastWritten", label: "Last written" }], data: [{ name: "old-deploy", lastWritten: "12 Mar" }, { name: "proxy-notes", lastWritten: "2 Apr" }] }).el,
+      S.ActionForm({ path: "memory review", title: "Walk them, keeping or expiring each", why: "It asks about each topic, so it opens in a terminal here.", effect: "session", fields: [{ name: "project", label: "Project", value: slug, fixed: true }, { name: "--older-than", label: "Not written to for (months)", kind: "number", placeholder: "6", more: true }], onRun: did("Opened the review in a terminal") }).el]);
+  };
+
+  /* Spend */
+  C.resume = function () {
+    var sess = [{ id: "s1", title: "why is this postgres query so slow", sub: "starstats · claude · 2 h ago" }, { id: "s4", title: "tidy the deploy script", sub: "starstats · codex · yesterday" }];
+    function form(id) { return { path: "resume", effect: "session", label: "Resume it", fields: [{ name: "SESSION", label: "Session", value: id, fixed: true }, { name: "--task", label: "What it is for now", placeholder: "carried over" }, { name: "--mode", label: "Posture", kind: "choice", options: MODES4, unset: "carried over" },
+      { name: "--task-id", label: "A recorded task it is for now", more: true }, { name: "--worktree", label: "Reopen it in this worktree", more: true }, { name: "--fresh", label: "Carry nothing over", kind: "flag", more: true }, { name: "--remote", label: "With the agent's remote control on", kind: "flag", more: true }, { name: "--no-remote", label: "With remote control off", kind: "flag", more: true }], onRun: did("Opened it in a terminal") }; }
+    return el("div", { "class": "cstack" }, [S.ItemList({ title: "Pick up a session where it stopped", one: "session", many: "sessions", readCmd: "$ loadout sessions --all --json", items: sess.map(function (x) { return { name: x.title, sub: x.sub, actions: [{ label: "Resume it", cmd: "$ loadout resume " + x.id, said: "Opened it in a terminal", onPress: function () { said("Resumed in a terminal", "$ loadout resume " + x.id); } }, { label: "Resume with changes", cmd: "opens the options", form: form(x.id) }] }; }) }).el,
+      S.ActionRow({ actions: [{ label: "Resume the last one", glyph: "▸", cmd: "$ loadout resume --last", said: "Opened it in a terminal" }] })]);
+  };
+  C.usage = function () {
+    return el("div", { "class": "cstack" }, [S.Readout({ path: "usage", title: "Usage your own way", view: "table", params: [{ name: "--by", label: "By", kind: "choice", options: [["project", "project"], ["day", "day"], ["model", "model"], ["agent", "agent"]], value: "model", required: true }, { name: "--days", label: "Over the last", kind: "choice", options: [["7", "7 days"], ["30", "30 days"], ["90", "90 days"]], value: "30", required: true }, { name: "--project", label: "Only this project", kind: "choice", options: PICKP }],
+      columns: [{ key: "name", label: "Name" }, { key: "total", label: "Tokens", num: true }, { key: "cached", label: "From cache", num: true }],
+      load: function (v) { var by = v["--by"]; return by === "model" ? [{ name: "opus", total: "6.1M", cached: "71%" }, { name: "sonnet", total: "4.9M", cached: "64%" }, { name: "haiku", total: "0.3M", cached: "12%" }] : by === "agent" ? [{ name: "claude", total: "10.2M", cached: "68%" }, { name: "codex", total: "1.1M", cached: "40%" }] : by === "day" ? [{ name: "today", total: "0.6M", cached: "70%" }, { name: "yesterday", total: "0.9M", cached: "66%" }] : [{ name: "loadout-cli", total: "7.4M", cached: "69%" }, { name: "starstats", total: "3.9M", cached: "61%" }]; } }).el,
+      S.ActionForm({ path: "usage", title: "As a report to send someone", label: "Make it", effect: "reads", fields: [{ name: "--format", label: "As", kind: "choice", options: [["markdown", "Markdown"], ["csv", "CSV"]], value: "markdown", required: true }, { name: "--by", label: "By", kind: "choice", options: ["project", "day", "model", "agent"], more: true }, { name: "--days", label: "Days", kind: "number", placeholder: "30", more: true }],
+        onRun: function (v) { return v["--format"] === "csv" ? S.CsvTable("project,tokens\nloadout-cli,7400000\nstarstats,3900000") : S.Markdown("| Project | Tokens |\n|---|---|\n| loadout-cli | 7.4M |\n| starstats | 3.9M |"); } }).el,
+      S.ActionForm({ path: "spend refresh", title: "Where spending stands, for the status line", why: "Works out the warnings the status line shows.", label: "Work it out again", fields: [{ name: "--project", label: "Project", kind: "choice", options: PICKP, value: "loadout-cli", required: true }], dryRun: true,
+        onRun: function (v, info) { said("Worked it out again", info.line); return info.preview ? null : el("p", { "class": "calm", text: "One warning: 82% of this month's budget is used." }); } }).el]);
+  };
+
+  /* Ideas */
+  C.ideaMore = function (x, where, onRefine) {
+    var at = where[0] === "--global" ? { name: "--global", label: "List", value: true, kind: "flag", fixed: true } : { name: "--project", label: "List", value: where[1], fixed: true };
+    return el("div", { "class": "cstack" }, [
+      S.ActionForm({ path: "idea refine", title: "Take it one round further", why: "An agent asks its questions, proposes a plan, or revises it. A round takes a minute or two.", label: "Refine it", dryRun: true, fields: [{ name: "id", label: "Idea", value: x.id, fixed: true }, at, { name: "--model", label: "Model", placeholder: "the agent's default", more: true }],
+        onRun: function (v, info) { if (!info.preview && onRefine) { onRefine(); } said(info.preview ? "Previewed the round" : "Round started", info.line); return info.preview ? null : "A round is running on the daemon."; } }).el,
+      S.ActionForm({ path: "idea improve", title: "Ask for the whole plan to be reworked", label: "Ask for it", dryRun: true, fields: [{ name: "id", label: "Idea", value: x.id, fixed: true }, { name: "piece", label: "What", value: "plan", fixed: true }, { name: "--request", label: "What should change", kind: "lines", joined: true, required: true }, at], onRun: did("Sent the plan back") }).el,
+      S.ActionForm({ path: "idea move", title: "Move it to another list", label: "Move it", dryRun: true, fields: [{ name: "id", label: "Idea", value: x.id, fixed: true }, at, { name: "--to", label: "To", kind: "choice", required: true, options: PICKP.filter(function (p) { return p[0] !== where[1]; }).concat([["@global", "the workspace-wide list"]]), flags: { "@global": "--to-global" } }], onRun: did("Moved it") }).el,
+      S.ActionForm({ path: "idea remove", title: "Forget this idea", why: "Its task, its rounds and its notes all go.", label: "Forget it", danger: true, ask: "Forget “" + x.title + "”? Its rounds and notes go with it, and nothing brings them back.", yes: "Forget it", dryRun: true, fields: [{ name: "id", label: "Idea", value: x.id, fixed: true }, at],
+        onRun: function (v, info) { if (info.preview) { return "Previewed. Nothing changed."; } IDEAS = IDEAS.filter(function (i) { return i.id !== x.id; }); said("Forgot " + x.title, info.line); setTimeout(function () { go("ideas"); }, 200); return "Forgotten."; } }).el]);
+  };
+  C.ideaDump = function () {
+    return S.ActionForm({ path: "idea dump add", title: "Drop notes in", why: "An agent splits them into ideas and tasks for you to keep or drop. Nothing is recorded until you do.", label: "Drop them in", dryRun: true,
+      fields: [{ name: "--text", label: "The notes", kind: "lines", joined: true, wide: true, hint: "Paste them as they are." }, { name: "--project", label: "On", kind: "choice", options: PICKP.concat([["@global", "the workspace-wide list"]]), value: "loadout-cli", flags: { "@global": "--global" }, required: true },
+        { name: "file", label: "Or from a file", placeholder: "~/notes/ideas.md", more: true }, { name: "--no-split", label: "Keep them without asking an agent yet", kind: "flag", more: true }, { name: "--model", label: "Model", more: true }],
+      onRun: function (v, info) { if (info.preview) { return null; } DUMPS.unshift({ id: "d" + (DUMPS.length + 4), source: "Pasted here", captured: "17 Oct", split: null, items: [] }); said("Dropped the notes in. Split them to see the pieces.", info.line); bump(); return "Dropped in."; } }).el;
+  };
+
+  /* Projects */
+  C.workspace = function () {
+    return el("div", { "class": "cstack" }, [S.ActionRow({ actions: [{ label: "Bring it up to date", glyph: "↻", cmd: "$ loadout workspace sync", said: "Up to date: 3 changes pulled", onPress: function () { said("Synced: 3 changes pulled", "$ loadout workspace sync"); } }, { label: "Open its folder", cmd: "$ loadout workspace open", said: "Opened", onPress: function () { said("Opened the workspace folder", "$ loadout workspace open"); } }] }),
+      S.ActionForm({ path: "workspace save", title: "Save and push what changed here", label: "Save it", dryRun: true, fields: [{ name: "--message", label: "Project to name in the commit", placeholder: "optional" }, { name: "--project", label: "Only this project's files", kind: "choice", options: PICKP, more: true }, { name: "--local", label: "Commit without pushing", kind: "flag", more: true }],
+        onRun: function (v, info) { said(info.preview ? "Previewed: 4 changes would be saved" : "Saved 4 changes and pushed", info.line); return null; } }).el]);
+  };
+  C.placeAdd = function () {
+    return el("div", { "class": "cstack" }, [
+      S.ActionForm({ path: "project add", title: "Register a Git repository on this machine", label: "Add it", dryRun: true, fields: [{ name: "path", label: "Where it is", required: true, placeholder: "~/code/my-repo" }, { name: "--slug", label: "Its slug", placeholder: "from the remote or the folder", more: true }], onRun: did("Registered it") }).el,
+      S.ActionForm({ path: "project clone", title: "Clone a project the workspace knows but this machine does not have", label: "Clone it", dryRun: true, fields: [{ name: "project", label: "Project", kind: "choice", required: true, options: [["home-lab", "home-lab"]], value: "home-lab" }, { name: "destination", label: "Where to put it", placeholder: "beside your other projects" }], onRun: did("Cloned it") }).el]);
+  };
+  C.placeNew = function () {
+    return el("div", { "class": "cstack" }, [
+      S.ActionForm({ path: "project new", title: "A new project, empty or from one you have", label: "Make it", fields: [{ name: "name", label: "Name", required: true, placeholder: "my-tool", hint: "Becomes its slug." }, { name: "--from", label: "Copy conventions from", kind: "choice", options: PICKP, unset: "nothing: start empty" }, { name: "--path", label: "Where", placeholder: "beside your other projects", more: true }, { name: "--remote", label: "Remote to record", placeholder: "nothing is pushed", more: true }], note: "It can't be previewed: the command makes the project straight away.", onRun: did("Made it") }).el,
+      S.ActionForm({ path: "start", title: "Your first project, step by step with an agent", why: "It asks as it goes and starts agent sessions, so it opens in a terminal here.", effect: "session", fields: [{ name: "--starter", label: "Start from", kind: "choice", options: [["web-page", "a web page"], ["checklist", "a checklist"], ["own-idea", "your own idea"]] }, { name: "--name", label: "Call it" }, { name: "--path", label: "Where", more: true }, { name: "--yes", label: "Take the suggested answer to every question about this machine", kind: "flag", more: true }, { name: "--again", label: "Start another first project", kind: "flag", more: true }], onRun: did("Opened it in a terminal") }).el]);
+  };
+  C.placeFind = function () {
+    var found = [{ name: "dotfiles", sub: "~/code/dotfiles", registered: false }, { name: "scratch-api", sub: "~/code/scratch-api", registered: false }, { name: "loadout-cli", sub: "~/code/loadout-cli", registered: true }];
+    return el("div", { "class": "cstack" }, [
+      S.ItemList({ title: "Repositories under the folders Loadout looks in", one: "repository", many: "repositories", readCmd: "$ loadout project discover --json", asOf: "read just now", items: found.map(function (f) { return { name: f.name, sub: f.sub, facts: [f.registered ? "registered" : "not registered"], actions: f.registered ? [] : [{ label: "Add it", cmd: "$ loadout project add " + f.sub, said: "Registered " + f.name, removes: false }] }; }) }).el,
+      S.Readout({ path: "project survey", title: "Agent memory no project accounts for", view: "table", columns: [{ key: "path", label: "Where" }, { key: "against", label: "Recorded against" }, { key: "topics", label: "Topics", num: true }], data: [{ path: "~/.claude/projects/-home-you-code-scratch-api", against: "~/code/scratch-api", topics: 3 }] }).el,
+      S.ActionForm({ path: "project survey", title: "Adopt it", why: "Registers the repositories and imports their memory. A backup is taken first.", label: "Adopt them", previewWith: ["--adopt"], applyWith: ["--adopt", "--apply", "--yes"], ask: "Register scratch-api and import its 3 topics?", yes: "Adopt them", onRun: did("Adopted 1 repository") }).el,
+      S.Readout({ path: "drift", title: "Where every project has drifted", view: "findings", data: { verdict: "1 needs you", findings: [{ name: "starstats: remote", severity: "warning", detail: "origin is not the recorded remote", fixable: true }, { name: "loadout-cli", severity: "ok", detail: "as recorded" }] } }).el,
+      S.ActionForm({ path: "drift", title: "Put right what can be put right, everywhere", label: "Put it right", previewWith: ["--fix", "--dry-run"], applyWith: ["--fix", "--yes"], ask: "Apply 1 fix?", yes: "Apply it", fields: [{ name: "PROJECT", label: "Project", kind: "choice", options: PICKP, unset: "every project" }, { name: "--quiet-clean", label: "Only list projects that drifted", kind: "flag", more: true }], onRun: did("Put 1 right", "done") }).el,
+      S.Readout({ path: "repo check", extra: ["--all"], title: "AI tooling files tracked in repositories", view: "findings", data: { verdict: "1 to look at", findings: [{ name: "starstats", severity: "warning", detail: ".claude/settings.json is tracked", fixable: false }, { name: "loadout-cli", severity: "ok", detail: "compliant, hook installed" }] } }).el]);
+  };
+  C.drift = function (p, fixes, onFixed) {
+    return S.ActionForm({ path: "drift", title: "Put right what can be put right", label: "Put " + (fixes === 1 ? "it" : "them") + " right", previewWith: ["--fix", "--dry-run"], applyWith: ["--fix", "--yes"], ask: "Apply " + fixes + " fix" + (fixes === 1 ? "" : "es") + " to " + p.id + "?", yes: "Apply", fields: [{ name: "PROJECT", label: "Project", value: p.id, fixed: true }],
+      onRun: function (v, info) { if (info.preview) { said("Previewed " + fixes + " fixes", info.line); return null; } onFixed(); return "Put right."; } }).el;
+  };
+  C.dossierDo = function (p, tasks) {
+    var kids = [];
+    if (p.available) {
+      kids.push(S.ActionRow({ title: "Open it", actions: [{ label: "In the editor", cmd: "$ loadout code " + p.id, said: "Opened in the editor", onPress: function () { said("Opened " + p.id + " in the editor", "$ loadout code " + p.id); } }, { label: "Its folder", cmd: "$ loadout project open " + p.id, said: "Opened its folder" }] }));
+      kids.push(S.ActionForm({ path: "code", title: "Open it with another editor profile", label: "Open it", compact: true, fields: [{ name: "project", label: "Project", value: p.id, fixed: true }, { name: "--editor-profile", label: "Editor profile", required: true, placeholder: "work" }], onRun: did("Opened it") }).el);
+    } else {
+      kids.push(S.ActionForm({ path: "project clone", title: "Clone it onto this machine", label: "Clone it", dryRun: true, fields: [{ name: "project", label: "Project", value: p.id, fixed: true }, { name: "destination", label: "Where to put it", placeholder: "beside your other projects" }], onRun: did("Cloned it") }).el);
+    }
+    kids.push(S.ActionForm({ path: "project onboard", title: "Onboard it with an agent", why: "An agent session that learns the project and writes down what it finds.", effect: "session", fields: [{ name: "project", label: "Project", value: p.id, fixed: true }, { name: "--mode", label: "Posture", kind: "choice", options: MODES4, value: "investigate", required: true }], onRun: did("Opened onboarding in a terminal") }).el);
+    kids.push(S.ActionRow({ actions: [{ label: "Skip onboarding", cmd: "$ loadout project onboard " + p.id + " --skip", said: "Recorded that it is not being onboarded" }] }));
+    kids.push(el("h4", { "class": "ctl-h", text: "What every session here also gets" }));
+    kids.push(S.SettingRow({ label: "Its recorded tasks", sub: "Open, doing and blocked tasks go in front of every session.", kind: "switch", value: "on", setCmd: function (v) { return "$ loadout project context tasks " + v + " --project " + p.id; } }));
+    kids.push(S.SettingRow({ label: "A map of the code", sub: "A short outline of where things are.", kind: "switch", value: "off", setCmd: function (v) { return "$ loadout project context code-map " + v + " --project " + p.id; } }));
+    kids.push(S.Readout({ path: "project proposal", extra: [p.id], title: "A proposed change to its settings", view: "list", data: [{ name: "+ agent: codex", sub: "proposed by an onboarding session, 2 days ago" }, { name: "- agent: claude", sub: "" }] }).el);
+    kids.push(S.ActionRow({ actions: [{ label: "Apply it", cmd: "$ loadout project proposal " + p.id + " --apply", ask: "Write the proposal over project.yaml?", yes: "Apply it", said: "Applied" }, { label: "Discard it", danger: true, cmd: "$ loadout project proposal " + p.id + " --discard", ask: "Discard the proposal?", yes: "Discard it", said: "Discarded" }] }));
+    kids.push(S.ActionForm({ path: "project relocate", title: "It has moved on this machine", label: "Point at it", dryRun: true, fields: [{ name: "project", label: "Project", value: p.id, fixed: true }, { name: "path", label: "Where it is now", required: true, placeholder: "~/code/" + p.id }], onRun: did("Pointed it at the new place") }).el);
+    kids.push(S.ActionRow({ title: "The repository", actions: [{ label: "Record which project it is", cmd: "$ loadout project link " + p.id, said: "Linked" }] }));
+    if (tasks.length) { kids.push(S.ActionForm({ path: "task remove", title: "Forget a task entirely", why: "To say a task is done or dropped, move it on the board instead.", label: "Forget it", danger: true, ask: "Forget this task entirely? Nothing brings it back.", yes: "Forget it", dryRun: true, fields: [{ name: "id", label: "Task", kind: "choice", required: true, options: tasks.map(function (t) { return [t.id, t.title]; }) }, { name: "--project", label: "Project", value: p.id, fixed: true }], onRun: did("Forgot the task") }).el); }
+    if (tasks.length) { kids.push(C.taskMove(tasks, ["--project", p.id])); }
+    kids.push(S.Readout({ path: "repo check", extra: [p.id], title: "AI tooling files in its repository", view: "findings", data: { verdict: "compliant", findings: [{ name: "pre-commit hook", severity: "ok", detail: "installed" }, { name: "global excludes", severity: "ok", detail: "set" }] } }).el);
+    return el("div", { "class": "cstack" }, kids);
+  };
+
+  C.taskMove = function (tasks, where) {
+    var global = where[0] === "--global", here = global ? null : where[1];
+    return S.ActionForm({ path: "task move", title: global ? "Move one onto the project it belongs to" : "Move a task to another project, or the workspace-wide list", why: "Its plan and its record go with it.", label: "Move it", dryRun: true,
+      fields: [{ name: "id", label: "Task", kind: "choice", required: true, options: tasks.map(function (t) { return [t.id, t.title]; }) }, global ? { name: "--global", label: "From", value: true, kind: "flag", fixed: true } : { name: "--project", label: "From", value: here, fixed: true },
+        { name: "--to", label: "To", kind: "choice", required: true, options: PICKP.filter(function (x) { return x[0] !== here; }).concat(global ? [] : [["@global", "the workspace-wide list"]]), flags: { "@global": "--to-global" } }], onRun: did("Moved the task") }).el;
+  };
+
+  /* Context */
+  C.ctxCompare = function (slug) {
+    return S.ActionForm({ path: "instructions explain", title: "Compare it with another setup", why: "What a session would load differently, and what it costs.", label: "Compare", effect: "reads",
+      fields: [{ name: "task", label: "What you would ask", placeholder: "add --since to usage" }, { name: "--project", label: "Project", value: slug, fixed: true }, { name: "--against-mode", label: "Against posture", kind: "choice", options: MODES4, value: "review" },
+        { name: "--mode", label: "This posture", kind: "choice", options: MODES4, more: true }, { name: "--against-task", label: "Against this wording", more: true }, { name: "--against-profile", label: "Against this profile", more: true }, { name: "--specialist", label: "Always load", kind: "lines", more: true }, { name: "--without", label: "Never load", kind: "lines", more: true }, { name: "--against-without", label: "Against one that also leaves out", kind: "lines", more: true }, { name: "--style", label: "With this style", more: true }],
+      onRun: function () { return tbl(["", "Specialist", "Tokens"], [["+ added", "review.checklist", "+420"], ["- removed", "language.csharp-impl", "-610"], ["", "In all", "-190"]]); } }).el;
+  };
+  C.ctxSpecialists = function (slug) {
+    return S.ActionForm({ path: "instructions new", title: "Draft a new specialist or skill", why: "To copy a built-in one to edit, open it: its page has Copy it.", label: "Draft it", dryRun: true,
+      fields: [{ name: "ID", label: "Identifier", required: true, placeholder: "skill.deploy-checklist", hint: "Its layer first: skill.…, language.…" }, { name: "--title", label: "What it is called" }, { name: "--summary", label: "What it is for, in a line" }, { name: "--project", label: "Into", value: slug, fixed: true }, { name: "--force", label: "Replace one of that name", kind: "flag", more: true }], onRun: did("Drafted it") }).el;
+  };
+  C.ctxRules = function (slug) {
+    var cands = [{ path: "projects/" + slug + "/rules/commit-style.md", reason: "never mentions the project" }];
+    return el("div", { "class": "cstack" }, [
+      S.SettingRow({ label: "The style this project uses", sub: "How sessions here are told to write code.", value: "plain-csharp", kind: "choice", options: [["plain-csharp", "plain-csharp"], ["dense-csharp", "dense-csharp"], ["none", "none: only your own and the codebase's"]], setLabel: "Use it", setCmd: function (v) { return "$ loadout style use " + v + " --project " + slug; }, onSet: function (v) { said("This project uses " + v + " now", "$ loadout style use " + v + " --project " + slug); } }),
+      S.Readout({ path: "style show", extra: ["plain-csharp", "--project", slug], title: "The style, as sessions get it", view: "document", data: "## plain-csharp\n\n- Name things for what they mean.\n- One idea per method.\n- Comments say why, never what.\n\nLoads its language file for `*.cs`." }).el,
+      S.ActionForm({ path: "rules split", title: "Split the oversized instruction file into scoped rules", why: "Moves sections into rules that load only for the paths they are about. Nothing is lost; a backup is taken first.", label: "Split it", applyWith: ["--apply"], ask: "Move 4 section groups out of AGENTS.md into scoped rules?", yes: "Split it",
+        fields: [{ name: "project", label: "Project", value: slug, fixed: true }, { name: "--from", label: "The file", placeholder: "the largest always-loaded one" }, { name: "--map", label: "The routing map", placeholder: "split-map.yaml beside it", more: true }],
+        onRun: function (v, info) { said(info.preview ? "Previewed the split" : "Split it into 4 rules", info.line); return info.preview ? tbl(["Rule", "For", "Bytes"], [["testing", "tests/**", "2,104"], ["release", "build/**", "1,380"]]) : null; } }).el,
+      S.ActionRow({ actions: [{ label: "Write a starter routing map", cmd: "$ loadout rules split " + slug + " --write-map", said: "Wrote split-map.yaml beside the file" }] }),
+      S.ItemList({ title: "Guidance that may belong to everybody", one: "file", many: "files", why: "Files in this project that never mention it.", readCmd: "$ loadout share candidates --project " + slug + " --json", items: cands.map(function (c) { return { name: c.path.split("/").pop(), sub: c.path, facts: [c.reason], actions: [
+        { label: "What would move", cmd: "$ loadout share promote " + c.path, onPress: function () { return para("It would move to global/specialists/commit-style.md, after a scan for anything private."); } },
+        { label: "Move it to everybody", cmd: "$ loadout share promote " + c.path + " --apply", ask: "Move this file into the workspace's global layer? Every project's sessions can load it.", yes: "Move it", removes: true, said: "Moved. It is shared on the next save." }] }; }) }).el]);
+  };
+  C.ctxDocs = function (slug) {
+    return el("div", { "class": "cstack" }, [
+      S.Readout({ path: "docs find", extra: ["--project", slug], title: "Where a type or member is declared", view: "table", lazy: true, readLabel: "Find it", waiting: "Name something to find.", params: [{ name: "NAME", label: "Type or member", placeholder: "StudioCoverage", required: true }, { name: "--limit", label: "Show at most", kind: "number", placeholder: "10" }, { name: "--rescan", label: "Read the tree again", kind: "flag" }],
+        columns: [{ key: "name", label: "Name" }, { key: "kind", label: "Kind" }, { key: "at", label: "Where" }], load: function (v) { return [{ name: v.NAME || "StudioCoverage", kind: "class", at: "src/Loadout.Core/Teams/Daemon/StudioCoverage.cs:83" }, { name: (v.NAME || "StudioCoverage") + ".Reach", kind: "property", at: "src/Loadout.Core/Teams/Daemon/StudioCoverage.cs:95" }]; } }).el,
+      S.ActionForm({ path: "docs refresh", title: "Bring the index up to date after an edit", label: "Refresh it", dryRun: true, fields: [{ name: "FILE", label: "Files that changed", kind: "lines", required: true, hint: "One a line, relative to the repository." }, { name: "--project", label: "Project", value: slug, fixed: true }], onRun: did("Refreshed the index") }).el,
+      S.ActionForm({ path: "docs export", title: "Write a reference or a guide", why: "Left without a place, it shows here instead of writing a file.", label: "Write it", dryRun: true,
+        fields: [{ name: "--type", label: "What", kind: "choice", options: [["reference", "a reference"], ["technical", "a technical guide"], ["user-guide", "a user-guide scaffold"], ["machine-index", "a machine index"]], value: "reference", required: true }, { name: "--out", label: "Where to write it", placeholder: "show it here" }, { name: "--project", label: "Project", value: slug, fixed: true }, { name: "--front-matter", label: "With the YAML header Docusaurus and MkDocs read", kind: "flag", more: true }],
+        onRun: function (v, info) { if (v["--out"]) { said("Wrote " + v["--out"], info.line); return null; } return S.Markdown("# Reference\n\n## StudioCoverage\n\nEvery command Loadout has, and where Studio reaches it."); } }).el,
+      S.ActionForm({ path: "docs ci", title: "Write a CI workflow that regenerates them", why: "A starting point, not a fixture. Left without a place, it shows here.", label: "Write it", dryRun: true,
+        fields: [{ name: "--out", label: "Where to write it", placeholder: "show it here" }, { name: "--project", label: "Project", value: slug, fixed: true }, { name: "--docs-dir", label: "Where the documents land", placeholder: "docs/generated", more: true }, { name: "--no-front-matter", label: "Without the YAML header", kind: "flag", more: true }, { name: "--include-user-guide", label: "Publish the user-guide scaffold too", kind: "flag", more: true }],
+        onRun: function (v, info) { if (v["--out"]) { said("Wrote " + v["--out"], info.line); return null; } return el("pre", { "class": "ctl-pre", text: "name: docs\non:\n  push:\n    branches: [main]\njobs:\n  docs:\n    runs-on: ubuntu-latest" }); } }).el]);
+  };
+  C.ctxHealth = function (slug) {
+    return el("div", { "class": "cstack" }, [
+      S.Readout({ path: "instructions stats", extra: ["--project", slug], title: "What launches here actually loaded", view: "figures", params: [{ name: "--days", label: "Over the last", kind: "choice", options: [["7", "7 days"], ["30", "30 days"], ["90", "90 days"]], value: "30", required: true }],
+        load: function (v) { var k = +v["--days"] / 30; return [{ label: "Launches", value: String(Math.round(61 * k)) }, { label: "Instruction tokens", value: (2.1 * k).toFixed(1) + "M", note: "estimated" }, { label: "Never loaded", value: "3", note: "of 24 specialists" }]; } }).el,
+      S.ItemList({ title: "Specialists that can be measured", one: "specialist", many: "specialists", readCmd: "$ loadout instructions probe --json", items: [{ name: "review.checklist", sub: "asks for a checklist in every review" }, { name: "language.csharp-impl", sub: "asks for nullable annotations" }].map(function (x) { return Object.assign(x, { actions: [{ label: "How often it is followed", cmd: "$ loadout instructions probe " + x.name + " --json", onPress: function () { return tbl(["Week of", "Sessions", "Did it"], [["29 Sep", 12, "58%"], ["6 Oct", 14, "71%"], ["13 Oct", 11, "82%"]]); } }] }); }) }).el]);
+  };
+  C.ctxVoice = function (slug) {
+    var marks = [{ ref: "pr:182", kind: "pull request", state: "holds" }, { ref: "docs/guides/studio.md", kind: "file", state: "lapsed" }];
+    var surfaces = [["format.doc", "Dates in documents", "long-british"], ["format.commit", "Dates in commits", "iso"], ["format.pr", "Dates in pull requests", null], ["estimates", "Estimates", "range-with-owner"]];
+    var presets = [["iso", "2026-10-27"], ["long-british", "27 October 2026"], ["long-american", "October 27, 2026"], ["short-numeric", "27/10/2026"], ["relative", "3 days ago"], ["relative-with-absolute", "3 days ago (24 Oct)"]];
+    var layer = "personal", rowsBox = el("div", {});
+    function timeRows() {
+      rowsBox.textContent = "";
+      var lf = layer === "codebase" ? " --layer codebase" : "";
+      rowsBox.appendChild(el("label", { "class": "ctl-pick" }, ["Whose ", el("select", { "class": "ls-text", onchange: function (e) { layer = e.target.value; timeRows(); } }, [["personal", "yours (personal)"], ["codebase", "this codebase's"]].map(function (o) { return el("option", { value: o[0], text: o[1], selected: layer === o[0] ? true : null }); }))]));
+      surfaces.forEach(function (s) {
+        rowsBox.appendChild(S.SettingRow({ label: s[1], value: layer === "codebase" ? null : s[2], unset: "not set: the default applies", kind: "choice", options: s[0] === "estimates" ? [["range-with-owner", "a range, with who owns it"], ["never", "never"]] : presets.map(function (p) { return [p[0], p[1] + "  (" + p[0] + ")"]; }), show: function (v) { var p = presets.filter(function (x) { return x[0] === v; })[0]; return p ? p[1] : v; },
+          setCmd: function (v) { return "$ loadout voice time set " + s[0] + " " + v + lf + " --project " + slug; }, clearCmd: "$ loadout voice time unset " + s[0] + lf + " --project " + slug }));
+      });
+      return rowsBox;
+    }
+    return el("div", { "class": "cstack" }, [
+      S.ActionForm({ path: "voice check", title: "Check some writing against your voice", why: "It reports; it never fails on a finding.", label: "Check it", effect: "reads",
+        fields: [{ name: "--message", label: "A commit message or description", kind: "lines", joined: true, wide: true }, { name: "--surface", label: "What it is", kind: "choice", options: [["commit", "a commit"], ["pr", "a pull request"], ["doc", "a document"]], value: "commit" }, { name: "FILES", label: "Or these files", kind: "lines", more: true }, { name: "--project", label: "Project", value: slug, fixed: true }, { name: "--guide", label: "Guide", placeholder: "prose", more: true }],
+        onRun: function () { return S.HealthList({ findings: [{ name: "hedging", severity: "warning", detail: "line 2: “perhaps”" }, { name: "sentence length", severity: "ok" }], verdict: "1 finding" }); } }).el,
+      S.ItemList({ title: "Writing marked as yours", one: "mark", many: "marks", why: "Learning counts only what you mark. Kept on this machine.", readCmd: "$ loadout voice mark --list --project " + slug + " --json",
+        items: marks.map(function (mk) { return { name: mk.ref, sub: mk.kind, word: mk.state === "lapsed" ? "waiting for you" : "done", facts: [mk.state], actions: [{ label: "Take the mark off", cmd: "$ loadout voice mark " + mk.ref + " --remove --project " + slug, removes: true, said: "Unmarked" }] }; }),
+        add: { label: "Mark writing as yours", form: { path: "voice mark", label: "Mark it", dryRun: true, extra: ["--yes"], fields: [{ name: "TARGETS", label: "What", kind: "lines", required: true, hint: "Files, pr:123, a commit, or a range such as main~20..main. One a line." }, { name: "--project", label: "Project", value: slug, fixed: true }, { name: "--guide", label: "Guide", more: true }], onRun: did("Marked") }, toItem: function (v) { return { name: String(v.TARGETS).split("\n")[0], sub: "just marked", facts: ["holds"], actions: [] }; } } }).el,
+      S.ActionRow({ actions: [{ label: "Re-confirm the lapsed marks", cmd: "$ loadout voice mark --lapsed --yes --project " + slug, said: "Re-confirmed 1 mark" }] }),
+      el("h4", { "class": "ctl-h", text: "Dates and estimates" }),
+      timeRows()].concat([
+      el("p", { "class": "ls-from" }, ["From ", el("code", { text: "$ loadout voice time show --project " + slug + " --json" }), "."]),
+      S.ActionForm({ path: "voice render", title: "Render your voice into the style specialist", label: "Render it", dryRun: true, fields: [{ name: "--layer", label: "Which", kind: "choice", options: [["personal", "yours"], ["named", "a named style"], ["codebase", "this codebase's"]], value: "personal", required: true }, { name: "--style", label: "The named style", placeholder: "with a named style" }, { name: "--project", label: "Project", value: slug, fixed: true }, { name: "--force", label: "Replace a rendered file changed by hand", kind: "flag", more: true }, { name: "--guide", label: "Guide", more: true }], onRun: did("Rendered it") }).el,
+      S.ActionForm({ path: "voice learn", title: "Learn it from your own writing, rule by rule", why: "It asks you about each rule and spends within a cap you set, so it opens in a terminal here.", effect: "session", fields: [{ name: "--layer", label: "Into", kind: "choice", options: [["personal", "yours"], ["named", "a named style"], ["codebase", "this codebase's"]], value: "personal", required: true }, { name: "--style", label: "The named style" }, { name: "--project", label: "Project", value: slug, fixed: true }, { name: "--corpus", label: "From somebody's writing in this folder", more: true }, { name: "--model", label: "Model", more: true }, { name: "--pull-requests", label: "Also read merged pull requests", kind: "flag", more: true }, { name: "--transcripts", label: "Also read what you typed to Claude Code", kind: "flag", more: true }, { name: "--guide", label: "Guide", more: true }], onRun: did("Opened learning in a terminal") }).el,
+      S.ActionForm({ path: "voice guide draft", title: "Draft a new guide with an agent", why: "You review it before it is saved, so it opens in a terminal here.", effect: "session", fields: [{ name: "ID", label: "Its id", required: true, placeholder: "idiolect" }, { name: "--about", label: "What it should learn", kind: "lines", joined: true, required: true }, { name: "--model", label: "Model", more: true }], onRun: did("Opened the draft in a terminal") }).el,
+      S.Readout({ path: "voice runs", extra: ["--project", slug], title: "Past learn runs", view: "table", params: [{ name: "--layer", label: "Whose", kind: "choice", options: [["personal", "yours"], ["named", "a named style"], ["codebase", "this codebase's"]], value: "personal", required: true }],
+        columns: [{ key: "when", label: "When" }, { key: "outcome", label: "How it ended" }, { key: "kept", label: "Rules kept", num: true }, { key: "cost", label: "Cost", num: true }], data: [{ when: "14 Oct", outcome: "finished", kept: 7, cost: "$0.42" }, { when: "2 Oct", outcome: "stopped at its cap", kept: 3, cost: "$0.50" }] }).el,
+      S.Readout({ path: "voice guide show", extra: ["prose"], title: "The prose guide: what a run is judged by", view: "list", data: [{ name: "Sources", sub: "commits, documents, marked pull requests" }, { name: "Checks", sub: "hedging, sentence length, banned words" }, { name: "Cap", sub: "$0.50 a run" }] }).el]));
+  };
+  C.ctxHandoff = function (slug) {
+    var hs = [{ name: "2026-10-17-1402", written: "17 Oct 14:02" }, { name: "before-the-rename", written: "15 Oct 09:10" }];
+    return S.ItemList({ title: "Handoffs", one: "handoff", many: "handoffs", readCmd: "$ loadout handoff " + slug + " --list --json", items: hs.map(function (x) { return { name: x.name, sub: "written " + x.written, actions: [
+      { label: "Read it", cmd: "$ loadout handoff " + slug + " --show --name " + x.name, onPress: function () { return S.Markdown("## Where it stands\n\n- `--since` is in; tests pass.\n- Next: the docs page."); } },
+      { label: "Copy it", cmd: "$ loadout handoff " + slug + " --clipboard --name " + x.name, said: "Copied to this machine's clipboard" }] }; }),
+      add: { label: "Write a new one", form: { path: "handoff", label: "Write it", dryRun: true, fields: [{ name: "project", label: "Project", value: slug, fixed: true }, { name: "--name", label: "Name", placeholder: "the time" }], onRun: did("Wrote a handoff to fill in") }, toItem: function (v) { return { name: v["--name"] || "2026-10-27-1200", sub: "written just now", actions: [] }; } } }).el;
+  };
+  C.specialist = function (id, slug) {
+    return el("div", { "class": "cstack" }, [
+      S.ActionForm({ path: "instructions export", title: "Copy it into the workspace to edit", why: "The copy is used instead of the built-in from then on.", label: "Copy it", dryRun: true, fields: [{ name: "SPECIALIST", label: "Specialist", value: id, fixed: true }, { name: "--project", label: "Into", kind: "choice", options: [[slug, "this project"], ["@ws", "the whole workspace"]], value: slug, flags: { "@ws": "" }, required: true }, { name: "--force", label: "Replace a copy that is already there", kind: "flag", more: true }], onRun: did("Copied it") }).el,
+      S.Readout({ path: "instructions probe", extra: [id], title: "How often sessions did what it asks", view: "table", params: [{ name: "--days", label: "Over the last", kind: "choice", options: [["30", "30 days"], ["60", "60 days"], ["90", "90 days"]], value: "60", required: true }],
+        columns: [{ key: "week", label: "Week of" }, { key: "sessions", label: "Sessions", num: true }, { key: "did", label: "Did it", num: true }], data: [{ week: "29 Sep", sessions: 12, did: "58%" }, { week: "6 Oct", sessions: 14, did: "71%" }, { week: "13 Oct", sessions: 11, did: "82%" }] }).el]);
+  };
+
+  /* Teams: shared tools, and calls for help */
+  C.tools = function () {
+    var tools = [{ name: "flaky-hunter", sub: "reruns a failing test until it is sure", version: "1.3.0", word: "done", uses: "42 uses · 2 failed", trusted: true }, { name: "old-linter", sub: "the lint before analyzers", version: "0.9.1", word: "held", uses: "deprecated · idle 41 days" }];
+    function row(t) { var acts = [
+      { label: "Details", cmd: "$ loadout tools show " + t.name + " --json", onPress: function () { return tbl(["", ""], [["Owner", "qa-crew"], ["Kind", "script"], ["Trusted here", "yes"], ["Versions", "1.1.0, 1.2.0, 1.3.0"]]); } },
+      { label: "Health", cmd: "$ loadout tools health " + t.name + " --json", onPress: function () { return tbl(["Measure", "Now"], [["Median case", "4.2 s"], ["Failed uses", "5%"], ["Worked around", "2%"], ["Last used", "today"]]); } },
+      { label: "Record a use", cmd: "opens the form", form: { path: "tools used", label: "Record it", dryRun: true, fields: [{ name: "TOOL", label: "Tool", value: t.name + "@" + t.version, fixed: true }, { name: "--outcome", label: "How it went", kind: "choice", options: [["ok", "it worked"], ["failed", "it failed"], ["workaround", "it needed working around"]], value: "ok", required: true }, { name: "--note", label: "What happened", more: true }, { name: "--run", label: "In run", more: true }, { name: "--team", label: "By team", more: true }], onRun: did("Recorded the use") } }];
+      if (t.trusted) { acts.push({ label: "Stop trusting it", cmd: "$ loadout tools trust " + t.name + "@" + t.version + " --revoke", ask: "Take back trust in " + t.name + "@" + t.version + "? A remediator can no longer run it with nobody watching.", yes: "Take it back", said: "No longer trusted here" }); }
+      acts.push(t.word === "held" ? { label: "Retire it", danger: true, cmd: "$ loadout tools retire " + t.name, ask: "Retire " + t.name + "? Nobody has used it for 30 days.", yes: "Retire it", removes: true, said: "Retired" }
+        : { label: "Deprecate it", cmd: "opens the form", form: { path: "tools deprecate", label: "Deprecate it", dryRun: true, fields: [{ name: "TOOL", label: "Tool", value: t.name, fixed: true }, { name: "--replacement", label: "Use this instead", placeholder: "a tool" }, { name: "--reason", label: "Or why, where nothing replaces it" }], onRun: did("Deprecated it") } });
+      return { name: t.name, sub: t.sub, word: t.word, facts: [t.version, t.uses], actions: acts }; }
+    return el("div", { "class": "cstack" }, [
+      S.ItemList({ title: "Shared tools", one: "tool", many: "tools", why: "Tools teams share, with how each is doing.", readCmd: "$ loadout tools search --all --json", items: tools.map(row) }).el,
+      S.ActionForm({ path: "tools submit", title: "Send something to the catalogue's inbox", why: "A candidate tool, an idea, a bug or a lesson. Screened for credentials.", label: "Send it", dryRun: true, fields: [{ name: "--kind", label: "What it is", kind: "choice", options: [["idea", "an idea"], ["bug", "a bug"], ["lesson", "a lesson"], ["candidate", "a candidate tool"]], value: "idea", required: true }, { name: "--text", label: "What it says", kind: "lines", joined: true, required: true }, { name: "--tool", label: "About this tool", placeholder: "optional" }, { name: "--from-run", label: "From run", more: true }, { name: "--script", label: "A candidate's script", more: true }, { name: "--summary", label: "A candidate's summary", more: true }, { name: "--capabilities", label: "Search terms, by commas", more: true }], onRun: did("Sent it to the inbox") }).el,
+      S.ActionForm({ path: "tools promote", title: "Promote a verified draft", why: "Writes it once as a version and makes it active.", label: "Promote it", dryRun: true, fields: [{ name: "DRAFT", label: "The draft", required: true, placeholder: "drafts/flaky-hunter-1.4.0" }, { name: "--because", label: "Because of", kind: "choice", required: true, options: ["lesson", "requirement", "bug", "idea", "nomination", "consolidation"] }, { name: "--source", label: "From", required: true, placeholder: "the submission or run" }, { name: "--owner", label: "Owning team", more: true }, { name: "--kind", label: "Kind", more: true }, { name: "--summary", label: "What it is for", more: true }, { name: "--capabilities", label: "Search terms, by commas", more: true }], onRun: did("Promoted it") }).el,
+      S.ActionForm({ path: "tools verify", title: "Verify a draft", why: "Runs its harness and known-good cases where this machine allows it.", label: "Verify it", dryRun: true, fields: [{ name: "DRAFT", label: "The draft", required: true, placeholder: "drafts/flaky-hunter-1.4.0" }, { name: "--by", label: "Who is asking", placeholder: "you", more: true }], onRun: did("Verified: 6 of 6 cases passed") }).el,
+      S.TerminalOnly({ title: "Trust a version so a remediator may run it", why: "Trust is your agreement that one exact script may run with nobody watching, so it is given where you type. An agent is never allowed to give it.", command: "$ loadout tools trust <name@version>" }),
+      S.TerminalOnly({ title: "Agree to a draft's harness running here", why: "Agreeing is made in a terminal, where the script and its cases are shown in full first.", command: "$ loadout tools verify <draft> --agree" }),
+      S.Readout({ path: "tools audit", title: "What has happened in the catalogue", view: "table", params: [{ name: "--tool", label: "Only this tool" }, { name: "--since", label: "In the last", kind: "choice", options: [["7d", "7 days"], ["30d", "30 days"]], value: "7d" }], columns: [{ key: "at", label: "When" }, { key: "action", label: "What" }, { key: "tool", label: "Tool" }, { key: "actor", label: "Who" }], data: [{ at: "26 Oct", action: "promoted", tool: "flaky-hunter 1.3.0", actor: "qa-crew" }, { at: "20 Oct", action: "deprecated", tool: "old-linter", actor: "you" }] }).el]);
+  };
+  C.help = function () {
+    var state = { where: null, webhook: true };
+    var box = el("div", { "class": "cstack" });
+    function paint() {
+      box.textContent = "";
+      box.appendChild(S.Readout({ path: "team notify show", title: "Calls for help", view: "list", data: [{ name: state.where ? "Sent to " + state.where : "Not sent anywhere", sub: state.where ? "while the daemon runs" : "a run that needs you while you are away waits silently" }] }).el);
+      box.appendChild(S.ActionForm({ path: "team notify set", title: state.where ? "Send them somewhere else" : "Send them somewhere", label: "Send them there", dryRun: true, fields: [{ name: "WHERE", label: "To", kind: "choice", required: true, options: [["slack", "Slack"], ["discord", "Discord"], ["teams", "Teams"], ["telegram", "Telegram"], ["generic", "your own endpoint"]], value: "slack" }, { name: "--url", label: "The address", required: true, hint: "Kept in this machine's credential store." }, { name: "--chat", label: "The Telegram chat", placeholder: "only for Telegram" }],
+        onRun: function (v, info) { if (info.preview) { return null; } state.where = v.WHERE; said("Calls for help go to " + v.WHERE, info.line); setTimeout(paint, 50); return null; } }).el);
+      if (state.where) { box.appendChild(S.ActionRow({ actions: [{ label: "Send a test", cmd: "$ loadout team notify test", said: "Sent: look for it to arrive" }, { label: "Stop sending", danger: true, cmd: "$ loadout team notify clear", ask: "Forget where to send? Calls for help go nowhere.", yes: "Stop sending", onPress: function () { state.where = null; setTimeout(paint, 50); } }] })); }
+      box.appendChild(S.Readout({ path: "team webhook show", title: "The webhook", view: "list", data: [{ name: state.webhook ? "On" : "Off", sub: state.webhook ? "listening on 127.0.0.1:4418 for release-crew, docs-crew" : "nothing outside this machine can start a run" }] }).el);
+      if (state.webhook) { box.appendChild(S.ActionRow({ actions: [{ label: "Turn it off", danger: true, cmd: "$ loadout team webhook disable", ask: "Forget the token? Nothing outside this machine can start a run.", yes: "Turn it off", onPress: function () { state.webhook = false; setTimeout(paint, 50); } }] })); }
+      box.appendChild(S.TerminalOnly({ title: state.webhook ? "Make a new token" : "Turn it on", why: "It makes a token and shows it once. Reading a secret back happens where you type, never on a page." + (state.webhook ? " The old token stops working." : ""), command: "$ loadout team webhook enable" }));
+      box.appendChild(el("p", { "class": "ls-from" }, ["Which teams it may start is the setting ", el("code", { text: "team-webhook-teams" }), " on Loadout's settings."]));
+      box.appendChild(S.TerminalOnly({ title: "The attach passphrase", why: "It guards this page, so it is set where you type.", command: "$ loadout team attach set" }));
+    }
+    paint();
+    return box;
+  };
+  C.capabilities = function () {
+    return S.Readout({ path: "team capabilities", title: "What a run of it can ask for", view: "table", columns: [{ key: "id", label: "Capability" }, { key: "summary", label: "What it is" }, { key: "gate", label: "Asks first" }], data: [{ id: "pr.open", summary: "open a pull request", gate: "yes" }, { id: "tests.run", summary: "run the test suite", gate: "no" }, { id: "deploy.staging", summary: "deploy to staging", gate: "yes" }] }).el;
+  };
+
   /* ---------- placeholder pages ---------- */
   function renderElsewhere(main, r) {
     if (r === "settings") { main.appendChild(el("div", { "class": "head" }, [el("h1", { text: "Settings" })])); main.appendChild(el("section", { "class": "placeholder", "aria-labelledby": "z-app" }, [zone("", "Appearance", "z-app"), appearanceForm()])); return; }
@@ -2366,6 +2687,8 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     else if (r === "teams") { renderTeams(main); }
     else if (r === "teams-remedies") { renderRemedies(main); }
     else if (r === "teams-bin") { renderBin(main); }
+    else if (r === "teams-tools") { renderTools(main); }
+    else if (r === "teams-help") { renderHelp(main); }
     else if (r.indexOf("run-") === 0) { renderRun(main, r.slice(4)); }
     else if (r.indexOf("team-") === 0) { renderTeam(main, r.slice(5)); }
     else if (r === "ideas" || r.indexOf("ideas/") === 0) { renderIdeas(main, r); }

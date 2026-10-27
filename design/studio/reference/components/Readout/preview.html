@@ -1,0 +1,30 @@
+<!-- @dsCard group="Commands as controls" height=900 width=1200 subtitle="What a reading command says, drawn as a view from its --json, never as a transcript" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Readout</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .col { flex: 1 1 420px; min-width: 0; max-width: 640px; }
+</style>
+</head>
+<body class="ls">
+<div class="row"><div class="col" id="a"></div><div class="col" id="b"></div></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  document.getElementById("a").appendChild(S.Readout({ path: "usage", title: "What the agents used", view: "figures", params: [{ name: "--days", label: "Over the last", kind: "choice", options: [["7", "7 days"], ["30", "30 days"], ["90", "90 days"]], value: "30", required: true }],
+    load: function (v) { var k = +v["--days"] / 30; return [{ label: "Sessions", value: String(Math.round(184 * k)) }, { label: "Tokens", value: (11.3 * k).toFixed(1) + "M", note: "in and out" }, { label: "Spent", value: "$" + (412.6 * k).toFixed(2), note: "at list prices" }]; } }).el);
+  document.getElementById("a").appendChild(S.Readout({ path: "instructions stats", extra: ["--project", "loadout-cli"], title: "What sessions here loaded", view: "table",
+    columns: [{ key: "file", label: "File" }, { key: "sessions", label: "Sessions", num: true }, { key: "tokens", label: "Tokens", num: true }],
+    data: [{ file: "CLAUDE.md", sessions: 61, tokens: "2,140" }, { file: "csharp specialist", sessions: 44, tokens: "1,380" }, { file: "release rules", sessions: 9, tokens: "620" }] }).el);
+  document.getElementById("b").appendChild(S.Readout({ path: "doctor", title: "How this machine stands", view: "findings",
+    data: { verdict: "2 things need you", findings: [{ name: "git 2.43", severity: "ok" }, { name: "Claude Code not signed in", severity: "warning", detail: "Run claude in a terminal and sign in.", fixable: false }, { name: "Workspace remote unreachable", severity: "error", detail: "github.com refused the key.", fixable: true }] } }).el);
+  document.getElementById("b").appendChild(S.Readout({ path: "style show", extra: ["house"], title: "The house style", view: "document", data: "## House style\n\n- Name things for what they mean.\n- One idea per function.\n- Comments say why, never what." }).el);
+})();
+</script>
+</body>
+</html>

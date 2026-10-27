@@ -44,7 +44,7 @@ Don't reopen these. Ask me only if one turns out to be impossible.
   | Memory | stores, then the topic being edited, then its health and tools |
   | Spend | one number, where it went, then what is running and was launched |
 
-- **ActionDrawer replaces CommandAction's look, not its logic.** A page shows its main actions in place. Every other command it offers is an ActionDrawer:
+- **ActionDrawer replaces CommandAction's look, not its logic.** *Superseded by `CONTROLS.md`: pages offer every command as a control made for it, and only the Commands page keeps the catalogue's form. What follows is the decision as first made.* A page shows its main actions in place. Every other command it offers is an ActionDrawer:
   - closed, it is one line: the title, `loadout <path>` and the effect tag;
   - opened, it is the command's form.
 

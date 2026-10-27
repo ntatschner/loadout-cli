@@ -1,0 +1,32 @@
+<!-- @dsCard group="Commands as controls" height=820 width=1200 subtitle="One thing a command does, in place: plain fields, More options, the line, Preview, then the action" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ActionForm</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .col { flex: 1 1 420px; min-width: 0; max-width: 640px; }
+</style>
+</head>
+<body class="ls">
+<div class="row"><div class="col" id="a"></div><div class="col" id="b"></div></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  document.getElementById("a").appendChild(S.ActionForm({ path: "project clone", title: "Clone it onto this machine", why: "Fetches the repository and registers it here.", label: "Clone it",
+    fields: [{ name: "project", label: "Project", value: "starstats", fixed: true }, { name: "destination", label: "Where to put it", placeholder: "~/code/starstats", hint: "Left empty, it goes beside your other projects." }],
+    onRun: function () { return "Cloned into ~/code/starstats"; } }).el);
+  document.getElementById("a").appendChild(S.ActionForm({ path: "memory compress", title: "Compress the memory", why: "Folds topics with many facts into fewer, keeping every fact.", label: "Compress", applyWith: ["--apply"],
+    fields: [{ name: "--project", label: "Project", value: "loadout-cli", fixed: true }, { name: "--min-facts", label: "Only topics with at least", kind: "number", placeholder: "12", more: true }, { name: "--file", label: "Just this topic file", more: true }] }).el);
+  document.getElementById("b").appendChild(S.ActionForm({ path: "setup", title: "Set Loadout up on this machine", why: "Asks as it goes, so it opens in a terminal Studio hosts.", effect: "session",
+    fields: [{ name: "--use-existing", label: "Use the workspace you already have", kind: "flag" }, { name: "--remote", label: "Workspace remote", placeholder: "git@github.com:you/workspace.git" },
+      { name: "--branch", label: "Branch", more: true }, { name: "--name", label: "Workspace name", more: true }, { name: "--local-only", label: "Keep it on this machine only", kind: "flag", more: true }, { name: "--register-discovered", label: "Register repositories it finds", kind: "flag", more: true }, { name: "--global-excludes", label: "Add the global git excludes", kind: "flag", more: true }] }).el);
+  document.getElementById("b").appendChild(S.ActionForm({ path: "idea remove", title: "Forget this idea", label: "Forget it", danger: true, ask: "Forget \u201cCompany sign-in\u201d? Its rounds and notes go with it.", yes: "Forget it",
+    fields: [{ name: "id", label: "Idea", value: "company-sign-in", fixed: true }, { name: "--project", label: "Project", value: "starstats", fixed: true }] }).el);
+})();
+</script>
+</body>
+</html>

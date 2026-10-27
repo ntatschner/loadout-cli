@@ -1,0 +1,32 @@
+<!-- @dsCard group="Commands as controls" height=760 width=1100 subtitle="The things a command keeps, with what can be done to each, and Add" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ItemList</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .col { flex: 1 1 420px; min-width: 0; max-width: 640px; }
+</style>
+</head>
+<body class="ls">
+<div class="row"><div class="col" id="a" style="max-width: 760px"></div></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var L = S.ItemList({ title: "Specialist packs", one: "pack", many: "packs", readCmd: "$ loadout pack list --json", asOf: "read 2 min ago",
+    why: "Specialists and skills from other repositories, pinned to a version you approved.",
+    items: [
+      { name: "csharp-house", sub: "github.com/acme/csharp-house", word: "done", facts: ["v1.4.2", "approved"], actions: [{ label: "Update", cmd: "$ loadout pack update csharp-house", said: "Updated to v1.4.3" }, { label: "Remove", cmd: "$ loadout pack remove csharp-house", danger: true, ask: "Remove csharp-house? Its specialists stop loading.", yes: "Remove it", removes: true, said: "Removed" }] },
+      { name: "infra-notes", sub: "github.com/acme/infra-notes", word: "waiting for you", facts: ["v0.9.0", "changed since approval"], detailLabel: "What changed",
+        detail: function () { var p = document.createElement("p"); p.textContent = "2 specialists changed: terraform, k8s-review."; return p; },
+        actions: [{ label: "Approve", cmd: "$ loadout pack approve infra-notes", said: "Approved v0.9.0" }, { label: "Remove", cmd: "$ loadout pack remove infra-notes", danger: true, ask: "Remove infra-notes?", yes: "Remove it", removes: true }] } ],
+    add: { label: "Add a pack", form: { path: "pack add", label: "Add it", fields: [{ name: "name", label: "Name", required: true, placeholder: "house-style" }, { name: "remote", label: "Where it lives", required: true, placeholder: "github.com/you/pack" }, { name: "--ref", label: "Version or branch", more: true }] },
+      toItem: function (v) { return { name: v.name, sub: v.remote, word: "waiting for you", facts: ["not approved yet"], actions: [{ label: "Approve", cmd: "$ loadout pack approve " + v.name }] }; } } });
+  document.getElementById("a").appendChild(L.el);
+})();
+</script>
+</body>
+</html>
