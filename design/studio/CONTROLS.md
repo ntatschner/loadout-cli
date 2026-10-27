@@ -1,10 +1,10 @@
 # Studio: commands as controls
 
-Studio's pages offer their commands as **drawers** today (0.101.0): 105 `CommandAction`s, each a closed line that opens into a form built from the command catalogue. This round replaces every one of them with a **control made for that command**: a form with words for its fields, a list whose members carry their own buttons, a setting changed where it is shown, or a proper view of what a read returns. The pages stay as they are; only how they offer commands changes.
+Studio's pages offer their commands as **drawers** today (0.103.1): 105 `CommandAction`s, each a closed line that opens into a form built from the command catalogue. This round replaces every one of them with a **control made for that command**: a form with words for its fields, a list whose members carry their own buttons, a setting changed where it is shown, or a proper view of what a read returns. The pages stay as they are; only how they offer commands changes.
 
 This is one piece of work: five components, every page's drawers swapped for them page by page, a fix to the task board, and the records. The last section, **Record it in Loadout**, writes records only and builds nothing else. Run it last.
 
-**Order.** This builds on `PAGES.md`, which is built (the six pages, by 0.85.1), and on the Teams places main has (0.101.0: Shared tools, Calls for help and the webhook, Blocked). It doesn't depend on `ROUND4.md`, `BACKGROUND.md` or `OFFICE.md`, and none of them depends on it. If one of them is built first, its own controls follow this brief's patterns.
+**Order.** This builds on `PAGES.md`, which is built (the six pages, by 0.85.1), and on the Teams places main has (0.103.1: Shared tools, Calls for help and the webhook, Blocked). It doesn't depend on `ROUND4.md`, `BACKGROUND.md` or `OFFICE.md`, and none of them depends on it. If one of them is built first, its own controls follow this brief's patterns.
 
 **This replaces a decision.** `PAGES.md` said "ActionDrawer replaces CommandAction's look, not its logic … fields from the command catalogue". That no longer holds: pages don't use drawers, and a control's fields are chosen and worded for its command. The Commands page keeps the catalogue-built form (`CommandForm`). Nothing else in `PAGES.md` changes.
 
@@ -100,7 +100,7 @@ All five follow the theme, density and motion settings. All five reflow to one c
 
 ## The task board, and button rows
 
-Main's task board hides a button's command until you point at it (`studio/src/styles/components.css`, the `.ls-tboard .task .moves .ls-cmd` rules, about lines 1520 to 1522). Showing it pushes everything under it down. Replace that with **one reserved line** under each task's buttons:
+Main's task board hides a button's command until you point at it (`studio/src/styles/components.css`, the `.ls-tboard .task .moves .ls-cmd` rules, about lines 1525 to 1527 on 0.103.1). Showing it pushes everything under it down. Replace that with **one reserved line** under each task's buttons:
 
 ```css
 .ls-tboard .task .moves, .ls-tboard .task .go { position: relative; padding-bottom: 20px; }
@@ -322,7 +322,7 @@ Tell me what each step did, and confirm that nothing was started: no session, ru
 
 # Every drawer, and what it becomes
 
-The 105 `CommandAction`s on main's pages (0.101.0), in file order. "Fixed" means the page already knows it and shows it as a fact. "Text only" means the command prints words, not JSON, when it succeeds.
+The 105 `CommandAction`s on main's pages (0.103.1), in file order. "Fixed" means the page already knows it and shows it as a fact. "Text only" means the command prints words, not JSON, when it succeeds.
 
 | # | Page in `studio/src/pages/` | Command | Becomes | In place | Under More options | Shows |
 |---|---|---|---|---|---|---|
@@ -352,11 +352,11 @@ The 105 `CommandAction`s on main's pages (0.101.0), in file order. "Fixed" means
 | 24 | `Context.svelte:456` | `voice time set` | SettingRow (choice), one per surface | the preset or policy, Set it | – | adds --layer codebase when the codebase's is picked |
 | 25 | `Context.svelte:457` | `voice time unset` | SettingRow Clear it | on each row | – | – |
 | 26 | `Context.svelte:462` | `handoff` | ItemList | rows from `handoff <project> --list --json`; Read it (--show --name), Copy it (--clipboard --name); add: --name | – | Read it shows the document under the row (text only) |
-| 27 | `Ideas.svelte:819` | `idea refine` | ActionForm | id and list fixed | --model | a line: a round is running |
-| 28 | `Ideas.svelte:820` | `idea improve` | ActionForm | id, piece fixed; --request | – | a line: sent back |
-| 29 | `Ideas.svelte:821` | `idea move` | ActionForm | id fixed; --to a choice of projects, or the workspace-wide list (--to-global) | – | – |
-| 30 | `Ideas.svelte:822` | `idea remove` | ActionForm (danger, asks) | id and list fixed | – | a line, then back to Ideas (text only) |
-| 31 | `Ideas.svelte:863` | `idea dump add` | ActionForm | --text, the list (--project or --global) | file, --no-split, --model | a line, and the dump joins the list below |
+| 27 | `Ideas.svelte:821` | `idea refine` | ActionForm | id and list fixed | --model | a line: a round is running |
+| 28 | `Ideas.svelte:822` | `idea improve` | ActionForm | id, piece fixed; --request | – | a line: sent back |
+| 29 | `Ideas.svelte:823` | `idea move` | ActionForm | id fixed; --to a choice of projects, or the workspace-wide list (--to-global) | – | – |
+| 30 | `Ideas.svelte:824` | `idea remove` | ActionForm (danger, asks) | id and list fixed | – | a line, then back to Ideas (text only) |
+| 31 | `Ideas.svelte:865` | `idea dump add` | ActionForm | --text, the list (--project or --global) | file, --no-split, --model | a line, and the dump joins the list below |
 | 32 | `Memory.svelte:183` | `memory delete` | ActionForm (danger) | topic and project fixed; preview with --dry-run, act with --yes after asking | – | facts and what links to it, from `--json` |
 | 33 | `Memory.svelte:215` | `memory write` | ActionForm | topic, --fact one a line (project fixed) | --description, --kind, --scope, --separate | a line: recorded |
 | 34 | `Memory.svelte:216` | `memory reindex` | ActionRow | Rebuild it | – | a line (text only) |
