@@ -379,6 +379,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             var port = settings.Port != 0 ? settings.Port : teams?.DashboardPort ?? DashboardServer.DefaultPort;
 
             server.SignIn = SignIn.ForMachine(_paths);
+            server.LinkAddress = teams?.LinkAddress;
 
             var started = server.Start(
                 port,
@@ -2117,7 +2118,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         if (_notices is not null && Notices.KindOf(teams?.NotifyKind) is { } kind && _sendTo is { Length: > 0 } address)
         {
             await _notices.PostAsync(
-                kind, title, detail, _address is { Length: > 0 } page ? page : "loadout team queue list",
+                kind, title, detail, NoticeLink.To(teams!.LinkAddress, _address, "teams", "loadout team queue list"),
                 teams!.NotifyChat, address, ct: ct).ConfigureAwait(false);
         }
     }
@@ -2170,7 +2171,8 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         var where = teams!.NotifyKind;
         var sent = await _notices!
             .SayAsync(
-                runs, kind, teams.NotifyChat, address, Link, _time.GetUtcNow(), ct,
+                runs, kind, teams.NotifyChat, address,
+                run => NoticeLink.For(teams.LinkAddress, _address, run.RunId), _time.GetUtcNow(), ct,
                 _watch is { } watch ? (run, reason, landed) => watch.Told(where, run, reason, landed) : null)
             .ConfigureAwait(false);
 
@@ -2224,17 +2226,12 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         }
     }
 
-    /// <summary>Where the dashboard is, so a notice can point at it.</summary>
-    /// <remarks>
-    /// A notice that says something is wrong and leaves somebody to find it is
-    /// half a notice. Falls back to the command when no page is being served.
-    /// </remarks>
-    private string Link(RunSummary run) =>
-        _address is { Length: > 0 }
-            ? _address
-            : $"loadout team status {run.RunId}";
-
     private Notices? _notices;
+
+    /// <summary>
+    /// Where the dashboard is serving, token and all. A notice's link is built
+    /// from it only through <see cref="NoticeLink"/>, which drops the token.
+    /// </summary>
     private string? _address;
 
     /// <summary>What records the event history, or null for a daemon with nowhere to keep it.</summary>

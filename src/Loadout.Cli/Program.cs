@@ -1311,6 +1311,7 @@ public static class Program
             CommandCategory.Start,
             "dashboard web page browser watch runs live team");
         dashboard.AddCommand<DashboardSignOutCommand>("sign-out");
+        dashboard.AddCommand<DashboardPairCommand>("pair");
         dashboard.AddCommand<DashboardSignalCommand>("signal");
     }
 

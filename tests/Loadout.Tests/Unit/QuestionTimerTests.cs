@@ -79,6 +79,24 @@ public sealed class QuestionTimerTests : IDisposable
         (await asking).Should().Be("no");
     }
 
+    [Fact]
+    public async Task A_question_waits_as_long_as_the_machine_says()
+    {
+        var console = new DashboardTeamConsole(TimeProvider.System, _ => { }, TimeSpan.FromMinutes(7));
+
+        console.Starting(_directory);
+
+        var before = DateTimeOffset.UtcNow;
+        var asking = console.DecideAsync(Question);
+        var pending = await WrittenAsync();
+
+        // What the page counts down to.
+        pending.Until.Should().BeCloseTo(before.AddMinutes(7), TimeSpan.FromSeconds(30));
+
+        await NodePermissions.AnswerAsync(_directory, pending.Id, new AskAnswer(true, "no", Chosen: "no"));
+        (await asking).Should().Be("no");
+    }
+
     private async Task<PendingAsk> WrittenAsync()
     {
         using var give = new CancellationTokenSource(TimeSpan.FromSeconds(10));

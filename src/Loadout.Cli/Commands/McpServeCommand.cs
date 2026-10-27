@@ -208,6 +208,7 @@ public sealed class LoadoutTools
     private readonly Core.Tools.IToolRegistry _catalogue;
     private readonly ISettingsProposals _proposals;
     private readonly Core.Ideas.IIdeaService _ideas;
+    private readonly Core.Configuration.IConfigurationService? _configuration;
 
     public LoadoutTools(
         IInstructionService instructions,
@@ -222,8 +223,10 @@ public sealed class LoadoutTools
         LoadoutToolScope scope,
         Core.Tools.IToolRegistry catalogue,
         ISettingsProposals proposals,
-        Core.Ideas.IIdeaService ideas)
+        Core.Ideas.IIdeaService ideas,
+        Core.Configuration.IConfigurationService? configuration = null)
     {
+        _configuration = configuration;
         _proposals = proposals;
         _ideas = ideas;
         _catalogue = catalogue;
@@ -839,8 +842,13 @@ public sealed class LoadoutTools
             Blocked: blocked is { Length: > 0 } part ? Loadout.Core.Security.SecretRedactor.Redact(part) : null,
             Flags: AskWording.Flags(tool, NodePermissions.Target(inputJson)) is { Count: > 0 } flags ? flags : null);
 
+        // Read at each question rather than when the server starts, so a wait
+        // changed during a long run applies to its next question.
+        var wait = TeamWaits.Permission(
+            _configuration is null ? null : (await _configuration.LoadMachineAsync().ConfigureAwait(false)).Value?.Teams);
+
         var answer = await NodePermissions
-            .AskAsync(directory, ask, _time)
+            .AskAsync(directory, ask, _time, wait)
             .ConfigureAwait(false);
 
         if (answer is null)
@@ -848,7 +856,7 @@ public sealed class LoadoutTools
             return new PermissionDecision(
                 false,
                 $"Nobody answered whether you may use {tool} within "
-                + $"{NodePermissions.Patience.TotalMinutes:F0} minutes, so it is refused. "
+                + $"{TeamWaits.Said(wait)}, so it is refused. "
                 + "Report what you needed and why rather than finding another way to do it.");
         }
 

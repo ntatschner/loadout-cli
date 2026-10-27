@@ -139,6 +139,7 @@
 | `loadout team remedy show\|trust\|requests` | One remedy in full, trusting or untrusting it, and the remediations waiting on you |
 | `loadout dashboard` | Every run at once, live, on a page: the daemon's if one is serving, otherwise a new one here |
 | `loadout dashboard sign-out` | Sign every browser out of the dashboard on this machine, including in a daemon that is already running |
+| `loadout dashboard pair` | Sign a phone in at the link address, to read and answer team runs there: prints a link that works once, for two minutes |
 | `loadout dashboard signal <state>` | Not for typing: a Claude Code session Studio started runs it from its own hooks to say it is waiting for you, waiting on background work of its own, asking for approval, or working again |
 | `loadout hook session-start --agent <agent>` | Not for typing: a Claude Code session Loadout launched runs it from its own hook as a conversation starts, so that resuming it later knows what it was launched for |
 | `loadout team office check <set>` | Whether an office set's kit (with its rules) or tile scene can be used, and each thing wrong with it by name. A kit may lack parts: it lists which, and those are drawn in the built-in kit's shapes meanwhile |

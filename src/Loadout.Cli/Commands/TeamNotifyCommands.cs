@@ -191,7 +191,10 @@ public sealed class TeamNotifyTestCommand : AsyncCommand<GlobalSettings>
             kind,
             "Loadout is set up",
             "This is the message a run will send when it needs you.",
-            "loadout team status",
+
+            // At the link address when there is one, so following it from a
+            // phone is the check that a real notice's link will open there.
+            NoticeLink.To(teams!.LinkAddress, null, "teams", "loadout team status"),
             teams!.NotifyChat,
             address,
             ct: cancellationToken).ConfigureAwait(false);

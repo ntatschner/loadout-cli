@@ -219,8 +219,13 @@ edit it. So it may ask for things and it may never grant them.
   could be asked past would make every deny list a suggestion. Where nobody is
   watching — an autonomous run, or any run down a pipe — nodes are not told they
   may ask, and what no rule covers is refused as before. A question nobody
-  answers within five minutes is refused too, and says that is why rather than
-  blaming the role.
+  answers in time is refused too, and says that is why rather than blaming the
+  role. In time means five minutes, or thirty once a link address is set,
+  because then the answer comes by phone from a notice. Change it with
+  `loadout config set team-permission-wait <minutes>`. A lead's question, a
+  gate or a brief waits an hour (`team-question-wait`). Both are read when the
+  question is asked, so a change applies to the next one, and the dashboard
+  counts down to whichever applies.
 - **The question says what the node is trying to do before it shows the
   command.** It used to be the raw command and nothing else, so you had to read
   the shell to know what you were agreeing to. Now it opens with a plain line:
@@ -1847,6 +1852,51 @@ Slack, Discord, Teams, Telegram, or `generic` for your own endpoint, which gets
 Loadout's own JSON. Telegram also needs `--chat`. Every message carries a link
 back to the run, because a notice that says something is wrong and leaves you
 to find it is half a notice.
+
+The link never carries the dashboard's token. A notice sits in somebody else's
+chat history for as long as they keep it, and the token is the whole key to
+the dashboard, so whoever follows the link signs in there instead. By default
+the link is the address the dashboard serves on, which only this machine can
+open. To read notices on your phone, give the address it reaches the dashboard
+by, such as a tailnet name or a reverse proxy:
+
+```sh
+loadout config set team-link-address https://desk.example.ts.net:4800
+loadout daemon restart            # the daemon reads it when it starts
+loadout dashboard pair            # a sign-in link for the phone, once, for two minutes
+loadout team notify test          # its link uses that address too
+```
+
+Anything after a `?` or `#` is refused, because the likeliest thing there is
+the token. So is an address on this machine, which the dashboard's own address
+already covers.
+
+`dashboard pair` is made at this machine because this machine is what proves
+the phone is yours. Open its link on the phone and the phone stays signed in
+there for ninety days. Until it is used, the link signs in whoever opens it,
+so type it or send it to yourself somewhere private. `loadout dashboard
+sign-out` ends it along with every other sign-in.
+
+At the link address the phone can do one job: read team runs on the classic
+page and answer what they are waiting on, questions and permissions both.
+Everything else the dashboard serves is refused there, Studio included,
+because Studio holds your sessions and a terminal there types at your agent.
+A cookie that lasts ninety days on a phone should not be able to do that. So
+notices at the link address open the classic page's list of runs, not
+Studio.
+
+The phone is known by the name it asked for. The proxy in front of the
+dashboard has to pass that name on in `X-Forwarded-Host`, which most proxies
+send or can be told to. Passing it in `Host` instead, unchanged, works only on
+Windows. Everywhere else the dashboard's listener refuses a host it was not
+bound to before Loadout sees the request. **A proxy that rewrites `Host` to
+`127.0.0.1` and sends no `X-Forwarded-Host` makes the phone look like this
+machine, and this machine is allowed everything.**
+
+**Not verified:** following the link from a real phone, through a real
+tailnet or proxy, and which proxies send `X-Forwarded-Host` without being told
+to. The tests play the phone by sending requests that name the link address,
+against the real listener.
 
 The address lives in your operating system's credential store, never in a file
 — a Slack or Discord webhook address *is* the credential: anyone holding it can

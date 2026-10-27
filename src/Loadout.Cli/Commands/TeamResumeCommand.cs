@@ -329,7 +329,7 @@ public sealed class TeamResumeCommand : AsyncCommand<TeamResumeCommand.Settings>
 
         return await TeamRunCommand.DriveAsync(
             _runner, _console, _reading, _git, _paths, _processes,
-            output, settings, request, project, cancellationToken).ConfigureAwait(false);
+            output, settings, request, project, _configuration, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>The term offered for an answer in the person's own words.</summary>
