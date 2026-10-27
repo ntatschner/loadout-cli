@@ -153,6 +153,8 @@ loadout rules split starstats      # scope prose to the paths it applies to
 instruction written in two places, a rule that declares globs *and*
 `alwaysApply` (the globs are decorative; it loads always), two rules claiming
 the same paths, and `@import` lines whose size appears in nobody's budget.
+It also warns about wording that invites the agent to narrate, which
+[Rules followed without comment](#rules-followed-without-comment) explains.
 
 `loadout rules split` breaks an existing instruction file apart. It needs a map
 saying which sections belong to which rule and what each rule's scope is —
@@ -181,3 +183,52 @@ than applied. A file that has already been split cannot be split again, because
 the second pass would rebuild the rules from a source whose content has already
 moved out of it.
 
+
+## Rules followed without comment
+
+An agent handed rules tends to say so every time it applies one: "per your rule
+I won't add a Co-Authored-By", "following the house voice". It's a sentence you
+have to read past, and it tells you nothing you can act on. Loadout does three
+things about it.
+
+**Every compiled context says to follow the rules quietly.** A short section
+near the top, *How to apply these instructions*, tells the agent to follow its
+rules, specialists and memory without saying that it is, and to mention one
+only when it stops or changes something you asked for, or when two of them
+disagree. It reaches Claude Code, Codex and every team node, because they all
+read the compiled context. It's an instruction to a model, so it makes the
+narration rarer rather than impossible. To leave it out:
+
+```sh
+loadout config set quiet-rules false
+```
+
+**Claude Code isn't asked for attribution trailers.** Its own system prompt
+tells it to end every commit with a Co-Authored-By line and every pull request
+with a "Generated with" footer. If your rules say not to, the agent has two
+instructions that disagree, and it tends to explain which one it picked. So
+Loadout writes empty `attribution` settings (and `includeCoAuthoredBy: false`,
+the key older builds read) into the settings file it hands each launch, and
+the instruction is never sent. That file lives in the launch's own runtime
+directory; your `~/.claude` and the project's `settings.json` aren't touched.
+A project whose `settings.json` already sets either key has decided, and is
+left alone. Because a launch's settings outrank your own, attribution text you
+set in `~/.claude/settings.json` is overruled too, unless you turn this off:
+
+```sh
+loadout config set attribution-trailers true
+```
+
+**The audit points at wording that invites it.** "This overrides the session
+default" is true, and it's also an invitation: an agent told that one
+instruction beats another tends to say, every time, which one it chose and why.
+`loadout rules audit` reports an `invites-narration` warning for that kind of
+phrasing in rules, the core instruction files and memory topics, naming the
+file and line, and `loadout doctor` counts them per project. Rewrite it as a
+plain directive ("Do not add Co-Authored-By trailers") and it's followed without
+comment. The audit matches a short list of phrasings rather than judging every
+sentence, so it misses paraphrases.
+
+An agent you've described in `config.yaml` as a custom agent isn't given the
+compiled context, so it doesn't get the first of these, and Loadout knows no
+attribution setting for it.

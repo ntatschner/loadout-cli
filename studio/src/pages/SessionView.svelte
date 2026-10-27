@@ -8,6 +8,7 @@
   import Dialog from '../lib/components/Dialog.svelte';
   import HaloButton from '../lib/components/HaloButton.svelte';
   import SessionPane from '../lib/components/SessionPane.svelte';
+  import StatusBlock from '../lib/components/StatusBlock.svelte';
   import { sessions as sessionsApi, type Session } from '../lib/api';
   import { command } from '../lib/commands';
   import { router } from '../lib/router.svelte';
@@ -116,6 +117,9 @@
           <dt>Drawn with</dt><dd>{renderer || '…'}</dd>
         </dl>
       </section>
+      {#if session.status && !session.ended}
+        <StatusBlock status={session.status} now={studio.now} />
+      {/if}
       {#if line.events?.length}
         <section>
           <h2>Last events</h2>

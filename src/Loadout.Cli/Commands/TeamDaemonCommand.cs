@@ -193,7 +193,10 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             line => console.WriteLine(line),
             // A tab renamed in Studio names the agent's own conversation
             // too, through whatever command its adapter says does that.
-            (agent, name) => agents.Resolve(agent) is { Succeeded: true, Value: { } adapter } ? adapter.RenameInput(name) : null);
+            (agent, name) => agents.Resolve(agent) is { Succeeded: true, Value: { } adapter } ? adapter.RenameInput(name) : null,
+            // Where each hosted session's status line leaves what Claude
+            // knows about it, for Studio to draw.
+            StatusesOf(paths));
         _ideas = ideas;
         _dumps = dumps;
         _launcher = launcher;
@@ -376,6 +379,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             var port = settings.Port != 0 ? settings.Port : teams?.DashboardPort ?? DashboardServer.DefaultPort;
 
             server.SignIn = SignIn.ForMachine(_paths);
+            server.LinkAddress = teams?.LinkAddress;
 
             var started = server.Start(
                 port,
@@ -518,6 +522,11 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             // opened after a restart can still offer to resume one.
             Loadout.Core.Sessions.Hosting.SessionSignals.Prune(
                 Loadout.Core.Sessions.Hosting.SessionSignals.Directory(_paths.Paths.State), _time.GetUtcNow());
+
+            // Status snapshots are no use once their session has gone, which
+            // a daemon that stopped took with it.
+            Loadout.Core.Sessions.Hosting.SessionStatus.Prune(
+                Loadout.Core.Sessions.Hosting.SessionStatus.Directory(_paths.Paths.State), _time.GetUtcNow());
             _sessions.Changed += HostedChanged;
 
             // Which page the address opens, read each time so setting it is
@@ -895,6 +904,10 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     /// <summary>Where hosted sessions' hooks report, or null for a daemon built without paths.</summary>
     private static string? SignalsOf(IPlatformPaths? paths) =>
         paths?.Paths is { } where ? Loadout.Core.Sessions.Hosting.SessionSignals.Directory(where.State) : null;
+
+    /// <summary>Where hosted sessions' status lines leave their snapshots, or null for a daemon built without paths.</summary>
+    private static string? StatusesOf(IPlatformPaths? paths) =>
+        paths?.Paths is { } where ? Loadout.Core.Sessions.Hosting.SessionStatus.Directory(where.State) : null;
     private readonly Loadout.Core.Instructions.IMemoryService _memory;
     private readonly Loadout.Core.Sessions.LaunchSheet _sheet;
     private readonly Loadout.Core.Instructions.IMemoryImporter _importer;
@@ -2105,7 +2118,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         if (_notices is not null && Notices.KindOf(teams?.NotifyKind) is { } kind && _sendTo is { Length: > 0 } address)
         {
             await _notices.PostAsync(
-                kind, title, detail, _address is { Length: > 0 } page ? page : "loadout team queue list",
+                kind, title, detail, NoticeLink.To(teams!.LinkAddress, _address, "teams", "loadout team queue list"),
                 teams!.NotifyChat, address, ct: ct).ConfigureAwait(false);
         }
     }
@@ -2158,7 +2171,8 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         var where = teams!.NotifyKind;
         var sent = await _notices!
             .SayAsync(
-                runs, kind, teams.NotifyChat, address, Link, _time.GetUtcNow(), ct,
+                runs, kind, teams.NotifyChat, address,
+                run => NoticeLink.For(teams.LinkAddress, _address, run.RunId), _time.GetUtcNow(), ct,
                 _watch is { } watch ? (run, reason, landed) => watch.Told(where, run, reason, landed) : null)
             .ConfigureAwait(false);
 
@@ -2212,17 +2226,12 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         }
     }
 
-    /// <summary>Where the dashboard is, so a notice can point at it.</summary>
-    /// <remarks>
-    /// A notice that says something is wrong and leaves somebody to find it is
-    /// half a notice. Falls back to the command when no page is being served.
-    /// </remarks>
-    private string Link(RunSummary run) =>
-        _address is { Length: > 0 }
-            ? _address
-            : $"loadout team status {run.RunId}";
-
     private Notices? _notices;
+
+    /// <summary>
+    /// Where the dashboard is serving, token and all. A notice's link is built
+    /// from it only through <see cref="NoticeLink"/>, which drops the token.
+    /// </summary>
     private string? _address;
 
     /// <summary>What records the event history, or null for a daemon with nowhere to keep it.</summary>

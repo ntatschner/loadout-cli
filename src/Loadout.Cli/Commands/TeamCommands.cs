@@ -750,7 +750,7 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
         foreach (var gate in run.Waiting)
         {
             output.WriteBlankLine();
-            output.WriteLine($"  [yellow]waiting[/] {Markup.Escape(gate.Asking)}");
+            output.WriteLine($"  [yellow]waiting[/] {Markup.Escape(gate.Brief)}");
             output.WriteLine(
                 $"    [dim]loadout team gate {Markup.Escape(run.RunId)} --gate {Markup.Escape(gate.Id)} "
                 + $"--answer {Markup.Escape(gate.Choices[0])}[/]");
@@ -1961,7 +1961,7 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
 
         return await DriveAsync(
             _runner, _console, _reading, _git, _paths, _processes,
-            output, settings, request, project, cancellationToken).ConfigureAwait(false);
+            output, settings, request, project, _configuration, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -1984,8 +1984,12 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         GlobalSettings settings,
         TeamRunRequest request,
         Loadout.Models.Projects.ProjectResolution project,
+        Loadout.Core.Configuration.IConfigurationService configuration,
         CancellationToken ct)
     {
+        // How long a question to the dashboard waits, as this machine has it.
+        var wait = TeamWaits.Question((await configuration.LoadMachineAsync(ct).ConfigureAwait(false)).Value?.Teams);
+
         // Where the run's questions go. A terminal answers its own; a run with
         // nobody at one sends them to the dashboard, if a daemon is serving it.
         // Decided once rather than per question, because two places able to
@@ -1993,7 +1997,7 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         ITeamConsole console = settings.AllowsPrompting
             ? new TerminalTeamConsole(terminal, settings, reading)
             : Serving(paths, processes)
-                ? new DashboardTeamConsole(TimeProvider.System, line => output.WriteLine(TeamStyle.Note(line)))
+                ? new DashboardTeamConsole(TimeProvider.System, line => output.WriteLine(TeamStyle.Note(line)), wait)
                 : new TerminalTeamConsole(terminal, settings, reading);
 
         await SayWhereAsync(git, output, project, ct).ConfigureAwait(false);

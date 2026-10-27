@@ -564,6 +564,7 @@ public sealed class IdeaListCommand : AsyncCommand<IdeaListCommand.Settings>
                     by = idea.DeclaredBy,
                     declared = idea.DeclaredUtc,
                     unanswered = idea.Unanswered,
+                    outdated = idea.Outdated,
                     running = idea.Running,
                     failure = IdeaView.Failure(idea.Failure),
                     moved = TaskTrace.Json(idea.Moved),

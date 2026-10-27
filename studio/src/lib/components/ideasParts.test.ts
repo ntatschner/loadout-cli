@@ -311,3 +311,36 @@ describe('NoteDump', () => {
     expect(applied).toEqual([['d3', '--only', '1']]);
   });
 });
+
+describe('QuestionSet, saying what each question relates to', () => {
+  const ABOUT: Question[] = [
+    { id: 'Q1', round: 1, question: 'Keep a week of checks?', why: null, options: ['yes', 'no'], recommendation: 'yes', answer: 'yes', about: 'L2 Storage', context: 'Storage sizes depend on it.', outdated: 'layer Storage changed in revision 3' },
+    { id: 'Q2', round: 1, question: 'Who opens it?', why: null, options: [], recommendation: null, answer: null, about: null, context: 'Hosting depends on it.', outdated: null },
+    { id: 'Q3', round: 2, question: 'Older one', why: null, options: [], recommendation: null, answer: null },
+  ];
+  const ROUNDS = [
+    { round: 1, understanding: 'A status page for the lab.', questions: ['Q1', 'Q2'] },
+    { round: 2, understanding: null, questions: ['Q3'] },
+  ];
+
+  it('shows the reference and context under each question, and the understanding above its round', () => {
+    render(QuestionSet, { id: 'i', where: ['--global'], questions: ABOUT, rounds: ROUNDS });
+
+    expect(screen.getByText('Relates to L2 Storage: Storage sizes depend on it.')).toBeTruthy();
+    expect(screen.getByText('Hosting depends on it.')).toBeTruthy();
+    expect(screen.getAllByText(/^Understood as:/)).toHaveLength(1);
+    expect(screen.getByText('Understood as: A status page for the lab.')).toBeTruthy();
+    expect(document.querySelectorAll('.about')).toHaveLength(2);
+  });
+
+  it('marks an outdated answer and sends the same answer again when it still stands', async () => {
+    const sent: Answer[][] = [];
+    render(QuestionSet, { id: 'i', where: ['--global'], questions: ABOUT, rounds: ROUNDS, onsend: async (answers: Answer[]) => (sent.push(answers), true) });
+
+    expect(screen.getByText(/Possibly outdated: layer Storage changed in revision 3/)).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: 'It still stands' }));
+    await settle();
+
+    expect(sent.map((answers) => answers.map((one) => one.words))).toEqual([[['i', 'Q1', '--answer=yes', '--global']]]);
+  });
+});

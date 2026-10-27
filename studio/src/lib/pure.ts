@@ -6,6 +6,7 @@ import type { Run } from './api';
 import { matchesWords } from './findWords';
 import type { Work } from './lines';
 import { wordFor } from './signals';
+import { contextPercent } from './status';
 import { runWord } from './teamsData';
 
 /** One thing in the list: a session, a team run, an idea or a task. */
@@ -20,6 +21,8 @@ export interface PureItem {
   meta: string;
   /** Its state word; empty for something with no state, such as a section of Settings. */
   word: string;
+  /** For a session, how much of its context window is in use, as its status line last said. */
+  context?: number | null;
 }
 
 export interface PureGroup {
@@ -97,6 +100,7 @@ export function pureGroups(lines: Work[], runs: Run[], idleAfter: number, scope:
         title: line.title,
         meta: [line.session?.project, line.session?.kind === 'command' ? 'loadout' : line.session?.agent, line.session?.mode].filter(Boolean).join(' · '),
         word: line.stage === 4 ? 'ended' : wordFor(line, idleAfter),
+        context: line.stage === 4 || line.session?.ended ? null : contextPercent(line.session?.status),
       });
 
       if (line.waiting) {

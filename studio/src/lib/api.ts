@@ -3,6 +3,7 @@
 // token; an address printed with one still works, and the token is then kept
 // in memory only and taken out of the address bar at once.
 import type { ListShape } from './lists';
+import type { SessionStatus } from './status';
 
 const printed = new URLSearchParams(location.search).get('token') ?? '';
 
@@ -195,6 +196,8 @@ export interface Session {
   agentSession?: string | null;
   /** 'command' for a command that asks as it goes, 'launch' for an agent session. */
   kind?: 'launch' | 'command';
+  /** What its status line last handed over: null until it draws, once it has ended, and for an agent with no such line. */
+  status?: SessionStatus | null;
 }
 
 export interface Launch {
@@ -397,6 +400,8 @@ export interface RunGate {
   node: string;
   role: string;
   question: string;
+  /** The question without a permission's command, for a list or a toast. Missing from an older daemon. */
+  brief?: string;
   options: string[];
   recommendation: string | null;
   at: string;

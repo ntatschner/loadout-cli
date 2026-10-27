@@ -25,6 +25,7 @@ public sealed class DashboardSessionSignalsTests : IAsyncLifetime
     private readonly CancellationTokenSource _stopping = new();
     private readonly List<ScriptedTerminal> _terminals = [];
     private readonly string _signals = Path.Combine(Path.GetTempPath(), "loadout-signals-" + Guid.NewGuid().ToString("N"));
+    private string Statuses => _signals + "-status";
     private HostedSessions _sessions = null!;
     private DashboardServer _server = null!;
     private HttpClient _client = null!;
@@ -34,7 +35,8 @@ public sealed class DashboardSessionSignalsTests : IAsyncLifetime
     {
         _sessions = new HostedSessions(
             Made, () => ("loadout-host", []), signals: _signals,
-            renaming: (agent, name) => agent == "claude" ? "/rename " + name : null);
+            renaming: (agent, name) => agent == "claude" ? "/rename " + name : null,
+            statuses: Statuses);
         _server = new DashboardServer(new EmptyJournal()) { Sessions = _sessions };
 
         var started = _server.Start(0);
@@ -57,13 +59,62 @@ public sealed class DashboardSessionSignalsTests : IAsyncLifetime
         _server.Dispose();
         _stopping.Dispose();
 
-        try
+        foreach (var directory in new[] { _signals, Statuses })
         {
-            Directory.Delete(_signals, recursive: true);
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+            }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-        }
+    }
+
+    [Fact]
+    public async Task A_session_shows_what_its_status_line_last_handed_over()
+    {
+        var id = await StartAsync();
+
+        (await OneAsync(id)).GetProperty("status").ValueKind.Should().Be(JsonValueKind.Null, "its line has not drawn yet");
+
+        SessionStatus.Write(Statuses, id, SessionStatusSnapshot.From(
+            Loadout.Core.Statusline.StatuslinePayload.Parse("""{ "context_window": { "used_percentage": 87, "context_window_size": 200000 } }"""),
+            DateTimeOffset.UtcNow, 30, "off", false, "demo", ["role.implementer"]));
+
+        var status = (await OneAsync(id)).GetProperty("status");
+
+        status.GetProperty("context").GetProperty("usedPercent").GetDouble().Should().Be(87);
+        status.GetProperty("refreshSeconds").GetInt32().Should().Be(30);
+        status.GetProperty("specialists").EnumerateArray().Select(one => one.GetString()).Should().Equal("role.implementer");
+    }
+
+    [Fact]
+    public async Task Every_open_page_hears_when_a_session_redraws_its_status()
+    {
+        var id = await StartAsync();
+
+        using var patience = new CancellationTokenSource(Patience);
+        using var events = await _client.GetAsync($"{_root}/api/v1/events", HttpCompletionOption.ResponseHeadersRead, patience.Token);
+        using var reader = new StreamReader(await events.Content.ReadAsStreamAsync(patience.Token));
+
+        await NextChangeAsync(reader, patience.Token);
+
+        SessionStatus.Write(Statuses, id, SessionStatusSnapshot.From(null, DateTimeOffset.UtcNow, null, "off", false, null, null));
+
+        (await NextChangeAsync(reader, patience.Token)).Should().Contain("sessions");
+    }
+
+    [Fact]
+    public async Task A_forgotten_session_takes_its_status_with_it()
+    {
+        var id = await StartAsync();
+
+        SessionStatus.Write(Statuses, id, SessionStatusSnapshot.From(null, DateTimeOffset.UtcNow, null, "off", false, null, null));
+
+        (await _sessions.RemoveAsync(id)).Should().BeTrue();
+
+        File.Exists(Path.Combine(Statuses, id + ".json")).Should().BeFalse();
     }
 
     [Fact]

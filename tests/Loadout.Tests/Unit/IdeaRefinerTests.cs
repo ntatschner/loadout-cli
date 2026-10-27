@@ -60,7 +60,7 @@ public sealed class IdeaRefinerTests : IDisposable
         options.DeniedTools.Should().Contain(["Write", "Edit", "Bash"]);
         options.IsolateMcpServers.Should().BeTrue();
         options.DisableHooks.Should().BeTrue();
-        options.OutputSchemaJson.Should().Be(IdeaSchema.Version2);
+        options.OutputSchemaJson.Should().Be(IdeaSchema.Version3);
     }
 
     [Fact]

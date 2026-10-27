@@ -88,6 +88,44 @@ older version wrote something a newer one spells differently. A status line
 command that can't run draws nothing and reports nothing, so this check exists
 to make that visible.
 
+### In sessions Studio hosts
+
+In a session Studio hosts, Studio draws the status itself. You get a strip
+under the terminal, a fuller block in Details, and a context mark on each
+Terminals tab and each row of the Pure list. The tab mark is the point of it:
+with four sessions open you can see which one is about to run out of context
+without opening any of them.
+
+To get the figures out, the launch gives the session a status line of its own,
+`loadout statusline --studio`. Claude hands it the context window, what the
+session has cost and the plan's usage limits, and it leaves them in a file under
+the launcher's state directory for the daemon to read. The agent never holds a
+sign-in, and your own settings files aren't touched. Every figure is Claude's
+own. Limits only appear for a subscription, or behind a gateway with a spend
+limit, so on an API key that part of the strip is simply empty.
+
+By default the terminal then shows no line at all. Claude Code draws no row for
+an empty line, so the terminal gets that row back, and you aren't reading the
+same numbers twice. `statusline-in-studio` changes that:
+
+| Setting | What the terminal shows |
+|---|---|
+| `off` (default) | Nothing |
+| `minimal` | A short line: project, model, context and specialists, with no git and no times so nothing in it can be slow |
+| `full` | Your own status line if you have one, run for you with the same payload, or this launcher's full line if you don't |
+
+It's read every time the line draws, so a change shows up at the next redraw
+without restarting the session. `full` is there because the launch's line
+outranks every settings file you keep, so without it your own line would just
+stop in Studio. Your line gets whatever is left of the two-second deadline. The
+figures are written for Studio before it runs, so a slow or broken line of
+yours costs you that line and never Studio's strip. `loadout statusline show`
+says which of these a hosted session would do, and names your line when it is
+the one being hidden.
+
+Sessions Studio doesn't host aren't affected: they get no extra line and write
+no file.
+
 ### Time on the line
 
 After the context figure and before spend, the line can say what the session

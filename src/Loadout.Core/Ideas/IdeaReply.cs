@@ -5,7 +5,7 @@ using Loadout.Models.Results;
 
 namespace Loadout.Core.Ideas;
 
-/// <summary>What an agent answered to one round, as <see cref="IdeaSchema.Version2"/> has it.</summary>
+/// <summary>What an agent answered to one round, as <see cref="IdeaSchema.Version3"/> has it.</summary>
 public sealed class IdeaReply
 {
     [JsonPropertyName("contract")]
@@ -33,6 +33,12 @@ public sealed class IdeaReply
 
         [JsonPropertyName("recommendation")]
         public string Recommendation { get; set; } = string.Empty;
+
+        [JsonPropertyName("relatesTo")]
+        public string RelatesTo { get; set; } = string.Empty;
+
+        [JsonPropertyName("context")]
+        public string Context { get; set; } = string.Empty;
     }
 
     public sealed class ReplyPlan
@@ -138,10 +144,11 @@ public sealed class IdeaReply
             return OperationResult<IdeaReply>.Fail("The agent's answer is empty.");
         }
 
-        // The one before is read too: a round already in flight when this
-        // build arrived answers in it, and its plan simply proposes no done-when.
+        // The ones before are read too: a round already in flight when this
+        // build arrived answers in one, and its questions simply say nothing
+        // about what they relate to, and its plan proposes no done-when.
         if (!string.Equals(reply.Contract, IdeaSchema.Version, StringComparison.Ordinal)
-            && !string.Equals(reply.Contract, IdeaSchema.Previous, StringComparison.Ordinal))
+            && !IdeaSchema.Earlier.Contains(reply.Contract, StringComparer.Ordinal))
         {
             return OperationResult<IdeaReply>.Fail(
                 $"The agent's answer names contract '{reply.Contract}', not {IdeaSchema.Version}, "

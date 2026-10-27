@@ -93,6 +93,11 @@ namespace Loadout.Agents;
 /// Already settled by the launcher against what the agent advertises, so an
 /// adapter only places its switch; it is never set for a headless session.
 /// </param>
+/// <param name="KeepAttribution">
+/// Whether the agent's own commit and pull request attribution is left as the
+/// agent writes it. Off unless the person set <c>attribution-trailers</c>, and
+/// then an adapter whose agent has a setting for it clears it.
+/// </param>
 public sealed record AgentLaunchContext(
     ProjectResolution Project,
     string WorkingDirectory,
@@ -114,7 +119,8 @@ public sealed record AgentLaunchContext(
     string? OpeningPrompt = null,
     string? StudioSession = null,
     bool LinksSession = false,
-    bool RemoteControl = false);
+    bool RemoteControl = false,
+    bool KeepAttribution = false);
 
 /// <summary>A fully resolved launch, ready to be handed to the process layer.</summary>
 /// <param name="Executable">Absolute path to the agent binary.</param>

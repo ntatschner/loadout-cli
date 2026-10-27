@@ -191,7 +191,10 @@ public sealed class SessionLinkTests : IDisposable
             null,
             [],
             Headless: headless,
-            LinksSession: links));
+            LinksSession: links,
+            // Attribution kept, so the only reason for a settings file is
+            // the one this test is about.
+            KeepAttribution: true));
 
         built.Succeeded.Should().BeTrue(built.Error);
 

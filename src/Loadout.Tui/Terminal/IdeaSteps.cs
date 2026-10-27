@@ -143,7 +143,10 @@ internal static class IdeaSteps
 
         var stage = IdeaWork.StageOf(record);
 
-        Say($"{place.Id} on {place.Where}: {Stage(stage, IdeaWork.Unanswered(record).Count)}");
+        var outdatedCount = IdeaWork.OutdatedCount(record);
+
+        Say($"{place.Id} on {place.Where}: {Stage(stage, IdeaWork.Unanswered(record).Count)}"
+            + (outdatedCount > 0 ? $", {outdatedCount} possibly outdated" : string.Empty));
 
         if (moved is not null)
         {
@@ -183,16 +186,34 @@ internal static class IdeaSteps
             }
         }
 
-        var questions = record.Rounds.SelectMany(round => round.Questions).ToList();
-
-        if (questions.Count > 0)
+        if (record.Rounds.Any(round => round.Questions.Count > 0))
         {
             lines.Add(string.Empty);
             lines.Add("Questions");
+        }
 
-            foreach (var question in questions)
+        foreach (var round in record.Rounds)
+        {
+            if (round.Understanding.Length > 0 && round.Questions.Count > 0)
             {
+                Say($"Understood as: {round.Understanding}", 2);
+            }
+
+            foreach (var question in round.Questions)
+            {
+                var about = IdeaWork.About(record, question);
+
                 Say($"{question.Id}  {question.Question}", 2);
+
+                if (about.Line is { } line)
+                {
+                    Say(line, 6);
+                }
+
+                if (about.Outdated is { } outdated)
+                {
+                    Say($"Possibly outdated: {outdated}. Answering again clears it.", 6);
+                }
 
                 if (question.Answer.Length > 0)
                 {
@@ -284,9 +305,10 @@ internal static class IdeaSteps
     /// <c>loadout idea list</c> puts it.
     /// </summary>
     internal static string Stage(IdeaSummary idea) =>
-        idea.Running ? "round running"
+        (idea.Running ? "round running"
         : idea.Failure is not null ? "last round failed"
-        : Stage(idea.Stage, idea.Unanswered);
+        : Stage(idea.Stage, idea.Unanswered))
+        + (idea.Outdated > 0 ? string.Create(CultureInfo.InvariantCulture, $", {idea.Outdated} possibly outdated") : string.Empty);
 
     /// <summary>Where an idea stands, in the words the list shows.</summary>
     internal static string Stage(IdeaStage stage, int unanswered) => stage switch

@@ -34,7 +34,7 @@
       })),
     ...studio.runs
       .filter((run) => run.running)
-      .map((run) => ({ id: run.id, kind: 'team run' as const, title: run.goal, word: runWord(run), where: run.team, ask: run.gates[0]?.question ?? '' })),
+      .map((run) => ({ id: run.id, kind: 'team run' as const, title: run.goal, word: runWord(run), where: run.team, ask: run.gates[0]?.brief ?? run.gates[0]?.question ?? '' })),
   ]);
 
   const run = $derived(open?.item.kind === 'team run' ? (studio.runs.find((one) => one.id === open!.item.id) ?? null) : null);

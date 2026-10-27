@@ -1221,12 +1221,120 @@ public sealed class DashboardServer : IDisposable
     /// </remarks>
     internal CookieStanding SignedIn(HttpListenerRequest request)
     {
-        if (SignIn is null || Beyond || !From(request) || !Ours(request))
+        if (SignIn is null)
+        {
+            return CookieStanding.Refused;
+        }
+
+        // At the link address the request comes from a phone, often through
+        // a proxy, so where it came from says nothing. What it can reach
+        // there is held to Remotely in HandleAsync instead.
+        if (AtLink(request))
+        {
+            return FromLinkPage(request)
+                ? SignIn.Check(request.Cookies[SignIn.CookieName]?.Value)
+                : CookieStanding.Refused;
+        }
+
+        if (Beyond || !From(request) || !Ours(request))
         {
             return CookieStanding.Refused;
         }
 
         return SignIn.Check(request.Cookies[SignIn.CookieName]?.Value);
+    }
+
+    /// <summary>
+    /// The machine's link address, where a paired phone signs in and answers
+    /// runs, or null or empty where none is set.
+    /// </summary>
+    /// <remarks>
+    /// Read when the daemon starts, like where its notices go, so a link
+    /// address set later takes effect when the daemon is next started.
+    /// </remarks>
+    public string? LinkAddress { get; set; }
+
+    /// <summary>The link address, where it is one a phone could use.</summary>
+    /// <remarks>
+    /// Never a loopback address: requests naming this machine are judged as
+    /// this machine's, and a link address of 127.0.0.1 would otherwise hold
+    /// this machine's own page to what a phone may reach.
+    /// </remarks>
+    private Uri? Link =>
+        NoticeLink.Problem(LinkAddress) is null
+        && Uri.TryCreate(LinkAddress?.Trim(), UriKind.Absolute, out var link)
+        && !IsLoopback(link.Host.Trim('[', ']'))
+            ? link
+            : null;
+
+    /// <summary>Whether a request names the link address as its host.</summary>
+    /// <remarks>
+    /// <para>
+    /// Either header counts. A proxy that keeps the Host header says so in
+    /// Host, but only Windows delivers that to a listener bound to 127.0.0.1:
+    /// the listener everywhere else answers 404 for a host it was not bound
+    /// to, before any of this runs. A proxy that rewrites Host to this
+    /// machine says where the request was meant for in X-Forwarded-Host
+    /// instead, and that reaches the listener on every platform.
+    /// </para>
+    /// <para>
+    /// Trusting X-Forwarded-Host here can only hold a request to less, never
+    /// let it do more, because the link address is where the least is
+    /// allowed. A browser on this machine never sends it. A proxy that
+    /// rewrites Host and sends neither makes the phone look like this machine,
+    /// which the documentation warns about.
+    /// </para>
+    /// </remarks>
+    internal bool AtLink(HttpListenerRequest request) =>
+        Link is { } link
+        && (Names(request.Headers["Host"], link) || Names(FirstOf(request.Headers["X-Forwarded-Host"]), link));
+
+    private static bool Names(string? host, Uri link) =>
+        host is { Length: > 0 } && string.Equals(host.Trim(), link.Authority, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The first of a comma-separated header's values: the one the client sent, before any later proxy.</summary>
+    private static string? FirstOf(string? header) =>
+        header?.Split(',', 2)[0];
+
+    /// <summary>Whether a request at the link address came from the page there, where it says.</summary>
+    private bool FromLinkPage(HttpListenerRequest request) =>
+        request.Headers["Origin"] is not { } origin
+        || (Link is { } link
+            && string.Equals(origin, $"{link.Scheme}://{link.Authority}", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// What may be asked for at the link address: the classic page, a run's
+    /// reads, and answering what a run is waiting on.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// An allow-list, because everything else this server answers was built
+    /// for somebody at this machine. Studio's API in particular holds hosted
+    /// sessions, and a terminal there types at somebody's agent; a phone
+    /// cookie that lasts ninety days should not be able to do that.
+    /// </para>
+    /// <para>
+    /// The classic page rather than Studio because the classic page reads
+    /// and answers runs through <c>/api/runs</c> alone, where Studio needs
+    /// its whole API just to draw itself.
+    /// </para>
+    /// </remarks>
+    internal static bool Remotely(string method, string path)
+    {
+        var run = path.StartsWith("/api/runs/", StringComparison.Ordinal) ? Doing(path) : default;
+
+        return method switch
+        {
+            "GET" => path is "/classic" or "/signin" or "/icon" or "/icon-needs" or "/favicon.ico"
+                    or "/api/runs" or "/api/waiting" or "/api/choices" or "/api/daemon"
+                || (run.Run is { Length: > 0 } && run.Verb is null),
+
+            // Answering a question or a permission, and nothing else a run
+            // can be asked to do.
+            "POST" => run.Verb is "gate" or "gates",
+
+            _ => false,
+        };
     }
 
     /// <summary>Whether a request names this listener as its host, and as its origin when it gives one.</summary>
@@ -1675,11 +1783,13 @@ public sealed class DashboardServer : IDisposable
                 // What each session needs is part of it, so a hook saying an
                 // agent is waiting, and somebody typing the answer, both reach
                 // every open page without it asking; so does background work
-                // gone silent long enough to read as waiting for you.
+                // gone silent long enough to read as waiting for you. So does
+                // a new status snapshot, each time Claude redraws its line.
                 var sessionsNow = Sessions is null
                     ? string.Empty
                     : string.Join(';', Sessions.All.Select(one => Sessions.SignalOf(one) is var signal
                         ? one.Id + (one.HasEnded ? "!" : string.Empty) + "?" + signal.Needs + (signal.Background ? "~" : string.Empty)
+                            + "@" + Sessions.StatusStamp(one)?.Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture)
                             + "=" + one.Label
                         : string.Empty));
                 var runsNow = string.Join(';', _journal.List(40).Select(run => run + "=" + RunStamp(run)));
@@ -1845,41 +1955,86 @@ public sealed class DashboardServer : IDisposable
     {
         var request = context.Request;
 
-        if (SignIn is null || Beyond || !From(request) || !Ours(request) || !SignIn.Redeem(request.QueryString["code"]))
+        var atLink = AtLink(request);
+
+        // The code is spent last, so a link opened at the wrong address is
+        // still good at the right one.
+        if (SignIn is null
+            || !(atLink || (!Beyond && From(request) && Ours(request)))
+            || !SignIn.Redeem(request.QueryString["code"]))
         {
             await WriteAsync(context, 403, "text/plain; charset=utf-8",
-                "This sign-in link has been used or has run out. Open the dashboard again with: loadout dashboard --open")
+                atLink
+                    ? "This sign-in link has been used or has run out. Make another at the machine with: loadout dashboard pair"
+                    : "This sign-in link has been used or has run out. Open the dashboard again with: loadout dashboard --open")
                 .ConfigureAwait(false);
 
             return;
         }
 
-        GiveCookie(context.Response);
+        GiveCookie(context.Response, atLink);
         context.Response.Headers["Cache-Control"] = "no-store";
         context.Response.StatusCode = 303;
 
-        // One of two fixed places, never an address taken from the link, so
+        // One of a few fixed places, never an address taken from the link, so
         // a sign-in link cannot be made into a way of sending somebody
-        // somewhere else.
-        context.Response.Headers["Location"] = request.QueryString["to"] switch
-        {
-            "classic" => "/classic",
-            "studio" => StudioAssets.Root,
-            _ => "/",
-        };
+        // somewhere else. At the link address, relative, so a proxy serving
+        // the dashboard under a path of its own keeps it.
+        context.Response.Headers["Location"] = atLink
+            ? "classic#list"
+            : request.QueryString["to"] switch
+            {
+                "classic" => "/classic",
+                "studio" => StudioAssets.Root,
+                _ => "/",
+            };
         context.Response.Close();
     }
 
-    private void GiveCookie(HttpListenerResponse response) =>
+    /// <remarks>
+    /// Lax at the link address rather than Strict. A notice's link is tapped
+    /// in a chat app, which makes it a visit from another site, and a Strict
+    /// cookie is not sent on one: the phone would be refused the page it was
+    /// signed in to. Lax is still not sent with another site's POST, and the
+    /// answers are POSTs. Secure where the link address is https, so it never
+    /// travels unencrypted.
+    /// </remarks>
+    private void GiveCookie(HttpListenerResponse response, bool atLink) =>
         response.AppendHeader(
             "Set-Cookie",
             $"{SignIn.CookieName}={SignIn!.IssueCookie()}; Path=/; "
-            + $"Max-Age={((long)SignIn.CookieLife.TotalSeconds).ToString(CultureInfo.InvariantCulture)}; HttpOnly; SameSite=Strict");
+            + $"Max-Age={((long)SignIn.CookieLife.TotalSeconds).ToString(CultureInfo.InvariantCulture)}; HttpOnly; "
+            + (atLink
+                ? "SameSite=Lax" + (Link?.Scheme == Uri.UriSchemeHttps ? "; Secure" : string.Empty)
+                : "SameSite=Strict"));
 
     private async Task HandleAsync(HttpListenerContext context, CancellationToken ct)
     {
         var request = context.Request;
         var path = request.Url?.AbsolutePath ?? "/";
+
+        // Before anything else, because what follows was built for somebody
+        // at this machine and assumes it: see Remotely for what is let through.
+        if (AtLink(request))
+        {
+            if (path is "/" or "/index.html" && request.HttpMethod == "GET")
+            {
+                context.Response.StatusCode = 302;
+                context.Response.Headers["Location"] = "classic#list";
+                context.Response.Close();
+
+                return;
+            }
+
+            if (!Remotely(request.HttpMethod, path))
+            {
+                await WriteAsync(context, 403, "text/plain; charset=utf-8",
+                    "At the link address, team runs can be read and answered, and nothing else. "
+                    + "The rest is on the machine the dashboard runs on.").ConfigureAwait(false);
+
+                return;
+            }
+        }
 
         if (path == "/signin")
         {
@@ -1892,7 +2047,7 @@ public sealed class DashboardServer : IDisposable
         // fresh with whatever was asked for.
         if (SignedIn(request) == CookieStanding.Renew)
         {
-            GiveCookie(context.Response);
+            GiveCookie(context.Response, AtLink(request));
         }
 
         // Setting the second credential, which is the one thing here that
@@ -3248,6 +3403,10 @@ public sealed class DashboardServer : IDisposable
             gate.Node,
             gate.Role,
             question = gate.Question,
+
+            // The question as a list or a toast shows it: a permission's plain
+            // line and warnings without the command, which is in "ask" below.
+            brief = gate.Brief,
             options = gate.Choices,
             gate.Recommendation,
             gate.At,

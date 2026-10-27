@@ -90,8 +90,10 @@ public static class ConfigKeys
 
         // Apart from the machine's other settings, which ran off a page at
         // eighty by twenty-four once the trigger journal had a limit of its
-        // own; how long things are kept is one question in any case.
-        public const string Keeping = "Keeping and pruning";
+        // own; how long things are kept is one question in any case. How long
+        // a run waits for you joined it for the same two reasons: the machine's
+        // page was full again, and it is the same question asked of a run.
+        public const string Keeping = "Waiting and keeping";
         public const string Accessibility = "Accessibility";
         public const string Studio = "Studio";
 
@@ -252,6 +254,13 @@ public static class ConfigKeys
             Group: Groups.Agents,
             IsFlag: true),
 
+        new("attribution-trailers",
+            "Let the agent add its own Co-Authored-By and pull request attribution. Off clears Claude Code's",
+            (c, _) => Boolean(c.Attribution.Keep),
+            (c, _, v) => c.Attribution.Keep = Flag(v), false,
+            Group: Groups.Agents,
+            IsFlag: true),
+
         new("statusline-project", "Show the project slug in the agent status line",
             (c, _) => Boolean(c.Statusline.ShowProject),
             (c, _, v) => c.Statusline.ShowProject = Flag(v), false,
@@ -291,6 +300,13 @@ public static class ConfigKeys
         new("statusline-separator", "Text drawn between status line segments",
             (c, _) => c.Statusline.Separator,
             (c, _, v) => c.Statusline.Separator = v, false,
+            Group: Groups.Statusline),
+
+        new("statusline-in-studio",
+            "In a session Studio hosts, what Claude's own line shows: off, minimal or full (your own status line, kept working)",
+            (c, _) => c.Statusline.StudioTerminal,
+            (c, _, v) => c.Statusline.StudioTerminal = OneOf(v, "off", "minimal", "full"), false,
+            Sample: "full",
             Group: Groups.Statusline),
 
         new("statusline-waiting", "Show what the session is waiting on, and since when",
@@ -384,6 +400,12 @@ public static class ConfigKeys
             Group: Groups.Instructions,
             WhenUnset: "only your personal and codebase styles, unless a project chooses one"),
 
+        new("quiet-rules", "Tell launched agents to follow their rules without saying so",
+            (c, _) => Boolean(c.InstructionContext.QuietRules),
+            (c, _, v) => c.InstructionContext.QuietRules = Flag(v), false,
+            Group: Groups.Instructions,
+            IsFlag: true),
+
         new("telemetry", "Tell launched agents to report token usage to this machine",
             (c, _) => Boolean(c.Telemetry.Enabled),
             (c, _, v) => c.Telemetry.Enabled = Flag(v), false,
@@ -456,6 +478,34 @@ public static class ConfigKeys
             Sample: "-1001234567890",
             Group: Groups.Machine,
             WhenUnset: "nothing, which Telegram refuses"),
+
+        new("team-link-address",
+            "The address a notice links to the dashboard by, for reading it away from this machine. "
+                + "A notice never carries the dashboard's token",
+            (_, m) => m.Teams.LinkAddress,
+            (_, m, v) => m.Teams.LinkAddress = LinkAddress(v),
+            true,
+            Sample: "https://desk.example.ts.net:4800",
+            Group: Groups.Machine,
+            WhenUnset: "the address the dashboard is serving on, which only this machine can open"),
+
+        new("team-permission-wait",
+            "Minutes a node stopped mid-turn waits to be told whether it may use a tool, before it is refused",
+            (_, m) => m.Teams.PermissionWaitMinutes?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty,
+            (_, m, v) => m.Teams.PermissionWaitMinutes = v.Trim().Length == 0 ? null : Minutes(v),
+            true,
+            Sample: "30",
+            Group: Groups.Keeping,
+            WhenUnset: "5 minutes, or 30 where a link address is set, since then the answer comes by phone"),
+
+        new("team-question-wait",
+            "Minutes a lead's question, a gate or a brief waits for a person, before the run stops at it",
+            (_, m) => m.Teams.QuestionWaitMinutes?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty,
+            (_, m, v) => m.Teams.QuestionWaitMinutes = v.Trim().Length == 0 ? null : Minutes(v),
+            true,
+            Sample: "120",
+            Group: Groups.Keeping,
+            WhenUnset: "60 minutes"),
 
         new("team-office-set",
             "Which set of office art the dashboard's building is drawn from",
@@ -1118,6 +1168,12 @@ public static class ConfigKeys
             out var parsed) && parsed is >= 1 and <= 65535
             ? parsed
             : throw new FormatException($"'{value}' is not a port: give a whole number from 1 to 65535.");
+
+    /// <summary>A link address: an http or https address with nothing after it, or empty to clear it.</summary>
+    private static string LinkAddress(string value) =>
+        Teams.Daemon.NoticeLink.Problem(value) is { } problem
+            ? throw new FormatException(problem)
+            : value.Trim();
 
     /// <summary>A default team budget: a figure above zero, none, or empty to clear it.</summary>
     /// <remarks>Refused rather than guessed, for the reason <see cref="Count" /> gives.</remarks>
