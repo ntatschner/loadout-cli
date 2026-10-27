@@ -343,7 +343,11 @@ internal sealed class AskService : IAskService
         // project list puts first.
         var about = AskParser.Place(query, vocabulary, today).Request?.Project ?? projects[0].Slug;
 
-        var turned = await _agent.AskAsync(query, new AskAgentContext(vocabulary, today, about), resumeSessionId, ct)
+        var open = (await OpenTasksAsync(null, projects, ct).ConfigureAwait(false))
+            .Select(one => new AskTaskLine(one.Project, one.Task.Id, one.Task.Title, one.Task.DoneWhen.Count))
+            .ToList();
+
+        var turned = await _agent.AskAsync(query, new AskAgentContext(vocabulary, today, about, open), resumeSessionId, ct)
             .ConfigureAwait(false);
 
         if (turned.Failed)
@@ -516,7 +520,7 @@ internal sealed class AskService : IAskService
         CancellationToken ct)
     {
         var open = await OpenTasksAsync(request.Project, projects, ct).ConfigureAwait(false);
-        var ranked = TaskScorer.Rank(open, request.Pick, now).Take(request.Count ?? DefaultListed).ToList();
+        var ranked = Ranked(request, open, request.Pick, now).Take(request.Count ?? request.Named?.Count ?? DefaultListed).ToList();
 
         var scope = request.Project is null ? "across all projects" : $"on {request.Project}";
         var how = request.Pick switch
@@ -547,8 +551,8 @@ internal sealed class AskService : IAskService
             ? (request.Shape == AskShape.TeamQueue ? TaskPick.Easy : TaskPick.NeedsWorkFirst)
             : request.Pick;
 
-        var ranked = TaskScorer.Rank(open, pick, now);
-        var wanted = request.Count ?? (request.Shape == AskShape.TeamQueue ? 3 : 1);
+        var ranked = Ranked(request, open, pick, now);
+        var wanted = request.Named?.Count ?? request.Count ?? (request.Shape == AskShape.TeamQueue ? 3 : 1);
 
         var steps = new List<AskPlanStep>();
         var left = new List<string>();
@@ -658,6 +662,32 @@ internal sealed class AskService : IAskService
             .Where(team => !team.Template)
             .Select(team => team.Name)
             .Order(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    /// <summary>
+    /// The tasks a request is about, best first: the ones it names, in its
+    /// order, when it names any, or else the scorer's ranking. Named ones still
+    /// carry the scorer's reasons, so the card says the same things about them.
+    /// </summary>
+    private static IReadOnlyList<RankedTask> Ranked(
+        AskRequest request,
+        List<(string Project, TaskItem Task)> open,
+        TaskPick pick,
+        DateTimeOffset now)
+    {
+        if (request.Named is not { Count: > 0 } named)
+        {
+            return TaskScorer.Rank(open, pick, now);
+        }
+
+        return named
+            .Select(one => open.FirstOrDefault(task =>
+                string.Equals(task.Project, one.Project, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(task.Task.Id, one.Task, StringComparison.OrdinalIgnoreCase)))
+            .Where(found => found.Task is not null)
+            .Select(found => TaskScorer.Score(found.Project, found.Task, pick, now))
+            .Select(scored => scored with { Reasons = ["named in the request", .. scored.Reasons] })
             .ToList();
     }
 

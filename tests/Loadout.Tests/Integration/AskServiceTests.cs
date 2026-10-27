@@ -220,6 +220,40 @@ public sealed class AskServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task The_agent_is_shown_every_projects_open_tasks()
+    {
+        await RegisterAsync("alpha", "beta");
+        await TaskAsync("alpha", "a1", "On alpha", doneWhen: 1);
+        await TaskAsync("beta", "b1", "On beta");
+
+        await _ask.AskAgentAsync("anything", null);
+
+        _agent.Asked[0].Context.OpenTasks!.Select(task => $"{task.Project}/{task.Id}/{task.DoneWhen}")
+            .Should().BeEquivalentTo(["alpha/a1/1", "beta/b1/0"]);
+    }
+
+    [Fact]
+    public async Task Tasks_the_agent_names_are_the_ones_queued_even_when_the_scorer_would_pick_others()
+    {
+        await RegisterAsync("alpha");
+        await TaskAsync("alpha", "small", "Rename a flag", doneWhen: 1, detail: "One line.");
+        await TaskAsync("alpha", "large", "Rework the parser", doneWhen: 1, detail: new string('x', 2000));
+        await TaskAsync("alpha", "unbounded", "Tidy the readme");
+
+        _agent.Next = new AskAgentTurn(
+            null,
+            new AskRequest(AskShape.TeamQueue, Team: "bug-hunt", Start: true, Named: [new("alpha", "large"), new("alpha", "unbounded")]),
+            0.05m,
+            null);
+
+        var plan = (await _ask.AskAgentAsync("queue the parser rework and the readme", null)).Value!.Plan!;
+
+        plan.Steps.Where(step => step.Kind == AskStepKind.QueueTask).Select(step => step.Task).Should().Equal("large");
+        plan.Steps[0].Reasons[0].Should().Be("named in the request");
+        plan.Left.Should().ContainSingle(left => left.StartsWith("unbounded on alpha: no done-when", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task An_answer_in_words_comes_back_as_the_agents_and_a_follow_up_carries_its_conversation_on()
     {
         await RegisterAsync("alpha");

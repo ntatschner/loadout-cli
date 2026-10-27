@@ -36,6 +36,44 @@ public sealed class AskAgentSchemaTests
         read.Value.Request.Period.Until.Should().Be(new DateOnly(2026, 10, 25));
     }
 
+    private static readonly IReadOnlyList<AskTaskLine> Open =
+    [
+        new("api", "fix-slow-query", "Fix the slow query", 0),
+        new("api", "add-option", "Add a timeout option", 1),
+    ];
+
+    [Fact]
+    public void Tasks_the_agent_names_are_read_in_its_order_when_it_was_shown_them()
+    {
+        var read = AskAgentSchema.Read(
+            """{"answer": null, "request": {"shape": "team-queue", "from": null, "until": null, "project": null, "count": null, "pick": "any", "team": "bug-hunt", "start": true, "tasks": [{"project": "API", "task": "Add-Option"}, {"project": "api", "task": "fix-slow-query"}, {"project": "api", "task": "add-option"}]}}""",
+            Names,
+            Open);
+
+        read.Succeeded.Should().BeTrue(read.Error);
+        read.Value.Request!.Named.Should().Equal(new AskTaskRef("api", "add-option"), new AskTaskRef("api", "fix-slow-query"));
+    }
+
+    [Fact]
+    public void A_task_it_was_not_shown_is_refused()
+    {
+        var read = AskAgentSchema.Read(
+            """{"answer": null, "request": {"shape": "terminals", "pick": "any", "start": false, "tasks": [{"project": "api", "task": "made-up"}]}}""",
+            Names,
+            Open);
+
+        read.Error.Should().Contain("'api/made-up' is not an open task on this machine");
+    }
+
+    [Fact]
+    public void The_agent_is_shown_every_open_task_and_which_have_no_done_when()
+    {
+        var prompt = AskAgentSchema.Prompt("q", new AskAgentContext(Names, new DateOnly(2026, 10, 26), "webapp", Open));
+
+        prompt.Should().Contain("- api/fix-slow-query: Fix the slow query (no done-when)")
+            .And.Contain("- api/add-option: Add a timeout option" + Environment.NewLine);
+    }
+
     [Fact]
     public void An_answer_in_words_needs_no_request()
     {

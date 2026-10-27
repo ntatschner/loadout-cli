@@ -78,7 +78,7 @@ internal sealed class AskAgentRound : IAskAgent
                 AskAgentSchema.Json,
                 AskAgentSchema.Contract,
                 AskAgentSchema.Prompt(query, context),
-                json => AskAgentSchema.Read(json, context.Vocabulary),
+                json => AskAgentSchema.Read(json, context.Vocabulary, context.OpenTasks),
                 null,
                 ct).ConfigureAwait(false);
 

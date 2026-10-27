@@ -28,6 +28,10 @@ public enum AskShape
 /// <param name="Pick">How tasks should be ranked.</param>
 /// <param name="Team">The team named, or null when none was.</param>
 /// <param name="Start">Whether the team should be started once its queue is filled.</param>
+/// <param name="Named">
+/// Particular tasks, in order, when the request means those rather than
+/// whichever rank best. The parser never fills it; the agent can.
+/// </param>
 public sealed record AskRequest(
     AskShape Shape,
     DateSpan? Period = null,
@@ -35,7 +39,11 @@ public sealed record AskRequest(
     int? Count = null,
     TaskPick Pick = TaskPick.Any,
     string? Team = null,
-    bool Start = false);
+    bool Start = false,
+    IReadOnlyList<AskTaskRef>? Named = null);
+
+/// <summary>One task, by the project it is on and its id.</summary>
+public sealed record AskTaskRef(string Project, string Task);
 
 /// <summary>A built-in phrasing close to what was typed, offered when nothing was placed.</summary>
 /// <param name="Shape">Which kind of request it is.</param>

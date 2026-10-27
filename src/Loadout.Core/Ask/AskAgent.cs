@@ -17,7 +17,22 @@ public sealed record AskAgentTurn(string? Answer, AskRequest? Request, decimal C
 /// <param name="Vocabulary">The projects and teams it may name, and no others.</param>
 /// <param name="Today">Today, for periods like "last tuesday".</param>
 /// <param name="Project">The project its tools answer about.</param>
-public sealed record AskAgentContext(AskVocabulary Vocabulary, DateOnly Today, string Project);
+/// <param name="OpenTasks">
+/// Every open task on every project, so the agent can compare projects and
+/// name a particular task without tools that read one project at a time.
+/// </param>
+public sealed record AskAgentContext(
+    AskVocabulary Vocabulary,
+    DateOnly Today,
+    string Project,
+    IReadOnlyList<AskTaskLine>? OpenTasks = null);
+
+/// <summary>One open task, as the agent is shown it.</summary>
+/// <param name="Project">The project it is on.</param>
+/// <param name="Id">Its id.</param>
+/// <param name="Title">Its title.</param>
+/// <param name="DoneWhen">How many done-when conditions it has. A team's queue takes none without one.</param>
+public sealed record AskTaskLine(string Project, string Id, string Title, int DoneWhen);
 
 /// <summary>
 /// Asks an agent to place a request Loadout could not, or to answer it from
@@ -50,6 +65,9 @@ public static class AskAgentSchema
     /// <summary>The name the shape goes by when the agent is asked to give it again.</summary>
     public const string Contract = "ask/1";
 
+    /// <summary>How many open tasks the agent is shown, so a very long list can't swamp the prompt.</summary>
+    internal const int MostTasksShown = 200;
+
     /// <summary>A JSON Schema for the answer: words, or a request, or both.</summary>
     public const string Json = """
         {
@@ -61,7 +79,7 @@ public static class AskAgentSchema
             "request": {
               "type": ["object", "null"],
               "additionalProperties": false,
-              "required": ["shape", "from", "until", "project", "count", "pick", "team", "start"],
+              "required": ["shape", "from", "until", "project", "count", "pick", "team", "start", "tasks"],
               "properties": {
                 "shape": { "enum": ["spend", "tasks", "team-queue", "terminals"] },
                 "from": { "type": ["string", "null"], "description": "First day, yyyy-MM-dd, for spend." },
@@ -70,7 +88,17 @@ public static class AskAgentSchema
                 "count": { "type": ["integer", "null"], "minimum": 1, "maximum": 50 },
                 "pick": { "enum": ["any", "easy", "needs-work-first"] },
                 "team": { "type": ["string", "null"] },
-                "start": { "type": "boolean" }
+                "start": { "type": "boolean" },
+                "tasks": {
+                  "type": ["array", "null"],
+                  "description": "Particular open tasks, in order, when the person means those rather than whichever rank best. Null otherwise.",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["project", "task"],
+                    "properties": { "project": { "type": "string" }, "task": { "type": "string" } }
+                  }
+                }
               }
             }
           }
@@ -99,7 +127,25 @@ public static class AskAgentSchema
         text.AppendLine(CultureInfo.InvariantCulture, $"Today is {context.Today:yyyy-MM-dd} ({context.Today:dddd}).");
         text.AppendLine("Projects: " + string.Join(", ", context.Vocabulary.Projects.Select(project => project.Slug)));
         text.AppendLine("Teams: " + (context.Vocabulary.Teams.Count == 0 ? "none" : string.Join(", ", context.Vocabulary.Teams)));
-        text.AppendLine(CultureInfo.InvariantCulture, $"Your tools read about {context.Project}.");
+        text.AppendLine(CultureInfo.InvariantCulture, $"Your tools read about {context.Project} alone; the open tasks below cover every project.");
+
+        if (context.OpenTasks is { Count: > 0 } open)
+        {
+            text.AppendLine();
+            text.AppendLine("Open tasks on every project, as project/id: title. A team's queue refuses one with no done-when.");
+
+            foreach (var task in open.Take(MostTasksShown))
+            {
+                text.AppendLine(CultureInfo.InvariantCulture, $"- {task.Project}/{task.Id}: {task.Title}{(task.DoneWhen == 0 ? " (no done-when)" : string.Empty)}");
+            }
+
+            if (open.Count > MostTasksShown)
+            {
+                text.AppendLine(CultureInfo.InvariantCulture, $"- and {open.Count - MostTasksShown} more not shown.");
+            }
+
+            text.AppendLine("When the person means particular tasks, or you recommend particular ones and they agree, name them in request.tasks, in order. Otherwise leave it null and Loadout ranks them itself.");
+        }
         text.AppendLine();
         text.AppendLine("The request:");
         text.AppendLine(query);
@@ -108,7 +154,13 @@ public static class AskAgentSchema
     }
 
     /// <summary>Reads the agent's answer, refusing anything that names what is not here.</summary>
-    public static OperationResult<(string? Answer, AskRequest? Request)> Read(string? json, AskVocabulary vocabulary)
+    /// <param name="json">The answer.</param>
+    /// <param name="vocabulary">The projects and teams on this machine.</param>
+    /// <param name="openTasks">The open tasks it was shown; a task it names has to be one of them.</param>
+    public static OperationResult<(string? Answer, AskRequest? Request)> Read(
+        string? json,
+        AskVocabulary vocabulary,
+        IReadOnlyList<AskTaskLine>? openTasks = null)
     {
         ArgumentNullException.ThrowIfNull(vocabulary);
 
@@ -187,6 +239,36 @@ public static class AskAgentSchema
 
             var start = request.Value.TryGetProperty("start", out var starting) && starting.ValueKind == JsonValueKind.True;
 
+            List<AskTaskRef>? named = null;
+
+            if (request.Value.TryGetProperty("tasks", out var tasks) && tasks.ValueKind == JsonValueKind.Array)
+            {
+                named = [];
+
+                foreach (var one in tasks.EnumerateArray())
+                {
+                    var onProject = Text(one, "project");
+                    var id = Text(one, "task");
+
+                    // Only a task it was shown as open: a name it made up, or
+                    // one on another list, would become a step nobody chose.
+                    var known = openTasks?.FirstOrDefault(line =>
+                        string.Equals(line.Project, onProject, StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(line.Id, id, StringComparison.OrdinalIgnoreCase))
+                        ?? throw new FormatException($"'{onProject}/{id}' is not an open task on this machine.");
+
+                    if (!named.Any(seen => seen.Project == known.Project && seen.Task == known.Id))
+                    {
+                        named.Add(new AskTaskRef(known.Project, known.Id));
+                    }
+                }
+
+                if (named.Count == 0)
+                {
+                    named = null;
+                }
+            }
+
             return OperationResult<(string?, AskRequest?)>.Ok((answer, new AskRequest(
                 shape,
                 period,
@@ -194,7 +276,8 @@ public static class AskAgentSchema
                 count,
                 pick,
                 team is null ? null : vocabulary.Teams.First(one => string.Equals(one, team, StringComparison.OrdinalIgnoreCase)),
-                start)));
+                start,
+                named)));
         }
         catch (Exception ex) when (ex is JsonException or FormatException or InvalidOperationException)
         {
