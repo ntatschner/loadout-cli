@@ -321,6 +321,7 @@
   --ease-out: cubic-bezier(.22,1,.36,1);
   --ease-travel: cubic-bezier(.65,0,.35,1);
   --recede: 0.72;
+  --z-ground: -1;
   --z-page: 10;
   --z-rail: 20;
   --z-modebar: 30;

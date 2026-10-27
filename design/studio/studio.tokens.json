@@ -1147,6 +1147,11 @@
     }
   },
   "layer": {
+    "z-ground": {
+      "$type": "number",
+      "$value": -1,
+      "$description": "Behind the page: the field map (FieldMap), which shows only where the page shows its ground."
+    },
     "z-page": {
       "$type": "number",
       "$value": 10,
