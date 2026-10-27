@@ -5,8 +5,6 @@ Studio is built and merged. Six of its pages still show their data as plain list
 1. **The pages.** Rebuild each to its design. The Commands page stays as it is.
 2. **The pages in every mode.** Give each page its version in Terminal Focus, Team Focus, Minimal and Pure Focus.
 
-**Loadout's own records** of this work (a task for it, notes on the related ideas, one memory fact) are written by the last section of `ROUND4.md`, "Record it in Loadout", which covers every Studio brief. That section only writes records. It marks this brief "Designed, not built" until it is, and it never starts this work.
-
 **Order.** Part 1 stands on its own: it doesn't depend on `NEXT.md` (Teams, modes and Pure Focus), so it can be built before, after or beside it. Part 2 builds on the modes, so build it after `NEXT.md`'s Part 2 (Modes) and Part 3 (Pure Focus).
 
 ## Source of truth
@@ -497,7 +495,6 @@ Branch off `claude/determined-meitner-6wqi6z`. Commit in logical steps:
 12. the committed build
 13. tests (or with each step, if you prefer)
 14. docs
-15. **Record it in Loadout** (below), as the very last step
 
 Don't push or open a pull request until I say so.
 
@@ -511,19 +508,3 @@ Finish by telling me:
 - whether the terminals kept their scrollback when a page opened and closed beside them;
 - which existing tests you updated, and why each still guards the same thing;
 - anything from the designs you couldn't build, and why.
-
-# Record it in Loadout
-
-When everything above is committed, update the task for this work so whoever picks it up next knows it is built. **This step writes one record and builds nothing.** Don't run `idea refine`, `idea dump add`, `team run`, `team schedule add` or `launch`. Don't start a session for any other item, and never declare anything `doing`.
-
-1. Run `loadout task list --project loadout-cli --all --json` and find `studio-six-pages`.
-2. If it exists, re-declare it with its **current state** and its current note. Take out the sentence "Designed, not built. Don't start on this from this record; build it only when someone asks, from its brief." and add, at the end, "Built on branch <your branch> in <the commits>; not merged yet.":
-
-   ```
-   loadout task declare studio-six-pages <its current state> --note "<the note, changed as above>" --project loadout-cli --by "studio design"
-   ```
-
-   Run it once with `--dry-run` first. If the task doesn't exist, don't create it; tell me.
-3. `loadout workspace save`.
-
-Tell me what it did, and confirm that nothing was started.
