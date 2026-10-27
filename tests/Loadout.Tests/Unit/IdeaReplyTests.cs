@@ -89,7 +89,7 @@ public sealed class IdeaReplyTests
     [Fact]
     public void The_schema_offers_done_when_on_the_plan_without_requiring_it()
     {
-        using var schema = System.Text.Json.JsonDocument.Parse(IdeaSchema.Version2);
+        using var schema = System.Text.Json.JsonDocument.Parse(IdeaSchema.Version3);
         var plan = schema.RootElement.GetProperty("properties").GetProperty("plan");
 
         schema.RootElement.GetProperty("properties").GetProperty("contract").GetProperty("const").GetString()
@@ -98,8 +98,49 @@ public sealed class IdeaReplyTests
         plan.GetProperty("required").EnumerateArray().Select(one => one.GetString()).Should().NotContain("doneWhen");
     }
 
+    [Fact]
+    public void A_question_in_the_current_shape_says_what_it_relates_to()
+    {
+        var read = IdeaReply.Read("""
+            {
+              "contract": "idea/3", "understanding": "A page.",
+              "questions": [{ "question": "Keep a week?", "why": "Size.", "options": [], "recommendation": "",
+                              "relatesTo": "L2", "context": "Storage sizes depend on it." }]
+            }
+            """);
+
+        read.Succeeded.Should().BeTrue(read.Error);
+        read.Value!.Questions.Single().RelatesTo.Should().Be("L2");
+        read.Value.Questions.Single().Context.Should().Be("Storage sizes depend on it.");
+    }
+
     [Theory]
-    [InlineData("""{ "contract": "idea/3", "understanding": "", "questions": [] }""", "idea/3")]
+    [InlineData("idea/1")]
+    [InlineData("idea/2")]
+    public void A_question_in_an_earlier_shape_is_read_relating_to_nothing(string contract)
+    {
+        var read = IdeaReply.Read($$"""
+            { "contract": "{{contract}}", "understanding": "A page.",
+              "questions": [{ "question": "Public?", "why": "", "options": [], "recommendation": "" }] }
+            """);
+
+        read.Succeeded.Should().BeTrue(read.Error);
+        read.Value!.Questions.Single().RelatesTo.Should().BeEmpty();
+        read.Value.Questions.Single().Context.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void The_schema_requires_a_reference_and_context_on_every_question()
+    {
+        using var schema = System.Text.Json.JsonDocument.Parse(IdeaSchema.Version3);
+        var question = schema.RootElement.GetProperty("properties").GetProperty("questions").GetProperty("items");
+
+        question.GetProperty("required").EnumerateArray().Select(one => one.GetString())
+            .Should().Contain(["relatesTo", "context"]);
+    }
+
+    [Theory]
+    [InlineData("""{ "contract": "idea/4", "understanding": "", "questions": [] }""", "idea/4")]
     [InlineData(null, "without an")]
     [InlineData("not json", "not valid JSON")]
     [InlineData("""{ "contract": "report/1", "understanding": "", "questions": [] }""", "report/1")]

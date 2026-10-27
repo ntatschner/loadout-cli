@@ -1306,8 +1306,20 @@ public sealed class LoadoutTools
 
             foreach (var question in record.Rounds.SelectMany(round => round.Questions))
             {
+                var about = Core.Ideas.IdeaWork.About(record, question);
+
                 text.AppendLine($"{question.Id}. {question.Question} "
                     + (question.Answer.Length > 0 ? $"Answer: {question.Answer}" : "(not answered)"));
+
+                if (about.Line is { } line)
+                {
+                    text.AppendLine($"   {line}");
+                }
+
+                if (about.Outdated is { } outdated)
+                {
+                    text.AppendLine($"   Possibly outdated: {outdated}.");
+                }
             }
 
             if (record.Plan is { } plan)

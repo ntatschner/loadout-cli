@@ -19,35 +19,42 @@ namespace Loadout.Models.Ideas;
 public static class IdeaSchema
 {
     /// <summary>The contract every answer names, so a stale one is refused rather than misread.</summary>
-    public const string Version = "idea/2";
+    public const string Version = "idea/3";
 
     /// <summary>
-    /// The contract before a plan could propose done-when. An answer naming it
-    /// is still read, as a plan with none: it is the same shape, less one field.
+    /// The contracts before this one, still read. idea/1 had no done-when on
+    /// the plan and idea/2 no reference or context on a question: the same
+    /// shape, less those fields, so an answer naming either is read with them
+    /// empty.
     /// </summary>
-    public const string Previous = "idea/1";
+    public static readonly IReadOnlyList<string> Earlier = ["idea/2", "idea/1"];
 
     /// <summary>The schema for <see cref="Version"/>.</summary>
     /// <remarks>
-    /// idea/1 with an optional <c>doneWhen</c> on the plan. Optional, so a plan
-    /// without one is still a plan; the person adds conditions at acceptance.
+    /// idea/2 with <c>relatesTo</c> and <c>context</c> on every question. Both
+    /// are required, so the validator makes the agent say what each question is
+    /// about; <c>relatesTo</c> may be empty for a question about nothing in
+    /// particular. <c>doneWhen</c> on the plan stays optional, so a plan without
+    /// one is still a plan; the person adds conditions at acceptance.
     /// </remarks>
-    public const string Version2 = """
+    public const string Version3 = """
         {
-          "title": "idea/2",
+          "title": "idea/3",
           "type": "object",
           "additionalProperties": false,
           "required": ["contract", "understanding", "questions"],
           "properties": {
-            "contract": { "const": "idea/2" },
+            "contract": { "const": "idea/3" },
             "understanding": { "type": "string" },
             "questions": { "type": "array", "items": {
-              "type": "object", "additionalProperties": false, "required": ["question", "why", "options", "recommendation"],
+              "type": "object", "additionalProperties": false, "required": ["question", "why", "options", "recommendation", "relatesTo", "context"],
               "properties": {
                 "question": { "type": "string" },
                 "why": { "type": "string" },
                 "options": { "type": "array", "items": { "type": "string" } },
-                "recommendation": { "type": "string" } } } },
+                "recommendation": { "type": "string" },
+                "relatesTo": { "type": "string" },
+                "context": { "type": "string" } } } },
             "plan": {
               "type": "object", "additionalProperties": false, "required": ["title", "layers", "additions", "project"],
               "properties": {

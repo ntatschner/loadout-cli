@@ -8,12 +8,14 @@
   import HaloButton from './HaloButton.svelte';
   import { lineFor } from '../commandLine';
   import { holdPlace } from '../holdPlace';
-  import { acceptRecommendations, changedAnswers, offeredChoices, settledDrafts, type Answer, type Question } from '../ideas';
+  import { aboutLine, acceptRecommendations, changedAnswers, offeredChoices, settledDrafts, standingAnswer, understoodBefore, type Answer, type Question, type Round } from '../ideas';
 
   interface Props {
     id: string;
     where: string[];
     questions: Question[];
+    /** The rounds they were asked in, for what the agent understood when it asked. */
+    rounds?: Round[];
     disabledReason?: string;
     /** Sends the answers, then refines when asked; true when every one went. */
     onsend?: (answers: Answer[], refine: boolean) => Promise<boolean>;
@@ -21,7 +23,7 @@
     ondraft?: (drafted: string[], sent: string[]) => void;
   }
 
-  let { id, where, questions, disabledReason = undefined, onsend = undefined, ondraft = undefined }: Props = $props();
+  let { id, where, questions, rounds = undefined, disabledReason = undefined, onsend = undefined, ondraft = undefined }: Props = $props();
 
   let drafts = $state<Record<string, string>>({});
   let editing = $state<Record<string, boolean>>({});
@@ -72,6 +74,26 @@
     draft(question.id, answerOf(question) ?? '');
   }
 
+  /** Sends the saved answer again, which says it still stands and clears its possibly outdated marker. */
+  async function stand(question: Question) {
+    const again = standingAnswer(id, where, question);
+
+    if (!onsend || sending || !again) {
+      return;
+    }
+
+    sending = true;
+    said = '';
+
+    const ok = await onsend([again], false);
+
+    sending = false;
+
+    if (ok) {
+      said = `✓ ${question.id} still stands.`;
+    }
+  }
+
   async function send(refine: boolean) {
     if (!onsend || sending) {
       return;
@@ -116,14 +138,21 @@
       {@const typed = (drafts[question.id] ?? '').trim()}
       {@const offered = offeredChoices(question)}
       {@const own = typed && !offered.choices.includes(typed) ? (drafts[question.id] ?? '') : ''}
+      {@const understood = understoodBefore(rounds, question.id)}
+      {@const about = aboutLine(question)}
+      {#if understood}<p class="understood">Understood as: {understood}</p>{/if}
       <section class={['q', answered ? 'answered' : typed ? 'drafted' : ''].filter(Boolean).join(' ')} aria-labelledby={`${name}-${question.id}`} data-next={`question:${question.id}`} data-anchor={`question:${question.id}`}>
         <span class="who">{[question.id, answered ? 'answered' : typed ? 'your answer, not sent yet' : 'the agent asks'].join(' · ')}</span>
         {#if answered}
           <p class="qt" id={`${name}-${question.id}`}>{question.question}</p>
+          {#if about}<p class="about">{about}</p>{/if}
+          {#if question.outdated}<p class="outdated">Possibly outdated: {question.outdated}. Answering again clears it.{#if !disabledReason}<button type="button" onclick={() => void stand(question)}>It still stands</button>{/if}</p>{/if}
           <p class="was">You answered: <b>{answer}</b>{#if !disabledReason}<button type="button" onclick={() => change(question)}>Change it</button>{/if}</p>
         {:else}
           <fieldset>
             <legend id={`${name}-${question.id}`}>{question.question}</legend>
+            {#if about}<p class="about">{about}</p>{/if}
+            {#if question.outdated}<p class="outdated">Possibly outdated: {question.outdated}. Answering clears it.</p>{/if}
             {#if question.why}<p class="why">{question.why}</p>{/if}
             {#if offered.choices.length}
               <div class="opts">

@@ -1396,6 +1396,11 @@ html[data-vt="fade"]::view-transition-group(*) { animation-duration: 0s; }
 .ls-qset .q legend, .ls-qset .q .qt { float: none; padding: 0; margin: 0; font-size: 17px; line-height: 1.35; color: var(--ink-strong); overflow-wrap: anywhere; }
 .ls-qset .q fieldset { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; min-width: 0; }
 .ls-qset .q .why { margin: 0; font-size: 13.5px; color: var(--muted); }
+.ls-qset .q .about { margin: 0; font-size: 13.5px; color: var(--ink-soft); max-width: 76ch; }
+.ls-qset .q .outdated { margin: 0; font-size: 13.5px; color: var(--needs-text); max-width: 76ch; }
+.ls-qset .q .outdated button { margin-left: 10px; padding: 0; border: 0; background: none; font: inherit; font-size: 13px; color: var(--accent-text); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.ls-qset .q .outdated button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ls-qset .understood { margin: 4px 0 0; font-size: 13.5px; color: var(--muted); max-width: 76ch; }
 .ls-qset .opts { display: flex; flex-wrap: wrap; gap: 6px; }
 .ls-qset .opt { position: relative; display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 6px 14px 6px 10px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--control-edge); font-size: 14px; color: var(--ink); cursor: pointer; }
 .ls-qset .opt input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }

@@ -46,7 +46,7 @@ public sealed record IdeaChoice(string? Agent, string? Model, bool FromLastRound
 /// can be tested without either: this is where the decisions are, and neither a
 /// file nor an agent is needed to check them.
 /// </remarks>
-public static class IdeaWork
+public static partial class IdeaWork
 {
     /// <summary>The piece that names the whole plan rather than one part of it.</summary>
     public const string WholePlan = "plan";
@@ -404,28 +404,6 @@ public static class IdeaWork
         ArgumentNullException.ThrowIfNull(record);
         ArgumentNullException.ThrowIfNull(reply);
 
-        if (reply.Questions.Count > 0)
-        {
-            var asked = record.Rounds.Sum(round => round.Questions.Count);
-
-            record.Rounds.Add(new IdeaRound
-            {
-                AskedUtc = now,
-                Revision = reply.Plan is null ? record.Plan?.Revision ?? 0 : (record.Plan?.Revision ?? 0) + 1,
-                Questions =
-                [
-                    .. reply.Questions.Select((q, index) => Recommend(new IdeaQuestion
-                    {
-                        Id = $"Q{asked + index + 1}",
-                        Question = q.Question.Trim(),
-                        Why = q.Why.Trim(),
-                        Options = [.. q.Options.Select(o => o.Trim()).Where(o => o.Length > 0)],
-                        Recommendation = q.Recommendation.Trim(),
-                    })),
-                ],
-            });
-        }
-
         if (reply.Plan is { } proposed)
         {
             var previous = record.Plan;
@@ -529,6 +507,42 @@ public static class IdeaWork
             }
         }
 
+        // After the plan, so a question asked alongside one refers to its
+        // layers and additions, as the prompt tells the agent it does.
+        if (reply.Questions.Count > 0)
+        {
+            var asked = record.Rounds.Sum(round => round.Questions.Count);
+            var made = new List<IdeaQuestion>();
+
+            foreach (var (q, index) in reply.Questions.Select((q, i) => (q, i)))
+            {
+                var (relatesTo, snapshot) = Refer(record, made, q.RelatesTo);
+
+                made.Add(Recommend(new IdeaQuestion
+                {
+                    Id = $"Q{asked + index + 1}",
+                    Question = q.Question.Trim(),
+                    Why = q.Why.Trim(),
+                    Options = [.. q.Options.Select(o => o.Trim()).Where(o => o.Length > 0)],
+                    Recommendation = q.Recommendation.Trim(),
+                    RelatesTo = relatesTo,
+                    Context = q.Context.Trim(),
+                    Snapshot = snapshot,
+                }));
+            }
+
+            record.Rounds.Add(new IdeaRound
+            {
+                AskedUtc = now,
+                Revision = record.Plan?.Revision ?? 0,
+
+                // A plan keeps its own; a round that only asked would
+                // otherwise leave nothing saying what it took the idea to be.
+                Understanding = reply.Plan is null ? reply.Understanding.Trim() : string.Empty,
+                Questions = made,
+            });
+        }
+
         ClearFailure(record);
     }
 
@@ -611,6 +625,17 @@ public static class IdeaWork
             + "rather than true of any work (not just 'the tests pass'). The person confirms or "
             + "rewrites them when they accept the plan, and an unattended run is held to them. "
             + "understanding is what you now take the idea to be, in a few plain sentences.");
+        text.AppendLine();
+        text.AppendLine(
+            "They may come back to a question days later, after adding notes or revising the plan, "
+            + "so every question says what it is about. Set relatesTo to the id of the thing it "
+            + $"concerns: {TheAsk} for the idea as they wrote it, a note such as N2, a layer or option "
+            + "such as L1 or L1b, an addition such as A2, or an earlier question such as Q3. Use only "
+            + "ids shown above, except that when you propose a plan in the same answer, L and A ids "
+            + "mean that plan's layers and additions, numbered in the order you give them. Leave "
+            + "relatesTo empty when the question is about nothing in particular. Always give context: "
+            + "one sentence saying what the question is in aid of, so it can be answered without the "
+            + "rest of this conversation.");
 
         return text.ToString();
     }
@@ -649,10 +674,26 @@ public static class IdeaWork
 
             foreach (var question in questions)
             {
+                var about = About(record, question);
+
                 text.AppendLine(CultureInfo.InvariantCulture, $"{question.Id}. {question.Question}");
+
+                if (about.Line is { } line)
+                {
+                    text.AppendLine(CultureInfo.InvariantCulture, $"   {line}");
+                }
+
                 text.AppendLine(question.Answer.Length > 0
                     ? $"   Answer: {question.Answer}"
                     : "   Not answered.");
+
+                // Said, so a fresh agent does not build on an answer given
+                // to something that has since changed as if it were settled.
+                if (about.Outdated is { } outdated)
+                {
+                    text.AppendLine(CultureInfo.InvariantCulture,
+                        $"   Possibly outdated: {outdated}, so this {(question.Answer.Length > 0 ? "answer" : "question")} may need revisiting.");
+                }
             }
 
             text.AppendLine();
@@ -680,14 +721,14 @@ public static class IdeaWork
             var chosen = layer.Options.FirstOrDefault(o => o.Id == layer.Chosen);
 
             text.AppendLine(CultureInfo.InvariantCulture,
-                $"- Layer '{layer.Name}': options {string.Join(", ", layer.Options.Select(o => $"\"{o.Title}\""))}; "
+                $"- {layer.Id} layer '{layer.Name}': options {string.Join(", ", layer.Options.Select(o => $"{o.Id} \"{o.Title}\""))}; "
                 + $"chosen \"{chosen?.Title ?? "none"}\"; {Said(layer.Verdict, layer.Request)}");
         }
 
         foreach (var addition in plan.Additions)
         {
             text.AppendLine(CultureInfo.InvariantCulture,
-                $"- Addition '{addition.Title}': {Said(addition.Verdict, addition.Request)}");
+                $"- {addition.Id} addition '{addition.Title}': {Said(addition.Verdict, addition.Request)}");
         }
 
         if (record.Request.Length > 0)
@@ -853,7 +894,19 @@ public static class IdeaWork
 
             foreach (var question in answered)
             {
+                var about = About(record, question);
+
                 text.AppendLine(CultureInfo.InvariantCulture, $"- {question.Question} **{question.Answer}**");
+
+                if (about.Line is { } line)
+                {
+                    text.AppendLine(CultureInfo.InvariantCulture, $"  {line}");
+                }
+
+                if (about.Outdated is { } outdated)
+                {
+                    text.AppendLine(CultureInfo.InvariantCulture, $"  Possibly outdated: {outdated}.");
+                }
             }
 
             text.AppendLine();

@@ -10,6 +10,48 @@ export interface Question {
   options: string[];
   recommendation: string | null;
   answer: string | null;
+  /** Which round asked it, counting from one. */
+  round?: number;
+  /** What it relates to, readably: 'L2 Storage', 'N3', 'the ask'; null when nothing, as before idea/3. */
+  about?: string | null;
+  /** The agent's line saying what the question is in aid of. */
+  context?: string | null;
+  /** Why what it relates to may have changed since it was asked or last answered, or null. */
+  outdated?: string | null;
+}
+
+/** One round of questions: what the agent took the idea to be, kept when it asked and proposed nothing. */
+export interface Round {
+  round: number;
+  understanding: string | null;
+  questions: string[];
+}
+
+/** 'Relates to L2 Storage: why it is asked', the context alone, the reference alone, or null: the words 'idea show' uses. */
+export function aboutLine(question: Pick<Question, 'about' | 'context'>): string | null {
+  if (question.about && question.context) {
+    return `Relates to ${question.about}: ${question.context}`;
+  }
+
+  return question.about ? `Relates to ${question.about}` : question.context || null;
+}
+
+/** The understanding to show above a question: its round's, when the question is that round's first. */
+export function understoodBefore(rounds: Round[] | undefined, question: string): string | null {
+  const round = rounds?.find((one) => one.questions[0] === question);
+
+  return round?.understanding ?? null;
+}
+
+/** The same answer again, sent to say it still stands: what clears a possibly outdated marker. */
+export function standingAnswer(id: string, where: string[], question: Question): Answer | null {
+  if (!question.answer) {
+    return null;
+  }
+
+  const words = answerWords(id, question.id, question.answer, where);
+
+  return { question: question.id, answer: question.answer, words, line: lineFor('idea answer', words) };
 }
 
 /** One answer ready to send: the question it answers, the text, and its exact words and line. */
