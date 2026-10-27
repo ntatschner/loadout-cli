@@ -13823,7 +13823,7 @@
         ask.className = "lk-card-ask";
         label.textContent = "Gate: ";
         ask.appendChild(label);
-        ask.appendChild(document.createTextNode(asking(gate.question)));
+        ask.appendChild(document.createTextNode(asking(gate.brief || gate.question)));
         box.appendChild(ask);
       } else {
         var goal = document.createElement("p");

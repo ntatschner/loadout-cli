@@ -324,6 +324,12 @@ public sealed record PendingAsk(
         }
     }
 
+    /// <summary>
+    /// The question as a list of things waiting shows it: without the command
+    /// where there is wording for one, and <see cref="Asking"/> otherwise.
+    /// </summary>
+    public string Brief => AskWording.View(this)?.Brief ?? Asking;
+
     /// <summary>What may be chosen, with yes and no as the default pair.</summary>
     public IReadOnlyList<string> Choices =>
         Options is { Count: > 0 } given ? given : ["yes", "no"];

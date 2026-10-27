@@ -1721,6 +1721,28 @@ public sealed class DashboardServerTests : IAsyncLifetime
             .Should().Equal(kinds);
     }
 
+    /// <remarks>
+    /// The rail, the toasts and the run cards show the brief; the command
+    /// reaches the page only in the permission's parts, set apart.
+    /// </remarks>
+    [Fact]
+    public async Task A_worded_permission_reaches_the_page_with_a_brief_that_leaves_out_the_command()
+    {
+        var run = Path.Combine(Papers(), "20260916-1200-aaaa");
+
+        (await NodePermissions.PutAsync(run, new PendingAsk(
+            "gate-1", "implementer", "builder", "Bash", "ls build && rm -rf build", DateTimeOffset.UtcNow,
+            Said: "list the build output", Blocked: "rm -rf build", Flags: [AskWording.Deletes])))
+            .Should().BeTrue();
+
+        var json = JsonDocument.Parse(await (await GetAsync("/api/runs")).Content.ReadAsStringAsync());
+        var gate = json.RootElement.GetProperty("runs")[0].GetProperty("gates")[0];
+
+        gate.GetProperty("brief").GetString().Should().Be(
+            "implementer (builder) wants to list the build output. Careful: the command deletes files. Let it?");
+        gate.GetProperty("ask").GetProperty("command").GetString().Should().Be("ls build && rm -rf build");
+    }
+
     [Fact]
     public async Task Every_question_the_page_asks_is_its_own_dialog()
     {

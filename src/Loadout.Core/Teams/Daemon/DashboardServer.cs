@@ -3250,6 +3250,10 @@ public sealed class DashboardServer : IDisposable
             gate.Node,
             gate.Role,
             question = gate.Question,
+
+            // The question as a list or a toast shows it: a permission's plain
+            // line and warnings without the command, which is in "ask" below.
+            brief = gate.Brief,
             options = gate.Choices,
             gate.Recommendation,
             gate.At,

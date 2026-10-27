@@ -750,7 +750,7 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
         foreach (var gate in run.Waiting)
         {
             output.WriteBlankLine();
-            output.WriteLine($"  [yellow]waiting[/] {Markup.Escape(gate.Asking)}");
+            output.WriteLine($"  [yellow]waiting[/] {Markup.Escape(gate.Brief)}");
             output.WriteLine(
                 $"    [dim]loadout team gate {Markup.Escape(run.RunId)} --gate {Markup.Escape(gate.Id)} "
                 + $"--answer {Markup.Escape(gate.Choices[0])}[/]");
