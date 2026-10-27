@@ -9,6 +9,8 @@ export interface PaletteRow {
   kind?: string;
   glyph?: string;
   need?: boolean;
+  /** Keeps the palette open when chosen, for a row that changes what it shows. */
+  stay?: boolean;
   run?: (row: PaletteRow) => void;
 }
 

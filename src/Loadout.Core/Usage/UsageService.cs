@@ -7,7 +7,14 @@ namespace Loadout.Core.Usage;
 /// <param name="Days">How many days back to include, counting today.</param>
 /// <param name="ProjectSlug">Only this registered project.</param>
 /// <param name="Agent">Only this agent.</param>
-public sealed record UsageQuery(int Days = 30, string? ProjectSlug = null, string? Agent = null);
+/// <param name="From">The first day to include, in place of counting back <paramref name="Days"/>.</param>
+/// <param name="Until">The last day to include, or null for up to today.</param>
+public sealed record UsageQuery(
+    int Days = 30,
+    string? ProjectSlug = null,
+    string? Agent = null,
+    DateOnly? From = null,
+    DateOnly? Until = null);
 
 /// <summary>One row of a report: something spent tokens, and this is how many.</summary>
 /// <param name="Name">What to call it — a slug, a day, a model, an agent.</param>
@@ -95,7 +102,7 @@ internal sealed class UsageService : IUsageService
         ArgumentNullException.ThrowIfNull(query);
 
         var days = Math.Max(1, query.Days);
-        var since = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-(days - 1));
+        var since = query.From ?? DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-(days - 1));
 
         var buckets = new List<UsageBucket>();
         var integrity = UsageIntegrity.Empty;
@@ -126,7 +133,9 @@ internal sealed class UsageService : IUsageService
                 continue;
             }
 
-            buckets.AddRange(scanned.Value!.Buckets);
+            buckets.AddRange(query.Until is { } until
+                ? scanned.Value!.Buckets.Where(bucket => bucket.Day <= until)
+                : scanned.Value!.Buckets);
             integrity += scanned.Value.Integrity;
         }
 

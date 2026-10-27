@@ -211,6 +211,18 @@ public sealed class ResumeSettings : SessionSettings
     [CommandOption("--fresh")]
     [Description("Carry nothing over from its launch: no task, mode, profile or worktree but those given here.")]
     public bool Fresh { get; init; }
+
+    [CommandOption("--remote")]
+    [Description(RemoteControlOption.OnDescription)]
+    public bool Remote { get; init; }
+
+    [CommandOption("--no-remote")]
+    [Description(RemoteControlOption.OffDescription)]
+    public bool NoRemote { get; init; }
+
+    /// <inheritdoc />
+    public override ValidationResult Validate() =>
+        RemoteControlOption.Validate(Remote, NoRemote, base.Validate);
 }
 
 /// <summary>
@@ -380,7 +392,8 @@ public sealed class ResumeCommand : AsyncCommand<ResumeSettings>
             Task: values.Task,
             Mode: values.Mode,
             DryRun: settings.DryRun,
-            TaskId: values.TaskId)).ConfigureAwait(false);
+            TaskId: values.TaskId,
+            RemoteControl: RemoteControlOption.From(settings.Remote, settings.NoRemote))).ConfigureAwait(false);
 
         if (launch.Failed)
         {

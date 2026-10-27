@@ -114,7 +114,10 @@ which credentials and sandbox a session gets. If one looks wrong, report it.
 launch of this project refreshing the shared workspace first. That trades fresh context
 for a launch that never touches the network, which is their call, not a finding.
 `aliases` adds other names the project answers to; if it needs one, say so in
-your report.
+your report. `delivery.pr_mode` decides whether a queued run that meets its
+done-when pushes its branch and opens a pull request (`draft`, `ready` or
+`none`). That reaches outside this machine, so if the repository's habits
+suggest one, say so in your report and leave it to the person to set.
 
 Give the reason beside every change. A setting nobody can account for gets
 removed by the next person to read the file.

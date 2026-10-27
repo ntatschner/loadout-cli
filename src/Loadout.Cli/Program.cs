@@ -934,6 +934,7 @@ public static class Program
                 queue.AddCommand<TeamQueuePlanCommand>("plan");
                 queue.AddCommand<TeamQueueSettingsCommand>("settings");
                 queue.AddCommand<TeamQueueRunNextCommand>("run-next");
+                queue.AddCommand<TeamQueueRunNowCommand>("run-now");
                 queue.AddCommand<TeamQueueWindowCommand>("window");
             });
 
@@ -1075,6 +1076,7 @@ public static class Program
         });
         Top<ResumeCommand>(config, "resume");
         Top<FindCommand>(config, "find");
+        Top<AskCommand>(config, "ask");
         Top<UsageCommand>(config, "usage");
         Top<LaunchesCommand>(config, "launches");
 

@@ -26,7 +26,7 @@
 | `loadout update` | Check the release source and install a newer build |
 | `loadout secret set\|test\|remove` | Manage credentials in the OS keystore |
 | `loadout mcp list\|add\|remove` | Manage the MCP servers a project loads, and see what clashes |
-| `loadout mcp serve` | Serve the launcher's own tools to an agent. Started by the agent, not by you |
+| `loadout mcp serve` | Serve the launcher's own tools to an agent. Started by the agent, not by you. `--read-only` serves only the tools that read, which is all the Ask agent is given |
 | `loadout repo check` | Check a repository for tracked AI tooling files |
 | `loadout drift [project]` | Show where projects have drifted from their recorded configuration |
 | `loadout drift --fix` | Put right the drift the launcher can fix itself |
@@ -86,6 +86,8 @@
 | `loadout session rename <session> <name>` | Rename one, as renaming its tab in Studio does. `--reset` gives it back the name it was launched as |
 | `loadout session end <session>` | End one, as Studio's End session does. It stays listed, ended. Asks first unless `--yes` |
 | `loadout find <query>` | Search tasks, ideas, sessions, team runs and projects at once, grouped, each with the command that shows it. Takes the [list query](#filtering-and-sorting-a-list): `kind:task state:open login` searches only open tasks. A query starting with a minus goes as `--query=` |
+| `loadout ask <request>` | Ask in plain words: what you spent over a period ("how much did I spend last tuesday"), which open tasks are easy or need work first, or what to queue and start. Loadout answers from its own records without an agent. Spend is a list-rate estimate: the tokens every session and team run recorded, priced at Anthropic's published API rates, which is not what a subscription charges. A request that would start something comes back as a plan to read, with each task's reasons and the cap it would run under, and nothing starts. A request it can't place gets the closest ones it can, written out to ask as they stand, and a rough cost for asking the agent instead |
+| `loadout ask --use-agent <request>` | Ask the configured agent instead, because you chose to. It gets Loadout's tools that read and nothing else, and answers in words or with a request Loadout then runs as its own, so anything it proposes is a plan you approve. The answer says what the agent's turn cost, kept apart from any plan's cap. `--resume <session>` carries its conversation on from an earlier answer |
 | `loadout task list\|show\|declare\|remove` | Record what is being worked on, and check it against the repository. `--global` is the list for what belongs to no project yet |
 | `loadout task declare <id> <state> --title <line> --detail <text>` | A title is one line of 72 characters at most, so a list stays readable; the full description goes in `--detail`. A longer title is shortened at a word, the whole of it is kept at the start of the detail, and you're told so |
 | `loadout task declare <id> <state> --done-when <condition>` | What must be true for the task to be finished, repeated for each. Together they replace what it had, and `--no-done-when` clears them. A team run for the task is held to them |
@@ -142,6 +144,7 @@
 | `loadout team office check <set>` | Whether an office set's kit (with its rules) or tile scene can be used, and each thing wrong with it by name. A kit may lack parts: it lists which, and those are drawn in the built-in kit's shapes meanwhile |
 | `loadout team schedule add\|list\|remove` | Runs that should happen again and again on this machine |
 | `loadout team queue add\|list\|move\|remove\|plan\|settings\|run-next` | A team's queue of fully specified tasks, worked through one run at a time, each in a worktree of its own. Only a task with a title and a done-when gets in |
+| `loadout team queue run-now <team> --task <project/id> --usd <cap>` | Run the tasks given now, back to back, under one cap they share. They go to the front of the queue first, so nothing already waiting spends the cap, and each run is given what is left of it. A run checks its spend after each turn, so the one that crosses the cap finishes that turn and the batch can end a little over it. This is what approving a team plan from Ask does. `--usd none` runs them with no cap of their own |
 | `loadout team queue window <team> --at <time> --for <duration>` | The daily window in which the daemon works through a team's queue on its own; `--off` takes it away |
 | `loadout team run --task <id> --work-in <worktree>` | A run in a worktree of the project's repository instead of its own checkout, which is how a queued run keeps out of yours |
 | `loadout daemon` | Stay running: fire the scheduled runs and serve the dashboard |

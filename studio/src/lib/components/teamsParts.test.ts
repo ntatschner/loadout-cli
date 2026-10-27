@@ -46,6 +46,22 @@ describe('Gate', () => {
     expect(box.readOnly).toBe(true);
   });
 
+  it('draws a permission as its plain line, the refused part, the warning and the command apart', () => {
+    const command = 'ls build && rm -rf build';
+    render(Gate, {
+      kind: 'permission',
+      run: 'r1',
+      gate: 'g4',
+      question: `implementer (builder) wants to list the build output. The command: '${command}'. Let it`,
+      ask: { line: 'implementer (builder) wants to list the build output', command, blocked: 'rm -rf build', flags: ['deletes files'], careful: 'Careful: the command deletes files.' },
+    });
+
+    expect(screen.getByRole('group', { name: 'implementer (builder) wants to list the build output.' })).toBeTruthy();
+    expect(screen.getByText('Not allowed by its role: rm -rf build')).toBeTruthy();
+    expect(screen.getByText('Careful: the command deletes files.')).toBeTruthy();
+    expect(screen.getByText(command).tagName).toBe('PRE');
+  });
+
   it('stays open when the answer was not taken', async () => {
     render(Gate, { kind: 'confirm', run: 'r1', question: 'Go?', onanswer: () => false });
 

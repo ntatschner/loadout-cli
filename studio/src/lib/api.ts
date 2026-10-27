@@ -403,6 +403,17 @@ export interface RunGate {
   until: string | null;
   /** When nobody answers: what happens, and when. */
   timer?: { at: string; does: string } | null;
+  /** A permission's parts, where the daemon has words for it. */
+  ask?: PermissionParts | null;
+}
+
+/** A permission as its parts: the plain line, what was refused, the warnings and the command. */
+export interface PermissionParts {
+  line: string;
+  command: string | null;
+  blocked: string | null;
+  flags: string[];
+  careful: string | null;
 }
 
 export interface RunNode {

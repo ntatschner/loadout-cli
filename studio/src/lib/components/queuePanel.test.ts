@@ -111,6 +111,17 @@ describe('QueuePanel', () => {
     expect(screen.getByText(/\$12 a window · 3 run\(s\) a window · at most 2 held/)).toBeTruthy();
   });
 
+  it('says first when the queue may open pull requests ready for review, and turns that off', async () => {
+    const { acted } = setup({ settings: { windowUsd: null, windowRuns: null, heldCap: 2, draftPullRequests: false, prMode: 'ready' } });
+
+    expect(screen.getByRole('note').textContent).toContain('pull request ready for review');
+    const stop = screen.getByRole('button', { name: 'Stop that' });
+    expect(said(stop)).toBe('$ loadout team queue settings builders --pr-mode none');
+
+    await fireEvent.click(stop);
+    expect(acted).toEqual([['team queue settings', ['builders', '--pr-mode', 'none']]]);
+  });
+
   it('moves an item up or down by its place, and not past either end', async () => {
     const { acted } = setup();
     const rows = within(screen.getByRole('list', { name: "Waiting in builders' queue" })).getAllByRole('listitem');

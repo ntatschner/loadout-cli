@@ -2274,7 +2274,8 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             // numbered one, so it is the one thing here left unescaped and
             // uncoloured: a command with a bracket in it would otherwise be
             // read as a style on one path and printed doubled on the other.
-            var chosen = _reading.Ask(_console, ask.Asking.Replace("[", "(").Replace("]", ")"), ask.Choices, option => option);
+            var asking = AskWording.View(ask)?.Text ?? ask.Asking;
+            var chosen = _reading.Ask(_console, asking.Replace("[", "(").Replace("]", ")"), ask.Choices, option => option);
 
             var allowed = !string.Equals(chosen, "no", StringComparison.OrdinalIgnoreCase);
 

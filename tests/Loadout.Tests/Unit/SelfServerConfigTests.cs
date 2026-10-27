@@ -73,6 +73,19 @@ public sealed class SelfServerConfigTests : IDisposable
     }
 
     [Fact]
+    public void An_agent_that_may_only_look_is_given_the_server_read_only()
+    {
+        var files = SelfServerConfig.Write(
+            enabled: true, "starstats", _runtime, [], _executable, readOnly: true);
+
+        using var document = JsonDocument.Parse(File.ReadAllText(files[0]));
+
+        document.RootElement.GetProperty("mcpServers").GetProperty("loadout").GetProperty("args")
+            .EnumerateArray().Select(a => a.GetString())
+            .Should().Equal("mcp", "serve", "--project", "starstats", "--read-only");
+    }
+
+    [Fact]
     public void It_is_written_where_the_launch_can_take_it_away_again()
     {
         var warnings = new List<string>();

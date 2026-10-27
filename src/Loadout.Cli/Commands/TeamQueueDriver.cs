@@ -1,7 +1,9 @@
+using Loadout.Core.Delivery;
 using Loadout.Core.Git;
 using Loadout.Core.Projects;
 using Loadout.Core.Tasks;
 using Loadout.Core.Teams;
+using Loadout.Core.Workspace;
 using Loadout.Models;
 using Loadout.Models.Results;
 using Loadout.Models.Tasks;
@@ -43,8 +45,9 @@ public sealed class TeamQueueDriver
     private readonly IGitManager _git;
     private readonly IProcessLauncher _launcher;
     private readonly IProcessInspector _processes;
-    private readonly IExecutableResolver _resolver;
+    private readonly IRepositoryHost _host;
     private readonly IPullRequestReader _pulls;
+    private readonly IWorkspaceManager _workspace;
     private readonly IPlatformPaths _paths;
     private readonly TimeProvider _time;
 
@@ -57,8 +60,9 @@ public sealed class TeamQueueDriver
         IGitManager git,
         IProcessLauncher launcher,
         IProcessInspector processes,
-        IExecutableResolver resolver,
+        IRepositoryHost host,
         IPullRequestReader pulls,
+        IWorkspaceManager workspace,
         IPlatformPaths paths,
         TimeProvider time)
     {
@@ -70,8 +74,9 @@ public sealed class TeamQueueDriver
         _git = git;
         _launcher = launcher;
         _processes = processes;
-        _resolver = resolver;
+        _host = host;
         _pulls = pulls;
+        _workspace = workspace;
         _paths = paths;
         _time = time;
     }
@@ -183,6 +188,7 @@ public sealed class TeamQueueDriver
                 {
                     Task = decision.Item!.Task,
                     Project = decision.Item.Project,
+                    PrMode = decision.Item.PrMode,
                     StartedUtc = started,
                     StartedBy = by,
                 };
@@ -391,19 +397,23 @@ public sealed class TeamQueueDriver
 
         if (run.State == QueueRunState.Met)
         {
-            var queue = await _queues.LoadAsync(team, ct).ConfigureAwait(false);
-            var granted = queue.Value?.Settings.DraftPullRequests == true;
+            var choice = await ModeAsync(team, run, ct).ConfigureAwait(false);
+            var kind = choice.Mode == PullRequestMode.Draft ? "draft pull request" : "pull request";
 
-            if (granted && await OpenAsync(team, run, ct).ConfigureAwait(false) is { } url)
+            if (choice.Mode == PullRequestMode.None)
+            {
+                reason = choice.Level == PullRequestModeLevel.Default
+                    ? $"Met its done-when on branch {run.Branch}, kept on this machine: nothing asks for a pull request."
+                    : $"Met its done-when on branch {run.Branch}, kept on this machine: {choice.From} asks for no pull request.";
+            }
+            else if (await OpenAsync(team, run, choice.Mode == PullRequestMode.Draft, ct).ConfigureAwait(false) is { } url)
             {
                 run.PullRequest = url;
-                reason = $"Met its done-when. Draft pull request: {url}";
+                reason = $"Met its done-when. {char.ToUpperInvariant(kind[0])}{kind[1..]}: {url}";
             }
             else
             {
-                reason = granted
-                    ? $"Met its done-when on branch {run.Branch}, but the draft pull request could not be opened: {run.Reason}"
-                    : $"Met its done-when on branch {run.Branch}, kept on this machine: this queue may not open pull requests.";
+                reason = $"Met its done-when on branch {run.Branch}, but the {kind} could not be opened: {run.Reason}";
             }
         }
         else
@@ -435,8 +445,24 @@ public sealed class TeamQueueDriver
         }, ct).ConfigureAwait(false);
     }
 
-    /// <summary>Pushes a met run's branch and opens a draft pull request, returning its address or null.</summary>
-    private async Task<string?> OpenAsync(string team, QueueRun run, CancellationToken ct)
+    /// <summary>
+    /// The pull request mode a met run follows: its queued task's, else its
+    /// queue's, else its project's, else none.
+    /// </summary>
+    /// <remarks>
+    /// A queue or manifest that cannot be read says nothing, so a read that
+    /// fails can only ever mean fewer pull requests, never one nobody asked for.
+    /// </remarks>
+    private async Task<PullRequestModeChoice> ModeAsync(string team, QueueRun run, CancellationToken ct)
+    {
+        var queue = await _queues.LoadAsync(team, ct).ConfigureAwait(false);
+        var project = await _workspace.ReadProjectAsync(run.Project, ct).ConfigureAwait(false);
+
+        return PullRequestModes.Resolve(run.PrMode, queue.Value?.Settings ?? new QueueSettings(), project.Value?.Delivery);
+    }
+
+    /// <summary>Pushes a met run's branch and opens a pull request, returning its address or null.</summary>
+    private async Task<string?> OpenAsync(string team, QueueRun run, bool draft, CancellationToken ct)
     {
         var place = run.Worktree.Length > 0 && Directory.Exists(run.Worktree)
             ? run.Worktree
@@ -449,9 +475,9 @@ public sealed class TeamQueueDriver
             return null;
         }
 
-        if (_resolver.Resolve("gh") is not { } gh)
+        if (_host.Unavailable() is { } cannot)
         {
-            run.Reason = "the GitHub CLI is not on PATH";
+            run.Reason = cannot;
 
             return null;
         }
@@ -478,23 +504,19 @@ public sealed class TeamQueueDriver
 
         var title = task.Title.Trim().Length > 0 ? task.Title.Trim() : task.Id;
 
-        var opened = await _launcher.RunAsync(
-            new ProcessRequest(
-                gh,
-                ["pr", "create", "--draft", "--head", run.Branch, "--title", title, "--body", QueueSettling.Body(task, summary, team)],
-                place),
-            TimeSpan.FromMinutes(2),
+        var opened = await _host.OpenAsync(
+            place,
+            new PullRequestOpening(run.Branch, title, QueueSettling.Body(task, summary, team), draft),
             ct).ConfigureAwait(false);
 
-        if (opened.Failed || opened.Value?.Succeeded != true)
+        if (opened.Failed)
         {
-            run.Reason = "gh could not open it: "
-                + (opened.Value?.StandardError.Trim() is { Length: > 0 } said ? said : opened.Error);
+            run.Reason = opened.Error!;
 
             return null;
         }
 
-        return opened.Value.StandardOutput.Trim().Split('\n').LastOrDefault()?.Trim();
+        return opened.Value;
     }
 
     /// <summary>

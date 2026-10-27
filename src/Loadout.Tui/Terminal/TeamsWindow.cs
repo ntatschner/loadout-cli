@@ -289,7 +289,12 @@ internal sealed class TeamsWindow : Window
     {
         var choices = gate.Choices;
 
-        using var dialog = new ChoiceDialog(gate.Question, choices, _application);
+        // A permission with wording gets its parts on their own lines - the
+        // plain line, what was refused, the warnings, the command set apart -
+        // under a short title. Anything else is its question, as before.
+        using var dialog = AskWording.View(gate) is { } view
+            ? new ChoiceDialog($"{gate.Node} is waiting for you", choices, _application, view.Text)
+            : new ChoiceDialog(gate.Question, choices, _application);
 
         _application.Run(dialog);
 

@@ -2106,7 +2106,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         {
             await _notices.PostAsync(
                 kind, title, detail, _address is { Length: > 0 } page ? page : "loadout team queue list",
-                teams!.NotifyChat, address, ct).ConfigureAwait(false);
+                teams!.NotifyChat, address, ct: ct).ConfigureAwait(false);
         }
     }
 

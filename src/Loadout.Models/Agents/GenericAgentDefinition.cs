@@ -25,6 +25,17 @@ public sealed class GenericAgentDefinition
     public Dictionary<string, string> Environment { get; set; } = [];
 
     /// <summary>
+    /// The agent's own remote-control switch, added after <see cref="Arguments"/>
+    /// when a session asks for remote control. Placeholders are expanded.
+    /// </summary>
+    /// <remarks>
+    /// Empty means the agent has none, and a session that asks for it is
+    /// refused. Declared rather than probed, because the launcher cannot read a
+    /// described agent's help.
+    /// </remarks>
+    public List<string> RemoteControlArguments { get; set; } = [];
+
+    /// <summary>
     /// How this agent's transcripts are laid out, when it writes any.
     /// </summary>
     /// <remarks>

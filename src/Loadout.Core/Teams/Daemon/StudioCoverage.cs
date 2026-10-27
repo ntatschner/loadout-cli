@@ -196,6 +196,7 @@ public static class StudioCoverage
         ["team queue plan"] = new("teams", StudioEffect.Reads),
         ["team queue settings"] = new("teams", StudioEffect.Changes),
         ["team queue run-next"] = new("teams", StudioEffect.Changes),
+        ["team queue run-now"] = new("home", StudioEffect.Changes),
         ["team queue window"] = new("teams", StudioEffect.Changes),
         ["team gate"] = new("home", StudioEffect.Changes),
         ["team message"] = new("teams", StudioEffect.Changes),
@@ -297,6 +298,9 @@ public static class StudioCoverage
         // The palette's search, on every page. Placed with Home, where the
         // palette is first met.
         ["find"] = new("home", StudioEffect.Reads),
+        // Asked from the palette with a leading '?', which is on every page.
+        // Reads unless the agent is asked, which spends a turn.
+        ["ask"] = new("home", StudioEffect.Changes, ChangesOnlyWith: ["--use-agent"]),
         ["usage"] = new("spend", StudioEffect.Reads),
         ["launches"] = new("spend", StudioEffect.Reads),
         ["instructions list"] = new("context", StudioEffect.Reads),

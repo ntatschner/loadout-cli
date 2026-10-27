@@ -31,6 +31,10 @@ public sealed class McpServeSettings : GlobalSettings
     [CommandOption("--policy <PATH>")]
     [Description("A team node's permission policy, which this session answers its agent's permission questions from.")]
     public string? Policy { get; init; }
+
+    [CommandOption("--read-only")]
+    [Description("Serve only the tools that read: nothing that records, changes or answers for anybody.")]
+    public bool ReadOnly { get; init; }
 }
 
 /// <summary>
@@ -93,7 +97,12 @@ public sealed class McpServeCommand : AsyncCommand<McpServeSettings>
         foreach (var method in typeof(LoadoutTools).GetMethods(
             BindingFlags.Public | BindingFlags.Instance))
         {
-            if (method.GetCustomAttribute<McpServerToolAttribute>() is null)
+            if (method.GetCustomAttribute<McpServerToolAttribute>() is not { } tool)
+            {
+                continue;
+            }
+
+            if (settings.ReadOnly && !LoadoutTools.ReadOnly.Contains(tool.Name ?? string.Empty))
             {
                 continue;
             }
@@ -144,6 +153,48 @@ public sealed record LoadoutToolScope(string? Project, string? PolicyPath = null
 [McpServerToolType]
 public sealed class LoadoutTools
 {
+    /// <summary>
+    /// The tools that only read, served alone by 'mcp serve --read-only'.
+    /// </summary>
+    /// <remarks>
+    /// Named rather than inferred, so a new tool is not read-only until
+    /// somebody says so: a test holds every tool to being in this list or in
+    /// <see cref="Acting"/>. The Ask agent is given these and no others, so it
+    /// can look and can't record, declare, approve or change anything.
+    /// </remarks>
+    public static readonly IReadOnlySet<string> ReadOnly = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "loadout_specialist",
+        "loadout_effective_instructions",
+        "loadout_recall",
+        "loadout_tools_search",
+        "loadout_tools_show",
+        "loadout_locate",
+        "loadout_code_map",
+        "loadout_tasks",
+        "loadout_teams",
+        "loadout_task_show",
+        "loadout_ideas",
+        "loadout_project_settings",
+    };
+
+    /// <summary>The tools that record, change or answer for somebody, never served read-only.</summary>
+    public static readonly IReadOnlySet<string> Acting = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "loadout_remember",
+        "loadout_tools_submit",
+        "loadout_tools_used",
+        "loadout_permission",
+        "loadout_progress",
+        "loadout_task_declare",
+        "loadout_task_apply",
+        "loadout_idea_apply",
+        "loadout_task_move",
+        "loadout_idea_add",
+        "loadout_propose_settings",
+        "loadout_mode",
+    };
+
     private readonly IInstructionService _instructions;
     private readonly IMemoryService _memory;
     private readonly IWorkspaceManager _workspace;
@@ -699,7 +750,7 @@ public sealed class LoadoutTools
         // written twice is written differently the second time.
         if (policy is not null && NodePermissions.Askable(policy, decision))
         {
-            decision = await AskedAsync(policy, tool_name, inputJson, tool_use_id, decision.Remedy)
+            decision = await AskedAsync(policy, tool_name, inputJson, tool_use_id, decision.Remedy, decision.Blocked)
                 .ConfigureAwait(false);
         }
 
@@ -739,7 +790,8 @@ public sealed class LoadoutTools
         string tool,
         string? inputJson,
         string? toolUseId,
-        RemedyStanding? remedy = null)
+        RemedyStanding? remedy = null,
+        string? blocked = null)
     {
         var directory = Path.GetDirectoryName(_scope.PolicyPath!);
 
@@ -778,7 +830,14 @@ public sealed class LoadoutTools
             // what it does, what it assumes and how you would know it worked.
             Kind: remedy is null ? "permission" : "remedy",
             Asked: remedy?.Asking(policy.Node, policy.Role),
-            Options: rule is null ? null : ["yes", NodePermissions.AlwaysOption(rule), "no"]);
+            Options: rule is null ? null : ["yes", NodePermissions.AlwaysOption(rule), "no"],
+
+            // The plain line, the part refused and what the command does,
+            // worked out here because this is the last place the call's whole
+            // input is to hand. Every surface reads them from the file.
+            Said: remedy is null ? AskWording.Said(tool, inputJson) : null,
+            Blocked: blocked is { Length: > 0 } part ? Loadout.Core.Security.SecretRedactor.Redact(part) : null,
+            Flags: AskWording.Flags(tool, NodePermissions.Target(inputJson)) is { Count: > 0 } flags ? flags : null);
 
         var answer = await NodePermissions
             .AskAsync(directory, ask, _time)
@@ -850,6 +909,11 @@ public sealed class LoadoutTools
                 allowed = decision.Allowed,
                 rule = decision.Rule,
                 reason = decision.Reason,
+
+                // Worked out for allowed calls as well as asked ones, so the
+                // record shows whether the word lists flag too much before
+                // anybody has learnt to ignore them.
+                flags = AskWording.Flags(tool, NodePermissions.Target(inputJson)) is { Count: > 0 } flags ? flags : null,
                 toolUseId,
             });
 

@@ -63,6 +63,12 @@ public enum UsageFormat
 /// show a number in the thousands that nobody was ever billed. Tokens are what
 /// actually happened.
 /// </para>
+/// <para>
+/// Money is still a question people ask, so 'loadout ask' answers it from
+/// these same counts through <see cref="Core.Usage.PriceTable"/>, and every
+/// figure it gives is labelled a list-rate estimate. This report stays in
+/// tokens, where nothing has to be labelled.
+/// </para>
 /// </remarks>
 [Description("Show what the agents have spent, by project, day, model or agent.")]
 [CommandMeta(CommandCategory.Administration, Intent = "tokens cost spend usage stats how much")]

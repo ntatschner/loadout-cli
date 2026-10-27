@@ -28,6 +28,7 @@ public static class ServiceRegistration
         services.AddSingleton<IConfigurationService, ConfigurationService>();
         services.AddSingleton<IGitManager, GitManager>();
         services.AddSingleton<IPullRequestReader, GhPullRequestReader>();
+        services.AddSingleton<IRepositoryHost, GhRepositoryHost>();
         services.AddSingleton<IWorkspaceManager, WorkspaceManager>();
         services.AddSingleton<IProjectCheckouts, ProjectCheckouts>();
         services.AddSingleton<IProjectService, ProjectService>();
@@ -170,6 +171,7 @@ public static class ServiceRegistration
         services.AddSingleton<Usage.ISpendWatch, Usage.SpendWatch>();
         services.AddSingleton<Usage.ISpendNoticeStore, Usage.SpendNoticeStore>();
         services.AddSingleton<Tasks.ITaskService, Tasks.TaskService>();
+        services.AddSingleton<Ask.IAskService, Ask.AskService>();
         services.AddSingleton<Tasks.ITaskActivityReader, Tasks.TaskActivityReader>();
         services.AddSingleton<Ideas.IIdeaService, Ideas.IdeaService>();
         services.AddSingleton<Ideas.IIdeaLocks, Ideas.IdeaLocks>();

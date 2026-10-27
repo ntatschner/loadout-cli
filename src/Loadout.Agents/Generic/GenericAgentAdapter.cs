@@ -48,6 +48,23 @@ public sealed class GenericAgentAdapter : AgentAdapterBase
         new Dictionary<string, string[]>();
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Remote control is the one capability a definition can declare, because
+    /// it names the switch itself.
+    /// </remarks>
+    protected override async Task<IReadOnlyDictionary<string, bool>> ProbeCapabilitiesAsync(
+        string executable,
+        CancellationToken ct)
+    {
+        var probed = await base.ProbeCapabilitiesAsync(executable, ct).ConfigureAwait(false);
+
+        return new Dictionary<string, bool>(probed)
+        {
+            [AgentCapabilities.RemoteControl] = _definition.RemoteControlArguments.Count > 0,
+        };
+    }
+
+    /// <inheritdoc />
     public override async Task<OperationResult<AgentInvocation>> BuildInvocationAsync(
         AgentLaunchContext context,
         CancellationToken ct = default)
@@ -71,6 +88,12 @@ public sealed class GenericAgentAdapter : AgentAdapterBase
         var placeholders = BuildPlaceholders(context);
 
         var arguments = _definition.Arguments.Select(a => Expand(a, placeholders)).ToList();
+
+        if (context.RemoteControl && context.Headless is null)
+        {
+            arguments.AddRange(_definition.RemoteControlArguments.Select(a => Expand(a, placeholders)));
+        }
+
         arguments.AddRange(context.PassthroughArguments);
 
         // Preflight-resolved variables go in first so a definition can still
