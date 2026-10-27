@@ -148,7 +148,7 @@ public sealed class ResolutionSnapshotTests : IDisposable
     {
         // Every task ends with something being done, so the phrases have to be
         // the question, not the word: "done" alone would fire on everything.
-        var selected = await SelectedFor("fix the null reference in the parser");
+        var selected = await SelectedFor("get the parser fix done and add a done_when field to the manifest");
 
         selected.Should().NotContain("skill.actually-done");
     }
