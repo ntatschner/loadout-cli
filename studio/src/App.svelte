@@ -16,6 +16,10 @@
   import Sessions from './pages/Sessions.svelte';
   import LaunchSheet from './pages/LaunchSheet.svelte';
   import { search } from './lib/search';
+  import { approvePlan, askLoadout, type PaletteAsk } from './lib/ask';
+  import { conversation } from './lib/askConversation.svelte';
+  import { commands } from './lib/api';
+  import { runJob } from './lib/jobs';
   import type { Chosen } from './lib/tasks';
   import type { Conversation } from './lib/api';
   import Settings from './pages/Settings.svelte';
@@ -228,6 +232,23 @@
     }
   }
 
+  // Asking Loadout from the palette. A plan is carried out only from its
+  // card's Approve, through the same commands the terminal would run.
+  const paletteAsk: PaletteAsk = {
+    conversation,
+    asker: askLoadout,
+    approve: (plan, team, cap) =>
+      approvePlan(plan, team, cap, {
+        start: (path, words) => commands.run(path, words),
+        run: (path, words) => runJob(path, words),
+        openTerminal: async (project, task) => {
+          if (!(await studio.startSession({ project, taskId: task, columns: 120, rows: 32 }, `loadout ${project}`))) {
+            throw new Error(`The terminal for ${task} on ${project} did not open.`);
+          }
+        },
+      }),
+  };
+
   const groups = $derived(
     paletteGroups(studio, revealParts, {
       launch: () => openLaunch(),
@@ -407,7 +428,7 @@
     <Ambient onleave={() => (ambient = false)} onlaunch={() => openLaunch()} />
   {/if}
   {#if palette}
-    <CommandPalette {groups} search={(query) => search(query, revealParts)} onclose={() => (palette = false)} />
+    <CommandPalette {groups} search={(query) => search(query, revealParts)} ask={paletteAsk} onclose={() => (palette = false)} />
   {/if}
   {#if appearance}
     <Dialog title="Appearance" why="Every Studio screen follows these, in every browser: they are kept in Loadout's config." cancelLabel="Done" actions={[]} onclose={() => (appearance = false)}>

@@ -81,7 +81,7 @@ public sealed record AskPlanStep(
 /// <param name="Team">The team it uses, or null when one has to be chosen.</param>
 /// <param name="TeamChoices">The teams it could use, when one has to be chosen.</param>
 /// <param name="Steps">What would happen, in order.</param>
-/// <param name="Capped">Whether this plan carries a spending cap. Interactive terminals do not: somebody is there.</param>
+/// <param name="Capped">Whether this plan carries a spending cap: one that starts a team does. Interactive terminals do not, since somebody is there.</param>
 /// <param name="Cap">The cap it starts with, from this machine's team-budget, or unset when there is none.</param>
 /// <param name="Left">Tasks that would have been picked and could not be, each with why.</param>
 public sealed record AskPlan(
@@ -400,7 +400,9 @@ internal sealed class AskService : IAskService
             var machine = await _configuration.LoadMachineAsync(ct).ConfigureAwait(false);
             var cap = machine.Succeeded && UsdCap.TryParse(machine.Value!.Teams.Budget, out var said) ? said : UsdCap.Unset;
 
-            var plan = new AskPlan(AskShape.TeamQueue, team, team is null ? teams : [], steps, Capped: true, cap, left);
+            // Only starting spends anything: tasks that are only queued wait for
+            // the queue's own window and its limits.
+            var plan = new AskPlan(AskShape.TeamQueue, team, team is null ? teams : [], steps, Capped: request.Start, cap, left);
 
             return OperationResult<AskReply>.Ok(new AskReply(
                 query, AskReplyKind.Plan, "loadout", PlanSummary(plan, wanted), request, null, [], plan, []));

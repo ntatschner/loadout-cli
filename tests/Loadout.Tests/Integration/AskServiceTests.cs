@@ -142,6 +142,19 @@ public sealed class AskServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task A_plan_that_only_queues_needs_no_cap_because_it_starts_nothing()
+    {
+        await RegisterAsync("alpha");
+        await TaskAsync("alpha", "small", "Rename a flag", doneWhen: 1);
+
+        var reply = await AskAsync("queue one easy task for bug-hunt");
+
+        reply.Plan!.Capped.Should().BeFalse();
+        reply.Plan.Steps.Should().NotContain(step => step.Kind == AskStepKind.StartTeam);
+        reply.Plan.Needs.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task Terminals_go_one_per_project_before_any_project_gets_a_second()
     {
         await RegisterAsync("alpha", "beta");

@@ -45,12 +45,18 @@ public sealed class AskCommand : AsyncCommand<AskCommand.Settings>
         [Description("What to ask, as words: how much did I spend last tuesday, list 5 easy open tasks.")]
         public string[] Words { get; init; } = [];
 
-        public string Query => string.Join(' ', Words);
+        [CommandOption("--query <REQUEST>")]
+        [Description("The request as one option, for one starting with a minus, or as Studio sends it: --query=\"-5 tasks\".")]
+        public string? Option { get; init; }
+
+        public string Query => Option ?? string.Join(' ', Words);
 
         public override ValidationResult Validate() =>
-            Words.Length == 0
-                ? ValidationResult.Error("Say what to ask: loadout ask how much did I spend this week")
-                : base.Validate();
+            Words.Length > 0 && Option is not null
+                ? ValidationResult.Error("Give the request once: after the command, or as --query, not both.")
+                : Words.Length == 0 && string.IsNullOrWhiteSpace(Option)
+                    ? ValidationResult.Error("Say what to ask: loadout ask how much did I spend this week")
+                    : base.Validate();
     }
 
     /// <inheritdoc />
