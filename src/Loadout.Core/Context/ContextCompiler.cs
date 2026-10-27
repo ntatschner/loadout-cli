@@ -16,6 +16,9 @@ internal sealed class ContextCompiler : IContextCompiler
 
     internal const string CompiledFileName = "compiled-context.md";
 
+    /// <summary>Heading of the section telling an agent to follow its rules without saying so.</summary>
+    internal const string QuietRulesHeading = "How to apply these instructions";
+
     /// <summary>
     /// Refuses to inline anything larger than this. A stray build log or
     /// database dump committed into the workspace would otherwise be pasted
@@ -110,8 +113,25 @@ internal sealed class ContextCompiler : IContextCompiler
         var sources = new List<ContextSource>();
         var missing = new List<string>();
 
+        // Read once, for the two sections that follow the person's own
+        // settings. Null when there is no configuration service, or the file
+        // cannot be read: a broken config.yaml is doctor's to report, and must
+        // not cost a session its context.
+        Models.Configuration.LauncherConfig? config = null;
+
+        if (_configuration is not null)
+        {
+            var loaded = await _configuration.LoadConfigAsync(ct).ConfigureAwait(false);
+            config = loaded.Succeeded ? loaded.Value : null;
+        }
+
         WriteHeader(builder, manifest, agentName, profileName);
         WriteToolAccess(builder, instructions);
+
+        if (config?.InstructionContext.QuietRules != false)
+        {
+            WriteQuietRules(builder);
+        }
 
         // Specialists come before the project's own material, because they are
         // the more general half: the C# specialist says what C# code should
@@ -187,7 +207,7 @@ internal sealed class ContextCompiler : IContextCompiler
         // material, the rules and the memory index. Who is reading is the most
         // specific fact there is, and the last thing read is what an agent
         // carries into its first sentence.
-        await AppendAccessibilityAsync(builder, sources, ct).ConfigureAwait(false);
+        AppendAccessibility(builder, sources, config);
 
         var outputPath = Path.Combine(runtimeDirectory, CompiledFileName);
 
@@ -610,22 +630,12 @@ internal sealed class ContextCompiler : IContextCompiler
     /// tokens. Whoever wants none of this never learns it exists.
     /// </para>
     /// </remarks>
-    private async Task AppendAccessibilityAsync(
+    private static void AppendAccessibility(
         StringBuilder builder,
         List<ContextSource> sources,
-        CancellationToken ct)
+        Models.Configuration.LauncherConfig? config)
     {
-        if (_configuration is null)
-        {
-            return;
-        }
-
-        var loaded = await _configuration.LoadConfigAsync(ct).ConfigureAwait(false);
-
-        // A broken configuration file is somebody else's error to report. It
-        // must not cost a session its context, and doctor is where a person
-        // finds out.
-        if (loaded.Failed || Instructions.AccessibilityProfile.Compose(loaded.Value?.Accessibility) is not { } section)
+        if (config is null || Instructions.AccessibilityProfile.Compose(config.Accessibility) is not { } section)
         {
             return;
         }
@@ -924,6 +934,36 @@ internal sealed class ContextCompiler : IContextCompiler
         builder.AppendLine(
             "Anything that changes the machine or pushes to a remote is deliberately not listed: "
             + "ask rather than run it.");
+        builder.AppendLine();
+    }
+
+    /// <summary>
+    /// Tells the agent to follow what it is given without announcing it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// An agent handed rules tends to say so each time it applies one: "per
+    /// your rule I won't add a Co-Authored-By", "following the house voice".
+    /// That is a sentence the reader has to get past, and it tells them
+    /// nothing they can act on. What is worth saying is a rule that changed
+    /// what they asked for, so that is the exception, and in one sentence.
+    /// </para>
+    /// <para>
+    /// Near the top, before what it governs, and written here rather than
+    /// shipped as a rule file, so every adapter that takes compiled context
+    /// carries it from one place. Short because it is paid for on every
+    /// launch. Off with <c>quiet-rules</c>.
+    /// </para>
+    /// </remarks>
+    private static void WriteQuietRules(StringBuilder builder)
+    {
+        builder.AppendLine($"## {QuietRulesHeading}");
+        builder.AppendLine();
+        builder.AppendLine(
+            "Follow the rules, specialists and memory below without saying that you are. A "
+            + "sentence announcing that a rule was followed tells the reader nothing they can use. "
+            + "Mention a rule only when it stops or changes something you were asked for, or when "
+            + "two of them disagree, and then in one sentence that names it.");
         builder.AppendLine();
     }
 

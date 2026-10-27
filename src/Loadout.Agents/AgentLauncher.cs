@@ -918,7 +918,8 @@ public sealed class AgentLauncher : IAgentLauncher
             // resuming it later knows what it was for. A node's already is,
             // through its own protocol.
             LinksSession: headless is null,
-            RemoteControl: remote.On);
+            RemoteControl: remote.On,
+            KeepAttribution: config.Attribution.Keep);
 
         var invocationResult = await adapter.BuildInvocationAsync(context, ct).ConfigureAwait(false);
         if (invocationResult.Failed)

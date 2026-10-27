@@ -61,6 +61,7 @@ internal sealed class InstructionDiagnosticContributor : IDiagnosticContributor
         var heavy = new List<string>();
         var leaking = new List<string>();
         var elsewhere = new List<(string Slug, int Topics)>();
+        var narrating = new List<string>();
 
         foreach (var project in listed.Value)
         {
@@ -81,15 +82,34 @@ internal sealed class InstructionDiagnosticContributor : IDiagnosticContributor
             var manifest = await _workspace.ReadProjectAsync(slug, ct).ConfigureAwait(false);
 
             (string Path, long Bytes)? largest = null;
+            IReadOnlyList<string> core = [];
 
             if (manifest.Succeeded)
             {
                 largest = CoreInstructions.Largest(manifest.Value!, _workspace.LocalPath, slug);
+                core = CoreInstructions.PathsFor(manifest.Value!, _workspace.LocalPath, slug);
 
-                alwaysLoaded += CoreInstructions
-                    .PathsFor(manifest.Value!, _workspace.LocalPath, slug)
+                alwaysLoaded += core
                     .Where(File.Exists)
                     .Sum(path => new FileInfo(path).Length);
+            }
+
+            // Counted here, detailed by the audit. The wording costs attention
+            // in every session that reads it, and nobody runs 'rules audit'
+            // without a reason to.
+            var topics = await _memory.ListAsync(_workspace.LocalPath, slug, ct).ConfigureAwait(false);
+
+            var narration = RuleAuditor.Audit(
+                    rules.Succeeded ? rules.Value! : [],
+                    core.Where(File.Exists).ToList(),
+                    slug,
+                    topics.Succeeded ? topics.Value!.Select(topic => topic.Path).ToList() : null)
+                .Findings
+                .Count(finding => finding.Kind == "invites-narration");
+
+            if (narration > 0)
+            {
+                narrating.Add($"{slug} ({narration})");
             }
 
             if (alwaysLoaded > ComfortableAlwaysLoadedBytes)
@@ -165,6 +185,15 @@ internal sealed class InstructionDiagnosticContributor : IDiagnosticContributor
                     $"Import {topics} memory topic(s) for {slug} into the workspace",
                     slug)));
         }
+
+        checks.Add(narrating.Count > 0
+            ? DiagnosticCheck.Warn(
+                Category,
+                "Rule wording",
+                $"Rules or memory worded so the agent tends to say it is following them: "
+                + $"{string.Join(", ", narrating)}. See where with: loadout rules audit <project>")
+            : DiagnosticCheck.Ok(
+                Category, "Rule wording", "No rule or memory invites the agent to narrate it."));
 
         checks.Add(heavy.Count > 0
             ? DiagnosticCheck.Warn(

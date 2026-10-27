@@ -311,13 +311,19 @@ public sealed class RulesBudgetCommand : RulesCommandBase<RulesBudgetCommand.Set
 public sealed class RulesAuditCommand : RulesCommandBase<RulesAuditCommand.Settings>
 {
     private readonly IRuleService _rules;
+    private readonly IMemoryService _memory;
 
     public RulesAuditCommand(
         IRuleService rules,
+        IMemoryService memory,
         IProjectService projects,
         IWorkspaceManager workspace,
         IAnsiConsole console)
-        : base(projects, workspace, console) => _rules = rules;
+        : base(projects, workspace, console)
+    {
+        _rules = rules;
+        _memory = memory;
+    }
 
     public sealed class Settings : RulesSettings
     {
@@ -344,7 +350,15 @@ public sealed class RulesAuditCommand : RulesCommandBase<RulesAuditCommand.Setti
         }
 
         var core = await CoreInstructionPathsAsync(slug.Value!).ConfigureAwait(false);
-        var audit = RuleAuditor.Audit(loaded.Value!, core, slug.Value!);
+        // Memory as well as rules: a topic is as likely as a rule to tell the
+        // agent one instruction overrides another, and is read the same way.
+        var memory = await _memory.ListAsync(Workspace.LocalPath, slug.Value!).ConfigureAwait(false);
+
+        var audit = RuleAuditor.Audit(
+            loaded.Value!,
+            core,
+            slug.Value!,
+            memory.Succeeded ? memory.Value!.Select(topic => topic.Path).ToList() : null);
 
         if (output.IsJson)
         {

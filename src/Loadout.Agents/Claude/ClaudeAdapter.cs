@@ -369,7 +369,11 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         // A person's conversation, filed under its launch when it starts.
         var links = context.LinksSession && context.Headless is null;
 
-        if (settingsPath is null && reading.Count == 0 && !hosted && !links)
+        // Claude's own attribution, cleared unless the person asked to keep
+        // it. A node commits too, so this is not only a person's session.
+        var unattributed = !context.KeepAttribution;
+
+        if (settingsPath is null && reading.Count == 0 && !hosted && !links && !unattributed)
         {
             return;
         }
@@ -491,7 +495,13 @@ public sealed class ClaudeAdapter : AgentAdapterBase
             AddLinkHook(screened.Document, launcher);
         }
 
-        if (screened.Changed || disableHooks || reading.Count > 0 || hosted || links || path is null)
+        if (unattributed)
+        {
+            unattributed = ClearAttribution(screened.Document);
+        }
+
+        if (screened.Changed || disableHooks || reading.Count > 0 || hosted || links || unattributed
+            || path is null)
         {
             path = Path.Combine(context.RuntimeDirectory, "settings.json");
 
@@ -559,6 +569,43 @@ public sealed class ClaudeAdapter : AgentAdapterBase
     /// hooks are. The command prints nothing, which matters more here than
     /// anywhere: what a session-start hook prints becomes the agent's context.
     /// </remarks>
+    /// <summary>
+    /// Empties Claude's commit and pull request attribution, unless the
+    /// project's own settings already say what it should be.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Claude Code's own instructions ask for a Co-Authored-By trailer and a
+    /// "Generated with" footer. Somebody whose rules say not to then reads the
+    /// agent explaining, every time it commits, that it is leaving them out.
+    /// With the setting empty Claude is never asked, so there is nothing to
+    /// explain.
+    /// </para>
+    /// <para>
+    /// Both spellings: <c>attribution</c> is the current key and
+    /// <c>includeCoAuthoredBy</c> the one it replaced, and a build ignores a
+    /// key it does not know, so writing both costs nothing on either. A
+    /// project that set either has decided, and is left alone.
+    /// </para>
+    /// </remarks>
+    /// <returns>Whether anything was written.</returns>
+    internal static bool ClearAttribution(System.Text.Json.Nodes.JsonObject document)
+    {
+        if (document.ContainsKey("attribution") || document.ContainsKey("includeCoAuthoredBy"))
+        {
+            return false;
+        }
+
+        document["attribution"] = new System.Text.Json.Nodes.JsonObject
+        {
+            ["commit"] = string.Empty,
+            ["pr"] = string.Empty,
+        };
+        document["includeCoAuthoredBy"] = false;
+
+        return true;
+    }
+
     internal static void AddLinkHook(System.Text.Json.Nodes.JsonObject document, string launcher) =>
         AddHook(document, "SessionStart", null, $"{launcher} hook session-start --agent claude");
 
