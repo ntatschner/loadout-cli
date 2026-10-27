@@ -1,0 +1,46 @@
+<!-- @dsCard group="Overlays" height=1000 width=1200 subtitle="One plan from Ask Loadout: each step and why, the team and the cap, and Approve, held until they are given" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AskPlanCard</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 24px 28px; align-items: start; }
+  .lab { margin: 0 0 4px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  @media (max-width: 420px) { body { padding: 16px; } }
+</style>
+</head>
+<body class="ls">
+<div class="grid" id="g"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio, g = document.getElementById("g");
+  function card(title, plan, approve) {
+    var col = document.createElement("div"), lab = document.createElement("p");
+    lab.className = "lab"; lab.textContent = title; col.appendChild(lab);
+    col.appendChild(S.AskPlanCard({ plan: plan, approve: approve || ok }).el); g.appendChild(col);
+  }
+  function ok(p, team, cap) {
+    return new Promise(function (done) { setTimeout(function () {
+      var n = p.steps.filter(function (s) { return s.task && s.project; }).length;
+      if (p.shape === "terminals") { done("Opened " + n + " terminal(s), each with its task. They are on the Sessions page."); return; }
+      if (p.steps.some(function (s) { return s.kind === "start-team"; })) { done("Started " + team + " on " + n + " task(s), sharing a cap of " + (cap.trim().toLowerCase() === "none" ? "none" : S.AskPlanCard.usd(Number(cap.trim().replace(/^\$/, "")))) + ". The Jobs strip shows how it goes."); return; }
+      done("Queued " + n + " task(s) for " + team + ". Nothing has started.");
+    }, 900); });
+  }
+  function refused() { return new Promise(function (d, no) { setTimeout(function () { no(new Error("reviewers already has a run going: team queue run-now waits for it to end.")); }, 900); }); }
+  var steps = [{ kind: "queue-task", project: "starstats", task: "t-14", says: "Queue t-14, Cache the leaderboard query", reasons: ["one file", "done-when says what to measure"] },
+    { kind: "queue-task", project: "starstats", task: "t-21", says: "Queue t-21, Rename the export button", reasons: ["copy only"] },
+    { kind: "start-team", project: null, task: null, says: "Start the team on its queue, sharing one cap", reasons: [] }];
+
+  card("Needs a team and a cap", { shape: "team-queue", team: null, teamChoices: ["reviewers", "night-shift"], steps: steps, capped: true, cap: null, capNone: false, left: ["t-19 is blocked"], needs: ["team", "cap"] });
+  card("Ready: cap from team-budget", { shape: "team-queue", team: "reviewers", teamChoices: [], steps: steps, capped: true, cap: 25, capNone: false, left: [], needs: [] });
+  card("Refused when approved", { shape: "team-queue", team: "reviewers", teamChoices: [], steps: steps, capped: true, cap: null, capNone: true, left: [], needs: [] }, refused);
+  card("Queues only, starts nothing", { shape: "team-queue", team: "night-shift", teamChoices: [], steps: steps.slice(0, 2), capped: false, cap: null, capNone: false, left: [], needs: [] });
+  card("Opens terminals", { shape: "terminals", team: null, teamChoices: [], steps: [{ kind: "open-terminal", project: "starstats", task: "t-14", says: "Open a terminal on t-14 in starstats", reasons: ["one file"] }, { kind: "open-terminal", project: "starstats", task: "t-21", says: "Open a terminal on t-21 in starstats", reasons: [] }], capped: false, cap: null, capNone: false, left: [], needs: [] });
+  card("Nothing qualified", { shape: "team-queue", team: "reviewers", teamChoices: [], steps: [{ kind: "start-team", project: null, task: null, says: "Start the team on its queue", reasons: [] }], capped: true, cap: 25, capNone: false, left: ["t-19 is blocked", "t-22 is dropped"], needs: [] });
+})();
+</script>
+</body>
+</html>

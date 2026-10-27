@@ -38,6 +38,8 @@ export interface HaloButtonOptions {
   cmd?: string;
   /** When set, the button does nothing and this reason is shown under it instead of a command. */
   disabledReason?: string;
+  /** Pressing does nothing, with no reason to give: "already first" is said by the page. Announced as disabled. */
+  inactive?: boolean;
   describedBy?: string;
   onPress?: (e: MouseEvent) => void;
 }
@@ -543,3 +545,461 @@ export declare function ItemList(o: { title?: string; label?: string; heading?: 
 /** What a reading command says, drawn as a view (figures, a table, a document, findings or a list), from its --json. Small settings beside it; Read it again; the line it reads with. */
 export declare function Readout(o: { path: string; title?: string; heading?: string; why?: string; params?: ControlField[]; extra?: string[]; view?: "figures" | "table" | "document" | "findings" | "list"; columns?: { key: string; label: string; num?: boolean; format?: (v: unknown, row: Record<string, unknown>) => string | Node }[]; data?: unknown; load?: (values: Record<string, string | boolean>) => unknown; render?: (data: unknown, values: Record<string, string | boolean>) => Node; empty?: string; waiting?: string; lazy?: boolean; readLabel?: string }): { el: HTMLElement; read: () => void; values: Record<string, string | boolean> };
 /* end stage 13 */
+
+/* ---------- What main's Studio built since the design (stage 14) ---------- */
+/** What 'loadout ask --json' answers (main's ask.ts AskReply). Properties --json leaves out may be missing. */
+export interface AskReply {
+  query: string;
+  kind: "answer" | "plan" | "unplaced";
+  answeredBy?: "loadout" | "agent";
+  summary: string;
+  spend?: { models: { model: string; tokens: number; usd?: number | null }[]; caveat?: string | null; usd?: number; basis?: string } | null;
+  tasks?: { project: string; id: string; title: string; score: number; reasons: string[] }[];
+  plan?: AskPlan | null;
+  nearMisses?: { shape: AskPlan["shape"]; rewrite: string }[];
+  /** What asking the agent instead would cost, roughly, when nothing was placed. */
+  agentOffer?: { estimatedUsd: number; basis: string } | null;
+  /** What the agent's turn cost, when it answered. Never part of a plan's cap. */
+  agentCostUsd?: number | null;
+  agentSession?: string | null;
+}
+/** One request and what came back, or why nothing did (main's ask.ts AskTurn). reply and failed both null: still asking. */
+export interface AskTurn { id: number | string; query: string; reply: AskReply | null; failed: string | null }
+/** The palette's conversation with Loadout (Ask Loadout, '?' in the CommandPalette): each request and its answer, newest last. An answer says who gave it (Loadout or the agent, and what the agent cost); spend by model; tasks with why; a plan as an AskPlanCard; near misses to ask as they stand, and the agent instead, for about its cost. */
+export declare function AskPane(o: {
+  turns: AskTurn[];
+  /** A request is out: Ask the agent and Clear the conversation are held. */
+  asking: boolean;
+  /** Asks a near miss as it stands. */
+  onrewrite: (rewrite: string) => void;
+  /** Asks the agent the request as it was typed. */
+  onagent: (query: string) => void;
+  /** Carries a plan out; passed to each AskPlanCard. */
+  approve: (plan: AskPlan, team: string | null, cap: string) => string | Promise<string>;
+  onclear: () => void;
+}): {
+  el: HTMLElement;
+  /** New turns or asking; a turn already shown keeps its nodes (and its plan card what was typed into it). */
+  set: (p: { turns?: AskTurn[]; asking?: boolean }) => void;
+  /** Main's AskConversation: adds the request at once and its reply, or why there was none, when asker settles. */
+  ask: (query: string, asker: (query: string) => AskReply | Promise<AskReply>) => Promise<void>;
+  clear: () => void;
+};
+/** One step of a plan from 'loadout ask --json' (main's ask.ts AskStep). */
+export interface AskStep { kind: "queue-task" | "start-team" | "open-terminal"; project: string | null; task: string | null; says: string; reasons: string[] }
+/** A plan from Ask Loadout: what it would queue, start or open, carried out only when approved (main's ask.ts AskPlan). */
+export interface AskPlan {
+  shape: "spend" | "tasks" | "team-queue" | "terminals";
+  /** The team it names, or null: then the card asks for one from teamChoices. */
+  team: string | null;
+  teamChoices: string[];
+  steps: AskStep[];
+  /** Whether the plan carries a spending cap. */
+  capped: boolean;
+  /** The cap it starts with, from team-budget, or null. */
+  cap: number | null;
+  /** team-budget says 'none': no cap, on purpose. */
+  capNone: boolean;
+  /** What was left out, and why ("t-19 is blocked"). */
+  left: string[];
+  needs: string[];
+}
+/** One plan from Ask Loadout: every step with why its task was picked, the team and the cap, and Approve with the command it runs ("$ loadout team queue run-now …"). Approve is held, saying why, while a team or a needed cap is missing. */
+export declare function AskPlanCard(o: {
+  /** The plan as 'loadout ask --json' writes it; what --json leaves out is filled in. */
+  plan: AskPlan;
+  /** Carries the plan out and says what happened, or throws (rejects) with why not. */
+  approve: (plan: AskPlan, team: string | null, cap: string) => string | Promise<string>;
+}): { el: HTMLElement; plan: AskPlan };
+export type BlockedAction = "carry-on" | "raise" | "requeue" | "edit-requeue" | "set-aside" | "drop";
+/** A run that ended short of its done-when, as `loadout team blocked list --json` reads it (main's lib/blocked.ts BlockedRead). */
+export interface BlockedRead {
+  id: string; team: string; project: string | null; task: string | null; goal: string;
+  kind: "blocked" | "failed" | "limited" | "unrecorded" | "dead" | "handover";
+  /** How it said it ended, or null. */
+  ended: string | null;
+  cost: number; budget: number | null; rounds: number; roundLimit: number;
+  /** The trigger rule that started it, or null. */
+  origin: string | null; follows: string | null;
+  /** How many runs in a row on its task, this one included, ended without getting there. */
+  chain: number;
+  merged: string[]; unmerged: string[];
+  /** What its lead last said, or null. */
+  lead: { blocker: string | null; unblockedBy: string | null; questions: string[]; next: string | null; summary: string | null } | null;
+  suggested: { action: BlockedAction; label: string; reason: string; rule: string };
+  /** Every action open to it, the suggestion first. */
+  offered: { action: BlockedAction; label: string }[];
+  /** For a limited run: what it ran out of, filled in as the same again. */
+  raise: { cap: "rounds" | "budget"; figure: number; used: number; said: string } | null;
+}
+/** What a person filled in before confirming. */
+export interface BlockedChoice { action: BlockedAction; answer: string; figure: string; title: string; detail: string; doneWhen: string }
+/** Runs that ended short of their done-when, each with Loadout's suggestion and why, and every other action. Nothing is done until Confirm, which shows its `loadout team blocked resolve` line. */
+export declare function BlockedRuns(o: {
+  runs: BlockedRead[];
+  /** When set, Confirm does nothing and shows this instead of its command. */
+  disabledReason?: string;
+  /** Resolves to what the command said, or throws (rejects) with why it refused; either is shown under the run. */
+  onresolve: (run: BlockedRead, choice: BlockedChoice) => Promise<string> | string;
+}): { el: HTMLElement; /** A reread: choices already made are kept by run id. */ set: (patch: Partial<{ runs: BlockedRead[]; disabledReason: string; onresolve: (run: BlockedRead, choice: BlockedChoice) => Promise<string> | string }>) => void };
+/** How much of a session's context window is in use, for a tab or a list row: the figure and a short beam, Needs past 70% and Bad with "!" past 90%. role="img" with the words in its label. Hidden, with nothing drawn, while the percent is null. */
+export declare function ContextMark(o: {
+  /** The share in use, rounded; null where Claude has not said. */
+  percent: number | null;
+}): { el: HTMLElement; set: (percent: number | null) => void };
+/** What a conversation was launched for, when Loadout launched it (main's api.ts LaunchedFor). */
+export interface LaunchedFor { launch: string; task: string | null; taskId: string | null; mode: string | null; profile: string | null; worktree: string | null }
+/** A conversation from either agent's own history, as 'loadout sessions' lists it (main's api.ts Conversation). */
+export interface Conversation {
+  agent: string; id: string; title: string;
+  /** Null when it ran in a folder that is not a project. */
+  project: string | null;
+  /** Whether its folder is a registered project; if not, Resume is "Register and resume". */
+  registered: boolean;
+  directory: string; branch: string | null;
+  /** ISO time. */
+  lastActive: string;
+  /** Null where there is no link: nothing is carried over, and nothing is guessed. */
+  launchedFor: LaunchedFor | null;
+  /** none, elsewhere, or hosted:<session id>. */
+  running: string;
+}
+/** Past conversations from both agents, each with where and when, what would carry over and whether it is running, and Open (in a Studio terminal) or Resume ("$ loadout resume <id> --project <slug>"). Used on Sessions and a project's page. */
+export declare function ConversationList(o: {
+  conversations: Conversation[];
+  /** The list's accessible name ("Past conversations"). */
+  label: string;
+  /** Offers "Resume with changes…" on a registered one: opens the launch sheet filled in with what would carry over. */
+  onchanges?: (conversation: Conversation) => void;
+  /** Leaves the project out of each row, where the page is already about one. */
+  inProject?: boolean;
+  /** Resumes it (main: studio.resume): resolves to the new session's id, or null when declined. One at a time. */
+  onresume?: (conversation: Conversation) => string | null | Promise<string | null>;
+  /** Goes to a session's terminal: one already open (launched false), or one just resumed (launched true). */
+  onopen?: (session: string, launched: boolean) => void;
+  /** Studio is only watching: Resume is held, saying watchOnlyReason. */
+  watchOnly?: boolean;
+  watchOnlyReason?: string;
+  /** False when the daemon cannot open a terminal here: Resume is held, saying so. */
+  startsSessions?: boolean;
+  /** The clock "4 min ago" is worked out from, in ms or ISO. Default now. */
+  now?: number | string;
+}): { el: HTMLElement; set: (p: Partial<{ conversations: Conversation[]; label: string; inProject: boolean; watchOnly: boolean; startsSessions: boolean; now: number | string }>) => void };
+/** One thing a run handed over, as the daemon's run read gives it (handover.items). */
+export interface HandoverItem {
+  /** The done-when criterion it could not meet itself. */
+  criterion: string;
+  /** "needs-push", "needs-ci" or "needs-person". */
+  needs: string;
+  /** What to do, in the run's words. */
+  todo: string;
+  /** Who ticked it off, or null while it is still yours. */
+  checkedBy: string | null;
+}
+/** What a run handed to you because only you could do it. Each is ticked off once done, kept as review evidence in your name; the last tick judges the run again. */
+export declare function Handover(o: {
+  /** The run's id, for the command. */
+  run: string;
+  items: HandoverItem[];
+  /** Where the work is: "The work is on …". */
+  branches?: string[];
+  /** When set, the tick buttons do nothing and show this instead of their command. */
+  disabledReason?: string;
+  /** Ticks one off, by its number (from 1). While its promise is out, the other buttons say "ticking one off". Runs `loadout team handover <run> --check <n>`. */
+  oncheck?: (number: number) => Promise<boolean | void> | boolean | void;
+}): { el: HTMLElement; /** New items (with checkedBy filled in), branches or reason. */ set: (patch: Partial<{ items: HandoverItem[]; branches: string[]; disabledReason: string; oncheck: (number: number) => Promise<boolean | void> | boolean | void }>) => void };
+/** One command run from Studio, as the daemon serves it (main's api.ts Job). */
+export interface StudioJob {
+  id: string;
+  /** The command's path, e.g. "task list". */
+  path: string;
+  /** The line it ran, e.g. "loadout task list --project loadout-cli --json". */
+  line: string;
+  state: "running" | "done" | "failed" | "cancelled";
+  exitCode: number | null;
+  startedAt: string;
+  endedAt: string | null;
+  /** It said more than Studio keeps. */
+  truncated: boolean;
+  output: string | null;
+  error: string | null;
+}
+/** One command run from Studio: its state as a Signal, when it started, how long it took and its exit code, the line it ran, and once it ends what it said (JSON pretty-printed) and what it said on standard error. Cancel while it runs; Run it again once it ends. */
+export declare function JobResult(o: {
+  /** The job; nothing is drawn until there is one. */
+  job?: StudioJob | null;
+  /** Under a form, without the command's name as a heading or its line. */
+  compact?: boolean;
+  /** Offered once it has ended, as Run it again. */
+  onagain?: (job: StudioJob) => void;
+  /** Cancel while it runs (main: DELETE /api/v1/jobs/<id>). A rejected promise is shown as the problem. */
+  oncancel?: (job: StudioJob) => void | Promise<unknown>;
+  /** Shown in place of Cancel's command, and Cancel does nothing, e.g. when Studio is only watching. */
+  disabledReason?: string;
+  /** Reading the job failed: shown as an alert above it. */
+  problem?: string | null;
+}): { el: HTMLElement; set: (p: { job?: StudioJob | null; problem?: string | null; compact?: boolean; disabledReason?: string; onagain?: (job: StudioJob) => void; oncancel?: (job: StudioJob) => void | Promise<unknown> }) => void; /** The job read again. */ update: (job: StudioJob) => void };
+/** One line of a run's journal or a node's stream, as main's lib/teams.ts JournalLine. */
+export interface JournalEntry {
+  /** "14:02", or "" for a line that is not an event. */
+  time: string;
+  text: string;
+  /** Signal family that colours the words: "needs", "bad" or "good". The kind word says it too. */
+  family?: string;
+  /** What kind of line: "round", "gate", "said", "bash". */
+  kind?: string;
+  /** Said by a sub-agent the node started: indented. */
+  sub?: boolean;
+  /** How many times a repeat came round: "×4". */
+  repeats?: number;
+}
+/** A run's journal or a node's stream, one line each: when, what kind, what was said, and how many times a repeat came round. Styled inside .ls-depths, where main draws it. */
+export declare function Journal(o: {
+  lines: JournalEntry[];
+  /** The list's accessible name. Default "Journal"; a node's stream: "What implementer/1 did". */
+  label?: string;
+}): { el: HTMLOListElement; /** New lines replace the old; a new label renames it. */ set: (patch: { lines?: JournalEntry[]; label?: string }) => void };
+/** A field a list can be filtered or sorted on, as the daemon reports it. */
+export interface ListField { name: string; type: "text" | "choice" | "date" | "number"; description: string; choices: string[] }
+/** What the daemon made of a list's query: its pieces, the fields and the default (main's lib/lists.ts ListShape). */
+export interface ListShape { text: string; parts: string[]; fields: ListField[]; defaultQuery: string }
+/** The same search, filter and sort controls over every list. The box, the chips and the menus all edit the one query string the daemon read; '/' puts you in the box. */
+export declare function ListToolbar(o: {
+  /** What the list is, for the box's label: "tasks". */
+  noun: string;
+  /** The query as it stands. */
+  query: string;
+  /** What the daemon made of it, or null before the first read. */
+  shape: ListShape | null;
+  /** How many the query kept, and how many there were before it: "Showing 2 of 7". */
+  shown?: number | null;
+  recorded?: number | null;
+  /** What the daemon refused about the query, if it did: an alert under the box. */
+  problem?: string | null;
+  /** Whether '/' comes here. Only one toolbar on a page should take it. Default true. */
+  slash?: boolean;
+  /** The new query, trimmed: on Enter, after a 350ms pause in typing, or from a chip, menu, reset or Show all. Read the list and call set. */
+  onchange: (query: string) => void;
+}): { el: HTMLElement; /** What the daemon said back; a new query replaces what is in the box. */ set: (patch: Partial<{ noun: string; query: string; shape: ListShape | null; shown: number | null; recorded: number | null; problem: string | null; slash: boolean }>) => void; focus: () => void; /** Stops listening for '/'. */ destroy: () => void };
+/** A run's rounds as a line small enough for a board row. Decoration (aria-hidden): the row beside it says the same in words. */
+export declare function MiniLine(o: {
+  /** Each round's word ("done", "running", "waiting for you", "failed") and its nodes as [name, word]. */
+  rounds: { word: string; nodes?: [string, string][] }[];
+  /** A solid stop where it ended. */
+  end?: boolean;
+  /** A dashed stop for what comes next. Wins over end. */
+  running?: boolean;
+}): { el: HTMLElement; set: (patch: Partial<{ rounds: { word: string; nodes?: [string, string][] }[]; end: boolean; running: boolean }>) => void };
+/** A ring that fills for stages, the Meter's round form. The figure in it is decoration: say the stage in words beside it. */
+export declare function ProgressRing(o: {
+  /** How far, from 0 to 1; clamped. */
+  value: number;
+}): { el: HTMLElement; /** A new value: a number, or { value }. */ set: (next: number | { value: number }) => void };
+export interface QueueItemRow { position: number; task: string; project: string; after?: string | null; by?: string; added?: string; refused?: string | null }
+export interface QueueRunRow { task: string; project: string; run?: string | null; state: string; reason?: string | null; costUsd: number; started: string; ended?: string | null; by?: string }
+export interface QueueSettingsRow {
+  windowUsd?: string | null; windowRuns?: number | null; heldCap: number; draftPullRequests: boolean;
+  /** draft, ready or none; absent when the queue leaves it to each project. */
+  prMode?: string | null;
+}
+export interface QueueWindowRow { at: string | null; lengthMinutes: number; autonomy: string; open: boolean; next?: string | null }
+/** What 'team queue list <team> --json' says. */
+export interface QueueRead {
+  team: string; items: QueueItemRow[]; runs: QueueRunRow[]; settings: QueueSettingsRow;
+  /** When the daemon works through it on its own, or null when only by hand. */
+  window?: QueueWindowRow | null;
+  /** When the window being worked in opened, while one is. */
+  windowOpened?: string | null;
+}
+/** What 'team queue plan <team> --json' says. */
+export interface QueuePlan { order: { task: string; project: string }[]; left: { task: string; project: string; reason: string }[]; stops: string }
+/** What 'task propose-done-when --json' says: an agent's proposal, recorded nowhere yet. */
+export interface DoneWhenProposed { task: string; project: string | null; proposed: string[]; why: string; costUsd: number; replaces: string[]; recorded: boolean }
+export interface QueueTask {
+  id: string; title: string; state: string; kind: string;
+  /** Its finish line; a task without one is refused by the queue. */
+  doneWhen?: string[];
+}
+export interface QueuePanelOptions {
+  /** The team's queue, as 'team queue list <team> --json' reads it. */
+  queue: QueueRead;
+  /** The projects a task can be queued from, by slug. */
+  projects: string[];
+  /** The tasks on a project's list that could be queued ('task list --project <slug>'). */
+  tasksOf: (project: string) => Promise<QueueTask[]>;
+  /** Asks an agent for a task's done-when; records nothing. Without it, Propose them is not offered. */
+  propose?: (project: string, task: string) => Promise<DoneWhenProposed>;
+  /** Runs one queue command ('team queue window|settings|move|remove|run-next|add', 'task declare') and says whether it was done: false keeps the form open. */
+  act: (path: string, words: string[], done: string) => Promise<boolean | void> | boolean | void;
+  /** Reads what the queue would run next. */
+  readPlan: () => Promise<QueuePlan>;
+  /** Why nothing can be pressed, when Studio is only watching. Shown in place of each command. */
+  disabledReason?: string;
+  /** For a day's spend, so tests can fix the clock. */
+  now?: () => number;
+}
+/** One team's queue: what waits and what would be refused, the pull request grant said first, its window, its limits and what it ran. */
+export declare function QueuePanel(o: QueuePanelOptions): {
+  el: HTMLElement;
+  /** A new read of the queue, or new props; open forms and what is typed in them are kept. */
+  set: (o: Partial<QueuePanelOptions>) => void;
+};
+export declare namespace QueuePanel {
+  /** A team's name as an owner: builders' and docs-crew's. */
+  function whose(team: string): string;
+}
+/** The spend line for a run: what it has spent, of what, and where it is projected to end. Past its budget is said in words with a Needs edge. */
+export declare function Spend(o: {
+  /** Dollars spent so far. */
+  spent: number;
+  /** Its budget in dollars, or null for none. */
+  cap?: number | null;
+  /** No cap, on purpose: drawn as words, no bar. */
+  uncapped?: boolean;
+  /** Where it is projected to end, in dollars: a mark on the bar, or words when past the cap. */
+  projected?: number | null;
+  /** "$0.41 a round". */
+  rate?: string | null;
+}): { el: HTMLElement; /** New figures, merged into the old. */ set: (patch: Partial<{ spent: number; cap: number | null; uncapped: boolean; projected: number | null; rate: string | null }>) => void };
+/** Where a column divider and a row divider cross: dragging moves both, a double click puts both back. Pointer only: aria-hidden and takes no focus, since the two Splitters either side take the keys. */
+export declare function SplitCross(o: {
+  /** Where the column boundary sits, as a fraction of the width the panes share. */
+  column: number;
+  /** Where the row boundary sits, as a fraction of the height the panes share. */
+  row: number;
+  /** Defaults 0.1 and 0.9 each. */
+  colMin?: number; colMax?: number; rowMin?: number; rowMax?: number;
+  /** Where a double click puts [column, row]. */
+  reset: [number, number];
+  /** Called with both new fractions. */
+  onchange: (column: number, row: number) => void;
+}): { el: HTMLElement; set: (p: { column?: number; row?: number; colMin?: number; colMax?: number; rowMin?: number; rowMax?: number; reset?: [number, number] }) => void };
+/** The divider between two panes of a split: role="separator", laid over its grid's gap. Drag it; arrows move it 2%, Shift+arrow 10%, Home and End to its limits, Enter or a double click back to reset. Raises "ls-split-settled" on the document when let go. */
+export declare function Splitter(o: {
+  /** Where the boundary sits, as a fraction of the length the panes share. */
+  value: number;
+  /** Default 0.1. */
+  min?: number;
+  /** Default 0.9. */
+  max?: number;
+  /** Where Enter or a double click puts it. */
+  reset: number;
+  /** "vertical" between panes side by side (default), "horizontal" between one above the other. */
+  orientation?: "vertical" | "horizontal";
+  /** Its accessible name, e.g. "Width of the panes". */
+  label: string;
+  /** The id of the panes it sizes (aria-controls). */
+  controls?: string;
+  /** The pixels the fractions share; the parent's length less one gap where not given. */
+  span?: () => number;
+  /** Extra classes the page places it by, e.g. "cols", "rows", "first". */
+  class?: string;
+  /** Called with the new fraction, held between min and max. */
+  onchange: (value: number) => void;
+}): { el: HTMLElement; /** New props from the page. */ set: (p: { value?: number; min?: number; max?: number; reset?: number }) => void; readonly value: number };
+export declare namespace Splitter {
+  /** Two tracks sharing a length by a fraction, as CSS grid tracks. */
+  function tracks(first: number): string;
+  /** A fraction held between its limits; the middle where they cross. */
+  function clamp(value: number, min: number, max: number): number;
+  /** "ls-split-settled". */
+  const SETTLED: string;
+}
+/** A hosted session's status in full, for its Details: the context window and what fills it, cost and lines, each usage window with when it resets, the spend limit, specialists linked to what they say, and the command that changes what the terminal shows. Uses Meter and Command. */
+export declare function StatusBlock(o: {
+  /** What the status line last handed over (see SessionStatus under StatusStrip). */
+  status: SessionStatus;
+  /** The time to measure ages and resets against, in ms. Default Date.now(). */
+  now?: number;
+}): { el: HTMLElement; set: (p: { status?: SessionStatus; now?: number }) => void };
+/** A hosted session's status as the daemon serves it on the session row (main's lib/status.ts). Every figure is Claude's; one it did not send is null, never zero. */
+export interface SessionStatus {
+  version: number;
+  /** When the status line last handed it over (ISO time). */
+  at: string;
+  /** How often Claude was asked to redraw, in seconds; null when it redraws only on its own events. */
+  refreshSeconds: number | null;
+  /** What the terminal itself shows. */
+  terminal: "off" | "minimal" | "full";
+  /** Whether the person's own status line is run for them. */
+  wrapping: boolean;
+  model: string | null;
+  context: { usedPercent: number | null; inputTokens: number | null; windowSize: number | null; uncachedTokens: number | null; cacheReadTokens: number | null; cacheWriteTokens: number | null; outputTokens: number | null } | null;
+  cost: { usd: number | null; durationMs: number | null; linesAdded: number | null; linesRemoved: number | null } | null;
+  limits: { fiveHour: { usedPercent: number; resetsAt: string | null } | null; sevenDay: { usedPercent: number; resetsAt: string | null } | null; spend: { usedPercent: number | null; resetsAt: string | null; usedUsd: number | null; limitUsd: number | null; period: string | null } | null } | null;
+  project: string | null;
+  /** Specialist ids, e.g. "role.implementer". */
+  specialists: string[] | null;
+}
+/** A hosted session's status as one row on the foot of its terminal: model, context, cost, the five-hour window (or the spend limit), specialists and how old the figures are. Says politely when the context crosses 70% or 90%. Put it in a `.foot` div at the end of the Terminal. */
+export declare function StatusStrip(o: {
+  /** What the status line last handed over. */
+  status: SessionStatus;
+  /** The time to measure ages and resets against, in ms. Default Date.now(). */
+  now?: number;
+}): { el: HTMLElement; /** New props; announces a threshold crossing once. */ set: (p: { status?: SessionStatus; now?: number }) => void };
+/** One change of state, as 'task show' gives it. */
+export interface TaskEvent { state: string; by: string; at: string; reason?: string | null }
+/** What 'task show --json' says (main's tasks.ts TaskShowRead). */
+export interface TaskShowRead {
+  project: string | null; revision: string | null;
+  task: { id: string; title: string; state: string; kind?: string; by?: string; declared?: string; note?: string | null; detail?: string; history?: TaskEvent[] };
+  /** The idea it was accepted from, worked out from the id they share. */
+  idea?: { plan: string; accepted: string; by: string } | null;
+}
+/** One task in full, as the dialog draws it (main's tasks.ts TaskShown). */
+export interface TaskShown { id: string; title: string; state: string; declaredBy?: string; declared?: string; note?: string | null; project: string | null; detail: string; history: TaskEvent[]; idea?: TaskShowRead["idea"] }
+/** One task in full, over its board: state, id and list as chips; the idea it came from; Note; Detail as Markdown; History, each change with who said so and when. Read with 'task show', and says the line ("$ loadout task show t-14 --project starstats"). Opens as a Dialog at once. */
+export declare function TaskDetail(o: {
+  /** The task as the card has it, shown until the full one is read. project: a slug, null for the workspace-wide list, or left out when unknown. */
+  task: { id: string; title: string; state: string; project?: string | null };
+  onclose?: () => void;
+  /** Reads it (main: readJson('task show', words)). A rejection is shown as the problem; one named "SignedOut" goes to onsignedout. */
+  read?: (path: "task show", words: string[]) => TaskShowRead | Promise<TaskShowRead>;
+  /** Already read: drawn at once, without calling read. */
+  shown?: TaskShown | null;
+  problem?: string | null;
+  onsignedout?: () => void;
+  /** "Open the idea" was followed (its href is "#ideas/<project or ~>/<id>"); the dialog closes. */
+  onidea?: (href: string) => void;
+  /** Passed to Dialog: where it opens, whether it is held inside host, and the page that steps back. */
+  host?: HTMLElement; contained?: boolean; behind?: HTMLElement;
+}): { readonly el: HTMLElement | null; open: () => HTMLElement; close: () => void; set: (p: { shown?: TaskShown | null; read?: TaskShowRead; problem?: string | null }) => void };
+/** One event kind, as 'trigger events --json' lists it. */
+export interface TriggerEventKind { kind: string; fields: string[]; github: boolean; ending: boolean }
+/** One rule, as 'trigger list --json' carries it under "rule". Spans are .NET TimeSpans ("1.00:00:00"). */
+export interface TriggerRuleRead {
+  id: string; on: string; projects: string[]; every?: string | null; at?: string | null; where: Record<string, string>;
+  action: { kind: string; name: string; goal: string; autonomy: string };
+  budgetUsd?: number | null; capUsd?: number | null; capRuns: number; window: string; debounce: string; enabled: boolean; version: number; suggestedBy?: string;
+}
+/** One rule and where it stands against its caps ('trigger list --json'). */
+export interface TriggerRuleStanding { rule: TriggerRuleRead; problem?: string | null; runs: number; landedUsd: number; reservedUsd: number; headroomUsd?: number | null; paused: boolean; suggestionChanged: boolean }
+export interface TriggerRulesOptions {
+  /** The teams a rule can start, by name. */
+  teams: string[];
+  /** The projects a rule can watch, by slug. */
+  projects: string[];
+  /** Why nothing here can be pressed, when Studio is only watching. Shown in place of each command. */
+  disabledReason?: string;
+  /** Something went wrong that the page should say. */
+  onfail?: (error: unknown) => void;
+  /** main's readJson: called with 'trigger list', 'trigger events' ({kinds, builtins}), 'trigger suggested', 'trigger allowed' and 'trigger journal' ['--limit','25']. Without it, nothing is read. */
+  read?: (path: string, words?: string[]) => Promise<unknown>;
+  /** main's runJob: 'trigger add' (with --dry-run for Preview), 'trigger test', 'trigger resume', 'trigger remove', 'trigger accept', 'trigger allow', 'trigger disallow'. Its output is what Preview and Try it show. */
+  run?: (path: string, words: string[]) => Promise<{ output?: string }>;
+  /** Where the dialogs open (default document.body), and whether they stay inside it. */
+  host?: HTMLElement;
+  contained?: boolean;
+}
+/** Trigger rules: each rule against its caps, the form that writes them, teams' suggestions, who is trusted, and what the rules decided. */
+export declare function TriggerRules(o: TriggerRulesOptions): {
+  el: HTMLElement;
+  /** Reads everything again. */
+  load: () => Promise<void>;
+  /** Opens the form for a new rule, or for the rule with this id. */
+  add: () => void;
+  change: (id: string) => void;
+  set: (o: Partial<Pick<TriggerRulesOptions, "teams" | "projects" | "disabledReason" | "onfail">>) => void;
+};
+/* end stage 14 */

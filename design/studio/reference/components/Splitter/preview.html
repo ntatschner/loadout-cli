@@ -1,0 +1,54 @@
+<!-- @dsCard group="Navigation" height=720 width=1200 subtitle="The divider between two panes: drag it, or arrows, Shift+arrows, Home, End; Enter or a double click puts it back" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Splitter</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .note { margin: 6px 0 24px; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+  /* A split as a page lays one out: a grid with a gap, the divider placed in the second track and laid over the gap. */
+  .split { position: relative; display: grid; gap: 10px; min-width: 0; }
+  .split.cols { height: 170px; }
+  .split.rows { height: 260px; }
+  .split > .ls-split { --split-gap: 10px; }
+  .split.cols > .ls-split { grid-column: 2; }
+  .split.rows > .ls-split { grid-row: 2; }
+  .pane { display: grid; align-content: start; gap: 4px; min-width: 0; min-height: 0; overflow: hidden; padding: 10px 12px; background: var(--term-bg); color: var(--term-fg); box-shadow: inset 0 0 0 1px var(--rule); font-family: var(--font-mono); font-size: 12px; }
+  .pane b { font-weight: 400; color: var(--muted); }
+</style>
+</head>
+<body class="ls">
+<p class="lab">Two panes side by side</p>
+<div class="split cols" id="two"><div class="pane" id="p1"><span>Port the status line</span><b>loadout-cli · claude</b></div><div class="pane" id="p2"><span>Tidy the release notes</span><b>loadout-cli · claude</b></div></div>
+<p class="note" id="twon"></p>
+<p class="lab">One above the other</p>
+<div class="split rows" id="stack"><div class="pane" id="p3"><span>Rewrite the job queue</span><b>daemon · claude</b></div><div class="pane" id="p4"><span>Shell</span><b>~/src</b></div></div>
+<p class="note" id="stackn"></p>
+<p class="lab">While it moves</p>
+<div class="split cols" id="busy" style="height: 90px"><div class="pane"><span>List</span></div><div class="pane"><span>View</span></div></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio, settled = 0;
+  document.addEventListener(S.Splitter.SETTLED, function () { settled++; paint(); });
+  var at = 0.5, down = 0.6;
+  var two = document.getElementById("two"), stack = document.getElementById("stack");
+  function paint() {
+    two.style.gridTemplateColumns = S.Splitter.tracks(at);
+    stack.style.gridTemplateRows = S.Splitter.tracks(down);
+    document.getElementById("twon").textContent = "Width of the panes: " + Math.round(at * 100) + "% · settled " + settled + " times";
+    document.getElementById("stackn").textContent = "Height of the panes: " + Math.round(down * 100) + "%";
+  }
+  var a = S.Splitter({ "class": "cols", label: "Width of the panes", controls: "two", value: at, min: 0.25, max: 0.75, reset: 0.5, onchange: function (v) { at = v; paint(); } });
+  two.appendChild(a.el);
+  var b = S.Splitter({ orientation: "horizontal", label: "Height of the panes", controls: "stack", value: down, min: 0.2, max: 0.8, reset: 0.5, onchange: function (v) { down = v; paint(); } });
+  stack.appendChild(b.el);
+  var busy = document.getElementById("busy"); busy.style.gridTemplateColumns = S.Splitter.tracks(0.32);
+  var c = S.Splitter({ label: "Width of the list", value: 0.32, reset: 0.32, onchange: function (v) { busy.style.gridTemplateColumns = S.Splitter.tracks(v); } });
+  c.el.classList.add("dragging"); busy.appendChild(c.el);
+  paint();
+})();
+</script>
+</body>
+</html>

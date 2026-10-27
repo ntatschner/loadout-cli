@@ -1,0 +1,51 @@
+<!-- @dsCard group="Sessions" height=1100 width=1200 subtitle="Past conversations from both agents: what each was launched for, whether it is running, and Resume" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ConversationList</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+    .out { margin: 0 0 16px; min-height: 22px; font-size: 14px; color: var(--good); }
+  section + section, #a + #b { margin-top: 28px; }
+  section { max-width: 1100px; }
+  @media (max-width: 420px) { body { padding: 16px; } }
+</style>
+</head>
+<body class="ls">
+<p class="out" role="status" id="out"></p>
+<div id="a"></div><div id="b"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio, out = document.getElementById("out"), now = Date.parse("2026-10-27T15:00:00Z");
+  function ago(min) { return new Date(now - min * 60000).toISOString(); }
+  function block(where, heading, list) {
+    var s = document.createElement("section"), z = document.createElement("h2");
+    z.className = "ls-zone"; z.textContent = heading; s.appendChild(z); s.appendChild(list.el);
+    document.getElementById(where).appendChild(s);
+  }
+  /* Made-up conversations in the shape 'loadout sessions --json' lists them. */
+  var convs = [
+    { agent: "claude", id: "c7f2a9e1-4b0d-4c1e-9a7e-2f0b6d1c8e55", title: "Cache the leaderboard query", project: "starstats", registered: true, directory: "/home/nina/code/starstats", branch: "cache-leaderboard", lastActive: ago(4),
+      launchedFor: { launch: "l-88", task: "Cache the leaderboard query", taskId: "t-14", mode: "build", profile: null, worktree: null }, running: "hosted:s-41" },
+    { agent: "codex", id: "019a1c2e-77f3-7d10-b8a4-5e9c0d2f1a3b", title: "Why is the nightly build slower", project: "starstats", registered: true, directory: "/home/nina/code/starstats", branch: "main", lastActive: ago(95),
+      launchedFor: { launch: "l-86", task: null, taskId: null, mode: "investigate", profile: "careful", worktree: null }, running: "elsewhere" },
+    { agent: "claude", id: "3d9e0b72-1f5a-4e8c-a06b-7c2d4e9f1b80", title: "Rename the export button", project: "starstats", registered: true, directory: "/home/nina/code/starstats", branch: "rename-export", lastActive: ago(60 * 26),
+      launchedFor: { launch: "l-80", task: "Rename the export button", taskId: "t-21", mode: "build", profile: null, worktree: "starstats-rename" }, running: "none" },
+    { agent: "claude", id: "a41c6f08-9b2e-4d7a-8e15-0c3b9d6f2e47", title: "Sketch a reading list importer", project: null, registered: false, directory: "/home/nina/scratch/importer", branch: null, lastActive: ago(60 * 24 * 3),
+      launchedFor: null, running: "none" },
+    { agent: "codex", id: "019a0f88-2c41-7b9e-a3d0-6f1e8c4b2a90", title: "Tidy the shared lint config", project: "loadout-cli", registered: true, directory: "/home/nina/code/loadout-cli", branch: "lint", lastActive: ago(60 * 24 * 6),
+      launchedFor: { launch: "l-71", task: null, taskId: null, mode: null, profile: null, worktree: null }, running: "none" }
+  ];
+  function onresume(c) { out.textContent = "Starting " + c.agent + " on “" + c.title + "”…"; return new Promise(function (ok) { setTimeout(function () { ok("s-" + (50 + Math.floor(Math.random() * 40))); }, 1200); }); }
+  function onopen(id, launched) { out.textContent = "✓ " + (launched ? "Started, and went to its terminal, " : "Went to its terminal, ") + id + "."; }
+  function onchanges(c) { out.textContent = "The launch sheet opens with what would carry over from “" + c.title + "”."; }
+
+  block("a", "Past conversations", S.ConversationList({ conversations: convs, label: "Past conversations", now: now, onresume: onresume, onopen: onopen, onchanges: onchanges }));
+  block("b", "Recent conversations", S.ConversationList({ conversations: convs.slice(0, 3), label: "Recent conversations in starstats", inProject: true, now: now, onresume: onresume, onopen: onopen, onchanges: onchanges }));
+  block("b", "Only watching", S.ConversationList({ conversations: convs.slice(2, 4), label: "Past conversations, watch-only", now: now, watchOnly: true, onresume: onresume, onopen: onopen, onchanges: onchanges }));
+  block("b", "Nothing yet", S.ConversationList({ conversations: [], label: "Past conversations", now: now }));
+})();
+</script>
+</body>
+</html>

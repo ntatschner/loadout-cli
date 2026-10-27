@@ -1,0 +1,33 @@
+<!-- @dsCard group="Teams" height=330 width=1200 subtitle="A run's rounds as a line small enough for a board row: the running one lit, what comes next dashed" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MiniLine</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 20px 32px; align-items: flex-start; }
+  .col { flex: 1 1 340px; min-width: 0; }
+  .hd { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  @media (max-width: 480px) { body { padding: 16px; } }
+  .brd { display: grid; gap: 10px; max-width: 760px; } .r { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 200px); gap: 6px 16px; align-items: center; padding: 10px 12px; box-shadow: inset 0 0 0 1px var(--rule); background: var(--surface); } .r .t { color: var(--ink-strong); } .r .x { display: block; font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); } @media (max-width: 560px) { .r { grid-template-columns: minmax(0, 1fr); } }
+</style>
+</head>
+<body class="ls">
+<p class="hd">Rows on a board: the words beside each line say the same</p>
+<div class="brd" id="b"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio, b = document.getElementById("b");
+  function row(goal, facts, o) { var mini = S.MiniLine(o); b.appendChild(Object.assign(document.createElement("div"), { className: "r" })).append((function () { var d = document.createElement("div"); d.innerHTML = '<span class="t"></span><span class="x"></span>'; d.firstChild.textContent = goal; d.lastChild.textContent = facts; return d; })(), mini.el); return mini; }
+  var live = row("Add retries to the webhook sender", "dev-team · webhooks · round 3 · running", { rounds: [{ word: "done", nodes: [["planner/1", "done"]] }, { word: "done", nodes: [["implementer/1", "done"], ["reviewer/1", "done"]] }, { word: "running", nodes: [["implementer/1", "running"], ["verifier/1", "idle"]] }], running: true });
+  row("Write the migration guide for 0.103", "docs-team · loadout-cli · round 2 · waiting for you", { rounds: [{ word: "done", nodes: [["writer/1", "done"]] }, { word: "waiting for you", nodes: [["writer/1", "waiting for you"]] }], running: true });
+  row("Fix the flaky login test", "dev-team · auth · ended in round 4 · failed", { rounds: [{ word: "done", nodes: [["implementer/1", "done"]] }, { word: "done", nodes: [["implementer/1", "done"]] }, { word: "done", nodes: [["verifier/1", "done"]] }, { word: "failed", nodes: [["verifier/1", "failed"]] }], end: true });
+  row("Tidy the release notes", "docs-team · loadout-cli · 2 rounds · done", { rounds: [{ word: "done", nodes: [["writer/1", "done"]] }, { word: "done", nodes: [["reviewer/1", "done"]] }], end: true });
+  var n = 3;
+  setInterval(function () { n = n >= 5 ? 3 : n + 1; var rs = []; for (var i = 1; i <= n; i++) { rs.push(i < n ? { word: "done", nodes: [["implementer/1", "done"]] } : { word: "running", nodes: [["implementer/1", "running"], ["verifier/1", "idle"]] }); } live.set({ rounds: rs }); }, 2500);
+})();
+</script>
+</body>
+</html>

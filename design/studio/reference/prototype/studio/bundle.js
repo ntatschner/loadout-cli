@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format": 4, "namespace": "LoadoutStudio", "components": [{"name": "HaloButton"}, {"name": "StartRail"}, {"name": "Command"}, {"name": "Switch"}, {"name": "Tabs"}, {"name": "ModePicker"}, {"name": "Signal"}, {"name": "EventMark"}, {"name": "Urgency"}, {"name": "Meter"}, {"name": "Toasts"}, {"name": "SideRail"}, {"name": "Dialog"}, {"name": "Picker"}, {"name": "CommandPalette"}, {"name": "Halo"}, {"name": "TubeMap"}, {"name": "LineStrip"}, {"name": "NetworkStatus"}, {"name": "Terminal"}, {"name": "SessionView"}, {"name": "Gate"}, {"name": "RunCard"}, {"name": "NeedsYou"}, {"name": "RunShape"}, {"name": "Crew"}, {"name": "DoneWhen"}, {"name": "RunNumbers"}, {"name": "RunDepths"}, {"name": "Patch"}, {"name": "SayToNode"}, {"name": "TeamCard"}, {"name": "TeamNodes"}, {"name": "TeamRules"}, {"name": "RoleRecord"}, {"name": "TeamSheet"}, {"name": "Schedules"}, {"name": "Remedy"}, {"name": "Bin"}, {"name": "Outbox"}, {"name": "ModeSwitcher"}, {"name": "ModeBar"}, {"name": "SessionTabs"}, {"name": "TermDeck"}, {"name": "RunBoard"}, {"name": "QuietList"}, {"name": "FocusFrame"}, {"name": "WorkDesk"}, {"name": "ActionPane"}, {"name": "CommandBar"}, {"name": "KeyHelp"}, {"name": "ActionDrawer"}, {"name": "TerminalOnly"}, {"name": "HealthList"}, {"name": "IdeaStages"}, {"name": "QuestionSet"}, {"name": "PlanLayer"}, {"name": "NoteDump"}, {"name": "ProjectTile"}, {"name": "TaskBoard"}, {"name": "LoadStack"}, {"name": "ConfigList"}, {"name": "StoreList"}, {"name": "TopicEditor"}, {"name": "TokenSplit"}, {"name": "SpendBars"}, {"name": "PageBeside"}, {"name": "QuietPage"}, {"name": "ForgetProject"}, {"name": "ProgressLine"}, {"name": "CriteriaGrid"}, {"name": "PickUpSheet"}, {"name": "RefusalsList"}, {"name": "RedAlert"}, {"name": "TaskPicker"}, {"name": "ValueReport"}, {"name": "FieldMap"}, {"name": "OfficeView"}, {"name": "OfficePanel"}, {"name": "ActionForm"}, {"name": "ItemList"}, {"name": "SettingRow"}, {"name": "Readout"}, {"name": "ActionRow"}]} */
+/* @ds-bundle: {"format": 4, "namespace": "LoadoutStudio", "components": [{"name": "HaloButton"}, {"name": "StartRail"}, {"name": "Command"}, {"name": "Switch"}, {"name": "Tabs"}, {"name": "ModePicker"}, {"name": "Signal"}, {"name": "EventMark"}, {"name": "Urgency"}, {"name": "Meter"}, {"name": "Toasts"}, {"name": "SideRail"}, {"name": "Dialog"}, {"name": "Picker"}, {"name": "CommandPalette"}, {"name": "Halo"}, {"name": "TubeMap"}, {"name": "LineStrip"}, {"name": "NetworkStatus"}, {"name": "Terminal"}, {"name": "SessionView"}, {"name": "Gate"}, {"name": "RunCard"}, {"name": "NeedsYou"}, {"name": "RunShape"}, {"name": "Crew"}, {"name": "DoneWhen"}, {"name": "RunNumbers"}, {"name": "RunDepths"}, {"name": "Patch"}, {"name": "SayToNode"}, {"name": "TeamCard"}, {"name": "TeamNodes"}, {"name": "TeamRules"}, {"name": "RoleRecord"}, {"name": "TeamSheet"}, {"name": "Schedules"}, {"name": "Remedy"}, {"name": "Bin"}, {"name": "Outbox"}, {"name": "ModeSwitcher"}, {"name": "ModeBar"}, {"name": "SessionTabs"}, {"name": "TermDeck"}, {"name": "RunBoard"}, {"name": "QuietList"}, {"name": "FocusFrame"}, {"name": "WorkDesk"}, {"name": "ActionPane"}, {"name": "CommandBar"}, {"name": "KeyHelp"}, {"name": "ActionDrawer"}, {"name": "TerminalOnly"}, {"name": "HealthList"}, {"name": "IdeaStages"}, {"name": "QuestionSet"}, {"name": "PlanLayer"}, {"name": "NoteDump"}, {"name": "ProjectTile"}, {"name": "TaskBoard"}, {"name": "LoadStack"}, {"name": "ConfigList"}, {"name": "StoreList"}, {"name": "TopicEditor"}, {"name": "TokenSplit"}, {"name": "SpendBars"}, {"name": "PageBeside"}, {"name": "QuietPage"}, {"name": "ForgetProject"}, {"name": "ProgressLine"}, {"name": "CriteriaGrid"}, {"name": "PickUpSheet"}, {"name": "RefusalsList"}, {"name": "RedAlert"}, {"name": "TaskPicker"}, {"name": "ValueReport"}, {"name": "FieldMap"}, {"name": "OfficeView"}, {"name": "OfficePanel"}, {"name": "ActionForm"}, {"name": "ItemList"}, {"name": "SettingRow"}, {"name": "Readout"}, {"name": "ActionRow"}, {"name": "AskPane"}, {"name": "AskPlanCard"}, {"name": "BlockedRuns"}, {"name": "ContextMark"}, {"name": "ConversationList"}, {"name": "Handover"}, {"name": "JobResult"}, {"name": "Journal"}, {"name": "ListToolbar"}, {"name": "MiniLine"}, {"name": "ProgressRing"}, {"name": "QueuePanel"}, {"name": "Spend"}, {"name": "SplitCross"}, {"name": "Splitter"}, {"name": "StatusBlock"}, {"name": "StatusStrip"}, {"name": "TaskDetail"}, {"name": "TriggerRules"}]} */
 /* Loadout Studio — plain JavaScript, no framework, no imports, no network.
    Components are CSS classes plus small helpers, written to port line for line to Svelte. */
 (function () {
@@ -65,10 +65,10 @@
     o = o || {};
     var cls = ["ls-halo", o.kind, o.size, o.solid ? "solid" : ""].filter(Boolean).join(" ");
     var ring = h("span", { "class": "ring", "aria-hidden": "true" }, o.glyph ? [h("b", { text: o.glyph })] : []);
-    var btn = h("button", { type: "button", "class": cls, "aria-disabled": o.disabledReason ? "true" : null, "aria-describedby": o.describedBy || null,
-      onclick: function (e) { if (!o.disabledReason && o.onPress) { o.onPress(e); } } }, [ring, o.label || ""]);
+    var btn = h("button", { type: "button", "class": cls, "aria-disabled": o.disabledReason || o.inactive ? "true" : null, "aria-describedby": o.describedBy || null,
+      onclick: function (e) { if (!o.disabledReason && !o.inactive && o.onPress) { o.onPress(e); } } }, [ring, o.label || ""]);
     if (!o.cmd && !o.disabledReason) { return btn; }
-    return h("div", { "class": "ls-action" }, [btn, cmd(o.cmd || o.disabledReason)]);
+    return h("div", { "class": "ls-action" }, [btn, cmd(o.disabledReason || o.cmd)]);
   }
 
   /* Command: the block form of a command, with an optional line saying why it must be run in a terminal. */
@@ -3512,3 +3512,2102 @@
   Object.assign(NS, { ActionForm: ActionForm, ActionRow: ActionRow, SettingRow: SettingRow, ItemList: ItemList, Readout: Readout, controlLine: lineFor });
 })();
 /* end stage 13 */
+
+/* ---------- Stage 14: what main's Studio built since the design ---------- */
+(function () {
+  "use strict";
+  var NS = window.LoadoutStudio = window.LoadoutStudio || {};
+  function h(tag, attrs, kids) {
+    var el = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) {
+      var v = attrs[k];
+      if (v === null || v === undefined || v === false) { return; }
+      if (k === "text") { el.textContent = v; } else if (k === "class") { el.className = v; } else if (k.slice(0, 2) === "on") { el.addEventListener(k.slice(2), v); } else { el.setAttribute(k, v === true ? "" : v); }
+    });
+    (kids || []).forEach(function (c) { if (c !== null && c !== undefined && c !== false) { el.appendChild(typeof c === "string" || typeof c === "number" ? document.createTextNode(String(c)) : c); } });
+    return el;
+  }
+  function uid(p) { return p + Math.random().toString(36).slice(2, 7); }
+  function q(v) { v = String(v); if (/^<[^<>\s]+>$/.test(v)) { return v; } return v === "" || /[\s"'$`\\|&;<>()*?!#~]/.test(v) ? "\"" + v.replace(/(["\\$`])/g, "\\$1") + "\"" : v; }
+  function full() { return !NS.motion || NS.motion() === "full"; }
+
+  /* --- AskPane --- */
+  (function () {
+    /* AskPane: the palette's conversation with Loadout: each request and its answer, newest
+       last. An answer says who gave it; a near miss can be asked as it stands; a plan is a
+       card to approve. Ported from main's AskPane.svelte. */
+
+    function usd(amount) {
+      return "$" + Number(amount).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    /* A reply as the command wrote it, with what --json left out filled in (main's arrived()). */
+    function arrived(reply) {
+      if (!reply) { return null; }
+      var spend = reply.spend;
+      return {
+        query: reply.query, kind: reply.kind, answeredBy: reply.answeredBy || "loadout", summary: reply.summary || "",
+        tasks: (reply.tasks || []).map(function (t) { return { project: t.project || "", id: t.id, title: t.title, score: t.score, reasons: t.reasons || [] }; }),
+        nearMisses: reply.nearMisses || [], agentOffer: reply.agentOffer || null,
+        agentCostUsd: reply.agentCostUsd === undefined ? null : reply.agentCostUsd, agentSession: reply.agentSession || null,
+        spend: spend ? { models: (spend.models || []).map(function (m) { return { model: m.model, tokens: m.tokens || 0, usd: m.usd === undefined ? null : m.usd }; }), caveat: spend.caveat || null } : null,
+        plan: reply.plan || null
+      };
+    }
+
+    function AskPane(o) {
+      var state = { turns: [], asking: false };
+      var el = h("div", { "class": "ls-ask", "aria-live": "polite" });
+      /* A plan card keeps what was typed into it across a redraw, as main's keyed each does. */
+      var cards = {};
+
+      function turnEl(turn) {
+        var kids = [h("p", { "class": "q" }, [h("span", { "aria-hidden": "true", text: "?" }), " " + turn.query])];
+        var reply = arrived(turn.reply);
+        if (turn.failed) {
+          kids.push(h("p", { "class": "failed", role: "alert", text: turn.failed }));
+        } else if (!reply) {
+          kids.push(h("p", { "class": "wait", text: "Asking…" }));
+        } else {
+          kids.push(h("p", { "class": "badge", text: reply.answeredBy === "agent" ? "Answered by the agent" + (reply.agentCostUsd !== null ? ", for " + usd(reply.agentCostUsd) : "") : "Answered by Loadout" }));
+          kids.push(h("p", { "class": "a", text: reply.summary }));
+          if (reply.spend) {
+            kids.push(h("ul", { "class": "models", "aria-label": "By model" }, reply.spend.models.map(function (m) {
+              return h("li", {}, [h("span", { text: m.model }), h("span", { text: m.tokens.toLocaleString("en-GB") + " tokens" }), h("span", { text: m.usd === null ? "no price" : usd(m.usd) })]);
+            })));
+            if (reply.spend.caveat) { kids.push(h("p", { "class": "caveat", text: reply.spend.caveat })); }
+          }
+          if (reply.tasks.length) {
+            kids.push(h("ol", { "class": "tasks" }, reply.tasks.map(function (task) {
+              return h("li", {}, [
+                h("span", { "class": "says" }, [task.title + " ", h("span", { "class": "where", text: task.id + " · " + (task.project || "workspace") })]),
+                task.reasons.length ? h("span", { "class": "why", text: task.reasons.join("; ") }) : null
+              ]);
+            })));
+          }
+          if (reply.plan) {
+            if (!cards[turn.id] || cards[turn.id].source !== turn.reply.plan) { cards[turn.id] = { source: turn.reply.plan, card: NS.AskPlanCard({ plan: reply.plan, approve: o.approve }) }; }
+            kids.push(cards[turn.id].card.el);
+          }
+          if (reply.nearMisses.length) {
+            var near = reply.nearMisses.map(function (n) {
+              return h("li", {}, [h("button", { type: "button", "class": "ls-opt", onclick: function () { if (o.onrewrite) { o.onrewrite(n.rewrite); } } },
+                [h("span", { "class": "g", "aria-hidden": "true", text: "?" }), h("span", { "class": "t", text: n.rewrite })])]);
+            });
+            if (reply.agentOffer) {
+              near.push(h("li", {}, [h("button", { type: "button", "class": "ls-opt", "data-agent": true, disabled: state.asking, onclick: function () { if (o.onagent) { o.onagent(turn.query); } } }, [
+                h("span", { "class": "g", "aria-hidden": "true", text: "✦" }),
+                h("span", { "class": "t", text: "Ask the agent instead, for about " + usd(reply.agentOffer.estimatedUsd) }),
+                h("span", { "class": "s", text: reply.agentOffer.basis + ". It only reads; anything it proposes comes back as a plan." })
+              ])]));
+            }
+            kids.push(h("ul", { "class": "near", "aria-label": "Closest requests Loadout can answer" }, near));
+          }
+        }
+        return h("section", { "class": "turn" }, kids);
+      }
+
+      /* Redraws in place: a turn already shown keeps its nodes, so the live region speaks only what is new. */
+      var shown = {}, empty = null, clearBtn = null;
+      function paint() {
+        var want = [], live = {};
+        if (!state.turns.length) {
+          empty = empty || h("p", { "class": "ls-pempty", text: "Ask in plain words, then press Enter. Loadout answers what it can from its own records: what you spent, which tasks are easy or need work first, or what to queue and start." });
+          want.push(empty);
+        }
+        state.turns.forEach(function (turn) {
+          live[turn.id] = true;
+          if (!shown[turn.id] || shown[turn.id].turn !== turn) { shown[turn.id] = { turn: turn, node: turnEl(turn) }; }
+          var agent = shown[turn.id].node.querySelector(".near li:last-child .ls-opt[data-agent]");
+          if (agent) { agent.disabled = state.asking; }
+          want.push(shown[turn.id].node);
+        });
+        Object.keys(shown).forEach(function (k) { if (!live[k]) { delete shown[k]; delete cards[k]; } });
+        if (state.turns.length) {
+          clearBtn = clearBtn || h("button", { type: "button", "class": "clear", onclick: function () { if (o.onclear) { o.onclear(); } }, text: "Clear the conversation" });
+          clearBtn.disabled = state.asking;
+          want.push(clearBtn);
+        }
+        want.forEach(function (node, i) { if (el.childNodes[i] !== node) { el.insertBefore(node, el.childNodes[i] || null); } });
+        while (el.childNodes.length > want.length) { el.removeChild(el.lastChild); }
+      }
+
+      function set(next) {
+        next = next || {};
+        Object.keys(next).forEach(function (k) { if (k === "turns" || k === "asking") { state[k] = next[k]; } else { o[k] = next[k]; } });
+        paint();
+      }
+
+      /* Main's AskConversation, for a page that has no conversation of its own: the request is
+         added at once, and its reply, or why there was none, when it comes. */
+      var nextId = 1;
+      function ask(query, asker) {
+        var id = "ask-" + (nextId++), turns = state.turns.slice();
+        function put(fields) { set({ turns: state.turns.map(function (t) { return t.id === id ? Object.assign({}, t, fields) : t; }), asking: false }); }
+        turns.push({ id: id, query: query, reply: null, failed: null });
+        set({ turns: turns, asking: true });
+        var settled;
+        try { settled = Promise.resolve(asker(query)); } catch (error) { settled = Promise.reject(error); }
+        return settled.then(function (reply) { put({ reply: reply }); }, function (error) { put({ failed: error && error.message ? error.message : "Loadout could not answer that." }); });
+      }
+      function clear() { set({ turns: [], asking: false }); }
+
+      o = o || {};
+      set({ turns: o.turns || [], asking: !!o.asking });
+      return { el: el, set: set, ask: ask, clear: clear };
+    }
+    AskPane.arrived = arrived;
+    NS.AskPane = AskPane;
+  })();
+
+  /* --- AskPlanCard --- */
+  (function () {
+    /* AskPlanCard: one plan from Ask Loadout: every step with why its task was picked, the
+       team and the cap, and Approve. Nothing starts until Approve is pressed, and Approve
+       stays held while a team or a needed cap is missing. Ported from main's AskPlanCard.svelte. */
+
+    /* A dollar figure as an answer shows it. */
+    function usd(amount) {
+      return "$" + Number(amount).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    /* Why a plan can't be approved yet, or null when it can. */
+    function approveReason(plan, team, cap) {
+      if (!plan.steps.some(function (step) { return step.task; })) { return "No task qualified, so there is nothing to start."; }
+      if (plan.shape === "team-queue" && !team) { return "Choose a team first."; }
+      if (plan.capped) {
+        var typed = String(cap).trim().replace(/^\$/, "");
+        if (!typed) { return "Give a spending cap first. team-budget is not set, so there is no default."; }
+        if (typed.toLowerCase() !== "none" && !(Number(typed) > 0)) { return "The cap is a figure in US dollars above zero, or none."; }
+      }
+      return null;
+    }
+
+    /* The cap the card starts with: team-budget's figure, 'none' when it says so, or blank. */
+    function startingCap(plan) {
+      return plan.cap !== null && plan.cap !== undefined ? String(plan.cap) : plan.capNone ? "none" : "";
+    }
+
+    /* The words of 'loadout team queue run-now' for an approved team plan. */
+    function runNowWords(plan, team, cap) {
+      var words = [team];
+      plan.steps.forEach(function (step) {
+        if (step.kind === "queue-task" && step.task && step.project) { words.push("--task", step.project + "/" + step.task); }
+      });
+      return words.concat(["--usd", String(cap).trim().replace(/^\$/, "")]);
+    }
+
+    /* A plan as the command wrote it, with what --json left out filled in. */
+    function filled(plan) {
+      return {
+        shape: plan.shape, team: plan.team || null, teamChoices: plan.teamChoices || [],
+        steps: (plan.steps || []).map(function (s) { return { kind: s.kind, project: s.project || null, task: s.task || null, says: s.says || "", reasons: s.reasons || [] }; }),
+        capped: !!plan.capped, cap: plan.cap === undefined ? null : plan.cap, capNone: !!plan.capNone, left: plan.left || [], needs: plan.needs || []
+      };
+    }
+
+    /* Main's HaloButton shows the reason in place of the command when it is held. */
+    function halo(o) {
+      return NS.HaloButton({ label: o.label, size: o.size, kind: o.kind, cmd: o.disabledReason ? undefined : o.cmd, disabledReason: o.disabledReason, onPress: o.onpress });
+    }
+
+    function AskPlanCard(o) {
+      o = o || {};
+      var plan = filled(o.plan || {});
+      var id = uid("ls-ap-");
+      var team = plan.team || "", cap = startingCap(plan), busy = false, done = null, failed = null;
+      var starts = plan.steps.some(function (step) { return step.kind === "start-team"; });
+
+      function command() {
+        if (plan.shape === "terminals") { return "opens " + plan.steps.length + " terminal(s), each with its task"; }
+        if (starts) { return "$ loadout team queue run-now " + runNowWords(plan, team || "<team>", cap || "<cap>").join(" "); }
+        return "$ loadout team queue add " + (team || "<team>") + " <task> --project <project>, for each";
+      }
+      function reason() { return done ? "Approved." : busy ? "Starting…" : approveReason(plan, team || null, cap); }
+
+      var el = h("div", { "class": "ls-askplan", role: "group", "aria-labelledby": id + "-h" }, [
+        h("h4", { id: id + "-h", text: "Plan: nothing starts until you approve it" }),
+        h("ol", {}, plan.steps.map(function (step) {
+          return h("li", {}, [h("span", { "class": "says", text: step.says }), step.reasons.length ? h("span", { "class": "why", text: step.reasons.join("; ") }) : null]);
+        })),
+        plan.left.length ? h("p", { "class": "left", text: "Left out: " + plan.left.join("; ") }) : null
+      ]);
+
+      var select = null, input = null, fields = h("div", { "class": "fields" });
+      if (plan.shape === "team-queue" && !plan.team) {
+        select = h("select", { name: "ask-team", onchange: function () { team = select.value; paint(); } },
+          [h("option", { value: "", text: "Choose a team" })].concat(plan.teamChoices.map(function (c) { return h("option", { value: c, text: c }); })));
+        select.value = team;
+        fields.appendChild(h("label", {}, [h("span", { text: "Team" }), select]));
+      }
+      if (plan.capped) {
+        input = h("input", { name: "ask-cap", inputmode: "decimal", placeholder: plan.cap === null && !plan.capNone ? "Required: team-budget is not set" : "", autocomplete: "off", oninput: function () { cap = input.value; paint(); } });
+        input.value = cap;
+        fields.appendChild(h("label", {}, [h("span", { text: "Spending cap, US dollars, for the whole plan" }), input]));
+      }
+      el.appendChild(fields);
+      var btnEl = null, doneEl = null, failEl = null;
+
+      function press() {
+        busy = true; failed = null; paint();
+        var settle = function () { busy = false; paint(); };
+        try {
+          Promise.resolve(o.approve ? o.approve(plan, team || null, cap) : "Approved.").then(function (said) { done = said; settle(); }, function (error) { failed = error && error.message ? error.message : String(error); settle(); });
+        } catch (error) { failed = error && error.message ? error.message : String(error); settle(); }
+      }
+
+      function paint() {
+        var r = reason(), focused = btnEl && btnEl.contains(document.activeElement);
+        var next = halo({ label: "Approve", size: "small", cmd: command(), disabledReason: r || undefined, onpress: press });
+        if (btnEl) { btnEl.replaceWith(next); } else { el.appendChild(next); }
+        btnEl = next;
+        if (focused) { (next.querySelector("button") || next).focus(); }
+        if (select) { select.disabled = !!done; }
+        if (input) { input.disabled = !!done; }
+        if (doneEl) { doneEl.remove(); doneEl = null; }
+        if (failEl) { failEl.remove(); failEl = null; }
+        if (done) { doneEl = el.appendChild(h("p", { "class": "done", role: "status", text: done })); }
+        if (failed) { failEl = el.appendChild(h("p", { "class": "failed", role: "alert", text: failed })); }
+      }
+      paint();
+
+      return { el: el, plan: plan };
+    }
+    AskPlanCard.usd = usd;
+    AskPlanCard.approveReason = approveReason;
+    AskPlanCard.startingCap = startingCap;
+    AskPlanCard.runNowWords = runNowWords;
+    NS.AskPlanCard = AskPlanCard;
+  })();
+
+  /* --- BlockedRuns --- */
+  (function () {
+    /* BlockedRuns: runs that ended short of their done-when, each with what Loadout suggests and why, and every other
+       action open to it. Nothing is done until a person confirms: the suggestion is picked first, the person can pick
+       another, and the confirm button shows the command it runs. A raise is filled in with the same again, beside what
+       the run used, and can be changed before confirming. As main's BlockedRuns.svelte and lib/blocked.ts. */
+    function lines(text) { return String(text || "").split(/\r?\n/).map(function (one) { return one.trim(); }).filter(Boolean); }
+    function choiceFor(run) {
+      return { action: run.suggested.action, answer: "", figure: run.raise ? String(run.raise.cap === "budget" ? Number(run.raise.figure).toFixed(2) : run.raise.figure) : "", title: "", detail: "", doneWhen: "" };
+    }
+    function notReady(run, choice) {
+      if (!(run.offered || []).some(function (one) { return one.action === choice.action; })) { return "that is not open to this run"; }
+      if (choice.action === "raise") {
+        var figure = Number(choice.figure.trim().replace(/^\$/, ""));
+        if (!choice.figure.trim() || !isFinite(figure) || figure <= 0) { return run.raise && run.raise.cap === "rounds" ? "say how many rounds" : "say how much it may spend"; }
+        if (run.raise && run.raise.cap === "rounds" && Math.floor(figure) !== figure) { return "rounds are a whole number"; }
+      }
+      if (choice.action === "edit-requeue" && !choice.title.trim() && !choice.detail.trim() && !lines(choice.doneWhen).length) { return "say what changes: the title, the detail or the done-when"; }
+      return null;
+    }
+    function resolveWords(run, choice) {
+      var words = [run.id, "--action", choice.action];
+      if (choice.answer.trim()) { words.push("--answer=" + choice.answer.trim()); }
+      if (choice.action === "raise" && run.raise) { var figure = choice.figure.trim().replace(/^\$/, ""); words.push(run.raise.cap === "rounds" ? "--rounds=" + figure : "--usd=" + figure); }
+      if (choice.action === "edit-requeue") {
+        if (choice.title.trim()) { words.push("--title=" + choice.title.trim()); }
+        if (choice.detail.trim()) { words.push("--detail=" + choice.detail.trim()); }
+        lines(choice.doneWhen).forEach(function (c) { words.push("--done-when=" + c); });
+      }
+      return words;
+    }
+    function resolveLine(run, choice) {
+      return "$ loadout team blocked resolve " + resolveWords(run, choice).map(function (w) { return /\s/.test(w) ? "\"" + w.replace(/"/g, "\\\"") + "\"" : w; }).join(" ");
+    }
+    function gotTo(run) {
+      var money = "$" + Number(run.cost).toFixed(2) + (run.budget !== null && run.budget !== undefined ? " of $" + Number(run.budget).toFixed(2) : "");
+      var branches = (run.merged || []).length || (run.unmerged || []).length ? " · " + run.merged.length + " merged, " + run.unmerged.length + " left on branches" : "";
+      return run.rounds + " of " + run.roundLimit + " round(s) · " + money + branches;
+    }
+    function snapshot(c) { return { action: c.action, answer: c.answer, figure: c.figure, title: c.title, detail: c.detail, doneWhen: c.doneWhen }; }
+
+    function BlockedRuns(o) {
+      var cur = Object.assign({ runs: [] }, o || {});
+      var choices = {}, said = {}, busy = null, rows = {};
+      var el = h("div", { "class": "ls-blocked" });
+      var empty = h("p", { "class": "calm", text: "No runs are waiting on you: every run that ended has been dealt with or got there." });
+      var ul = h("ul", { "aria-label": "Runs that ended short of their done-when" });
+      el.appendChild(empty); el.appendChild(ul);
+
+      function field(lab, input) { return h("div", { "class": "ls-field" }, [h("label", { "class": "lab", "for": input.id, text: lab }), input]); }
+      function text(runId, key, idp, area, rows_) {
+        var c = choices[runId];
+        var input = area ? h("textarea", { id: idp + "-" + runId, "class": "ls-text", rows: String(rows_), spellcheck: "false" }) : h("input", { id: idp + "-" + runId, "class": "ls-text", type: "text", autocomplete: "off", inputmode: key === "figure" ? "decimal" : null });
+        input.value = c[key];
+        input.addEventListener("input", function () { c[key] = input.value; rows[runId].refresh(); });
+        return input;
+      }
+
+      function row(run) {
+        var li = h("li"), extra = h("div"), answerLab = h("label", { "class": "lab", "for": "answer-" + run.id }), btn = h("div", { "class": "ls-answers" }), out = h("div");
+        var r = { li: li, run: run };
+        function paintExtra() {
+          var c = choices[run.id];
+          extra.textContent = "";
+          if (c.action === "raise" && run.raise) {
+            var rf = field(run.raise.cap === "rounds" ? "Rounds for the next run" : "What the next run may spend ($)", text(run.id, "figure", "raise"));
+            rf.appendChild(h("span", { "class": "calm small", text: "The same again. " + (run.raise.cap === "rounds" ? "It used " + run.raise.used + " of " + run.raise.figure + " round(s)." : "It spent $" + Number(run.raise.used).toFixed(2) + " of $" + Number(run.raise.figure).toFixed(2) + ".") }));
+            extra.appendChild(rf);
+          }
+          if (c.action === "edit-requeue") {
+            extra.appendChild(field("New title", text(run.id, "title", "title")));
+            extra.appendChild(field("New detail", text(run.id, "detail", "detail", true, 3)));
+            extra.appendChild(field("Done when, one per line (replaces what it has)", text(run.id, "doneWhen", "done", true, 3)));
+          }
+          answerLab.textContent = c.action === "carry-on" || c.action === "raise" ? "What to tell the next lead" : "A note, kept on the run";
+        }
+        function refresh() {
+          var c = choices[run.id], why = notReady(run, c);
+          btn.textContent = "";
+          var reason = cur.disabledReason || (busy === run.id ? "working on it" : (why || undefined));
+          /* Main's HaloButton shows the reason in place of the command; the design system's shows the command when both
+             are given, so the command goes only to an enabled one. */
+          btn.appendChild(NS.HaloButton({ label: "Confirm", size: "small", cmd: reason ? undefined : resolveLine(run, c), disabledReason: reason,
+            onPress: function () { confirm(run); } }));
+          out.textContent = "";
+          if (said[run.id]) { out.appendChild(h("p", { "class": said[run.id].ok ? "ls-said" : "refused", role: "status", text: (said[run.id].ok ? "✓ " : "") + said[run.id].text })); }
+        }
+        r.refresh = refresh; r.paintExtra = paintExtra;
+
+        var lead = run.lead, ask = null;
+        if (lead && (lead.blocker || (lead.questions || []).length)) {
+          ask = h("p", { "class": "lead", text: (lead.blocker ? "Blocked on: " + lead.blocker + (lead.unblockedBy ? ". It said this would unblock it: " + lead.unblockedBy : "") + "." : "") + (lead.questions || []).map(function (qn) { return " Asked: " + qn; }).join("") });
+        }
+        var suggested = run.kind === "handover"
+          ? h("p", { "class": "suggested" }, [h("b", { text: "It handed over what only you can do." }), " " + run.suggested.reason + " ", h("a", { href: "#teams/" + encodeURIComponent(run.id), text: "Tick them off on its page" }), "."])
+          : h("p", { "class": "suggested" }, [h("b", { text: "Suggested: " + run.suggested.label + "." }), " " + run.suggested.reason]);
+        var fs = h("fieldset", {}, [h("legend", { text: "What to do" })].concat((run.offered || []).map(function (one) {
+          var radio = h("input", { type: "radio", name: "blocked-" + run.id, value: one.action });
+          radio.checked = choices[run.id].action === one.action;
+          radio.addEventListener("change", function () { if (radio.checked) { choices[run.id].action = one.action; paintExtra(); refresh(); } });
+          return h("label", { "class": "pick" }, [radio, " " + one.label + (one.action === run.suggested.action ? " (suggested)" : "")]);
+        })));
+        var answer = h("textarea", { id: "answer-" + run.id, "class": "ls-text", rows: "2", spellcheck: "false" });
+        answer.value = choices[run.id].answer;
+        answer.addEventListener("input", function () { choices[run.id].answer = answer.value; refresh(); });
+
+        [h("div", { "class": "head" }, [h("b", { text: run.id }), h("span", { text: run.team + (run.project ? " on " + run.project : "") + (run.task ? ", task " + run.task : "") }), h("span", { "class": "kind", text: run.kind })]),
+          h("p", { "class": "goal", text: run.goal }),
+          h("p", { "class": "calm small", text: (run.ended || (run.kind === "dead" ? "Its process went away while its journal still said it was running." : "It did not say how it ended.")) + " · " + gotTo(run) + (run.origin ? " · started by rule " + run.origin : "") + (run.chain > 1 ? " · run " + run.chain + " in a row on this task" : "") }),
+          ask, suggested, fs, extra, h("div", { "class": "ls-field" }, [answerLab, answer]), btn, out
+        ].forEach(function (k) { if (k) { li.appendChild(k); } });
+        paintExtra(); refresh();
+        return r;
+      }
+
+      function confirm(run) {
+        busy = run.id; rows[run.id].refresh();
+        var finish = function (ok, t) { said[run.id] = { ok: ok, text: t }; busy = null; if (rows[run.id]) { rows[run.id].refresh(); } };
+        var got;
+        try { got = cur.onresolve ? cur.onresolve(run, snapshot(choices[run.id])) : ""; } catch (e) { finish(false, e && e.message ? e.message : String(e)); return; }
+        Promise.resolve(got).then(function (t) { finish(true, t === undefined || t === null ? "" : String(t)); }, function (e) { finish(false, e && e.message ? e.message : String(e)); });
+      }
+
+      function paint() {
+        var runs = cur.runs || [];
+        empty.hidden = !!runs.length;
+        var keep = {};
+        runs.forEach(function (run) {
+          if (!choices[run.id]) { choices[run.id] = choiceFor(run); }
+          var have = rows[run.id];
+          if (have && have.run !== run) { var focused = document.activeElement && have.li.contains(document.activeElement) ? document.activeElement.id || null : null; have = row(run); rows[run.id] = have; have.focusId = focused; }
+          keep[run.id] = have || (rows[run.id] = row(run));
+        });
+        Object.keys(rows).forEach(function (k) { if (!keep[k]) { delete rows[k]; } });
+        ul.textContent = "";
+        runs.forEach(function (run) { ul.appendChild(rows[run.id].li); });
+        runs.forEach(function (run) { var r = rows[run.id]; if (r.focusId) { var f = document.getElementById(r.focusId); if (f) { f.focus(); } r.focusId = null; } else { r.refresh(); } });
+      }
+      paint();
+      return { el: el, set: function (patch) { cur = Object.assign({}, cur, patch || {}); paint(); } };
+    }
+    NS.BlockedRuns = BlockedRuns;
+  })();
+
+  /* --- ContextMark --- */
+  (function () {
+    /* ContextMark: how much of a session's context window is in use, small enough for a tab or a list row: the figure
+       and a short beam, turning to Needs as it fills and to Bad when it is nearly full. Nothing here is announced as it
+       changes; the strip on the terminal says when a threshold is crossed. Ported from main's ContextMark.svelte. */
+    var WARN = 70, URGENT = 90;
+    function levelOf(p) { if (p === null || p === undefined || !isFinite(p)) { return "ok"; } return p >= URGENT ? "urgent" : p >= WARN ? "warn" : "ok"; }
+    function levelWords(l) { return l === "urgent" ? "nearly full" : l === "warn" ? "filling" : ""; }
+    function ContextMark(o) {
+      o = o || {};
+      var el = h("span", { "class": "ls-ctx" });
+      function set(percent) {
+        el.textContent = "";
+        if (percent === null || percent === undefined) {
+          el.hidden = true; el.className = "ls-ctx"; el.removeAttribute("role"); el.removeAttribute("aria-label"); el.removeAttribute("title");
+          return;
+        }
+        var level = levelOf(percent), words = levelWords(level), said = "Context " + percent + "% used" + (words ? ", " + words : "");
+        el.hidden = false;
+        el.className = "ls-ctx " + level;
+        el.setAttribute("role", "img"); el.setAttribute("aria-label", said); el.setAttribute("title", said);
+        var fill = h("i"); fill.style.width = Math.min(100, Math.max(0, percent)) + "%";
+        el.appendChild(h("i", { "class": "beam", "aria-hidden": "true" }, [fill]));
+        el.appendChild(h("b", { "aria-hidden": "true", text: percent + "%" }));
+        if (level === "urgent") { el.appendChild(h("span", { "class": "bang", "aria-hidden": "true", text: "!" })); }
+      }
+      set(o.percent === undefined ? null : o.percent);
+      return { el: el, set: set };
+    }
+    NS.ContextMark = ContextMark;
+  })();
+
+  /* --- ConversationList --- */
+  (function () {
+    /* ConversationList: past conversations from both agents, each with what it was launched
+       for and whether it is running, and the way to carry it on. Shared by Sessions, which
+       owns the history, and a project's page, which shows its own. Ported from main's
+       ConversationList.svelte. */
+
+    /* The daemon's terminal already running a conversation, or null. */
+    function hostedIn(running) {
+      running = running || "";
+      return running.indexOf("hosted:") === 0 ? running.slice(7) || null : null;
+    }
+
+    /* What carries over into a resume, as somebody would say it. */
+    function carriedWords(c) {
+      var l = c.launchedFor;
+      if (!l) { return "nothing carried over: no launch on record"; }
+      var parts = [l.task ? "task ‘" + l.task + "’" : null, l.mode ? "mode " + l.mode : null, l.profile ? "profile " + l.profile : null, l.worktree ? "worktree " + l.worktree : null].filter(Boolean);
+      return parts.length ? "carries over " + parts.join(", ") : "launched with nothing to carry over";
+    }
+
+    /* The terminal command a resume runs, shown beneath the button. */
+    function resumeWords(c) {
+      var words = ["$ loadout resume", c.id];
+      if (c.project) { words.push("--project " + c.project); }
+      return words.join(" ");
+    }
+
+    function halo(o) {
+      return NS.HaloButton({ label: o.label, size: o.size, cmd: o.disabledReason ? undefined : o.cmd, disabledReason: o.disabledReason, onPress: o.onpress });
+    }
+
+    function ConversationList(o) {
+      o = Object.assign({ conversations: [], label: "Past conversations", inProject: false }, o || {});
+      var busy = null;
+      var el = h("div", { "class": "ls-convlist" });
+
+      function now() { return o.now === undefined ? Date.now() : (typeof o.now === "number" ? o.now : Date.parse(o.now)); }
+      function when(at) {
+        var minutes = Math.max(0, Math.round((now() - Date.parse(at)) / 60000));
+        return minutes < 1 ? "just now" : minutes < 60 ? minutes + " min ago" : minutes < 60 * 24 ? Math.round(minutes / 60) + " h ago" : Math.round(minutes / 1440) + " d ago";
+      }
+      function where(c) {
+        return [o.inProject ? null : (c.project || "not a project · " + c.directory), c.agent, c.branch, when(c.lastActive)].filter(Boolean).join(" · ");
+      }
+      function running(c) {
+        return hostedIn(c.running) ? "open in Studio" : c.running === "elsewhere" ? "looks to be running elsewhere" : null;
+      }
+      /* Why nothing can be started from here: watch-only, or a daemon that cannot open a terminal. */
+      function unable() {
+        return o.watchOnly ? (o.watchOnlyReason || "Studio is only watching: type the command in a terminal") : o.startsSessions === false ? "This daemon cannot open a terminal here" : undefined;
+      }
+
+      function resume(c) {
+        busy = c.id; paint();
+        var done = function (id) { busy = null; paint(); if (id && o.onopen) { o.onopen(id, true); } };
+        try {
+          Promise.resolve(o.onresume ? o.onresume(c) : null).then(done, function () { done(null); });
+        } catch (e) { done(null); }
+      }
+
+      function row(c) {
+        var there = hostedIn(c.running), r = running(c), stop = unable(), acts;
+        if (there) {
+          acts = [halo({ label: "Open", size: "small", cmd: "goes to its terminal", onpress: function () { if (o.onopen) { o.onopen(there, false); } } })];
+        } else {
+          acts = [halo({ label: c.registered ? "Resume" : "Register and resume", size: "small", cmd: busy === c.id ? "starting…" : resumeWords(c), disabledReason: stop || (busy ? "one at a time" : undefined), onpress: function () { resume(c); } })];
+          if (o.onchanges && c.registered) {
+            acts.push(h("button", { type: "button", "class": "linkish", disabled: !!stop, title: stop || null, onclick: function () { o.onchanges(c); }, text: "Resume with changes…" }));
+          }
+        }
+        return h("li", { "class": "conv" }, [
+          h("div", { "class": "what" }, [
+            h("span", { "class": "t", text: c.title }),
+            h("span", { "class": "x", text: where(c) }),
+            h("span", { "class": "x carried", text: carriedWords(c) + (r ? " · " + r : "") })
+          ]),
+          h("div", { "class": "acts" }, acts)
+        ]);
+      }
+
+      function paint() {
+        var key = document.activeElement && el.contains(document.activeElement) ? document.activeElement.closest("li") : null;
+        var at = key ? Array.prototype.indexOf.call(key.parentNode.children, key) : -1;
+        var which = key ? Array.prototype.indexOf.call(key.querySelectorAll("button"), document.activeElement) : -1;
+        el.textContent = "";
+        if (o.conversations.length) {
+          el.appendChild(h("ul", { "class": "slist convs", "aria-label": o.label }, o.conversations.map(row)));
+        } else {
+          el.appendChild(h("p", { "class": "calm", text: "No conversation from either agent is on record here yet." }));
+        }
+        if (at >= 0) { var li = el.querySelectorAll("li.conv")[at]; var b = li && li.querySelectorAll("button")[which]; if (b) { b.focus(); } }
+      }
+
+      function set(next) { Object.assign(o, next || {}); paint(); }
+      paint();
+      return { el: el, set: set };
+    }
+    ConversationList.carriedWords = carriedWords;
+    ConversationList.resumeWords = resumeWords;
+    ConversationList.hostedIn = hostedIn;
+    NS.ConversationList = ConversationList;
+  })();
+
+  /* --- Handover --- */
+  (function () {
+    /* Handover: what a run handed to you because only you could do it: a push, a CI run or a check by hand. Each is
+       ticked off here once it is done, which the journal keeps as review evidence in your name. The last tick judges
+       the run again, with no turn for the lead. As main's Handover.svelte. */
+    var NEEDS = { "needs-push": "a push", "needs-ci": "a CI run", "needs-person": "your check" };
+    function checkLine(run, number) { return "$ loadout team handover " + run + " --check " + number; }
+    function Handover(o) {
+      var cur = Object.assign({ items: [], branches: [] }, o || {}), sending = null;
+      var id = uid("ls-handover-");
+      var el = h("section", { "class": "ls-gate handover", role: "group", "aria-labelledby": id });
+      function press(number) {
+        if (sending !== null) { return; }
+        sending = number; paint();
+        var done = function () { sending = null; paint(); };
+        var r;
+        try { r = cur.oncheck ? cur.oncheck(number) : undefined; } catch (e) { done(); throw e; }
+        if (r && typeof r.then === "function") { r.then(done, done); } else { done(); }
+      }
+      function paint() {
+        var items = cur.items || [], open = items.filter(function (one) { return !one.checkedBy; }).length;
+        var keep = document.activeElement && el.contains(document.activeElement) ? document.activeElement.getAttribute("data-k") : null;
+        el.textContent = "";
+        el.appendChild(h("span", { "class": "who", text: "handed over · " + (open ? open + " of " + items.length + " still yours" : "all checked") }));
+        el.appendChild(h("p", { "class": "q", id: id, text: "It handed these over: only you can do them." }));
+        el.appendChild(h("ol", { "class": "readings" }, items.map(function (one, index) {
+          var act;
+          if (one.checkedBy) { act = h("span", { "class": "m", text: "✓ checked by " + one.checkedBy }); }
+          else {
+            var reason = cur.disabledReason || (sending !== null ? "ticking one off" : undefined);
+            /* The reason in place of the command, as main's HaloButton draws it. */
+            act = NS.HaloButton({ label: "Done: tick it off", size: "small",
+              cmd: reason ? undefined : checkLine(cur.run, index + 1) + (open === 1 ? " · the last one, so it is judged again" : ""),
+              disabledReason: reason,
+              onPress: function () { press(index + 1); } });
+            var b = act.tagName === "BUTTON" ? act : act.querySelector("button"); if (b) { b.setAttribute("data-k", "h" + index); }
+          }
+          return h("li", {}, [
+            h("span", { "class": "c" }, [one.criterion + " ", h("span", { "class": "ls-chip", text: "needs " + (NEEDS[one.needs] || one.needs) })]),
+            h("span", { "class": "m", text: one.todo }),
+            act
+          ]);
+        })));
+        if ((cur.branches || []).length) { el.appendChild(h("p", { "class": "ls-note", text: "The work is on " + cur.branches.join(", ") + "." })); }
+        if (keep) { var f = el.querySelector('[data-k="' + keep + '"]') || el.querySelector("[data-k]"); if (f) { f.focus(); } }
+      }
+      paint();
+      return { el: el, set: function (patch) { cur = Object.assign({}, cur, patch || {}); paint(); } };
+    }
+    NS.Handover = Handover;
+  })();
+
+  /* --- JobResult --- */
+  (function () {
+    /* JobResult: one command run from Studio: how it stands, the line it ran, and what it said once it ends. Main
+       reads the job again whenever the job list changes, which is how the output arrives; here the page passes the
+       job in and calls update(job) as it changes. Ported from main's JobResult.svelte. */
+    /* The output as data when it is data, so it reads as a structure rather than one long line. */
+    function pretty(output) { try { return JSON.stringify(JSON.parse(output), null, 2); } catch (e) { return output; } }
+    function stateWord(state) { return state === "cancelled" ? "stopped" : state; }
+    function when(at) { return new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
+    function seconds(one) { return one.endedAt ? Math.max(0, Math.round((Date.parse(one.endedAt) - Date.parse(one.startedAt)) / 1000)) : null; }
+
+    function JobResult(o) {
+      o = o || {};
+      var job = o.job || null, problem = o.problem || null;
+      /* Main draws the problem and the section side by side in its parent; this holds both without a box of its own. */
+      var el = h("div", { "class": "ls-jobresult" });
+      function paint() {
+        el.textContent = "";
+        if (problem) { el.appendChild(h("p", { "class": "offline", role: "alert", text: problem })); }
+        if (!job) { return; }
+        var sec = h("section", { "class": "jobresult", "aria-label": "Result of " + job.path });
+        if (!o.compact) { sec.appendChild(h("h2", { "class": "topicname", text: job.path })); }
+        var took = seconds(job);
+        sec.appendChild(h("div", { "class": "jobhead" }, [NS.Signal(stateWord(job.state)),
+          h("span", { "class": "calm small", text: "started " + when(job.startedAt) + (took !== null ? " · took " + took + "s" : "") + (job.exitCode !== null && job.exitCode !== undefined ? " · exit code " + job.exitCode : "") })]));
+        if (!o.compact) { sec.appendChild(NS.Command({ command: "$ " + job.line })); }
+        if (job.state === "running") {
+          sec.appendChild(h("div", { "class": "ls-answers flush" }, [NS.HaloButton({ label: "Cancel", kind: "danger", size: "small", cmd: "stops it and anything it started", disabledReason: o.disabledReason || undefined,
+            onPress: function () { if (o.oncancel) { var r = o.oncancel(job); if (r && r.then) { r.then(null, function (err) { set({ problem: (err && err.message) || String(err) }); }); } } } })]));
+          sec.appendChild(h("p", { "class": "calm", role: "status", text: "Running. What it says appears here when it ends." }));
+        } else {
+          if (job.output) {
+            sec.appendChild(h("h3", { "class": "ls-zone", text: "What it said" }));
+            /* Focusable so a keyboard can scroll it: output wider than the page scrolls inside its box, not the page. */
+            sec.appendChild(h("pre", { "class": "output", tabindex: "0", "aria-label": "What it said", text: pretty(job.output) }));
+          } else {
+            sec.appendChild(h("p", { "class": "calm", text: "It said nothing on standard output." }));
+          }
+          if (job.error) {
+            sec.appendChild(h("h3", { "class": "ls-zone", text: "On standard error" }));
+            sec.appendChild(h("pre", { "class": "output err", tabindex: "0", "aria-label": "On standard error", text: job.error }));
+          }
+          if (job.truncated) { sec.appendChild(h("p", { "class": "calm small", text: "It said more than Studio keeps; the end was left out." })); }
+          if (o.onagain) {
+            sec.appendChild(h("div", { "class": "ls-answers flush" }, [NS.HaloButton({ label: "Run it again", size: "small", cmd: "opens its form", onPress: function () { o.onagain(job); } })]));
+          }
+        }
+        el.appendChild(sec);
+      }
+      function set(p) {
+        p = p || {};
+        if (p.job !== undefined) { job = p.job; }
+        if (p.problem !== undefined) { problem = p.problem; }
+        ["compact", "disabledReason", "onagain", "oncancel"].forEach(function (k) { if (p[k] !== undefined) { o[k] = p[k]; } });
+        paint();
+      }
+      paint();
+      return { el: el, set: set, update: function (next) { set({ job: next }); } };
+    }
+    NS.JobResult = JobResult;
+  })();
+
+  /* --- Journal --- */
+  (function () {
+    /* Journal: a run's journal or a node's stream, one line each: when, what kind, what was said, and how many times a
+       repeat came round. As main's Journal.svelte, with its JournalLine shape ({ time, text, family, kind, sub, repeats }). */
+    function line(l) {
+      var cls = [l.family || "", l.sub ? "sub" : ""].filter(Boolean).join(" ") || null;
+      return h("li", { "class": cls }, [
+        h("span", { "class": "tm", text: l.time || "" }),
+        h("span", { "class": "tx" }, [l.kind ? h("span", { "class": "k", text: l.kind }) : null, l.text || "", l.repeats ? h("span", { "class": "x", text: "×" + l.repeats }) : null])
+      ]);
+    }
+    function Journal(o) {
+      o = o || {};
+      var el = h("ol", { "class": "log", tabindex: "0", "aria-label": o.label || "Journal" });
+      function set(patch) {
+        patch = patch || {};
+        if (patch.label !== undefined) { el.setAttribute("aria-label", patch.label || "Journal"); }
+        if (patch.lines) { el.textContent = ""; patch.lines.forEach(function (l) { el.appendChild(line(l)); }); }
+      }
+      set({ lines: o.lines || [] });
+      return { el: el, set: set };
+    }
+    NS.Journal = Journal;
+  })();
+
+  /* --- ListToolbar --- */
+  (function () {
+    /* ListToolbar: the same search, filter and sort controls over every list. The box takes the query typed; the chips
+       are its pieces as the daemon read them, and a chip's x takes that piece away; the menus add a filter or choose a
+       sort. All of them edit the one query string, so they cannot disagree. '/' puts you in the box from anywhere on
+       the page that is not already a field. As main's ListToolbar.svelte and lib/lists.ts. */
+    var SORT = "sort:";
+    function withoutPart(parts, index) { return parts.filter(function (_, at) { return at !== index; }).join(" "); }
+    function withTerm(parts, term) { return (parts.indexOf(term) >= 0 ? parts : parts.concat([term])).join(" "); }
+    function sortOf(parts) { var p = parts.filter(function (x) { return x.indexOf(SORT) === 0; })[0]; return p ? p.slice(SORT.length) : ""; }
+    function withSort(parts, sort) { var kept = parts.filter(function (x) { return x.indexOf(SORT) !== 0; }); return (sort ? kept.concat([SORT + sort]) : kept).join(" "); }
+    function partSaid(part) {
+      if (part.indexOf(SORT) === 0) {
+        return "sorted by " + part.slice(SORT.length).split(",").map(function (f) { return f.charAt(0) === "-" ? f.slice(1) + ", descending" : f; }).join(", then ");
+      }
+      return part;
+    }
+    function exampleQuery(fields) {
+      var choice = fields.filter(function (f) { return f.type === "choice" && (f.choices || []).length > 0; })[0];
+      var date = fields.filter(function (f) { return f.type === "date"; })[0];
+      return [choice ? choice.name + ":" + choice.choices[0] : null, date ? "sort:-" + date.name : null].filter(Boolean).join(" ");
+    }
+    function typingIn(node) {
+      return !!node && (node.tagName === "INPUT" || node.tagName === "TEXTAREA" || node.tagName === "SELECT" || node.isContentEditable || !!(node.closest && node.closest(".ls-term, .xterm, .ls-dialog")));
+    }
+
+    function ListToolbar(o) {
+      var cur = Object.assign({ noun: "items", query: "", shape: null, shown: null, recorded: null, problem: null, slash: true }, o || {});
+      var id = uid("ls-lt-"), timer, typed = cur.query || "";
+      var el = h("div", { "class": "ls-ltool", role: "search" });
+      var lab = h("label", { "class": "lab", "for": id });
+      var box = h("input", { id: id, "class": "ls-text q", type: "search", autocomplete: "off", spellcheck: "false", "aria-keyshortcuts": "/" });
+      var row = h("div", { "class": "row" }, [lab, box]);
+      el.appendChild(row);
+      var tail = [];
+
+      function send(next) { clearTimeout(timer); if (cur.onchange) { cur.onchange(String(next).trim()); } }
+      box.addEventListener("input", function () {
+        typed = box.value; clearTimeout(timer);
+        /* Each keystroke would be a read of the list; wait for a pause. */
+        timer = setTimeout(function () { send(typed); }, 350);
+      });
+      box.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") { e.preventDefault(); send(typed); }
+        else if (e.key === "Escape" && typed) { e.preventDefault(); typed = cur.query || ""; box.value = typed; }
+      });
+      function slash(e) {
+        if (cur.slash !== false && e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey && !typingIn(e.target)) { e.preventDefault(); box.focus(); box.select(); }
+      }
+      window.addEventListener("keydown", slash);
+
+      function paint(queryChanged) {
+        var shape = cur.shape, parts = (shape && shape.parts) || [], fields = (shape && shape.fields) || [];
+        var sort = sortOf(parts), choices = fields.filter(function (f) { return f.type === "choice"; }), example = exampleQuery(fields);
+        var atDefault = String(cur.query || "").trim() === String((shape && shape.defaultQuery) || "").trim();
+        var hidden = cur.shown !== null && cur.shown !== undefined && cur.recorded !== null && cur.recorded !== undefined ? cur.recorded - cur.shown : 0;
+        var focusKey = document.activeElement && el.contains(document.activeElement) && document.activeElement !== box ? document.activeElement.getAttribute("data-k") : null;
+
+        el.setAttribute("aria-label", "Filter and sort the " + cur.noun);
+        lab.textContent = "Find " + cur.noun;
+        if (queryChanged) { typed = cur.query || ""; if (box.value !== typed) { box.value = typed; } }
+        box.placeholder = example ? "Type to filter, or " + example : "Type to filter";
+        if (cur.problem) { box.setAttribute("aria-invalid", "true"); box.setAttribute("aria-describedby", id + "-problem"); } else { box.removeAttribute("aria-invalid"); box.removeAttribute("aria-describedby"); }
+
+        while (row.children.length > 2) { row.removeChild(row.lastChild); }
+        if (choices.length) {
+          var add = h("select", { "class": "ls-text menu", "aria-label": "Add a filter", "data-k": "add" }, [h("option", { value: "", text: "Add a filter…" })].concat(choices.map(function (f) {
+            return h("optgroup", { label: f.name }, [].concat.apply([], (f.choices || []).map(function (c) {
+              return [h("option", { value: f.name + ":" + c, text: f.name + " is " + c }), h("option", { value: "-" + f.name + ":" + c, text: f.name + " is not " + c })];
+            })));
+          })));
+          add.addEventListener("change", function () { var v = add.value; if (v !== "") { send(withTerm(parts, v)); } add.value = ""; });
+          row.appendChild(add);
+        }
+        if (fields.length) {
+          var opts = [h("option", { value: "", text: "Default order" })];
+          fields.forEach(function (f) { opts.push(h("option", { value: f.name, text: f.name })); opts.push(h("option", { value: "-" + f.name, text: f.name + ", descending" })); });
+          if (sort && !fields.some(function (f) { return f.name === sort || "-" + f.name === sort; })) { opts.push(h("option", { value: sort, text: sort })); }
+          var by = h("select", { "class": "ls-text menu", "aria-label": "Sort by", "data-k": "sort" }, opts);
+          by.value = sort;
+          by.addEventListener("change", function () { send(withSort(parts, by.value)); });
+          row.appendChild(by);
+        }
+
+        tail.forEach(function (n) { if (n.parentNode) { n.parentNode.removeChild(n); } }); tail = [];
+        if (cur.problem) { tail.push(h("p", { "class": "problem", id: id + "-problem", role: "alert", text: cur.problem })); }
+        if (parts.length || !atDefault) {
+          var chips = h("div", { "class": "chips" }, parts.map(function (part, index) {
+            return h("span", { "class": "chip" }, [h("span", { "class": "said", text: partSaid(part) }),
+              h("button", { type: "button", "aria-label": "Remove " + partSaid(part), "data-k": "chip" + index, text: "×", onclick: function () { send(withoutPart(parts, index)); } })]);
+          }));
+          if (shape && !atDefault) { chips.appendChild(h("button", { type: "button", "class": "reset", "data-k": "reset", text: "Reset to default", onclick: function () { send(shape.defaultQuery); } })); }
+          tail.push(chips);
+        }
+        if (hidden > 0) {
+          tail.push(h("p", { "class": "count", role: "status" }, ["Showing " + cur.shown + " of " + cur.recorded + ". ", cur.shown === 0 ? "Nothing matches. " : null,
+            h("button", { type: "button", "class": "clear", "data-k": "clear", text: "Show all " + cur.recorded, onclick: function () { send(""); } })]));
+        }
+        tail.forEach(function (n) { el.appendChild(n); });
+        if (focusKey) { var f = el.querySelector('[data-k="' + focusKey + '"]') || el.querySelector('[data-k^="chip"]') || box; f.focus(); }
+      }
+      paint(true);
+      return {
+        el: el,
+        set: function (patch) { patch = patch || {}; var qc = patch.query !== undefined && patch.query !== cur.query; cur = Object.assign({}, cur, patch); paint(qc); },
+        focus: function () { box.focus(); box.select(); },
+        destroy: function () { clearTimeout(timer); window.removeEventListener("keydown", slash); }
+      };
+    }
+    NS.ListToolbar = ListToolbar;
+  })();
+
+  /* --- MiniLine --- */
+  (function () {
+    /* MiniLine: a run's rounds as a line small enough for a board row. A stop for each round with a tick per node,
+       the one running lit, and a dashed stop for what comes next or a solid one where it ended. Decoration: the row
+       beside it says the same in words. As main's MiniLine.svelte. */
+    function stopOf(word) {
+      var family = NS.signalOf(word || "done").family;
+      return word === "running" || word === "round running" ? "cur" : family === "needs" ? "wait" : family === "bad" ? "bad" : "";
+    }
+    function MiniLine(o) {
+      var el = h("div", { "class": "ls-mini", "aria-hidden": "true" });
+      function paint(p) {
+        el.textContent = "";
+        (p.rounds || []).forEach(function (round, index) {
+          var stop = stopOf(round.word);
+          if (index) { el.appendChild(h("span", { "class": "seg" + (stop === "cur" ? " into" : "") })); }
+          el.appendChild(h("span", { "class": "st " + stop }, [h("i"), h("span", { "class": "nd" }, (round.nodes || []).map(function (n) {
+            return h("u", { "class": NS.signalOf(n[1]).family, title: n[0] + " · " + n[1] });
+          }))]));
+        });
+        if (p.running) { el.appendChild(h("span", { "class": "seg dash" })); el.appendChild(h("span", { "class": "st next" }, [h("i")])); }
+        else if (p.end) { el.appendChild(h("span", { "class": "seg" })); el.appendChild(h("span", { "class": "st end" }, [h("i")])); }
+      }
+      var cur = Object.assign({ rounds: [], end: false, running: false }, o || {});
+      paint(cur);
+      return { el: el, set: function (patch) { cur = Object.assign({}, cur, patch || {}); paint(cur); } };
+    }
+    NS.MiniLine = MiniLine;
+  })();
+
+  /* --- ProgressRing --- */
+  (function () {
+    /* ProgressRing: a ring that fills for stages, the Meter's round form. As main's ProgressRing.svelte. */
+    var C = 2 * Math.PI * 48, SVGNS = "http://www.w3.org/2000/svg";
+    function circle(cls, extra) {
+      var c = document.createElementNS(SVGNS, "circle");
+      c.setAttribute("class", cls); c.setAttribute("cx", "60"); c.setAttribute("cy", "60"); c.setAttribute("r", "48");
+      if (extra) { c.setAttribute("transform", extra); }
+      return c;
+    }
+    function ProgressRing(o) {
+      o = o || {};
+      var wrap = h("div", { "class": "ls-progress" });
+      var svg = document.createElementNS(SVGNS, "svg");
+      svg.setAttribute("viewBox", "0 0 120 120"); svg.setAttribute("aria-hidden", "true");
+      var fg = circle("fg", "rotate(-90 60 60)");
+      svg.appendChild(circle("bg")); svg.appendChild(fg);
+      var pct = h("span", { "class": "pct", "aria-hidden": "true" });
+      wrap.appendChild(svg); wrap.appendChild(pct);
+      function set(next) {
+        var v = typeof next === "number" ? next : (next && next.value !== undefined ? next.value : 0);
+        var f = Math.max(0, Math.min(1, Number(v) || 0));
+        fg.style.strokeDasharray = (C * f).toFixed(1) + " " + C.toFixed(1);
+        pct.textContent = Math.round(f * 100) + "%";
+      }
+      set(o.value || 0);
+      return { el: wrap, set: set };
+    }
+    NS.ProgressRing = ProgressRing;
+  })();
+
+  /* --- QueuePanel --- */
+  (function () {
+    /* QueuePanel: one team's queue of fully specified tasks: what waits, in order, and what would
+       be refused now and why; what it has run; and what it is allowed. The draft pull request
+       grant is said first when it is on, because it is the one thing here that reaches outside
+       this machine, and it is turned off from the same line that says so. */
+
+    /** A team's name as an owner: builders' and docs-crew's. */
+    function whose(team) { return /s$/.test(team) ? team + "'" : team + "'s"; }
+    function money(usd) { return "$" + Number(usd).toFixed(2); }
+    function at(iso) { return new Date(iso).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short" }); }
+    function span(minutes) {
+      return minutes % 60 === 0 ? minutes / 60 + "h" : minutes > 60 ? Math.floor(minutes / 60) + "h" + (minutes % 60) + "m" : minutes + "m";
+    }
+
+    // main's HaloButton, including inactive: does nothing and says so, where the reason is written beside it.
+    function halo(o) {
+      var x = {}; Object.keys(o).forEach(function (k) { if (k !== "onpress" && k !== "inactive") { x[k] = o[k]; } });
+      // main shows the reason in place of the command (disabledReason ?? cmd).
+      if (o.disabledReason) { delete x.cmd; }
+      x.onPress = function (e) { if (!o.inactive && o.onpress) { o.onpress(e); } };
+      var el = NS.HaloButton(x);
+      if (o.inactive) { var b = el.tagName === "BUTTON" ? el : el.querySelector("button"); if (b) { b.setAttribute("aria-disabled", "true"); } }
+      return el;
+    }
+    var FOCUSABLE = "button, input, select, textarea, a[href]";
+    function focusables(root) { return Array.prototype.slice.call(root.querySelectorAll(FOCUSABLE)); }
+    // Redraws without losing the place: focus goes back to the same control inside the same [data-k].
+    function keep(root, fn) {
+      var a = document.activeElement, key = null, idx = -1;
+      if (a && root.contains(a) && a.closest) { var w = a.closest("[data-k]"); if (w && root.contains(w)) { key = w.getAttribute("data-k"); idx = focusables(w).indexOf(a); } }
+      fn();
+      if (key === null) { return; }
+      var nw = root.querySelector("[data-k=\"" + key + "\"]");
+      if (!nw) { return; }
+      var list = focusables(nw), t = list[idx] || list[0];
+      if (t) { t.focus(); }
+    }
+    function input(id, value, attrs, oninput) {
+      var a = { id: id, "class": "ls-text", type: "text", autocomplete: "off" };
+      Object.keys(attrs || {}).forEach(function (k) { a[k] = attrs[k]; });
+      var el = h(a.rows ? "textarea" : "input", a);
+      if (a.rows) { el.removeAttribute("type"); }
+      el.value = value;
+      el.addEventListener("input", function () { oninput(el.value); });
+      return el;
+    }
+    function lab(id, words) { return h("label", { "class": "lab", "for": id, text: words }); }
+    function select(id, value, options, attrs, onchange) {
+      var a = { id: id, "class": "ls-text" };
+      Object.keys(attrs || {}).forEach(function (k) { a[k] = attrs[k]; });
+      var el = h("select", a, options.map(function (op) { return h("option", { value: op[0], text: op[1] }); }));
+      el.value = value;
+      el.addEventListener("change", function () { onchange(el.value); });
+      return el;
+    }
+
+    function QueuePanel(o) {
+      o = o || {};
+      var queue = o.queue, projects = o.projects || [], tasksOf = o.tasksOf, propose = o.propose, actFn = o.act, readPlan = o.readPlan, disabledReason = o.disabledReason;
+      var now = o.now || function () { return Date.now(); };
+      var id = uid("ls-q-");
+      var el = h("section", { "class": "ls-queue" });
+
+      function act(path, words, done) {
+        return Promise.resolve().then(function () { return actFn ? actFn(path, words, done) : undefined; }).then(function (r) { return r !== false; });
+      }
+
+      // UI state, kept across a new read of the queue.
+      var timing = false, opensAt = "22:00", openFor = "8h";
+      var adding = false, project = "", tasks = null, task = "", after = "";
+      var conditions = "", proposing = false, proposedWhy = null, proposeError = null;
+      var editing = false, usd = "", runs = "", heldCap = "";
+      var plan = null, planError = null;
+
+      function team() { return queue.team; }
+      function settings() { return queue.settings || {}; }
+      function offered() { return (tasks || []).filter(function (one) { return one.kind === "task" && one.state !== "done" && one.state !== "dropped"; }); }
+      function chosen() { return offered().filter(function (one) { return one.id === task; })[0] || null; }
+      function lacking() { var c = chosen(); return !!c && !!c.doneWhen && c.doneWhen.length === 0; }
+      function lines() { return conditions.split("\n").map(function (x) { return x.trim(); }).filter(function (x) { return x.length > 0; }); }
+      function windowWords() { return [team(), "--at", opensAt.trim(), "--for", openFor.trim()]; }
+      function addWords() { return [team(), task, "--project", project].concat(after ? ["--after", after] : []); }
+      // As option=value, because a condition can start with a dash, which the command line would read as an option of its own.
+      function declareWords() { var c = chosen(); return [task, c ? c.state : "open", "--project", project].concat(lines().map(function (x) { return "--done-when=" + x; })); }
+      // Only what changed is sent, so saving one limit never rewrites another somebody changed from a terminal meanwhile.
+      function limitWords() {
+        var s = settings(), words = [];
+        if (usd.trim() !== (s.windowUsd || "")) { words.push("--window-usd", usd.trim() || "none"); }
+        if (runs.trim() !== (s.windowRuns ? String(s.windowRuns) : "")) { words.push("--window-runs", runs.trim() || "none"); }
+        if (heldCap.trim() && heldCap.trim() !== String(s.heldCap)) { words.push("--held-cap", heldCap.trim()); }
+        return words;
+      }
+
+      // Cleared when a different task is chosen, so one task's conditions are never saved onto another.
+      function setTask(next) { if (next !== task) { conditions = ""; proposedWhy = null; proposeError = null; } task = next; }
+
+      function editWindow() {
+        var w = queue.window || null;
+        opensAt = (w && w.at) || "22:00"; openFor = w ? span(w.lengthMinutes) : "8h"; timing = true; paint();
+      }
+      function saveWindow() { act("team queue window", windowWords(), whose(team()) + " queue has its window").then(function (ok) { if (ok) { timing = false; paint(); } }); }
+      function pickProject(slug) {
+        project = slug; setTask(""); after = ""; tasks = null; paint();
+        if (slug && tasksOf) {
+          Promise.resolve().then(function () { return tasksOf(slug); }).catch(function () { return []; }).then(function (t) { if (project === slug) { tasks = t || []; paint(); } });
+        }
+      }
+      function askForThem() {
+        if (!propose || !task) { return; }
+        proposing = true; proposeError = null; paint();
+        var p = project, t = task;
+        Promise.resolve().then(function () { return propose(p, t); }).then(function (proposed) {
+          conditions = proposed.proposed.join("\n");
+          proposedWhy = proposed.why ? proposed.why + (proposed.costUsd > 0 ? " (" + money(proposed.costUsd) + ")" : "") : null;
+        }, function (error) { proposeError = (error && error.message) || String(error); }).then(function () { proposing = false; paint(); });
+      }
+      function saveThem() {
+        var t = task, kept = lines();
+        act("task declare", declareWords(), t + " has its done-when").then(function (ok) {
+          if (!ok) { return; }
+          tasks = (tasks || []).map(function (one) { if (one.id !== t) { return one; } var c = {}; Object.keys(one).forEach(function (k) { c[k] = one[k]; }); c.doneWhen = kept; return c; });
+          conditions = ""; proposedWhy = null; paint();
+        });
+      }
+      function add() {
+        var t = task;
+        act("team queue add", addWords(), t + " is in " + whose(team()) + " queue").then(function (ok) { if (ok) { adding = false; setTask(""); after = ""; paint(); } });
+      }
+      function edit() {
+        var s = settings();
+        usd = s.windowUsd || ""; runs = s.windowRuns ? String(s.windowRuns) : ""; heldCap = String(s.heldCap); editing = true; paint();
+      }
+      function saveLimits() { act("team queue settings", [team()].concat(limitWords()), whose(team()) + " queue limits are saved").then(function (ok) { if (ok) { editing = false; paint(); } }); }
+      function showPlan() {
+        planError = null;
+        Promise.resolve().then(function () { return readPlan(); }).then(function (p) { plan = p; paint(); }, function (error) { plan = null; planError = (error && error.message) || String(error); paint(); });
+      }
+
+      // Slots for buttons whose line follows what is typed, so typing never redraws the field.
+      function slot(key, make) {
+        var s = h("div", { "class": "slot", "data-k": key });
+        function fill() { keep(s, function () { s.textContent = ""; s.appendChild(make()); }); }
+        fill(); s.fill = fill;
+        return s;
+      }
+
+      function paint() {
+        keep(el, function () {
+          el.textContent = "";
+          var T = team(), s = settings(), owner = whose(T);
+          var items = queue.items || [], allRuns = queue.runs || [];
+          var recent = allRuns.slice().reverse().slice(0, 8);
+          var held = allRuns.filter(function (r) { return r.state === "held"; }).length;
+          var going = allRuns.filter(function (r) { return r.state === "running"; })[0] || null;
+          // The window being worked in when there is one, since that is what its caps count; otherwise the last day's.
+          var since = queue.windowOpened ? Date.parse(queue.windowOpened) : now() - 86400000;
+          var daySpend = allRuns.filter(function (r) { return Date.parse(r.started) >= since; }).reduce(function (sum, r) { return sum + r.costUsd; }, 0);
+          var spendWhen = queue.windowOpened ? "in this window" : "in the last day";
+          var opening = queue.window || null;
+          var limits = [s.windowUsd ? "$" + s.windowUsd + " a window" : "no spending cap of its own", s.windowRuns ? s.windowRuns + " run(s) a window" : "no cap on runs", "at most " + s.heldCap + " held"].join(" · ");
+
+          el.setAttribute("aria-label", owner + " queue");
+          el.appendChild(h("header", {}, [h("b", { text: T }), h("em", { text: limits + (daySpend > 0 ? " · " + money(daySpend) + " " + spendWhen : "") })]));
+
+          el.appendChild(h("div", { "class": "grant", role: "group", "aria-label": "When " + owner + " queue runs", "data-k": id + "-win" }, opening ? [
+            h("p", {}, ["Worked through daily from ", h("strong", { text: opening.at }), " for " + span(opening.lengthMinutes) + ", " + opening.autonomy + (opening.open ? " · open now" : opening.next ? " · next from " + at(opening.next) : "") + "."]),
+            halo({ label: "No window", size: "small", cmd: "$ loadout team queue window " + T + " --off", disabledReason: disabledReason, onpress: function () { act("team queue window", [T, "--off"], owner + " queue has no window"); } }),
+            halo({ label: timing ? "Not now" : "Change the window", size: "small", cmd: timing ? undefined : "opens " + owner + " queue window", disabledReason: disabledReason, onpress: function () { if (timing) { timing = false; paint(); } else { editWindow(); } } })
+          ] : [
+            h("p", { text: "No window: its runs start only when you press Run the next one." }),
+            halo({ label: timing ? "Not now" : "Give it a window", size: "small", cmd: timing ? undefined : "opens " + owner + " queue window", disabledReason: disabledReason, onpress: function () { if (timing) { timing = false; paint(); } else { editWindow(); } } })
+          ]));
+
+          if (timing) {
+            var saveWin = slot(id + "-savewin", function () {
+              return halo({ label: "Save the window", solid: true, cmd: "$ loadout team queue window " + windowWords().join(" "), disabledReason: disabledReason || (!opensAt.trim() || !openFor.trim() ? "Say when it opens and for how long" : undefined), onpress: saveWindow });
+            });
+            el.appendChild(h("form", { "class": "qform", "aria-label": owner + " queue window", onsubmit: function (e) { e.preventDefault(); saveWindow(); } }, [
+              h("div", { "class": "ls-field" }, [lab(id + "-at", "Opens each day at, this machine's time"), input(id + "-at", opensAt, { placeholder: "22:00" }, function (v) { opensAt = v; saveWin.fill(); })]),
+              h("div", { "class": "ls-field" }, [lab(id + "-for", "Stays open for"), input(id + "-for", openFor, { placeholder: "8h" }, function (v) { openFor = v; saveWin.fill(); })]),
+              h("p", { "class": "calm small", text: "The daemon has to be running for anything to happen in it." }),
+              saveWin]));
+          }
+
+          if (s.prMode === "ready") {
+            el.appendChild(h("div", { "class": "grant on", role: "note", "data-k": id + "-pr" }, [
+              h("p", {}, ["It may push a branch and open a ", h("strong", { text: "pull request ready for review" }), " when a queued run meets its done-when. Merging still needs you."]),
+              halo({ label: "Stop that", size: "small", kind: "danger", cmd: "$ loadout team queue settings " + T + " --pr-mode none", disabledReason: disabledReason, onpress: function () { act("team queue settings", [T, "--pr-mode", "none"], owner + " queue opens no pull requests"); } })]));
+          } else if (s.draftPullRequests) {
+            el.appendChild(h("div", { "class": "grant on", role: "note", "data-k": id + "-pr" }, [
+              h("p", {}, ["It may push a branch and open a ", h("strong", { text: "draft pull request" }), " when a queued run meets its done-when. Merging still needs you."]),
+              halo({ label: "Stop that", size: "small", kind: "danger", cmd: "$ loadout team queue settings " + T + " --draft-prs off", disabledReason: disabledReason, onpress: function () { act("team queue settings", [T, "--draft-prs", "off"], owner + " queue opens no pull requests"); } })]));
+          } else {
+            el.appendChild(h("div", { "class": "grant", role: "note", "data-k": id + "-pr" }, [
+              h("p", { text: "It opens no pull requests: a run that meets its done-when keeps its branch on this machine." }),
+              halo({ label: "Let it open drafts", size: "small", cmd: "$ loadout team queue settings " + T + " --draft-prs on", disabledReason: disabledReason, onpress: function () { act("team queue settings", [T, "--draft-prs", "on"], owner + " queue may open draft pull requests"); } })]));
+          }
+
+          if (going || held) {
+            el.appendChild(h("p", { "class": "ls-note needs", text: (going ? going.task + " is running." : "") + (held ? " " + held + " held, waiting for an answer." : "") }));
+          }
+
+          if (!items.length) {
+            el.appendChild(h("p", { "class": "ls-note", text: "Nothing is waiting." }));
+          } else {
+            el.appendChild(h("ol", { "aria-label": "Waiting in " + owner + " queue" }, items.map(function (item, index) {
+              var first = index === 0, last = index === items.length - 1;
+              return h("li", { "class": item.refused ? "refused" : null }, [
+                h("div", { "class": "t" }, [h("b", { text: item.position + ". " + item.task }), h("span", { text: item.project + (item.after ? ", after " + item.after : "") }),
+                  item.refused ? h("em", { "class": "why", text: "Would be refused: " + item.refused }) : null]),
+                h("div", { "class": "acts", "data-k": id + "-i-" + item.project + "-" + item.task }, [
+                  halo({ label: "Up", size: "small", inactive: first, cmd: first ? "already first" : "$ loadout team queue move " + T + " " + item.task + " " + (item.position - 1), disabledReason: disabledReason,
+                    onpress: function () { act("team queue move", [T, item.task, String(item.position - 1), "--project", item.project], item.task + " moved up"); } }),
+                  halo({ label: "Down", size: "small", inactive: last, cmd: last ? "already last" : "$ loadout team queue move " + T + " " + item.task + " " + (item.position + 1), disabledReason: disabledReason,
+                    onpress: function () { act("team queue move", [T, item.task, String(item.position + 1), "--project", item.project], item.task + " moved down"); } }),
+                  halo({ label: "Take out", size: "small", cmd: "$ loadout team queue remove " + T + " " + item.task, disabledReason: disabledReason,
+                    onpress: function () { act("team queue remove", [T, item.task, "--project", item.project], item.task + " is out of the queue"); } })])]);
+            })));
+          }
+
+          el.appendChild(h("div", { "class": "row", "data-k": id + "-row" }, [
+            halo({ label: "Run the next one", cmd: "$ loadout team queue run-next " + T, disabledReason: disabledReason, onpress: function () { act("team queue run-next", [T], owner + " queue started its next task"); } }),
+            halo({ label: "What would run", cmd: "$ loadout team queue plan " + T, onpress: showPlan }),
+            halo({ label: adding ? "Not now" : "Add a task", cmd: adding ? undefined : "opens Add a task to " + owner + " queue", disabledReason: disabledReason, onpress: function () { adding = !adding; paint(); } }),
+            halo({ label: editing ? "Not now" : "Change its limits", cmd: editing ? undefined : "opens " + owner + " queue limits", disabledReason: disabledReason, onpress: function () { if (editing) { editing = false; paint(); } else { edit(); } } })]));
+
+          if (plan) {
+            var p = plan;
+            el.appendChild(h("div", { "class": "plan", role: "region", "aria-label": "What " + owner + " queue would run" }, [
+              p.order.length ? h("ol", {}, p.order.map(function (one) { return h("li", {}, [one.task + " ", h("span", { text: "on " + one.project })]); })) : h("p", { text: "Nothing would run." })]
+              .concat(p.left.map(function (one) { return h("p", { "class": "why", text: "Left: " + one.task + " on " + one.project + ". " + one.reason }); }))
+              // The rules' reason for waiting is the left-out reasons joined, said once above.
+              .concat([h("p", { "class": "calm small", text: (p.left.some(function (one) { return p.stops.indexOf(one.reason) >= 0; }) ? "" : p.stops + " ") + "If every run met its done-when." })])));
+          } else if (planError) {
+            el.appendChild(h("p", { "class": "ls-note needs", text: planError }));
+          }
+
+          if (adding) {
+            var off = offered(), c = chosen();
+            var formKids = [
+              h("div", { "class": "ls-field", "data-k": id + "-project" }, [lab(id + "-project", "Project"),
+                select(id + "-project", project, [["", "Choose a project"]].concat(projects.map(function (slug) { return [slug, slug]; })), {}, pickProject)]),
+              h("div", { "class": "ls-field", "data-k": id + "-task" }, [lab(id + "-task", "Task"),
+                select(id + "-task", task, [["", project && tasks === null ? "Reading…" : "Choose a task"]].concat(off.map(function (one) { return [one.id, one.id + " · " + one.title + (one.doneWhen && !one.doneWhen.length ? " (no done-when yet)" : "")]; })),
+                  { disabled: !project || tasks === null }, function (v) { setTask(v); paint(); })]),
+              h("div", { "class": "ls-field", "data-k": id + "-after" }, [lab(id + "-after", "After, if it waits for one"),
+                select(id + "-after", after, [["", "Nothing, run it in turn"]].concat(off.filter(function (one) { return one.id !== task; }).map(function (one) { return [one.id, one.id]; })),
+                  { disabled: !task }, function (v) { after = v; paint(); })])];
+            if (lacking()) {
+              var saveDone = slot(id + "-savedone", function () {
+                return halo({ label: "Save them", cmd: "$ loadout task declare " + task + " " + (c ? c.state : "open") + " --project " + project + " --done-when …",
+                  disabledReason: disabledReason || (!lines().length ? "Write or propose at least one" : undefined), onpress: saveThem });
+              });
+              formKids.push(h("div", { "class": "ls-field", role: "group", "aria-label": "Done-when for " + task }, [
+                lab(id + "-done", task + " has no done-when yet, so the queue would refuse it. One condition a line:"),
+                input(id + "-done", conditions, { rows: "4", placeholder: "What must be true for it to be finished" }, function (v) { conditions = v; saveDone.fill(); }),
+                proposedWhy ? h("p", { "class": "calm small", text: proposedWhy }) : null,
+                proposeError ? h("p", { "class": "ls-note needs", text: proposeError }) : null,
+                h("div", { "class": "row", "data-k": id + "-donerow" }, [
+                  propose ? halo({ label: proposing ? "Asking an agent…" : "Propose them", cmd: "$ loadout task propose-done-when " + task + " --project " + project,
+                    disabledReason: disabledReason || (proposing ? "An agent is already working on it" : undefined), onpress: askForThem }) : null,
+                  saveDone])]));
+            }
+            formKids.push(h("p", { "class": "calm small", text: "Only a task with a title and a done-when gets in, and you are told why otherwise." }));
+            formKids.push(h("div", { "class": "slot", "data-k": id + "-addit" }, [halo({ label: "Add it", solid: true, cmd: "$ loadout team queue add " + addWords().join(" "), disabledReason: disabledReason || (!task ? "Choose a task first" : undefined), onpress: add })]));
+            el.appendChild(h("form", { "class": "qform", "aria-label": "Add a task to " + owner + " queue", onsubmit: function (e) { e.preventDefault(); add(); } }, formKids));
+          }
+
+          if (editing) {
+            var saveLim = slot(id + "-savelim", function () {
+              var w = limitWords();
+              return halo({ label: "Save them", solid: true, cmd: ("$ loadout team queue settings " + T + " " + w.join(" ")).trim(), disabledReason: disabledReason || (!w.length ? "Nothing has changed" : undefined), onpress: saveLimits });
+            });
+            el.appendChild(h("form", { "class": "qform", "aria-label": owner + " queue limits", onsubmit: function (e) { e.preventDefault(); saveLimits(); } }, [
+              h("div", { "class": "ls-field" }, [lab(id + "-usd", "Most a window may spend, US dollars"), input(id + "-usd", usd, { placeholder: "none" }, function (v) { usd = v; saveLim.fill(); })]),
+              h("div", { "class": "ls-field" }, [lab(id + "-runs", "Most runs a window may start"), input(id + "-runs", runs, { inputmode: "numeric", placeholder: "none" }, function (v) { runs = v; saveLim.fill(); })]),
+              h("div", { "class": "ls-field" }, [lab(id + "-held", "Runs that may wait at a gate at once"), input(id + "-held", heldCap, { inputmode: "numeric" }, function (v) { heldCap = v; saveLim.fill(); })]),
+              saveLim]));
+          }
+
+          if (recent.length) {
+            el.appendChild(h("h4", { text: "What it ran" }));
+            el.appendChild(h("ul", { "aria-label": "Runs " + owner + " queue started" }, recent.map(function (r) {
+              return h("li", { "class": "st-" + r.state }, [
+                h("div", { "class": "t" }, [h("b", {}, [r.task + " ", h("span", { "class": "state", text: r.state })]),
+                  h("em", { text: [r.project, at(r.started), r.run, r.costUsd > 0 ? money(r.costUsd) : null].filter(Boolean).join(" · ") }),
+                  r.reason ? h("span", { text: r.reason }) : null]),
+                r.run ? h("a", { href: "#teams/" + encodeURIComponent(r.run), text: "The run" }) : null]);
+            })));
+          }
+        });
+      }
+
+      paint();
+
+      return {
+        el: el,
+        set: function (n) {
+          n = n || {};
+          if ("queue" in n) { queue = n.queue; }
+          if ("projects" in n) { projects = n.projects || []; }
+          if ("tasksOf" in n) { tasksOf = n.tasksOf; }
+          if ("propose" in n) { propose = n.propose; }
+          if ("act" in n) { actFn = n.act; }
+          if ("readPlan" in n) { readPlan = n.readPlan; }
+          if ("disabledReason" in n) { disabledReason = n.disabledReason; }
+          if ("now" in n) { now = n.now || function () { return Date.now(); }; }
+          paint();
+        }
+      };
+    }
+
+    QueuePanel.whose = whose;
+    NS.QueuePanel = QueuePanel;
+  })();
+
+  /* --- Spend --- */
+  (function () {
+    /* Spend: the spend line. What a run has spent, of what, and where it is projected to end. Past its budget is said
+       in words with a Needs edge, never in colour alone. As main's Spend.svelte. */
+    function money(n) { return "$" + Number(n === null || n === undefined ? 0 : n).toFixed(2); }
+    function Spend(o) {
+      var el = h("div", { "class": "ls-spend" });
+      function paint(p) {
+        var limit = p.uncapped ? null : (p.cap === undefined ? null : p.cap), projected = p.projected === undefined ? null : p.projected;
+        var over = !!(limit && projected && projected > limit), percent = limit ? Math.min(100, (p.spent / limit) * 100) : 0;
+        el.className = "ls-spend" + (over ? " over" : ""); el.textContent = "";
+        el.appendChild(h("div", { "class": "w" }, [
+          h("b", { text: money(p.spent) }),
+          h("span", { text: limit ? "of " + money(limit) : "no cap, on purpose" }),
+          p.rate ? h("span", { text: "· " + p.rate }) : null,
+          over ? h("em", { text: "projected " + money(projected) + ", past its budget" }) : null
+        ]));
+        if (limit) {
+          var fill = h("i"); fill.style.width = percent.toFixed(1) + "%";
+          var mark = null;
+          if (!over && projected) { mark = h("u"); mark.style.left = Math.min(100, (projected / limit) * 100).toFixed(1) + "%"; }
+          el.appendChild(h("div", { "class": "bar", role: "meter", "aria-label": "Spent", "aria-valuemin": "0", "aria-valuemax": String(limit), "aria-valuenow": String(p.spent),
+            "aria-valuetext": money(p.spent) + " of " + money(limit) + (over ? ", projected " + money(projected) + ", past its budget" : "") }, [fill, mark]));
+        }
+      }
+      var cur = Object.assign({ spent: 0 }, o || {});
+      paint(cur);
+      return { el: el, set: function (patch) { cur = Object.assign({}, cur, patch || {}); paint(cur); } };
+    }
+    NS.Spend = Spend;
+  })();
+
+  /* --- SplitCross --- */
+  (function () {
+    /* SplitCross: where a column divider and a row divider cross: dragging here moves both, and a double click puts
+       both back. It is for the pointer only; the two dividers either side of it already take the keys, so it takes no
+       focus and a screen reader is not told about it twice. Ported from main's SplitCross.svelte. */
+    var SETTLED = "ls-split-settled";
+    function clampSplit(v, min, max) { if (min > max) { return (min + max) / 2; } return Math.min(max, Math.max(min, v)); }
+    function SplitCross(o) {
+      o = o || {};
+      var column = o.column, row = o.row, drag = null;
+      var lim = { colMin: 0.1, colMax: 0.9, rowMin: 0.1, rowMax: 0.9 };
+      Object.keys(lim).forEach(function (k) { if (o[k] !== undefined) { lim[k] = o[k]; } });
+      var reset = o.reset || [0.5, 0.5];
+      var el = h("div", { "class": "ls-cross", "aria-hidden": "true", title: "Drag to move both dividers; a double click puts them back" });
+      /* The parent's width and height, less one gap each way. */
+      function lengths() {
+        var parent = el.parentElement;
+        if (!parent) { return [0, 0]; }
+        var box = parent.getBoundingClientRect(), style = getComputedStyle(parent);
+        function gap(v) { return isFinite(parseFloat(v)) ? parseFloat(v) : 0; }
+        return [box.width - gap(style.columnGap), box.height - gap(style.rowGap)];
+      }
+      function tell(c, r) { column = c; row = r; if (o.onchange) { o.onchange(c, r); } }
+      function settle() { document.dispatchEvent(new CustomEvent(SETTLED)); }
+      el.addEventListener("pointerdown", function (e) {
+        var l = lengths();
+        if (e.button !== 0 || l[0] <= 0 || l[1] <= 0) { return; }
+        e.preventDefault();
+        if (el.setPointerCapture) { try { el.setPointerCapture(e.pointerId); } catch (x) { /* a synthetic pointer */ } }
+        drag = { x: e.clientX, y: e.clientY, column: column, row: row, wide: l[0], tall: l[1], pointer: e.pointerId };
+        el.classList.add("dragging");
+      });
+      el.addEventListener("pointermove", function (e) {
+        if (!drag || e.pointerId !== drag.pointer) { return; }
+        var c = clampSplit(drag.column + (e.clientX - drag.x) / drag.wide, lim.colMin, lim.colMax);
+        var r = clampSplit(drag.row + (e.clientY - drag.y) / drag.tall, lim.rowMin, lim.rowMax);
+        if (c !== column || r !== row) { tell(c, r); }
+      });
+      function up(e) {
+        if (!drag || e.pointerId !== drag.pointer) { return; }
+        if (el.releasePointerCapture) { try { el.releasePointerCapture(e.pointerId); } catch (x) { /* already let go */ } }
+        drag = null;
+        el.classList.remove("dragging");
+        settle();
+      }
+      el.addEventListener("pointerup", up);
+      el.addEventListener("pointercancel", up);
+      el.addEventListener("dblclick", function () { tell(clampSplit(reset[0], lim.colMin, lim.colMax), clampSplit(reset[1], lim.rowMin, lim.rowMax)); settle(); });
+      return {
+        el: el,
+        /** New props from the page: { column?, row?, colMin?, colMax?, rowMin?, rowMax?, reset? }. */
+        set: function (p) {
+          p = p || {};
+          if (p.column !== undefined) { column = p.column; } if (p.row !== undefined) { row = p.row; } if (p.reset) { reset = p.reset; }
+          Object.keys(lim).forEach(function (k) { if (p[k] !== undefined) { lim[k] = p[k]; } });
+        }
+      };
+    }
+    NS.SplitCross = SplitCross;
+  })();
+
+  /* --- Splitter --- */
+  (function () {
+    /* Splitter: the divider between two panes of a split, for every split Studio has, so they all drag and take keys
+       the same way. It sits in the gap of its grid, placed there by the page's own CSS, and only says where the
+       boundary should be: the page turns that into its tracks. The arrows move it a little, Shift with an arrow
+       further, Home and End to its limits, and Enter or a double click puts it back where it started.
+       Ported from main's Splitter.svelte. */
+    var SETTLED = "ls-split-settled", STEP = 0.02, LEAP = 0.1;
+    function clampSplit(v, min, max) { if (min > max) { return (min + max) / 2; } return Math.min(max, Math.max(min, v)); }
+    function Splitter(o) {
+      o = o || {};
+      var value = o.value, min = o.min === undefined ? 0.1 : o.min, max = o.max === undefined ? 0.9 : o.max, reset = o.reset;
+      var orientation = o.orientation || "vertical", across = orientation === "vertical", drag = null;
+      var el = h("div", { "class": ["ls-split", orientation, o["class"] || ""].filter(Boolean).join(" "), role: "separator", tabindex: "0",
+        "aria-orientation": orientation, "aria-label": o.label, "aria-controls": o.controls || null,
+        title: "Drag, or the arrow keys; Enter or a double click puts it back" }, [h("span", { "class": "grip", "aria-hidden": "true" })]);
+      function percent(f) { return Math.round(f * 100); }
+      function aria() { el.setAttribute("aria-valuenow", percent(value)); el.setAttribute("aria-valuemin", percent(min)); el.setAttribute("aria-valuemax", percent(max)); }
+      function length() {
+        if (o.span) { return o.span(); }
+        var parent = el.parentElement;
+        if (!parent) { return 0; }
+        var box = parent.getBoundingClientRect(), gap = parseFloat(getComputedStyle(parent)[across ? "columnGap" : "rowGap"]);
+        return (across ? box.width : box.height) - (isFinite(gap) ? gap : 0);
+      }
+      function move(to) {
+        var next = clampSplit(to, min, max);
+        if (next !== value) { value = next; aria(); if (o.onchange) { o.onchange(next); } }
+      }
+      /* Terminals sized while it moved tell their sessions now. */
+      function settle() { document.dispatchEvent(new CustomEvent(SETTLED)); }
+      el.addEventListener("pointerdown", function (e) {
+        if (e.button !== 0) { return; }
+        var total = length();
+        if (total <= 0) { return; }
+        e.preventDefault();
+        if (el.setPointerCapture) { try { el.setPointerCapture(e.pointerId); } catch (x) { /* a synthetic pointer */ } }
+        el.focus({ preventScroll: true });
+        drag = { from: across ? e.clientX : e.clientY, at: value, length: total, pointer: e.pointerId };
+        el.classList.add("dragging");
+      });
+      el.addEventListener("pointermove", function (e) {
+        if (!drag || e.pointerId !== drag.pointer) { return; }
+        move(drag.at + ((across ? e.clientX : e.clientY) - drag.from) / drag.length);
+      });
+      function up(e) {
+        if (!drag || e.pointerId !== drag.pointer) { return; }
+        if (el.releasePointerCapture) { try { el.releasePointerCapture(e.pointerId); } catch (x) { /* already let go */ } }
+        drag = null;
+        el.classList.remove("dragging");
+        settle();
+      }
+      el.addEventListener("pointerup", up);
+      el.addEventListener("pointercancel", up);
+      el.addEventListener("keydown", function (e) {
+        if (e.ctrlKey || e.altKey || e.metaKey) { return; }
+        var back = across ? "ArrowLeft" : "ArrowUp", on = across ? "ArrowRight" : "ArrowDown", by = e.shiftKey ? LEAP : STEP, to = null;
+        if (e.key === back) { to = value - by; } else if (e.key === on) { to = value + by; } else if (e.key === "Home") { to = min; } else if (e.key === "End") { to = max; } else if (e.key === "Enter") { to = reset; }
+        if (to === null) { return; }
+        /* Kept here, so a page's own arrows and Home and End don't also act. */
+        e.preventDefault();
+        e.stopPropagation();
+        move(to);
+      });
+      el.addEventListener("keyup", function (e) { if (/^(Arrow(Left|Right|Up|Down)|Home|End|Enter)$/.test(e.key)) { settle(); } });
+      el.addEventListener("dblclick", function () { move(reset); settle(); });
+      aria();
+      return {
+        el: el,
+        /** New props from the page, which may hold the boundary somewhere else: { value?, min?, max?, reset? }. */
+        set: function (p) {
+          p = p || {};
+          if (p.value !== undefined) { value = p.value; } if (p.min !== undefined) { min = p.min; } if (p.max !== undefined) { max = p.max; } if (p.reset !== undefined) { reset = p.reset; }
+          aria();
+        },
+        get value() { return value; }
+      };
+    }
+    /** Two tracks sharing a length by a fraction, as CSS (main's splits.ts tracks). */
+    Splitter.tracks = function (first) { return "minmax(0, " + first.toFixed(4) + "fr) minmax(0, " + (1 - first).toFixed(4) + "fr)"; };
+    Splitter.clamp = clampSplit;
+    Splitter.SETTLED = SETTLED;
+    NS.Splitter = Splitter;
+  })();
+
+  /* --- StatusBlock --- */
+  (function () {
+    /* StatusBlock: a hosted session's status in full, for its Details: the context window and what fills it, what the
+       session has cost, each of the plan's usage windows with when it resets, and every specialist it was given, by
+       name and linked to what it says. Its only action is a command, shown whole, for bringing a line back to the
+       terminal: nothing here types into the session. Ported from main's StatusBlock.svelte. */
+    var WARN = 70, URGENT = 90;
+    function isStale(s, now) { if (!s.refreshSeconds) { return false; } return now - Date.parse(s.at) > s.refreshSeconds * 2000; }
+    function pad2(n) { return (n < 10 ? "0" : "") + n; }
+    function ago(at, now) {
+      var s = Math.max(0, Math.round((now - Date.parse(at)) / 1000));
+      if (s < 10) { return "just now"; }
+      if (s < 60) { return s + "s ago"; }
+      var m = Math.floor(s / 60);
+      return m < 60 ? m + "m ago" : Math.floor(m / 60) + "h" + pad2(m % 60) + "m ago";
+    }
+    function resetsIn(at, now) {
+      if (!at) { return null; }
+      var m = Math.max(0, Math.round((Date.parse(at) - now) / 60000));
+      if (m < 60) { return "resets in " + m + "m"; }
+      if (m < 48 * 60) { return "resets in " + Math.floor(m / 60) + "h" + pad2(m % 60) + "m"; }
+      return "resets in " + Math.round(m / 1440) + "d";
+    }
+    function dollars(usd) { if (usd === null || usd === undefined || !isFinite(usd)) { return null; } return usd < 10 ? "$" + usd.toFixed(2) : "$" + Math.round(usd); }
+    function tokens(n) { if (n === null || n === undefined || !isFinite(n)) { return null; } if (n < 1000) { return String(n); } return n < 1000000 ? Math.round(n / 1000) + "k" : (n / 1000000).toFixed(1) + "M"; }
+    function pct(v) { return Math.round(v) + "%"; }
+
+    function StatusBlock(o) {
+      o = o || {};
+      var status = o.status, now = o.now === undefined ? Date.now() : o.now;
+      var el = h("section", { "class": "ls-sblock", "aria-label": "Status" });
+      function pairs(rows) {
+        var dl = h("dl");
+        rows.forEach(function (r) { if (r) { dl.appendChild(h("dt", { text: r[0] })); dl.appendChild(h("dd", {}, r[1])); } });
+        return dl;
+      }
+      function paint() {
+        var s = status || {}, c = s.context, percent = c && c.usedPercent !== null && c.usedPercent !== undefined ? c.usedPercent : null;
+        var limits = s.limits, stale = isStale(s, now);
+        el.textContent = "";
+        el.appendChild(h("h2", { text: "Status" }));
+        el.appendChild(h("p", { "class": "when" + (stale ? " stale" : ""),
+          text: stale ? "These figures are " + ago(s.at, now).replace(" ago", "") + " old: the session has not redrawn its line since." : "Updated " + ago(s.at, now) + "." }));
+        if (percent !== null) {
+          el.appendChild(NS.Meter({ label: "Context window used", value: percent, max: 100, threshold: WARN, thresholdLabel: WARN + "%", overWords: percent >= URGENT ? "nearly full" : "filling",
+            format: pct, of: function () { return c.windowSize ? "of " + tokens(c.windowSize) + " tokens" : ""; } }).el);
+        }
+        if (c) {
+          el.appendChild(pairs([
+            c.inputTokens !== null && c.inputTokens !== undefined ? ["In the window", [tokens(c.inputTokens) + " tokens"]] : null,
+            c.cacheReadTokens !== null && c.cacheReadTokens !== undefined ? ["Read from cache", [tokens(c.cacheReadTokens)]] : null,
+            c.cacheWriteTokens !== null && c.cacheWriteTokens !== undefined ? ["Written to cache", [tokens(c.cacheWriteTokens)]] : null,
+            c.uncachedTokens !== null && c.uncachedTokens !== undefined ? ["Not cached", [tokens(c.uncachedTokens)]] : null,
+            c.outputTokens !== null && c.outputTokens !== undefined ? ["Last reply", [tokens(c.outputTokens)]] : null
+          ]));
+        }
+        if (s.cost) {
+          var added = s.cost.linesAdded, removed = s.cost.linesRemoved, hasLines = (added !== null && added !== undefined) || (removed !== null && removed !== undefined);
+          el.appendChild(pairs([
+            dollars(s.cost.usd) ? ["Cost so far", [dollars(s.cost.usd) + " ", h("span", { "class": "src", text: "Claude\u2019s estimate" })]] : null,
+            hasLines ? ["Lines", ["+" + (added || 0) + " \u2212" + (removed || 0)]] : null
+          ]));
+        }
+        [["Five-hour window", limits && limits.fiveHour], ["Seven-day window", limits && limits.sevenDay]].forEach(function (one) {
+          var w = one[1];
+          if (!w) { return; }
+          el.appendChild(NS.Meter({ label: one[0], value: w.usedPercent, max: 100, threshold: WARN, thresholdLabel: WARN + "%", overWords: "getting close",
+            format: pct, of: function () { return resetsIn(w.resetsAt, now) || ""; } }).el);
+        });
+        if (limits && limits.spend) {
+          var sp = limits.spend, words = "";
+          if (sp.usedUsd !== null && sp.usedUsd !== undefined && sp.limitUsd !== null && sp.limitUsd !== undefined) { words = dollars(sp.usedUsd) + " of " + dollars(sp.limitUsd); }
+          else if (sp.usedPercent !== null && sp.usedPercent !== undefined) { words = Math.round(sp.usedPercent) + "%"; }
+          if (sp.period) { words += " " + sp.period; }
+          if (resetsIn(sp.resetsAt, now)) { words += " \u00b7 " + resetsIn(sp.resetsAt, now); }
+          el.appendChild(pairs([["Spend limit", [words]]]));
+        }
+        if (!limits) {
+          el.appendChild(h("p", { "class": "calm small", text: "No usage limits: Claude sends them for a subscription, or behind a gateway with a spend limit." }));
+        }
+        if (s.specialists && s.specialists.length) {
+          el.appendChild(h("h3", { text: "Specialists" }));
+          el.appendChild(h("ul", { "class": "specs" }, s.specialists.map(function (id) {
+            return h("li", {}, [s.project ? h("a", { href: "#context/" + encodeURIComponent(s.project || "") + "/specialist/" + encodeURIComponent(id), text: id }) : id]);
+          })));
+        }
+        var terminalWords = s.terminal === "full"
+          ? (s.wrapping ? "your own status line, run for you" : "the launcher\u2019s full line")
+          : s.terminal === "minimal" ? "a short line" : "no line: Studio draws it here";
+        el.appendChild(h("p", { "class": "calm small", text: "The terminal shows " + terminalWords + "." }));
+        el.appendChild(NS.Command({ why: "Change what the terminal shows:", command: "loadout config set statusline-in-studio " + (s.terminal === "off" ? "full" : "off") }));
+      }
+      paint();
+      return {
+        el: el,
+        /** New props: { status?, now? }. */
+        set: function (p) { p = p || {}; if (p.status) { status = p.status; } if (p.now !== undefined) { now = p.now; } paint(); }
+      };
+    }
+    NS.StatusBlock = StatusBlock;
+  })();
+
+  /* --- StatusStrip --- */
+  (function () {
+    /* StatusStrip: a hosted session's status, one row on the foot of its terminal, from what its status line last
+       handed over: the model, the context, what it has cost, the plan's five-hour window and how many specialists it
+       was given. Every figure is Claude's; one it did not send is left out rather than drawn as nought. Old figures
+       say so. A screen reader hears it only when the context crosses a threshold, and politely.
+       Ported from main's StatusStrip.svelte. */
+    var WARN = 70, URGENT = 90;
+    function levelOf(p) { if (p === null || p === undefined || !isFinite(p)) { return "ok"; } return p >= URGENT ? "urgent" : p >= WARN ? "warn" : "ok"; }
+    function levelWords(l) { return l === "urgent" ? "nearly full" : l === "warn" ? "filling" : ""; }
+    function contextPercent(s) { var u = s && s.context ? s.context.usedPercent : null; return u === null || u === undefined || !isFinite(u) ? null : Math.round(u); }
+    function isStale(s, now) { if (!s.refreshSeconds) { return false; } return now - Date.parse(s.at) > s.refreshSeconds * 2000; }
+    function pad2(n) { return (n < 10 ? "0" : "") + n; }
+    function ago(at, now) {
+      var s = Math.max(0, Math.round((now - Date.parse(at)) / 1000));
+      if (s < 10) { return "just now"; }
+      if (s < 60) { return s + "s ago"; }
+      var m = Math.floor(s / 60);
+      return m < 60 ? m + "m ago" : Math.floor(m / 60) + "h" + pad2(m % 60) + "m ago";
+    }
+    function resetsIn(at, now) {
+      if (!at) { return null; }
+      var m = Math.max(0, Math.round((Date.parse(at) - now) / 60000));
+      if (m < 60) { return "resets in " + m + "m"; }
+      if (m < 48 * 60) { return "resets in " + Math.floor(m / 60) + "h" + pad2(m % 60) + "m"; }
+      return "resets in " + Math.round(m / 1440) + "d";
+    }
+    function dollars(usd) { if (usd === null || usd === undefined || !isFinite(usd)) { return null; } return usd < 10 ? "$" + usd.toFixed(2) : "$" + Math.round(usd); }
+    function beam(p) { var f = h("i"); f.style.width = Math.min(100, p) + "%"; return h("i", { "class": "beam", "aria-hidden": "true" }, [f]); }
+
+    function StatusStrip(o) {
+      o = o || {};
+      var status = o.status, now = o.now === undefined ? Date.now() : o.now, last = null;
+      var live = h("span", { "class": "ls-vh", role: "status", "aria-live": "polite" });
+      var el = h("div", { "class": "ls-sstrip", role: "group", "aria-label": "Session status" });
+      function paint() {
+        var s = status || {}, percent = contextPercent(s), level = levelOf(percent), cost = dollars(s.cost ? s.cost.usd : null);
+        var five = s.limits && s.limits.fiveHour ? s.limits.fiveHour : null, spend = s.limits && s.limits.spend ? s.limits.spend : null;
+        var stale = isStale(s, now), count = s.specialists ? s.specialists.length : 0;
+        el.textContent = "";
+        el.classList.toggle("stale", stale);
+        if (s.model) { el.appendChild(h("span", { "class": "model", text: s.model })); }
+        if (percent !== null) {
+          el.appendChild(h("span", { "class": "gauge " + level }, [h("span", { "class": "k", text: "ctx" }), beam(percent), h("b", { text: percent + "%" }), level !== "ok" ? h("em", { text: levelWords(level) }) : null]));
+        }
+        if (cost) { el.appendChild(h("span", { "class": "cost" }, [h("span", { "class": "k", text: "cost" }), " ", h("b", { text: cost })])); }
+        if (five) {
+          el.appendChild(h("span", { "class": "gauge " + levelOf(five.usedPercent), title: resetsIn(five.resetsAt, now) }, [h("span", { "class": "k", text: "5h" }), beam(five.usedPercent), h("b", { text: Math.round(five.usedPercent) + "%" })]));
+        } else if (spend && spend.usedPercent !== null && spend.usedPercent !== undefined) {
+          el.appendChild(h("span", { "class": "gauge " + levelOf(spend.usedPercent) }, [h("span", { "class": "k", text: "spend" }), beam(spend.usedPercent), h("b", { text: Math.round(spend.usedPercent) + "%" })]));
+        }
+        if (count) { el.appendChild(h("span", { "class": "spec" }, [h("b", { text: String(count) }), " ", h("span", { "class": "k", text: count === 1 ? "specialist" : "specialists" })])); }
+        el.appendChild(h("span", { "class": "grow" }));
+        el.appendChild(h("span", { "class": "when", text: stale ? "old: " + ago(s.at, now) : ago(s.at, now) }));
+        el.appendChild(live);
+        /* Said once each time the context moves from one level to another, never on the first reading. */
+        if (last !== null && last !== level) {
+          live.textContent = level === "ok" ? "Context back to " + percent + "%" : "Context " + percent + "% used, " + levelWords(level);
+        }
+        last = level;
+      }
+      paint();
+      return {
+        el: el,
+        /** New props: { status?, now? }. */
+        set: function (p) { p = p || {}; if (p.status) { status = p.status; } if (p.now !== undefined) { now = p.now; } paint(); }
+      };
+    }
+    NS.StatusStrip = StatusStrip;
+  })();
+
+  /* --- TaskDetail --- */
+  (function () {
+    /* TaskDetail: one task in full, opened from its card: the detail a list leaves out, the
+       note, and every change of state with who said so and when. Read with 'task show', so it
+       says what a terminal would. The card already has the title and the moves; this is for
+       reading. Ported from main's TaskDetail.svelte. */
+
+    /* The words naming a task's list, and those for reading one task in full after 'task show'. */
+    function showWords(id, project) { return [id].concat(project ? ["--project", project] : ["--global"]); }
+    function whereSaid(project) { return project || "the workspace-wide list"; }
+    function ideaHref(project, id) { return "#ideas/" + encodeURIComponent(project === null || project === undefined ? "~" : project) + "/" + encodeURIComponent(id); }
+    /* A word as a shell would need it quoted, matching the daemon's own quoting. */
+    function quoted(w) { return /^[A-Za-z0-9\-_./:=@,+%]+$/.test(w) ? w : "'" + w.replace(/'/g, "'\\''") + "'"; }
+    function lineFor(path, words) { return "$ loadout " + [path].concat(words.map(quoted)).join(" "); }
+
+    /* One task in full, from what 'task show --json' says. */
+    function fromShow(read) {
+      var t = read.task || {};
+      return { id: t.id, title: t.title || "", state: t.state || "", kind: t.kind, declaredBy: t.by || "", declared: t.declared || "",
+        note: t.note || null, project: read.project === undefined ? null : read.project, detail: t.detail || "", history: t.history || [], idea: read.idea || null };
+    }
+
+    function TaskDetail(o) {
+      o = o || {};
+      var task = o.task || { id: "", title: "", state: "" };
+      var shown = o.shown || null, problem = o.problem || null, dialog = null, panel = null, body = null;
+      var words = showWords(task.id, task.project);
+      var when = function (at) { return new Date(at).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }); };
+
+      function close() { if (dialog) { dialog.close(); } }
+      function section(key, heading, kids) {
+        return h("section", { "aria-labelledby": key }, [h("h3", { id: key, text: heading })].concat(kids));
+      }
+
+      function readPart() {
+        if (problem) { return [h("p", { "class": "offline", role: "alert", text: problem })]; }
+        if (!shown) { return [h("p", { "class": "calm", role: "status", text: "Reading…" })]; }
+        var f = shown, out = [], k = uid("td-");
+        if (f.idea) {
+          out.push(h("p", { "class": "from" }, ["From an idea accepted " + when(f.idea.accepted) + ": the plan is at ", h("code", { text: f.idea.plan }), ". ",
+            h("a", { href: ideaHref(task.project, task.id), onclick: function () { if (o.onidea) { o.onidea(ideaHref(task.project, task.id)); } close(); }, text: "Open the idea" })]));
+        }
+        if (f.note) { out.push(section(k + "-note", "Note", [h("p", { text: f.note })])); }
+        if (f.detail) { out.push(section(k + "-detail", "Detail", [NS.Markdown(f.detail)])); }
+        var hist;
+        if (f.history.length) {
+          hist = h("ol", { "class": "history" }, f.history.map(function (one) {
+            return h("li", {}, [h("span", { "class": "st" }, [NS.Signal(one.state)]), " ", h("span", { "class": "by", text: one.by || "nobody named" }), " ",
+              h("time", { datetime: one.at, text: when(one.at) }), one.reason ? h("span", { "class": "why", text: one.reason }) : null]);
+          }));
+        } else {
+          /* Recorded before there was a history: the latest claim is all that was kept. */
+          hist = h("p", { "class": "calm", text: f.state + ", said by " + (f.declaredBy || "nobody named") + (f.declared ? " on " + when(f.declared) : "") + ". Nothing earlier was kept." });
+        }
+        out.push(section(k + "-history", "History", [hist]));
+        return out;
+      }
+
+      function chipKids() {
+        var state = (shown && shown.state) || task.state;
+        return [state ? h("span", { "class": "ls-tag" }, [NS.Signal(state)]) : null,
+          h("span", { "class": "ls-tag", text: task.id }),
+          task.project !== undefined ? h("span", { "class": "ls-tag", text: whereSaid(task.project) }) : null];
+      }
+
+      /* The panel is the Dialog's. The chips, the line and Close stay put; only what was read is
+         redrawn, between the chips and the line, as main's {#if} blocks do. */
+      var chips = null, from = null, reads = [];
+      function paint() {
+        if (!panel) { return; }
+        var title = panel.querySelector("h2");
+        if (title) { title.textContent = (shown && shown.title) || task.title || task.id; }
+        if (!chips || !panel.contains(chips)) {
+          chips = h("p", { "class": "chips" }, chipKids());
+          from = h("p", { "class": "ls-from" }, ["The same as ", h("code", { text: lineFor("task show", words) }), "."]);
+          panel.appendChild(chips); panel.appendChild(from);
+          panel.appendChild(h("div", { "class": "close" }, [NS.HaloButton({ label: "Close", size: "small", onPress: close })]));
+          reads = [];
+        } else {
+          chips.textContent = ""; chipKids().forEach(function (n) { if (n) { chips.appendChild(n); } });
+        }
+        reads.forEach(function (n) { n.remove(); });
+        reads = readPart();
+        reads.forEach(function (n) { panel.insertBefore(n, from); });
+      }
+
+      function set(next) {
+        next = next || {};
+        if ("shown" in next) { shown = next.shown; }
+        if ("read" in next && next.read) { shown = fromShow(next.read); }
+        if ("problem" in next) { problem = next.problem; }
+        paint();
+      }
+
+      function open() {
+        body = h("div", {});
+        dialog = NS.Dialog({ title: (shown && shown.title) || task.title || task.id, extraClass: "ls-tdetail", initialFocus: ".close button",
+          host: o.host, contained: o.contained, behind: o.behind, onClose: function () { panel = null; if (o.onclose) { o.onclose(); } } });
+        panel = dialog.open();
+        paint();
+        if (!shown && !problem && o.read) {
+          var got;
+          try { got = Promise.resolve(o.read("task show", words)); } catch (e) { got = Promise.reject(e); }
+          got.then(function (read) { set({ read: read }); }, function (error) {
+            /* Signed out is the page's to handle, as main sets studio.signedOut. */
+            if (error && error.name === "SignedOut" && o.onsignedout) { o.onsignedout(); } else { set({ problem: (error && error.message) || String(error) }); }
+          });
+        }
+        return panel;
+      }
+
+      open();
+      return { get el() { return panel; }, open: open, close: close, set: set };
+    }
+    TaskDetail.fromShow = fromShow;
+    TaskDetail.showWords = showWords;
+    NS.TaskDetail = TaskDetail;
+  })();
+
+  /* --- TriggerRules --- */
+  (function () {
+    /* TriggerRules: each rule on this machine with where it stands against its caps, a form that
+       writes and changes them, the rules teams suggest, who is trusted beyond the collaborators,
+       and what the rules decided lately. Everything is read with a 'trigger ...' command and done
+       with one; the form shows the line it will run, and Preview runs it with --dry-run first. */
+
+    // main's quoted() from lib/commands.ts, kept apart from q(): it quotes only what a shell reads.
+    function quoted(value) {
+      value = String(value);
+      return value === "" || /[\s"'$`\\]/.test(value) ? "\"" + value.replace(/(["\\$`])/g, "\\$1") + "\"" : value;
+    }
+    function money(amount) { return "$" + Number(amount == null ? 0 : amount).toFixed(2); }
+
+    /* ---------- lib/triggerRule.ts, as built ---------- */
+
+    var RULE_DEFAULTS = { capRuns: "10", window: "24h" };
+
+    function ruleValues(preset) {
+      var v = { name: "", on: "pr-opened", starts: "team", team: "", builtin: "docs audit", goal: "", autonomy: "autonomous", projects: [], where: [],
+        capUsd: "proposed", budgetUsd: "", capRuns: RULE_DEFAULTS.capRuns, window: RULE_DEFAULTS.window, debounce: "", clock: "every", every: "1h", at: "09:00", disabled: false };
+      Object.keys(preset || {}).forEach(function (k) { v[k] = preset[k]; });
+      return v;
+    }
+
+    function spanWords(span) {
+      var found = /^(?:(\d+)\.)?(\d{1,2}):(\d{2}):(\d{2})/.exec(span || "");
+      if (!found) { return ""; }
+      var minutes = Number(found[1] || 0) * 1440 + Number(found[2]) * 60 + Number(found[3]);
+      if (minutes === 0) { return ""; }
+      if (minutes % 1440 === 0) { return minutes / 1440 + "d"; }
+      return minutes % 60 === 0 ? minutes / 60 + "h" : minutes + "m";
+    }
+
+    function valuesFromRule(rule) {
+      var team = rule.action.kind === "team";
+      var w = spanWords(rule.window);
+      return ruleValues({
+        name: rule.id, on: rule.on, starts: team ? "team" : "builtin", team: team ? rule.action.name : "", builtin: team ? "docs audit" : rule.action.name,
+        goal: rule.action.goal || "", autonomy: rule.action.autonomy === "supervised" ? "supervised" : "autonomous", projects: (rule.projects || []).slice(),
+        where: Object.keys(rule.where || {}).map(function (f) { return { field: f, value: rule.where[f] }; }),
+        capUsd: rule.capUsd == null ? "" : String(rule.capUsd), budgetUsd: rule.budgetUsd == null ? "" : String(rule.budgetUsd), capRuns: String(rule.capRuns),
+        window: w === "" || w === "1d" ? RULE_DEFAULTS.window : w, debounce: spanWords(rule.debounce), clock: rule.at ? "at" : "every",
+        every: spanWords(rule.every) || "1h", at: (rule.at || "09:00").slice(0, 5), disabled: !rule.enabled
+      });
+    }
+
+    function ruleWords(v) {
+      var words = [v.name || "<name>", v.on];
+      if (v.starts === "team") { words.push("--team", v.team || "<team>", "--goal", v.goal.trim() || "…", "--autonomy", v.autonomy); } else { words.push("--builtin", v.builtin); }
+      v.projects.forEach(function (p) { words.push("--project", p); });
+      v.where.filter(function (e) { return e.field && e.value.trim(); }).forEach(function (one) { words.push("--where", one.field + "=" + one.value.trim()); });
+      if (v.on === "clock") { if (v.clock === "at") { words.push("--at", v.at); } else { words.push("--every", v.every.trim()); } }
+      if (v.starts === "team" && v.capUsd.trim()) { words.push("--cap-usd", v.capUsd.trim()); }
+      if (v.starts === "team" && v.budgetUsd.trim()) { words.push("--budget-usd", v.budgetUsd.trim()); }
+      if (v.capRuns.trim() && v.capRuns.trim() !== RULE_DEFAULTS.capRuns) { words.push("--cap-runs", v.capRuns.trim()); }
+      if (v.window.trim() && v.window.trim() !== RULE_DEFAULTS.window) { words.push("--window", v.window.trim()); }
+      if (v.debounce.trim()) { words.push("--debounce", v.debounce.trim()); }
+      if (v.disabled) { words.push("--disabled"); }
+      return words;
+    }
+
+    function ruleCommand(v) { return "$ loadout trigger add " + ruleWords(v).map(quoted).join(" "); }
+
+    var DURATION = /^\d+\s*(m|h|d)$/, MONEY = /^\d+(\.\d+)?$/;
+
+    function ruleProblem(v, kinds, teams) {
+      if (!v.name) { return "give the rule a name first"; }
+      if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(v.name)) { return "a rule’s name is lowercase words joined by hyphens"; }
+      var kind = kinds.filter(function (one) { return one.kind === v.on; })[0];
+      if (!kind) { return "pick what it waits for"; }
+      if (v.starts === "team") {
+        if (!v.team) { return "pick the team it starts"; }
+        if (teams.indexOf(v.team) < 0) { return "there is no team called " + v.team; }
+        if (!v.goal.trim()) { return "say what to ask the team for"; }
+      } else if (!v.builtin) { return "pick the built-in it starts"; }
+      for (var i = 0; i < v.where.length; i++) {
+        var one = v.where[i];
+        if (!one.field) { return "pick the field each condition is about"; }
+        if (kind.fields.indexOf(one.field) < 0) { return "a " + v.on + " event carries no " + one.field; }
+        if (!one.value.trim()) { return "say what " + one.field + " must be"; }
+      }
+      if (v.on === "clock") {
+        if (v.clock === "every") {
+          if (!DURATION.test(v.every.trim())) { return "say how often as 30m, 2h or 1d"; }
+          if (/^\d+\s*m$/.test(v.every.trim()) && parseInt(v.every, 10) < 5) { return "a clock rule comes round every five minutes at the most"; }
+        } else if (!/^\d{2}:\d{2}$/.test(v.at)) { return "say the time of day as 09:00"; }
+        if (v.starts === "team" && v.projects.length !== 1) { return "a clock rule that starts a team names the one project it runs on"; }
+      }
+      if (v.starts === "team") {
+        var cap = v.capUsd.trim();
+        if (!cap) { return "a rule that starts a team needs a spend cap, or proposed for one worked out from its runs"; }
+        if (cap !== "proposed" && (!MONEY.test(cap) || Number(cap) <= 0)) { return "the spend cap is a figure in US dollars above nothing, or proposed"; }
+        var budget = v.budgetUsd.trim();
+        if (budget && budget !== "proposed" && (!MONEY.test(budget) || Number(budget) <= 0)) { return "the budget for each run is a figure in US dollars above nothing, or proposed"; }
+        if (budget && MONEY.test(budget) && MONEY.test(cap) && Number(budget) > Number(cap)) { return "a run’s budget cannot be more than the spend cap, or not even one run could start"; }
+      }
+      if (!/^\d+$/.test(v.capRuns.trim()) || Number(v.capRuns) < 1) { return "the most runs in its window is a whole number, at least one"; }
+      if (!DURATION.test(v.window.trim())) { return "write the window as 24h or 7d"; }
+      if (v.debounce.trim() && !DURATION.test(v.debounce.trim())) { return "write how long to wait as 10m or 1h"; }
+      return null;
+    }
+
+    /* ---------- small helpers ---------- */
+
+    function halo(o) {
+      var x = {}; Object.keys(o).forEach(function (k) { if (k !== "onpress") { x[k] = o[k]; } });
+      // main shows the reason in place of the command (disabledReason ?? cmd).
+      if (o.disabledReason) { delete x.cmd; }
+      if (o.onpress) { x.onPress = o.onpress; }
+      return NS.HaloButton(x);
+    }
+    var FOCUSABLE = "button, input, select, textarea, a[href]";
+    function focusables(root) { return Array.prototype.slice.call(root.querySelectorAll(FOCUSABLE)); }
+    // Redraws without losing the place: focus goes back to the same control inside the same [data-k].
+    function keep(root, fn) {
+      var a = document.activeElement, key = null, idx = -1;
+      if (a && root.contains(a) && a.closest) { var w = a.closest("[data-k]"); if (w && root.contains(w)) { key = w.getAttribute("data-k"); idx = focusables(w).indexOf(a); } }
+      fn();
+      if (key === null) { return; }
+      var nw = root.querySelector("[data-k=\"" + key + "\"]");
+      if (!nw) { return; }
+      var list = focusables(nw), t = list[idx] || list[0];
+      if (t) { t.focus(); }
+    }
+    function field(id, label, input, hint, wide) {
+      return h("div", { "class": "ls-field" + (wide ? " wide" : ""), "data-k": id }, [h("label", { "class": "lab", "for": id, text: label }), input, hint == null ? null : h("span", { "class": "hint", text: hint })]);
+    }
+    function text(id, value, attrs, oninput) {
+      var a = { id: id, name: id, "class": "ls-text", type: "text", autocomplete: "off" };
+      Object.keys(attrs || {}).forEach(function (k) { a[k] = attrs[k]; });
+      var el = h(a.rows ? "textarea" : "input", a);
+      if (a.rows) { el.removeAttribute("type"); }
+      el.value = value == null ? "" : value;
+      el.addEventListener("input", function () { oninput(el.value); });
+      return el;
+    }
+    // ModePicker calls onChange while it is built; only a person's pick counts.
+    function modes(key, o, onchange) {
+      var ready = false;
+      var el = NS.ModePicker({ label: o.label, selected: o.selected, options: o.options, onChange: function (name, i) { if (ready) { onchange(name, i); } } });
+      ready = true;
+      el.setAttribute("data-k", key);
+      return el;
+    }
+    function picker(key, o) { var el = NS.Picker(o); el.setAttribute("data-k", key); return el; }
+
+    function TriggerRules(o) {
+      o = o || {};
+      var teams = o.teams || [], projects = o.projects || [], disabledReason = o.disabledReason, onfail = o.onfail;
+      var base = uid("tr-");
+      var el = h("div", { "class": "ls-trules" });
+
+      var rules = null, kinds = [], builtins = [], suggested = [], allowed = [], journal = [];
+      var read = o.read || function () { return Promise.resolve([]); };
+      var run = o.run || function () { return Promise.resolve({ output: "" }); };
+      function soft(p) { return p.catch(function () { return []; }); }
+
+      function load() {
+        return Promise.all([
+          read("trigger list"),
+          read("trigger events"),
+          soft(read("trigger suggested")),
+          soft(read("trigger allowed")),
+          soft(read("trigger journal", ["--limit", "25"]))
+        ]).then(function (r) {
+          rules = r[0] || []; kinds = (r[1] && r[1].kinds) || []; builtins = (r[1] && r[1].builtins) || [];
+          suggested = r[2] || []; allowed = r[3] || []; journal = (r[4] || []).slice().reverse();
+          paint();
+        }, function (error) { if (onfail) { onfail(error); } });
+      }
+
+      /* ---------- the rules' own buttons ---------- */
+
+      function line(path, words) { return "loadout " + path + " " + words.map(quoted).join(" "); }
+      function act(path, words, after, rule) {
+        return Promise.resolve().then(function () { return run(path, words); }).then(function (job) {
+          if (after === "show") { tried(rule, ((job && job.output) || "").trim() || "It said nothing."); }
+        }, function (error) { if (onfail) { onfail(error); } }).then(function () { return load(); });
+      }
+      function starts(rule) { return rule.action.kind === "team" ? "starts " + rule.action.name + " (" + rule.action.autonomy + ")" : "runs " + rule.action.name; }
+      function when(rule) {
+        if (rule.on !== "clock") { return "on " + rule.on; }
+        return rule.at ? "daily at " + rule.at.slice(0, 5) : "every " + (rule.every || "");
+      }
+      function standing(one) {
+        var cap = one.rule.capUsd == null ? "" : " of " + money(one.rule.capUsd);
+        return one.runs + " of " + one.rule.capRuns + " runs · " + money(one.landedUsd) + " spent" + cap + " · " + money(one.reservedUsd) + " set aside";
+      }
+
+      /* ---------- the allow-list ---------- */
+
+      var login = "", scope = "everywhere", where = "";
+      var SCOPES = ["everywhere", "repository", "owner"];
+      function allowWords() { return [login.trim() || "<login>"].concat(scope === "repository" ? ["--repository", where.trim()] : scope === "owner" ? ["--owner", where.trim()] : []); }
+      function allowProblem() { return !login.trim() ? "name the GitHub account first" : scope !== "everywhere" && !where.trim() ? "say which " + scope : null; }
+      var trustSlot = h("div", { "data-k": base + "-trust" });
+      function paintTrust() {
+        keep(trustSlot, function () {
+          trustSlot.textContent = "";
+          var words = allowWords();
+          trustSlot.appendChild(halo({ label: "Trust them", disabledReason: allowProblem() || disabledReason, cmd: line("trigger allow", words),
+            onpress: function () { act("trigger allow", words); login = ""; where = ""; paint(); } }));
+        });
+      }
+
+      /* ---------- the page ---------- */
+
+      function rule(one) {
+        var r = one.rule;
+        var wh = Object.keys(r.where || {}).map(function (f) { return " · " + f + " = " + r.where[f]; }).join("");
+        return h("li", { "class": "rule" + (!r.enabled || one.paused ? " off" : "") }, [
+          h("div", { "class": "top" }, [
+            h("strong", { text: r.id }),
+            h("span", { "class": "calm small", text: "v" + r.version + " · " + when(r) + " · " + starts(r) }),
+            one.paused ? h("span", { "class": "tag needs", text: "paused at a cap" }) : null,
+            !r.enabled ? h("span", { "class": "tag", text: "disabled" }) : null,
+            one.suggestionChanged ? h("span", { "class": "tag", text: "the team changed its suggestion" }) : null]),
+          r.action.goal ? h("p", { "class": "goal", text: r.action.goal }) : null,
+          h("p", { "class": "calm small", text: (r.projects.length ? "Watches " + r.projects.join(", ") : "Watches every project") + wh }),
+          h("p", { "class": "calm small", text: standing(one) }),
+          one.problem ? h("p", { "class": "prob", role: "alert", text: "✕ Not acted on: " + one.problem }) : null,
+          h("div", { "class": "acts", "data-k": base + "-r-" + r.id }, [
+            halo({ size: "small", label: "Change", disabledReason: disabledReason, cmd: "loadout trigger add " + r.id + " …", onpress: function () { change(r); } }),
+            halo({ size: "small", label: "Try it", cmd: line("trigger test", [r.id]), onpress: function () { act("trigger test", [r.id], "show", r.id); } }),
+            one.paused ? halo({ size: "small", label: "Resume", kind: "needs", disabledReason: disabledReason, cmd: line("trigger resume", [r.id]), onpress: function () { act("trigger resume", [r.id]); } }) : null,
+            halo({ size: "small", label: "Remove", kind: "danger", disabledReason: disabledReason, cmd: line("trigger remove", [r.id]), onpress: function () { removing(r); } })])]);
+      }
+
+      function paint() {
+        keep(el, function () {
+          el.textContent = "";
+          var rulesId = base + "-rules";
+          el.appendChild(h("section", { "class": "tblock", "aria-labelledby": rulesId }, [
+            h("div", { "class": "headrow", "data-k": base + "-head" }, [h("h2", { "class": "topicname", id: rulesId, text: "Trigger rules" }),
+              halo({ label: "Add a rule", solid: true, glyph: "+", disabledReason: disabledReason, cmd: "loadout trigger add …", onpress: add })]),
+            h("p", { "class": "calm small", text: "A rule starts a team or a built-in when something happens. Each that can spend has a cap, and a run that would write waits for your approval in Needs you." }),
+            rules === null ? h("p", { "class": "calm", text: "Reading the rules…" })
+              : !rules.length ? h("p", { "class": "calm", text: "There are no rules on this machine yet." })
+              : h("ul", { "class": "rules" }, rules.map(rule))]));
+
+          if (suggested.length) {
+            var sId = base + "-suggested";
+            el.appendChild(h("section", { "class": "tblock", "aria-labelledby": sId }, [
+              h("h2", { "class": "topicname", id: sId, text: "Suggested by teams" }),
+              h("ul", { "class": "rules" }, suggested.map(function (one) {
+                return h("li", { "class": "rule" }, [
+                  h("div", { "class": "top" }, [h("strong", { text: one.team + " · " + one.name }), h("span", { "class": "calm small", text: "on " + one.suggested.on }),
+                    one.accepted && one.changed ? h("span", { "class": "tag needs", text: "changed since you accepted it" }) : one.accepted ? h("span", { "class": "tag", text: "accepted as " + one.rule }) : null]),
+                  one.suggested.goal ? h("p", { "class": "goal", text: one.suggested.goal }) : null,
+                  !one.accepted || one.changed ? h("div", { "class": "acts", "data-k": base + "-s-" + one.team + "-" + one.name }, [
+                    halo({ size: "small", label: one.accepted ? "Take the change" : "Accept it", disabledReason: disabledReason, cmd: line("trigger accept", [one.team, one.name]),
+                      onpress: function () { act("trigger accept", [one.team, one.name]); } })]) : null]);
+              }))]));
+          }
+
+          var tId = base + "-trusted", loginId = base + "-login", whereId = base + "-where";
+          el.appendChild(h("section", { "class": "tblock", "aria-labelledby": tId }, [
+            h("h2", { "class": "topicname", id: tId, text: "Trusted beyond the collaborators" }),
+            h("p", { "class": "calm small", text: "Owners, members and collaborators are trusted as GitHub says. Anybody else's words reach a run quoted as theirs, unless they are here." }),
+            allowed.length ? h("ul", { "class": "rules" }, allowed.map(function (one) {
+              return h("li", { "class": "rule" }, [
+                h("div", { "class": "top" }, [h("strong", { text: one.login }), h("span", { "class": "calm small", text: one.scope }),
+                  one.nowCalled ? h("span", { "class": "tag needs", text: "now called " + one.nowCalled }) : null]),
+                h("div", { "class": "acts", "data-k": base + "-a-" + one.id + "-" + one.scope }, [
+                  halo({ size: "small", label: "Stop trusting", kind: "danger", disabledReason: disabledReason, cmd: line("trigger disallow", [one.login]), onpress: function () { act("trigger disallow", [one.login]); } })])]);
+            })) : null,
+            h("div", { "class": "allow" }, [
+              field(loginId, "GitHub login", text(loginId, login, { placeholder: "for example: dependabot[bot]" }, function (v) { login = v; paintTrust(); })),
+              modes(base + "-scope", { label: "Where", selected: SCOPES.indexOf(scope), options: [{ name: "Everywhere", desc: "every repository" }, { name: "One repository", desc: "--repository owner/name" }, { name: "One owner", desc: "--owner name" }] },
+                function (_, i) { scope = SCOPES[i]; paint(); }),
+              scope !== "everywhere" ? field(whereId, scope === "repository" ? "The repository, as owner/name" : "The owner", text(whereId, where, {}, function (v) { where = v; paintTrust(); })) : null,
+              trustSlot])]));
+          paintTrust();
+
+          var jId = base + "-journal";
+          el.appendChild(h("section", { "class": "tblock", "aria-labelledby": jId }, [
+            h("h2", { "class": "topicname", id: jId, text: "What the rules decided lately" }),
+            journal.length ? h("ul", { "class": "journal" }, journal.map(function (one) {
+              return h("li", {}, [h("span", { "class": "calm small", text: new Date(one.at).toLocaleString() }), " ", h("strong", { text: one.kind }),
+                (one.rule ? " · " + one.rule : "") + (one.subject ? " · " + one.subject : "") + (one.reason ? " · " + one.reason : "")]);
+            })) : h("p", { "class": "calm", text: "Nothing in the last day." }),
+            h("p", { "class": "calm small" }, ["From ", h("code", { "class": "ls-cmd", text: "loadout trigger journal --limit 25" }), "; the terminal reads further back with --since."])]));
+        });
+      }
+
+      /* ---------- the form ---------- */
+
+      var editing = null, said = "", refused = false, sending = false, sheetDlg = null, sheet = null, live = null;
+
+      function add() { said = ""; editing = { values: ruleValues({ team: teams[0] || "", builtin: builtins[0] || "docs audit" }), changing: false }; openSheet(); }
+      function change(r) { said = ""; editing = { values: valuesFromRule(r), changing: true }; openSheet(); }
+      function closeSheet() { if (sheetDlg) { var d = sheetDlg; sheetDlg = null; d.close(); } }
+
+      function openSheet() {
+        closeSheet();
+        sheet = h("div", { "class": "ls-sheet" });
+        paintSheet();
+        var v = editing.values;
+        sheetDlg = NS.Dialog({ title: editing.changing ? "Change " + v.name : "Add a trigger rule", label: "Trigger rule", extraClass: "sheet ls-trules-dlg", cancelLabel: "Close", content: sheet, host: o.host, contained: o.contained,
+          onClose: function () { sheetDlg = null; editing = null; } });
+        sheetDlg.open();
+      }
+
+      function send(dry) {
+        if (!editing || sending) { return; }
+        sending = true; live();
+        var words = ruleWords(editing.values).concat(dry ? ["--dry-run"] : []);
+        Promise.resolve().then(function () { return run("trigger add", words); }).then(function (job) {
+          said = ((job && job.output) || "").trim() || (dry ? "Nothing would change." : "Saved.");
+          refused = false;
+          if (!dry) { sending = false; closeSheet(); load(); return; }
+        }, function (error) { said = (error && error.message) || String(error); refused = true; }).then(function () { sending = false; if (editing) { live(); } });
+      }
+
+      function paintSheet() {
+        keep(sheet, function () {
+          sheet.textContent = "";
+          var v = editing.values, changing = editing.changing;
+          var kind = kinds.filter(function (one) { return one.kind === v.on; })[0] || null;
+          var k = base + "-f";
+          var cmdline = h("code", { "class": "ls-cmdline" });
+          var foot = h("div", { "class": "foot", "data-k": k + "-foot" });
+          var saidEl = null;
+          var projHint = h("p", { "class": "hint" });
+
+          live = function () {
+            if (!editing) { return; }
+            var problem = ruleProblem(v, kinds, teams);
+            cmdline.textContent = ruleCommand(v);
+            projHint.textContent = v.projects.length ? "" : "No project ticked: events from every project count.";
+            keep(foot, function () {
+              foot.textContent = "";
+              foot.appendChild(halo({ label: "Preview", disabledReason: problem || (sending ? "sending…" : undefined), cmd: problem ? undefined : "runs it with --dry-run", onpress: function () { send(true); } }));
+              foot.appendChild(halo({ label: changing ? "Save the change" : "Save the rule", solid: true, glyph: "▶", disabledReason: problem || disabledReason || (sending ? "sending…" : undefined), cmd: problem ? undefined : "runs the command above", onpress: function () { send(false); } }));
+              foot.appendChild(halo({ label: "Close", size: "small", onpress: closeSheet }));
+            });
+            if (!said) { if (saidEl) { saidEl.remove(); saidEl = null; } return; }
+            if (!saidEl) { saidEl = h("pre", { role: "status" }); sheet.appendChild(saidEl); }
+            saidEl.className = refused ? "ls-said no output" : "ls-said output";
+            saidEl.textContent = said;
+          };
+          function set(key) { return function (val) { v[key] = val; live(); }; }
+          function again() { paintSheet(); }
+
+          sheet.appendChild(h("div", { "class": "two" }, [
+            field(k + "-name", "Its name", text(k + "-name", v.name, { placeholder: "for example: review-pulls", readonly: changing ? true : null }, set("name")),
+              changing ? "Saving keeps the name and counts its version on." : "Lowercase words joined by hyphens."),
+            picker(k + "-on", { label: "When this happens", options: kinds.map(function (one) { return { name: one.kind, sub: (one.github ? "GitHub · " : "") + "carries " + one.fields.join(", ") }; }),
+              selected: Math.max(0, kinds.map(function (one) { return one.kind; }).indexOf(v.on)),
+              onPick: function (option) {
+                v.on = option.name;
+                var nk = kinds.filter(function (x) { return x.kind === option.name; })[0];
+                v.where = v.where.filter(function (one) { return nk && nk.fields.indexOf(one.field) >= 0; });
+                again();
+              } })]));
+
+          if (v.on === "clock") {
+            sheet.appendChild(h("fieldset", {}, [h("legend", { text: "When it comes round" }),
+              modes(k + "-clock", { label: "When", selected: v.clock === "at" ? 1 : 0, options: [{ name: "An interval", desc: "--every 1h" }, { name: "A time of day", desc: "--at 09:00" }] }, function (_, i) { v.clock = i ? "at" : "every"; again(); }),
+              v.clock === "at" ? field(k + "-at", "The time of day, this machine’s own", text(k + "-at", v.at, { type: "time" }, set("at")))
+                : field(k + "-every", "How often", text(k + "-every", v.every, { placeholder: "1h" }, set("every")), "30m, 2h or 1d. At least five minutes.")]));
+          }
+
+          var startsKids = [h("legend", { text: "What it starts" }),
+            modes(k + "-starts", { label: "Starts", selected: v.starts === "builtin" ? 1 : 0, options: [{ name: "A team", desc: "a run, with a cap" }, { name: "A built-in", desc: "costs nothing" }] }, function (_, i) { v.starts = i ? "builtin" : "team"; again(); })];
+          if (v.starts === "team") {
+            startsKids.push(picker(k + "-team", { label: "Team", options: teams.map(function (n) { return { name: n, sub: "" }; }), selected: Math.max(0, teams.indexOf(v.team)), onPick: function (op) { v.team = op.name; live(); } }));
+            startsKids.push(field(k + "-goal", "What to ask it for", text(k + "-goal", v.goal, { rows: "2", placeholder: "for example: Review {title} and say what would break" }, set("goal")),
+              (kind ? "{" + kind.fields.join("}, {") + "} are filled in from the event." : "") + " An outside author’s words are quoted as theirs.", true));
+            startsKids.push(modes(k + "-posture", { label: "Posture", selected: v.autonomy === "supervised" ? 0 : 1, options: [{ name: "supervised", desc: "holds at the gates the team names" }, { name: "autonomous", desc: "holds for nothing, within its caps" }] }, function (name) { v.autonomy = name; live(); }));
+          } else {
+            startsKids.push(picker(k + "-builtin", { label: "Built-in", options: builtins.map(function (n) { return { name: n, sub: "reads and reports" }; }), selected: Math.max(0, builtins.indexOf(v.builtin)), onPick: function (op) { v.builtin = op.name; live(); } }));
+          }
+          sheet.appendChild(h("fieldset", {}, startsKids));
+
+          var countKids = [h("legend", { text: "Which events count" }), projHint,
+            h("div", { "class": "projects", "data-k": k + "-projects" }, projects.map(function (name) {
+              return NS.Switch({ label: name, checked: v.projects.indexOf(name) >= 0, onChange: function (on) { v.projects = on ? v.projects.concat([name]) : v.projects.filter(function (x) { return x !== name; }); live(); } });
+            }))];
+          var fields = (kind && kind.fields) || [];
+          v.where.forEach(function (condition, index) {
+            var vid = base + "-value-" + index;
+            countKids.push(h("div", { "class": "two" }, [
+              picker(k + "-wf-" + index, { label: "Field", options: fields.map(function (n) { return { name: n, sub: "" }; }), selected: Math.max(0, fields.indexOf(condition.field)), onPick: function (op) { v.where[index].field = op.name; live(); } }),
+              h("div", { "class": "ls-field", "data-k": k + "-wv-" + index }, [h("label", { "class": "lab", "for": vid, text: "Must be" }),
+                text(vid, condition.value, {}, function (val) { v.where[index].value = val; live(); }),
+                halo({ size: "small", label: "Remove this condition", onpress: function () { v.where = v.where.filter(function (_, at) { return at !== index; }); again(); } })])]));
+          });
+          if (fields.length) {
+            countKids.push(h("div", { "data-k": k + "-addcond" }, [halo({ size: "small", label: "Add a condition", glyph: "+", onpress: function () { v.where = v.where.concat([{ field: fields[0], value: "" }]); again(); } })]));
+          }
+          if (kind && kind.github) { countKids.push(h("p", { "class": "hint", text: "Drafts are passed by unless a condition asks for draft = true, and closed pull requests unless the rule waits for the closing." })); }
+          sheet.appendChild(h("fieldset", {}, countKids));
+
+          var spend = [];
+          if (v.starts === "team") {
+            spend.push(field(k + "-cap", "Spend cap, in US dollars", text(k + "-cap", v.capUsd, { placeholder: "proposed" }, set("capUsd")), "Or proposed, worked out from the team’s last runs. Preview shows the figure."));
+            spend.push(field(k + "-budget", "Each run may spend", text(k + "-budget", v.budgetUsd, { placeholder: "the team’s own" }, set("budgetUsd")), "A figure, or proposed. Needed when the team has no budget of its own."));
+          }
+          spend.push(field(k + "-runs", "Runs at most in the window", text(k + "-runs", v.capRuns, { inputmode: "numeric" }, set("capRuns"))));
+          spend.push(field(k + "-window", "The window", text(k + "-window", v.window, {}, set("window")), "24h or 7d; both caps count over it."));
+          spend.push(field(k + "-debounce", "Wait for the subject to go quiet", text(k + "-debounce", v.debounce, { placeholder: "no wait" }, set("debounce")), "10m turns a burst of pushes into one run."));
+          var off = NS.Switch({ label: "Record it without letting it act yet", sub: "--disabled", checked: v.disabled, onChange: function (on) { v.disabled = on; live(); } });
+          off.setAttribute("data-k", k + "-disabled");
+          sheet.appendChild(h("fieldset", {}, [h("legend", { text: "What it may spend and how often" }), h("div", { "class": "two" }, spend), off]));
+
+          sheet.appendChild(cmdline);
+          sheet.appendChild(foot);
+          live();
+        });
+      }
+
+      /* ---------- the two small dialogs ---------- */
+
+      function removing(r) {
+        NS.Dialog({ danger: true, role: "alertdialog", title: "Remove " + r.id + "?", host: o.host, contained: o.contained,
+          why: "It stops acting at once, and anything waiting to start under it, or waiting for your approval, is withdrawn. Its history stays in the journal.",
+          actions: [{ label: "Remove it", kind: "danger", disabledReason: disabledReason, cmd: line("trigger remove", [r.id]), onPress: function () { act("trigger remove", [r.id]); } }] }).open();
+      }
+
+      function tried(ruleId, said) {
+        var d = null;
+        var body = h("div", {}, [h("pre", { "class": "output", text: said }), halo({ label: "Close", size: "small", onpress: function () { if (d) { d.close(); } } })]);
+        d = NS.Dialog({ title: "What " + ruleId + " would have done", label: "Try " + ruleId, cancelLabel: "Close", content: body, extraClass: "ls-trules-dlg", host: o.host, contained: o.contained });
+        d.open();
+      }
+
+      paint();
+      load();
+
+      return {
+        el: el,
+        load: load,
+        add: add,
+        change: function (id) { var one = (rules || []).filter(function (x) { return x.rule.id === id; })[0]; if (one) { change(one.rule); } },
+        set: function (n) {
+          n = n || {};
+          if ("teams" in n) { teams = n.teams || []; }
+          if ("projects" in n) { projects = n.projects || []; }
+          if ("disabledReason" in n) { disabledReason = n.disabledReason; }
+          if ("onfail" in n) { onfail = n.onfail; }
+          paint();
+          if (editing && sheet) { paintSheet(); }
+        }
+      };
+    }
+
+    NS.TriggerRules = TriggerRules;
+  })();
+})();
+/* end stage 14 */

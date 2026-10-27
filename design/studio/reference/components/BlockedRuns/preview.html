@@ -1,0 +1,60 @@
+<!-- @dsCard group="Teams" height=1400 width=1200 subtitle="Runs that ended short of their done-when: what Loadout suggests and why, every other action, nothing done until you confirm" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BlockedRuns</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 20px 32px; align-items: flex-start; }
+  .col { flex: 1 1 340px; min-width: 0; }
+  .hd { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .src { margin: 8px 0 0; font-size: 13px; color: var(--muted); } .src code { font-family: var(--font-mono); font-size: 12px; overflow-wrap: anywhere; }
+  @media (max-width: 480px) { body { padding: 16px; } }
+
+</style>
+<body class="ls">
+<div class="row">
+  <div class="col" style="flex-basis: 560px"><p class="hd">Four runs waiting on you</p><div id="a"></div><p class="src">From <code>loadout team blocked list</code>.</p></div>
+  <div class="col"><p class="hd">Nothing waiting</p><div id="b"></div><p class="hd" style="margin-top: 24px">Studio is only watching</p><div id="c"></div></div>
+</div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var L = { "carry-on": "Carry on now", raise: "Raise the limit and carry on", requeue: "Re-queue at the front", "edit-requeue": "Edit the task, then re-queue", "set-aside": "Set aside", drop: "Drop the task" };
+  function offer(list) { return list.map(function (a) { return { action: a, label: L[a] }; }); }
+  function base(o) { return Object.assign({ project: null, task: null, ended: null, cost: 0, budget: null, rounds: 0, roundLimit: 6, origin: null, follows: null, chain: 1, merged: [], unmerged: [], lead: null, raise: null }, o); }
+  var runs = [
+    base({ id: "run-0419", team: "dev-team", project: "webhooks", task: "T-31", goal: "Add retries to the webhook sender", kind: "limited", ended: "it spent its budget", cost: 5, budget: 5, rounds: 4, unmerged: ["run-0419/implementer-1"],
+      suggested: { action: "raise", label: L.raise, reason: "It ran out of money: it spent $5.00 of $5.00 over 4 round(s). If that was going somewhere, the same again should finish it.", rule: "budget" },
+      offered: offer(["raise", "carry-on", "requeue", "edit-requeue", "set-aside", "drop"]), raise: { cap: "budget", figure: 5, used: 5, said: "$5.00 more; it spent $5.00 of $5.00" } }),
+    base({ id: "run-0416", team: "docs-team", project: "loadout-cli", task: "T-12", goal: "Write the migration guide for 0.103", kind: "blocked", ended: "the lead reported blocked", cost: 1.42, budget: 4, rounds: 2, origin: "nightly-docs",
+      lead: { blocker: "which upgrade path to document first", unblockedBy: null, questions: ["Should the guide cover 0.98 to 0.103 directly, or only 0.102 to 0.103?"], next: null, summary: null },
+      suggested: { action: "carry-on", label: L["carry-on"], reason: "The lead was blocked on 1 question(s) only you can answer, starting with: Should the guide cover 0.98 to 0.103 directly, or only 0.102 to 0.103? Answer, and the next lead is told.", rule: "blocked-question" },
+      offered: offer(["carry-on", "requeue", "edit-requeue", "set-aside", "drop"]) }),
+    base({ id: "run-0412", team: "dev-team", project: "webhooks", task: "T-29", goal: "Make the sender idempotent", kind: "handover", ended: "it handed over what only you can do", cost: 2.18, budget: 5, rounds: 3, merged: ["run-0412/implementer-1"],
+      suggested: { action: "set-aside", label: L["set-aside"], reason: "Nothing left is the run's to do. It handed 2 criterion(s) to you, starting with: The fix is on main. Push run-0412/implementer-1 and open a pull request. Tick each off on its page, or with 'loadout team handover run-0412 --check 1', and once every one is ticked it is judged again. Set it aside only to file it without doing that.", rule: "handover" },
+      offered: offer(["set-aside", "drop"]) }),
+    base({ id: "run-0405", team: "dev-team", project: "auth", task: "T-8", goal: "Fix the flaky login test", kind: "failed", ended: "no progress: two rounds without a request", cost: 0.96, budget: 3, rounds: 3, chain: 3,
+      suggested: { action: "set-aside", label: L["set-aside"], reason: "This is run 3 in a row on this task that ended without reaching its done-when. Another of the same is unlikely to go differently: look at the task yourself, or drop it.", rule: "chain" },
+      offered: offer(["set-aside", "carry-on", "requeue", "edit-requeue", "drop"]) })
+  ];
+  var a = S.BlockedRuns({ runs: runs, onresolve: function (run, choice) {
+    return new Promise(function (ok, no) { setTimeout(function () {
+      var usd = Number(String(choice.figure).replace(/^\$/, ""));
+      if (choice.action === "raise" && usd > 10) { no(new Error("Refused: $" + usd.toFixed(2) + " is $" + (usd - 10).toFixed(2) + " past the $10.00 a run that rule budget-cap allows. Its page: #teams/rules/budget-cap")); return; }
+      ok(choice.action === "raise" ? "Raised it to $" + usd.toFixed(2) + " and started run-0420 where it left off." : choice.action === "set-aside" ? "Set aside: " + run.id + " is filed and off this list." : "Done: " + choice.action + " for " + run.id + ".");
+    }, 600); });
+  } });
+  document.getElementById("a").appendChild(a.el);
+  document.getElementById("b").appendChild(S.BlockedRuns({ runs: [], onresolve: function () { return ""; } }).el);
+  document.getElementById("c").appendChild(S.BlockedRuns({ disabledReason: "Studio is only watching: type the command in a terminal", onresolve: function () { return ""; }, runs: [
+    base({ id: "run-0401", team: "ops-team", project: "infra", task: null, goal: "Rotate the staging certificates", kind: "dead", cost: 0.31, budget: null, rounds: 1, roundLimit: 4,
+      suggested: { action: "carry-on", label: L["carry-on"], reason: "Whatever was driving it went away before it finished, so it never said how it went. Carrying on starts from the work it left on its branches.", rule: "dead" },
+      offered: offer(["carry-on", "requeue", "set-aside", "drop"]) })
+  ] }).el);
+})();
+</script>
+</body>
+</html>

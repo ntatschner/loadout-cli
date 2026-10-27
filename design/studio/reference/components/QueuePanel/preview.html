@@ -1,0 +1,86 @@
+<!-- @dsCard group="Teams" height=1900 width=1200 subtitle="One team's queue: what waits and what would be refused, the pull request grant said first, its window, limits and what it ran" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>QueuePanel</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 40px; align-items: flex-start; }
+  .lab { margin: 0 0 4px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .col { flex: 1 1 480px; min-width: 0; max-width: 620px; }
+  .col > .lab + * { margin-bottom: 22px; }
+  .out { margin: 6px 0 18px; font-family: var(--font-mono); font-size: 12px; color: var(--muted); min-height: 18px; overflow-wrap: anywhere; }
+</style>
+</head>
+<body class="ls">
+<div class="row">
+  <div class="col"><p class="lab">Waiting, one would be refused · the plan · adding a task with no done-when</p><div id="a"></div><p class="out" id="said" aria-live="polite"></p></div>
+  <div class="col">
+    <p class="lab">May open draft pull requests · in its window · changing its limits</p><div id="b"></div>
+    <p class="lab">Opens pull requests ready for review · one held</p><div id="c"></div>
+    <p class="lab">Nothing waiting, while Studio is only watching</p><div id="d"></div>
+  </div>
+</div>
+<script>
+(function () {
+  var S = window.LoadoutStudio, said = document.getElementById("said");
+  var NOW = Date.parse("2026-10-27T08:00:00Z");
+  function act(path, words) { said.textContent = "ran: $ loadout " + path + " " + words.join(" "); return true; }
+  function tasksOf(project) {
+    return Promise.resolve(project === "website" ? [
+      { id: "fix-login", title: "Fix the login redirect", state: "open", kind: "task", doneWhen: ["the login suite passes"] },
+      { id: "login-docs", title: "Say how sign-in works", state: "open", kind: "task", doneWhen: ["docs/sign-in.md exists"] },
+      { id: "faster-list", title: "Make the session list faster", state: "open", kind: "task", doneWhen: [] },
+      { id: "shipped", title: "Shipped", state: "done", kind: "task" },
+      { id: "a-thought", title: "A thought", state: "open", kind: "idea" }
+    ] : []);
+  }
+  function propose(project, task) { return Promise.resolve({ task: task, project: project, proposed: ["the session list loads in under a second with 500 sessions", "-q still prints errors"], why: "From the title and the list's tests.", costUsd: 0.12, replaces: [], recorded: false }); }
+  function plan() { return Promise.resolve({ order: [{ task: "fix-login", project: "website" }, { task: "login-docs", project: "website" }], left: [{ task: "bare", project: "website", reason: "'bare' has no done-when." }], stops: "It stops at $25.00 a window." }); }
+  function click(root, label) { var b = Array.prototype.filter.call(root.querySelectorAll("button"), function (x) { return x.textContent.trim() === label; })[0]; if (b) { b.click(); } }
+  function pick(root, labelStart, value) { var l = Array.prototype.filter.call(root.querySelectorAll("label"), function (x) { return x.textContent.indexOf(labelStart) === 0; })[0]; var s = l && document.getElementById(l.getAttribute("for")); if (s) { s.value = value; s.dispatchEvent(new Event("change")); } }
+
+  var a = S.QueuePanel({
+    queue: { team: "builders",
+      items: [
+        { position: 1, task: "fix-login", project: "website", after: null, refused: null, by: "nigel", added: "2026-10-26T18:02:00Z" },
+        { position: 2, task: "login-docs", project: "website", after: "fix-login", refused: null, by: "nigel", added: "2026-10-26T18:03:00Z" },
+        { position: 3, task: "bare", project: "website", after: null, refused: "'bare' has no done-when" }],
+      runs: [
+        { task: "old-cache", project: "website", run: "20261025-0100-a3f2", state: "met", reason: "every done-when met", costUsd: 9, started: "2026-10-25T01:00:00Z", ended: "2026-10-25T01:48:00Z" },
+        { task: "cache", project: "website", run: "20261027-0200-b81c", state: "failed", reason: "over budget at $3.50 of $3.00", costUsd: 3.5, started: "2026-10-27T02:00:00Z", ended: "2026-10-27T02:31:00Z" }],
+      settings: { windowUsd: "25", windowRuns: 3, heldCap: 2, draftPullRequests: false } },
+    projects: ["website", "homelab"], tasksOf: tasksOf, propose: propose, act: act, readPlan: plan, now: function () { return NOW; } });
+  document.getElementById("a").appendChild(a.el);
+  click(a.el, "What would run");
+  click(a.el, "Add a task");
+  pick(a.el, "Project", "website");
+  setTimeout(function () { pick(a.el, "Task", "faster-list"); click(a.el, "Propose them"); }, 50);
+
+  var b = S.QueuePanel({
+    queue: { team: "docs-crew",
+      items: [{ position: 1, task: "readme-install", project: "loadout-cli", after: null, refused: null }],
+      runs: [{ task: "cli-reference", project: "loadout-cli", run: "20261027-0010-c0d4", state: "running", costUsd: 1.2, started: "2026-10-27T00:10:00Z" }],
+      settings: { windowUsd: null, windowRuns: null, heldCap: 2, draftPullRequests: true },
+      window: { at: "22:00", lengthMinutes: 510, autonomy: "autonomous", open: true }, windowOpened: "2026-10-26T22:00:00Z" },
+    projects: ["loadout-cli"], tasksOf: tasksOf, act: act, readPlan: plan, now: function () { return NOW; } });
+  document.getElementById("b").appendChild(b.el);
+  click(b.el, "Change its limits");
+
+  var c = S.QueuePanel({
+    queue: { team: "homelab-crew",
+      items: [{ position: 1, task: "backup-check", project: "homelab", after: null, refused: null }, { position: 2, task: "cert-renew", project: "homelab", after: null, refused: "the window's $10.00 is spent" }],
+      runs: [{ task: "dns-cleanup", project: "homelab", run: "20261026-2300-77e1", state: "held", reason: "asked whether to drop the old zone", costUsd: 0.8, started: "2026-10-26T23:00:00Z" }],
+      settings: { windowUsd: "10", windowRuns: null, heldCap: 1, draftPullRequests: false, prMode: "ready" },
+      window: { at: "01:00", lengthMinutes: 240, autonomy: "supervised", open: false, next: "2026-10-28T01:00:00Z" } },
+    projects: ["homelab"], tasksOf: tasksOf, act: act, readPlan: plan, now: function () { return NOW; } });
+  document.getElementById("c").appendChild(c.el);
+
+  var d = S.QueuePanel({ queue: { team: "reviewer", items: [], runs: [], settings: { heldCap: 2, draftPullRequests: false } },
+    projects: ["website"], tasksOf: tasksOf, act: act, readPlan: plan, disabledReason: "Studio is only watching", now: function () { return NOW; } });
+  document.getElementById("d").appendChild(d.el);
+})();
+</script>
+</body>
+</html>

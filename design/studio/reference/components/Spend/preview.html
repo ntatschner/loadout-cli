@@ -1,0 +1,36 @@
+<!-- @dsCard group="Teams" height=330 width=1200 subtitle="What a run has spent, of what, and where it is projected to end; past its budget said in words" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spend</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 20px 32px; align-items: flex-start; }
+  .col { flex: 1 1 340px; min-width: 0; }
+  .hd { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  @media (max-width: 480px) { body { padding: 16px; } }
+
+</style>
+</head>
+<body class="ls">
+<div class="row">
+  <div class="col"><p class="hd">Well inside its budget</p><div id="a"></div></div>
+  <div class="col"><p class="hd">Projected past it</p><div id="b"></div></div>
+  <div class="col"><p class="hd">No cap, on purpose</p><div id="c"></div></div>
+  <div class="col"><p class="hd">Spending as it runs</p><div id="d"></div></div>
+</div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  document.getElementById("a").appendChild(S.Spend({ spent: 1.84, cap: 5, projected: 3.1, rate: "$0.41 a round" }).el);
+  document.getElementById("b").appendChild(S.Spend({ spent: 4.12, cap: 5, projected: 6.85, rate: "$1.37 a round" }).el);
+  document.getElementById("c").appendChild(S.Spend({ spent: 12.6, cap: null, uncapped: true, rate: "$2.10 a round" }).el);
+  var spent = 0.6, d = S.Spend({ spent: spent, cap: 3, projected: 1.8, rate: "$0.30 a round" });
+  document.getElementById("d").appendChild(d.el);
+  setInterval(function () { spent = spent >= 2.7 ? 0.6 : spent + 0.3; d.set({ spent: spent, projected: Math.min(4, spent * 2.2) }); }, 1500);
+})();
+</script>
+</body>
+</html>

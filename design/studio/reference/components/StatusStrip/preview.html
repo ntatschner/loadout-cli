@@ -1,0 +1,62 @@
+<!-- @dsCard group="Sessions" height=660 width=1200 subtitle="A hosted session's status on the foot of its terminal: model, context, cost, the five-hour window, specialists" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>StatusStrip</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr)); gap: 24px; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .col { min-width: 0; }
+  .col .ls-term { min-height: 0; }
+  .col .ls-term .screen { height: 150px; }
+  .more { margin-top: 10px; }
+</style>
+</head>
+<body class="ls">
+<div class="grid">
+  <div class="col"><p class="lab">Normal</p><div id="a"></div><div class="more" id="a2"></div></div>
+  <div class="col"><p class="lab">Filling, behind a spend limit</p><div id="b"></div></div>
+  <div class="col"><p class="lab">Nearly full</p><div id="c"></div></div>
+  <div class="col"><p class="lab">Old figures</p><div id="d"></div></div>
+</div>
+<script>
+(function () {
+  var S = window.LoadoutStudio, now = Date.parse("2026-10-27T12:00:20Z");
+  function snapshot(over) {
+    var s = { version: 1, at: "2026-10-27T12:00:12Z", refreshSeconds: 30, terminal: "off", wrapping: false, model: "Opus 5.5",
+      context: { usedPercent: 42, inputTokens: 84000, windowSize: 200000, uncachedTokens: 1200, cacheReadTokens: 79800, cacheWriteTokens: 3000, outputTokens: 900 },
+      cost: { usd: 1.234, durationMs: 600000, linesAdded: 40, linesRemoved: 7 },
+      limits: { fiveHour: { usedPercent: 61.5, resetsAt: "2026-10-27T14:10:00Z" }, sevenDay: null, spend: null },
+      project: "loadout-cli", specialists: ["role.implementer", "language.csharp"] };
+    Object.keys(over || {}).forEach(function (k) { s[k] = over[k]; });
+    return s;
+  }
+  function term(id, title, lines, status) {
+    var t = S.Terminal({ title: title, project: "loadout-cli", agent: "claude", state: "working", size: [100, 8], lines: lines });
+    var strip = S.StatusStrip({ status: status, now: now });
+    var foot = document.createElement("div"); foot.className = "foot"; foot.appendChild(strip.el); t.el.appendChild(foot);
+    document.getElementById(id).appendChild(t.el);
+    return strip;
+  }
+  var one = snapshot();
+  var a = term("a", "Port the status line", ["$ loadout status --session 4f2a", "Reading lib/status.ts", "Editing StatusStrip.svelte (+38 −4)"], one);
+  term("b", "Tidy the release notes", ["Reading CHANGELOG.md", "Writing the 0.103 entry"], snapshot({ model: "Sonnet 5", context: { usedPercent: 78.4, inputTokens: 156800, windowSize: 200000, uncachedTokens: 900, cacheReadTokens: 150000, cacheWriteTokens: 5900, outputTokens: 1400 },
+    cost: { usd: 14.6, durationMs: 3600000, linesAdded: 220, linesRemoved: 31 }, limits: { fiveHour: null, sevenDay: null, spend: { usedPercent: 46, resetsAt: "2026-11-01T00:00:00Z", usedUsd: 23, limitUsd: 50, period: "monthly" } }, specialists: ["role.writer"] }));
+  term("c", "Rewrite the daemon's job queue", ["Running the test suite", "212 passed, 3 failed"], snapshot({ context: { usedPercent: 93.2, inputTokens: 186400, windowSize: 200000, uncachedTokens: 400, cacheReadTokens: 184000, cacheWriteTokens: 2000, outputTokens: 2100 },
+    cost: { usd: 6.8, durationMs: 5400000, linesAdded: 640, linesRemoved: 290 }, limits: { fiveHour: { usedPercent: 94, resetsAt: "2026-10-27T12:42:00Z" }, sevenDay: null, spend: null },
+    specialists: ["role.implementer", "language.go", "domain.queues"] }));
+  term("d", "Look into the flaky test", ["Waiting on the CI run"], snapshot({ at: "2026-10-27T11:52:40Z", model: "Haiku 5", context: { usedPercent: 21, inputTokens: 42000, windowSize: 200000, uncachedTokens: 100, cacheReadTokens: 41000, cacheWriteTokens: 900, outputTokens: 300 },
+    cost: { usd: 0.31, durationMs: 300000, linesAdded: 0, linesRemoved: 0 }, limits: null, specialists: null }));
+  /* A new reading crosses a threshold: the strip says so once, politely. */
+  var levels = [42, 71, 91, 38], at = 0;
+  var btn = S.HaloButton({ label: "Next reading", size: "small", cmd: "a new status line arrives", onPress: function () {
+    at = (at + 1) % levels.length; one = snapshot({ context: { usedPercent: levels[at], inputTokens: levels[at] * 2000, windowSize: 200000, uncachedTokens: 1200, cacheReadTokens: 79800, cacheWriteTokens: 3000, outputTokens: 900 } });
+    a.set({ status: one, now: now });
+  } });
+  document.getElementById("a2").appendChild(btn);
+})();
+</script>
+</body>
+</html>

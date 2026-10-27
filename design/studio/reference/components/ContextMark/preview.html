@@ -1,0 +1,44 @@
+<!-- @dsCard group="Sessions" height=260 width=1200 subtitle="How full a session's context is, small enough for a tab or a list row" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ContextMark</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .lab { margin: 0 0 10px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .marks { display: flex; flex-wrap: wrap; gap: 14px 36px; align-items: center; margin: 0 0 28px; padding: 0; list-style: none; }
+  .marks li { display: grid; gap: 4px; }
+  .marks small { font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body class="ls">
+<p class="lab">Each level</p>
+<ul class="marks" id="a"></ul>
+<p class="lab">On the session tabs</p>
+<div id="b"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio, a = document.getElementById("a");
+  [[12, "Fine"], [42, "Fine"], [74, "Filling, past 70%"], [93, "Nearly full, past 90%"], [null, "Claude has not said: nothing drawn"]].forEach(function (one) {
+    var li = document.createElement("li"), m = S.ContextMark({ percent: one[0] }), note = document.createElement("small");
+    note.textContent = one[1];
+    li.appendChild(m.el); li.appendChild(note); a.appendChild(li);
+  });
+  var sessions = [
+    { id: "s1", title: "Port the status line", word: "working", where: "loadout-cli", agent: "claude", context: 42 },
+    { id: "s2", title: "Tidy the release notes", word: "waiting for you", where: "loadout-cli", agent: "claude", context: 78 },
+    { id: "s3", title: "Rewrite the job queue", word: "working", where: "daemon", agent: "claude", context: 93, unread: true },
+    { id: "s4", title: "Shell", word: "idle", where: "~/src" }
+  ];
+  var tabs = S.SessionTabs({ sessions: sessions, current: "s1", onNew: function () {} });
+  /* As main's SessionTabs draws it: after the where and agent, before the key. */
+  tabs.querySelectorAll('[role="tab"]').forEach(function (t, i) {
+    var p = sessions[i].context;
+    if (p !== undefined && p !== null) { t.insertBefore(S.ContextMark({ percent: p }).el, t.querySelector(".k")); }
+  });
+  document.getElementById("b").appendChild(tabs);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+<!-- @dsCard group="Actions" height=1160 width=1200 subtitle="One command run from Studio: how it stands, the line it ran, and what it said once it ends" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>JobResult</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr)); gap: 32px 40px; align-items: start; }
+  .lab { margin: 0 0 10px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .col { display: grid; gap: 12px; min-width: 0; }
+  .form { display: grid; gap: 12px; padding: 14px 16px; box-shadow: inset 0 0 0 1px var(--rule); }
+</style>
+</head>
+<body class="ls">
+<div class="row">
+  <div class="col"><p class="lab">Running</p><div class="col" id="a"></div></div>
+  <div class="col"><p class="lab">Done, its output is data</p><div class="col" id="b"></div></div>
+  <div class="col"><p class="lab">Failed</p><div class="col" id="c"></div></div>
+  <div class="col"><p class="lab">Stopped, compact under its form</p><div class="form" id="d"></div><p class="lab">Only watching</p><div class="col" id="e"></div></div>
+</div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var running = { id: "j-7f3a91", path: "project survey", line: "loadout project survey --project loadout-cli", state: "running", exitCode: null,
+    startedAt: "2026-10-27T11:58:04Z", endedAt: null, truncated: false, output: null, error: null };
+  var a = S.JobResult({ job: running, oncancel: function (job) {
+    a.update({ id: job.id, path: job.path, line: job.line, state: "cancelled", exitCode: 130, startedAt: job.startedAt, endedAt: "2026-10-27T11:58:51Z", truncated: false, output: "", error: "Stopped by Studio." });
+  }, onagain: function () {} });
+  document.getElementById("a").appendChild(a.el);
+  document.getElementById("b").appendChild(S.JobResult({ onagain: function () {}, job: { id: "j-52c0d8", path: "task list", line: "loadout task list --project loadout-cli --json", state: "done", exitCode: 0,
+    startedAt: "2026-10-27T11:52:10Z", endedAt: "2026-10-27T11:52:11Z", truncated: false, error: null,
+    output: JSON.stringify([{ id: "t-41", title: "Port the status line to the design system", state: "doing", kind: "task" }, { id: "t-42", title: "Release notes for 0.103", state: "open", kind: "task" }]) } }).el);
+  document.getElementById("c").appendChild(S.JobResult({ onagain: function () {}, job: { id: "j-09be44", path: "repo check", line: "loadout repo check --project daemon", state: "failed", exitCode: 2,
+    startedAt: "2026-10-27T11:40:00Z", endedAt: "2026-10-27T11:40:07Z", truncated: false,
+    output: "Checked 3 of 4 remotes.\norigin        ok\nupstream      ok\nmirror        unreachable",
+    error: "error: mirror: git@git.example.com refused the key (publickey)\nhint: add the key with ssh-add, then run it again" } }).el);
+  document.getElementById("d").appendChild(S.JobResult({ compact: true, job: { id: "j-c11f02", path: "usage", line: "loadout usage --days 30", state: "cancelled", exitCode: 130,
+    startedAt: "2026-10-27T11:30:00Z", endedAt: "2026-10-27T11:30:14Z", truncated: true, output: "Reading 184 sessions\nReading 61 transcripts", error: null } }).el);
+  document.getElementById("e").appendChild(S.JobResult({ compact: true, disabledReason: "Studio is only watching: type the command in a terminal", job: { id: "j-a0e771", path: "doctor", line: "loadout doctor", state: "running", exitCode: null,
+    startedAt: "2026-10-27T11:59:30Z", endedAt: null, truncated: false, output: null, error: null } }).el);
+  document.getElementById("e").appendChild(S.JobResult({ problem: "The daemon did not answer: is loadout studio still running?" }).el);
+})();
+</script>
+</body>
+</html>

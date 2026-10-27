@@ -1,0 +1,46 @@
+<!-- @dsCard group="Pages" height=1900 width=1200 subtitle="One task in full over its board: the note, the detail and every change of state, read with task show" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TaskDetail</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr)); gap: 28px 32px; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .stage { position: relative; height: 880px; overflow: hidden; box-shadow: inset 0 0 0 1px var(--rule); }
+  .page { padding: 20px 22px; }
+  .page .t { margin: 0 0 12px; font-size: 15px; color: var(--ink-strong); }
+  @media (max-width: 420px) { body { padding: 16px; } .stage { height: 980px; } }
+</style>
+</head>
+<body class="ls">
+<div class="grid" id="g"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio, g = document.getElementById("g");
+  /* Made-up reads in the shape 'task show --json' writes. */
+  var full = { project: "starstats", revision: "r-112", task: { id: "t-14", title: "Cache the leaderboard query", state: "doing", kind: "build", by: "nina", declared: "2026-10-27T09:12:00Z",
+      note: "The query runs on every page view; the leaderboard only changes when a match ends.",
+      detail: "## Done when\n\n- The leaderboard page answers in under **150 ms** at the 95th percentile.\n- A finished match clears the cache for its season.\n\nThe slow part is `rank_players()`, which sorts every player each time.",
+      history: [{ state: "open", by: "nina", at: "2026-10-24T16:40:00Z", reason: "accepted from an idea" }, { state: "doing", by: "claude in s-41", at: "2026-10-27T09:12:00Z", reason: null }] },
+    idea: { plan: "ideas/starstats/t-14/plan.md", accepted: "2026-10-24T16:40:00Z", by: "nina" } };
+  var legacy = { project: null, revision: null, task: { id: "w-3", title: "Tidy the shared lint config", state: "blocked", by: "rowan", declared: "2026-09-02T11:05:00Z", note: "Waiting on the eslint 10 release." } };
+
+  function stage(title, task, o) {
+    var col = document.createElement("div"), lab = document.createElement("p"); lab.className = "lab"; lab.textContent = title; col.appendChild(lab);
+    var st = document.createElement("div"); st.className = "stage";
+    var page = document.createElement("div"); page.className = "page";
+    var t = document.createElement("p"); t.className = "t"; t.textContent = task.id + (task.title ? " · " + task.title : ""); page.appendChild(t);
+    function show() { S.TaskDetail(Object.assign({ task: task, host: st, contained: true, behind: page, onclose: function () {} }, o)); }
+    page.appendChild(S.HaloButton({ label: "Read it in full", size: "small", onPress: show }));
+    st.appendChild(page); col.appendChild(st); g.appendChild(col); show();
+  }
+  stage("Read in full, from an idea", { id: "t-14", title: "Cache the leaderboard query", state: "doing", project: "starstats" }, { read: function () { return full; } });
+  stage("Kept before there was a history", { id: "w-3", title: "Tidy the shared lint config", state: "blocked", project: null }, { read: function () { return new Promise(function (ok) { setTimeout(function () { ok(legacy); }, 40); }); } });
+  stage("Reading", { id: "t-21", title: "Rename the export button", state: "open", project: "starstats" }, { read: function () { return new Promise(function () {}); } });
+  stage("Could not be read", { id: "t-9", title: "", state: "", project: "starstats" }, { read: function () { return Promise.reject(new Error("No task t-9 in starstats. It may have been moved: loadout task list --project starstats --all shows where.")); } });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,50 @@
+<!-- @dsCard group="Teams" height=760 width=1200 subtitle="What a run handed to you because only you could do it, each ticked off in your name; the last tick judges it again" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Handover</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 20px 32px; align-items: flex-start; }
+  .col { flex: 1 1 340px; min-width: 0; }
+  .hd { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .src { margin: 8px 0 0; font-size: 13px; color: var(--muted); } .src code { font-family: var(--font-mono); font-size: 12px; overflow-wrap: anywhere; }
+  @media (max-width: 480px) { body { padding: 16px; } }
+
+</style>
+<body class="ls">
+<div class="row">
+  <div class="col"><p class="hd">Two of three still yours</p><div id="a"></div><p class="ls-said" id="said" role="status"></p></div>
+  <div class="col"><p class="hd">All checked</p><div id="b"></div><p class="hd" style="margin-top: 20px">Studio is only watching</p><div id="c"></div></div>
+</div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var items = [
+    { criterion: "The fix is on main.", needs: "needs-push", todo: "Push run-0412/implementer-1 and open a pull request: this team may not push.", checkedBy: null },
+    { criterion: "CI passes on the pull request.", needs: "needs-ci", todo: "Wait for the Build and test workflow to go green.", checkedBy: null },
+    { criterion: "A retried webhook reaches the test receiver.", needs: "needs-person", todo: "Send one from the staging console with the receiver down for ten seconds.", checkedBy: "nigel" }
+  ];
+  var a = S.Handover({ run: "run-0412", items: items, branches: ["run-0412/implementer-1"],
+    oncheck: function (n) {
+      return new Promise(function (done) { setTimeout(function () {
+        items = items.map(function (it, i) { return i === n - 1 ? Object.assign({}, it, { checkedBy: "you" }) : it; });
+        a.set({ items: items });
+        document.getElementById("said").textContent = "✓ Ticked off: number " + n + (items.every(function (it) { return it.checkedBy; }) ? ". Every one is ticked, so it is judged again." : "");
+        done(true);
+      }, 700); });
+    } });
+  document.getElementById("a").appendChild(a.el);
+  document.getElementById("b").appendChild(S.Handover({ run: "run-0398", items: [
+    { criterion: "The release is tagged.", needs: "needs-push", todo: "Push the v0.103.1 tag.", checkedBy: "nigel" },
+    { criterion: "The docs site shows 0.103.1.", needs: "needs-person", todo: "Open the docs site and check the version in the footer.", checkedBy: "nigel" }
+  ], branches: [] }).el);
+  document.getElementById("c").appendChild(S.Handover({ run: "run-0407", disabledReason: "Studio is only watching: type the command in a terminal", items: [
+    { criterion: "The new index is in production.", needs: "needs-person", todo: "Run the migration against the production database.", checkedBy: null }
+  ], branches: ["run-0407/implementer-1", "run-0407/implementer-2"] }).el);
+})();
+</script>
+</body>
+</html>

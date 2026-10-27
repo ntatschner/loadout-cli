@@ -1,0 +1,36 @@
+<!-- @dsCard group="Signals" height=300 width=1200 subtitle="A ring that fills for stages, the Meter's round form" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ProgressRing</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 20px 32px; align-items: flex-start; }
+  .col { flex: 1 1 340px; min-width: 0; }
+  .hd { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  @media (max-width: 480px) { body { padding: 16px; } }
+  .ring { display: grid; gap: 8px; justify-items: start; } .ring b { font-family: var(--font-mono); font-weight: 500; font-size: 12px; color: var(--ink-strong); }
+</style>
+</head>
+<body class="ls">
+<div class="row">
+  <div class="ring"><p class="hd">Captured</p><div id="r0"></div><b>Stage 1 of 5 · captured</b></div>
+  <div class="ring"><p class="hd">Running</p><div id="r1"></div><b>Stage 3 of 5 · running</b></div>
+  <div class="ring"><p class="hd">Done</p><div id="r2"></div><b>Stage 5 of 5 · done</b></div>
+  <div class="ring"><p class="hd">Moving on</p><div id="r3"></div><b id="st">Stage 2 of 5 · shaping</b><button type="button" class="ls-halo small" id="adv"><span class="ring" aria-hidden="true"></span>Move it on</button></div>
+</div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  document.getElementById("r0").appendChild(S.ProgressRing({ value: 0.1 }).el);
+  document.getElementById("r1").appendChild(S.ProgressRing({ value: 0.6 }).el);
+  document.getElementById("r2").appendChild(S.ProgressRing({ value: 1 }).el);
+  var F = [0.1, 0.35, 0.6, 0.75, 1], W = ["captured", "shaping", "running", "waiting for you", "done"], st = 1, R = S.ProgressRing({ value: F[st] });
+  document.getElementById("r3").appendChild(R.el);
+  document.getElementById("adv").addEventListener("click", function () { st = (st + 1) % 5; R.set({ value: F[st] }); document.getElementById("st").textContent = "Stage " + (st + 1) + " of 5 · " + W[st]; });
+})();
+</script>
+</body>
+</html>

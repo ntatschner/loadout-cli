@@ -1,0 +1,89 @@
+<!-- @dsCard group="Overlays" height=1500 width=1200 subtitle="Ask Loadout in the palette: each request and its answer, who gave it, near misses, and plans to approve" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AskPane</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 500px), 1fr)); gap: 28px 32px; align-items: start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  /* The palette as it opens over the page, drawn in place so the states sit side by side. */
+  .ls-dialog.pal.still { position: relative; left: auto; top: auto; z-index: auto; transform: none; width: 100%; max-height: none; }
+  .ls-dialog.pal.still .ls-plist { max-height: none; }
+  @media (max-width: 420px) { body { padding: 16px; } }
+</style>
+</head>
+<body class="ls">
+<div class="grid" id="g"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio, g = document.getElementById("g");
+
+  function palette(title, typed, pane, asking) {
+    var col = document.createElement("div");
+    var lab = document.createElement("p"); lab.className = "lab"; lab.textContent = title; col.appendChild(lab);
+    var d = document.createElement("div"); d.className = "ls-dialog pal still"; d.setAttribute("role", "dialog"); d.setAttribute("aria-label", "Command palette, " + title);
+    var start = document.createElement("div"); start.className = "ls-start";
+    var field = document.createElement("div"); field.className = "field";
+    var input = document.createElement("input"); input.name = "palette"; input.setAttribute("role", "combobox"); input.setAttribute("aria-expanded", "false"); input.setAttribute("aria-label", "Go to a page, find work, or do something, or ? to ask"); input.autocomplete = "off"; input.value = typed;
+    input.addEventListener("keydown", function (e) { if (e.key === "Enter" && input.value.replace(/^\s*\?+/, "").trim()) { pane.ask(input.value.replace(/^\s*\?+/, "").trim(), asker); input.value = "?"; } });
+    var kbd = document.createElement("span"); kbd.className = "ls-kbd"; kbd.setAttribute("aria-hidden", "true"); kbd.textContent = "Esc";
+    field.appendChild(input); field.appendChild(kbd); start.appendChild(field); d.appendChild(start);
+    var list = document.createElement("div"); list.className = "ls-plist"; list.appendChild(pane.el); d.appendChild(list);
+    var foot = document.createElement("div"); foot.className = "ls-pfoot"; foot.setAttribute("aria-hidden", "true");
+    ["Enter to ask", "Esc to close, and the conversation is kept"].forEach(function (w) { var s = document.createElement("span"); s.textContent = w; foot.appendChild(s); });
+    d.appendChild(foot); col.appendChild(d); g.appendChild(col);
+  }
+
+  /* Made-up answers in the shape 'loadout ask --json' writes. */
+  var spend = { query: "what did I spend this week", kind: "answer", summary: "About $41.20 across 37 sessions in the last 7 days, at list rates.",
+    spend: { estimate: true, basis: "list rates", pricesCheckedOn: "2026-10-01", usd: 41.2, unpricedTokens: 88000, unpricedModels: ["local-llama"],
+      models: [{ model: "claude-opus-4", tokens: 2310400, usd: 36.85 }, { model: "claude-sonnet-4", tokens: 1102300, usd: 4.35 }, { model: "local-llama", tokens: 88000 }],
+      caveat: "88,000 tokens from local-llama have no list price, so they are not in the total." } };
+  var easy = { query: "which tasks are easy", kind: "answer", summary: "3 open tasks look easy: each is small, has a clear done-when and touches one area.",
+    tasks: [{ project: "starstats", id: "t-14", title: "Cache the leaderboard query", score: 0.82, reasons: ["one file", "done-when says what to measure"] },
+      { project: "starstats", id: "t-21", title: "Rename the export button", score: 0.77, reasons: ["copy only"] },
+      { project: "", id: "w-3", title: "Tidy the shared lint config", score: 0.61, reasons: [] }] };
+  var plan = { query: "queue the easy ones for a team and start it", kind: "plan", summary: "A plan to queue 2 tasks for a team and start it. Nothing starts until you approve it.",
+    plan: { shape: "team-queue", teamChoices: ["reviewers", "night-shift"], capped: true, capNone: false,
+      steps: [{ kind: "queue-task", project: "starstats", task: "t-14", says: "Queue t-14, Cache the leaderboard query", reasons: ["one file", "done-when says what to measure"] },
+        { kind: "queue-task", project: "starstats", task: "t-21", says: "Queue t-21, Rename the export button", reasons: ["copy only"] },
+        { kind: "start-team", says: "Start the team on its queue, sharing one cap" }],
+      left: ["t-19 is blocked", "w-3 is on the workspace-wide list, which a team cannot take"] } };
+  var terminals = { query: "open terminals for the two quick ones", kind: "plan", summary: "A plan to open 2 terminals, each with its task.",
+    plan: { shape: "terminals", capped: false, steps: [{ kind: "open-terminal", project: "starstats", task: "t-14", says: "Open a terminal on t-14 in starstats" }, { kind: "open-terminal", project: "starstats", task: "t-21", says: "Open a terminal on t-21 in starstats" }] } };
+  var unplaced = { query: "why is the nightly build slower", kind: "unplaced", summary: "Loadout's own records don't say. These are the closest requests it can answer.",
+    nearMisses: [{ shape: "spend", rewrite: "what did the night-shift team spend last week" }, { shape: "tasks", rewrite: "which tasks in starstats need work first" }],
+    agentOffer: { estimatedUsd: 0.4, basis: "One read-only turn with claude-sonnet-4, about 60,000 tokens" } };
+  var agent = { query: "why is the nightly build slower", kind: "answer", answeredBy: "agent", agentCostUsd: 0.37, agentSession: "c7f2a9e1",
+    summary: "The nightly build started running the full integration suite on 21 October, when CI_FULL was set in the workflow. That suite takes 14 of its 19 minutes." };
+
+  var replies = { "what did the night-shift team spend last week": { query: "what did the night-shift team spend last week", kind: "answer", summary: "About $12.08 across 9 runs, at list rates.", spend: { models: [{ model: "claude-sonnet-4", tokens: 2760000, usd: 12.08 }] } } };
+  function asker(query) {
+    return new Promise(function (ok, no) { setTimeout(function () { if (replies[query]) { ok(replies[query]); } else { no(new Error("The daemon stopped answering. Is loadout dashboard still running?")); } }, 900); });
+  }
+  function approve(p, team, cap) {
+    return new Promise(function (ok) { setTimeout(function () {
+      var tasks = p.steps.filter(function (s) { return s.task && s.project; }).length;
+      if (p.shape === "terminals") { ok("Opened " + tasks + " terminal(s), each with its task. They are on the Sessions page."); return; }
+      ok("Started " + team + " on " + tasks + " task(s), sharing a cap of " + (cap.trim().toLowerCase() === "none" ? "none" : S.AskPlanCard.usd(Number(cap.trim().replace(/^\$/, "")))) + ". The Jobs strip shows how it goes.");
+    }, 900); });
+  }
+  function pane(turns, asking) {
+    var p = S.AskPane({ turns: turns, asking: !!asking, approve: approve,
+      onrewrite: function (r) { p.ask(r, asker); },
+      onagent: function (q) { p.ask(q, function () { return new Promise(function (ok) { setTimeout(function () { ok(agent); }, 1200); }); }); },
+      onclear: function () { p.clear(); } });
+    return p;
+  }
+
+  palette("Nothing asked yet", "?", pane([]));
+  palette("Answered by Loadout", "?", pane([{ id: 1, query: spend.query, reply: spend, failed: null }, { id: 2, query: easy.query, reply: easy, failed: null }]));
+  palette("A plan to approve", "?", pane([{ id: 1, query: plan.query, reply: plan, failed: null }, { id: 2, query: terminals.query, reply: terminals, failed: null }]));
+  palette("Near misses, the agent, and a failure", "?", pane([{ id: 1, query: unplaced.query, reply: unplaced, failed: null }, { id: 2, query: agent.query, reply: agent, failed: null },
+    { id: 3, query: "how much did starstats cost in august", reply: null, failed: "The daemon stopped answering. Is loadout dashboard still running?" }, { id: 4, query: "what is queued for reviewers", reply: null, failed: null }], true));
+})();
+</script>
+</body>
+</html>

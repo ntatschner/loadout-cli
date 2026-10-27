@@ -1,0 +1,75 @@
+<!-- @dsCard group="Inputs" height=820 width=1200 subtitle="One search, filter and sort bar over every list: box, chips and menus all edit the one query the daemon read" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ListToolbar</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 20px 32px; align-items: flex-start; }
+  .col { flex: 1 1 340px; min-width: 0; }
+  .hd { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .src { margin: 8px 0 0; font-size: 13px; color: var(--muted); } .src code { font-family: var(--font-mono); font-size: 12px; overflow-wrap: anywhere; }
+  @media (max-width: 480px) { body { padding: 16px; } }
+
+</style>
+<body class="ls">
+<div class="row">
+  <div class="col" style="flex-basis: 560px"><p class="hd">Tasks, filtered</p><div id="a"></div>
+    <ul id="list" style="margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 14px"></ul></div>
+  <div class="col"><p class="hd">Conversations, at the default</p><div id="b"></div>
+    <p class="hd" style="margin-top: 20px">A query the daemon refused</p><div id="c"></div></div>
+</div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var FIELDS = [
+    { name: "id", type: "text", description: "the task's id", choices: [] },
+    { name: "state", type: "choice", description: "where it stands", choices: ["open", "doing", "blocked", "done", "dropped"] },
+    { name: "kind", type: "choice", description: "what it is", choices: ["task", "bug", "idea"] },
+    { name: "updated", type: "date", description: "when it last changed", choices: [] }
+  ];
+  var TASKS = [
+    ["T-31", "Add retries to the webhook sender", "doing", "task", 6], ["T-29", "Make the sender idempotent", "blocked", "task", 5], ["T-12", "Write the migration guide for 0.103", "open", "task", 4],
+    ["T-8", "Fix the flaky login test", "blocked", "bug", 3], ["T-35", "Login page forgets the return address", "open", "bug", 2], ["T-4", "Tidy the release notes", "done", "task", 1], ["T-2", "A dark map for the office view", "dropped", "idea", 0]
+  ];
+  var DEFAULT = "-state:done,dropped";
+  /* What the daemon does, made up for the preview: read the query into pieces, keep what matches. */
+  function read(query) {
+    var parts = query.split(/\s+/).filter(Boolean), sort = "", bad = null;
+    var kept = TASKS.filter(function (t) {
+      return parts.every(function (p) {
+        var not = p.charAt(0) === "-", m = /^-?(\w+):(.+)$/.exec(p);
+        if (!m) { return (t[0] + " " + t[1]).toLowerCase().indexOf(p.toLowerCase()) >= 0; }
+        if (m[1] === "sort") { sort = m[2]; return true; }
+        var f = { id: 0, state: 2, kind: 3 }[m[1]];
+        if (f === undefined) { bad = "There is no field called " + m[1] + ": try " + FIELDS.map(function (x) { return x.name; }).join(", ") + "."; return true; }
+        var hit = m[2].split(",").indexOf(t[f]) >= 0; return not ? !hit : hit;
+      });
+    });
+    if (sort) { var desc = sort.charAt(0) === "-", key = sort.replace(/^-/, ""), i = { id: 0, state: 2, kind: 3, updated: 4 }[key]; kept.sort(function (x, y) { return (x[i] > y[i] ? 1 : x[i] < y[i] ? -1 : 0) * (desc ? -1 : 1); }); }
+    return { shape: { text: query, parts: parts, fields: FIELDS, defaultQuery: DEFAULT }, items: bad ? null : kept, problem: bad };
+  }
+  var list = document.getElementById("list");
+  function show(items) {
+    list.textContent = "";
+    (items || []).forEach(function (t) { var li = document.createElement("li"); li.innerHTML = '<code style="font-family: var(--font-mono); font-size: 12px; color: var(--muted); margin-right: 10px"></code><span></span>'; li.firstChild.textContent = t[0]; li.lastChild.textContent = t[1] + " · " + t[2]; list.appendChild(li); });
+  }
+  var q0 = DEFAULT + " login sort:-updated", r0 = read(q0);
+  var a = S.ListToolbar({ noun: "tasks", query: q0, shape: r0.shape, shown: r0.items.length, recorded: TASKS.length, onchange: function (query) {
+    var r = read(query); a.set({ query: query, shape: r.shape, problem: r.problem, shown: r.items ? r.items.length : null, recorded: TASKS.length }); if (r.items) { show(r.items); }
+  } });
+  document.getElementById("a").appendChild(a.el); show(r0.items);
+
+  var b = S.ListToolbar({ noun: "conversations", slash: false, query: "", shape: { text: "", parts: [], defaultQuery: "", fields: [{ name: "agent", type: "text", description: "which agent", choices: [] }, { name: "active", type: "date", description: "when it was last active", choices: [] }] }, shown: 24, recorded: 24,
+    onchange: function (query) { b.set({ query: query, shape: { text: query, parts: query.split(/\s+/).filter(Boolean), defaultQuery: "", fields: [{ name: "agent", type: "text", description: "which agent", choices: [] }, { name: "active", type: "date", description: "when it was last active", choices: [] }] } }); } });
+  document.getElementById("b").appendChild(b.el);
+
+  var r2 = read("owner:nigel state:open");
+  var c = S.ListToolbar({ noun: "tasks", slash: false, query: "owner:nigel state:open", shape: r2.shape, problem: r2.problem, onchange: function (query) { var r = read(query); c.set({ query: query, shape: r.shape, problem: r.problem }); } });
+  document.getElementById("c").appendChild(c.el);
+})();
+</script>
+</body>
+</html>

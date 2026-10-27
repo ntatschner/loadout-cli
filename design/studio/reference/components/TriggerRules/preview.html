@@ -1,0 +1,82 @@
+<!-- @dsCard group="Teams" height=3260 width=1200 subtitle="Trigger rules against their caps, the form that writes them, teams' suggestions, who is trusted, and what the rules decided" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TriggerRules</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 40px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .col { flex: 1 1 560px; min-width: 0; }
+  .side { flex: 1 1 380px; min-width: 0; max-width: 520px; }
+  .host { position: relative; height: 1820px; margin-top: 8px; overflow: hidden; box-shadow: inset 0 0 0 1px var(--rule); }
+  .out { margin: 6px 0 0; font-family: var(--font-mono); font-size: 12px; color: var(--muted); min-height: 18px; overflow-wrap: anywhere; }
+</style>
+</head>
+<body class="ls">
+<div class="row">
+  <div class="col"><p class="lab">This machine's rules</p><div id="a"></div><p class="out" id="said" aria-live="polite"></p></div>
+  <div class="side"><p class="lab">No rules yet</p><div id="b"></div><p class="lab" style="margin-top: 22px">Reading</p><div id="c"></div><p class="lab" style="margin-top: 22px">While Studio is only watching</p><div id="d"></div></div>
+</div>
+<p class="lab" style="margin-top: 28px">Changing a rule: the form, with the line it will run</p>
+<div class="host" id="host"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var said = document.getElementById("said");
+  var READS = {
+    "trigger list": [
+      { rule: { id: "review-pulls", on: "pr-opened", projects: ["website"], where: { base: "main" }, action: { kind: "team", name: "reviewer", goal: "Review {title} and say what would break", autonomy: "supervised" },
+          capUsd: 12, capRuns: 10, window: "1.00:00:00", debounce: "00:10:00", enabled: true, version: 3 },
+        runs: 2, landedUsd: 3.5, reservedUsd: 4, headroomUsd: 4.5, paused: true, suggestionChanged: false },
+      { rule: { id: "nightly-docs", on: "clock", projects: [], at: "02:00:00", where: {}, action: { kind: "builtin", name: "docs audit", goal: "", autonomy: "autonomous" },
+          capUsd: null, capRuns: 1, window: "1.00:00:00", debounce: "00:00:00", enabled: true, version: 1 },
+        runs: 1, landedUsd: 0, reservedUsd: 0, paused: false, suggestionChanged: false },
+      { rule: { id: "docs-crew-on-drift", on: "docs-drift", projects: ["loadout-cli"], where: {}, action: { kind: "team", name: "docs-crew", goal: "Fix the docs that drifted from {file}", autonomy: "autonomous" },
+          capUsd: 20, capRuns: 4, window: "7.00:00:00", debounce: "00:00:00", enabled: false, version: 2, suggestedBy: "docs-crew/on-drift" },
+        problem: "docs-crew has no budget of its own and the rule names none", runs: 0, landedUsd: 0, reservedUsd: 0, paused: false, suggestionChanged: true }
+    ],
+    "trigger events": {
+      kinds: [
+        { kind: "pr-opened", fields: ["repo", "base", "trust", "draft", "title"], github: true, ending: false },
+        { kind: "pr-closed", fields: ["repo", "base", "merged", "title"], github: true, ending: true },
+        { kind: "run-finished", fields: ["team", "project", "outcome", "run"], github: false, ending: false },
+        { kind: "docs-drift", fields: ["project", "file"], github: false, ending: false },
+        { kind: "clock", fields: [], github: false, ending: false }
+      ],
+      builtins: ["docs audit", "memory audit", "repo check"]
+    },
+    "trigger suggested": [
+      { team: "docs-crew", name: "on-drift", rule: "docs-crew-on-drift", suggested: { on: "docs-drift", goal: "Fix the docs that drifted from {file}", capUsd: 20 }, accepted: true, changed: true },
+      { team: "bug-hunt", name: "on-red", rule: "bug-hunt-on-red", suggested: { on: "run-finished", goal: "Find why {run} failed" }, accepted: false, changed: false }
+    ],
+    "trigger allowed": [
+      { id: 49699333, login: "dependabot[bot]", scope: "everywhere", nowCalled: null },
+      { id: 1203344, login: "mira-k", scope: "repository acme/website", nowCalled: "mira-kovacs" }
+    ],
+    "trigger journal": [
+      { at: "2026-10-27T07:58:00Z", kind: "paused", rule: "review-pulls", reason: "2 of 10 runs, $7.50 of $12.00 counted" },
+      { at: "2026-10-27T07:41:00Z", kind: "matched", rule: "review-pulls", subject: "pr:acme/website#212" },
+      { at: "2026-10-27T06:12:00Z", kind: "passed-by", rule: "review-pulls", subject: "pr:acme/website#211", reason: "a draft" },
+      { at: "2026-10-27T02:00:00Z", kind: "started", rule: "nightly-docs", subject: "clock" }
+    ]
+  };
+  function read(path) { return Promise.resolve(JSON.parse(JSON.stringify(READS[path] || []))); }
+  function run(path, words) {
+    said.textContent = "ran: loadout " + path + " " + words.join(" ");
+    if (path === "trigger test") { return Promise.resolve({ output: "pr-opened acme/website#212 \"Cache the session list\"\n  matches review-pulls (base = main)\n  would start reviewer, supervised, with a $4.00 budget\n  then 3 of 10 runs, $11.50 of $12.00 set aside" }); }
+    if (words.indexOf("--dry-run") >= 0) { return Promise.resolve({ output: "Dry run: nothing was saved.\n  review-pulls v3 -> v4\n  spend cap: $12.00 -> $20.00" }); }
+    return Promise.resolve({ output: "Saved." });
+  }
+  var teams = ["reviewer", "docs-crew", "bug-hunt", "builders"], projects = ["website", "loadout-cli", "homelab"];
+  document.getElementById("a").appendChild(S.TriggerRules({ teams: teams, projects: projects, read: read, run: run }).el);
+  document.getElementById("b").appendChild(S.TriggerRules({ teams: teams, projects: projects, read: function (p) { return Promise.resolve(p === "trigger events" ? READS[p] : []); } }).el);
+  document.getElementById("c").appendChild(S.TriggerRules({ teams: teams, projects: projects, read: function () { return new Promise(function () {}); } }).el);
+  document.getElementById("d").appendChild(S.TriggerRules({ teams: teams, projects: projects, read: function (p) { return Promise.resolve(p === "trigger list" ? READS[p].slice(0, 1) : p === "trigger events" ? READS[p] : []); }, disabledReason: "Studio is only watching" }).el);
+  var shown = S.TriggerRules({ teams: teams, projects: projects, read: read, run: run, host: document.getElementById("host"), contained: true });
+  shown.load().then(function () { shown.change("review-pulls"); });
+})();
+</script>
+</body>
+</html>

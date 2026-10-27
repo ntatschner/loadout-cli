@@ -1,0 +1,47 @@
+<!-- @dsCard group="Navigation" height=560 width=1200 subtitle="Where two dividers cross: drag it to move both, double click to put both back; pointer only" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SplitCross</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .note { margin: 6px 0 0; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+  /* Four panes as the deck lays them out: two dividers in the second tracks, the cross where they meet. */
+  .four { position: relative; display: grid; gap: 10px; height: 420px; min-width: 0; }
+  .four > .ls-split { --split-gap: 10px; }
+  .four > .ls-split.cols { grid-column: 2; }
+  .four > .ls-split.rows { grid-row: 2; }
+  .four > .ls-cross { grid-column: 2; grid-row: 2; }
+  .pane { display: grid; align-content: start; gap: 4px; min-width: 0; min-height: 0; overflow: hidden; padding: 10px 12px; background: var(--term-bg); color: var(--term-fg); box-shadow: inset 0 0 0 1px var(--rule); font-family: var(--font-mono); font-size: 12px; }
+  .pane b { font-weight: 400; color: var(--muted); }
+</style>
+</head>
+<body class="ls">
+<p class="lab">Four panes</p>
+<div class="four" id="four">
+  <div class="pane"><span>Port the status line</span><b>loadout-cli · claude</b></div>
+  <div class="pane"><span>Tidy the release notes</span><b>loadout-cli · claude</b></div>
+  <div class="pane"><span>Rewrite the job queue</span><b>daemon · claude</b></div>
+  <div class="pane"><span>Shell</span><b>~/src</b></div>
+</div>
+<p class="note" id="n"></p>
+<script>
+(function () {
+  var S = window.LoadoutStudio, column = 0.5, row = 0.5, four = document.getElementById("four");
+  function paint() {
+    four.style.gridTemplateColumns = S.Splitter.tracks(column);
+    four.style.gridTemplateRows = S.Splitter.tracks(row);
+    document.getElementById("n").textContent = "Columns " + Math.round(column * 100) + "% · rows " + Math.round(row * 100) + "%";
+  }
+  var cols = S.Splitter({ "class": "cols", label: "Width of the panes", controls: "four", value: column, min: 0.2, max: 0.8, reset: 0.5, onchange: function (v) { column = v; cross.set({ column: v }); paint(); } });
+  var rows = S.Splitter({ "class": "rows", orientation: "horizontal", label: "Height of the panes", controls: "four", value: row, min: 0.2, max: 0.8, reset: 0.5, onchange: function (v) { row = v; cross.set({ row: v }); paint(); } });
+  var cross = S.SplitCross({ column: column, row: row, colMin: 0.2, colMax: 0.8, rowMin: 0.2, rowMax: 0.8, reset: [0.5, 0.5],
+    onchange: function (c, r) { column = c; row = r; cols.set({ value: c }); rows.set({ value: r }); paint(); } });
+  four.appendChild(cols.el); four.appendChild(rows.el); four.appendChild(cross.el);
+  paint();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,56 @@
+<!-- @dsCard group="Teams" height=560 width=1200 subtitle="A run's journal or a node's stream, one line each: when, what kind, what was said, repeats counted" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Journal</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 20px 32px; align-items: flex-start; }
+  .col { flex: 1 1 340px; min-width: 0; }
+  .hd { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .src { margin: 8px 0 0; font-size: 13px; color: var(--muted); } .src code { font-family: var(--font-mono); font-size: 12px; overflow-wrap: anywhere; }
+  @media (max-width: 480px) { body { padding: 16px; } }
+
+</style>
+</head>
+<body class="ls">
+<div class="row">
+  <div class="col ls-depths"><p class="hd">The run</p><div id="a"></div><p class="src">One line every few seconds, repeats counted. <code>$ loadout team log run-0412 --events</code></p></div>
+  <div class="col ls-depths"><p class="hd">What implementer/1 did</p><div id="b"></div><p class="src">Everything implementer/1 did: every tool it called and everything it said. Sub-agents are marked.</p></div>
+  <div class="col ls-depths"><p class="hd">Nothing yet</p><div id="c"></div></div>
+</div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var base = [
+    { time: "14:02", kind: "start", text: "Run started by you: Add retries to the webhook sender." },
+    { time: "14:02", kind: "round", text: "Round 1: the lead asked planner/1 for a plan." },
+    { time: "14:05", kind: "report", text: "planner/1 reported: three steps, retries with jittered backoff.", family: "good" },
+    { time: "14:06", kind: "round", text: "Round 2: implementer/1 and reviewer/1 started." },
+    { time: "14:09", kind: "quiet", text: "implementer/1 is still working.", repeats: 4 },
+    { time: "14:21", kind: "gate", text: "The lead asks: may it add a dependency on polly?", family: "needs" },
+    { time: "14:24", kind: "answer", text: "You answered: No, write it by hand." },
+    { time: "14:31", kind: "refused", text: "reviewer/1 was refused: git push is not allowed for this team.", family: "bad" }
+  ];
+  var run = S.Journal({ lines: base });
+  document.getElementById("a").appendChild(run.el);
+  var stream = S.Journal({ label: "What implementer/1 did", lines: [
+    { time: "14:06", kind: "read", text: "src/Webhooks/Sender.cs" },
+    { time: "14:07", kind: "said", text: "The sender gives up after the first 5xx. I will add a retry loop around SendAsync." },
+    { time: "14:08", kind: "agent", text: "Started a sub-agent to find every caller of SendAsync." },
+    { time: "14:08", kind: "grep", text: "SendAsync in src/", sub: true },
+    { time: "14:09", kind: "said", text: "Four callers, all in Webhooks.", sub: true },
+    { time: "14:12", kind: "edit", text: "src/Webhooks/Sender.cs: +38 -6" },
+    { time: "14:15", kind: "bash", text: "dotnet test --filter Webhooks", repeats: 2 },
+    { time: "14:17", kind: "said", text: "12 passed. Retries back off at 1s, 2s and 4s, with jitter.", family: "good" }
+  ] });
+  document.getElementById("b").appendChild(stream.el);
+  document.getElementById("c").appendChild(S.Journal({ label: "What verifier/1 did", lines: [{ time: "", text: "Nothing from verifier/1 yet." }] }).el);
+  var more = [{ time: "14:33", kind: "round", text: "Round 3: implementer/1 started again with your answer." }, { time: "14:36", kind: "quiet", text: "implementer/1 is still working.", repeats: 2 }], n = 0;
+  (function tick() { if (n > more.length) { return; } run.set({ lines: base.concat(more.slice(0, n++)) }); setTimeout(tick, 2500); })();
+})();
+</script>
+</body>
+</html>

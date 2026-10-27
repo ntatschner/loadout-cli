@@ -1992,3 +1992,390 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 .ls-arow .ls-halo, .ls-aform .ls-halo, .ls-setrow .ls-halo, .ls-ilist .ls-halo { white-space: normal; text-align: left; max-width: 100%; }
 .ls-arow .ls-action > .ls-cmd, .ls-aform .ls-action > .ls-cmd, .ls-setrow .ls-action > .ls-cmd, .ls-ilist .ls-action > .ls-cmd { max-width: 100%; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
 /* end stage 13 */
+
+/* ---------- Stage 14: what main's Studio built since the design ---------- */
+/* --- AskPane --- */
+.ls-ask { padding: 0 18px; }
+.ls-ask .turn { margin: 12px 0; }
+.ls-ask .q { margin: 0; font-weight: 500; color: var(--ink-strong); }
+.ls-ask .q span { color: var(--accent); }
+.ls-ask .badge { margin: 4px 0 2px; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--subtle); }
+.ls-ask .a { margin: 0; }
+.ls-ask .wait { color: var(--muted); }
+.ls-ask .failed, .ls-ask .caveat { color: var(--needs-text); }
+.ls-ask .models { list-style: none; margin: 6px 0; padding: 0; font-family: var(--font-mono); font-size: 12px; }
+.ls-ask .models li { display: grid; grid-template-columns: 1fr auto 9ch; gap: 12px; }
+.ls-ask .models li span:last-child { text-align: right; }
+.ls-ask .tasks { margin: 6px 0; padding-left: 20px; }
+.ls-ask .tasks li { margin: 4px 0; }
+.ls-ask .says, .ls-ask .tasks .why { display: block; }
+.ls-ask .where, .ls-ask .tasks .why { font-size: 12.5px; color: var(--muted); }
+.ls-ask .near { list-style: none; margin: 6px 0; padding: 0; }
+.ls-ask .clear { margin: 4px 0 8px; background: none; border: 0; padding: 0; color: var(--muted); text-decoration: underline; cursor: pointer; font: inherit; font-size: 12.5px; }
+
+/* --- AskPlanCard --- */
+.ls-askplan { margin: 8px 0 0; padding: 10px 14px; border-radius: var(--radius-chip); box-shadow: inset 0 0 0 1px var(--rule); }
+.ls-askplan h4 { margin: 0 0 6px; font-size: 12px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.ls-askplan ol { margin: 0 0 8px; padding-left: 20px; }
+.ls-askplan li { margin: 4px 0; }
+.ls-askplan .says { display: block; }
+.ls-askplan .why, .ls-askplan .left { display: block; font-size: 12.5px; color: var(--muted); }
+.ls-askplan .fields { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 6px 0 10px; }
+.ls-askplan label { display: grid; gap: 2px; font-size: 12.5px; color: var(--ink-soft); }
+.ls-askplan input { width: 14ch; }
+.ls-askplan .done { color: var(--ink-soft); }
+.ls-askplan .failed { color: var(--needs-text); }
+/* Main sets color-scheme on :root (pages.css), so the native team list and cap box follow the theme. */
+.ls-askplan { color-scheme: dark; }
+[data-theme="light"] .ls-askplan, [data-theme="hc-light"] .ls-askplan { color-scheme: light; }
+
+/* --- BlockedRuns --- */
+/* Main's own <style> block, scoped to the component. Main's --ls-* custom properties are not defined anywhere, so
+   it draws with their fallbacks: a currentColor edge, a 6px corner, 0.75rem and 1rem spacing, the refusal in the
+   text colour. The same here. */
+.ls-blocked ul { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--ls-space-4, 1rem); }
+.ls-blocked li { border: 1px solid var(--ls-line, currentColor); border-radius: var(--ls-radius, 6px); padding: var(--ls-space-3, 0.75rem); max-width: 76ch; }
+.ls-blocked .head { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: baseline; }
+.ls-blocked .kind { text-transform: uppercase; font-size: 0.8em; letter-spacing: 0.04em; }
+.ls-blocked .goal, .ls-blocked .lead, .ls-blocked .suggested { margin: 0.4rem 0; }
+.ls-blocked fieldset { border: 0; margin: 0.5rem 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; }
+.ls-blocked legend { font-weight: 600; margin-bottom: 0.25rem; }
+.ls-blocked .ls-field input.ls-text { max-width: 16ch; }
+.ls-blocked .refused { color: var(--ls-danger, inherit); }
+/* From main's pages.css and studio.css, which the design system lacks: the calm line and its small form. */
+.ls-blocked .calm { margin: 0; color: var(--muted); }
+.ls-blocked .calm.small { margin-top: var(--space-2); font-size: 13.5px; }
+/* From main's components.css (the design system has them too): fields, the confirm row and what it said. */
+.ls-blocked .ls-field { display: grid; gap: 6px; justify-items: start; }
+.ls-blocked .ls-field > .lab { font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+.ls-blocked .ls-answers { display: flex; flex-wrap: wrap; gap: 10px 26px; margin-top: 10px; }
+.ls-blocked .ls-said { margin: 8px 0 0; font-size: 14px; color: var(--good); }
+
+/* --- ContextMark --- */
+/* ContextMark: the context mark on a tab or a Pure row: a short beam and the figure. As main's components.css. */
+.ls-ctx { --c: var(--moving); display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); white-space: nowrap; }
+.ls-ctx[hidden] { display: none; }
+.ls-ctx .beam { position: relative; display: inline-block; width: 28px; height: 4px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--rule); overflow: hidden; }
+.ls-ctx .beam > i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--c); }
+.ls-ctx b { font-weight: 400; font-variant-numeric: tabular-nums; }
+.ls-ctx.warn { --c: var(--needs); color: var(--needs-text); }
+.ls-ctx.urgent { --c: var(--bad); color: var(--bad-text); font-weight: 600; }
+.ls-ctx .bang { font-weight: 700; }
+.ls-stabs [role="tab"] .ls-ctx { grid-row: 1; grid-column: 3; justify-self: end; }
+.ls-stabs [role="tab"]:has(.ls-ctx) .k { grid-row: 2; }
+.ls-desk [role="option"] .ls-ctx { grid-row: 1; grid-column: 3; justify-self: end; }
+.ls-desk [role="option"]:has(.ls-ctx) .w { grid-row: 2; }
+
+/* --- ConversationList --- */
+/* From main's pages.css, which the design system lacks: the Sessions list and the calm line. */
+.ls-convlist .slist { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.ls-convlist .calm { margin: 0; color: var(--muted); }
+/* ConversationList.svelte's own rules. */
+.ls-convlist .conv { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 14px; align-items: center; padding: 8px 12px; }
+.ls-convlist .what { display: grid; gap: 2px; min-width: 0; }
+.ls-convlist .what .t { font-size: 15px; color: var(--ink-strong); overflow-wrap: anywhere; }
+.ls-convlist .what .x { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); overflow-wrap: anywhere; }
+.ls-convlist .acts { display: grid; justify-items: end; gap: 4px; }
+.ls-convlist .linkish { border: 0; background: none; padding: 0; color: var(--accent); font: inherit; font-size: 12.5px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.ls-convlist .linkish:disabled { color: var(--muted); cursor: default; text-decoration: none; }
+.ls-convlist .linkish:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+@media (max-width: 600px) {
+  .ls-convlist .conv { grid-template-columns: 1fr; }
+  .ls-convlist .acts { justify-items: start; }
+}
+
+/* --- Handover --- */
+/* Handover is a Gate in look: main draws it with .ls-gate and its readings list, which the design system has under
+   Gate. The rules it uses, as main has them, so it stands on its own. */
+.ls-gate.handover { --c: var(--needs); display: grid; gap: 6px; padding: calc(var(--space-4) * var(--density)) calc(var(--space-5) * var(--density)); background: var(--surface); box-shadow: inset 3px 0 0 var(--needs), inset 0 0 0 1px var(--rule), -8px 0 30px -22px var(--cgf); }
+.ls-gate.handover .who { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); overflow-wrap: anywhere; }
+.ls-gate.handover .q { margin: 0; font-size: 19px; line-height: 1.35; font-weight: 400; color: var(--ink-strong); overflow-wrap: anywhere; }
+.ls-gate.handover .readings { margin: 4px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.ls-gate.handover .readings li { display: grid; gap: 1px; padding-left: 12px; box-shadow: inset 1px 0 0 var(--rule); }
+.ls-gate.handover .readings .c { color: var(--ink-strong); }
+.ls-gate.handover .readings .m { font-size: 13.5px; color: var(--muted); }
+.ls-gate.handover .ls-chip { display: inline-block; padding: 1px 7px; border-radius: var(--radius-chip); box-shadow: inset 0 0 0 1px var(--control-edge); font-family: var(--font-mono); font-size: 11px; color: var(--ink-soft); white-space: nowrap; }
+.ls-gate.handover .ls-note { margin: 6px 0 0; font-size: 13px; color: var(--muted); }
+
+/* --- JobResult --- */
+/* JobResult: one command run from Studio. As main's studio.css, with the shell rules it leans on scoped here. */
+.ls-jobresult { display: contents; }
+.jobresult { display: grid; gap: var(--space-3); }
+.jobresult .topicname { margin: 0; font-size: 22px; font-weight: 300; color: var(--ink-strong); overflow-wrap: anywhere; }
+.jobresult .jobhead { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); align-items: center; }
+.jobresult .output {
+  margin: 0; max-height: 60vh; overflow: auto; padding: var(--space-3);
+  border-radius: var(--radius-chip); background: var(--surface-2); color: var(--ink);
+  font-family: var(--font-mono); font-size: 12.5px; line-height: 1.5; white-space: pre;
+}
+.jobresult .output.err { color: var(--bad-text); }
+.jobresult .output:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.jobresult .calm { margin: 0; color: var(--muted); }
+.jobresult .calm.small { margin-top: var(--space-2); font-size: 13.5px; }
+.jobresult .ls-answers.flush { margin: 0; }
+.ls-jobresult > .offline { margin: 0 0 var(--space-5); padding: var(--space-3) var(--space-4); border-radius: var(--radius-chip); background: var(--bad-wash); color: var(--bad-text); }
+
+/* --- Journal --- */
+/* Main styles the journal where it sits, in RunDepths' first depth (.ls-depths .log); the same rules here. */
+.ls-depths .log { margin: 0; padding: 10px 14px; list-style: none; display: grid; gap: 3px; max-height: 360px; overflow: auto; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--rule); }
+.ls-depths .log li { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 10px; font-size: 13.5px; color: var(--ink); }
+.ls-depths .log .tm { font-family: var(--font-mono); font-size: 11.5px; color: var(--subtle); padding-top: 2px; }
+.ls-depths .log .tx { overflow-wrap: anywhere; }
+.ls-depths .log .k { margin-right: 8px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.ls-depths .log .x { margin-left: 8px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.ls-depths .log li.needs .tx { color: var(--needs-text); } .ls-depths .log li.bad .tx { color: var(--bad-text); } .ls-depths .log li.good .tx { color: var(--good); }
+.ls-depths .log li.sub { padding-left: 18px; }
+
+/* --- ListToolbar --- */
+/* Main's own <style> block, scoped under the toolbar. */
+.ls-ltool { display: grid; gap: 8px; margin-bottom: 14px; }
+.ls-ltool .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ls-ltool .row .lab { flex-basis: 100%; }
+.ls-ltool .q { flex: 1 1 22ch; max-width: 56ch; width: auto; font-family: var(--font-mono); font-size: 13px; }
+.ls-ltool .menu { flex: 0 1 auto; width: auto; max-width: 26ch; }
+.ls-ltool .chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ls-ltool .chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 4px 1px 8px; border-radius: var(--radius-chip); box-shadow: inset 0 0 0 1px var(--control-edge); font-family: var(--font-mono); font-size: 12px; color: var(--ink); }
+.ls-ltool .chip button { border: 0; background: none; color: var(--ink-soft); font: inherit; cursor: pointer; padding: 0 4px; }
+.ls-ltool .chip button:hover, .ls-ltool .chip button:focus-visible { color: var(--ink-strong); }
+.ls-ltool .reset, .ls-ltool .clear { border: 0; background: none; padding: 0; color: var(--accent); font: inherit; font-size: 13px; text-decoration: underline; cursor: pointer; }
+.ls-ltool .count { margin: 0; font-size: 13px; color: var(--ink-soft); }
+.ls-ltool .problem { margin: 0; font-size: 13px; color: var(--bad-text); }
+
+/* --- MiniLine --- */
+.ls-mini { position: relative; display: flex; align-items: flex-start; min-width: 0; padding: 4px 0 2px; }
+.ls-mini .st { position: relative; flex: 0 0 auto; display: grid; justify-items: center; gap: 5px; }
+.ls-mini .st i { display: block; width: 14px; height: 14px; border-radius: 50%; background: var(--ground); box-shadow: 0 0 0 2.5px var(--accent); }
+.ls-mini .st.cur i { box-shadow: 0 0 0 2.5px var(--moving), 0 0 10px var(--cgf); animation: lsBreathe var(--dur-breathe) ease-in-out infinite; }
+.ls-mini .st.wait i { box-shadow: 0 0 0 2.5px var(--needs), 0 0 0 6px var(--needs-wash); }
+.ls-mini .st.bad i { border-radius: var(--radius-chip); box-shadow: 0 0 0 2.5px var(--bad); }
+.ls-mini .st.next i { box-shadow: 0 0 0 1.5px var(--rest); }
+.ls-mini .st.end i { box-shadow: 0 0 0 2.5px var(--good); }
+.ls-mini .st .nd { display: flex; gap: 3px; }
+.ls-mini .st .nd u { display: block; width: 6px; height: 6px; border-radius: 50%; background: var(--c2, var(--rest)); }
+.ls-mini .st .nd u.moving { --c2: var(--moving); } .ls-mini .st .nd u.needs { --c2: var(--needs); } .ls-mini .st .nd u.bad { --c2: var(--bad); border-radius: 1px; } .ls-mini .st .nd u.good { --c2: var(--good); }
+.ls-mini .seg { position: relative; flex: 1 1 18px; min-width: 10px; max-width: 54px; height: 3px; margin-top: 5.5px; background: var(--accent); overflow: hidden; }
+.ls-mini .seg.dash { background: repeating-linear-gradient(90deg, var(--rest) 0 4px, transparent 4px 8px); }
+.ls-mini .seg.into::after { content: ""; position: absolute; top: -2px; bottom: -2px; width: 14px; left: -14px; background: linear-gradient(90deg, transparent, var(--ink-strong), transparent); opacity: calc(.4 + var(--glow-on) * .5); animation: lsTrain 1.8s var(--ease-travel) infinite; }
+[data-motion="reduced"] .ls-mini .seg.into::after, [data-motion="none"] .ls-mini .seg.into::after { display: none; }
+[data-motion="reduced"] .ls-mini .st.cur i, [data-motion="none"] .ls-mini .st.cur i { animation: none; }
+[data-mode="pure"] .ls-mini .st.cur i { animation: none !important; }
+[data-mode="pure"] .ls-mini .seg.into::after { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { .ls-mini .st.cur i { animation: none !important; } .ls-mini .seg.into::after { display: none; } }
+/* Main draws it only inside RunBoard, whose .ls-board gives it --c and --cgf; the same here, so it stands alone. */
+.ls-mini { --c: var(--accent); --cgf: color-mix(in srgb, var(--c) calc(var(--glow-on) * 100%), transparent); }
+
+/* --- ProgressRing --- */
+.ls-progress { position: relative; width: 120px; height: 120px; }
+.ls-progress svg { display: block; width: 100%; height: 100%; }
+.ls-progress .bg { fill: none; stroke: color-mix(in srgb, var(--moving) 16%, transparent); stroke-width: 8; }
+.ls-progress .fg { fill: none; stroke: var(--moving); stroke-width: 8; stroke-linecap: round; transition: stroke-dasharray 1s var(--ease-out); }
+.ls-progress .pct { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--font-mono); font-size: 20px; color: var(--ink-strong); }
+[data-theme="hc-dark"] .ls-progress .bg, [data-theme="hc-light"] .ls-progress .bg { stroke: var(--control-edge); stroke-width: 2; }
+[data-motion="reduced"] .ls-progress .fg, [data-motion="none"] .ls-progress .fg { transition: none; }
+@media (prefers-reduced-motion: reduce) { .ls-progress .fg { transition: none; } }
+
+/* --- QueuePanel --- */
+/* components.css, as built. */
+.ls-queue { --c: var(--accent); display: grid; gap: 10px; padding: 12px 0 16px; box-shadow: inset 0 -1px 0 var(--rule); }
+.ls-queue header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.ls-queue header b { font-family: var(--font-mono); font-size: 14px; font-weight: 500; color: var(--ink-strong); }
+.ls-queue header em, .ls-queue .t em { font-style: normal; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.ls-queue .grant { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 18px; align-items: center; max-width: 76ch; }
+.ls-queue .grant p { margin: 0; font-size: 13.5px; color: var(--ink); }
+.ls-queue .grant.on p { color: var(--ink-strong); }
+.ls-queue ol, .ls-queue ul { margin: 0; padding: 0; list-style: none; display: grid; }
+.ls-queue li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 18px; align-items: center; padding: 8px 0; box-shadow: inset 0 -1px 0 var(--rule); }
+.ls-queue .t { display: grid; gap: 2px; min-width: 0; }
+.ls-queue .t b { font-family: var(--font-mono); font-size: 13.5px; font-weight: 500; color: var(--ink-strong); }
+.ls-queue .t span { font-size: 13.5px; color: var(--ink); overflow-wrap: anywhere; }
+.ls-queue .why { font-style: normal; font-size: 13px; color: var(--needs-text); overflow-wrap: anywhere; max-width: 76ch; }
+.ls-queue .acts, .ls-queue .row { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: start; }
+.ls-queue ol > li { grid-template-columns: minmax(0, 1fr); }
+.ls-queue .state { font-weight: 400; font-size: 12px; color: var(--muted); }
+.ls-queue h4 { margin: 4px 0 0; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+.ls-queue .plan { display: grid; gap: 4px; max-width: 76ch; }
+.ls-queue .plan ol { list-style: decimal inside; }
+.ls-queue .plan ol li { display: list-item; padding: 2px 0; box-shadow: none; }
+.ls-queue .qform { display: grid; gap: 10px; max-width: 48ch; }
+.ls-queue .qform .ls-text { min-width: 24ch; max-width: 100%; }
+@media (max-width: 560px) { .ls-queue li, .ls-queue .grant { grid-template-columns: minmax(0, 1fr); } }
+
+/* Page rules the panel stands on (pages.css, studio.css), scoped here. */
+.ls-queue .calm { margin: 0; color: var(--muted); }
+.ls-queue .calm.small { margin-top: var(--space-2); font-size: 13.5px; }
+/* The wrappers that keep a button's place while its line follows what is typed: no box of their own. */
+.ls-queue .slot { display: contents; }
+
+/* --- Spend --- */
+.ls-spend { display: grid; gap: 4px; max-width: 420px; }
+.ls-spend .w { display: flex; flex-wrap: wrap; gap: 2px 12px; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.ls-spend .w b { font-weight: 500; color: var(--ink-strong); }
+.ls-spend .w em { font-style: normal; color: var(--needs-text); }
+.ls-spend .bar { position: relative; height: 6px; border-radius: var(--radius-pill); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--rule); }
+.ls-spend .bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: var(--radius-pill); background: var(--moving); }
+.ls-spend .bar u { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--needs); }
+.ls-spend.over .bar { box-shadow: inset 0 0 0 1px var(--needs); }
+
+/* --- SplitCross --- */
+/* SplitCross: where two dividers cross, a square over both that moves them together. As main's components.css. */
+.ls-cross { --split-gap: 10px; position: absolute; z-index: 3; top: 0; left: 0; width: 20px; height: 20px; margin: calc(var(--split-gap) / -2 - 10px) 0 0 calc(var(--split-gap) / -2 - 10px); cursor: move; touch-action: none; }
+.ls-cross::after { content: ""; position: absolute; inset: 6px; box-shadow: inset 0 0 0 2px var(--control-edge); transition: box-shadow var(--dur-quick); }
+.ls-cross:hover::after, .ls-cross.dragging::after { box-shadow: inset 0 0 0 2px var(--accent); background: var(--accent); }
+.ls-deck .panes > .ls-cross { grid-column: 2; grid-row: 2; }
+
+/* --- Splitter --- */
+/* Splitter: the divider between two panes, laid over the gap its grid leaves; the grid places it by column or row. As main's components.css. */
+.ls-split { position: absolute; z-index: 2; display: grid; place-items: center; touch-action: none; outline: none; }
+.ls-split.vertical { top: 0; bottom: 0; left: 0; width: 12px; margin-left: calc(var(--split-gap, 0px) / -2 - 6px); cursor: col-resize; }
+.ls-split.horizontal { left: 0; right: 0; top: 0; height: 12px; margin-top: calc(var(--split-gap, 0px) / -2 - 6px); cursor: row-resize; }
+.ls-split .grip { position: relative; width: 2px; height: 100%; transition: background var(--dur-quick); }
+.ls-split.horizontal .grip { width: 100%; height: 2px; }
+/* A short handle at rest, so the divider can be found; the full line while it is in use. */
+.ls-split .grip::after { content: ""; position: absolute; top: 50%; left: 50%; width: 4px; height: 28px; transform: translate(-50%, -50%); background: var(--control-edge); }
+.ls-split.horizontal .grip::after { width: 28px; height: 4px; }
+.ls-split:hover .grip, .ls-split.dragging .grip { background: var(--accent); }
+.ls-split:hover .grip::after, .ls-split.dragging .grip::after { background: var(--accent); }
+.ls-split:focus-visible .grip, .ls-split:focus-visible .grip::after { background: var(--focus); }
+.ls-split:focus-visible { box-shadow: 0 0 0 2px var(--focus); }
+/* Where main's splits place it. */
+.ls-deck .panes > .ls-split { --split-gap: 10px; }
+.ls-deck .panes > .ls-split.cols { grid-column: 2; }
+.ls-deck .panes > .ls-split.rows { grid-row: 2; }
+.ls-desk > .ls-split { grid-row: 1 / 2; }
+.ls-desk > .ls-split.first { grid-column: 2; }
+.ls-desk > .ls-split.second { grid-column: 3; }
+@media (max-width: 1023px) { .ls-desk > .ls-split { display: none; } }
+.ls-besidegrid > .ls-split { --split-gap: 18px; grid-column: 2; }
+@media (max-width: 1099px) { .ls-besidegrid > .ls-split { display: none; } }
+
+/* --- StatusBlock --- */
+/* StatusBlock: the fuller block in a session's Details. As main's components.css. */
+.ls-sblock { display: grid; gap: 12px; min-width: 0; }
+.ls-sblock h2 { margin: 0; }
+.ls-sblock h3 { margin: 4px 0 0; font-size: 11px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.ls-sblock .when { margin: 0; font-size: 12.5px; color: var(--muted); }
+.ls-sblock .when.stale { color: var(--needs-text); }
+.ls-sblock .src { font-family: var(--font-sans); font-size: 11px; color: var(--muted); }
+.ls-sblock .specs { font-family: var(--font-mono); font-size: 12px; }
+/* What it takes from the Details column it sits in (main's .ls-session .sside) and from studio.css, kept here. */
+.ls-sblock h2 { font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+.ls-sblock dl { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; font-size: 13px; }
+.ls-sblock dt { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); align-self: center; }
+.ls-sblock dd { margin: 0; font-family: var(--font-mono); font-size: 12.5px; color: var(--ink-strong); overflow-wrap: anywhere; }
+.ls-sblock ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.ls-sblock .calm { margin: 0; color: var(--muted); }
+.ls-sblock .calm.small { margin-top: var(--space-2); font-size: 13.5px; }
+
+/* --- StatusStrip --- */
+/* StatusStrip: the strip on the terminal's foot. As main's components.css. */
+.ls-term .foot { box-shadow: inset 0 1px 0 var(--rule); }
+.ls-sstrip { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; min-height: 30px; padding: 4px 12px; font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+.ls-sstrip .beam { position: relative; display: inline-block; width: 28px; height: 4px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--rule); overflow: hidden; }
+.ls-sstrip .beam > i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--c); }
+.ls-sstrip .k { color: var(--subtle); }
+.ls-sstrip b { font-weight: 400; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.ls-sstrip .model { color: var(--ink-soft); }
+.ls-sstrip .gauge { --c: var(--moving); display: inline-flex; align-items: center; gap: 6px; }
+.ls-sstrip .gauge.warn { --c: var(--needs); }
+.ls-sstrip .gauge.warn b, .ls-sstrip .gauge.warn em { color: var(--needs-text); }
+.ls-sstrip .gauge.urgent { --c: var(--bad); }
+.ls-sstrip .gauge.urgent b, .ls-sstrip .gauge.urgent em { color: var(--bad-text); font-weight: 600; }
+.ls-sstrip em { font-style: normal; }
+.ls-sstrip .grow { flex: 1 1 auto; }
+.ls-sstrip.stale .when { color: var(--needs-text); }
+.ls-sstrip.stale > :not(.when):not(.grow):not(.ls-vh) { opacity: .6; }
+
+/* --- TaskDetail --- */
+.ls-tdetail { max-width: 72ch; }
+.ls-tdetail .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.ls-tdetail section { margin-top: 14px; }
+.ls-tdetail h3 { margin: 0 0 6px; font-size: 11.5px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+.ls-tdetail section > p { margin: 0; font-size: 14px; color: var(--ink); overflow-wrap: anywhere; }
+.ls-tdetail .history { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.ls-tdetail .history li { position: relative; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 13.5px; color: var(--ink); }
+.ls-tdetail .history .st { font-family: var(--font-mono); font-size: 12px; min-width: 7ch; }
+.ls-tdetail .history .by { color: var(--ink-soft); }
+.ls-tdetail .history time { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+.ls-tdetail .history .why { flex-basis: 100%; padding-left: calc(7ch + 10px); font-size: 12.5px; color: var(--muted); }
+.ls-tdetail .close { display: flex; justify-content: flex-end; margin-top: 14px; }
+.ls-tdetail .from { margin: 0 0 4px; padding: 8px 12px; background: var(--surface-2); box-shadow: inset 3px 0 0 var(--accent); font-size: 13.5px; color: var(--ink); overflow-wrap: anywhere; }
+.ls-tdetail .from code { font-family: var(--font-mono); font-size: 12px; }
+/* From main's pages.css and studio.css, which the design system lacks: the calm line and the problem box. */
+.ls-tdetail .calm { margin: 0; color: var(--muted); }
+.ls-tdetail .offline { margin: 0 0 var(--space-5); padding: var(--space-3) var(--space-4); border-radius: var(--radius-chip); background: var(--bad-wash); color: var(--bad-text); }
+
+/* --- TriggerRules --- */
+/* The page rules main's Trigger rules place stands on (studio.css, pages.css), scoped here. */
+.ls-trules .tblock { margin-bottom: calc(var(--space-7) * var(--density)); }
+.ls-trules .topicname { margin: 0; font-size: 22px; font-weight: 300; color: var(--ink-strong); overflow-wrap: anywhere; }
+.ls-trules .calm, .ls-trules-dlg .calm { margin: 0; color: var(--muted); }
+.ls-trules .calm.small, .ls-trules-dlg .calm.small { margin-top: var(--space-2); font-size: 13.5px; }
+.ls-trules-dlg .output {
+  margin: 0; max-height: 60vh; overflow: auto; padding: var(--space-3);
+  border-radius: var(--radius-chip); background: var(--surface-2); color: var(--ink);
+  font-family: var(--font-mono); font-size: 12.5px; line-height: 1.5; white-space: pre;
+}
+.ls-trules-dlg .output:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* TriggerRules.svelte's own <style>, as built. The --ls-* names are main's, with main's fallbacks. */
+.ls-trules .headrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ls-s3, 12px);
+  flex-wrap: wrap;
+}
+.ls-trules .rules,
+.ls-trules .journal {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--ls-s3, 12px);
+}
+.ls-trules .rule {
+  border: 1px solid var(--ls-line, currentColor);
+  border-radius: var(--ls-r2, 8px);
+  padding: var(--ls-s3, 12px);
+  max-width: 104ch;
+}
+.ls-trules .rule.off { opacity: 0.8; }
+.ls-trules .top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--ls-s2, 8px);
+}
+.ls-trules .goal { margin: var(--ls-s1, 4px) 0; }
+.ls-trules .tag {
+  font-size: 0.85em;
+  padding: 0 var(--ls-s2, 8px);
+  border: 1px solid var(--ls-line, currentColor);
+  border-radius: 999px;
+}
+.ls-trules .tag.needs,
+.ls-trules .prob { color: var(--ls-needs, inherit); }
+.ls-trules .acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ls-s2, 8px);
+  margin-top: var(--ls-s2, 8px);
+}
+.ls-trules .allow {
+  display: grid;
+  gap: var(--ls-s3, 12px);
+  max-width: 60ch;
+  margin-top: var(--ls-s3, 12px);
+}
+.ls-trules-dlg .projects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ls-s2, 8px);
+}
+.ls-trules .journal li { max-width: 96ch; }
+.ls-trules-dlg .output {
+  white-space: pre-wrap;
+  max-height: 40vh;
+  overflow: auto;
+}
+/* end stage 14 */
