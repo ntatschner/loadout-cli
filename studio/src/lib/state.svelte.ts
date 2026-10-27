@@ -5,7 +5,7 @@ import * as api from './api';
 import { command } from './commands';
 import { clockOf, linesOf, type Work } from './lines';
 import type { SignalFamily } from './signals';
-import { setAccent, setDensity, setMotion, setTheme, preferredTheme } from './studio';
+import { setAccent, setBackdrop, setDensity, setMotion, setTheme, preferredTheme } from './studio';
 import { toasts } from './toasts.svelte';
 import { isMode, morph, nextMode, type StudioMode } from './modes';
 import { resumeConversation, type ResumeAsk, type ResumeOutcome } from './resume';
@@ -241,13 +241,14 @@ export class Studio {
     this.applyPrefs();
   }
 
-  /** Theme, accent, density, motion and mode as attributes on <html>; no theme set follows the system. */
+  /** Theme, accent, density, motion, backdrop and mode as attributes on <html>; no theme set follows the system. */
   applyPrefs(): void {
     const prefs = this.prefs;
     setTheme(prefs?.theme || preferredTheme());
     setAccent(prefs?.accent ?? 'cyan');
     setDensity(prefs?.density ?? 'comfortable');
     setMotion(prefs?.motion ?? 'full');
+    setBackdrop(prefs?.backdrop ?? 'plain');
     // The mode is this browser's own, so it is set however the prefs read.
     document.documentElement.setAttribute('data-mode', this.mode);
   }

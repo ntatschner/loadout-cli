@@ -11,6 +11,8 @@ export const THEMES: Theme[] = ['dark', 'light', 'hc-dark', 'hc-light'];
 export const ACCENTS: Accent[] = ['cyan', 'ice', 'magenta', 'violet'];
 export const DENSITIES: Density[] = ['compact', 'comfortable', 'roomy'];
 export const MOTIONS: Motion[] = ['full', 'reduced', 'none'];
+export type Backdrop = 'plain' | 'map' | 'map-animated';
+export const BACKDROPS: Backdrop[] = ['plain', 'map', 'map-animated'];
 
 export const THEME_NAMES: Record<Theme, string> = {
   dark: 'Dark',
@@ -45,6 +47,15 @@ export function setDensity(density: string, el?: Element): void {
 /** Sets data-motion. The operating system's reduced motion still wins: see motion(). */
 export function setMotion(level: string, el?: Element): void {
   root(el).setAttribute('data-motion', pick(MOTIONS, level, 'full'));
+}
+
+/**
+ * Sets data-backdrop, the studio-backdrop setting as kept. Unknown values
+ * fall back to plain. What shows is resolveBackdrop()'s, from this and what
+ * overrides it.
+ */
+export function setBackdrop(backdrop: string, el?: Element): void {
+  root(el).setAttribute('data-backdrop', pick(BACKDROPS, backdrop, 'plain'));
 }
 
 function matches(query: string): boolean {
