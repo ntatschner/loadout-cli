@@ -26,8 +26,8 @@ public static class NoticeLink
     /// <param name="dashboard">Where the dashboard is serving, as it printed it, or null where it is not.</param>
     /// <param name="run">The run the notice is about.</param>
     /// <returns>
-    /// Studio's page for the run, or the command that shows it where there is
-    /// no address to link to.
+    /// The page that shows the run, or the command that shows it where there
+    /// is no address to link to.
     /// </returns>
     public static string For(string? linkAddress, string? dashboard, string run)
     {
@@ -36,18 +36,34 @@ public static class NoticeLink
         return To(linkAddress, dashboard, $"teams/{Uri.EscapeDataString(run)}", $"loadout team status {run}");
     }
 
-    /// <summary>The link for one of Studio's pages.</summary>
+    /// <summary>The link for one of Studio's pages, or for the runs at the link address.</summary>
     /// <param name="linkAddress">The machine's <c>team-link-address</c>, or null or empty where it is unset.</param>
     /// <param name="dashboard">Where the dashboard is serving, as it printed it, or null where it is not.</param>
     /// <param name="route">Studio's route for the page, such as <c>teams</c>, already escaped.</param>
     /// <param name="otherwise">What to say where there is no address to link to: the command that shows the same.</param>
     public static string To(string? linkAddress, string? dashboard, string route, string otherwise)
     {
-        var root = Root(linkAddress) ?? Root(dashboard);
+        // At the link address only the classic page's runs can be reached
+        // (DashboardServer.Remotely says why), and its list has no place for
+        // one run, so every link there opens the list.
+        if (Root(linkAddress) is { } away)
+        {
+            return $"{away}classic#list";
+        }
 
         // Studio is served at /studio/ whichever page the address itself
         // opens, so the route works on a machine set to classic too.
-        return root is null ? otherwise : $"{root}studio/#{route}";
+        return Root(dashboard) is { } here ? $"{here}studio/#{route}" : otherwise;
+    }
+
+    /// <summary>A one-time sign-in link at the link address, or null where none is set.</summary>
+    /// <param name="linkAddress">The machine's <c>team-link-address</c>.</param>
+    /// <param name="code">A code from <see cref="SignIn.MintCode"/>.</param>
+    public static string? Pairing(string? linkAddress, string code)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(code);
+
+        return Root(linkAddress) is { } away ? $"{away}signin?code={Uri.EscapeDataString(code)}" : null;
     }
 
     /// <summary>Whether a link address can be used, and why not where it cannot.</summary>
@@ -73,6 +89,14 @@ public static class NoticeLink
             // put the key to the dashboard in every chat a notice goes to.
             return "Give the link address without anything after a '?' or '#'. A notice never "
                 + "carries the dashboard's token; whoever follows the link signs in there.";
+        }
+
+        if (where.IsLoopback)
+        {
+            // The dashboard's own address already says this, and the server
+            // never treats a request naming this machine as a phone's.
+            return "A link address is the name another device reaches this machine by. For this "
+                + "machine alone, leave it unset: notices then link to the dashboard's own address.";
         }
 
         return null;

@@ -31,15 +31,16 @@ public sealed class NoticeLinkTests
     [Fact]
     public void A_link_address_takes_the_place_of_where_the_dashboard_listens()
     {
+        // The classic page's runs, the one thing a phone can reach there.
         NoticeLink.For("https://desk.example.ts.net:4800", Serving, "run-1")
-            .Should().Be("https://desk.example.ts.net:4800/studio/#teams/run-1");
+            .Should().Be("https://desk.example.ts.net:4800/classic#list");
     }
 
     [Fact]
     public void A_link_address_behind_a_path_keeps_its_path()
     {
         NoticeLink.For("https://example.com/loadout", Serving, "run-1")
-            .Should().Be("https://example.com/loadout/studio/#teams/run-1");
+            .Should().Be("https://example.com/loadout/classic#list");
     }
 
     [Fact]
@@ -47,7 +48,15 @@ public sealed class NoticeLinkTests
     {
         // Refused when it is set; this is what a hand-edited file gets.
         NoticeLink.For("https://desk.example.ts.net/?token=secret-token-value", Serving, "run-1")
-            .Should().Be("https://desk.example.ts.net/studio/#teams/run-1");
+            .Should().Be("https://desk.example.ts.net/classic#list");
+    }
+
+    [Fact]
+    public void A_pairing_link_is_a_sign_in_at_the_link_address()
+    {
+        NoticeLink.Pairing("https://desk.example.ts.net:4800", "a+b").Should()
+            .Be("https://desk.example.ts.net:4800/signin?code=a%2Bb");
+        NoticeLink.Pairing(null, "a+b").Should().BeNull();
     }
 
     [Fact]
@@ -65,7 +74,7 @@ public sealed class NoticeLinkTests
     [Fact]
     public void The_run_is_escaped_into_the_route()
     {
-        NoticeLink.For("https://desk.example", null, "a b").Should().EndWith("#teams/a%20b");
+        NoticeLink.For(null, Serving, "a b").Should().EndWith("#teams/a%20b");
     }
 
     [Fact]
@@ -86,6 +95,8 @@ public sealed class NoticeLinkTests
     [InlineData("ftp://desk.example")]
     [InlineData("https://desk.example/?token=abc")]
     [InlineData("https://desk.example/#teams")]
+    [InlineData("http://127.0.0.1:8477")]
+    [InlineData("http://localhost:8477")]
     public void The_setting_refuses_what_cannot_be_a_link_address(string value)
     {
         var key = ConfigKeys.Find("team-link-address")!;

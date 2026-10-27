@@ -1857,15 +1857,37 @@ by, such as a tailnet name or a reverse proxy:
 
 ```sh
 loadout config set team-link-address https://desk.example.ts.net:4800
+loadout daemon restart            # the daemon reads it when it starts
+loadout dashboard pair            # a sign-in link for the phone, once, for two minutes
 loadout team notify test          # its link uses that address too
 ```
 
 Anything after a `?` or `#` is refused, because the likeliest thing there is
-the token.
+the token. So is an address on this machine, which the dashboard's own address
+already covers.
 
-**Not yet:** signing in at that address. The dashboard's sign-in only works on
-this machine for now, so the link takes you to the right page and stops at
-signing in.
+`dashboard pair` is made at this machine because this machine is what proves
+the phone is yours. Open its link on the phone and the phone stays signed in
+there for ninety days. Until it is used, the link signs in whoever opens it,
+so type it or send it to yourself somewhere private. `loadout dashboard
+sign-out` ends it along with every other sign-in.
+
+At the link address the phone can do one job: read team runs on the classic
+page and answer what they are waiting on, questions and permissions both.
+Everything else the dashboard serves is refused there, Studio included,
+because Studio holds your sessions and a terminal there types at your agent.
+A cookie that lasts ninety days on a phone should not be able to do that. So
+notices at the link address open the classic page's list of runs, not
+Studio.
+
+The phone is known by the name it asked for, the `Host` header. A proxy in
+front of the dashboard must pass that header on unchanged. One that rewrites it
+to `127.0.0.1` makes the phone look like this machine, and this machine is
+allowed everything.
+
+**Not verified:** following the link from a real phone, through a real
+tailnet or proxy. The tests play the phone by sending requests that name the
+link address, against the real listener on Windows.
 
 The address lives in your operating system's credential store, never in a file
 — a Slack or Discord webhook address *is* the credential: anyone holding it can

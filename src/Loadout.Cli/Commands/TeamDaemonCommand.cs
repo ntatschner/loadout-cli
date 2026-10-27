@@ -379,6 +379,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             var port = settings.Port != 0 ? settings.Port : teams?.DashboardPort ?? DashboardServer.DefaultPort;
 
             server.SignIn = SignIn.ForMachine(_paths);
+            server.LinkAddress = teams?.LinkAddress;
 
             var started = server.Start(
                 port,
