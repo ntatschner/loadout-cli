@@ -271,6 +271,41 @@ pre.output { margin: 0; max-height: 60vh; overflow: auto; white-space: pre-wrap;
 .ls-text.big { min-height: 120px; font-family: var(--font-sans); font-size: 16px; }
 .wherebar .lab { font-size: 11.5px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-soft); }
 pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); font-size: 13px; color: var(--ink); }
+/* Ideas, as main's pages.css and components.css have them since the design */
+.bench { overflow-anchor: none; }
+.work { grid-template-columns: minmax(0, 1fr); }
+.ls-qset .send .ls-halo { overflow-wrap: anywhere; min-width: 0; }
+.work [tabindex="-1"] { scroll-margin-top: 76px; }
+.work [tabindex="-1"]:focus { outline: none; }
+.work [tabindex="-1"]:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; }
+.shelf a .t { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+.shelf details.dropped { margin-top: 12px; }
+.shelf details.dropped summary { cursor: pointer; padding: 4px 10px; font-size: 11.5px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); }
+.shelf > .calm { margin: 10px 10px 0; font-size: 12.5px; color: var(--muted); }
+.shelf .offline, .work .offline, .memgrid .offline { margin: 0 0 var(--space-5); padding: var(--space-3) var(--space-4); border-radius: var(--radius-chip); background: var(--bad-wash); color: var(--bad-text); }
+.accept p { margin: 0; font-size: 13.5px; color: var(--ink-soft); }
+.accept .done-when { display: grid; gap: 6px; font-size: 14px; color: var(--ink); }
+.accept .done-when .hint { display: block; font-size: 13px; color: var(--ink-soft); }
+.accept .done-when textarea { max-width: 68ch; resize: vertical; }
+.ls-qset .q .about { margin: 0; font-size: 13.5px; color: var(--ink-soft); max-width: 76ch; }
+.ls-qset .q .outdated { margin: 0; font-size: 13.5px; color: var(--needs-text); max-width: 76ch; }
+.ls-qset .q .outdated button { margin-left: 10px; padding: 0; border: 0; background: none; font: inherit; font-size: 13px; color: var(--accent-text); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.ls-qset .q .outdated button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ls-qset .understood { margin: 4px 0 0; font-size: 13.5px; color: var(--muted); max-width: 76ch; }
+.work ul.notes { margin: 6px 0; padding-left: 0; list-style: none; display: grid; gap: 6px; max-width: 72ch; }
+.work ul.notes li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 14px; color: var(--ink); }
+.work ul.notes .nid { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.work ul.notes .ntext { flex: 1 1 24ch; min-width: 0; overflow-wrap: anywhere; }
+.work .opt input[type="checkbox"] { width: 16px; height: 16px; margin: 0 6px 0 0; accent-color: var(--accent); vertical-align: middle; }
+.work.has-next { padding-bottom: 96px; }
+/* Next: fixed to the lower right, clear of the toasts at the top. */
+.ls-next { position: fixed; right: max(24px, env(safe-area-inset-right, 0px)); bottom: max(20px, env(safe-area-inset-bottom, 0px)); z-index: 40; display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule), var(--shadow-float); max-width: calc(100% - 32px); }
+.ls-next[hidden] { display: none; }
+.ls-next .ls-halo { min-width: 0; white-space: normal; text-align: left; }
+.ls-next .left { --c: var(--needs); min-width: 22px; height: 22px; padding: 0 6px; display: inline-grid; place-items: center; font-family: var(--font-mono); font-size: 12px; color: var(--ink-strong); box-shadow: inset 0 0 0 1.5px var(--c); border-radius: var(--radius-pill); }
+.next-here { animation: lsNextHere 1s var(--ease-out, ease-out); }
+@keyframes lsNextHere { 0% { outline: 2px solid var(--focus); outline-offset: 6px; } 100% { outline: 2px solid transparent; outline-offset: 2px; } }
+@media (max-width: 520px) { .ls-next { right: 16px; left: 16px; max-width: none; } }
 @media (max-width: 860px) { .bench { grid-template-columns: minmax(0, 1fr); gap: 20px; } .shelf { position: static; max-height: none; } }
 /* Projects: the wall and the dossier */
 .ls-pwall.compact { grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); }
@@ -1650,14 +1685,19 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
   };
 
   /* ===== Ideas: a workbench for one idea at a time ===== */
+  /* As main's pages/Ideas.svelte and lib/ideas.ts: a shelf read through idea list with the shared query, beside a workbench
+     for one idea. Every step shows its command; watching only, each says so instead of changing anything. */
   var IDEAS = [
-    { id: "browser-launcher", list: "loadout-cli", title: "Run the launcher in a browser", stage: "Proposed", ask: "I'd like to open the launcher from a browser tab instead of the terminal, on this machine at least.",
-      understanding: "A page served on this machine that does what the terminal launcher does: pick a project, a task and a mode, and start the session.",
+    { id: "browser-launcher", list: "loadout-cli", title: "Run the launcher in a browser", stage: "Proposed", state: "doing", ask: "I'd like to open the launcher from a browser tab instead of the terminal, on this machine at least.",
+      rounds: [{ round: 1, understanding: "A launcher page in a browser tab that does what the terminal launcher does.", questions: ["q3"] },
+        { round: 2, understanding: "A page on this machine that sits beside the terminal launcher, served by the daemon that already hosts sessions.", questions: ["q1", "q2"] }],
       questions: [
-        { id: "q1", question: "Should the browser launcher replace the terminal one, or sit beside it?", why: "It decides whether the terminal launcher keeps its own screens.", options: ["Beside it", "Replace it"], recommendation: "Beside it", answer: null },
-        { id: "q2", question: "Who opens it: only you on this machine, or anyone on the network?", why: "Anyone on the network means it needs signing in.", options: ["Only this machine", "The network, signed in"], recommendation: "Only this machine", answer: null },
-        { id: "q3", question: "What should it show first?", why: null, options: [], recommendation: "The projects, most recent first", answer: "The projects, most recent first" }],
-      plan: { revision: 2, title: "A browser launcher beside the terminal one", layers: [
+        { id: "q1", round: 2, question: "Should the browser launcher replace the terminal one, or sit beside it?", why: "It decides whether the terminal launcher keeps its own screens.", about: "the ask", context: null, outdated: null, options: ["Beside it", "Replace it"], recommendation: "Beside it", answer: null },
+        { id: "q2", round: 2, question: "Who opens it: only you on this machine, or anyone on the network?", why: "Anyone on the network means it needs signing in.", about: "L2 How it is served", context: "signing in decides whether the daemon can serve it as it is", outdated: null, options: ["Only this machine", "The network, signed in"], recommendation: "Only this machine", answer: null },
+        { id: "q3", round: 1, question: "What should it show first?", why: null, about: "L1 What it does", context: null, outdated: "layer What it does changed in revision 2", options: [], recommendation: "The projects, most recent first", answer: "The projects, most recent first" }],
+      plan: { revision: 2, title: "A browser launcher beside the terminal one", understanding: "A page served on this machine that does what the terminal launcher does: pick a project, a task and a mode, and start the session.",
+        doneWhen: ["The launcher opens from a browser tab on this machine", "Starting from the page opens the session as the terminal launcher would"],
+        layers: [
         { id: "L1", name: "What it does", purpose: "The launcher's job, unchanged: project, task, mode, start.", chosen: "o1", verdict: "Keep", options: [
           { id: "o1", title: "The same steps as the terminal", detail: "Project, then task, then mode, then start.", pros: ["Nothing new to learn"], cons: [], recommended: true }] },
         { id: "L2", name: "How it is served", purpose: "Where the page comes from and who can reach it.", chosen: null, verdict: "Undecided", options: [
@@ -1668,114 +1708,476 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
           { id: "o2", title: "In a new terminal window", detail: "The page asks the desktop to open a terminal.", pros: ["Your own terminal"], cons: ["Differs on every desktop"], recommended: false }] }],
         additions: [{ id: "A1", title: "A link from the terminal launcher", why: "So people find the browser one from where they already are.", verdict: "Undecided" }],
         placement: { slug: "loadout-cli", isNew: false, name: "Loadout CLI", reason: "the launcher lives there" } },
+      notes: [{ id: "N1", text: "It should remember the last project picked.", by: "you", added: "16 Oct", taken: "16 Oct 21:52" }, { id: "N2", text: "Keyboard first: the arrow keys and Enter, as in the terminal.", by: "you", added: "17 Oct", taken: null }],
       accepted: null },
-    { id: "retry-dashboard", list: "starstats", title: "Show upload retries on the dashboard", stage: "Ready", ask: "When uploads retry, show it on the stats dashboard.", understanding: "A small panel counting retries per day, from the upload log.", questions: [{ id: "q1", question: "Per day or per hour?", why: null, options: ["Per day", "Per hour"], recommendation: "Per day", answer: "Per day" }], plan: null, accepted: null },
-    { id: "follow-system-theme", list: "~", title: "Every tool follows the system theme", stage: "Captured", ask: "Everything I use should follow the system light and dark setting.", understanding: "", questions: [], plan: null, accepted: null },
-    { id: "company-sign-in", list: "starstats", title: "Sign in with the company account", stage: "Accepted", ask: "Use the company account to sign in to StarStats.", understanding: "Single sign-on through the company's identity provider.", questions: [], plan: { revision: 3, title: "Company sign-in", layers: [], additions: [], placement: null }, accepted: { project: "starstats", plan: "docs/plans/company-sign-in.md", by: "you", when: "9 Oct" } }
+    { id: "laptop-checklist", list: "loadout-cli", title: "A checklist for setting up a new machine", stage: "Captured", state: "open", moved: { from: null, at: "15 Oct" }, ask: "A checklist Loadout walks through on a new laptop: clone the projects, sign in, set the secrets.", rounds: [], questions: [], plan: null, notes: [], accepted: null },
+    { id: "retry-dashboard", list: "starstats", title: "Show upload retries on the dashboard", stage: "Ready", state: "open", ask: "When uploads retry, show it on the stats dashboard.",
+      rounds: [{ round: 1, understanding: "A small panel counting retries per day, from the upload log.", questions: ["q1"] }],
+      questions: [{ id: "q1", round: 1, question: "Per day or per hour?", why: null, about: "the ask", context: null, outdated: null, options: ["Per day", "Per hour"], recommendation: "Per day", answer: "Per day" }], plan: null, notes: [], accepted: null },
+    { id: "follow-system-theme", list: "~", title: "Every tool follows the system theme", stage: "Captured", state: "open", ask: "Everything I use should follow the system light and dark setting.", rounds: [], questions: [], plan: null, notes: [], accepted: null },
+    { id: "old-charts-png", list: "starstats", title: "Export the old charts as images", stage: "Captured", state: "dropped", ask: "Let me save the old charts as PNG files before they go.", rounds: [], questions: [], plan: null, notes: [], accepted: null },
+    { id: "company-sign-in", list: "starstats", title: "Sign in with the company account", stage: "Accepted", state: "open", ask: "Use the company account to sign in to StarStats.", rounds: [], questions: [],
+      plan: { revision: 3, title: "Company sign-in", understanding: "Single sign-on through the company's identity provider.", doneWhen: ["Signing in with a company account reaches the dashboard"], layers: [], additions: [], placement: null },
+      notes: [{ id: "N1", text: "The identity provider is the one the intranet uses.", by: "you", added: "5 Oct", taken: "5 Oct 10:12" }],
+      accepted: { project: "starstats", plan: "docs/plans/company-sign-in.md", by: "you", when: "9 Oct" } }
   ];
-  var DUMPS = [{ id: "d3", source: "Notes app, Tuesday", captured: "16 Oct 21:40", split: "16 Oct 21:41", items: [
+  /* Ideas moved to another list since, and tasks there now: shown so they are not simply gone. */
+  var IDEA_MOVEDON = [{ id: "upload-progress", title: "Show upload progress in the terminal", from: "starstats", to: "loadout-cli", at: "14 Oct" }];
+  var DUMPS = [{ id: "d3", source: "Notes app, Tuesday", captured: "16 Oct 21:40", split: "16 Oct 21:41",
+    text: "- the launcher should follow the system theme\n- the flaky upload test: it fails one run in ten on CI\n- who grants access to the new bucket?", items: [
     { number: 1, title: "A dark mode for the launcher", excerpt: "the launcher should follow the system theme", kind: "idea" },
     { number: 2, title: "Fix the flaky upload test", excerpt: "it fails one run in ten on CI", kind: "task" },
     { number: 3, title: "Ask about the bucket move", excerpt: "who grants access to the new bucket?", kind: "task", recorded: true }] }];
+  /* What idea list can be filtered and sorted on, as the daemon reports it (IdeaFields). */
+  var IDEA_FIELDS = [
+    { name: "id", type: "text", description: "the idea's id", choices: [] }, { name: "title", type: "text", description: "what it asks for", choices: [] },
+    { name: "project", type: "text", description: "the project it is on", choices: [] }, { name: "stage", type: "choice", description: "how far it has got", choices: ["captured", "answering", "ready", "proposed", "accepted"] },
+    { name: "by", type: "text", description: "who dropped it in", choices: [] }, { name: "updated", type: "date", description: "when it was last recorded", choices: [] },
+    { name: "unanswered", type: "number", description: "questions waiting on you", choices: [] }];
+  var IDEA_STAGES = ["captured", "answering", "ready", "proposed", "accepted"];
+  /* The shelf is read whole up to a limit no workspace is near; past it the page says so. */
+  var IDEA_LIMIT = 200;
+  var IDEA_SHELF = { query: null, read: false, kept: null }, IDEA_TBS = [], IDEA_ACC = {}, IDEA_MORE = {}, IDEA_ADD = { text: "", list: "~" }, IDEA_ON = null, IDEA_ARRIVED = null, IDEA_ROUND_AT = 0, IDEA_STIR = 0, IDEA_KEYS = false, IDEA_QDRAFT = {}, IDEA_RW = {};
+  var IDEA_WATCH = "Studio is only watching: type the command in a terminal";
+  /* Watching only (loadout dashboard --watch-only): every step shows its command and changes nothing. */
+  function ideaRefused() { return P.watchOnly ? IDEA_WATCH : null; }
+  function ideaOnlyWatching(cmd) { said("Studio is only watching, so nothing was changed.", cmd); }
+  function ideaLine(path, words) { return S.commandLine(path, [], {}, words); }
   function ideaWhere(x) { return x.list === "~" ? ["--global"] : ["--project", x.list]; }
+  function ideaWhereSaid(list) { return !list || list === "~" ? "the workspace-wide list" : list; }
+  function ideaUnanswered(x) { return x.questions.filter(function (q) { return !q.answer; }).length; }
+  function ideaFailure(x) {
+    var l = x.id === "browser-launcher" ? line("i1") : null;
+    return l && l.failed ? { agent: "codex", model: "gpt-5-codex", when: "17/10/2026, 13:22:00", error: "The agent's answer is not valid JSON: 'T' is an invalid start of a value. LineNumber: 0 | BytePositionInLine: 0." } : null;
+  }
+  function ideaRunning(x) { var l = x.id === "browser-launcher" ? line("i1") : null; return !!(l && l.stage === 2 && !l.failed); }
+  /* What the shelf and the stages say: a round running, a failed one, questions waiting, accepted, or being shaped. */
   function ideaWord(x) {
-    if (x.id === "browser-launcher") { var l = line("i1"); if (l && l.failed) { return "last round failed"; } if (l && l.stage === 2) { return "round running"; } }
-    var u = x.questions.filter(function (q) { return !q.answer; }).length;
-    return u ? "waiting for you" : x.stage === "Accepted" ? "accepted" : "shaping";
+    if (ideaRunning(x)) { return "round running"; }
+    if (ideaFailure(x)) { return "last round failed"; }
+    return ideaUnanswered(x) ? "waiting for you" : x.stage === "Accepted" ? "accepted" : "shaping";
+  }
+  /* The shared query over the shelf: field:value terms, -field:value to leave out, words to find, sort:field. A refused one keeps the shelf as it was. */
+  function ideaShelf() {
+    var q = IDEA_SHELF.query === null ? "" : IDEA_SHELF.query, parts = q.split(/\s+/).filter(Boolean), names = IDEA_FIELDS.map(function (f) { return f.name; }), problem = null, terms = [], words = [], sort = "-updated";
+    parts.forEach(function (p) {
+      if (problem) { return; }
+      if (p.indexOf("sort:") === 0) { sort = p.slice(5); var sf = sort.replace(/^-/, "").split(",")[0]; if (names.indexOf(sf) < 0) { problem = "'" + sf + "' is not something ideas can be sorted on. They can be: " + names.join(", ") + "."; } return; }
+      var m = /^(-?)([A-Za-z]+):(.*)$/.exec(p);
+      if (!m) { words.push(p.toLowerCase()); return; }
+      var f = IDEA_FIELDS.filter(function (x) { return x.name === m[2].toLowerCase(); })[0];
+      if (!f) { problem = "'" + m[2] + "' is not something ideas can be filtered on. They can be: " + names.join(", ") + "."; return; }
+      var vs = m[3].split(",").filter(Boolean);
+      vs.forEach(function (v) {
+        if (problem) { return; }
+        if (f.type === "choice" && f.choices.indexOf(v.toLowerCase()) < 0) { problem = "'" + v + "' is not a " + f.name + ". It is one of: " + f.choices.join(", ") + "."; }
+        if (f.type === "number" && !/^(<=|>=|<|>)?\d+$/.test(v)) { problem = "'" + f.name + ":" + v + "' is not a number. Write one such as 3, >2 or <=5."; }
+        if (f.type === "date" && !/^(<=|>=|<|>)?(\d+[mhdw]|\d{4}-\d\d-\d\d)$/.test(v)) { problem = "'" + f.name + ":" + v + "' is not a date. Write an age such as <7d or >12h, or a day such as >=2026-10-01."; }
+      });
+      terms.push({ not: !!m[1], field: f, values: vs });
+    });
+    function val(x, f) { return f === "id" ? x.id : f === "title" ? x.title : f === "project" ? (x.list === "~" ? "" : x.list) : f === "stage" ? x.stage.toLowerCase() : f === "by" ? "you" : f === "unanswered" ? ideaUnanswered(x) : IDEAS.indexOf(x); }
+    function keeps(x) {
+      return terms.every(function (t) {
+        var v = val(x, t.field.name), hit = !t.values.length || t.field.type === "date" || t.values.some(function (w) {
+          if (t.field.type === "number") { var mm = /^(<=|>=|<|>)?(\d+)$/.exec(w), n = +mm[2]; return mm[1] === "<" ? v < n : mm[1] === ">" ? v > n : mm[1] === "<=" ? v <= n : mm[1] === ">=" ? v >= n : v === n; }
+          return t.field.type === "choice" ? v === w.toLowerCase() : String(v).toLowerCase().indexOf(w.toLowerCase()) >= 0;
+        });
+        return t.not ? !hit : hit;
+      }) && words.every(function (w) { return (x.title + " " + x.id).toLowerCase().indexOf(w) >= 0; });
+    }
+    if (problem) { return { items: IDEA_SHELF.kept || IDEAS.slice(), problem: problem, parts: parts, text: q }; }
+    var by = sort.replace(/^-/, "").split(",")[0], down = sort.charAt(0) === "-", items = IDEAS.filter(keeps);
+    items.sort(function (a, b) {
+      var A = by === "stage" ? IDEA_STAGES.indexOf(a.stage.toLowerCase()) : by === "updated" ? -IDEAS.indexOf(a) : val(a, by), B = by === "stage" ? IDEA_STAGES.indexOf(b.stage.toLowerCase()) : by === "updated" ? -IDEAS.indexOf(b) : val(b, by);
+      return (A < B ? -1 : A > B ? 1 : 0) * (down ? -1 : 1);
+    });
+    IDEA_SHELF.kept = items;
+    return { items: items, problem: null, parts: parts, text: q };
+  }
+  function ideaToolbar(sh) {
+    /* One toolbar listens for '/' at a time: the ones no longer on the page stop. */
+    IDEA_TBS = IDEA_TBS.filter(function (t) { if (t.el.isConnected) { return true; } t.destroy(); return false; });
+    var tb = S.ListToolbar({ noun: "ideas", query: sh ? sh.text : "", shape: sh ? { text: sh.text, parts: sh.parts, fields: IDEA_FIELDS, defaultQuery: "" } : null, shown: sh ? sh.items.length : null, recorded: sh ? IDEAS.length : null, problem: sh ? sh.problem : null,
+      onchange: function (q) { IDEA_SHELF.query = q; bump(); } });
+    var box = tb.el.querySelector("input"); if (box) { box.setAttribute("data-k", "idea-find"); }
+    IDEA_TBS.push(tb);
+    return tb.el;
+  }
+  function ideaInstallKeys() {
+    if (IDEA_KEYS) { return; }
+    IDEA_KEYS = true;
+    function stir() { IDEA_STIR = Date.now(); }
+    window.addEventListener("wheel", stir, { passive: true }); window.addEventListener("touchmove", stir, { passive: true });
+    /* ] goes to the next stop, outside text fields: N is taken, and typing is when single keys are ignored. */
+    window.addEventListener("keydown", function (e) {
+      stir();
+      var t = e.target, typing = t && t.closest && t.closest("input, textarea, select, [contenteditable=\"true\"], .xterm");
+      if (e.key !== "]" || !IDEA_ON || !IDEA_ON.el.isConnected || typing || e.ctrlKey || e.metaKey || e.altKey || !P.keys || document.querySelector(".ls-dialog")) { return; }
+      e.preventDefault(); IDEA_ON.next();
+    });
+    /* Leaving with answers or a rework typed and not sent loses them, so the browser asks first. */
+    window.addEventListener("beforeunload", function (e) { if (IDEA_ON && IDEA_ON.el.isConnected && IDEA_ON.unsent()) { e.preventDefault(); e.returnValue = ""; } });
+  }
+  function ideaStill() { return P.motion !== "full" || (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches); }
+  /* A round started here comes back in a while; on browser-launcher it brings a question, which the page takes you to unless you moved since. */
+  function ideaRefine(x) {
+    IDEA_ROUND_AT = Date.now();
+    if (x.id !== "browser-launcher") { return; }
+    refine();
+    setTimeout(function () {
+      var i1 = line("i1"); if (!i1 || i1.failed || i1.stage !== 2) { return; }
+      i1.stage = 1; i1.note = "round 3 back · 1 question for you";
+      if (!x.questions.filter(function (q) { return q.id === "q4"; }).length) {
+        x.questions.push({ id: "q4", round: 3, question: "Should the page open by itself when the daemon starts?", why: "It decides whether the daemon opens a browser tab at log-in.", about: "L2 How it is served", context: null, outdated: null, options: ["Only when asked", "At log-in"], recommendation: "Only when asked", answer: null });
+        x.rounds = (x.rounds || []).concat([{ round: 3, understanding: "The same page, opened on demand rather than kept running in a tab.", questions: ["q4"] }]);
+      }
+      IDEA_ARRIVED = { id: x.id, what: "questions" };
+      said("Run the launcher in a browser: round 3 is back with 1 question", "$ loadout idea show browser-launcher --project loadout-cli", "done");
+      bump();
+    }, 9000);
+  }
+  /* Recommendation matching as offeredChoices: exact first, then the longest option that starts it, or it starts; a tie is no match. */
+  function ideaOffered(q) {
+    var choices = (q.options || []).slice(), want = String(q.recommendation || "").trim().replace(/\s+/g, " "), said0 = want.toLowerCase();
+    if (!want) { return { choices: choices, recommended: null }; }
+    var exact = choices.map(function (c) { return c.trim().toLowerCase(); }).indexOf(said0);
+    if (exact >= 0) { return { choices: choices, recommended: exact }; }
+    var best = -1, len = 0, tied = false;
+    function starts(l, s) { return l.indexOf(s) === 0 && (l.length === s.length || !/[A-Za-z0-9]/.test(l.charAt(s.length))); }
+    choices.forEach(function (c, i) { var o = c.trim().toLowerCase(), sh = starts(said0, o) ? o.length : starts(o, said0) ? said0.length : 0; if (sh > len) { best = i; len = sh; tied = false; } else if (sh > 0 && sh === len) { tied = true; } });
+    return best < 0 || tied ? { choices: choices.concat([want]), recommended: choices.length } : { choices: choices, recommended: best };
+  }
+  function ideaAbout(q) { return q.about && q.context ? "Relates to " + q.about + ": " + q.context : q.about ? "Relates to " + q.about : q.context || null; }
+  function ideaUnderstood(x, q) { var r = (x.rounds || []).filter(function (one) { return one.questions[0] === q.id; })[0]; return r ? r.understanding : null; }
+  /* What main's QuestionSet shows that the design system's does not yet: what each question relates to, whether it may be
+     outdated (with It still stands), what the agent understood when it asked, and Accept all recommendations. Drawn onto
+     each card as the set paints it; a card already carrying them is left alone. */
+  function ideaQuestionsMore(qs, x, where, refused, onStand) {
+    var list = qs.el.querySelector(".qs"), send = qs.el.querySelector(".send");
+    function cards() {
+      Array.prototype.forEach.call(list.children, function (card, i) {
+        var q = x.questions[i]; if (!q || card.__idea) { return; }
+        card.__idea = true; card.setAttribute("data-next", "question:" + q.id);
+        var answered = card.classList.contains("answered"), head = card.querySelector("legend, .qt"), u = ideaUnderstood(x, q), ab = ideaAbout(q);
+        if (u && !card.querySelector(".understood")) { card.insertBefore(el("p", { "class": "understood", text: "Understood as: " + u }), card.firstChild); }
+        var after = head ? head.nextSibling : null, box = head ? head.parentNode : card;
+        if (ab && !card.querySelector(".about")) { box.insertBefore(el("p", { "class": "about", text: ab }), after); }
+        if (q.outdated && !card.querySelector(".outdated")) {
+          var od = el("p", { "class": "outdated" }, ["Possibly outdated: " + q.outdated + ". Answering " + (answered ? "again " : "") + "clears it."]);
+          if (answered && !refused) { od.appendChild(el("button", { type: "button", text: "It still stands", onclick: function () { onStand(q); } })); }
+          var at = box.querySelector(".about"); box.insertBefore(od, at ? at.nextSibling : after);
+        }
+      });
+    }
+    function open() { return Array.prototype.filter.call(list.children, function (card, i) { var q = x.questions[i]; if (!q || card.classList.contains("answered") || card.classList.contains("drafted")) { return false; } return ideaOffered(q).recommended !== null; }); }
+    function takeAll() {
+      open().forEach(function (card) {
+        var q = x.questions[Array.prototype.indexOf.call(list.children, card)], o = ideaOffered(q), pick = o.choices[o.recommended], r = Array.prototype.filter.call(card.querySelectorAll("input[type=radio]"), function (i) { return i.value === pick; })[0];
+        if (r) { r.checked = true; r.dispatchEvent(new Event("change", { bubbles: true })); } else { var ta = card.querySelector("textarea"); if (ta) { ta.value = pick; ta.dispatchEvent(new Event("input", { bubbles: true })); } }
+      });
+    }
+    function sendRow() {
+      var row = send.querySelector(".ls-answers"); if (!row || row.querySelector("[data-k=\"i-takeall\"]")) { return; }
+      var n = open().length;
+      row.appendChild(halo({ label: "Accept all recommendations", size: "", cmd: "fills " + n + " answer" + (n === 1 ? "" : "s") + "; sends nothing", disabledReason: refused || (n ? null : "no recommendations left to take"), onPress: takeAll }, "i-takeall"));
+    }
+    /* Answers typed and not sent are kept while the page is drawn again, as main keeps them while the idea is read again. */
+    var kept = IDEA_QDRAFT[x.id] || {};
+    Array.prototype.forEach.call(list.children, function (card, i) {
+      var q = x.questions[i], d = q && !q.answer ? kept[q.id] : null; if (!d) { return; }
+      var r = Array.prototype.filter.call(card.querySelectorAll("input[type=radio]"), function (n) { return n.value === d; })[0];
+      if (r) { r.checked = true; r.dispatchEvent(new Event("change", { bubbles: true })); } else { var ta = card.querySelector("textarea"); if (ta) { ta.value = d; ta.dispatchEvent(new Event("input", { bubbles: true })); } }
+    });
+    function keep() {
+      var now = {};
+      Array.prototype.forEach.call(list.children, function (card, i) {
+        var q = x.questions[i]; if (!q || card.classList.contains("answered")) { return; }
+        var r = card.querySelector("input[type=radio]:checked"), ta = card.querySelector("textarea"), v = r ? r.value : ta ? ta.value : "";
+        if (v.trim()) { now[q.id] = v; }
+      });
+      IDEA_QDRAFT[x.id] = now;
+    }
+    list.addEventListener("input", function () { setTimeout(keep, 0); }); list.addEventListener("change", function () { setTimeout(keep, 0); });
+    cards(); sendRow();
+    if (typeof MutationObserver === "function") { new MutationObserver(function () { cards(); keep(); }).observe(list, { childList: true }); new MutationObserver(sendRow).observe(send, { childList: true }); }
+  }
+  /* Next, as lib/ideas.ts nextStop: open questions, then the send button once each has something typed, then a half-written rework, then the plan's first gap, then Accept. */
+  function ideaNeedsChoice(p) { return !!(p.options && p.options.length) && !p.chosen && String(p.verdict || "undecided").toLowerCase() !== "drop"; }
+  function ideaGaps(x, d) {
+    if (x.accepted) { return []; }
+    var found = x.questions.filter(function (q) { return !q.answer && d.answers.indexOf(q.id) < 0; }).map(function (q) { return { kind: "question", id: q.id, index: x.questions.indexOf(q) + 1, of: x.questions.length }; });
+    (x.plan ? x.plan.layers.concat(x.plan.additions) : []).forEach(function (p) { if (ideaNeedsChoice(p)) { found.push({ kind: "choose", id: p.id }); } if (String(p.verdict || "undecided").toLowerCase() === "undecided") { found.push({ kind: "verdict", id: p.id }); } });
+    return found;
+  }
+  function ideaNextStop(x, d) {
+    if (x.accepted) { return null; }
+    var found = ideaGaps(x, d), q = found.filter(function (s) { return s.kind === "question"; })[0];
+    if (q) { return q; }
+    if (d.answers.length) { return { kind: "send-answers" }; }
+    var rw = (x.plan ? x.plan.layers.concat(x.plan.additions) : []).filter(function (p) { return d.reworks.indexOf(p.id) >= 0; })[0];
+    if (rw) { return { kind: "rework", id: rw.id }; }
+    return found[0] || (x.plan ? { kind: "accept" } : null);
+  }
+  function ideaStopWords(s) { return { question: "answer " + s.index + " of " + s.of, "send-answers": "send answers", rework: "send " + s.id + " back", choose: "choose for " + s.id, verdict: "keep or drop " + s.id, accept: "accept the plan" }[s.kind]; }
+  function ideaStopTarget(s) { return s.id ? s.kind + ":" + s.id : s.kind; }
+  function ideaDrafts(work, qs) {
+    var answers = qs ? qs.changed.map(function (q) { return q.id; }) : [], reworks = [];
+    Array.prototype.forEach.call(work.querySelectorAll(".ls-layer[data-piece]"), function (s) { var rw = s.querySelector(".rework"), ta = rw && rw.querySelector("textarea"); if (rw && rw.classList.contains("on") && ta && ta.value.trim()) { reworks.push(s.getAttribute("data-piece")); } });
+    return { answers: answers, reworks: reworks };
+  }
+  function ideaGoTo(work, what) {
+    var h = work.querySelector(what === "questions" ? "#z-iq" : "#z-ip") || work.querySelector(".ihead h2"); if (!h) { return; }
+    IDEA_ARRIVED = null;
+    if (h.scrollIntoView) { h.scrollIntoView({ block: "start", behavior: ideaStill() ? "auto" : "smooth" }); }
+    h.focus({ preventScroll: true });
+  }
+  function ideaNextBar(work, x, qs, refused) {
+    var bar = el("div", { "class": "ls-next", hidden: true });
+    function stop() { var d = ideaDrafts(work, qs); return { s: ideaNextStop(x, refused ? { answers: [], reworks: [] } : d), left: ideaGaps(x, d).length, d: d }; }
+    function goNext() {
+      var st = stop().s, target = st && work.querySelector("[data-next=\"" + ideaStopTarget(st) + "\"]"); if (!target) { return; }
+      var focusable = target.matches("button, input, textarea, select") ? target : target.querySelector("input, textarea, select, button");
+      if (target.scrollIntoView) { target.scrollIntoView({ block: "center", behavior: ideaStill() ? "auto" : "smooth" }); }
+      if (focusable) { focusable.focus({ preventScroll: true }); }
+      if (!ideaStill()) { target.classList.remove("next-here"); void target.offsetWidth; target.classList.add("next-here"); setTimeout(function () { target.classList.remove("next-here"); }, 1100); }
+    }
+    function paint() {
+      var n = stop(), arrived = IDEA_ARRIVED && IDEA_ARRIVED.id === x.id ? IDEA_ARRIVED.what : null;
+      bar.textContent = ""; bar.hidden = !n.s && !arrived; work.classList.toggle("has-next", !!n.s);
+      if (arrived) { bar.appendChild(halo({ label: arrived === "questions" ? "New questions: go to them" : "New revision " + (x.plan ? x.plan.revision : "") + ": go to it", size: "small", kind: "needs", glyph: "↑", cmd: "changes nothing", onPress: function () { ideaGoTo(work, arrived); paint(); } }, "i-arrived")); }
+      if (n.s) {
+        if (n.left) { bar.appendChild(el("span", { "class": "left", "aria-hidden": "true", text: String(n.left) })); }
+        var b = halo({ label: "Next: " + ideaStopWords(n.s), size: "small", solid: true, glyph: "↓", cmd: "changes nothing · ]" + (n.left ? " · " + n.left + " left to decide" : ""), disabledReason: refused && n.s.kind === "accept" ? refused : null, onPress: goNext }, "i-next");
+        var bb = b.tagName === "BUTTON" ? b : b.querySelector("button"); if (bb) { bb.setAttribute("aria-describedby", "ls-next-left"); }
+        bar.appendChild(b);
+        bar.appendChild(el("span", { "class": "ls-sr", id: "ls-next-left", text: n.left ? n.left + " left to decide on this idea" : "nothing left to decide on this idea" }));
+      }
+    }
+    var timer; function later() { clearTimeout(timer); timer = setTimeout(paint, 0); }
+    work.addEventListener("input", later); work.addEventListener("change", later); work.addEventListener("click", later);
+    paint();
+    IDEA_ON = { el: work, next: goNext, paint: paint, unsent: function () { var d = stop().d; return d.answers.length + d.reworks.length > 0; } };
+    return bar;
   }
   function renderIdeas(main, r) {
-    var parts = r.split("/"), sel = parts[1] === "+add" || parts[1] === "+dumps" ? parts[1] : (parts[2] || null);
-    var waiting = IDEAS.filter(function (x) { return ideaWord(x) === "waiting for you"; }).length;
-    pageHead(main, "Ideas", IDEAS.filter(function (x) { return !x.accepted; }).length + " being shaped" + (waiting ? " · " + waiting + " waiting on you" : ""), [
+    ideaInstallKeys();
+    var parts = r.split("/"), place = parts[1] && parts[1].charAt(0) === "+" ? parts[1].slice(1) : null, refused = ideaRefused();
+    var sh = IDEA_SHELF.read || !main.isConnected ? ideaShelf() : null, ideas = sh ? sh.items : null, first = ideas && ideas[0] ? ideas[0] : null;
+    var list = place ? null : (parts[1] || (first ? first.list : null)), id = place ? null : (parts[2] || (parts[1] ? null : (first ? first.id : null)));
+    if (!IDEA_SHELF.read && !main.isConnected) { IDEA_SHELF.read = true; }
+    if (!IDEA_SHELF.read) { setTimeout(function () { if (!IDEA_SHELF.read) { IDEA_SHELF.read = true; bump(); } }, 350); }
+    var waiting = (ideas || []).filter(function (x) { return ideaWord(x) === "waiting for you"; }).length, shaping = (ideas || []).filter(function (x) { return x.stage !== "Accepted"; }).length;
+    pageHead(main, "Ideas", ideas ? shaping + " being shaped" + (waiting ? " · " + waiting + " waiting on you" : "") : "ideas you are shaping, a round at a time", [
       halo({ label: "Drop an idea in", size: "small", solid: true, glyph: "+", cmd: "opens the box · records nothing yet", onPress: function () { go("ideas/+add"); } }, "i-add")]);
-    if (!sel && IDEAS.length) { sel = IDEAS[0].id; }
+    if (waiting) { var hf = main.querySelector(".head .fact"); if (hf) { hf.classList.add("need"); } }
     var bench = el("div", { "class": "bench" }), shelf = el("nav", { "class": "shelf", "aria-label": "Ideas" });
-    var lists = {}; IDEAS.forEach(function (x) { (lists[x.list] = lists[x.list] || []).push(x); });
-    Object.keys(lists).forEach(function (k) {
+    shelf.appendChild(ideaToolbar(sh));
+    if (ideas === null) { shelf.appendChild(el("p", { "class": "calm", role: "status", text: "Reading…" })); }
+    else if (!ideas.length && !IDEAS.length) { shelf.appendChild(el("p", { "class": "calm", text: "No ideas being shaped. Drop one in." })); }
+    function cur(x) { return !place && id === x.id && x.list === list ? "page" : null; }
+    var groups = {}, order = [];
+    (ideas || []).filter(function (x) { return x.state !== "dropped"; }).forEach(function (x) { if (!groups[x.list]) { groups[x.list] = []; order.push(x.list); } groups[x.list].push(x); });
+    order.forEach(function (k) {
       shelf.appendChild(el("h2", { "class": "gh", text: k === "~" ? "Workspace-wide" : k }));
-      shelf.appendChild(el("ul", {}, lists[k].map(function (x) {
-        var w = ideaWord(x), u = x.questions.filter(function (q) { return !q.answer; }).length;
-        return el("li", {}, [el("a", { href: "#ideas/" + x.list + "/" + x.id, "data-k": "idea-" + x.id, "aria-current": sel === x.id ? "page" : null }, [el("span", { "class": "t", text: x.title }), S.Signal(w), el("span", { "class": "x", text: u ? u + " question" + (u === 1 ? "" : "s") + " for you" : x.stage.toLowerCase() })])]);
+      shelf.appendChild(el("ul", {}, groups[k].map(function (x) {
+        var u = ideaUnanswered(x);
+        return el("li", {}, [el("a", { href: "#ideas/" + x.list + "/" + x.id, "data-k": "idea-" + x.id, "aria-current": cur(x) }, [el("span", { "class": "t", text: x.title }), S.Signal(ideaWord(x)), el("span", { "class": "x", text: ideaFailure(x) ? "last round failed" : u ? u + " question" + (u === 1 ? "" : "s") + " for you" : x.stage.toLowerCase() })])]);
       })));
     });
+    /* Dropped ideas fold away under the groups, as done and dropped tasks do on a board: kept, and out of the way. */
+    var dropped = (ideas || []).filter(function (x) { return x.state === "dropped"; });
+    if (dropped.length) {
+      shelf.appendChild(el("details", { "class": "dropped" }, [el("summary", { text: dropped.length + " dropped" }), el("ul", {}, dropped.map(function (x) {
+        return el("li", {}, [el("a", { href: "#ideas/" + x.list + "/" + x.id, "data-k": "idea-" + x.id, "aria-current": cur(x) }, [el("span", { "class": "t", text: x.title }), el("span", { "class": "x", text: ideaWhereSaid(x.list) + " · dropped" })])]);
+      }))]));
+    }
+    if (ideas && IDEAS.length > IDEA_LIMIT) { shelf.appendChild(el("p", { "class": "calm" }, ["The newest " + Math.min(ideas.length, IDEA_LIMIT) + " are shown and " + (IDEAS.length - IDEA_LIMIT) + " more are not. Narrow the shelf with the search box, or see them all with ", el("code", { text: "loadout idea list" }), "."])); }
+    if (ideas && IDEA_MOVEDON.length) {
+      shelf.appendChild(el("h2", { "class": "gh", text: "Became tasks elsewhere" }));
+      shelf.appendChild(el("ul", { "class": "gone" }, IDEA_MOVEDON.map(function (g) { return el("li", {}, [el("a", { "class": "place", href: g.to ? "#projects/" + g.to : "#projects/+tasks" }, [el("span", { "class": "t", text: g.title || g.id }), el("span", { "class": "x", text: "was on " + ideaWhereSaid(g.from) + " · a task on " + ideaWhereSaid(g.to) + " now" })])]); })));
+    }
     shelf.appendChild(el("h2", { "class": "gh", text: "More" }));
-    shelf.appendChild(el("ul", {}, [["+add", "Drop an idea in"], ["+dumps", "Notes kept elsewhere"]].map(function (p) { return el("li", {}, [el("a", { href: "#ideas/" + p[0], "aria-current": sel === p[0] ? "page" : null, "class": "place" }, [el("span", { "class": "t", text: p[1] })])]); })));
+    shelf.appendChild(el("ul", {}, [["add", "Drop an idea in"], ["dumps", "Notes kept elsewhere"]].map(function (p) { return el("li", {}, [el("a", { href: "#ideas/+" + p[0], "aria-current": place === p[0] ? "page" : null, "class": "place" }, [el("span", { "class": "t", text: p[1] })])]); })));
     shelf.appendChild(from("$ loadout idea list"));
     bench.appendChild(shelf);
-    var work = el("div", { "class": "work" }); bench.appendChild(work); main.appendChild(bench);
-    if (sel === "+add") { return ideaAdd(work); }
-    if (sel === "+dumps") { return ideaDumps(work); }
-    var x = IDEAS.filter(function (i) { return i.id === sel; })[0]; if (!x) { work.appendChild(el("p", { "class": "calm", text: "Choose an idea to answer its questions, shape its plan or accept it." })); return; }
-    var where = ideaWhere(x), w = ideaWord(x), i1 = x.id === "browser-launcher" ? line("i1") : null;
-    work.appendChild(el("div", { "class": "ihead" }, [el("h2", { text: x.plan ? x.plan.title : x.title }), el("p", { "class": "slug", text: x.id + " · " + (x.list === "~" ? "workspace-wide" : x.list) + (x.plan ? " · plan revision " + x.plan.revision : "") })]));
+    var work = el("section", { "class": "work", "aria-label": "Idea" }); bench.appendChild(work); main.appendChild(bench);
+    if (place === "add") { return ideaAdd(work, refused); }
+    if (place === "dumps") { return ideaDumps(work, refused); }
+    if (!id) { if (ideas && !ideas.length) { work.appendChild(el("p", { "class": "calm", text: "Nothing on the shelf yet. Drop an idea in, and refine it when you want an agent to flesh it out." })); } return; }
+    var x = IDEAS.filter(function (i) { return i.id === id && i.list === list; })[0];
+    if (!x) { work.appendChild(el("p", { "class": "offline", role: "alert", text: "There is no idea called '" + id + "' on " + ideaWhereSaid(list) + "." })); return; }
+    var where = ideaWhere(x), w = ideaWord(x), fl = ideaFailure(x), qs = null;
+    work.appendChild(el("div", { "class": "ihead" }, [el("h2", { tabindex: "-1", text: x.plan ? x.plan.title : x.ask }), el("p", { "class": "slug", text: x.id + " · " + (x.list === "~" ? "workspace-wide" : x.list) + (x.plan ? " · plan revision " + x.plan.revision : "") }),
+      x.moved ? el("p", { "class": "slug", text: "Moved here from " + ideaWhereSaid(x.moved.from) + ", " + x.moved.at }) : null]));
     work.appendChild(S.IdeaStages({ stage: x.stage, word: w }));
-    if (x.understanding) { work.appendChild(el("p", { "class": "understand", text: x.understanding })); }
+    if (x.plan && x.plan.understanding) { work.appendChild(el("p", { "class": "understand", text: x.plan.understanding })); }
     work.appendChild(el("details", { "class": "asked" }, [el("summary", { text: "What was asked" }), el("p", { text: x.ask })]));
-    if (i1 && i1.failed) {
-      work.appendChild(el("div", { "class": "waitcard problem" }, [el("span", { "class": "w", text: i1.failed }), el("p", { "class": "q", text: "The last round failed. Nothing it was doing was kept." }), el("div", { "class": "ls-answers" }, [
-        halo({ label: "Try the round again", kind: "danger", size: "small", cmd: "$ loadout idea refine browser-launcher --project loadout-cli", onPress: function () { refine(); bump(); } }),
-        halo({ label: "Clear the marker", size: "small", cmd: "$ loadout idea dismiss browser-launcher --project loadout-cli", onPress: function () { i1.failed = ""; i1.note = "round 2 back"; bump(); said("Cleared the 'last round failed' marker", "$ loadout idea dismiss browser-launcher --project loadout-cli"); } })])]));
+    if (x.accepted) { work.appendChild(el("p", { "class": "accepted" }, ["Accepted onto ", el("strong", { text: x.accepted.project }), " by " + x.accepted.by + ". The plan is at ", el("code", { text: x.accepted.plan }), ". ", el("a", { href: "#projects/" + x.accepted.project, text: "Its task is on " + ideaWhereSaid(x.accepted.project) + "'s board" }), "."])); }
+    if (fl) {
+      var rl = ideaLine("idea refine", [x.id].concat(where)), dl = ideaLine("idea dismiss", [x.id].concat(where));
+      work.appendChild(el("div", { "class": "waitcard problem", role: "alert" }, [el("span", { "class": "w", text: "last round failed · " + fl.agent + ", model " + fl.model + " · " + fl.when }), el("p", { "class": "q", text: fl.error }), el("div", { "class": "ls-answers" }, [
+        halo({ label: "Try the round again", size: "small", glyph: "↻", cmd: rl, disabledReason: refused, onPress: function () { said("Round started", rl); ideaRefine(x); bump(); } }, "i-retry"),
+        halo({ label: "Clear the marker", size: "small", cmd: dl, disabledReason: refused, onPress: function () { var i1 = line("i1"); i1.failed = ""; i1.note = "round 2 back"; said("Cleared the 'last round failed' marker", dl); bump(); } }, "i-dismiss")])]));
     }
-    if (i1 && i1.stage === 2 && !i1.failed) { work.appendChild(el("p", { "class": "ls-note needs", text: "A round is running on the daemon. You can leave this page; a toast says when it ends." })); }
-    if (x.accepted) { work.appendChild(el("p", { "class": "accepted" }, ["✓ Accepted onto ", el("b", { text: x.accepted.project }), " by " + x.accepted.by + " on " + x.accepted.when + ". The plan is at ", el("code", { text: x.accepted.plan }), "."])); }
-    var unanswered = x.questions.filter(function (q) { return !q.answer; });
     if (x.questions.length && !x.accepted) {
-      work.appendChild(block("z-iq", unanswered.length ? "Questions for you" : "Questions, answered", [S.QuestionSet({ id: x.id, where: where, questions: x.questions, onSend: function (a, refineToo, lines) {
-        said(a.length + " answer" + (a.length === 1 ? "" : "s") + " saved" + (refineToo ? ", and round 3 started" : ""), lines.join(" · ") + (refineToo ? " · then $ loadout idea refine " + x.id + " " + where.join(" ") : ""));
-        if (refineToo && i1) { refine(); }
+      var od = x.questions.filter(function (q) { return q.outdated; }).length;
+      qs = S.QuestionSet({ id: x.id, where: where, questions: x.questions, rounds: x.rounds, disabledReason: refused, onSend: function (a, refineToo, lines) {
+        a.forEach(function (one) { x.questions.forEach(function (q) { if (q.id === one.question) { q.outdated = null; } }); });
+        said(a.length + " answer" + (a.length === 1 ? "" : "s") + " saved" + (refineToo ? ", and the next round has started" : ""), lines.join(" · ") + (refineToo ? " · then " + ideaLine("idea refine", [x.id].concat(where)) : ""));
+        if (refineToo) { ideaRefine(x); }
         setTimeout(bump, 1200);
-      } }).el]));
+      } });
+      ideaQuestionsMore(qs, x, where, refused, function (q) {
+        var ln = ideaLine("idea answer", [x.id, q.id, "--answer=" + q.answer].concat(where));
+        if (refused) { ideaOnlyWatching(ln); return; }
+        q.outdated = null; said(q.id + " still stands.", ln, "done"); bump();
+      });
+      var qb = block("z-iq", "Questions for you", [qs.el]), qh = qb.querySelector("#z-iq");
+      if (qh) { qh.setAttribute("tabindex", "-1"); if (od) { qh.appendChild(el("span", { "class": "outdated-count", text: " · " + od + " possibly outdated" })); } }
+      work.appendChild(qb);
     }
-    if (x.plan && x.plan.layers.length) {
-      var pz = block("z-iplan", "The plan · revision " + x.plan.revision, [el("p", { "class": "calm", style: "margin: 0 0 6px; font-size: 13.5px", text: "Each layer's options side by side. Choose one, keep or drop the layer, or send it back with what should change." })]);
-      x.plan.layers.forEach(function (L) { pz.appendChild(S.PlanLayer({ idea: x.id, where: where, layer: L, accepted: !!x.accepted, onChoose: function (o) { L.chosen = o; said("Chose " + o + " for " + L.id, "$ loadout idea choose " + x.id + " " + L.id + " " + o + " " + where.join(" ")); bump(); }, onVerdict: function (v) { L.verdict = v; bump(); }, onImprove: function (req) { L.verdict = "Improve"; said("Sent " + L.id + " back: " + req, "$ loadout idea improve " + x.id + " " + L.id + " --request=" + S.shellQuote(req) + " " + where.join(" ")); bump(); } })); });
-      if (x.plan.additions.length) { pz.appendChild(el("h3", { "class": "sub", text: "Additions the agent proposes" })); x.plan.additions.forEach(function (A) { pz.appendChild(S.PlanLayer({ idea: x.id, where: where, addition: A, accepted: !!x.accepted, onVerdict: function (v) { A.verdict = v; bump(); } })); }); }
+    if (x.plan && (x.plan.layers.length || x.plan.additions.length)) {
+      var pz = block("z-ip", "The plan · revision " + x.plan.revision, []), ph = pz.querySelector("#z-ip"); if (ph) { ph.setAttribute("tabindex", "-1"); }
+      /* One quick change to a piece, recorded or not: when it is not, the piece stays as it was and a toast says so and why. */
+      function record(ln, undone, apply) {
+        if (refused) { ideaOnlyWatching(ln); return; }
+        if (ideaRunning(x)) { said(undone + " A round on " + x.id + " is running on this machine. Change the plan when the round has finished.", ln, "problem"); bump(); return; }
+        apply(); bump();
+      }
+      function verdictUndone(p, to) { return to + " for " + p.id + " was not recorded, so its verdict is " + String(p.verdict || "undecided").toLowerCase() + " again."; }
+      function piece(node, p) {
+        node.setAttribute("data-piece", p.id);
+        var o = node.querySelector(".opts"), a = node.querySelector(".acts"), rw = node.querySelector(".rework > div");
+        if (o) { o.setAttribute("data-next", "choose:" + p.id); } if (a) { a.setAttribute("data-next", "verdict:" + p.id); } if (rw) { rw.setAttribute("data-next", "rework:" + p.id); }
+        /* A rework request written and not sent stays, open, when the page is drawn again. */
+        var box = node.querySelector(".rework"), ta = box && box.querySelector("textarea"), rk = x.id + ":" + p.id;
+        if (box && ta) {
+          if (IDEA_RW[rk]) { box.classList.add("on"); ta.value = IDEA_RW[rk]; ta.dispatchEvent(new Event("input", { bubbles: true })); }
+          var save = function () { setTimeout(function () { IDEA_RW[rk] = box.classList.contains("on") ? ta.value : ""; }, 0); };
+          ta.addEventListener("input", save); node.addEventListener("click", save);
+        }
+        return node;
+      }
+      function verdict(p) { return function (v) { record(ideaLine(v === "Keep" ? "idea keep" : "idea drop", [x.id, p.id].concat(where)), verdictUndone(p, v), function () { p.verdict = v; }); }; }
+      function improve(p) { return function (req) { var ln = ideaLine("idea improve", [x.id, p.id, "--request=" + req].concat(where)); record(ln, verdictUndone(p, "Sending it back"), function () { p.verdict = "Improve"; said("Sent " + p.id + " back: " + req, ln); }); }; }
+      x.plan.layers.forEach(function (L) {
+        pz.appendChild(piece(S.PlanLayer({ idea: x.id, where: where, layer: L, accepted: !!x.accepted, disabledReason: refused,
+          onChoose: function (o) { var was = L.chosen; record(ideaLine("idea choose", [x.id, L.id, o].concat(where)), "Choosing " + o + " for " + L.id + " was not recorded, so " + (was ? was + " is chosen again" : "nothing is chosen") + ".", function () { L.chosen = o; }); },
+          onVerdict: verdict(L), onImprove: improve(L) }), L));
+      });
+      if (x.plan.additions.length) { pz.appendChild(el("h3", { "class": "sub", text: "Additions the agent proposes" })); x.plan.additions.forEach(function (A) { pz.appendChild(piece(S.PlanLayer({ idea: x.id, where: where, addition: A, accepted: !!x.accepted, disabledReason: refused, onVerdict: verdict(A), onImprove: improve(A) }), A)); }); }
       work.appendChild(pz);
     }
-    if (x.plan && !x.accepted) { work.appendChild(block("z-iacc", "Accept it", [ideaAccept(x, where)])); }
-    if (!x.accepted) {
-      work.appendChild(block("z-imore", "More", [C.ideaMore(x, where, function () { if (i1) { refine(); } setTimeout(bump, 400); })]));
+    if (x.plan && !x.accepted) { work.appendChild(ideaAccept(x, where, refused)); }
+    if (x.notes && x.notes.length) {
+      work.appendChild(block("z-in", "Added since", [el("ul", { "class": "notes" }, x.notes.map(function (n) {
+        var ln = ideaLine("idea note remove", [x.id, n.id].concat(where));
+        return el("li", { "data-note": n.id }, [el("span", { "class": "nid", text: n.id }), el("span", { "class": "ntext", text: n.text }), n.taken ? el("span", { "class": "ls-tag", text: "read by a round" }) : el("span", { "class": "ls-tag needs", text: "not read by a round yet" }),
+          !n.taken && !x.accepted ? halo({ label: "Remove " + n.id, size: "small", cmd: ln, disabledReason: refused, onPress: function () { x.notes = x.notes.filter(function (m) { return m !== n; }); said(n.id + " is removed. Its number is not given to another note.", ln, "done"); bump(); } }, "i-rm-" + n.id) : null]);
+      }))]));
     }
-    work.appendChild(S.Command({ why: "The same, in a terminal:", command: "$ loadout idea show " + x.id + " " + where.join(" ") }));
+    if (!x.accepted) { work.appendChild(ideaAddTo(x, where, refused)); }
+    if (!x.accepted) {
+      work.appendChild(block("z-im", "More", [C.ideaMore(x, where, function () { ideaRefine(x); setTimeout(bump, 400); }, refused),
+        el("p", { "class": "ls-from", text: "A round asks an agent and takes a minute or two. It runs on the daemon, so you can leave this page; a toast says when it has finished." })]));
+    }
+    work.appendChild(S.Command({ why: "The same, in a terminal:", command: ideaLine("idea show", [x.id].concat(where)) }));
+    work.appendChild(ideaNextBar(work, x, qs, refused));
+    /* A round that brought questions while you were away from the page's controls takes you to them; if you moved since, it offers to. */
+    if (IDEA_ARRIVED && IDEA_ARRIVED.id === x.id && IDEA_STIR <= IDEA_ROUND_AT && work.isConnected) { var what = IDEA_ARRIVED.what; setTimeout(function () { ideaGoTo(work, what); if (IDEA_ON && IDEA_ON.el === work) { IDEA_ON.paint(); } }, 30); }
   }
-  function ideaAccept(x, where) {
-    var pl = x.plan.placement, choice = pl && pl.isNew ? "new" : "to", to = pl ? pl.slug : "loadout-cli", nm = "", box = el("div", { "class": "accept" });
-    var undecided = x.plan.layers.filter(function (L) { return L.verdict === "Undecided" && !L.chosen; }).length;
-    if (pl) { box.appendChild(el("p", { "class": "place" }, ["The agent would put it on ", el("b", { text: pl.name }), pl.isNew ? ", a new project" : "", ": " + pl.reason + "."])); }
-    var nameId = "acc-new", rowTo = el("label", { "class": "opt" }, [el("input", { type: "radio", name: "acc", value: "to", checked: choice === "to" ? true : null, onchange: function () { choice = "to"; paint(); } }), "Onto a project ", projSelect(to, function (v) { to = v; paint(); }, "Which project").querySelector("select")]);
-    var newIn = el("input", { "class": "ls-text", id: nameId, placeholder: "its name", oninput: function () { nm = newIn.value.trim(); paint(); } });
-    var rowNew = el("label", { "class": "opt" }, [el("input", { type: "radio", name: "acc", value: "new", checked: choice === "new" ? true : null, onchange: function () { choice = "new"; paint(); } }), "As a new project ", newIn]);
-    box.appendChild(el("fieldset", { "class": "where" }, [el("legend", { text: "Where the plan goes" }), rowTo, rowNew]));
-    if (undecided) { box.appendChild(el("p", { "class": "ls-note needs", text: undecided + " layer" + (undecided === 1 ? " has" : "s have") + " no option chosen yet. Accepting now takes the plan as it stands." })); }
-    var act = el("div", { "class": "ls-answers" }); box.appendChild(act);
+  /* Accept it: onto a project or as a new one, with the done-when conditions the plan proposed, kept as typed until a different idea or revision arrives. */
+  function ideaAccept(x, where, refused) {
+    var pl = x.plan.placement, k = x.id + ":" + x.plan.revision, st = IDEA_ACC[k];
+    if (!st) { st = IDEA_ACC[k] = { goes: pl && pl.isNew ? "new" : "project", onto: pl && !pl.isNew ? pl.slug : (x.list !== "~" ? x.list : "loadout-cli"), named: pl && pl.isNew ? pl.name : "", doneWhen: (x.plan.doneWhen || []).join("\n") }; }
+    var box = el("section", { "class": "accept", "aria-labelledby": "z-ia" }, [zone("", "Accept it", "z-ia")]);
+    if (pl) { box.appendChild(el("p", { "class": "place" }, ["The agent would put it on ", el("strong", { text: pl.name }), pl.isNew ? ", a new project" : "", ": " + pl.reason])); }
+    var sel = el("select", { "class": "ls-text", name: "accept-onto", "aria-label": "The project it goes on", "data-k": "i-onto", disabled: st.goes !== "project" ? true : null, onchange: function () { st.onto = sel.value; paint(); } }, PROJ.filter(function (p) { return p.available; }).map(function (p) { return el("option", { value: p.id, text: p.name + " · " + p.id }); }));
+    sel.value = st.onto;
+    var newIn = el("input", { "class": "ls-text", name: "accept-new-project", "aria-label": "The new project's name", placeholder: "its name", "data-k": "i-named", value: st.named, disabled: st.goes !== "new" ? true : null, oninput: function () { st.named = newIn.value; paint(); } });
+    newIn.value = st.named;
+    function radio(v) { return el("input", { type: "radio", name: "accept-goes-" + x.id, value: v, checked: st.goes === v ? true : null, onchange: function () { st.goes = v; sel.disabled = v !== "project"; newIn.disabled = v !== "new"; paint(); } }); }
+    box.appendChild(el("fieldset", {}, [el("legend", { text: "Where the plan goes" }), el("label", { "class": "opt" }, [radio("project"), "Onto a project", sel]), el("label", { "class": "opt" }, [radio("new"), "As a new project", newIn])]));
+    var dw = el("textarea", { "class": "ls-text", name: "accept-done-when", rows: 4, "data-k": "i-donewhen", disabled: refused ? true : null, oninput: function () { st.doneWhen = dw.value; paint(); } });
+    dw.value = st.doneWhen;
+    box.appendChild(el("label", { "class": "done-when" }, [el("span", {}, ["Done when ", el("span", { "class": "hint", text: "one condition a line: what must be true for it to be finished. Accepting confirms them, and a run for the task is held to them." })]), dw]));
+    var noDw = el("p", {}, [el("span", { "class": "ls-tag needs", text: "no done-when" }), " It can still be accepted, but a team queue will refuse the task until it has some."]);
+    box.appendChild(noDw);
+    var undecided = x.plan.layers.filter(ideaNeedsChoice).length;
+    if (undecided) { box.appendChild(el("p", {}, [el("span", { "class": "ls-tag needs", text: undecided + " layer" + (undecided === 1 ? " has" : "s have") + " no option chosen" }), " It can still be accepted; the plan says so where it is written."])); }
+    var act = el("div", { "class": "ls-answers", "data-next": "accept" }); box.appendChild(act);
+    function lines() { return st.doneWhen.split(/\r?\n/).map(function (s) { return s.trim(); }).filter(Boolean); }
     function paint() {
+      var typed = lines(), proposed = x.plan.doneWhen || [], same = typed.length === proposed.length && typed.every(function (s, i) { return s === proposed[i].trim(); });
+      var dwWords = same ? [] : !typed.length ? ["--no-done-when"] : typed.map(function (s) { return "--done-when=" + s; });
+      var words = [x.id].concat(where, st.goes === "project" ? ["--to", st.onto || "<slug>"] : ["--new-project=" + (st.named.trim() || "<name>")], dwWords), ln = ideaLine("idea accept", words);
+      var reason = refused || (st.goes === "project" ? (st.onto ? null : "choose the project it goes on") : st.named.trim() ? null : "name the new project");
+      noDw.hidden = !!typed.length;
       act.textContent = "";
-      var ln = "$ loadout idea accept " + x.id + " " + where.join(" ") + (choice === "new" ? " --new-project=" + (nm ? S.shellQuote(nm) : "<name>") : " --to " + to);
-      act.appendChild(halo({ label: "Accept the plan", kind: "", solid: true, glyph: "✓", cmd: ln, disabledReason: choice === "new" && !nm ? "name the new project first" : null, onPress: function () { x.accepted = { project: choice === "new" ? nm : to, plan: "docs/plans/" + x.id + ".md", by: "you", when: "17 Oct" }; x.stage = "Accepted"; said("Accepted onto " + x.accepted.project, ln, "done"); bump(); } }, "i-accept"));
+      act.appendChild(halo({ label: "Accept the plan", solid: !reason, glyph: "✓", size: "small", cmd: ln, disabledReason: reason, onPress: function () {
+        var to = st.goes === "project" ? st.onto : st.named.trim();
+        x.accepted = { project: to, plan: "docs/plans/" + x.id + ".md", by: "you", when: "17 Oct" }; x.stage = "Accepted";
+        if (TASKS[to]) { TASKS[to].unshift({ id: x.id, title: x.title, state: "open", kind: "idea", declaredBy: "you", declared: "17 Oct", note: null }); }
+        said("Accepted onto " + to, ln, "done"); bump();
+      } }, "i-accept"));
     }
     paint();
     return box;
   }
-  function ideaAdd(work) {
-    work.appendChild(el("div", { "class": "ihead" }, [el("h2", { text: "Drop an idea in" }), el("p", { "class": "slug", text: "An idea, to be fleshed out by an agent later. Nothing is asked of an agent until you start a round." })]));
-    var text = "", list = "loadout-cli", ta = el("textarea", { "class": "ls-text big", id: "i-new", rows: 4, placeholder: "The idea, in your own words", oninput: function () { text = ta.value; paint(); } });
-    var where = el("div", { "class": "wherebar" }, [el("label", { "for": "i-new", "class": "lab", text: "The idea" })]);
-    work.appendChild(where); work.appendChild(ta);
-    var pick = projSelect(list, function (v) { list = v; paint(); }, "For");
-    var sel = pick.querySelector("select"); sel.appendChild(el("option", { value: "~", text: "No project yet · workspace-wide" }));
-    work.appendChild(pick);
+  /* Add to it: a note for the next round, with that round started now unless the box is unticked. Kept as typed until a different idea is opened. */
+  function ideaAddTo(x, where, refused) {
+    var st = IDEA_MORE[x.id] || (IDEA_MORE[x.id] = { text: "", refine: true }), open = ideaUnanswered(x);
+    var sec = block("z-ito", "Add to it", []);
+    if (open) { sec.appendChild(el("p", { role: "note" }, [el("span", { "class": "ls-tag needs", text: open + " question" + (open === 1 ? " is" : "s are") + " still open" }), " The note is kept either way; a round waits until they are answered."])); }
+    sec.appendChild(el("label", { "class": "ls-vh", "for": "idea-more", text: "What to add to it" }));
+    var ta = el("textarea", { id: "idea-more", "class": "ls-text", name: "idea-more", rows: 3, "data-k": "idea-more", placeholder: "Something the next round should know. It is kept as you write it.", disabled: refused ? true : null, oninput: function () { st.text = ta.value; paint(); } });
+    ta.value = st.text; sec.appendChild(ta);
+    var cb = el("input", { type: "checkbox", name: "idea-refine-now", "data-k": "idea-refine-now", disabled: refused ? true : null, onchange: function () { st.refine = cb.checked; paint(); } }); cb.checked = st.refine;
+    sec.appendChild(el("label", { "class": "opt" }, [cb, " Refine now"]));
+    var act = el("div", { "class": "ls-answers" }); sec.appendChild(act);
+    function paint() {
+      var words = ["--to", x.id, "--text=" + (st.text.trim() || "<note>")].concat(st.refine ? ["--refine"] : [], where), ln = ideaLine("idea add", words);
+      act.textContent = "";
+      act.appendChild(halo({ label: "Add it", size: "small", solid: !refused && !!st.text.trim(), glyph: "+", cmd: ln, disabledReason: refused || (st.text.trim() ? null : "write what to add first"), onPress: function () {
+        var n = "N" + ((x.notes || []).reduce(function (m, one) { return Math.max(m, +one.id.slice(1) || 0); }, 0) + 1);
+        x.notes = (x.notes || []).concat([{ id: n, text: st.text.trim(), by: "you", added: "17 Oct", taken: null }]);
+        /* The daemon says so when no round started, as while questions are open. */
+        if (st.refine && open) { said("Added " + n + " to " + x.id + ". No round was started: " + open + " question" + (open === 1 ? " is" : "s are") + " still open, and a round waits until they are answered.", ln, "done"); }
+        else if (st.refine) { said("Added to " + x.id + ", and a round has started on it. It usually takes a minute or two.", ln, "done"); ideaRefine(x); }
+        else { said("Added to " + x.id + ". No round was started; the next one reads it.", ln, "done"); }
+        st.text = ""; bump();
+      } }, "i-addto"));
+    }
+    paint();
+    return sec;
+  }
+  function ideaAdd(work, refused) {
+    work.appendChild(el("div", { "class": "ihead" }, [el("h2", { text: "Drop an idea in" }), el("p", { "class": "slug", text: "an agent fleshes it out when you refine it" })]));
+    var st = IDEA_ADD;
+    work.appendChild(el("label", { "class": "ls-vh", "for": "idea-text", text: "The idea, in your own words" }));
+    var ta = el("textarea", { "class": "ls-text big", id: "idea-text", "data-k": "idea-text", rows: 5, placeholder: "The idea, in your own words. It is kept as you write it.", oninput: function () { st.text = ta.value; paint(); } });
+    ta.value = st.text; work.appendChild(ta);
+    var sel = el("select", { "class": "ls-text", name: "idea-for", "data-k": "idea-for", onchange: function () { st.list = sel.value; paint(); } }, [el("option", { value: "~", text: "No project yet" })].concat(PROJ.filter(function (p) { return p.available; }).map(function (p) { return el("option", { value: p.id, text: p.name + " · " + p.id }); })));
+    sel.value = st.list;
+    work.appendChild(el("div", { "class": "accept wherebar" }, [el("label", { "class": "opt" }, [el("span", { "class": "lab", text: "For" }), sel])]));
     var act = el("div", { "class": "ls-answers" }); work.appendChild(act);
     function paint() {
+      var words = ["--text=" + (st.text.trim() || "<idea>")].concat(st.list === "~" ? ["--global"] : ["--project", st.list]), ln = ideaLine("idea add", words);
       act.textContent = "";
-      var w = list === "~" ? ["--global"] : ["--project", list], ln = "$ loadout idea add --text=" + (text.trim() ? S.shellQuote(text.trim()) : "<idea>") + " " + w.join(" ");
-      act.appendChild(halo({ label: "Drop it in", solid: true, glyph: "+", cmd: ln, disabledReason: text.trim() ? null : "say the idea first", onPress: function () { var id = text.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 32); IDEAS.push({ id: id, list: list, title: text.trim(), stage: "Captured", ask: text.trim(), understanding: "", questions: [], plan: null, accepted: null }); said("Dropped in: " + text.trim(), ln, "done"); go("ideas/" + list + "/" + id); } }, "i-drop"));
+      act.appendChild(halo({ label: "Drop it in", solid: !refused && !!st.text.trim(), glyph: "+", cmd: ln, disabledReason: refused || (st.text.trim() ? null : "write the idea first"), onPress: function () {
+        var t = st.text.trim(), id = t.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 32);
+        IDEAS.unshift({ id: id, list: st.list, title: t, stage: "Captured", state: "open", ask: t, rounds: [], questions: [], plan: null, notes: [], accepted: null });
+        said("Dropped it in. It is on the shelf; refine it when you want an agent to flesh it out.", ln, "done"); st.text = ""; bump();
+      } }, "i-drop"));
     }
     paint();
   }
-  function ideaDumps(work) {
-    work.appendChild(el("div", { "class": "ihead" }, [el("h2", { text: "Notes kept elsewhere" }), el("p", { "class": "slug", text: "Paste notes from wherever you keep them, and an agent splits them into ideas and tasks. Nothing is recorded until you record the pieces." })]));
-    work.appendChild(C.ideaDump());
-    DUMPS.forEach(function (d) { work.appendChild(S.NoteDump({ dump: d, onApply: function (ks) { d.items.forEach(function (it) { if (ks.indexOf(String(it.number)) >= 0) { it.recorded = true; } }); said("Recorded " + ks.length, "$ loadout idea dump apply " + d.id); bump(); }, onSplit: function () { said("Splitting " + d.id + " again", "$ loadout idea dump split " + d.id); }, onShow: function () { S.Dialog({ title: d.source, why: d.id + " · captured " + d.captured, content: el("pre", { "class": "dumpshow", text: d.items.map(function (i) { return i.excerpt || i.title; }).join("\n\n") }), cancelLabel: "Close" }).open(); } })); });
+  function ideaDumps(work, refused) {
+    work.appendChild(el("div", { "class": "ihead" }, [el("h2", { text: "Notes kept elsewhere" }), el("p", { "class": "slug", text: "split into ideas and tasks by an agent; nothing is recorded until you say" })]));
+    work.appendChild(C.ideaDump(refused));
+    DUMPS.forEach(function (d) { work.appendChild(S.NoteDump({ dump: d, disabledReason: refused, onApply: function (ks) { d.items.forEach(function (it) { if (ks.indexOf(String(it.number)) >= 0) { it.recorded = true; } }); said("Recorded " + ks.length, ideaLine("idea dump apply", [d.id])); bump(); }, onSplit: function () { said("Splitting " + d.id + " again", ideaLine("idea dump split", [d.id])); }, onShow: function () { S.Dialog({ title: "Notes " + d.id, why: ideaLine("idea dump show", [d.id]), content: el("pre", { "class": "dumpshow", text: d.text || d.items.map(function (i) { return i.excerpt || i.title; }).join("\n\n") }), cancelLabel: "Close" }).open(); } })); });
+    if (!DUMPS.length) { work.appendChild(el("p", { "class": "calm", text: "No notes dropped in yet." })); }
     work.appendChild(from("$ loadout idea dump list"));
   }
 
@@ -1852,9 +2254,13 @@ d.appendChild(block("z-ddo", "Do", [C.dossierDo(p, tasks)]));
     "design.cli": { title: "Command-line design", kind: "design", summary: "Verbs, options, exit codes and output that scripts can read", origin: "workspace", tokens: 1700, activation: { taskPhrases: ["command", "option", "flag"] }, body: "# Command-line design\n\nEvery command has --json. Exit codes mean something." },
     "style.voice": { title: "Your writing voice", kind: "style", summary: "Rendered from your voice guide", origin: "yours", tokens: 1000, always: true, activation: { always: true }, body: "# Your writing voice\n\nPlain words. Short sentences. No em dashes." },
     "database.postgresql": { title: "PostgreSQL", kind: "database", summary: "Indexes, migrations and EXPLAIN", origin: "built in", tokens: 1900, activation: { dependencies: ["Npgsql"], globs: ["db/migrations/**"] }, body: "# PostgreSQL\n\nRead EXPLAIN ANALYZE before changing a query." },
-    "framework.svelte": { title: "Svelte", kind: "framework", summary: "Runes, stores and accessible components", origin: "built in", tokens: 2200, activation: { globs: ["**/*.svelte"] }, body: "# Svelte\n\nRunes, not stores, for new code." }
+    "framework.svelte": { title: "Svelte", kind: "framework", summary: "Runes, stores and accessible components", origin: "built in", tokens: 2200, activation: { globs: ["**/*.svelte"] }, body: "# Svelte\n\nRunes, not stores, for new code." },
+    "skill.release-notes": { title: "Release notes", kind: "skill", summary: "Notes written from the merged pull requests", origin: "workspace", tokens: 900, activation: {}, body: "# Release notes\n\nOne line a change, in the words a user would use." }
   };
-  var CX = { task: "", mode: "implement" };
+  var CX = { task: "", mode: "implement", kind: "" };
+  /* Each section is read when it is first opened: "Reading…" or "Checking…" until then, as main says while the daemon answers. */
+  var CTX_READ = {}, CTX_LIVE = true;
+  function ctxRead(key, delay) { if (CTX_READ[key] || !CTX_LIVE) { return true; } if (CTX_READ[key] === undefined) { CTX_READ[key] = false; setTimeout(function () { CTX_READ[key] = true; bump(); }, delay || 350); } return false; }
   function explain(slug) {
     var sel = ["foundation", "style.voice"], om = [], t = CX.task.toLowerCase();
     if (slug !== "home-lab") { sel.push("language.csharp"); }
@@ -1865,64 +2271,123 @@ d.appendChild(block("z-ddo", "Do", [C.dossierDo(p, tasks)]));
     var modeCost = { implement: 276, advise: 180, investigate: 240, review: 210 }[CX.mode];
     var items = sel.map(function (id) { var s = SPECS[id]; return { id: id, title: s.title, estimatedTokens: s.tokens, always: !!s.always, reason: s.always ? "every session" : ({ "language.csharp": "the repository is C#", "database.postgresql": "Npgsql is a dependency", "practice.testing": CX.mode === "review" ? "review mode" : "the task says tests", "design.cli": "the task names a command" }[id] || "") }; });
     items.push({ id: "mode." + CX.mode, title: CX.mode.charAt(0).toUpperCase() + CX.mode.slice(1) + " mode", estimatedTokens: modeCost, always: false, reason: "the mode you chose" });
-    return { selected: items, omitted: om, conflicts: 1, budget: 8000 };
+    /* The daemon's estimate against the budget; near it from 80% (token-budget-warn-percent). */
+    var used = items.reduce(function (s, x) { return s + x.estimatedTokens; }, 0), budget = 8000;
+    return { selected: items, omitted: om, conflicts: 1, budget: budget, estimatedTokens: used, nearBudget: used <= budget && used * 100 >= budget * 80 };
   }
+  /* What rules, styles, profiles, candidates, documents, health and voice read for each project, in the shapes their --json gives. */
+  var CTX_DATA = {
+    "loadout-cli": {
+      rules: { list: [{ name: "tui-colours.md", globs: ["src/Loadout.Tui/**"], bytes: 1940 }, { name: "studio-pages.md", globs: ["studio/**"], bytes: 6300 }, { name: "tests.md", globs: ["tests/**"], bytes: 3640 }], budget: { alwaysLoadedBytes: 4210, scopedBytes: 11880, overBudget: false },
+        audit: { verdict: "HEALTHY", findings: [{ rule: "AGENTS.md", severity: "info", detail: "2,900 bytes; within the always-loaded budget" }] } },
+      styles: [{ name: "plain-csharp", layer: "codebase", coreTokens: 420 }, { name: "dense-csharp", layer: null, coreTokens: 380 }],
+      profiles: [{ name: "release", description: "Loads the release checklist and the changelog rules" }],
+      candidates: [{ path: "projects/loadout-cli/rules/commit-style.md", reason: "never mentions the project" }],
+      docs: { documents: 38, findings: [{ path: "README.md", line: 112, kind: "broken-link", detail: "links to 'docs/teams.md', which is not there." }, { path: "docs/guides/studio.md", line: 41, kind: "missing-path", detail: "names 'studio/src/pages/Office.svelte', which is not in the repository." }] },
+      health: { audit: { checks: 41, applicable: 6, findings: [{ specialist: "practice.testing", rule: "one behaviour per test", occurrences: 3, caveat: "judged from the test names, so it can be wrong" }] } }
+    },
+    starstats: {
+      rules: { list: [], budget: { alwaysLoadedBytes: 9800, scopedBytes: 0, overBudget: true }, audit: { verdict: "NEEDS ATTENTION", findings: [{ rule: "CLAUDE.md", severity: "warning", detail: "9,800 bytes always loaded; the budget is 8,000. loadout rules split can move sections into scoped rules." }] } },
+      styles: [], profiles: [], candidates: [],
+      docs: { documents: 12, findings: [] },
+      health: { audit: { checks: 18, applicable: 4, findings: [] } }
+    }
+  };
+  var CTX_LIBRARY = { specialists: 64, errors: 0, warnings: 1, findings: [{ specialist: "design.cli", severity: "warning", kind: "summary-length", detail: "its summary is longer than 120 characters" }] };
+  var CTX_VOICE = { guide: { id: "plain-english", version: 3, summary: "Plain words, short sentences", reference: "plain-english@3" }, layers: [{ layer: "words", name: "words", exists: true, rules: 12 }, { layer: "sentences", name: "sentences", exists: true, rules: 7 }, { layer: "structure", name: "structure", exists: false, rules: 0 }],
+    rules: [{ rule: "No em dashes", layer: "words", evidence: "learned from 41 samples" }, { rule: "One idea per sentence", layer: "sentences", evidence: "learned from 41 samples" }, { rule: "Say what was verified", layer: "sentences", evidence: "learned from 18 samples" }],
+    runs: 2, guides: [{ reference: "plain-english@3", ships: true }, { reference: "house-style@1", ships: false }] };
+  function ctxData(slug) { return CTX_DATA[slug] || { rules: { list: [], budget: { alwaysLoadedBytes: 0, scopedBytes: 0, overBudget: false }, audit: { verdict: "HEALTHY", findings: [] } }, styles: [], profiles: [], candidates: [], docs: { documents: 0, findings: [] }, health: { audit: { checks: 0, applicable: 0, findings: [] } } }; }
+  function ctxPlural(n, one) { return n + " " + one + (n === 1 ? "" : "s"); }
   var CSECT = [["load", "What a session loads"], ["specialists", "Specialists"], ["rules", "Rules and styles"], ["docs", "Documents"], ["health", "Health"], ["voice", "Your writing voice"], ["handoff", "Handing over"]];
   function renderContext(main, r) {
-    var parts = r.split("/"), slug = parts[1] || "loadout-cli", sec = parts[2] || "load";
-    pageHead(main, "Context", "what a session reads before it starts, and what it costs", [projSelect(slug, function (v) { go("context/" + v + "/" + (sec === "specialist" ? "specialists" : sec)); }, "Project")]);
-    main.appendChild(pnav("Context", CSECT.map(function (c) { return ["context/" + slug + "/" + c[0], c[1]]; }), "context/" + slug + "/" + (sec === "specialist" ? "specialists" : sec)));
+    var parts = r.split("/"), slug = parts[1] || null, sec = parts[2] || "load";
+    CTX_LIVE = main.isConnected;
+    pageHead(main, "Context", "what a session reads before it starts, and what it costs", [projSelect(slug || PROJ[0].id, function (v) { go("context/" + v + "/" + (sec === "specialist" ? "specialists" : sec)); }, "Project")]);
+    main.appendChild(pnav("Context", CSECT.map(function (c) { return ["context/" + (slug || "") + "/" + c[0], c[1]]; }), "context/" + (slug || "") + "/" + (sec === "specialist" ? "specialists" : sec)));
     var box = el("div", { "class": "ctx" }); main.appendChild(box);
+    /* With no project in the address, Studio goes to the first one. */
+    if (!slug) { box.appendChild(el("p", { "class": "calm", role: "status", text: "Reading…" })); if (route() === "context" || route() === "context/") { setTimeout(function () { if (route() === "context" || route() === "context/") { go("context/" + PROJ[0].id); } }, 0); } return; }
+    var data = ctxData(slug);
     if (sec === "load") {
       var e = explain(slug), words = (CX.task ? [S.shellQuote(CX.task)] : []).concat(["--project", slug, "--mode", CX.mode]);
       var form = el("form", { "class": "explain", onsubmit: function (ev) { ev.preventDefault(); bump(); } });
-      var ti = el("input", { "class": "ls-text", id: "cx-task", "data-k": "cx-task", value: CX.task, placeholder: "Fix the flaky upload test", oninput: function () { CX.task = ti.value; } });
+      var ti = el("input", { "class": "ls-text", id: "cx-task", "data-k": "cx-task", value: CX.task, autocomplete: "off", placeholder: "What the session is for", oninput: function () { CX.task = ti.value; } });
       ti.value = CX.task;
       form.appendChild(el("div", { "class": "ls-field grow" }, [el("label", { "class": "lab", "for": "cx-task", text: "The task, in a sentence (optional)" }), ti]));
       var mf = el("fieldset", { "class": "modes" }, [el("legend", { "class": "lab", text: "Mode" })]);
       ["implement", "advise", "investigate", "review"].forEach(function (m) { mf.appendChild(el("label", {}, [el("input", { type: "radio", name: "cx-mode", value: m, checked: CX.mode === m ? true : null, "data-k": "cx-m-" + m, onchange: function () { CX.mode = m; bump(); } }), m])); });
       form.appendChild(mf);
-      form.appendChild(halo({ label: "Explain it", solid: true, size: "small", cmd: "$ loadout instructions explain " + words.join(" ") + " · reads only", onPress: function () { CX.task = ti.value; bump(); } }, "cx-go"));
+      form.appendChild(halo({ label: "Explain it", size: "small", cmd: "$ loadout instructions explain " + words.join(" ") + " · reads only", onPress: function () { CX.task = ti.value; bump(); } }, "cx-go"));
       box.appendChild(form);
-      box.appendChild(block("z-cl", "What a session on " + slug + " would load", [S.LoadStack({ selected: e.selected, omitted: e.omitted, conflicts: e.conflicts, tokenBudget: e.budget, href: function (id) { return SPECS[id] ? "#context/" + slug + "/specialist/" + id : null; } }), from("$ loadout instructions explain " + words.join(" "))]));
+      if (ctxRead(slug + "/load")) {
+        box.appendChild(block("z-cl", "What a session on " + slug + " would load", [S.LoadStack({ selected: e.selected, omitted: e.omitted, conflicts: e.conflicts, estimatedTokens: e.estimatedTokens, tokenBudget: e.budget, nearBudget: e.nearBudget, href: function (id) { return SPECS[id] ? "#context/" + slug + "/specialist/" + id : null; } }), from("$ loadout instructions explain " + words.join(" "))]));
+      } else { box.appendChild(el("p", { "class": "calm", role: "status", text: "Reading…" })); }
       box.appendChild(C.ctxCompare(slug));
       return;
     }
     if (sec === "specialists" || sec === "specialist") {
       if (sec === "specialist") { return specialistPage(box, slug, parts[3]); }
-      var grid = el("div", { "class": "specs" });
-      Object.keys(SPECS).forEach(function (id) { var s = SPECS[id]; grid.appendChild(el("a", { "class": "spec", href: "#context/" + slug + "/specialist/" + id, "data-k": "sp-" + id }, [el("span", { "class": "k", text: s.kind + (s.always ? " · always" : "") }), el("b", { text: s.title }), el("span", { "class": "s", text: s.summary }), el("span", { "class": "n", text: s.tokens.toLocaleString("en-GB") + " tokens · " + s.origin })])); });
-      box.appendChild(block("z-cs", "Specialists", [grid, from("$ loadout instructions list " + slug)]));
+      if (ctxRead(slug + "/specialists")) {
+        var ids = Object.keys(SPECS).filter(function (id) { return !CX.kind || SPECS[id].kind === CX.kind; });
+        /* The kinds offered are those of the specialists listed, as main reads them from the list it has. */
+        var kinds = ids.map(function (id) { return SPECS[id].kind; }).filter(function (k, i, a) { return a.indexOf(k) === i; });
+        var ks = el("select", { "class": "ls-text", id: "specialist-kind", "data-k": "specialist-kind", onchange: function () { CX.kind = ks.value; bump(); } }, [el("option", { value: "", text: "every kind" })].concat(kinds.map(function (k) { return el("option", { value: k, text: k }); })));
+        ks.value = CX.kind;
+        var grid = el("div", { "class": "specs" });
+        ids.forEach(function (id) { var s = SPECS[id]; grid.appendChild(el("a", { "class": "spec", href: "#context/" + slug + "/specialist/" + id, "data-k": "sp-" + id }, [el("span", { "class": "k", text: s.kind + (s.always ? " · always" : "") }), el("b", { text: s.title }), el("span", { "class": "s", text: s.summary }), el("span", { "class": "n", text: s.tokens + " tokens · " + s.origin })])); });
+        box.appendChild(block("z-cs", "Specialists", [el("div", { "class": "psel inline" }, [el("label", { "for": "specialist-kind", text: "Kind" }), ks]), grid, from("$ loadout instructions list " + slug + (CX.kind ? " --kind " + CX.kind : ""))]));
+      } else { box.appendChild(el("p", { "class": "calm", role: "status", text: "Reading…" })); }
       box.appendChild(C.ctxSpecialists(slug));
       return;
     }
     if (sec === "rules") {
+      var ru = data.rules, b = function (n) { return n.toLocaleString("en-GB"); };
+      box.appendChild(el("div", { "class": "bytes" }, [el("p", {}, [el("b", { text: b(ru.budget.alwaysLoadedBytes) }), "bytes always loaded"]), el("p", {}, [el("b", { text: b(ru.budget.scopedBytes) }), "bytes scoped to the files they cover" + (ru.budget.overBudget ? ", over the budget" : "")])]));
       box.appendChild(block("z-cr", "Rules", [
-        el("div", { "class": "bytes" }, [el("p", {}, [el("b", { text: "4,210" }), " bytes always loaded"]), el("p", {}, [el("b", { text: "11,880" }), " scoped to the files they cover"])]),
-        el("ul", { "class": "plain" }, [["src/Loadout.Tui/**", "tui-colours.md", "1,940 bytes"], ["studio/**", "studio-pages.md", "6,300 bytes"], ["tests/**", "tests.md", "3,640 bytes"]].map(function (x) { return el("li", {}, [el("b", { text: x[1] }), " · ", el("code", { text: x[0] }), " · " + x[2]]); })),
-        S.HealthList({ verdict: "Fine", findings: [{ name: "AGENTS.md", severity: "Info", detail: "2,900 bytes; within the always-loaded budget" }], noneText: "Nothing to put right." }),
-        from("$ loadout rules list " + slug + ", loadout rules budget " + slug + " and loadout rules audit " + slug)]));
-      box.appendChild(block("z-cst", "Coding styles", [el("ul", { "class": "plain" }, [el("li", {}, [el("b", { text: "plain-csharp" }), " · ", S.Signal("met"), " in force · Records, no regions, early returns"]), el("li", {}, [el("b", { text: "dense-csharp" }), " · Fewer lines, more expression bodies"])]), from("$ loadout style list " + slug)]));
-      box.appendChild(block("z-cpr", "Profiles", [el("ul", { "class": "plain" }, [el("li", {}, [el("b", { text: "release" }), " · Loads the release checklist and the changelog rules"])]), from("$ loadout profile list " + slug)]));
-      box.appendChild(C.ctxRules(slug));
+        ru.list.length ? el("ul", { "class": "rowsx" }, ru.list.map(function (x) { return el("li", {}, [el("b", { text: x.name || x.path }), x.globs && x.globs.length ? el("code", { text: x.globs.join(", ") }) : null, x.bytes ? el("span", { text: b(x.bytes) + " bytes" }) : null]); })) : el("p", { "class": "lead", text: "No path-scoped rules." }),
+        el("h3", { "class": "sub", text: "The audit" }),
+        S.HealthList({ verdict: ru.audit.verdict, findings: ru.audit.findings.map(function (f) { return { name: f.rule || f.kind, severity: f.severity, detail: f.detail }; }), from: "$ loadout rules list " + slug + ", loadout rules budget " + slug + " and loadout rules audit " + slug })]));
+      box.appendChild(block("z-cst", "Coding styles", [data.styles.length ? el("ul", { "class": "rowsx" }, data.styles.map(function (s) { return el("li", {}, [el("b", { text: s.name })].concat(s.layer ? [S.Signal("met"), el("span", { text: "in force · " + s.layer })] : [el("span", { text: "in the library, not in force" })], s.coreTokens ? [el("code", { text: s.coreTokens + " tokens" })] : [])); })) : el("p", { "class": "lead", text: "No coding styles yet." }), from("$ loadout style list " + slug)]));
+      box.appendChild(block("z-cpr", "Profiles", [el("ul", { "class": "rowsx" }, data.profiles.map(function (p) { return el("li", {}, [el("b", { text: p.name }), el("span", { text: p.description })]); })), from("$ loadout profile list " + slug)]));
+      box.appendChild(block("z-cg", "Guidance for everybody", [
+        data.candidates.length ? el("ul", { "class": "rowsx" }, data.candidates.map(function (c) { return el("li", {}, [el("code", { text: c.path || c.file }), c.reason ? el("span", { text: c.reason }) : null]); })) : el("p", { "class": "lead", text: "Nothing here looks like it belongs to every project." }),
+        el("p", { "class": "ls-from" }, ["Guidance that never mentions this project, from ", el("code", { text: "$ loadout share candidates --project " + slug }), "."]),
+        C.ctxRules(slug, data.candidates)]));
       return;
     }
     if (sec === "docs") {
-      box.appendChild(block("z-cd", "Documents", [el("p", { "class": "lead", text: "38 documents checked; 2 places where they have come adrift." }), S.HealthList({ findings: [{ name: "docs/commands/usage.md:41", severity: "Warning", detail: "names --by week, which loadout usage does not have" }, { name: "README.md:112", severity: "Warning", detail: "links docs/teams.md, which was renamed docs/team-runs.md" }] }), from("$ loadout docs audit " + slug)]));
+      if (ctxRead(slug + "/docs")) {
+        var dc = data.docs, n = dc.findings.length;
+        box.appendChild(block("z-cd", "Documents", [el("p", { "class": "lead", text: ctxPlural(dc.documents, "document") + " checked; " + (n ? ctxPlural(n, "place") + " where they have come adrift" : "every reference resolves") + "." }),
+          S.HealthList({ findings: dc.findings.map(function (f) { return { name: f.path ? f.path + (f.line ? ":" + f.line : "") : f.kind, severity: "warning", detail: [f.kind, f.detail].filter(Boolean).join(" · ") }; }), from: "$ loadout docs audit " + slug, noneText: "Every reference resolves." })]));
+      } else { box.appendChild(el("p", { "class": "calm", role: "status", text: "Checking…" })); }
       box.appendChild(C.ctxDocs(slug));
       return;
     }
     if (sec === "health") {
-      box.appendChild(block("z-ch", "Health", [el("p", { "class": "lead", text: "6 specialists apply here, and 41 checks ran: 1 place where the project departs from what they ask." }), S.HealthList({ findings: [{ name: "practice.testing", severity: "Warning", detail: "tests/Loadout.Tests/UploadTests.cs has three behaviours in one test" }] }), el("p", { "class": "lead", text: "The library has 64 specialists: 0 errors, 1 warning." }), S.HealthList({ findings: [{ name: "design.cli", severity: "Warning", detail: "its summary is longer than 120 characters" }] }), from("$ loadout instructions audit --project " + slug + " and loadout instructions validate " + slug)]));
+      if (ctxRead(slug + "/health", 500)) {
+        var au = data.health.audit, lib = CTX_LIBRARY, m = au.findings.length;
+        box.appendChild(block("z-ch", "Health", [el("p", { "class": "lead", text: au.applicable + " specialists apply here, and " + au.checks + " checks ran: " + (m ? ctxPlural(m, "place") + " where the project departs from what they ask" : "nothing departs from what they ask") + "." }),
+          S.HealthList({ findings: au.findings.map(function (f) { return { name: f.specialist, severity: "warning", detail: [f.rule, f.occurrences ? ctxPlural(f.occurrences, "place") : null, f.caveat].filter(Boolean).join(" · ") }; }), from: "$ loadout instructions audit --project " + slug, noneText: "Nothing departs from what the specialists ask." }),
+          el("h3", { "class": "sub", text: "The library" }),
+          el("p", { "class": "lead", text: "The library has " + lib.specialists + " specialists: " + ctxPlural(lib.errors, "error") + ", " + ctxPlural(lib.warnings, "warning") + "." }),
+          S.HealthList({ findings: lib.findings.map(function (f) { return { name: f.specialist || f.kind, severity: f.severity, detail: f.detail }; }), from: "$ loadout instructions validate " + slug, noneText: "Every specialist reads as it should." })]));
+      } else { box.appendChild(el("p", { "class": "calm", role: "status", text: "Checking…" })); }
       box.appendChild(C.ctxHealth(slug));
       return;
     }
     if (sec === "voice") {
-      box.appendChild(block("z-cv", "Your writing voice", [el("p", { "class": "lead", text: "How you write, learned from your own writing and checked against it. The rules in force are rendered into the style specialist your sessions load." }),
-        el("dl", { "class": "ls-rules" }, [el("dt", { text: "Guide" }), el("dd", { text: "plain-english@3 · Plain words, short sentences" }), el("dt", { text: "Layers" }), el("dd", { text: "words: 12 rules · sentences: 7 rules · structure: not learned yet" })]),
-        el("ul", { "class": "plain" }, ["No em dashes · words · learned from 41 samples", "One idea per sentence · sentences · learned from 41 samples", "Say what was verified · sentences · learned from 18 samples"].map(function (t) { return el("li", { text: t }); })),
-        from("$ loadout voice show --project " + slug, ". 4 learn runs so far, as loadout voice runs lists them."),
-        el("p", { "class": "ls-from" }, ["Guides here: plain-english@3, house-style@1 (yours), from ", el("code", { text: "$ loadout voice guide list" }), "."])]));
+      var vk = [el("p", { "class": "lead", text: "How you write, learned from your own writing and checked against it. The rules in force are rendered into the style specialist your sessions load." })];
+      if (ctxRead("voice/" + slug)) {
+        var v = CTX_VOICE;
+        vk.push(el("dl", { "class": "facts" }, [el("dt", { text: "Guide" }), el("dd", { text: v.guide.reference + " · " + v.guide.summary }), el("dt", { text: "Layers" }), el("dd", { text: v.layers.map(function (l) { return l.name + ": " + (l.exists ? ctxPlural(l.rules, "rule") : "not learned yet"); }).join(" · ") }),
+          el("dt", { text: "Learn runs" }), el("dd", {}, [v.runs + " so far, as ", el("code", { text: "loadout voice runs" }), " lists them"])]));
+        if (v.rules.length) { vk.push(el("ul", { "class": "rowsx" }, v.rules.map(function (rule) { return el("li", { text: Object.keys(rule).map(function (k) { return rule[k]; }).filter(function (x) { return typeof x === "string"; }).slice(0, 3).join(" · ") }); }))); }
+        vk.push(from("$ loadout voice show --project " + slug));
+        vk.push(el("p", { "class": "ls-from" }, ["Guides here: " + v.guides.map(function (g) { return g.reference + (g.ships ? "" : " (yours)"); }).join(", ") + ", from ", el("code", { text: "$ loadout voice guide list" }), "."]));
+      } else { vk.push(el("p", { "class": "calm", role: "status", text: "Reading…" })); }
+      box.appendChild(block("z-cv", "Your writing voice", vk));
       box.appendChild(C.ctxVoice(slug));
       return;
     }
@@ -1930,13 +2395,19 @@ d.appendChild(block("z-ddo", "Do", [C.dossierDo(p, tasks)]));
       box.appendChild(block("z-cho", "Handing over", [el("p", { "class": "lead", text: "A handoff is a note the next session reads first: what this one worked out, so it does not have to again." }), C.ctxHandoff(slug)]));
     }
   }
+  /* When a specialist loads, in a sentence, as main's activation(). */
+  function specialistLoads(a) {
+    if (a.always) { return "Always: every session on every project starts with it."; }
+    var p = [a.globs && a.globs.length ? "for files like " + a.globs.join(", ") : "", a.dependencies && a.dependencies.length ? "when the project depends on " + a.dependencies.join(", ") : "", a.taskPhrases && a.taskPhrases.length ? "for tasks that say " + a.taskPhrases.join(", ") : "", a.modes && a.modes.length ? "in " + a.modes.join(", ") + " mode" : ""].filter(Boolean);
+    return p.length ? "It loads " + p.join("; ") + "." : "It loads only when asked for by name.";
+  }
   function specialistPage(box, slug, id) {
     var s = SPECS[id]; if (!s) { box.appendChild(el("p", { "class": "calm", text: "No such specialist." })); return; }
-    var a = s.activation, loads = a.always ? "always" : [a.globs ? "for files like " + a.globs.join(", ") : null, a.dependencies ? "with " + a.dependencies.join(", ") : null, a.taskPhrases ? "for tasks that say " + a.taskPhrases.map(function (p) { return "“" + p + "”"; }).join(" or ") : null, a.modes ? "in " + a.modes.join(" or ") + " mode" : null].filter(Boolean).join("; ") || "when asked for";
+    if (!ctxRead("specialist/" + id)) { box.appendChild(el("p", { "class": "calm", role: "status", text: "Reading…" })); return; }
     box.appendChild(el("p", { "class": "back" }, [el("a", { href: "#context/" + slug + "/specialists", text: "← Specialists" })]));
-    box.appendChild(el("div", { "class": "ihead" }, [el("h2", { text: s.title }), el("p", { "class": "slug", text: id + " · " + s.origin + " · " + s.tokens.toLocaleString("en-GB") + " tokens" })]));
+    box.appendChild(el("div", { "class": "ihead" }, [el("h2", { text: s.title }), el("p", { "class": "slug", text: id + " · " + s.origin + " · " + s.tokens + " tokens" })]));
     box.appendChild(el("p", { "class": "lead", text: s.summary }));
-    box.appendChild(el("dl", { "class": "ls-rules" }, [el("dt", { text: "Loads" }), el("dd", { text: loads })]));
+    box.appendChild(el("p", { "class": "lead", text: specialistLoads(s.activation) }));
     box.appendChild(el("pre", { "class": "body", "aria-label": "What it says", tabindex: "0", text: s.body }));
     box.appendChild(S.Command({ why: "The same, in a terminal:", command: "$ loadout instructions show " + id + " --project " + slug }));
     box.appendChild(C.specialist(id, slug));
@@ -2023,46 +2494,67 @@ d.appendChild(block("z-ddo", "Do", [C.dossierDo(p, tasks)]));
       agent: { command: "loadout memory import loadout-cli --apply", wouldImport: ["build-quirks", "ci-secrets"], drifted: ["test-layout"] } },
     starstats: { project: [{ name: "query-performance", description: "What made the daily totals slow, and the index that fixed it", facts: 3, kind: "finding", written: "17 Oct", version: "c1d2e3f4a5", text: "The daily totals query read every row: no index on events.created_at.\nAn index on events (created_at) brings it under 40 ms.\n" }], user: [], machine: [], agent: null }
   };
-  var STORES = [["project", "This project", "Travels with the workspace."], ["user", "Your work, any project", "Travels with the workspace."], ["machine", "This machine only", "Never synced. Read-only here."]];
+  /* What memory audit --json says for each project: its verdict, and each finding's topic, severity, kind and detail. */
+  var MEM_AUDIT = {
+    "loadout-cli": { verdict: "NEEDS ATTENTION", topics: 5, findings: [
+      { topic: "studio-coverage", severity: "warning", kind: "stale", detail: "dated 2026-03-02: \"Terminal-only: secrets, agreements, the attach passphrase.\". Check it still holds." },
+      { topic: "test-layout", severity: "info", kind: "index-missing-entry", detail: "not listed in MEMORY.md, so nothing points at it." }] },
+    starstats: { verdict: "HEALTHY", topics: 1, findings: [] }
+  };
+  var STORES = [["project", "This project", "Travels with the workspace."], ["user", "Your work, any project", "Travels with the workspace."], ["machine", "This machine only", "Never synced."]];
+  /* A project's stores and its audit are read when it is first opened: "Reading…" and "Checking…" until then. */
+  var MEM_READ = {}, MEM_LIVE = true;
+  function memRead(key, delay) { if (MEM_READ[key] || !MEM_LIVE) { return true; } if (MEM_READ[key] === undefined) { MEM_READ[key] = false; setTimeout(function () { MEM_READ[key] = true; bump(); }, delay); } return false; }
+  function memWatching() { return !!P.watchOnly; }
   function renderMemory(main, r) {
-    var parts = r.split("/"), slug = parts[1] || "loadout-cli", store = parts[2] || null, name = parts[3] || null, m = MEM[slug] || { project: [], user: [], machine: [], agent: null };
+    MEM_LIVE = main.isConnected;
+    var parts = r.split("/"), slug = parts[1] || null, store = parts[2] || null, name = parts[3] || null, m = MEM[slug] || { project: [], user: [], machine: [], agent: null };
+    var listed = slug ? memRead("topics/" + slug, 300) : false, audited = slug ? memRead("audit/" + slug, 650) : false, watching = memWatching();
     var count = m.project.length + m.user.length + m.machine.length;
-    pageHead(main, "Memory", count + " topics for " + slug, [projSelect(slug, function (v) { go("memory/" + v); }, "Project")]);
-    var g = el("div", { "class": "memgrid" });
-    g.appendChild(S.StoreList({ picked: { store: store, name: name }, href: function (s, n) { return "#memory/" + slug + "/" + s + "/" + n; }, stores: STORES.map(function (s) { return { key: s[0], label: s[1], hint: s[2], readOnly: s[0] === "machine", topics: m[s[0]] }; }), agent: m.agent }));
+    pageHead(main, "Memory", listed ? count + " topics in " + slug : "what each project remembers, by topic", [projSelect(slug || PROJ[0].id, function (v) { go("memory/" + v); }, "Project")]);
+    /* With no project in the address, Studio goes to the first one. */
+    if (!slug && (route() === "memory" || route() === "memory/")) { setTimeout(function () { if (route() === "memory" || route() === "memory/") { go("memory/" + PROJ[0].id); } }, 0); }
+    var g = el("div", { "class": "memgrid" + (name ? " open" : "") });
+    if (listed) { g.appendChild(S.StoreList({ picked: { store: store, name: name }, href: function (s, n) { return "#memory/" + slug + "/" + s + "/" + n; }, stores: STORES.map(function (s) { return { key: s[0], label: s[1], hint: s[2], readOnly: s[0] === "machine", topics: m[s[0]] }; }), agent: m.agent })); }
+    else { g.appendChild(el("p", { "class": "calm", role: "status", text: slug ? "Reading…" : "Choose a project." })); }
     var mid = el("div", { "class": "memmid" }); g.appendChild(mid);
     var t = store && name ? (m[store] || []).filter(function (x) { return x.name === name; })[0] : null;
-    if (t) {
-      mid.appendChild(S.TopicEditor({ project: slug, topic: Object.assign({ scope: store }, t), storeLabel: STORES.filter(function (s) { return s[0] === store; })[0][1], editable: store !== "machine", readOnlyReason: "This machine's memory is read-only here.",
+    if (t && listed) {
+      mid.appendChild(S.TopicEditor({ project: slug, topic: Object.assign({ scope: store }, t), storeLabel: STORES.filter(function (s) { return s[0] === store; })[0][1], editable: store !== "machine" && !watching,
+        readOnlyReason: watching ? "Studio is only watching, so this topic is read-only here." : "This machine's memory is never synced, and is read-only here.",
         onSave: function (text, version) { if (t.clash) { t.clash = false; var theirs = { name: t.name, scope: store, description: t.description, kind: t.kind, written: "17 Oct 14:02 · your other machine", version: "c90d13ab42", text: "Releases are cut from main.\nRun the suite with --configuration Release first.\nTag as v<major>.<minor>.<patch>; the tag push publishes.\nNuGet publishing needs the NUGET_KEY secret.\nThe changelog is written from the merged pull requests.\n" }; return { changed: theirs }; } t.text = text; t.version = Math.random().toString(16).slice(2, 12); t.written = "17 Oct"; return { saved: Object.assign({ scope: store }, t) }; },
         onSaved: function (x) { said("Saved " + x.name, "$ loadout workspace save · commits it to the workspace", "done"); } }).el);
       mid.appendChild(from("$ loadout memory show " + t.name + " --project " + slug + (store !== "project" ? " --scope " + store : ""), ": as stored."));
-      if (store === "project") { mid.appendChild(C.memoryDelete(t, slug, m)); }
-    } else {
-      mid.appendChild(el("div", { "class": "ihead" }, [el("h2", { text: "What " + slug + " remembers" }), el("p", { "class": "slug", text: "The topics on the left are loadout memory list " + slug + ". Choose one to read or edit it." })]));
-      mid.appendChild(memFind(slug));
+      if (store === "project" && !watching) { mid.appendChild(C.memoryDelete(t, slug, m)); }
+    } else if (name && slug) {
+      mid.appendChild(listed ? el("p", { "class": "offline", role: "alert", text: "There is no topic called '" + name + "' in " + slug + "'s " + (store || "project") + " memory." }) : el("p", { "class": "calm", role: "status", text: "Reading…" }));
+    } else if (slug) {
+      mid.appendChild(el("div", { "class": "ihead" }, [el("h2", { text: "What " + slug + " remembers" }), el("p", { "class": "slug", text: "the topics on the left are loadout memory list " + slug + "; choose one to read or edit it" })]));
+      mid.appendChild(memFind(slug, false));
     }
-    var side = el("aside", { "class": "memside", "aria-label": "Health and tools" });
-    var aud = slug === "loadout-cli" ? [{ name: "test-layout", severity: "Warning", detail: "differs from what the agent recorded outside the workspace", fixable: false }, { name: "studio-coverage", severity: "Info", detail: "not revisited in 9 days" }] : [];
-    side.appendChild(block("z-mh", "Health", [S.HealthList({ verdict: aud.length ? "Needs a look" : "Clean", findings: aud, from: "$ loadout memory audit " + slug, noneText: "Every topic is in order." })]));
-    if (t) { side.appendChild(memFind(slug)); }
-    side.appendChild(block("z-mdo", "Do", [C.memoryDo(slug)]));
-    g.appendChild(side);
+    if (slug) {
+      var side = el("aside", { "class": "memside", "aria-label": "Health and tools" }), aud = MEM_AUDIT[slug] || { verdict: "HEALTHY", findings: [] };
+      side.appendChild(block("z-mh", "Health", [audited ? S.HealthList({ verdict: aud.verdict, findings: aud.findings.map(function (f) { return { name: f.topic || f.kind, severity: f.severity, detail: [f.topic ? f.kind : null, f.detail].filter(Boolean).join(" · ") }; }), from: "$ loadout memory audit " + slug }) : el("p", { "class": "calm", role: "status", text: "Checking…" })]));
+      if (t && listed) { side.appendChild(memFind(slug, true)); }
+      side.appendChild(block("z-mdo", "Do", [C.memoryDo(slug, watching ? "Studio is only watching: type the command in a terminal" : null)]));
+      g.appendChild(side);
+    }
     main.appendChild(g);
   }
-  function memFind(slug) {
+  function memFind(slug, boxed) {
     var q = "", res = el("div", { "class": "found", "aria-live": "polite" });
-    var inp = el("input", { "class": "ls-text", id: "m-find", "data-k": "m-find", type: "search", placeholder: "how is a release tagged?", oninput: function () { q = inp.value; paint(); } });
+    var inp = el("input", { "class": "ls-text", id: "m-find", "data-k": "m-find", type: "search", autocomplete: "off", placeholder: "a question, in your words", oninput: function () { q = inp.value; paint(); } });
     var b = el("div", {}); function paint() { b.textContent = ""; b.appendChild(halo({ label: "Find", size: "small", cmd: "$ loadout memory find " + (q.trim() ? S.shellQuote(q.trim()) : "<question>") + " --project " + slug + " · reads only", disabledReason: q.trim() ? null : "say what you are looking for", onPress: run }, "m-go")); }
     function run() {
       res.textContent = ""; var words = q.toLowerCase().split(/\W+/).filter(function (w) { return w.length > 2; }), m = MEM[slug] || {}, hits = [];
-      ["project", "user", "machine"].forEach(function (s) { (m[s] || []).forEach(function (t) { var hay = (t.name + " " + t.description + " " + t.text).toLowerCase(), matched = words.filter(function (w) { return hay.indexOf(w) >= 0; }); if (matched.length) { hits.push([s, t, matched]); } }); });
-      if (!hits.length) { res.appendChild(el("p", { "class": "calm", style: "font-size: 13.5px", text: "Nothing matches. It matches words rather than meanings, so a topic that says the same thing differently will not come back." })); return; }
-      res.appendChild(el("ul", { "class": "plain" }, hits.map(function (h) { return el("li", {}, [el("a", { href: "#memory/" + slug + "/" + h[0] + "/" + h[1].name, text: h[1].name }), " · " + h[1].description + " · matched " + h[2].join(", ")]); })));
+      /* memory find searches the project's topics and your own (global); this machine's are not searched. */
+      ["project", "user"].forEach(function (s) { (m[s] || []).forEach(function (t) { var hay = (t.name + " " + t.description + " " + t.text).toLowerCase(); if (words.some(function (w) { return hay.indexOf(w) >= 0; })) { hits.push([s, t]); } }); });
+      if (!hits.length) { res.appendChild(el("p", { "class": "lead", text: "Nothing matches. It matches words rather than meanings, so a topic that says the same thing differently will not come back." })); return; }
+      res.appendChild(el("ul", { "class": "rowsx" }, hits.map(function (h) { return el("li", {}, [el("a", { href: "#memory/" + slug + "/" + h[0] + "/" + h[1].name }, [el("b", { text: h[1].name })]), el("span", { text: h[1].description })]); })));
     }
     var f = el("form", { "class": "mfind", onsubmit: function (e) { e.preventDefault(); if (q.trim()) { run(); } } }, [el("label", { "class": "lab", "for": "m-find", text: "Find the topics that answer" }), inp, b]);
     paint();
-    return block("z-mf", "Find", [f, res]);
+    return boxed ? block("z-mf", "Find", [f, res]) : el("div", { "class": "mfindw" }, [f, res]);
   }
 
   /* ===== Spend: one number, where it went, and what is running ===== */
@@ -2727,24 +3219,25 @@ d.appendChild(block("z-ddo", "Do", [C.dossierDo(p, tasks)]));
       fields: [{ name: "topic", label: "Topic", value: t.name, fixed: true }, { name: "project", label: "Project", value: slug, fixed: true }],
       onRun: function (v, info) { if (info.preview) { said("Previewed: " + t.name + " has " + (t.facts || 3) + " facts; nothing links to it", info.line); return "Previewed. Nothing changed."; } m.project = m.project.filter(function (x) { return x !== t; }); said("Deleted " + t.name + ". A backup was taken first.", info.line); setTimeout(function () { go("memory/" + slug); }, 200); return "Deleted."; } }).el;
   };
-  C.memoryDo = function (slug) {
+  C.memoryDo = function (slug, dis) {
     return el("div", { "class": "cstack" }, [
-      S.ActionForm({ path: "memory write", title: "Record a fact", label: "Record it", dryRun: true,
+      S.ActionForm({ path: "memory write", title: "Record a fact", label: "Record it", dryRun: true, disabledReason: dis,
         fields: [{ name: "topic", label: "Topic", required: true, placeholder: "build-quirks" }, { name: "--fact", label: "The facts", kind: "lines", required: true, hint: "One a line. Each is recorded as it is." }, { name: "--project", label: "Project", value: slug, fixed: true },
           { name: "--description", label: "What the topic covers", more: true }, { name: "--kind", label: "Kind", kind: "choice", options: ["project", "decision", "lesson", "reference"], more: true }, { name: "--scope", label: "Who it is true for", kind: "choice", options: [["project", "this project"], ["user", "you, everywhere"], ["machine", "only this machine"]], more: true }, { name: "--separate", label: "A new topic even if one covers it", kind: "flag", more: true }],
         onRun: did("Recorded") }).el,
-      S.ActionForm({ path: "memory audit", title: "Clean up what it can", why: "Empty topics, repeated bullets and index lines that lead nowhere. A backup is taken first.", label: "Clean it", fields: [{ name: "project", label: "Project", value: slug, fixed: true }], previewWith: ["--clean"], applyWith: ["--clean", "--apply"], ask: "Clean up what the audit found? A backup is taken first.", yes: "Clean it",
+      S.ActionForm({ path: "memory audit", title: "Clean up what it can", disabledReason: dis, why: "Empty topics, repeated bullets and index lines that lead nowhere. A backup is taken first.", label: "Clean it", fields: [{ name: "project", label: "Project", value: slug, fixed: true }], previewWith: ["--clean"], applyWith: ["--clean", "--apply"], ask: "Clean up what the audit found? A backup is taken first.", yes: "Clean it",
         onRun: function (v, info) { said(info.preview ? "Previewed the clean-up" : "Cleaned up", info.line); return info.preview ? tbl(["What", "Where"], [["dead index line", "MEMORY.md: old-deploy"], ["dead index line", "MEMORY.md: proxy-notes"]]) : null; } }).el,
-      S.ActionForm({ path: "memory import", title: "Bring in what an agent recorded outside the workspace", label: "Import it", applyWith: ["--apply"], ask: "Import these topics? A backup is taken first; the originals are copied, not moved.", yes: "Import them",
+      S.ActionForm({ disabledReason: dis, path: "memory import", title: "Bring in what an agent recorded outside the workspace", label: "Import it", applyWith: ["--apply"], ask: "Import these topics? A backup is taken first; the originals are copied, not moved.", yes: "Import them",
         fields: [{ name: "project", label: "Project", value: slug, fixed: true }, { name: "--from", label: "From this folder instead", placeholder: "found by itself", more: true }, { name: "--all", label: "Every project on this machine instead", kind: "flag", more: true }],
         onRun: function (v, info) { said(info.preview ? "Previewed the import" : "Imported 2 topics", info.line); return info.preview ? tbl(["Topic", "Facts", "What happens"], [["flaky-tests", 4, "imported"], ["deploy-notes", 2, "imported"], ["user-prefs", 1, "skipped: already here"]]) : null; } }).el,
-      S.ActionForm({ path: "memory compress", title: "Move durable facts out of always-loaded instructions", why: "Folds list-item facts from the instruction file into topics, so sessions load less.", label: "Compress it", applyWith: ["--apply"], ask: "Move 9 facts into 3 topics and shorten the instruction file? A backup is taken first.", yes: "Compress it",
+      S.ActionForm({ disabledReason: dis, path: "memory compress", title: "Move durable facts out of always-loaded instructions", why: "Folds list-item facts from the instruction file into topics, so sessions load less.", label: "Compress it", applyWith: ["--apply"], ask: "Move 9 facts into 3 topics and shorten the instruction file? A backup is taken first.", yes: "Compress it",
         fields: [{ name: "PROJECT", label: "Project", value: slug, fixed: true }, { name: "--min-facts", label: "Fewest facts for a topic", kind: "number", placeholder: "2", more: true }, { name: "--file", label: "Just this instruction file", placeholder: "the agent's instructions", more: true }],
         onRun: function (v, info) { said(info.preview ? "Previewed: 9 facts, 1.4 KB saved" : "Compressed: 1.4 KB fewer always loaded", info.line); return info.preview ? tbl(["Topic", "Facts", "Kind"], [["build-quirks", 4, "project"], ["release-process", 3, "reference"], ["review-habits", 2, "lesson"]]) : null; } }).el,
-      S.ActionRow({ title: "The index", actions: [{ label: "Rebuild it", glyph: "↻", cmd: "$ loadout memory reindex " + slug, said: "Rebuilt MEMORY.md from the topics that exist", onPress: function () { said("Rebuilt the index", "$ loadout memory reindex " + slug); } }] }),
+      S.ActionRow({ title: "The index", actions: [{ label: "Rebuild it", glyph: "↻", disabledReason: dis, cmd: "$ loadout memory reindex " + slug, said: "Rebuilt MEMORY.md from the topics that exist", onPress: function () { said("Rebuilt the index", "$ loadout memory reindex " + slug); } }] }),
       S.Readout({ path: "memory review", extra: [slug], title: "Topics nobody has revisited", view: "table", params: [{ name: "--older-than", label: "Not written to for", kind: "choice", options: [["3", "3 months"], ["6", "6 months"], ["12", "a year"]], value: "6", required: true }],
         columns: [{ key: "name", label: "Topic" }, { key: "lastWritten", label: "Last written" }], data: [{ name: "old-deploy", lastWritten: "12 Mar" }, { name: "proxy-notes", lastWritten: "2 Apr" }] }).el,
-      S.ActionForm({ path: "memory review", title: "Walk them, keeping or expiring each", why: "It asks about each topic, so it opens in a terminal here.", effect: "session", fields: [{ name: "project", label: "Project", value: slug, fixed: true }, { name: "--older-than", label: "Not written to for (months)", kind: "number", placeholder: "6", more: true }], onRun: did("Opened the review in a terminal") }).el]);
+      S.ActionForm({ disabledReason: dis, path: "memory review", title: "Walk them, keeping or expiring each", why: "It asks about each topic, so it opens in a terminal here.", effect: "session", fields: [{ name: "project", label: "Project", value: slug, fixed: true }, { name: "--older-than", label: "Not written to for (months)", kind: "number", placeholder: "6", more: true }], onRun: did("Opened the review in a terminal") }).el,
+      el("p", { "class": "ls-from" }, ["Clean, import and compress only report what they would do until you tick ", el("code", { text: "--apply" }), "."])]);
   };
 
   /* Spend */
@@ -2766,21 +3259,21 @@ d.appendChild(block("z-ddo", "Do", [C.dossierDo(p, tasks)]));
   };
 
   /* Ideas */
-  C.ideaMore = function (x, where, onRefine) {
+  C.ideaMore = function (x, where, onRefine, dis) {
     var at = where[0] === "--global" ? { name: "--global", label: "List", value: true, kind: "flag", fixed: true } : { name: "--project", label: "List", value: where[1], fixed: true };
     return el("div", { "class": "cstack" }, [
-      S.ActionForm({ path: "idea refine", title: "Take it one round further", why: "An agent asks its questions, proposes a plan, or revises it. A round takes a minute or two.", label: "Refine it", dryRun: true, fields: [{ name: "id", label: "Idea", value: x.id, fixed: true }, at, { name: "--model", label: "Model", placeholder: "the agent's default", more: true }],
+      S.ActionForm({ path: "idea refine", title: "Take it one round further", why: "An agent asks its questions, proposes a plan, or revises it. A round takes a minute or two.", label: "Refine it", dryRun: true, disabledReason: dis, fields: [{ name: "id", label: "Idea", value: x.id, fixed: true }, at, { name: "--model", label: "Model", placeholder: "the agent's default", more: true }],
         onRun: function (v, info) { if (!info.preview && onRefine) { onRefine(); } said(info.preview ? "Previewed the round" : "Round started", info.line); return info.preview ? null : "A round is running on the daemon."; } }).el,
-      S.ActionForm({ path: "idea improve", title: "Ask for the whole plan to be reworked", label: "Ask for it", dryRun: true, fields: [{ name: "id", label: "Idea", value: x.id, fixed: true }, { name: "piece", label: "What", value: "plan", fixed: true }, { name: "--request", label: "What should change", kind: "lines", joined: true, required: true }, at], onRun: did("Sent the plan back") }).el,
-      S.ActionForm({ path: "idea move", title: "Move it to another list", label: "Move it", dryRun: true, fields: [{ name: "id", label: "Idea", value: x.id, fixed: true }, at, { name: "--to", label: "To", kind: "choice", required: true, options: PICKP.filter(function (p) { return p[0] !== where[1]; }).concat([["@global", "the workspace-wide list"]]), flags: { "@global": "--to-global" } }], onRun: did("Moved it") }).el,
-      S.ActionForm({ path: "idea remove", title: "Forget this idea", why: "Its task, its rounds and its notes all go.", label: "Forget it", danger: true, ask: "Forget “" + x.title + "”? Its rounds and notes go with it, and nothing brings them back.", yes: "Forget it", dryRun: true, fields: [{ name: "id", label: "Idea", value: x.id, fixed: true }, at],
+      S.ActionForm({ path: "idea improve", title: "Ask for the whole plan to be reworked", label: "Ask for it", dryRun: true, disabledReason: dis, fields: [{ name: "id", label: "Idea", value: x.id, fixed: true }, { name: "piece", label: "What", value: "plan", fixed: true }, { name: "--request", label: "What should change", kind: "lines", joined: true, required: true }, at], onRun: did("Sent the plan back") }).el,
+      S.ActionForm({ path: "idea move", title: "Move it to another project", note: "Its answers, choices and plan go with it.", label: "Move it", dryRun: true, disabledReason: dis, fields: [{ name: "id", label: "Idea", value: x.id, fixed: true }, at, { name: "--to", label: "To", kind: "choice", required: true, options: PICKP.filter(function (p) { return p[0] !== where[1]; }).concat([["@global", "the workspace-wide list"]]), flags: { "@global": "--to-global" } }], onRun: did("Moved it") }).el,
+      S.ActionForm({ path: "idea remove", title: "Forget this idea", why: "Its task, its rounds and its notes all go.", label: "Forget it", danger: true, ask: "Forget “" + x.title + "”? Its rounds and notes go with it, and nothing brings them back.", yes: "Forget it", dryRun: true, disabledReason: dis, fields: [{ name: "id", label: "Idea", value: x.id, fixed: true }, at],
         onRun: function (v, info) { if (info.preview) { return "Previewed. Nothing changed."; } IDEAS = IDEAS.filter(function (i) { return i.id !== x.id; }); said("Forgot " + x.title, info.line); setTimeout(function () { go("ideas"); }, 200); return "Forgotten."; } }).el]);
   };
-  C.ideaDump = function () {
-    return S.ActionForm({ path: "idea dump add", title: "Drop notes in", why: "An agent splits them into ideas and tasks for you to keep or drop. Nothing is recorded until you do.", label: "Drop them in", dryRun: true,
+  C.ideaDump = function (dis) {
+    return S.ActionForm({ path: "idea dump add", title: "Drop notes in", why: "An agent splits them into ideas and tasks for you to keep or drop. Nothing is recorded until you do.", label: "Drop them in", dryRun: true, disabledReason: dis,
       fields: [{ name: "--text", label: "The notes", kind: "lines", joined: true, wide: true, hint: "Paste them as they are." }, { name: "--project", label: "On", kind: "choice", options: PICKP.concat([["@global", "the workspace-wide list"]]), value: "loadout-cli", flags: { "@global": "--global" }, required: true },
         { name: "file", label: "Or from a file", placeholder: "~/notes/ideas.md", more: true }, { name: "--no-split", label: "Keep them without asking an agent yet", kind: "flag", more: true }, { name: "--model", label: "Model", more: true }],
-      onRun: function (v, info) { if (info.preview) { return null; } DUMPS.unshift({ id: "d" + (DUMPS.length + 4), source: "Pasted here", captured: "17 Oct", split: null, items: [] }); said("Dropped the notes in. Split them to see the pieces.", info.line); bump(); return "Dropped in."; } }).el;
+      onRun: function (v, info) { if (info.preview) { return null; } DUMPS.unshift({ id: "d" + (DUMPS.length + 4), source: "Pasted here", captured: "17 Oct", split: null, text: String(v["--text"] || ""), items: [] }); said("Dropped the notes in. Split them to see the pieces.", info.line); bump(); return "Dropped in."; } }).el;
   };
 
   /* Projects */
@@ -2854,8 +3347,8 @@ d.appendChild(block("z-ddo", "Do", [C.dossierDo(p, tasks)]));
     return S.ActionForm({ path: "instructions new", title: "Draft a new specialist or skill", why: "To copy a built-in one to edit, open it: its page has Copy it.", label: "Draft it", dryRun: true,
       fields: [{ name: "ID", label: "Identifier", required: true, placeholder: "skill.deploy-checklist", hint: "Its layer first: skill.…, language.…" }, { name: "--title", label: "What it is called" }, { name: "--summary", label: "What it is for, in a line" }, { name: "--project", label: "Into", value: slug, fixed: true }, { name: "--force", label: "Replace one of that name", kind: "flag", more: true }], onRun: did("Drafted it") }).el;
   };
-  C.ctxRules = function (slug) {
-    var cands = [{ path: "projects/" + slug + "/rules/commit-style.md", reason: "never mentions the project" }];
+  C.ctxRules = function (slug, cands) {
+    cands = cands || [];
     return el("div", { "class": "cstack" }, [
       S.SettingRow({ label: "The style this project uses", sub: "How sessions here are told to write code.", value: "plain-csharp", kind: "choice", options: [["plain-csharp", "plain-csharp"], ["dense-csharp", "dense-csharp"], ["none", "none: only your own and the codebase's"]], setLabel: "Use it", setCmd: function (v) { return "$ loadout style use " + v + " --project " + slug; }, onSet: function (v) { said("This project uses " + v + " now", "$ loadout style use " + v + " --project " + slug); } }),
       S.Readout({ path: "style show", extra: ["plain-csharp", "--project", slug], title: "The style, as sessions get it", view: "document", data: "## plain-csharp\n\n- Name things for what they mean.\n- One idea per method.\n- Comments say why, never what.\n\nLoads its language file for `*.cs`." }).el,
@@ -2863,9 +3356,9 @@ d.appendChild(block("z-ddo", "Do", [C.dossierDo(p, tasks)]));
         fields: [{ name: "project", label: "Project", value: slug, fixed: true }, { name: "--from", label: "The file", placeholder: "the largest always-loaded one" }, { name: "--map", label: "The routing map", placeholder: "split-map.yaml beside it", more: true }],
         onRun: function (v, info) { said(info.preview ? "Previewed the split" : "Split it into 4 rules", info.line); return info.preview ? tbl(["Rule", "For", "Bytes"], [["testing", "tests/**", "2,104"], ["release", "build/**", "1,380"]]) : null; } }).el,
       S.ActionRow({ actions: [{ label: "Write a starter routing map", cmd: "$ loadout rules split " + slug + " --write-map", said: "Wrote split-map.yaml beside the file" }] }),
-      S.ItemList({ title: "Guidance that may belong to everybody", one: "file", many: "files", why: "Files in this project that never mention it.", readCmd: "$ loadout share candidates --project " + slug + " --json", items: cands.map(function (c) { return { name: c.path.split("/").pop(), sub: c.path, facts: [c.reason], actions: [
-        { label: "What would move", cmd: "$ loadout share promote " + c.path, onPress: function () { return para("It would move to global/specialists/commit-style.md, after a scan for anything private."); } },
-        { label: "Move it to everybody", cmd: "$ loadout share promote " + c.path + " --apply", ask: "Move this file into the workspace's global layer? Every project's sessions can load it.", yes: "Move it", removes: true, said: "Moved. It is shared on the next save." }] }; }) }).el]);
+      S.ActionForm({ path: "share promote", title: "Move guidance into the workspace's global layer", why: "It moves after a scan for anything private, and every project's sessions can load it.", label: "Move it", applyWith: ["--apply"], ask: "Move this file into the workspace's global layer? Every project's sessions can load it.", yes: "Move it",
+        fields: [cands.length ? { name: "path", label: "The file", kind: "choice", required: true, options: cands.map(function (c) { return [c.path, c.path]; }), value: cands[0].path } : { name: "path", label: "The file", required: true, placeholder: "projects/" + slug + "/rules/commit-style.md" }],
+        onRun: function (v, info) { if (info.preview) { said("Previewed the move", info.line); return para("It would move to global/specialists/" + String(v.path).split("/").pop() + ", after a scan for anything private."); } said("Moved. It is shared on the next save.", info.line, "done"); return null; } }).el]);
   };
   C.ctxDocs = function (slug) {
     return el("div", { "class": "cstack" }, [
