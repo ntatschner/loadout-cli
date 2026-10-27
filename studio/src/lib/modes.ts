@@ -125,6 +125,8 @@ export interface DeckSession {
   kind?: 'launch' | 'command';
   /** The project it runs in, for saying what ending it ends. */
   project?: string | null;
+  /** How much of its context window is in use, as its status line last said; null where it has not. */
+  context?: number | null;
 }
 
 export type DeckLayout = 1 | 2 | 4;

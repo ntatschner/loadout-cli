@@ -30,7 +30,7 @@ namespace Loadout.Cli.Commands;
 /// </summary>
 [Description("Render the agent status line. Claude runs this; you do not need to.")]
 [CommandMeta(CommandCategory.Integration, Intent = "prompt status bar agent display context")]
-public sealed class StatuslineRenderCommand : AsyncCommand<GlobalSettings>
+public sealed class StatuslineRenderCommand : AsyncCommand<StatuslineRenderSettings>
 {
     /// <summary>
     /// How long the whole thing may take. Claude redraws the status line
@@ -58,6 +58,7 @@ public sealed class StatuslineRenderCommand : AsyncCommand<GlobalSettings>
     private readonly IProcessLauncher _processes;
     private readonly IPlatformPaths _paths;
     private readonly IEnvironmentProvider _environment;
+    private readonly StatuslineTargets _targets;
     private readonly TimeProvider _time;
 
     public StatuslineRenderCommand(
@@ -70,6 +71,7 @@ public sealed class StatuslineRenderCommand : AsyncCommand<GlobalSettings>
         IProcessLauncher processes,
         IPlatformPaths paths,
         IEnvironmentProvider environment,
+        StatuslineTargets targets,
         TimeProvider time)
     {
         _configuration = configuration;
@@ -81,16 +83,17 @@ public sealed class StatuslineRenderCommand : AsyncCommand<GlobalSettings>
         _processes = processes;
         _paths = paths;
         _environment = environment;
+        _targets = targets;
         _time = time;
     }
 
     /// <inheritdoc />
-    public override async Task<int> ExecuteAsync(CommandContext context, GlobalSettings settings, CancellationToken cancellationToken)
+    public override async Task<int> ExecuteAsync(CommandContext context, StatuslineRenderSettings settings, CancellationToken cancellationToken)
     {
         using var deadline = new CancellationTokenSource(Deadline);
 
-        var payload = StatuslinePayload.Parse(
-            await ReadStdinAsync(deadline.Token).ConfigureAwait(false));
+        var raw = await ReadStdinAsync(deadline.Token).ConfigureAwait(false);
+        var payload = StatuslinePayload.Parse(raw);
 
         // No payload, or one this build could not read, still leaves a useful
         // line to draw: Claude runs the command inside the session directory,
@@ -106,6 +109,10 @@ public sealed class StatuslineRenderCommand : AsyncCommand<GlobalSettings>
         GitRepositoryState? git = null;
         DateTimeOffset? lastCommit = null;
 
+        var directory = payload?.Workspace?.ProjectDir
+            ?? payload?.Workspace?.CurrentDir
+            ?? payload?.Cwd;
+
         try
         {
             var configResult = await _configuration.LoadConfigAsync(deadline.Token).ConfigureAwait(false);
@@ -115,10 +122,6 @@ public sealed class StatuslineRenderCommand : AsyncCommand<GlobalSettings>
                 config = configResult.Value!;
                 options = config.Statusline;
             }
-
-            var directory = payload?.Workspace?.ProjectDir
-                ?? payload?.Workspace?.CurrentDir
-                ?? payload?.Cwd;
 
             if (directory is { Length: > 0 })
             {
@@ -134,15 +137,78 @@ public sealed class StatuslineRenderCommand : AsyncCommand<GlobalSettings>
                     slug = project.Entry.Slug;
                     root = project.LocalPath;
                 }
-
-                (git, lastCommit) = await ReadGitAsync(
-                    _git, directory, options, deadline.Token).ConfigureAwait(false);
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException || deadline.IsCancellationRequested)
         {
             // Deliberately broad. Whatever went wrong, the remedy is the same:
             // print what is known. There is nowhere to report it to.
+        }
+
+        LoadedSpecialists? loaded = null;
+
+        if ((options.ShowSpecialists || settings.Studio) && slug is { Length: > 0 })
+        {
+            try
+            {
+                loaded = await _loaded.ReadAsync(slug, deadline.Token).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException || deadline.IsCancellationRequested)
+            {
+                // Drops the segment. Nothing here is worth a prompt not drawing.
+            }
+        }
+
+        var minimal = false;
+
+        if (settings.Studio)
+        {
+            var terminal = StudioTerminal(options.StudioTerminal);
+            var own = terminal == "full" ? OwnCommand(slug, root ?? directory) : null;
+
+            // First, before git or the person's own command, either of which
+            // can be slow: a line that runs out of time still leaves Studio
+            // something current to draw.
+            WriteSnapshot(payload, terminal, own is not null, settings.Refresh, slug, loaded);
+
+            if (terminal == "off")
+            {
+                // Nothing printed, and Claude draws no row for an empty line.
+                return (int)ExitCode.Success;
+            }
+
+            if (own is not null)
+            {
+                await PrintOwnAsync(own, raw, directory, deadline).ConfigureAwait(false);
+
+                return (int)ExitCode.Success;
+            }
+
+            minimal = terminal == "minimal";
+
+            if (minimal)
+            {
+                options = Minimal(options);
+            }
+        }
+
+        if (!options.ShowSpecialists)
+        {
+            // Read for Studio's snapshot only.
+            loaded = null;
+        }
+
+        if (!minimal && directory is { Length: > 0 })
+        {
+            try
+            {
+                (git, lastCommit) = await ReadGitAsync(
+                    _git, directory, options, deadline.Token).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException || deadline.IsCancellationRequested)
+            {
+                // The branch is dropped; the rest of the line still draws.
+            }
         }
 
         SpendNotice? spend = null;
@@ -159,20 +225,6 @@ public sealed class StatuslineRenderCommand : AsyncCommand<GlobalSettings>
             {
                 // A cache that cannot be read drops the segment. Nothing about
                 // spending is worth a prompt failing to draw.
-            }
-        }
-
-        LoadedSpecialists? loaded = null;
-
-        if (options.ShowSpecialists && slug is { Length: > 0 })
-        {
-            try
-            {
-                loaded = await _loaded.ReadAsync(slug, deadline.Token).ConfigureAwait(false);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException || deadline.IsCancellationRequested)
-            {
-                // Drops the segment. Nothing here is worth a prompt not drawing.
             }
         }
 
@@ -217,6 +269,108 @@ public sealed class StatuslineRenderCommand : AsyncCommand<GlobalSettings>
 
         return (int)ExitCode.Success;
     }
+
+    /// <summary>What a hosted session's terminal line shows; anything unrecognised, as a hand-edited file may hold, is off.</summary>
+    internal static string StudioTerminal(string? value) =>
+        value?.Trim().ToLowerInvariant() switch
+        {
+            "minimal" => "minimal",
+            "full" => "full",
+            _ => "off",
+        };
+
+    /// <summary>
+    /// The launcher's line cut down to what a glance at the terminal wants
+    /// when Studio has the rest: the project, the model, the context and the
+    /// specialists. No git and no times, so nothing in it can be slow.
+    /// </summary>
+    internal static Models.Configuration.StatuslineSettings Minimal(Models.Configuration.StatuslineSettings options)
+    {
+        var copy = options.Copy();
+
+        copy.ShowDirectory = false;
+        copy.ShowGit = false;
+        copy.ShowSpend = false;
+        copy.ShowWaiting = false;
+        copy.ShowLastWrite = false;
+        copy.ShowClock = false;
+        copy.ShowSession = false;
+        copy.ShowTurn = false;
+        copy.ShowLastCommit = false;
+
+        return copy;
+    }
+
+    /// <summary>The person's own status line command, where they have one that is not the launcher's.</summary>
+    private string? OwnCommand(string? slug, string? projectDirectory)
+    {
+        try
+        {
+            return StatuslineWrap.FindOwnCommand(StatuslineWrap.Sources(
+                slug is { Length: > 0 } ? _targets.ProjectSettingsPath(slug) : null,
+                projectDirectory,
+                _targets.GlobalSettingsPath()));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            // Treated as having none: the launcher's own line is drawn instead.
+            return null;
+        }
+    }
+
+    /// <summary>Leaves Studio what Claude sent, for the session this runs in, if Studio hosts it.</summary>
+    private void WriteSnapshot(
+        StatuslinePayload? payload, string terminal, bool wrapping, int? refresh, string? slug, LoadedSpecialists? loaded)
+    {
+        var id = _environment.GetVariable(SessionSignals.Variable);
+
+        if (!SessionSignals.IsSessionId(id))
+        {
+            return;
+        }
+
+        try
+        {
+            SessionStatus.Write(
+                SessionStatus.Directory(_paths.Paths.State),
+                id!,
+                SessionStatusSnapshot.From(payload, _time.GetUtcNow(), refresh, terminal, wrapping, slug, loaded?.Ids));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Studio shows the last snapshot as old; the terminal is unaffected.
+        }
+    }
+
+    /// <summary>Runs the person's own line in what is left of the deadline and prints what it said.</summary>
+    private async Task PrintOwnAsync(string command, string? raw, string? directory, CancellationTokenSource deadline)
+    {
+        try
+        {
+            if (StatuslineWrap.Shell(_environment, _executables, OperatingSystem.IsWindows()) is not { } shell)
+            {
+                return;
+            }
+
+            var printed = await StatuslineWrap.RunAsync(
+                _processes, shell, command, raw, directory, OwnDeadline, deadline.Token).ConfigureAwait(false);
+
+            if (printed is not null)
+            {
+                Console.Out.WriteLine(printed);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || deadline.IsCancellationRequested)
+        {
+            // Their line stays empty this time; Studio already has the snapshot.
+        }
+    }
+
+    /// <summary>
+    /// How long the person's own line may take, inside the whole command's
+    /// deadline, leaving room for what ran before it.
+    /// </summary>
+    private static readonly TimeSpan OwnDeadline = TimeSpan.FromMilliseconds(1500);
 
     /// <summary>
     /// Asks git for the branch and, only when its segment is on, the head
@@ -380,6 +534,18 @@ public sealed class StatuslineRenderCommand : AsyncCommand<GlobalSettings>
 
         return null;
     }
+}
+
+/// <summary>How Claude runs the status line.</summary>
+public sealed class StatuslineRenderSettings : GlobalSettings
+{
+    [CommandOption("--studio")]
+    [Description("The session is hosted by Studio: leave it the status, and print what statusline-in-studio asks for.")]
+    public bool Studio { get; init; }
+
+    [CommandOption("--refresh <SECONDS>")]
+    [Description("How often Claude was asked to redraw while idle, so Studio can tell when the status is old.")]
+    public int? Refresh { get; init; }
 }
 
 /// <summary>Which settings file a status line command applies to.</summary>
@@ -763,6 +929,14 @@ public sealed class StatuslineShowCommand : AsyncCommand<StatuslineTargetSetting
             ? StatuslineInstaller.CommandFor(current)
             : null;
 
+        // In a session Studio hosts the launcher's line stands in for theirs,
+        // so somebody whose own line has gone there can see why here.
+        var studioTerminal = StatuslineRenderCommand.StudioTerminal(options.StudioTerminal);
+        var own = StatuslineWrap.FindOwnCommand(StatuslineWrap.Sources(
+            resolved.Value?.Entry.Slug is { } slug ? _targets.ProjectSettingsPath(slug) : null,
+            resolved.Value?.LocalPath ?? directory,
+            _targets.GlobalSettingsPath()));
+
         if (output.IsJson)
         {
             output.WriteJson(new
@@ -800,6 +974,15 @@ public sealed class StatuslineShowCommand : AsyncCommand<StatuslineTargetSetting
                     // Seconds between redraws while idle, or null for none.
                     refresh = i.Refresh,
                 }),
+
+                // What the terminal shows in a session Studio hosts, and
+                // whether that is the person's own line, run for them.
+                studio = new
+                {
+                    terminal = studioTerminal,
+                    ownCommand = own,
+                    wrapping = studioTerminal == "full" && own is not null,
+                },
             });
 
             return CommandOutput.Success();
@@ -878,6 +1061,21 @@ public sealed class StatuslineShowCommand : AsyncCommand<StatuslineTargetSetting
             output.WriteBlankLine();
             output.WriteLine("[dim]Turn it on with loadout statusline install[/]");
         }
+
+        output.WriteBlankLine();
+        output.WriteLine("[bold]In sessions Studio hosts[/]");
+        output.WriteLine("  Studio draws the status itself, from what Claude hands the line.");
+        output.WriteLine(studioTerminal switch
+        {
+            "full" when own is not null => $"  The terminal shows your own line, run for you: [dim]{own.EscapeMarkup()}[/]",
+            "full" => "  The terminal shows this launcher's full line.",
+            "minimal" => "  The terminal shows a short line: project, model, context and specialists.",
+            _ when own is not null => $"  The terminal shows no line, so your own is not shown there: [dim]{own.EscapeMarkup()}[/]",
+            _ => "  The terminal shows no line.",
+        });
+        output.WriteLine(studioTerminal == "full"
+            ? "[dim]Change it with loadout config set statusline-in-studio off|minimal|full[/]"
+            : "[dim]Bring a line back with loadout config set statusline-in-studio full[/]");
 
         return CommandOutput.Success();
     }

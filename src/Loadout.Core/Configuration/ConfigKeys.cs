@@ -300,6 +300,13 @@ public static class ConfigKeys
             (c, _, v) => c.Statusline.Separator = v, false,
             Group: Groups.Statusline),
 
+        new("statusline-in-studio",
+            "In a session Studio hosts, what Claude's own line shows: off, minimal or full (your own status line, kept working)",
+            (c, _) => c.Statusline.StudioTerminal,
+            (c, _, v) => c.Statusline.StudioTerminal = OneOf(v, "off", "minimal", "full"), false,
+            Sample: "full",
+            Group: Groups.Statusline),
+
         new("statusline-waiting", "Show what the session is waiting on, and since when",
             (c, _) => Boolean(c.Statusline.ShowWaiting),
             (c, _, v) => c.Statusline.ShowWaiting = Flag(v), false,

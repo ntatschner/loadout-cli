@@ -13,6 +13,7 @@
   // and the context-menu key or Shift+F10 opens the tab's menu.
   import { tick } from 'svelte';
   import Dialog from './Dialog.svelte';
+  import ContextMark from './ContextMark.svelte';
   import Signal from './Signal.svelte';
   import { signalOf } from '../signals';
   import { command } from '../commands';
@@ -440,6 +441,7 @@
             <Signal word={one.word} />
             <span class="t">{one.title}</span>
             <span class="x">{[one.where, one.agent].filter(Boolean).join(' · ')}</span>
+            {#if one.context !== undefined && one.context !== null}<ContextMark percent={one.context} />{/if}
             {#if index < 9}<span class="k" aria-hidden="true">⌃⌥{index + 1}</span>{/if}
             {#if one.unread}<span class="new" title="New output since you looked"><span class="ls-vh">new output</span></span>{/if}
           </button>

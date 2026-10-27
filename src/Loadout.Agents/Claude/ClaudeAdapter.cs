@@ -488,6 +488,10 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         if (hosted)
         {
             AddStudioHooks(screened.Document, launcher);
+            AddStudioStatusline(
+                screened.Document,
+                launcher,
+                Core.Statusline.StatuslineInstaller.RefreshFor(descriptor.Version, context.Accessibility?.Display.Redraw));
         }
 
         if (links)
@@ -557,6 +561,44 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         AddHook(document, "Stop", null, $"{launcher} dashboard signal turn --agent=claude");
         AddHook(document, "UserPromptSubmit", null, $"{launcher} dashboard signal working --agent=claude", background: true);
         AddHook(document, "PreToolUse", null, $"{launcher} dashboard signal working --agent=claude", background: true);
+    }
+
+    /// <summary>
+    /// The status line that hands Studio what Claude knows about a hosted
+    /// session: its context, its cost and the plan's limits.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Put in place of whatever line the settings carried, since Claude runs
+    /// one status line and this is the only way the figures leave the
+    /// session. Nothing is lost: with <c>statusline-in-studio full</c>
+    /// the command runs the person's own line and prints what it printed,
+    /// and by default it prints nothing, which gives the terminal its row
+    /// back while Studio draws the status instead.
+    /// </para>
+    /// <para>
+    /// The redraw interval is the one an install would write, so a quiet
+    /// session's figures stay current, and the command is told it so Studio
+    /// can say when they are old. None under a profile that asks for nothing
+    /// to redraw.
+    /// </para>
+    /// </remarks>
+    internal static void AddStudioStatusline(System.Text.Json.Nodes.JsonObject document, string launcher, int? refresh)
+    {
+        var line = new System.Text.Json.Nodes.JsonObject
+        {
+            ["type"] = "command",
+            ["command"] = refresh is { } seconds
+                ? $"{launcher} statusline --studio --refresh {seconds.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+                : $"{launcher} statusline --studio",
+        };
+
+        if (refresh is { } interval)
+        {
+            line["refreshInterval"] = interval;
+        }
+
+        document["statusLine"] = line;
     }
 
     /// <summary>

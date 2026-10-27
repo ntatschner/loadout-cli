@@ -209,6 +209,19 @@ public sealed class StatuslineSettings
     public string? LastCommitAfter { get; set; }
 
     /// <summary>
+    /// What Claude's own line shows in a session Studio hosts, where Studio
+    /// draws the status itself: <c>off</c>, <c>minimal</c> (a short line of
+    /// the launcher's), or <c>full</c> (the person's own status line command,
+    /// or the launcher's full line where they have none).
+    /// </summary>
+    /// <remarks>
+    /// Off by default: the terminal gets its row back, and nobody reads the
+    /// same facts twice. Read each time the line is drawn, so a change applies
+    /// at the next redraw without starting the session again.
+    /// </remarks>
+    public string StudioTerminal { get; set; } = "off";
+
+    /// <summary>
     /// A copy that shares nothing with this one. A copy written out member by
     /// member drops every setting added after it was written, silently.
     /// </summary>
