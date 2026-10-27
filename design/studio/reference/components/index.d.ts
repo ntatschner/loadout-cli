@@ -490,11 +490,11 @@ export declare function ValueReport(o: { head?: string | Node; groups: { name: s
 
 /* ---------- The field map (stage 11) ---------- */
 
-export type Background = "plain" | "map" | "map-animated";
-/** Set data-background on <html>: the plain ground, the field map still (the default), or the field map with its scan. */
-export declare function setBackground(value: Background, el?: Element): void;
-export declare const BACKGROUNDS: Background[];
-/** The embossed survey map behind every page: contour lines (every fifth heavier), grid squares and map references, the same map on every visit. Still unless data-background is map-animated and motion is full and the mode isn't Pure; hidden for plain and both high-contrast themes. Mount once. */
+export type Backdrop = "plain" | "map" | "map-animated";
+/** Set data-backdrop on <html>: the plain ground, the field map still (the default), or the field map with its scan. */
+export declare function setBackdrop(value: Backdrop, el?: Element): void;
+export declare const BACKDROPS: Backdrop[];
+/** The embossed survey map behind every page: contour lines (every fifth heavier), grid squares and map references, the same map on every visit. Still unless data-backdrop is map-animated and motion is full and the mode isn't Pure; hidden for plain and both high-contrast themes. Mount once. */
 export declare function FieldMap(o?: { seed?: number; scale?: number; levels?: number; cell?: number; square?: number; host?: HTMLElement; width?: number; height?: number }): { el: HTMLElement; redraw: () => void; destroy: () => void };
 
 /* ---------- The office (stage 12) ---------- */

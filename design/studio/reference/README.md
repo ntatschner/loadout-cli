@@ -107,7 +107,7 @@ Loadout Studio is the design system for Studio: the app Loadout serves on this m
 - Studio's ground is a field map (`FieldMap`): an embossed survey map with contours, a heavier index contour every fifth line, dashed grid squares every 200px, and map references (A, B… along the foot; 01, 02… down the left, under the rail). It is drawn from a fixed seed, so it is the same map everywhere.
 - Embossed, not drawn: each contour has a light edge up-left, a dark edge down-right and the line in `accent` (4% in Dark, 5.5% in Light; index contours 7% and 9%). Panels, dialogs and the terminal stay solid.
 - It is faint on purpose, and measured: on the map's worst pixel every text colour stays 4.5:1 or better, in both themes and all four accents. Measure again after changing any level.
-- `data-background` is `plain`, `map` (still, the default) or `map-animated` (a 16s scan line lights the contours it crosses, a white glint in Light; index contours breathe over 9s). It is set in Appearance → Background and stored as `studio-background`.
+- `data-backdrop` is `plain`, `map` (still, the default) or `map-animated` (a 16s scan line lights the contours it crosses, a white glint in Light; index contours breathe over 9s). It is set in Appearance → Background and stored as `studio-backdrop`.
 - The scan only runs under full motion and outside Pure Focus; everywhere else the map is still. Both high-contrast themes always get the plain ground.
 - The map carries on under the nav: the side rail is 58% ground with a 1.5px blur (solid again when it widens over the page), and the rail and the mode bar have an embossed edge with grid-reference ticks.
 

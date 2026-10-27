@@ -380,11 +380,11 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
   var hostTheme = root.getAttribute("data-theme");
   function applyPrefs() {
     var t = P.theme || (hostTheme === "light" || hostTheme === "dark" ? hostTheme : S.preferredTheme());
-    S.setTheme(t); S.setAccent(P.accent); S.setDensity(P.density); S.setMotion(P.motion); S.setBackground(P.background || "map");
+    S.setTheme(t); S.setAccent(P.accent); S.setDensity(P.density); S.setMotion(P.motion); S.setBackdrop(P.backdrop || "map");
     root.setAttribute("data-mode", P.mode || "default");
   }
   applyPrefs();
-  /* The field map: one embossed survey map behind every page; data-background and the motion setting decide whether it shows and whether it moves. */
+  /* The field map: one embossed survey map behind every page; data-backdrop and the motion setting decide whether it shows and whether it moves. */
   S.FieldMap();
   new MutationObserver(function () {
     var v = root.getAttribute("data-theme");
@@ -782,8 +782,8 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     f.appendChild(seg("accent", "Accent", [["cyan", "Cyan"], ["ice", "Ice"], ["magenta", "Magenta"], ["violet", "Violet"]], P.accent, function (v) { P.accent = v; }));
     f.appendChild(seg("density", "Density", [["compact", "Compact"], ["comfortable", "Comfortable"], ["roomy", "Roomy"]], P.density, function (v) { P.density = v; }));
     f.appendChild(seg("motion", "Motion", [["full", "Full"], ["reduced", "Reduced"], ["none", "None"]], P.motion, function (v) { P.motion = v; }));
-    f.appendChild(seg("background", "Background", [["plain", "Plain"], ["map", "Field map, still"], ["map-animated", "Field map, animated"]], P.background || "map", function (v) { P.background = v; }));
-    f.appendChild(el("p", { "class": "calm", style: "margin: -4px 0 0; font-size: 12.5px" }, ["The animated map moves only under full motion, and never in Pure Focus. High contrast keeps the plain ground. ", el("code", { "class": "ls-cmd", text: "$ loadout config set studio-background " + (P.background || "map") })]));
+    f.appendChild(seg("backdrop", "Background", [["plain", "Plain"], ["map", "Field map, still"], ["map-animated", "Field map, animated"]], P.backdrop || "map", function (v) { P.backdrop = v; }));
+    f.appendChild(el("p", { "class": "calm", style: "margin: -4px 0 0; font-size: 12.5px" }, ["The animated map moves only under full motion, and never in Pure Focus. High contrast keeps the plain ground. ", el("code", { "class": "ls-cmd", text: "$ loadout config set studio-backdrop " + (P.backdrop || "map") })]));
     f.appendChild(seg("halo", "Lens halo", [["orbit", "Orbit"], ["gyroscope", "Gyroscope"]], P.halo, function (v) { P.halo = v; }));
     f.appendChild(S.Switch({ label: "Single-letter shortcuts", sub: "A for Ambient, N for a new session", checked: P.keys, onChange: function (v) { P.keys = v; savePrefs(); } }));
     f.appendChild(el("p", { "class": "calm", style: "margin: 0; font-size: 12.5px" }, ["Kept in this browser for the prototype. Studio keeps the halo in Loadout's config: ", el("code", { "class": "ls-cmd", text: "$ loadout config set studio-halo orbit" }), " (a proposed key)."]));

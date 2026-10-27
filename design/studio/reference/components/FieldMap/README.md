@@ -14,13 +14,13 @@ So the relief reads as stamped into the ground, not printed on it.
 
 ## Settings
 
-| `data-background` | What shows |
+| `data-backdrop` | What shows |
 |---|---|
 | `plain` | today's ground |
 | `map` (default) | the field map, still |
 | `map-animated` | the map with a slow scan line (16s, top to bottom) that lights the contours it crosses (in the accent in Dark, a white glint in Light), and the index contours breathing over 9s |
 
-Chosen in Appearance → **Background**, and stored as `studio-background`. The animated map only moves under **full** motion; reduced, none, the system's reduced-motion setting and **Pure Focus** all get the still map. Both high-contrast themes always get the plain ground.
+Chosen in Appearance → **Background**, and stored as `studio-backdrop`. The animated map only moves under **full** motion; reduced, none, the system's reduced-motion setting and **Pure Focus** all get the still map. Both high-contrast themes always get the plain ground.
 
 ## Readable on top
 
