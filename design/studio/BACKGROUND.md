@@ -180,7 +180,7 @@ When everything above is committed, update Loadout's own records so that whoever
 
 These records are claims with a name and a date. Work from what the workspace says now, and change nothing you can't see.
 
-**Records only: this step builds nothing.** Some of what it records is designed but not built yet (`PAGES.md`, `OFFICE.md`, and any `ROUND4.md` part that isn't on `main` or your branch when you get here). Writing the record must not start that work.
+**Records only: this step builds nothing.** Some of what it records is designed but not built yet (`OFFICE.md`, and any `ROUND4.md` part that isn't on `main` or your branch when you get here). Writing the record must not start that work.
 
 - Run only the commands below: `task list`, `task declare`, `idea add`, `memory show`, `memory write`, `memory replace` and `workspace save`. None of them starts anything. They write Loadout's records, and `workspace save` commits and pushes the workspace.
 - Don't run `idea refine`, `idea dump add`, `team run`, `team schedule add` or `launch` for any item here. (`loadout <project>` is `launch` too.) Don't start a session or a build for one, and don't change code for one. Never declare anything `doing` from this step.
