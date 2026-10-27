@@ -98,6 +98,14 @@ Loadout Studio is the design system for Studio: the app Loadout serves on this m
   - **Pure**: the page is a WorkDesk, reached with G and a letter: I Ideas, P Projects, C Context, M Memory, U Spend (usage), O Settings (options).
 - **Forgetting a project** (ForgetProject) is on this machine only, or from the Loadout workspace for every machine, with optional cleanup that runs first and is shown command by command. The repository is never touched.
 
+### Built in main
+
+- These came from Studio as main built it (0.103.1), ported as built, so the system shows what ships:
+  - **Sessions:** StatusStrip on a hosted terminal's foot (model, context, cost, the plan's five-hour window, specialists, and "old:" when its figures are stale), StatusBlock in a session's Details, ContextMark in a session's tab, ConversationList for past conversations to carry on.
+  - **Teams:** BlockedRuns (runs that ended short of their done-when, each with a suggestion and Confirm), TriggerRules, QueuePanel (what waits for a team, its window and limits), Handover (what a run left for you to do), Journal, MiniLine on board rows, and Spend, a run's spend line.
+  - **Everywhere:** ListToolbar, the same search, filters and sort over every list; TaskDetail, a task in full; JobResult, one command run from Studio; Splitter and SplitCross, the dividers every split drags and keys the same way; Ask Loadout in the palette (AskPane, AskPlanCard); ProgressRing.
+- Where main's look failed a rule here, the port keeps main's intent and meets the rule: stale status figures are muted ink, not 60% opacity, which measured 2.7 to 3.8:1.
+
 ### Commands as controls
 
 - Every command a page offers is a control made for it, never a form generated from its options. Choose the pattern by what the command does:

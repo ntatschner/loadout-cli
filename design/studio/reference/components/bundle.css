@@ -2283,7 +2283,8 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 .ls-sstrip em { font-style: normal; }
 .ls-sstrip .grow { flex: 1 1 auto; }
 .ls-sstrip.stale .when { color: var(--needs-text); }
-.ls-sstrip.stale > :not(.when):not(.grow):not(.ls-vh) { opacity: .6; }
+/* Main dims stale figures to 0.6 opacity, which measures 2.7 to 3.8:1. Muted ink keeps them readable; "old:" says they are stale. */
+.ls-sstrip.stale > :not(.when):not(.grow):not(.ls-vh), .ls-sstrip.stale > :not(.when):not(.grow):not(.ls-vh) * { color: var(--muted); }
 
 /* --- TaskDetail --- */
 .ls-tdetail { max-width: 72ch; }
