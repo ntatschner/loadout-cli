@@ -238,6 +238,18 @@ public sealed class MachineTeams
     public string NotifyChat { get; set; } = string.Empty;
 
     /// <summary>
+    /// The address a notice's link uses for the dashboard, or empty for the
+    /// address it is serving on.
+    /// </summary>
+    /// <remarks>
+    /// For reading a notice somewhere other than this machine: a tailnet name
+    /// or a reverse proxy in front of the dashboard. Never worked out from
+    /// where the dashboard listens, because the name a phone reaches it by is
+    /// not one this machine can know.
+    /// </remarks>
+    public string LinkAddress { get; set; } = string.Empty;
+
+    /// <summary>
     /// Which set of office art the dashboard's building is drawn from, or empty
     /// for the one Loadout ships.
     /// </summary>

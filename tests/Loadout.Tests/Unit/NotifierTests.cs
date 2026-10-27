@@ -25,7 +25,7 @@ public sealed class NotifierTests
 {
     private const string Title = "docs-crew needs you — it has stopped to ask";
     private const string Detail = "implementer/1 wants to use Bash for 'dotnet test'";
-    private const string Link = "http://127.0.0.1:8477/?token=abc";
+    private const string Link = "http://127.0.0.1:8477/studio/#teams/20261027-1059-75ed";
 
     private static JsonElement Sent(NoticeKind kind, string? chat = null) =>
         JsonDocument.Parse(Notifier.Body(kind, Title, Detail, Link, chat)).RootElement;

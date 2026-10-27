@@ -477,6 +477,16 @@ public static class ConfigKeys
             Group: Groups.Machine,
             WhenUnset: "nothing, which Telegram refuses"),
 
+        new("team-link-address",
+            "The address a notice links to the dashboard by, for reading it away from this machine. "
+                + "A notice never carries the dashboard's token",
+            (_, m) => m.Teams.LinkAddress,
+            (_, m, v) => m.Teams.LinkAddress = LinkAddress(v),
+            true,
+            Sample: "https://desk.example.ts.net:4800",
+            Group: Groups.Machine,
+            WhenUnset: "the address the dashboard is serving on, which only this machine can open"),
+
         new("team-office-set",
             "Which set of office art the dashboard's building is drawn from",
             (_, m) => m.Teams.OfficeSet,
@@ -1138,6 +1148,12 @@ public static class ConfigKeys
             out var parsed) && parsed is >= 1 and <= 65535
             ? parsed
             : throw new FormatException($"'{value}' is not a port: give a whole number from 1 to 65535.");
+
+    /// <summary>A link address: an http or https address with nothing after it, or empty to clear it.</summary>
+    private static string LinkAddress(string value) =>
+        Teams.Daemon.NoticeLink.Problem(value) is { } problem
+            ? throw new FormatException(problem)
+            : value.Trim();
 
     /// <summary>A default team budget: a figure above zero, none, or empty to clear it.</summary>
     /// <remarks>Refused rather than guessed, for the reason <see cref="Count" /> gives.</remarks>

@@ -1848,6 +1848,25 @@ Loadout's own JSON. Telegram also needs `--chat`. Every message carries a link
 back to the run, because a notice that says something is wrong and leaves you
 to find it is half a notice.
 
+The link never carries the dashboard's token. A notice sits in somebody else's
+chat history for as long as they keep it, and the token is the whole key to
+the dashboard, so whoever follows the link signs in there instead. By default
+the link is the address the dashboard serves on, which only this machine can
+open. To read notices on your phone, give the address it reaches the dashboard
+by, such as a tailnet name or a reverse proxy:
+
+```sh
+loadout config set team-link-address https://desk.example.ts.net:4800
+loadout team notify test          # its link uses that address too
+```
+
+Anything after a `?` or `#` is refused, because the likeliest thing there is
+the token.
+
+**Not yet:** signing in at that address. The dashboard's sign-in only works on
+this machine for now, so the link takes you to the right page and stops at
+signing in.
+
 The address lives in your operating system's credential store, never in a file
 — a Slack or Discord webhook address *is* the credential: anyone holding it can
 post into that channel as you.
