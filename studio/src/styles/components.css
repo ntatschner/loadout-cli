@@ -1876,3 +1876,22 @@ a.ls-ptile:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px;
 /* A second guard: resolveBackdrop() already stills the map under reduced motion. */
 @media (prefers-reduced-motion: reduce) { .ls-fieldmap .scanzone { display: none !important; } .ls-fieldmap .scan, .ls-fieldmap .ixg { animation: none !important; } }
 @media print { .ls-fieldmap { display: none !important; } }
+
+/* ---------- The map carries on under the rail, the Pages tab and the mode bar: an embossed edge and grid ticks set them apart ---------- */
+/* Only where the map shows, which already leaves out Pure Focus, Ambient and both high-contrast themes. */
+:root:is([data-fieldmap="map"], [data-fieldmap="map-scan"]) .ls-railnav {
+  background: color-mix(in srgb, var(--ground) 58%, transparent);
+  -webkit-backdrop-filter: blur(1.5px); backdrop-filter: blur(1.5px);
+  box-shadow: inset -1px 0 0 color-mix(in srgb, #000 45%, transparent), inset -2px 0 0 color-mix(in srgb, var(--ink-strong) 10%, transparent), 8px 0 30px -20px var(--cgf);
+}
+:root:is([data-fieldmap="map"], [data-fieldmap="map-scan"]) .ls-railnav::after,
+:root:is([data-fieldmap="map"], [data-fieldmap="map-scan"]) .ls-pagestab::after { content: ""; position: absolute; top: 0; bottom: 0; right: 3px; width: 6px; pointer-events: none; background: repeating-linear-gradient(180deg, color-mix(in srgb, var(--ink-soft) 28%, transparent) 0 1px, transparent 1px 40px), repeating-linear-gradient(180deg, color-mix(in srgb, var(--ink-soft) 16%, transparent) 0 1px, transparent 1px 8px); background-size: 6px 100%, 3px 100%; background-repeat: no-repeat; background-position: right top, right top; }
+/* Widened over the page, the rail is solid again, so nothing on the page shows under its labels. */
+:root:is([data-fieldmap="map"], [data-fieldmap="map-scan"]) .ls-railnav:hover,
+:root:is([data-fieldmap="map"], [data-fieldmap="map-scan"]) .ls-railnav:focus-within { background: var(--ground); -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: inset -1px 0 0 color-mix(in srgb, var(--accent) 55%, transparent), 30px 0 70px 16px var(--scrim), 8px 0 30px -20px var(--cgf); }
+:root:is([data-fieldmap="map"], [data-fieldmap="map-scan"]) .ls-pagestab { box-shadow: inset -1px 0 0 color-mix(in srgb, #000 45%, transparent), inset -2px 0 0 color-mix(in srgb, var(--ink-strong) 10%, transparent), inset -3px 0 0 var(--accent); }
+:root[data-theme="light"]:is([data-fieldmap="map"], [data-fieldmap="map-scan"]) .ls-railnav:not(:hover):not(:focus-within) { box-shadow: inset -1px 0 0 color-mix(in srgb, var(--ink-strong) 14%, transparent), inset -2px 0 0 #fff, 8px 0 30px -20px var(--cgf); }
+:root[data-theme="light"]:is([data-fieldmap="map"], [data-fieldmap="map-scan"]) .ls-pagestab { box-shadow: inset -1px 0 0 color-mix(in srgb, var(--ink-strong) 14%, transparent), inset -2px 0 0 #fff, inset -3px 0 0 var(--accent); }
+:root:is([data-fieldmap="map"], [data-fieldmap="map-scan"]) .ls-modebar { position: relative; }
+:root:is([data-fieldmap="map"], [data-fieldmap="map-scan"]) .ls-modebar::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 7px; pointer-events: none; box-shadow: inset 0 -1px 0 color-mix(in srgb, #000 40%, transparent), inset 0 -2px 0 color-mix(in srgb, var(--ink-strong) 9%, transparent); background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--ink-soft) 28%, transparent) 0 1px, transparent 1px 40px) left bottom / 100% 6px no-repeat, repeating-linear-gradient(90deg, color-mix(in srgb, var(--ink-soft) 16%, transparent) 0 1px, transparent 1px 8px) left bottom / 100% 3px no-repeat; }
+@media print { .ls-railnav { background: var(--ground) !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; } .ls-railnav::after, .ls-pagestab::after, .ls-modebar::after { display: none !important; } }

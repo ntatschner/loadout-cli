@@ -104,3 +104,45 @@ describe('the field map’s CSS', () => {
     expect(rules.find((rule) => rule.selector === '.ls-fieldmap')?.body).toMatch(/position:\s*fixed;\s*inset:\s*0;\s*z-index:\s*var\(--z-ground\)/);
   });
 });
+
+describe('the nav over the field map', () => {
+  const css = readFileSync('src/styles/components.css', 'utf-8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, selector, body]) => ({ selector: selector.trim(), body }));
+  const SHOWING = ':root:is([data-fieldmap="map"], [data-fieldmap="map-scan"])';
+  /** A length a rule sets, in pixels. Throws where it sets none, so two missing lengths can never compare equal. */
+  const px = (selector: string, property: string) => {
+    const found = rules.find((rule) => rule.selector === selector)?.body.match(new RegExp(`${property}:\\s*(\\d+)px`))?.[1];
+    if (found === undefined) throw new Error(`${selector} sets no ${property}`);
+    return Number(found);
+  };
+
+  it('changes the rail, the Pages tab and the mode bar only where the map shows', () => {
+    const ticks = rules.filter((rule) => /repeating-linear-gradient/.test(rule.body) && /ls-(railnav|pagestab|modebar)/.test(rule.selector));
+
+    expect(ticks.length).toBeGreaterThanOrEqual(2);
+    for (const rule of ticks) {
+      for (const one of rule.selector.split(/,\s*(?=:root)/)) {
+        expect(one).toContain(SHOWING.slice(':root'.length));
+      }
+    }
+    expect(rules.find((rule) => rule.selector === `${SHOWING} .ls-railnav`)?.body).toMatch(/color-mix\(in srgb, var\(--ground\) 58%, transparent\)/);
+  });
+
+  it('makes the widened rail solid again, by hover and by keyboard focus', () => {
+    const widened = rules.find((rule) => rule.selector.includes(`${SHOWING} .ls-railnav:hover`))!;
+
+    expect(widened.selector).toContain(`${SHOWING} .ls-railnav:focus-within`);
+    expect(widened.body).toMatch(/background:\s*var\(--ground\)/);
+    expect(widened.body).toMatch(/[^-]backdrop-filter:\s*none/);
+  });
+
+  it('starts the scan where the rail, or the Pages tab, ends', () => {
+    expect(px('.ls-fieldmap', '--fm-scan-left')).toBe(px('.ls-railnav', 'width'));
+    expect(px(':root:has(.ls-nav.narrow) .ls-fieldmap', '--fm-scan-left')).toBe(px('.ls-pagestab', 'width'));
+    expect(css).toMatch(/@media \(max-width: 599px\) \{ \.ls-fieldmap \{ --fm-scan-left: 34px; \} \}/);
+  });
+
+  it('prints the rail on its solid ground', () => {
+    expect(css).toMatch(/@media print \{ \.ls-railnav \{ background: var\(--ground\) !important;/);
+  });
+});
