@@ -25,8 +25,11 @@ namespace Loadout.Cli.Commands;
 /// can do the same. The tasks go to the front of the queue, so they are what
 /// runs and nothing that was already waiting spends the cap. Each run is given
 /// whatever is left of the cap as its own budget, and nothing more starts once
-/// it is spent: the figure approved is the most the batch can cost, which is
-/// what a team run's budget already means for one run.
+/// it is spent. That is what a team run's budget already means for one run,
+/// and it has the same give: the agent checks its spend after each turn, so
+/// the run that crosses the cap finishes that turn. Tried for real with $0.40
+/// over two tasks, the first spent $0.32, the second was given $0.08 and
+/// stopped at $0.19, and the batch ended at $0.51.
 /// </para>
 /// <para>
 /// The limit is a window opened as the command starts, as the daemon's queue
@@ -79,7 +82,7 @@ public sealed class TeamQueueRunNowCommand : AsyncCommand<TeamQueueRunNowCommand
         public string[] Tasks { get; init; } = [];
 
         [CommandOption("--usd <AMOUNT>")]
-        [Description("The most the whole batch may spend, in US dollars, or none for no cap. Required.")]
+        [Description("What the whole batch may spend, in US dollars, or none for no cap. Required. The run that crosses it finishes its turn, so it can end a little over.")]
         public string? Usd { get; init; }
 
         [CommandOption("--by <WHO>")]
