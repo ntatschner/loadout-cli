@@ -50,6 +50,8 @@ export function livenessOf(run: Run): string | null {
       return 'possibly not responding';
     case 'unreadable':
       return 'owner unreadable';
+    case 'silent':
+      return run.owner ? `silent for an hour or more · pid ${run.owner.pid}` : 'silent for an hour or more';
     default:
       return null;
   }

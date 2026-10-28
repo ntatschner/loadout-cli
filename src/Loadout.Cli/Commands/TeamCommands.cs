@@ -522,7 +522,7 @@ public sealed class TeamRunsCommand : AsyncCommand<TeamRunsCommand.Settings>
 
             if (unresponsive is not null)
             {
-                output.WriteLine($"  {TeamStyle.CloseHint(run.RunId)}");
+                output.WriteLine($"  {TeamStyle.CloseHint(run.RunId, liveness[run.RunId])}");
             }
 
             if (run.Goal is { Length: > 0 })
@@ -732,7 +732,7 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
 
         if (unresponsive is not null)
         {
-            output.WriteLine($"  {TeamStyle.CloseHint(run.RunId)}");
+            output.WriteLine($"  {TeamStyle.CloseHint(run.RunId, liveness)}");
         }
 
         // Everything wanting attention that is not a question - the

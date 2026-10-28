@@ -1628,12 +1628,26 @@ public sealed class DashboardServerTests : IAsyncLifetime
                 .Should().Contain("notresponding");
         }
 
+        // Held, and the fixture last wrote weeks ago: driven, but silent for
+        // far longer than a working node ever is.
         ownership.Script(directory, new OwnerReading.Held());
 
-        using var held = JsonDocument.Parse(await (await GetAsync("/api/runs/20260916-1200-aaaa")).Content.ReadAsStringAsync());
+        using (var held = JsonDocument.Parse(await (await GetAsync("/api/runs/20260916-1200-aaaa")).Content.ReadAsStringAsync()))
+        {
+            held.RootElement.GetProperty("liveness").GetString().Should().Be("silent");
+            held.RootElement.TryGetProperty("owner", out _).Should().BeFalse("an owner nobody can read is left out");
+            held.RootElement.GetProperty("attention").EnumerateArray()
+                .Select(one => one.GetProperty("kind").GetString())
+                .Should().NotContain("notresponding", "something still holds it");
+        }
 
-        held.RootElement.GetProperty("liveness").GetString().Should().Be("live");
-        held.RootElement.TryGetProperty("owner", out _).Should().BeFalse("an owner nobody can read is left out");
+        // Where the holder said who it is beside the lock, the page can name it.
+        ownership.Script(directory, new OwnerReading.Held(
+            new RunOwner(5150, new DateTimeOffset(2026, 9, 16, 11, 59, 0, TimeSpan.Zero), "BOX", DateTimeOffset.UnixEpoch)));
+
+        using var named = JsonDocument.Parse(await (await GetAsync("/api/runs/20260916-1200-aaaa")).Content.ReadAsStringAsync());
+
+        named.RootElement.GetProperty("owner").GetProperty("pid").GetInt32().Should().Be(5150);
     }
 
     /// <remarks>

@@ -128,6 +128,16 @@ lines the agent wrote, its process id and whether it had already exited, then
 that hang, not yet against a real one that did, which is why it writes down so
 much about the moment it gave up.
 
+A run that hung before this, or under `never`, still holds its lock, and nothing
+will end it: `loadout team halt` waits for the end of a turn that is not coming
+back. So a run whose process still holds it but which has written nothing for an
+hour reads as *running, but silent* in `team status` and on its Studio page, and
+names the process holding it. End that process, then `loadout team runs close`.
+It is never offered as one to close while something holds it, and it may be the
+team daemon, in which case every run it drives stops with it. Only runs started
+by this build or later can name the process: older ones kept that record where
+it could not be read while the run was held.
+
 ## The three postures
 
 `--autonomy`, or the team's own setting when you do not pass one.

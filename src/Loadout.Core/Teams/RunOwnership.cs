@@ -22,7 +22,11 @@ public abstract record OwnerReading
     }
 
     /// <summary>A process holds the run now.</summary>
-    public sealed record Held : OwnerReading;
+    /// <param name="Owner">
+    /// Which, where it said so beside the lock: the lock itself cannot be read
+    /// while it is held. Null for a run taken by a build that did not.
+    /// </param>
+    public sealed record Held(RunOwner? Owner = null) : OwnerReading;
 
     /// <summary>
     /// The run had an owner and nothing holds it now: the process that drove
@@ -90,6 +94,12 @@ public interface IRunOwnership
 /// it is wanted: "not responding, last driven by process N".
 /// </para>
 /// <para>
+/// So the same record is also written beside it, as <c>owner.json</c>, which
+/// anybody may read while the run is held. It is read only to name the holder
+/// of a run that has gone quiet for a long time, so that somebody can end the
+/// right process; whether the run is held is still the lock's to say.
+/// </para>
+/// <para>
 /// The file is never deleted on close. One left behind with nothing holding
 /// it is what says a run had an owner who died, as against a run that never
 /// had one.
@@ -99,6 +109,9 @@ internal sealed class FileRunOwnership : IRunOwnership
 {
     /// <summary>The file in a run's directory that is locked.</summary>
     public const string FileName = "owner.lock";
+
+    /// <summary>The same record, readable while the lock is held.</summary>
+    public const string SaidName = "owner.json";
 
     private static readonly TimeSpan Pause = TimeSpan.FromMilliseconds(50);
 
@@ -205,7 +218,7 @@ internal sealed class FileRunOwnership : IRunOwnership
         }
         catch (IOException ex) when (IsLockConflict(ex))
         {
-            return new OwnerReading.Held();
+            return new OwnerReading.Held(Said(runDirectory));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -256,6 +269,32 @@ internal sealed class FileRunOwnership : IRunOwnership
         hold.File.Position = 0;
         hold.File.Write(bytes);
         hold.File.Flush(flushToDisk: true);
+
+        // Beside it, for naming the holder while it holds. Best effort: the
+        // lock is what matters, and a run is not refused for want of this.
+        try
+        {
+            File.WriteAllBytes(Path.Combine(Path.GetDirectoryName(hold.File.Name)!, SaidName), bytes);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
+
+    /// <summary>Who said they hold the run, or null where nothing beside the lock says.</summary>
+    private static RunOwner? Said(string runDirectory)
+    {
+        try
+        {
+            using var file = new FileStream(
+                Path.Combine(runDirectory, SaidName), FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+
+            return Parse(file);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     /// <summary>The owner a record names, or null when it cannot be read.</summary>

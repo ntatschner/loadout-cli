@@ -180,6 +180,14 @@ public sealed class RunCloser
                 $"Run {run.RunId} is still going: a process on this machine is driving it. "
                 + $"Stop it with 'loadout team halt {run.RunId}' instead.",
                 ExitCode.PolicyViolation),
+
+            // Still held, however long it has been quiet: closing it would
+            // write an ending under a process that may yet write its own.
+            Liveness.Silent silent => OperationResult<RunClosed>.Fail(
+                $"Run {run.RunId} has written nothing for {Quiet(silent.Quiet)}, but "
+                + (silent.Owner is { } owner ? $"process {owner.ProcessId}" : "a process on this machine")
+                + " still holds it. If a node has hung, end that process first, then close it.",
+                ExitCode.PolicyViolation),
             Liveness.Unreadable unreadable => OperationResult<RunClosed>.Fail(
                 $"Run {run.RunId} was left alone: its owner file "
                 + $"{Path.Combine(run.Directory, FileRunOwnership.FileName)} could not be read ({unreadable.Why}), "

@@ -6,7 +6,7 @@ import { quoted } from './commands';
 import { codeTokens, diffLines, fileKind, inline, markdown, parseCsv } from './files';
 import { sheetCommand, sheetProblem, sheetValues, type SheetTeam } from './teamSheet';
 import { depthKey, gateButtons, gateKind, pruneCommand, pruneSentence, type GateAsk } from './teams';
-import { boardRunsOf, boardTeamsOf, keptRuns, nodeWord, runWord, startedRun } from './teamsData';
+import { boardRunsOf, boardTeamsOf, keptRuns, livenessOf, nodeWord, runWord, startedRun, unowned } from './teamsData';
 import { signalOf } from './signals';
 import type { Run } from './api';
 
@@ -227,6 +227,15 @@ describe('runWord', () => {
 
     expect(runWord(run)).toBe('stalled');
     expect(signalOf('stalled').family).toBe('bad');
+  });
+});
+
+describe('livenessOf', () => {
+  it('names the process holding a run gone silent, and does not offer it as one to end', () => {
+    const run = { running: true, liveness: 'silent', owner: { pid: 5150, machine: 'BOX', startedAt: '2026-10-27T09:00:00Z' } } as unknown as Run;
+
+    expect(livenessOf(run)).toBe('silent for an hour or more · pid 5150');
+    expect(unowned(run)).toBe(false);
   });
 });
 

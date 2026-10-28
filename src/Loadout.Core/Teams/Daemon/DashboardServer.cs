@@ -3285,6 +3285,7 @@ public sealed class DashboardServer : IDisposable
         Liveness.NotResponding => "not-responding",
         Liveness.PossiblyNotResponding => "possibly-not-responding",
         Liveness.Unreadable => "unreadable",
+        Liveness.Silent => "silent",
         _ => "live",
     };
 
@@ -3314,17 +3315,24 @@ public sealed class DashboardServer : IDisposable
         // and this is the one that says the next move is yours.
         run.WaitingForYou,
 
-        // Whether anything still drives it: live, not-responding,
-        // possibly-not-responding, unreadable or finished. The journal says
+        // Whether anything still drives it: live, silent (driven, and quiet
+        // for an hour), not-responding, possibly-not-responding, unreadable
+        // or finished. The journal says
         // only that a run is going until it writes its finish, so a run whose
         // driver was killed reads as running for good without this.
         liveness = Spelt(liveness),
 
-        // Who last drove it, where that is known: only once the lock is free
-        // can its record be read. Taken out of the JSON when null.
-        owner = liveness is Liveness.NotResponding { LastOwner: { } last }
-            ? new { pid = last.ProcessId, machine = last.Machine, startedAt = last.StartedAt }
-            : null,
+        // Who last drove it, where that is known, or who holds a silent one.
+        // Taken out of the JSON when null.
+        owner = liveness switch
+        {
+            Liveness.NotResponding { LastOwner: { } last } => new { pid = last.ProcessId, machine = last.Machine, startedAt = last.StartedAt },
+
+            // Still held, and silent for long enough that somebody may want
+            // to end the process holding it.
+            Liveness.Silent { Owner: { } holder } => new { pid = holder.ProcessId, machine = holder.Machine, startedAt = holder.StartedAt },
+            _ => null,
+        },
 
         // Why it wants somebody, each saying what would clear it. Computed
         // fresh every read and never remembered, because a rail that only

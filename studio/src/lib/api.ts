@@ -480,7 +480,7 @@ export interface Run {
   numbers?: RunNumbers;
   turns?: { at: string; node: string; round: number; attempt: number; exchanges: number; cost: number; denials: number; completed: boolean; status: string | null; outcome: string | null }[];
   /** Whether the process driving it is still there. Absent, or a word not here, reads as live. */
-  liveness?: 'live' | 'not-responding' | 'possibly-not-responding' | 'unreadable' | 'finished';
+  liveness?: 'live' | 'not-responding' | 'possibly-not-responding' | 'unreadable' | 'silent' | 'finished';
   /** The process that holds the run's owner lock, when it could be read. */
   owner?: { pid: number; machine: string; startedAt: string };
 }
