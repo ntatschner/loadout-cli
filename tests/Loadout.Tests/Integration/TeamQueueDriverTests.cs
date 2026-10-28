@@ -52,11 +52,15 @@ public sealed class TeamQueueDriverTests : IDisposable
 
         _driver = new TeamQueueDriver(
             _queues, _schedules, _space.Tasks, _journal, new FakeProjects("website", repository), _git,
-            _launcher, _processes, new GhRepositoryHost(_launcher, new StubResolver("gh")), _pulls, _landings, _space.Workspace,
+            _launcher, _processes, new GhRepositoryHost(_launcher, new StubResolver("gh")), _pulls, _landings,
+            Delivery(new GhRepositoryHost(_launcher, new StubResolver("gh"))), _space.Workspace,
             _space.Paths, _clock);
     }
 
     public void Dispose() => _space.Dispose();
+
+    private DeliveryService Delivery(IRepositoryHost host) =>
+        new(_landings, new FakeProjects("website", _space.Scratch("website")), _git, host, _pulls, _space.Tasks, _clock);
 
     private static DateTimeOffset Local(int day, int hour)
     {
@@ -308,7 +312,8 @@ public sealed class TeamQueueDriverTests : IDisposable
     {
         var driver = new TeamQueueDriver(
             _queues, _schedules, _space.Tasks, _journal, new FakeProjects("website", _space.Scratch("website")), _git,
-            _launcher, _processes, new GhRepositoryHost(_launcher, new StubResolver(null)), _pulls, _landings, _space.Workspace,
+            _launcher, _processes, new GhRepositoryHost(_launcher, new StubResolver(null)), _pulls, _landings,
+            Delivery(new GhRepositoryHost(_launcher, new StubResolver(null))), _space.Workspace,
             _space.Paths, _clock);
 
         await ReadyAsync(projectMode: "ready");

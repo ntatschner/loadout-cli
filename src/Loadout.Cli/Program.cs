@@ -998,6 +998,9 @@ public static class Program
                 CommandCategory.Start,
                 "pr pull request pending branch landing merge deliver");
             pr.AddCommand<PrListCommand>("list");
+            pr.AddCommand<PrOpenCommand>("open");
+            pr.AddCommand<PrReadyCommand>("ready");
+            pr.AddCommand<PrMergeCommand>("merge");
         });
 
         TopBranch(config, "checkpoint", checkpoint =>

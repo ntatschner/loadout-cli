@@ -30,6 +30,7 @@ public static class ServiceRegistration
         services.AddSingleton<IPullRequestReader, GhPullRequestReader>();
         services.AddSingleton<IRepositoryHost, GhRepositoryHost>();
         services.AddSingleton<Delivery.ILandingService, Delivery.LandingService>();
+        services.AddSingleton<Delivery.IDeliveryService, Delivery.DeliveryService>();
         services.AddSingleton<IWorkspaceManager, WorkspaceManager>();
         services.AddSingleton<IProjectCheckouts, ProjectCheckouts>();
         services.AddSingleton<IProjectService, ProjectService>();

@@ -56,6 +56,16 @@ public sealed class BranchLanding
     /// <summary>Why it stands where it does, in a line.</summary>
     public string Why { get; set; } = string.Empty;
 
+    /// <summary>
+    /// When a person asked for its pull request to be squash-merged once its
+    /// checks pass, or null when nobody has. It stays ready until the merge
+    /// is seen, since the host does the merging, not Loadout.
+    /// </summary>
+    public DateTimeOffset? MergeRequestedUtc { get; set; }
+
+    /// <summary>When its pull request was last looked for among the merged, or null when it never has been.</summary>
+    public DateTimeOffset? MergeChecked { get; set; }
+
     public DateTimeOffset CreatedUtc { get; set; }
 
     public DateTimeOffset UpdatedUtc { get; set; }

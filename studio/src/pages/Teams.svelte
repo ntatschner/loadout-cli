@@ -526,6 +526,10 @@
       loadOverview,
     );
 
+  // As a job, so the page waits for the push and gh before it reads the list again.
+  const landingAct = (path: string, words: string[], done: string) =>
+    studio.perform(() => runJob(path, words), done, `$ loadout ${path} ${words.join(' ')}`, loadOverview);
+
   const when = (one: NonNullable<typeof schedules>[number]) => (one.at ? `at ${one.at}` : one.on ? `on ${one.on}` : one.every ? `every ${one.every.replace(/^0?(\d+):00:00$/, '$1h').replace(/^00:(\d+):00$/, '$1m')}` : '');
 </script>
 
@@ -683,7 +687,7 @@
     <section class="tblock" aria-labelledby="tm-landing">
       <h2 class="ls-zone" id="tm-landing">Waiting to land</h2>
       {#if landings}
-        <Landings {landings} />
+        <Landings {landings} act={landingAct} disabledReason={watch} />
       {:else}
         <p class="calm" role="status">Reading…</p>
       {/if}
