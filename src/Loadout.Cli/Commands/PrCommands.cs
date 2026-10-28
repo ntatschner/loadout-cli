@@ -126,6 +126,7 @@ public sealed class PrListCommand : AsyncCommand<PrListCommand.Settings>
                 task = row.Landing.Task,
                 pullRequest = row.Landing.PullRequest,
                 why = row.Landing.Why,
+                mergeRequested = row.Landing.MergeRequestedUtc,
                 created = row.Landing.CreatedUtc,
                 updated = row.Landing.UpdatedUtc,
                 gone = row.Gone,
