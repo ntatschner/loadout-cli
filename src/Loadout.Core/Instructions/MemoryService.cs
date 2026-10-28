@@ -404,8 +404,17 @@ internal sealed partial class MemoryService : IMemoryService
 
         try
         {
-            using var trace = ReadLedger.Begin(path);
-            text = await File.ReadAllTextAsync(path, ct).ConfigureAwait(false);
+            // The daemon parses every topic for each search and each page,
+            // and a topic changes far less often than that.
+            if (Loadout.Core.Reading.SharedReaders.Enabled)
+            {
+                text = await Loadout.Core.Reading.WholeFile.For(path).ReadTextAsync(ct).ConfigureAwait(false);
+            }
+            else
+            {
+                using var trace = ReadLedger.Begin(path);
+                text = await File.ReadAllTextAsync(path, ct).ConfigureAwait(false);
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

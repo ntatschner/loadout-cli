@@ -266,6 +266,12 @@ is now read once per process and after that only from where the last read
 stopped. Each read still checks the file's length and last-write time first,
 so a new launch shows up on the very next read, as it did before. A ledger
 that has shrunk, or been rewritten rather than added to, is read whole again.
+
+Memory topics are kept the same way, whole: a topic is opened again only when
+its length or last-write time has moved. One written in the last two seconds
+is opened every time, because a rewrite to the same length can land inside one
+tick of the file system's clock and look unchanged.
+
 Set `LOADOUT_SHARED_READERS=0` to go back to reading the whole file every
 time; it is there to tell a wrong answer from the sharing apart from one in
 the file.
