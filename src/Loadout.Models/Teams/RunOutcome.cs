@@ -66,4 +66,14 @@ public enum RunOutcome
     /// the record is somebody dealing with that.
     /// </remarks>
     [JsonStringEnumMemberName("abandoned")] Abandoned,
+
+    /// <summary>
+    /// Its lead went silent for longer than the team allows, was started
+    /// again, and went silent again, so the run stopped itself.
+    /// </summary>
+    /// <remarks>
+    /// Its own category rather than a failure: nothing the lead decided went
+    /// wrong, and the work it left is usually worth carrying on from.
+    /// </remarks>
+    [JsonStringEnumMemberName("stalled")] Stalled,
 }

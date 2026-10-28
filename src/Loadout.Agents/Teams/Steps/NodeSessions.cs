@@ -28,26 +28,161 @@ internal sealed class NodeSessions
         _tools = tools;
     }
 
+    /// <summary>What a node that was cut off is told when it is started again.</summary>
+    internal const string CutOff =
+        "Your last turn was cut off: you wrote nothing for longer than this team allows, so you were "
+        + "stopped and started again. Anything you had already changed in your working tree is still there. "
+        + "Check where you got to, then carry on and finish with your report.";
+
     /// <summary>
     /// One exchange with a node, judged. A report that fails the check goes
     /// back once with the reasons; a second failure is the node's answer.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A turn that goes silent for longer than the team allows is a second,
+    /// separate retry with its own count. The agent is killed with everything
+    /// it started, and started again once on its own conversation with a note
+    /// that it was cut off; where that conversation cannot be picked up it is
+    /// started afresh in the same tree, and that is the one retry spent. A
+    /// second silence is the node stuck.
+    /// </para>
+    /// <para>
+    /// A restart is a new launch, so the turn hands back the one the node is
+    /// now on, and that is the one the caller ends.
+    /// </para>
+    /// </remarks>
+    /// <param name="launch">The node, started.</param>
+    /// <param name="brief">What it was briefed with.</param>
+    /// <param name="prompt">What to say to it.</param>
+    /// <param name="journal">The run's record.</param>
+    /// <param name="ct">Cancels the turn.</param>
+    /// <param name="restart">
+    /// Starts the node again, on the conversation named or afresh for null.
+    /// Null for a caller that cannot restart a node, whose silent turn is then
+    /// stuck at once.
+    /// </param>
+    /// <param name="quiet">How long the node may be silent, or null for no limit.</param>
     public async Task<NodeTurn> TurnAsync(
         HeadlessLaunch launch,
         Brief brief,
         string prompt,
         JournalWriter journal,
-        CancellationToken ct)
+        CancellationToken ct,
+        Func<string?, CancellationToken, Task<OperationResult<HeadlessLaunch>>>? restart = null,
+        TimeSpan? quiet = null)
     {
         var session = launch.Session!;
         var cost = 0m;
         var said = string.Empty;
         var watching = new TeamRunner.Progress(journal, brief.Node, _time) { Steering = session };
+        var limit = quiet is { } span ? Quiet(span, brief) : null;
+        var restarted = false;
+        var resumed = false;
+        var briefing = prompt;
 
         for (var attempt = 1; attempt <= 2; attempt++)
         {
-            var turn = await session.TurnAsync(prompt, watching.SawAsync, ct).ConfigureAwait(false);
+            var turn = await session.TurnAsync(prompt, watching.SawAsync, ct, limit).ConfigureAwait(false);
             cost += turn.CostUsd;
+
+            // A resume that never got going: the conversation could not be
+            // picked up. Started afresh in the same tree, with the brief
+            // again, and still the one retry.
+            if (resumed && restart is not null && !turn.Silent && !turn.Completed
+                && !turn.Events.OfType<HeadlessStarted>().Any())
+            {
+                resumed = false;
+
+                await journal.WriteAsync("node.retried", brief.Node, new
+                {
+                    how = "fresh",
+                    because = "its conversation could not be picked up",
+                    stderr = TeamRunner.Tail(session.StandardError),
+                }, ct).ConfigureAwait(false);
+
+                var fresh = await ReplaceAsync(launch, restart, null, ct).ConfigureAwait(false);
+
+                if (fresh.Failed)
+                {
+                    await StuckAsync(journal, brief, fresh.Error, ct).ConfigureAwait(false);
+
+                    return new NodeTurn(null, cost, false, said) { Stuck = true, Launch = null };
+                }
+
+                launch = fresh.Value!;
+                session = launch.Session!;
+                watching.Steering = session;
+                prompt = CutOff + "\n\n" + briefing;
+                attempt--;
+                continue;
+            }
+
+            if (turn.Silent)
+            {
+                await journal.WriteAsync("node.silent", brief.Node, new
+                {
+                    limit = TeamDuration.Spell(quiet!.Value),
+                    pid = session.ProcessId,
+                    exited = session.Exited.IsCompleted,
+                    exit = session.Exited.IsCompletedSuccessfully ? session.Exited.Result : (int?)null,
+                    session = session.SessionId,
+                    lines = session.RecentOutput,
+                    stderr = TeamRunner.Tail(session.StandardError),
+                }, ct).ConfigureAwait(false);
+
+                // Everything it started goes with it: an agent's tools and
+                // servers left behind hold its pipes and its tree, which is
+                // the same hang one level down.
+                session.Kill();
+
+                if (restarted || restart is null)
+                {
+                    await StuckAsync(journal, brief, null, ct).ConfigureAwait(false);
+
+                    return new NodeTurn(null, cost, false, said) { Stuck = true, Launch = launch };
+                }
+
+                restarted = true;
+                var conversation = session.SessionId;
+                var how = conversation is { Length: > 0 } ? "resumed" : "fresh";
+                var again = await ReplaceAsync(launch, restart, conversation, ct).ConfigureAwait(false);
+                string? refused = null;
+
+                if (again.Failed && conversation is { Length: > 0 })
+                {
+                    refused = again.Error;
+                    how = "fresh";
+                    again = await restart(null, ct).ConfigureAwait(false);
+                }
+
+                if (again.Failed)
+                {
+                    await StuckAsync(journal, brief, again.Error, ct).ConfigureAwait(false);
+
+                    // The old launch is already ended, and nothing new started.
+                    return new NodeTurn(null, cost, false, said) { Stuck = true, Launch = null };
+                }
+
+                await journal.WriteAsync("node.retried", brief.Node, new
+                {
+                    how,
+                    session = conversation,
+                    because = refused,
+                }, ct).ConfigureAwait(false);
+
+                launch = again.Value!;
+                session = launch.Session!;
+                watching.Steering = session;
+                resumed = how == "resumed";
+                prompt = resumed ? CutOff : CutOff + "\n\n" + briefing;
+
+                // Not a report attempt: the node has not answered yet.
+                attempt--;
+                continue;
+            }
+
+            resumed = false;
 
             if (Tidy(turn.Text) is { Length: > 0 } text)
             {
@@ -72,7 +207,7 @@ internal sealed class NodeSessions
 
             if (!turn.Completed)
             {
-                return new NodeTurn(null, cost, false, said);
+                return new NodeTurn(null, cost, false, said) { Launch = launch };
             }
 
             var read = ReportReader.Read(turn.StructuredOutputJson);
@@ -83,7 +218,7 @@ internal sealed class NodeSessions
 
                 if (attempt == 2)
                 {
-                    return new NodeTurn(null, cost, false, said);
+                    return new NodeTurn(null, cost, false, said) { Launch = launch };
                 }
 
                 prompt = $"Your report could not be read: {read.Error} Reply with one report/1 document and nothing else.";
@@ -133,17 +268,17 @@ internal sealed class NodeSessions
             switch (verdict.Outcome)
             {
                 case ReportOutcome.Halted:
-                    return new NodeTurn(report, cost, true, said);
+                    return new NodeTurn(report, cost, true, said) { Launch = launch };
 
                 case ReportOutcome.Accepted:
-                    return new NodeTurn(report, cost, false, said);
+                    return new NodeTurn(report, cost, false, said) { Launch = launch };
 
                 default:
                     if (attempt == 2)
                     {
                         // Returned twice. The node's answer is what it is,
                         // and the record says it was returned.
-                        return new NodeTurn(report, cost, false, said);
+                        return new NodeTurn(report, cost, false, said) { Launch = launch };
                     }
 
                     prompt = "Your report was returned. " + string.Join(" ", verdict.Reasons)
@@ -152,8 +287,51 @@ internal sealed class NodeSessions
             }
         }
 
-        return new NodeTurn(null, cost, false, said);
+        return new NodeTurn(null, cost, false, said) { Launch = launch };
     }
+
+    /// <summary>
+    /// The silence timer for a node's turn, stopped while one of its questions
+    /// is waiting on a person.
+    /// </summary>
+    /// <remarks>
+    /// Read from the run's directory, where the question is written by the
+    /// process answering the node, so it holds whether or not anybody in this
+    /// process is watching for questions.
+    /// </remarks>
+    private QuietLimit Quiet(TimeSpan span, Brief brief)
+    {
+        var directory = RunDirectory(brief.Run);
+
+        return new QuietLimit(span, _time)
+        {
+            Held = () => NodePermissions.Pending(directory)
+                .Any(ask => string.Equals(ask.Node, brief.Node, StringComparison.Ordinal)),
+            Glance = span < Glance ? span : Glance,
+        };
+    }
+
+    /// <summary>How often a node's silence timer looks at the clock.</summary>
+    private static readonly TimeSpan Glance = TimeSpan.FromSeconds(15);
+
+    /// <summary>Ends a killed node's launch and starts it again.</summary>
+    private static async Task<OperationResult<HeadlessLaunch>> ReplaceAsync(
+        HeadlessLaunch old,
+        Func<string?, CancellationToken, Task<OperationResult<HeadlessLaunch>>> restart,
+        string? conversation,
+        CancellationToken ct)
+    {
+        old.Session!.Kill();
+
+        var (exit, _) = await old.Session.EndAsync(TeamRunner.EndGrace, CancellationToken.None).ConfigureAwait(false);
+        await old.CompleteAsync(exit, CancellationToken.None).ConfigureAwait(false);
+        await old.DisposeAsync().ConfigureAwait(false);
+
+        return await restart(conversation, ct).ConfigureAwait(false);
+    }
+
+    private static Task StuckAsync(JournalWriter journal, Brief brief, string? error, CancellationToken ct) =>
+        journal.WriteAsync("node.stuck", brief.Node, new { error }, ct);
 
     /// <summary>One line of what a node said, short enough to read in a warning.</summary>
     private static string Tidy(string text)
@@ -426,4 +604,18 @@ internal sealed class NodeSessions
 /// "ended without a report" while every one of them was saying "You've
 /// reached your Fable limit".
 /// </param>
-internal sealed record NodeTurn(Report? Report, decimal Cost, bool Halted, string Said);
+internal sealed record NodeTurn(Report? Report, decimal Cost, bool Halted, string Said)
+{
+    /// <summary>
+    /// Whether the node went silent twice and was given up on. Its agent has
+    /// been killed.
+    /// </summary>
+    public bool Stuck { get; init; }
+
+    /// <summary>
+    /// The launch the node is on now, which is a new one where it was started
+    /// again after going silent, and the one the caller ends. Null only where
+    /// a stuck node's launch has already been ended.
+    /// </summary>
+    public HeadlessLaunch? Launch { get; init; }
+}

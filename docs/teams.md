@@ -96,6 +96,38 @@ warning in the run.
 **A run that gets nowhere stops.** Two rounds without a request is no progress,
 and no progress is a stop condition like any other.
 
+**A node that goes quiet is stopped and tried once more.** A run waits for each
+node's turn for as long as the node keeps writing, and before this it waited for
+ever: a hung agent under a live launcher looked exactly like one still working,
+so the run showed as running in every view until somebody killed it. Now a turn
+that writes nothing for longer than the team's `quiet_limit`, twenty minutes by
+default, is killed along with everything it started, and the node is started
+again once on its own conversation, told its last turn was cut off. What it had
+changed in its tree is still there. Where that conversation cannot be picked up,
+it starts afresh in the same tree with its brief again, and that is the one try
+spent.
+
+Time a node spends waiting for your answer to one of its questions does not
+count. The clock stops while the question is open and starts again at the full
+limit once you have answered, however long you took.
+
+A node that goes quiet a second time is stuck. A stuck lead ends the run as
+`stalled`, which every view reads as finished, and the run waits in Studio's
+Blocked section suggesting you carry on — or set it aside, if a run before it on
+the same task stalled too, because then something about the task or the machine
+is hanging the lead and another unattended run would only pay for the same. A
+stuck worker fails the way one that cannot start does: the lead is told, with the
+branch it was working on, that what is there is unfinished, and carries on. Once
+the run ends, even as done, it waits in Blocked naming that branch, and counts
+towards the three-runs-in-a-row limit like any other.
+
+Set it under `rules`, as `quiet_limit: 45m`, or `never` to wait for ever as
+before. The journal says what happened in `node.silent`, which records the last
+lines the agent wrote, its process id and whether it had already exited, then
+`node.retried` and `node.stuck`. This has been tried against scripted agents
+that hang, not yet against a real one that did, which is why it writes down so
+much about the moment it gave up.
+
 ## The three postures
 
 `--autonomy`, or the team's own setting when you do not pass one.

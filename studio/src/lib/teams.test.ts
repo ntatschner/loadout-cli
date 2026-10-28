@@ -6,7 +6,8 @@ import { quoted } from './commands';
 import { codeTokens, diffLines, fileKind, inline, markdown, parseCsv } from './files';
 import { sheetCommand, sheetProblem, sheetValues, type SheetTeam } from './teamSheet';
 import { depthKey, gateButtons, gateKind, pruneCommand, pruneSentence, type GateAsk } from './teams';
-import { boardRunsOf, boardTeamsOf, keptRuns, nodeWord, startedRun } from './teamsData';
+import { boardRunsOf, boardTeamsOf, keptRuns, nodeWord, runWord, startedRun } from './teamsData';
+import { signalOf } from './signals';
 import type { Run } from './api';
 
 const ask = (over: Partial<GateAsk>): GateAsk => ({ kind: 'question', run: '20261017-1402-ab3f', gate: 'g1', question: 'Which way?', ...over });
@@ -212,6 +213,20 @@ describe('nodeWord', () => {
     expect(nodeWord('blocked', 'between turns', true)).toBe('waiting for you');
     expect(nodeWord('blocked', 'between turns', false)).toBe('blocked');
     expect(nodeWord('working', 'working')).toBe('working');
+  });
+
+  it('says a node given up on after going silent twice is stuck, and reads it as gone wrong', () => {
+    expect(nodeWord('stuck', 'between turns')).toBe('stuck');
+    expect(signalOf('stuck').family).toBe('bad');
+  });
+});
+
+describe('runWord', () => {
+  it('says a run whose lead went silent twice stalled, not that it is running', () => {
+    const run = { running: false, waitingForYou: false, outcome: 'stalled', ended: 'stalled: the lead wrote nothing for longer than 20m, twice' } as unknown as Run;
+
+    expect(runWord(run)).toBe('stalled');
+    expect(signalOf('stalled').family).toBe('bad');
   });
 });
 

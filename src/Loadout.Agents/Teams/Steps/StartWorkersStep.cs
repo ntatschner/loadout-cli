@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Loadout.Agents.Teams;
 using Loadout.Models.Agents;
 using Loadout.Models.Instructions;
@@ -146,7 +147,33 @@ internal sealed class StartWorkersStep
             return new WorkerOutcome(null, 0m, false, started.Error, warnings);
         }
 
-        await using var launch = started.Value!;
+        // Whichever launch the node ends on is the one disposed: one started
+        // again after going silent has replaced the one it began with.
+        var holding = new StrongBox<HeadlessLaunch>(started.Value!);
+
+        try
+        {
+            return await TalkAsync(run, journal, request, team, briefed, reviewing, holding, warnings, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            await holding.Value!.DisposeAsync().ConfigureAwait(false);
+        }
+    }
+
+    private async Task<WorkerOutcome> TalkAsync(
+        RunContext run,
+        JournalWriter journal,
+        TeamRunRequest request,
+        TeamDefinition team,
+        Briefed briefed,
+        string? reviewing,
+        StrongBox<HeadlessLaunch> holding,
+        List<string> warnings,
+        CancellationToken ct)
+    {
+        var (node, role, brief) = (briefed.Node, briefed.Role, briefed.Brief);
+        var launch = holding.Value!;
         warnings.AddRange(launch.Warnings);
 
         /*
@@ -205,16 +232,48 @@ internal sealed class StartWorkersStep
                 + "A branch the merge gate takes is cleared away with its tree; one it does not is left for you.");
         }
 
-        var turn = await _sessions.TurnAsync(launch, brief, TeamRunner.Render(brief) + TeamRunner.Placed(reviewing, launch.Plan.WorkingDirectory), journal, ct)
-            .ConfigureAwait(false);
+        var turn = await _sessions.TurnAsync(
+            launch,
+            brief,
+            TeamRunner.Render(brief) + TeamRunner.Placed(reviewing, launch.Plan.WorkingDirectory),
+            journal,
+            ct,
+            (conversation, token) => _sessions.StartAsync(
+                run, request, team, node, role, brief, dryRun: false, token, conversation, reviewing),
+            team.Rules.Quiet).ConfigureAwait(false);
 
-        var (exit, killed) = await launch.Session!.EndAsync(TeamRunner.EndGrace, CancellationToken.None).ConfigureAwait(false);
-        var stderr = TeamRunner.Tail(launch.Session.StandardError);
+        var exit = 0;
+        var stderr = string.Empty;
 
-        await journal.WriteAsync("node.ended", brief.Node, new { exit, killed, stderr }, CancellationToken.None).ConfigureAwait(false);
-        await launch.CompleteAsync(exit, CancellationToken.None).ConfigureAwait(false);
+        if (turn.Launch is { } ending)
+        {
+            launch = ending;
+            holding.Value = ending;
+
+            var (code, killed) = await ending.Session!.EndAsync(TeamRunner.EndGrace, CancellationToken.None).ConfigureAwait(false);
+            exit = code;
+            stderr = TeamRunner.Tail(ending.Session.StandardError);
+
+            await journal.WriteAsync("node.ended", brief.Node, new { exit, killed, stderr }, CancellationToken.None).ConfigureAwait(false);
+            await ending.CompleteAsync(exit, CancellationToken.None).ConfigureAwait(false);
+        }
 
         await _fold.RunAsync(run, journal, brief, warnings, CancellationToken.None).ConfigureAwait(false);
+
+        if (turn.Stuck)
+        {
+            // Failed the way a node that cannot start fails, so the lead
+            // carries on. What it committed is not thrown away: the lead is
+            // told where it is, and that it was left unfinished.
+            var unfinished = brief.Constraints.Worktree is { Length: > 0 } branch
+                ? $" What it committed is on branch '{branch}', unfinished: merge it, finish it, or leave it."
+                : string.Empty;
+
+            var stuck = $"{brief.Node} went silent twice and was stopped.{unfinished}";
+            warnings.Add(stuck);
+
+            return new WorkerOutcome(null, turn.Cost, false, stuck, warnings);
+        }
 
         if (turn.Report is null)
         {

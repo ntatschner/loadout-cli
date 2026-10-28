@@ -31,6 +31,8 @@ export function runWord(run: Run): string {
       return 'stopped';
     case 'abandoned':
       return 'abandoned';
+    case 'stalled':
+      return 'stalled';
     default:
       return run.ended ? 'stopped' : 'idle';
   }
@@ -188,6 +190,8 @@ export function nodeWord(state: string, activity: string, runWaiting = false): s
       return 'needs a decision';
     case 'ended':
       return 'stopped';
+    case 'stuck':
+      return 'stuck';
     default:
       return activity === 'working' ? 'working' : 'idle';
   }

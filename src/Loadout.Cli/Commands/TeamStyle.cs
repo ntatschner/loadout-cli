@@ -115,7 +115,8 @@ internal static class TeamStyle
         "run.started" or "run.finished" or "round.started" or "run.budget" => "bold",
         "node.asked" => "yellow",
         "node.answered" or "permission.asked" => entry.Yes("allowed") ? "green" : "red",
-        "node.failed" or "report.unreadable" or "request.refused" => "red",
+        "node.failed" or "report.unreadable" or "request.refused" or "node.stuck" or "run.stalled" => "red",
+        "node.silent" or "node.retried" => "yellow",
         "node.launched" => "blue",
         _ => null,
     };

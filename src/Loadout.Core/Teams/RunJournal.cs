@@ -495,6 +495,17 @@ public sealed record RunSummary(
     /// <summary>Criteria the lead has not reported as met.</summary>
     public IReadOnlyList<RunCovered> Outstanding => [.. Coverage.Where(one => !one.Met)];
 
+    /// <summary>The nodes that went silent twice and were given up on.</summary>
+    public IReadOnlyList<RunNode> Stuck =>
+        [.. Nodes.Where(one => string.Equals(one.State, "stuck", StringComparison.Ordinal))];
+
+    /// <summary>
+    /// The branches a stuck worker left, with whatever it had committed on
+    /// them and nothing to say it was finished.
+    /// </summary>
+    public IReadOnlyList<string> Unfinished =>
+        [.. Stuck.Where(one => one.Branch is { Length: > 0 }).Select(one => one.Branch!)];
+
     /// <summary>Every exchange the run paid for, oldest first.</summary>
     public IReadOnlyList<RunTurn> Turns => Exchanges ?? [];
 
@@ -1263,6 +1274,13 @@ public sealed class RunJournal : IRunJournal
 
                     break;
 
+                // Went silent, was started again, and went silent again. Kept
+                // through the node.ended that follows, which only moves a node
+                // that is still working.
+                case "node.stuck" when entry.Node is { Length: > 0 } stuck:
+                    Set(stuck, node => node with { State = "stuck", LastSeen = entry.At, Doing = null });
+                    break;
+
                 case "node.doing" when entry.Node is { Length: > 0 } busy:
                     Set(busy, node => node with { Doing = entry.Text("doing"), LastSeen = entry.At });
                     break;
@@ -1624,6 +1642,15 @@ public sealed class RunJournal : IRunJournal
             "report.unreadable" => $"gave no report: {entry.Text("Error")}",
             "node.ended" => $"ended, exit {entry.Number("exit")}",
             "node.failed" => $"could not start: {entry.Text("error")}",
+            "node.silent" => $"wrote nothing for {entry.Text("limit") ?? "too long"}, and was stopped"
+                + (entry.Yes("exited") ? " (its process had already exited)" : string.Empty),
+            "node.retried" => entry.Text("how") == "resumed"
+                ? "started again on its own conversation, told it was cut off"
+                : "started again afresh in the same tree, told it was cut off"
+                    + (entry.Text("because") is { Length: > 0 } because ? $" ({because})" : string.Empty),
+            "node.stuck" => "went silent again and was given up on"
+                + (entry.Text("error") is { Length: > 0 } error ? $": {error}" : string.Empty),
+            "run.stalled" => "stalled: the lead went silent twice",
             "request.refused" => $"asked for a node it may not: {entry.Text("reason")}",
             "gate.reminded" => "told it finished without the merge gate"
                 + (entry.Words("pending") is { Count: > 0 } waiting
