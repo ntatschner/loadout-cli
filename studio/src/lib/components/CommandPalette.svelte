@@ -163,6 +163,7 @@
         onrewrite={(rewrite) => askNow(rewrite)}
         onagent={(asked) => void ask.conversation.ask(asked, (query) => ask.agent(query, ask.conversation.agentSession))}
         approve={ask.approve}
+        onapproved={() => box?.focus()}
         onclear={() => ask.conversation.clear()}
       />
     </div>

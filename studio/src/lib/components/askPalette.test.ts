@@ -113,6 +113,42 @@ describe('asking Loadout from the palette', () => {
     expect(await screen.findByText('Started.')).toBeTruthy();
   });
 
+  it('puts focus back in the box once a plan is approved, so what is typed next goes there', async () => {
+    const approve = vi.fn(async () => 'Started.');
+    const { box } = setup(async (query) => reply(query, { kind: 'plan', plan: { ...PLAN, team: 'bug-hunt', cap: 25 } }), approve);
+
+    await fireEvent.input(box, { target: { value: '? queue 2 easy tasks and start it' } });
+    await fireEvent.keyDown(box, { key: 'Enter' });
+
+    // A browser focuses a button as it is clicked; jsdom does not.
+    const button = await screen.findByRole('button', { name: /Approve/ });
+    button.focus();
+    await fireEvent.click(button);
+
+    expect(await screen.findByText('Started.')).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(box));
+
+    await fireEvent.input(document.activeElement!, { target: { value: '? how much did I spend' } });
+    expect(box.value).toBe('? how much did I spend');
+  });
+
+  it('leaves focus on Approve when approving is refused, since it can be pressed again', async () => {
+    const approve = vi.fn(async () => {
+      throw new Error('The daemon is not running.');
+    });
+    const { box } = setup(async (query) => reply(query, { kind: 'plan', plan: { ...PLAN, team: 'bug-hunt', cap: 25 } }), approve);
+
+    await fireEvent.input(box, { target: { value: '? queue 2 easy tasks and start it' } });
+    await fireEvent.keyDown(box, { key: 'Enter' });
+
+    const button = await screen.findByRole('button', { name: /Approve/ });
+    button.focus();
+    await fireEvent.click(button);
+
+    expect(await screen.findByText('The daemon is not running.')).toBeTruthy();
+    expect(document.activeElement).toBe(button);
+  });
+
   it('keeps the conversation across closing until it is cleared', async () => {
     const conversation = new AskConversation();
 
