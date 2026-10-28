@@ -25,7 +25,6 @@ body { margin: 0; background: var(--ground); color: var(--ink); }
 .views button { min-height: 40px; padding: 0 18px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 12.5px; font-weight: 500; letter-spacing: .24em; text-transform: uppercase; cursor: pointer; }
 .views button[aria-pressed="true"] { background: var(--tint-picked-c); color: var(--ink-strong); box-shadow: inset 0 -2px 0 var(--accent); }
 .views button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.mapscope { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 16px; }
 .sample { margin-top: 40px; font-size: 12.5px; color: var(--muted); }
 /* Lens */
 .lens { display: grid; grid-template-columns: minmax(0, 560px) minmax(0, 1fr); gap: 32px 40px; align-items: start; }
