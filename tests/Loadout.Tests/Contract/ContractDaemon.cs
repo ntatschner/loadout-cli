@@ -54,6 +54,42 @@ internal sealed class ContractDaemon : IAsyncDisposable
             shown.GetProperty("error").GetString() ?? string.Empty);
     }
 
+    /// <summary>
+    /// Runs a line as the command line hands one over when it is typed in a
+    /// terminal while the daemon runs: the words, and the directory they were
+    /// typed in, which need not be the daemon's.
+    /// </summary>
+    internal async Task<(int? ExitCode, string Output, string Error)> TypedAsync(IReadOnlyList<string> words, string directory)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, RunApi.Root)
+        {
+            Content = JsonContent.Create(new
+            {
+                version = typeof(RunApi).Assembly.GetName().Version?.ToString(3) ?? "0.0.0",
+                words,
+                directory,
+                width = 120,
+                ansi = false,
+                colours = 0,
+            }),
+        };
+
+        using var response = await _client.SendAsync(request);
+
+        var body = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK, $"'{string.Join(' ', words)}' should be run: {body}");
+
+        var frames = body.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(line => JsonDocument.Parse(line).RootElement).ToList();
+
+        string Joined(string stream) =>
+            string.Concat(frames.Where(frame => frame.TryGetProperty(stream, out _)).Select(frame => frame.GetProperty(stream).GetString()));
+
+        var exit = frames.LastOrDefault(frame => frame.TryGetProperty("exit", out _));
+
+        return (exit.ValueKind == JsonValueKind.Object ? exit.GetProperty("exit").GetInt32() : null, Joined("out"), Joined("err"));
+    }
+
     internal async Task<(int? ExitCode, string Output, string Error)> JobAsync(string path, IReadOnlyList<string> words)
     {
         using var response = await _client.PostAsJsonAsync(CommandsApi.JobsRoot, new { path, words });
