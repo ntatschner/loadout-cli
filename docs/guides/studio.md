@@ -75,12 +75,32 @@ and **Map** switch between them.
 - **Map** draws every piece of work as a line through its stages, with *Needs
   you* as the interchange each one passes through. Pick a line and it's drawn
   straight below, with its checks, its last events and what you can do.
-  It opens on **In flight**: live sessions, runs going or waiting for you, and
-  tasks you're doing or are blocked on. Failed runs and sessions that ended
-  with an error stay for a day so you see them. Ideas and finished work
-  aren't drawn, and the map says how many it left off. **Everything** draws
-  the lot, and the choice is kept as `studio-map-scope`. Only the map
-  narrows, so the Lens still shows everything.
+
+A filter bar sits above both views, and they follow it alike. It has three
+filters:
+
+- **Kind** turns team runs, sessions, ideas and tasks on or off one at a time.
+- **State** picks from waiting on you, running, failed and ended. Waiting on
+  you is what the header counts: a run asking a question, a session asking for
+  approval or waiting for your next message, and an idea with questions open.
+  A failed run or session counts as failed for a day, then as ended.
+- **Projects** lists the projects to hide, so one you add later shows without
+  you choosing it. `(no project)` covers sessions and runs started outside any
+  project.
+
+The presets set all three at once. **In flight**, where Home opens, shows live
+sessions, runs going or waiting for you, tasks you're doing or are blocked on,
+and the day's failures; ideas and finished work stay off. **Runs and
+sessions** is the same with tasks off as well. **Everything** shows every
+line. Change a chip and the bar says **Custom**; choose a preset to go back.
+The last kind or state can't be turned off, because a filter that shows
+nothing helps nobody.
+
+When the filters hide something, the Map and *Needs you* say so, as "4 hidden,
+1 waiting on you", with a link to **Show everything**. The header's count
+still counts everything, so nothing waiting on you goes unmentioned. A line
+you open by name, from the palette or a link, is shown even if the filters
+would hide it.
 
 **Edit layout** lets you rearrange either view in place. Drag a panel by its
 name or use its arrows, hide what you don't use, and **Add back** what you hid.
@@ -308,10 +328,17 @@ loadout config set studio-density roomy
 loadout config set studio-motion reduced
 loadout config set studio-backdrop map-animated
 loadout config set studio-halo gyroscope
-loadout config set studio-map-scope all
+loadout config set studio-map-kinds "runs, sessions"
+loadout config set studio-map-states "waiting, running, failed"
+loadout config set studio-map-projects "starstats, (no project)"
 loadout config set studio-idle-after 20
 loadout config set studio-background-limit 60
 ```
+
+Setting `studio-map-kinds` or `studio-map-states` to nothing puts it back to In
+flight's. These three replaced `studio-map-scope`. If you had that set to
+`all`, Studio opens on Everything, and setting it now fails with a message
+naming the three keys to use instead.
 
 The things kept in the browser are the single-letter shortcuts (**A** for
 Ambient, **N** for a new session), whether Ambient fills the screen, and the

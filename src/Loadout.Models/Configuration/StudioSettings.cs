@@ -47,10 +47,48 @@ public sealed class StudioSettings
     public string? Backdrop { get; set; }
 
     /// <summary>
-    /// What Studio's tube map draws: inflight (live work, and failures for a
-    /// day) or all (every line Home has). Null is inflight.
+    /// The kinds Studio's Map and Lens show, as <see cref="StudioMap.Kinds"/>
+    /// names them, comma-separated. Null is In flight's: runs, sessions and
+    /// tasks.
     /// </summary>
-    public string? MapScope { get; set; }
+    public string? MapKinds { get; set; }
+
+    /// <summary>
+    /// The states Studio's Map and Lens show, as <see cref="StudioMap.States"/>
+    /// names them, comma-separated. Null is In flight's: waiting, running and
+    /// failed.
+    /// </summary>
+    public string? MapStates { get; set; }
+
+    /// <summary>
+    /// The projects Studio's Map and Lens hide, comma-separated, with
+    /// <see cref="StudioMap.NoProject"/> for work outside any project. A list
+    /// of what to hide, so a project added later shows. Null hides nothing.
+    /// </summary>
+    public string? MapProjects { get; set; }
+
+    /// <summary>
+    /// The retired studio-map-scope, read from a file written before the
+    /// three filters and never written back.
+    /// </summary>
+    /// <remarks>
+    /// Read once: all becomes Everything's kinds and states, unless the file
+    /// already says otherwise, and inflight is what the three unset already
+    /// mean. The getter is always null, so the next save drops the old value
+    /// and only the new keys remain.
+    /// </remarks>
+    public string? MapScope
+    {
+        get => null;
+        set
+        {
+            if (string.Equals(value?.Trim(), "all", StringComparison.OrdinalIgnoreCase))
+            {
+                MapKinds ??= string.Join(", ", StudioMap.Kinds);
+                MapStates ??= string.Join(", ", StudioMap.States);
+            }
+        }
+    }
 
     /// <summary>Minutes a working session is quiet before Studio reads it as idle. Null is ten.</summary>
     public int? IdleAfter { get; set; }
