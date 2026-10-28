@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using Loadout.Core.Diagnostics;
 using Loadout.Models;
 using Loadout.Models.Results;
 
@@ -509,6 +510,7 @@ public sealed class TeamBin
 
             if (File.Exists(path))
             {
+                using var trace = ReadLedger.Begin(path);
                 record = JsonSerializer.Deserialize<BinRecord>(File.ReadAllText(path), Json);
             }
         }

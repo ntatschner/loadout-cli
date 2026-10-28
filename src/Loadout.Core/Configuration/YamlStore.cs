@@ -1,3 +1,4 @@
+using Loadout.Core.Diagnostics;
 using Loadout.Models;
 using Loadout.Models.Results;
 using Loadout.Platform.Abstractions;
@@ -133,6 +134,7 @@ public sealed class YamlStore
                 return OperationResult<T>.Ok(createDefault());
             }
 
+            using var trace = ReadLedger.Begin(path);
             var text = await File.ReadAllTextAsync(path, ct).ConfigureAwait(false);
 
             if (string.IsNullOrWhiteSpace(text))
@@ -265,6 +267,7 @@ public sealed class YamlStore
 
         try
         {
+            using var trace = ReadLedger.Begin(path);
             text = File.Exists(path) ? await File.ReadAllTextAsync(path, ct).ConfigureAwait(false) : string.Empty;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Loadout.Core.Diagnostics;
 
 namespace Loadout.Core.Sessions.Hosting;
 
@@ -79,8 +80,11 @@ public static partial class BackgroundWork
 
         try
         {
+            using var trace = ReadLedger.Begin(path);
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             var skipFirst = stream.Length > Tail;
+
+            trace?.Read(Math.Min(stream.Length, Tail));
 
             if (skipFirst)
             {

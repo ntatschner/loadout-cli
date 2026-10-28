@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using Loadout.Core.Diagnostics;
 using Loadout.Models.Results;
 
 namespace Loadout.Core.Teams;
@@ -792,6 +793,7 @@ public sealed class RunJournal : IRunJournal
 
         try
         {
+            using var trace = ReadLedger.Begin(path);
             lines = File.ReadAllLines(path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -884,6 +886,7 @@ public sealed class RunJournal : IRunJournal
 
         try
         {
+            using var trace = ReadLedger.Begin(path);
             lines = File.ReadAllLines(path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

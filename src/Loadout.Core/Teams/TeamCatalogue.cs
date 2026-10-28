@@ -1,4 +1,5 @@
 using System.Text;
+using Loadout.Core.Diagnostics;
 using Loadout.Core.Instructions;
 using Loadout.Models.Instructions;
 using Loadout.Models.Teams;
@@ -514,6 +515,7 @@ public sealed class TeamCatalogue : ITeamCatalogue
 
             try
             {
+                using var trace = ReadLedger.Begin(file);
                 text = await File.ReadAllTextAsync(file, ct).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

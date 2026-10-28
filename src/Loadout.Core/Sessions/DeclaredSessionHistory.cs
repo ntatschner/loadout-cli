@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Loadout.Core.Diagnostics;
 using Loadout.Core.Transcripts;
 using Loadout.Models.Agents;
 using Loadout.Models.Results;
@@ -95,6 +96,7 @@ internal sealed class DeclaredSessionHistory : ISessionHistory
     {
         try
         {
+            using var trace = ReadLedger.Begin(file.FullName);
             using var reader = new StreamReader(file.OpenRead());
 
             string? id = null;

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using Loadout.Core.Diagnostics;
 using Loadout.Core.Security;
 using Loadout.Models.Agents;
 using Loadout.Models.Instructions;
@@ -393,6 +394,7 @@ internal sealed class LaunchLedger : ILaunchLedger
 
         try
         {
+            using var trace = ReadLedger.Begin(Path);
             using var reader = new StreamReader(File.OpenRead(Path));
 
             while (await reader.ReadLineAsync(ct).ConfigureAwait(false) is { } line)
