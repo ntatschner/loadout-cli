@@ -11,6 +11,7 @@
   import CommandAction from '../lib/components/CommandAction.svelte';
   import Dialog from '../lib/components/Dialog.svelte';
   import HaloButton from '../lib/components/HaloButton.svelte';
+  import Landings, { type LandingRead } from '../lib/components/Landings.svelte';
   import ListToolbar from '../lib/components/ListToolbar.svelte';
   import NeedsYou from '../lib/components/NeedsYou.svelte';
   import QueuePanel, { type DoneWhenProposed, type QueuePlan, type QueueRead, type QueueTask } from '../lib/components/QueuePanel.svelte';
@@ -58,6 +59,7 @@
   let schedules = $state<{ id: string; team: string; goal: string; autonomy: string; every?: string; at?: string; on: string; enabled: boolean; next?: string }[] | null>(null);
   let daemon = $state<{ daemon: boolean; paused: boolean | null } | null>(null);
   let queues = $state<QueueRead[] | null>(null);
+  let landings = $state<LandingRead[] | null>(null);
   let queueing = $state<string[]>([]);
   let problem = $state<string | null>(null);
   let sheet = $state<{ kind: SheetKind; preset: Partial<SheetValues> } | null>(null);
@@ -141,6 +143,9 @@
         list.teams.filter((team) => !team.template).map((team) => readJson<QueueRead>('team queue list', [team.name]).catch(() => null)),
       );
       queues = read.filter((one): one is QueueRead => one !== null);
+
+      // Left as it was when it cannot be read, as the queues are: the rest of the page is still true.
+      landings = await readJson<LandingRead[]>('pr list').catch(() => landings ?? []);
     } catch (error) {
       fail(error);
     }
@@ -670,6 +675,15 @@
           </div>
         {/if}
         <p class="calm small">From <code class="ls-cmd">$ loadout team queue list &lt;team&gt;</code>.</p>
+      {:else}
+        <p class="calm" role="status">Reading…</p>
+      {/if}
+    </section>
+
+    <section class="tblock" aria-labelledby="tm-landing">
+      <h2 class="ls-zone" id="tm-landing">Waiting to land</h2>
+      {#if landings}
+        <Landings {landings} />
       {:else}
         <p class="calm" role="status">Reading…</p>
       {/if}

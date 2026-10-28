@@ -204,6 +204,7 @@ public static class StudioCoverage
         ["team budget"] = new("teams", StudioEffect.Changes),
         ["team name"] = Terminal("names a run's room in the office, which only the classic dashboard draws; Studio does not draw rooms"),
         ["team pr"] = new("teams", StudioEffect.Changes),
+        ["pr list"] = new("teams", StudioEffect.Reads),
         ["team say"] = new("teams", StudioEffect.Changes),
         ["team attach set"] = Terminal("sets the passphrase this page must be given separately, so it cannot be set from the page it guards"),
         ["team attach clear"] = Terminal("removes the passphrase this page must be given separately, so it cannot be cleared from the page it guards"),

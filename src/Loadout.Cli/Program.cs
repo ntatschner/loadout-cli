@@ -991,6 +991,15 @@ public static class Program
             spend.AddCommand<SpendRefreshCommand>("refresh");
         });
 
+        TopBranch(config, "pr", pr =>
+        {
+            pr.Describe(
+                "See the branches of work waiting to land, and their pull requests.",
+                CommandCategory.Start,
+                "pr pull request pending branch landing merge deliver");
+            pr.AddCommand<PrListCommand>("list");
+        });
+
         TopBranch(config, "checkpoint", checkpoint =>
         {
             checkpoint.Describe(

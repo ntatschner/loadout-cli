@@ -170,6 +170,7 @@
 | `loadout team handover` | What a run handed to you because only you could do it: a push, a CI run, or a check by hand. `--check <n>` ticks one off as review evidence in your name; once every one is ticked the run is judged again and ends done |
 | `loadout team name` | Name a run's room, or clear the name to get the worked-out one back |
 | `loadout team pr` | Open a pull request for what one node of a run produced |
+| `loadout pr list` | The branches waiting to land: a queued run's own branch with its pull request, and each node branch its gate did not merge, pending. Says how long each has waited and which have gone from the repository; `--all` adds the merged and abandoned |
 | `loadout team say` | Say something to one node while it is still working |
 | `loadout team attach set` | Set the passphrase that lets the dashboard type at a running node |
 | `loadout team attach show` | Say whether one is set, never what it is |
