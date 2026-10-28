@@ -2381,17 +2381,31 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 .ls-arow .ls-action > .ls-cmd, .ls-aform .ls-action > .ls-cmd, .ls-setrow .ls-action > .ls-cmd, .ls-ilist .ls-action > .ls-cmd { max-width: 100%; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
 
 /* Commands shown: always, on hover (the default) or never, as data-commands on <html> (setCommands; studio-commands).
-   On hover, a line keeps its place and only its ink comes and goes, so nothing moves; it stays in the page for screen readers.
-   A button's command shows while that button is pointed at or focused; a form's line while the form is; a "From" line while its block is.
-   Never removes the lines and the space kept for them. Always shown whatever the setting: TerminalOnly blocks (the command is the only
-   way to do them), anything inside [data-commands="always"] (the Commands page), and a disabled button's reason, which is not a command. */
-:root:not([data-commands="always"]) :is(.ls-cmd:not(.reason), .is-cmd) { opacity: var(--cmd-btn, 0); transition: opacity var(--dur-quick) var(--ease-out); }
-:root:not([data-commands="always"]) .ls-cmdline { opacity: var(--cmd-form, 0); transition: opacity var(--dur-quick) var(--ease-out); }
-:root:not([data-commands="always"]) :is(.ls-from, .ls-ilist .from, .ls-readout .from) { opacity: var(--cmd-from, 0); transition: opacity var(--dur-quick) var(--ease-out); }
-:is(:hover, :focus-within, [aria-selected="true"]) > :is(.ls-cmd, .is-cmd), .ls-tboard .task :is(.moves, .go):is(:hover, :focus-within) .ls-cmd, .ls-toast:is(:hover, :focus-within) .ls-cmd { --cmd-btn: 1; }
-:is(:hover, :focus-within) > .ls-cmdline, :is(.ls-aform, .cmdform, .ls-dialog):is(:hover, :focus-within) { --cmd-form: 1; }
-:is(:hover, :focus-within) > :is(.ls-from, .from), :is(section, .pblock, .ls-ilist, .ls-readout, li, .ls-dialog):is(:hover, :focus-within) { --cmd-from: 1; }
-.ls-tonly, [data-commands="always"] { --cmd-btn: 1; --cmd-form: 1; --cmd-from: 1; }
-:root[data-commands="never"] :is(.ls-cmd:not(.reason), .is-cmd, .ls-cmdline, .ls-from, .ls-ilist .from, .ls-readout .from):not(.ls-tonly *):not([data-commands="always"] *) { display: none; }
-:root[data-commands="never"] :is(.ls-tboard .task .moves, .ls-tboard .task .go):not([data-commands="always"] *) { padding-bottom: 0; }
+   Always: every line shows, and rows keep one line for a command (the reserved line).
+   On hover: no line takes space. A command floats in, like a tooltip, over what is below: a button's while that button is
+   pointed at or focused, a form's line (just above its buttons) while one of its buttons is, and a line that stands on its own
+   (a "From" line, "the same, in a terminal") while the thing just before it is. A box that would run off the screen is moved back in.
+   Never: no lines at all. Whatever the setting, TerminalOnly blocks and anything inside [data-commands="always"] (the Commands
+   page) show theirs in place, and a disabled button's reason (.reason) stays where it is, since it is not a command. */
+:root:not([data-commands="always"]) :is(.ls-action, .ls-aform, .ls-ilist .row, .ls-setrow, .ls-toast) { position: relative; }
+:root:not([data-commands="always"]) :is(.ls-cmd:not(.reason), .ls-cmdline, .ls-from, .ls-ilist .from, .ls-readout .from):not(.ls-tonly *):not([data-commands="always"] *) {
+  position: absolute; z-index: var(--z-menu); box-sizing: border-box; width: max-content; max-width: min(560px, calc(100vw - 48px)); height: auto; margin: 0; padding: 4px 9px;
+  background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--rule), 0 8px 22px -6px rgb(0 0 0 / .45);
+  font-family: var(--font-mono); font-size: 12px; font-weight: 400; letter-spacing: 0; text-transform: none; line-height: 1.4;
+  white-space: normal; overflow-wrap: anywhere; overflow: visible; opacity: 1; pointer-events: none; -webkit-mask-image: none; mask-image: none; }
+:root:not([data-commands="always"]) .ls-cmd:not(.reason):not(.ls-tonly *):not([data-commands="always"] *) { display: var(--cmd-btn, none); }
+:root:not([data-commands="always"]) .ls-cmdline:not(.ls-tonly *):not([data-commands="always"] *) { display: var(--cmd-form, none); }
+:root:not([data-commands="always"]) :is(.ls-from, .ls-ilist .from, .ls-readout .from):not(.ls-tonly *):not([data-commands="always"] *) { display: var(--cmd-from, none); }
+:root:not([data-commands="always"]) .is-cmd:not([data-commands="always"] *) { display: var(--cmd-btn, none); }
+/* Where each floats: under a button, under a row's buttons, just above a form's buttons. */
+:root:not([data-commands="always"]) .ls-action > .ls-cmd:not(.reason) { top: calc(100% + 4px); left: 0; }
+:root:not([data-commands="always"]) .ls-tboard .task :is(.moves, .go) { padding-bottom: 0; }
+:root:not([data-commands="always"]) .ls-tboard .task :is(.moves, .go) .ls-cmd { top: calc(100% + 4px); bottom: auto; right: auto; }
+:root:not([data-commands="always"]) .ls-ilist .row > .peek { top: 0; left: 0; min-height: 0; }
+:root:not([data-commands="always"]) .ls-aform > .ls-cmdline { transform: translateY(calc(-100% - 6px)); }
+/* What reveals them, never under Never. */
+:root:not([data-commands="never"]) :is(:hover, :focus-within, [aria-selected="true"]) > :is(.ls-cmd, .is-cmd), :root:not([data-commands="never"]) .ls-tboard .task :is(.moves, .go):is(:hover, :focus-within) .ls-cmd, :root:not([data-commands="never"]) .ls-toast:is(:hover, :focus-within) .ls-cmd { --cmd-btn: block; }
+:root:not([data-commands="never"]) .ls-aform:has(> .ls-answers:is(:hover, :focus-within)), :root:not([data-commands="never"]) :is(:hover, :focus-within) + .ls-cmdline:not(.ls-aform > *) { --cmd-form: block; }
+:root:not([data-commands="never"]) :is(:hover, :focus-within) + :is(.ls-from, .from) { --cmd-from: block; }
+.ls-tonly, [data-commands="always"] { --cmd-btn: block; --cmd-form: block; --cmd-from: block; }
 /* end stage 13 */

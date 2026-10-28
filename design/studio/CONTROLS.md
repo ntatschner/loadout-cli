@@ -50,7 +50,7 @@ Don't reopen these. Ask me only if one turns out to be impossible.
 - **Common fields in place, the rest under More options.** Each control shows the fields most people need, worded for the page, with the option each one sets beside its label (`--project`). Everything else the command takes goes under **More options**, with a count. Fields the page already knows (the project, the topic, the idea) are shown as facts, not inputs.
 - **The Commands page stays as the expert catalogue.** It keeps `CommandForm`, built from the catalogue, for people who think in commands. No page links to it as its way of doing something. If a page needs a command, the page gets a control for it.
 - **Commands show on hover by default, and can be always or never.** A new Studio setting, `studio-commands`, takes `always`, `hover` (the default) or `never`. People see it as **Commands** in Appearance (Always shown, On hover, Never shown), and the command palette offers the other two as actions. In every case each action still has its exact command; the setting only decides when the line shows.
-  - **On hover:** a button's command shows while that button is pointed at or focused, in the line kept for it, so nothing moves. A form's line shows while the form is pointed at or has focus, and a "From" line while its block does. A palette option's command shows while it is highlighted. Hidden lines stay in the page for screen readers.
+  - **On hover:** no command takes space. A button's command floats in under it, like a tooltip, over what is below, while that button is pointed at or focused, so nothing moves. A form's line floats just above its buttons while one of them is pointed at or focused. A line that stands on its own (a "From" line, "the same, in a terminal") floats in while the thing just before it is pointed at. A palette option's command shows while it is highlighted. A box that would run off the screen is moved back in.
   - **Never:** no command lines, and no space kept for them.
   - **Always shown, whatever the setting:** TerminalOnly blocks (the command is the only way to do them), the Commands page, and a disabled button's reason, which is not a command.
 - **The effect decides the buttons.** These come from `StudioCoverage`, as now:
@@ -93,7 +93,7 @@ Write them in `studio/src/lib/components/`, matching the reference. Each one nam
     - ask first;
     - remove the row;
     - open a form or a detail under the row.
-  - **One reserved line under the row** shows the pointed-at or focused button's command, and the first's otherwise. A long command scrolls sideways in that line. Pointing at another button never moves the row. This is the same fix as the task board's, below.
+  - Under **Always shown**, **one reserved line under the row** shows the pointed-at or focused button's command, and the first's otherwise. A long command scrolls sideways in that line. Pointing at another button never moves the row. This is the same fix as the task board's, below. Under On hover the same command floats under the buttons instead, and the row keeps no line for it.
 - **SettingRow**: `label`, `sub`, `value`, `kind` (`switch`, `choice`, `text` or `number`), `unset` (what applies when it isn't set), `setCmd(value)` and `clearCmd`.
 - **Readout**: `path`, `title`, `params` (fields that change what it shows), `extra`, `view` (`figures`, `table`, `document`, `findings` or `list`), `columns` for a table, and `lazy` for one that waits until you ask (`docs find`).
   - Read with `readJson(path, words)`. Show where it was read from (`$ loadout <path> … --json`) and when, with Read it again.
@@ -203,10 +203,10 @@ Swap each page's drawers for the controls in the table at the end. These notes c
    - `--cmd-btn` for button lines (`.ls-cmd`) and palette commands (`.is-cmd`);
    - `--cmd-form` for a form's line and Command blocks (`.ls-cmdline`);
    - `--cmd-from` for "From" and "Read with" lines.
-   On hover, the lines fade with opacity rather than being removed, so their space is kept and screen readers still read them. Under Never they are `display: none`, and the task board's reserved line closes up.
+   On hover, a hidden line is `display: none` and takes no space; shown, it is positioned absolutely (`z-menu`) as a small box under its button, over the page, so nothing moves. The task board's and the list rows' reserved lines are only kept under Always. A short script (`keepFloatsInView` in the reference) moves a box back in when it would run past the screen's right edge. Under Never nothing is revealed.
 4. **What always shows.** `.ls-tonly` (TerminalOnly) and anything inside `[data-commands="always"]`, which the Commands page sets on its root. HaloButton marks a disabled reason as `.ls-cmd.reason`; it is never hidden.
 5. **The palette.** CommandPalette marks a sub-line that is a `loadout` command as `.is-cmd`. Add the two actions for the other settings, each showing `$ loadout config set studio-commands <value>`.
-6. **Appearance.** A **Commands** group after Background, with one line under it: "On hover, a button's command shows while you point at it or tab to it, in the line kept for it, so nothing moves. Terminal-only commands and the Commands page always show theirs." The group shows its command, `loadout config set studio-commands <value>`, like the others.
+6. **Appearance.** A **Commands** group after Background, with one line under it: "On hover, a button's command floats in under it while you point at it or tab to it, and takes no space. Terminal-only commands and the Commands page always show theirs." The group shows its command, `loadout config set studio-commands <value>`, like the others.
 
 ## Commands without JSON
 
@@ -261,10 +261,11 @@ Add vitest tests beside the existing ones:
   - a changed parameter reads again;
   - a lazy one waits;
   - a failed read says why.
-- **TaskBoard:** the reserved line, with pointing at each button moving nothing.
+- **TaskBoard:** under Always, the reserved line, with pointing at each button moving nothing.
 - **Showing commands:**
   - under `hover`, no command line shows with nothing pointed at or focused;
-  - pointing at a button, or tabbing to it, shows its command and only its own, and moves nothing;
+  - idle, a page under `hover` lays out exactly as under `never`: nothing keeps space for a command;
+  - pointing at a button, or tabbing to it, shows its command and only its own, floating, and moves nothing; at 320 wide it stays on screen;
   - under `never`, none shows and the task board's reserved line is gone;
   - TerminalOnly blocks, the Commands page and disabled reasons show under all three;
   - the palette offers the two other settings.

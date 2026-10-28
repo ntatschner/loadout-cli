@@ -5614,6 +5614,24 @@
   var COMMANDS = ["always", "hover", "never"];
   function setCommands(v, el) { (el || document.documentElement).setAttribute("data-commands", COMMANDS.indexOf(v) >= 0 ? v : "hover"); }
   function commandsShown() { return document.documentElement.getAttribute("data-commands") || "hover"; }
+  /* On hover, a command floats in beside what it belongs to; one that would run past the screen's right edge is moved back in. */
+  var FLOATS = ".ls-cmd:not(.reason), .ls-cmdline, .ls-from, .ls-ilist .from, .ls-readout .from", floatQueued = false;
+  function keepFloatsInView() {
+    floatQueued = false;
+    if (commandsShown() !== "hover") { return; }
+    Array.prototype.forEach.call(document.querySelectorAll(FLOATS), function (n) {
+      if (n.style.marginLeft) { n.style.marginLeft = ""; }
+      var cs = getComputedStyle(n);
+      if (cs.position !== "absolute" || cs.display === "none") { return; }
+      var r = n.getBoundingClientRect(), over = r.right - (document.documentElement.clientWidth - 8);
+      if (over > 0) { n.style.marginLeft = -Math.min(over, Math.max(0, r.left - 8)) + "px"; }
+    });
+  }
+  function queueFloats() { if (!floatQueued) { floatQueued = true; requestAnimationFrame(keepFloatsInView); } }
+  if (typeof document !== "undefined" && !NS.__floatsWatched) {
+    NS.__floatsWatched = true;
+    ["pointerover", "focusin", "keyup"].forEach(function (t) { document.addEventListener(t, queueFloats, true); });
+  }
 
   Object.assign(NS, { ActionForm: ActionForm, ActionRow: ActionRow, SettingRow: SettingRow, ItemList: ItemList, Readout: Readout, controlLine: lineFor, COMMANDS: COMMANDS, setCommands: setCommands, commandsShown: commandsShown });
 })();
