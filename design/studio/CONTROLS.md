@@ -49,6 +49,10 @@ Don't reopen these. Ask me only if one turns out to be impossible.
 - **Reads are views.** A command that only reads is shown as a Readout drawn from its `--json`, never as its text output in a box. A command with no JSON for what is read stays a line of words under its control (see **Commands without JSON**).
 - **Common fields in place, the rest under More options.** Each control shows the fields most people need, worded for the page, with the option each one sets beside its label (`--project`). Everything else the command takes goes under **More options**, with a count. Fields the page already knows (the project, the topic, the idea) are shown as facts, not inputs.
 - **The Commands page stays as the expert catalogue.** It keeps `CommandForm`, built from the catalogue, for people who think in commands. No page links to it as its way of doing something. If a page needs a command, the page gets a control for it.
+- **Commands show on hover by default, and can be always or never.** A new Studio setting, `studio-commands`, takes `always`, `hover` (the default) or `never`. People see it as **Commands** in Appearance (Always shown, On hover, Never shown), and the command palette offers the other two as actions. In every case each action still has its exact command; the setting only decides when the line shows.
+  - **On hover:** a button's command shows while that button is pointed at or focused, in the line kept for it, so nothing moves. A form's line shows while the form is pointed at or has focus, and a "From" line while its block does. A palette option's command shows while it is highlighted. Hidden lines stay in the page for screen readers.
+  - **Never:** no command lines, and no space kept for them.
+  - **Always shown, whatever the setting:** TerminalOnly blocks (the command is the only way to do them), the Commands page, and a disabled button's reason, which is not a command.
 - **The effect decides the buttons.** These come from `StudioCoverage`, as now:
 
   | Effect | Buttons |
@@ -186,6 +190,24 @@ Swap each page's drawers for the controls in the table at the end. These notes c
 - **Quiet pages** (Minimal) keep their one drawer's command as the same ActionForm (`QuietProjects`: drift).
 - **Every mode.** The controls are the page's own, so PageBeside, QuietPage and WorkDesk show them as they show the rest of the page. Nothing per mode.
 
+## Showing commands: `studio-commands`
+
+1. **The setting.** Add `studio-commands` where every `studio-*` key goes (follow `studio-halo`):
+   - `StudioSettings.Commands` (`src/Loadout.Models/Configuration/StudioSettings.cs`);
+   - the key in `ConfigKeys.cs`, group Studio, taking `always`, `hover` or `never`, with "hover, a command shows while you point at or tab to its control" when unset;
+   - the preferences allow-list in `DashboardActions.cs`;
+   - `commands` in the preferences read (`StudioPreferences.cs`), `"hover"` when unset;
+   - `commands` in `Preferences` (`studio/src/lib/api.ts`).
+2. **Applying it.** Where Studio sets `data-motion` on `<html>`, set `data-commands` from the preference, as the reference's `setCommands` does.
+3. **The CSS.** Port the reference's block headed `Commands shown: always, on hover (the default) or never` (in `bundle.css`, stage 13). It works through three custom properties, so a hovered button reveals only its own command and a hovered block only its "From" line:
+   - `--cmd-btn` for button lines (`.ls-cmd`) and palette commands (`.is-cmd`);
+   - `--cmd-form` for a form's line and Command blocks (`.ls-cmdline`);
+   - `--cmd-from` for "From" and "Read with" lines.
+   On hover, the lines fade with opacity rather than being removed, so their space is kept and screen readers still read them. Under Never they are `display: none`, and the task board's reserved line closes up.
+4. **What always shows.** `.ls-tonly` (TerminalOnly) and anything inside `[data-commands="always"]`, which the Commands page sets on its root. HaloButton marks a disabled reason as `.ls-cmd.reason`; it is never hidden.
+5. **The palette.** CommandPalette marks a sub-line that is a `loadout` command as `.is-cmd`. Add the two actions for the other settings, each showing `$ loadout config set studio-commands <value>`.
+6. **Appearance.** A **Commands** group after Background, with one line under it: "On hover, a button's command shows while you point at it or tab to it, in the line kept for it, so nothing moves. Terminal-only commands and the Commands page always show theirs." The group shows its command, `loadout config set studio-commands <value>`, like the others.
+
 ## Commands without JSON
 
 These commands print only words when they succeed. Their controls show a line, not a view, and must not wait for JSON:
@@ -240,6 +262,13 @@ Add vitest tests beside the existing ones:
   - a lazy one waits;
   - a failed read says why.
 - **TaskBoard:** the reserved line, with pointing at each button moving nothing.
+- **Showing commands:**
+  - under `hover`, no command line shows with nothing pointed at or focused;
+  - pointing at a button, or tabbing to it, shows its command and only its own, and moves nothing;
+  - under `never`, none shows and the task board's reserved line is gone;
+  - TerminalOnly blocks, the Commands page and disabled reasons show under all three;
+  - the palette offers the two other settings.
+- **C#:** `StudioConfigKeysTests`: `studio-commands` takes `always`, `hover` and `never`, refuses anything else and unsets with an empty value. `DashboardStudioRoutesTests`: the preferences read gives `commands: "hover"` when unset, and the allow-list takes `studio-commands`.
 - **Pages:** each page renders with no `CommandAction`, and each command in the table is reachable on its page.
 - **C#:** `StudioCoverageTests` pass, and the option-name test above.
 
@@ -254,6 +283,7 @@ Check by hand, against real data:
 - all four themes at 1440, 768, 390 and 320 wide, with no sideways scroll;
 - Default, Terminal Focus, Team Focus, Minimal and Pure Focus;
 - keyboard only: Tab through a form, open More options, run it, confirm a Dialog, act on a list row;
+- each of Always, On hover and Never: a page of each pattern, the task board, the palette and a terminal-only block;
 - a screen reader on one form, one list and one Readout: each control's name, its command and what it said afterwards are announced;
 - watch-only: changes are disabled and say why; reads still work;
 - no console errors.
@@ -265,13 +295,14 @@ Update `docs/guides/studio.md` (controls, not drawers; the Commands page as the 
 Branch off `claude/determined-meitner-6wqi6z`. Commit in logical steps:
 
 1. the five components, with their tests
-2. the task board's reserved line
-3. each page in turn: Ideas, Projects, Context, Settings, Memory, Spend, Teams (with a team's page and the quiet page)
-4. coverage (`team webhook enable`), and the option-name test
-5. `CommandAction` retired
-6. the committed build
-7. the docs
-8. **Record it in Loadout** (below), as the very last step
+2. `studio-commands`: the setting, Appearance, the palette and the CSS
+3. the task board's reserved line
+4. each page in turn: Ideas, Projects, Context, Settings, Memory, Spend, Teams (with a team's page and the quiet page)
+5. coverage (`team webhook enable`), and the option-name test
+6. `CommandAction` retired
+7. the committed build
+8. the docs
+9. **Record it in Loadout** (below), as the very last step
 
 Don't push or open a pull request until I say so.
 

@@ -68,7 +68,9 @@
     var btn = h("button", { type: "button", "class": cls, "aria-disabled": o.disabledReason || o.inactive ? "true" : null, "aria-describedby": o.describedBy || null,
       onclick: function (e) { if (!o.disabledReason && !o.inactive && o.onPress) { o.onPress(e); } } }, [ring, o.label || ""]);
     if (!o.cmd && !o.disabledReason) { return btn; }
-    return h("div", { "class": "ls-action" }, [btn, cmd(o.disabledReason || o.cmd)]);
+    var line = cmd(o.disabledReason || o.cmd);
+    if (o.disabledReason && line) { line.classList.add("reason"); }
+    return h("div", { "class": "ls-action" }, [btn, line]);
   }
 
   /* Command: the block form of a command, with an optional line saying why it must be run in a terminal. */
@@ -466,7 +468,7 @@
           var i = flat.length; flat.push(r);
           grp.appendChild(h("div", { role: "option", id: id + "-o" + i, "class": "ls-popt" + (r.need ? " need" : ""), "aria-selected": i === active ? "true" : "false",
             onclick: function () { run(r); }, onmousemove: function () { if (active !== i) { active = i; paint(); } } },
-            [h("span", { "class": "g", "aria-hidden": "true", text: r.glyph || "→" }), h("span", { "class": "t", text: r.label }), h("span", { "class": "s", text: r.sub || "" }), h("span", { "class": "k", text: r.kind || "" })]));
+            [h("span", { "class": "g", "aria-hidden": "true", text: r.glyph || "→" }), h("span", { "class": "t", text: r.label }), h("span", { "class": "s" + (/^\$ loadout /.test(r.sub || "") ? " is-cmd" : ""), text: r.sub || "" }), h("span", { "class": "k", text: r.kind || "" })]));
         });
         list.appendChild(grp);
       });
@@ -3281,237 +3283,6 @@
 
   Object.assign(NS, { OfficeView: OfficeView, OfficePanel: OfficePanel });
 })();
-/* ---------- Stage 13: commands as controls. Every command a page offers is a control made for it, not a form built from its options. ---------- */
-(function () {
-  "use strict";
-  var NS = window.LoadoutStudio = window.LoadoutStudio || {};
-  function h(tag, attrs, kids) {
-    var el = document.createElement(tag);
-    Object.keys(attrs || {}).forEach(function (k) {
-      var v = attrs[k];
-      if (v === null || v === undefined || v === false) { return; }
-      if (k === "text") { el.textContent = v; } else if (k === "class") { el.className = v; } else if (k.slice(0, 2) === "on") { el.addEventListener(k.slice(2), v); } else { el.setAttribute(k, v === true ? "" : v); }
-    });
-    (kids || []).forEach(function (c) { if (c) { el.appendChild(typeof c === "string" ? document.createTextNode(c) : c); } });
-    return el;
-  }
-  function uid(p) { return p + Math.random().toString(36).slice(2, 7); }
-  function q(v) { v = String(v); if (/^<[^<>\s]+>$/.test(v)) { return v; } return v === "" || /[\s"'$`\\|&;<>()*?!#~]/.test(v) ? "\"" + v.replace(/(["\\$`])/g, "\\$1") + "\"" : v; }
-  function said(el, t, bad) { el.textContent = t ? (bad ? "" : "\u2713 ") + t : ""; el.classList.toggle("bad", !!bad); }
-
-  /* The line a set of fields makes: arguments in order, then each option given, then anything extra. */
-  function lineFor(path, fields, values, extra) {
-    var args = [], opts = [];
-    fields.forEach(function (f) {
-      var v = values[f.name];
-      if (f.flags && Object.prototype.hasOwnProperty.call(f.flags, v)) { if (f.flags[v]) { opts.push(f.flags[v]); } return; }
-      if (f.always && (v === "" || v === undefined || v === null)) { opts.push(f.name); return; }
-      if (f.name.slice(0, 1) !== "-") { if (f.kind === "lines" && v) { String(v).split("\n").map(function (x) { return x.trim(); }).filter(Boolean).forEach(function (x) { args.push(q(x)); }); return; } if (v !== "" && v !== undefined && v !== null) { args.push(q(v)); } else if (f.required) { args.push("<" + (f.placeholder || f.name) + ">"); } return; }
-      if (f.kind === "flag") { if (v) { opts.push(f.name); } return; }
-      if (v === "" || v === undefined || v === null) { return; }
-      if (f.kind === "lines") { String(v).split("\n").map(function (s) { return s.trim(); }).filter(Boolean).forEach(function (s) { opts.push(f.name + " " + q(s)); }); return; }
-      opts.push(f.joined ? f.name + "=" + q(v) : f.name + " " + q(v));
-    });
-    return "$ loadout " + [path].concat(args, opts, extra || []).join(" ");
-  }
-
-  /* One field, in plain words, with the option it sets shown small beside its label. */
-  function field(f, values, onChange) {
-    var id = uid("ls-cf-"), v = values[f.name], flag = f.name.slice(0, 1) === "-" ? h("code", { "class": "opt", text: f.name }) : null;
-    function set(x) { values[f.name] = x; onChange(); }
-    if (f.fixed) { return h("div", { "class": "ls-cfield fixed" }, [h("span", { "class": "cl", text: f.label }), h("span", { "class": "val" }, [f.kind === "flag" ? (v ? "yes" : "no") : String(v), " ", flag])]); }
-    if (f.kind === "flag") {
-      var cb = h("input", { type: "checkbox", id: id, disabled: f.fixed ? true : null, onchange: function () { set(cb.checked); } }); cb.checked = !!v;
-      return h("label", { "class": "ls-cfield flag", "for": id }, [cb, h("span", { "class": "t" }, [f.label, f.hint ? h("small", { text: f.hint }) : null, flag])]);
-    }
-    var inp;
-    if (f.kind === "choice") {
-      inp = h("select", { "class": "ls-text", id: id, disabled: f.fixed ? true : null, onchange: function () { set(inp.value); } },
-        [f.required ? (v === undefined || v === null || v === "" ? h("option", { value: "", text: f.placeholder || "Choose one", disabled: true, selected: true }) : null) : h("option", { value: "", text: f.unset || "not given" })].concat((f.options || []).map(function (o) { var val = Array.isArray(o) ? o[0] : o; var op = h("option", { value: val, text: Array.isArray(o) ? o[1] : o }); if (val === v) { op.selected = true; } return op; })));
-    } else {
-      inp = h(f.kind === "lines" ? "textarea" : "input", { "class": "ls-text", id: id, type: f.kind === "number" ? "number" : null, rows: f.kind === "lines" ? 3 : null, placeholder: f.placeholder || null, autocomplete: "off", spellcheck: "false", readonly: f.fixed ? true : null, oninput: function () { set(inp.value); } });
-      inp.value = v === undefined || v === null ? "" : v;
-    }
-    return h("div", { "class": "ls-cfield" + (f.wide || f.kind === "lines" ? " wide" : "") }, [h("label", { "class": "cl", "for": id }, [f.label, f.required ? null : h("span", { "class": "opt-word", text: " (optional)" }), " ", flag]), inp, f.hint ? h("span", { "class": "hint", text: f.hint }) : null]);
-  }
-
-  function confirmThen(a, go) {
-    if (!a.ask) { go(); return; }
-    NS.Dialog({ title: a.askTitle || a.label, why: a.ask, danger: !!a.danger, role: "alertdialog", actions: [{ label: a.yes || a.label, kind: a.danger ? "danger" : "", solid: true, cmd: a.cmd, onPress: function () { go(); } }] }).open();
-  }
-
-  /* ActionForm: one thing a command does, in place. The fields people use, in plain words; every other option under More options; the exact line it will run; Preview when it can try it first; then the action. */
-  var EFFECT = { reads: "reads only", changes: "changes something", session: "opens a terminal here, hosted by the daemon" };
-  function ActionForm(o) {
-    o = o || {};
-    var fields = o.fields || [], values = {}, effect = o.effect || "changes";
-    fields.forEach(function (f) { values[f.name] = f.value !== undefined ? f.value : (f.kind === "flag" ? false : ""); });
-    var main = fields.filter(function (f) { return !f.more; }), more = fields.filter(function (f) { return f.more; });
-    var line = h("code", { "class": "ls-cmdline", "aria-live": "polite" }), acts = h("div", { "class": "ls-answers" }), out = h("p", { "class": "ls-said", role: "status" }), result = h("div", { "class": "result" });
-    var moreCount = h("span", { "class": "n" });
-    var kids = [o.title ? h(o.heading || "h4", { "class": "t", text: o.title }) : null, o.why ? h("p", { "class": "why", text: o.why }) : null];
-    if (main.length) { kids.push(h("div", { "class": "fields" }, main.map(function (f) { return field(f, values, paint); }))); }
-    if (more.length) {
-      kids.push(h("details", { "class": "more" }, [h("summary", {}, ["More options ", moreCount]), h("div", { "class": "fields" }, more.map(function (f) { return field(f, values, paint); }))]));
-    }
-    kids.push(line, acts, out, result);
-    if (o.note) { kids.push(h("p", { "class": "note", text: o.note })); }
-    var el = h("section", { "class": "ls-aform" + (o.compact ? " compact" : ""), "data-effect": effect, "aria-label": o.title || o.path }, kids);
-    function reads() { if (o.applyWith) { return false; } return effect === "reads" || (effect === "changes" && o.changesOnlyWith && !o.changesOnlyWith.some(function (n) { return !!values[n]; })); }
-    function acting(preview) { return (o.extra || []).concat(preview ? (o.previewWith || (o.applyWith ? [] : ["--dry-run"])) : (o.applyWith || [])); }
-    function missing() { var m = fields.filter(function (f) { return f.required && !String(values[f.name] || "").trim(); })[0]; return m ? "say " + m.label.toLowerCase() + " first" : null; }
-    function run(preview) {
-      var l = lineFor(o.path, fields, values, acting(preview));
-      var r = o.onRun ? o.onRun(Object.assign({}, values), { preview: !!preview, line: l }) : null;
-      result.textContent = "";
-      if (r && r.nodeType) { result.appendChild(r); said(out, preview ? "Previewed: nothing changed" : (o.said || "Done")); return; }
-      said(out, typeof r === "string" ? r : (preview ? "Previewed: nothing changed" : (o.said || "Done")));
-    }
-    function paint() {
-      line.textContent = lineFor(o.path, fields, values, acting(false));
-      var set = more.filter(function (f) { var v = values[f.name]; return f.kind === "flag" ? !!v : v !== "" && v !== undefined && v !== null; }).length;
-      moreCount.textContent = more.length ? "\u00b7 " + more.length + (set ? ", " + set + " set" : "") : "";
-      acts.textContent = "";
-      var dis = o.disabledReason || missing();
-      if (effect === "session") { acts.appendChild(NS.HaloButton({ label: o.label || "Open it in a terminal", size: "small", glyph: "\u25b8", solid: true, cmd: o.disabledReason || missing() ? null : EFFECT.session, disabledReason: dis, onPress: function () { run(false); } })); return; }
-      var r = reads();
-      if (!r && (o.dryRun || o.applyWith)) { acts.appendChild(NS.HaloButton({ label: o.previewLabel || "Preview", size: "small", cmd: o.previewWith ? "adds " + o.previewWith.join(" ") + " \u00b7 changes nothing" : o.applyWith ? "runs it without " + o.applyWith.join(" ") + " \u00b7 changes nothing" : "adds --dry-run \u00b7 changes nothing", disabledReason: missing(), onPress: function () { run(true); } })); }
-      var a = { label: o.label || (r ? "Show it" : "Do it"), size: "small", solid: !r, kind: o.danger ? "danger" : "", cmd: r ? EFFECT.reads : EFFECT.changes, disabledReason: (r ? missing() : dis), ask: o.ask, yes: o.yes };
-      a.onPress = function () { confirmThen({ label: a.label, ask: o.ask, yes: o.yes, danger: o.danger, cmd: lineFor(o.path, fields, values, acting(false)) }, function () { run(false); }); };
-      acts.appendChild(NS.HaloButton(a));
-    }
-    paint();
-    return { el: el, values: values, line: function () { return lineFor(o.path, fields, values, acting(false)); }, set: function (k, v) { values[k] = v; paint(); }, result: result };
-  }
-
-  /* ActionRow: things done with one press, each with its line under it. */
-  function ActionRow(o) {
-    o = o || {};
-    var out = h("p", { "class": "ls-said", role: "status" });
-    var row = h("div", { "class": "ls-answers" });
-    (o.actions || []).forEach(function (a) {
-      row.appendChild(NS.HaloButton({ label: a.label, size: "small", kind: a.danger ? "danger" : "", glyph: a.glyph, cmd: a.cmd, disabledReason: a.disabledReason, onPress: function () { confirmThen(a, function () { var r = a.onPress && a.onPress(); said(out, typeof r === "string" ? r : (a.said || "Done")); }); } }));
-    });
-    return h("div", { "class": "ls-arow" }, [o.title ? h("h4", { "class": "t", text: o.title }) : null, o.why ? h("p", { "class": "why", text: o.why }) : null, row, out]);
-  }
-
-  /* SettingRow: a value a command keeps. What it is now, a control to change it, and the line that sets or clears it. */
-  function SettingRow(o) {
-    o = o || {};
-    var cur = o.value === undefined || o.value === null ? "" : String(o.value), draft = cur, id = uid("ls-sr-");
-    var now = h("span", { "class": "now" }), line = h("code", { "class": "ls-cmd" }), out = h("p", { "class": "ls-said", role: "status" }), acts = h("div", { "class": "acts" });
-    var ctl;
-    if (o.kind === "switch") {
-      ctl = NS.Switch({ label: o.label, sub: o.sub, checked: cur === "on" || cur === "true", onChange: function (on) { draft = on ? "on" : "off"; commit(); } });
-    } else if (o.kind === "choice") {
-      ctl = h("select", { "class": "ls-text", id: id, onchange: function () { draft = ctl.value; paint(); } }, (cur ? [] : [h("option", { value: "", text: o.choose || "Choose one\u2026" })]).concat((o.options || []).map(function (x) { var val = Array.isArray(x) ? x[0] : x; var op = h("option", { value: val, text: Array.isArray(x) ? x[1] : x }); if (val === cur) { op.selected = true; } return op; })));
-    } else {
-      ctl = h("input", { "class": "ls-text", id: id, type: o.kind === "number" ? "number" : "text", placeholder: o.placeholder || null, autocomplete: "off", spellcheck: "false", oninput: function () { draft = ctl.value; paint(); } });
-      ctl.value = cur;
-    }
-    function commit() { var v = draft.trim(); var r = v ? (o.onSet && o.onSet(v)) : (o.onClear && o.onClear()); cur = v; said(out, typeof r === "string" ? r : (v ? (o.setSaid || "Set") : (o.clearSaid || "Cleared"))); paint(); }
-    function paint() {
-      var v = String(draft).trim();
-      now.textContent = cur ? (o.show ? o.show(cur) : cur) : (o.unset || "not set");
-      now.classList.toggle("unset", !cur);
-      line.textContent = v ? o.setCmd(v) : (cur && o.clearCmd ? o.clearCmd : o.setCmd("<" + (o.valueWord || "value") + ">"));
-      acts.textContent = "";
-      if (o.kind === "switch") { line.textContent = o.setCmd(cur === "on" ? "off" : "on"); return; }
-      acts.appendChild(NS.HaloButton({ label: o.setLabel || "Set it", size: "small", solid: true, disabledReason: !v ? "write a value first" : v === cur ? "that is already the value" : null, onPress: commit }));
-      if (o.clearCmd && cur) { acts.appendChild(NS.HaloButton({ label: o.clearLabel || "Clear it", size: "small", onPress: function () { draft = ""; if (ctl.value !== undefined && o.kind !== "choice") { ctl.value = ""; } commit(); } })); }
-    }
-    paint();
-    var head = o.kind === "switch" ? [ctl] : [h("label", { "class": "nm", "for": id, text: o.label }), o.sub ? h("span", { "class": "sub", text: o.sub }) : null, h("span", { "class": "nowwrap" }, [h("span", { "class": "k", text: "now " }), now])];
-    return h("div", { "class": "ls-setrow" + (o.kind === "switch" ? " sw" : "") }, [h("div", { "class": "head" }, head), o.kind === "switch" ? null : h("div", { "class": "ctl" }, [ctl, acts]), line, out]);
-  }
-
-  /* ItemList: the things a command keeps, each with what can be done to it, and a way to add one. The commands a row's buttons run show under the row, for whichever button is pointed at or focused. */
-  function ItemList(o) {
-    o = o || {};
-    var items = (o.items || []).slice(), out = h("p", { "class": "ls-said", role: "status" });
-    var list = h("ul", { "class": "rows" }), addBox = h("div", { "class": "add", hidden: true }), count = h("span", { "class": "count" });
-    var addBtn = o.add ? h("button", { type: "button", "class": "addbtn", "aria-expanded": "false", onclick: function () { var open = addBox.hidden; addBox.hidden = !open; addBtn.setAttribute("aria-expanded", String(open)); if (open) { var f = addBox.querySelector("input, select, textarea"); if (f) { f.focus(); } } } }, ["+ ", o.add.label || "Add one"]) : null;
-    if (o.add) { var form = ActionForm(Object.assign({ compact: true }, o.add.form, { onRun: function (v, info) { var r = o.add.form.onRun ? o.add.form.onRun(v, info) : null; if (!info.preview && o.add.toItem) { var it = o.add.toItem(v); if (it) { items.unshift(it); paint(); addBox.hidden = true; addBtn.setAttribute("aria-expanded", "false"); said(out, o.add.said ? o.add.said(it) : "Added " + it.name); } } return r; } })); addBox.appendChild(form.el); }
-    function row(it) {
-      var peek = h("code", { "class": "ls-cmd peek" });
-      var acts = h("div", { "class": "acts" });
-      var det = it.detail || (it.actions || []).some(function (a) { return a.form; }) ? h("div", { "class": "det", hidden: true }) : null;
-      var first = null;
-      (it.actions || []).forEach(function (a) {
-        var b = h("button", { type: "button", "class": "rb" + (a.danger ? " danger" : ""), disabled: a.disabledReason ? true : null, title: a.disabledReason || null, text: a.label });
-        function show() { peek.textContent = a.disabledReason ? a.label + ": " + a.disabledReason : a.cmd || ""; }
-        b.addEventListener("mouseenter", show); b.addEventListener("focus", show);
-        b.addEventListener("click", function () {
-          if (a.form && det) { var open = det.dataset.form === a.label && !det.hidden; det.textContent = ""; det.hidden = open; det.dataset.form = open ? "" : a.label;
-            if (!open) { det.appendChild(ActionForm(Object.assign({ compact: true }, a.form, { onRun: function (v, info) { var r = a.form.onRun ? a.form.onRun(v, info, it) : null; if (!info.preview && a.removes) { items = items.filter(function (x) { return x !== it; }); paint(); } if (!info.preview) { said(out, a.said ? (typeof a.said === "function" ? a.said(it) : a.said) : a.label + ": done"); } return r; } })).el); }
-            return; }
-          confirmThen({ label: a.label + (a.ask ? "" : ""), askTitle: a.askTitle, ask: a.ask, yes: a.yes, danger: a.danger, cmd: a.cmd }, function () {
-          var r = a.onPress && a.onPress(it);
-          if (a.removes) { items = items.filter(function (x) { return x !== it; }); paint(); }
-          if (r && r.nodeType && det) { det.textContent = ""; det.appendChild(r); det.hidden = false; }
-          said(out, typeof r === "string" ? r : (a.said ? (typeof a.said === "function" ? a.said(it) : a.said) : a.label + ": done")); }); });
-        acts.appendChild(b); if (!first) { first = a; }
-      });
-      function reset() { peek.textContent = first && !first.disabledReason ? first.cmd || "" : ""; }
-      reset();
-      acts.addEventListener("mouseleave", function () { if (!acts.contains(document.activeElement)) { reset(); } });
-      acts.addEventListener("focusout", function (e) { if (!acts.contains(e.relatedTarget)) { reset(); } });
-      var openBtn = it.detail ? h("button", { type: "button", "class": "rb more", "aria-expanded": "false", text: it.detailLabel || "Details", onclick: function () { var open = det.hidden; if (open && !det.firstChild) { det.appendChild(it.detail()); } det.hidden = !open; openBtn.setAttribute("aria-expanded", String(open)); } }) : null;
-      if (openBtn) { acts.insertBefore(openBtn, acts.firstChild); }
-      return h("li", { "class": "row" }, [
-        h("div", { "class": "who" }, [h("span", { "class": "nm", text: it.name }), it.sub ? h("span", { "class": "sub", text: it.sub }) : null]),
-        it.word ? NS.Signal(it.word) : h("span", {}),
-        h("div", { "class": "facts" }, (it.facts || []).map(function (f) { return h("span", { text: f }); })),
-        acts, peek, det]);
-    }
-    function paint() {
-      list.textContent = "";
-      count.textContent = items.length + " " + (items.length === 1 ? (o.one || "item") : (o.many || "items"));
-      if (!items.length) { list.appendChild(h("li", { "class": "empty", text: o.empty || "None yet." })); }
-      items.forEach(function (it) { list.appendChild(row(it)); });
-    }
-    paint();
-    var el = h("section", { "class": "ls-ilist", "aria-label": o.title || o.label || null }, [
-      h("div", { "class": "bar" }, [o.title ? h(o.heading || "h4", { "class": "t", text: o.title }) : null, count, h("span", { "class": "grow" }), addBtn]),
-      o.why ? h("p", { "class": "why", text: o.why }) : null, addBox, list, out,
-      o.readCmd ? h("p", { "class": "from" }, ["From ", h("code", { "class": "ls-cmd", text: o.readCmd }), o.asOf ? " \u00b7 " + o.asOf : ""]) : null]);
-    return { el: el, items: function () { return items; }, set: function (xs) { items = xs.slice(); paint(); } };
-  }
-
-  /* Readout: what a reading command says, drawn as a view, never as a transcript. Small settings beside it change what it reads; the line it reads with is under it. */
-  function Readout(o) {
-    o = o || {};
-    var fields = o.params || [], values = {};
-    fields.forEach(function (f) { values[f.name] = f.value !== undefined ? f.value : (f.kind === "flag" ? false : ""); });
-    var body = h("div", { "class": "body" }), line = h("code", { "class": "ls-cmd" }), when = h("span", { "class": "when" });
-    function view(data) {
-      body.textContent = "";
-      if (data === null || data === undefined) { body.appendChild(h("p", { "class": "calm", text: o.waiting || "Not read yet." })); return; }
-      var kind = o.view || "list", node;
-      if (o.render) { node = o.render(data, values); }
-      else if (kind === "figures") { node = h("dl", { "class": "figs" }, data.map(function (f) { return h("div", { "class": "fig" }, [h("dt", { text: f.label }), h("dd", {}, [h("b", { text: f.value }), f.note ? h("small", { text: f.note }) : null])]); })); }
-      else if (kind === "table") {
-        var cols = o.columns || Object.keys(data[0] || {}).map(function (k) { return { key: k, label: k }; });
-        node = data.length ? h("div", { "class": "tw" }, [h("table", {}, [h("thead", {}, [h("tr", {}, cols.map(function (c) { return h("th", { scope: "col", text: c.label, "class": c.num ? "num" : null }); }))]), h("tbody", {}, data.map(function (r) { return h("tr", {}, cols.map(function (c) { var v = c.format ? c.format(r[c.key], r) : r[c.key]; return h("td", { "class": c.num ? "num" : null }, [v && v.nodeType ? v : String(v === undefined || v === null ? "" : v)]); })); }))])]) : h("p", { "class": "calm", text: o.empty || "Nothing to show." });
-      }
-      else if (kind === "document") { node = NS.Markdown ? NS.Markdown(String(data)) : h("pre", { text: String(data) }); }
-      else if (kind === "findings") { node = NS.HealthList(Object.assign({ findings: data.findings || data }, data.findings ? data : {})); }
-      else { node = data.length ? h("ul", { "class": "plain" }, data.map(function (x) { return h("li", {}, typeof x === "string" ? [x] : [h("b", { text: x.name }), x.sub ? " \u00b7 " + x.sub : ""]); })) : h("p", { "class": "calm", text: o.empty || "Nothing to show." }); }
-      body.appendChild(node);
-    }
-    function read() { line.textContent = lineFor(o.path, fields, values, (o.extra || []).concat(["--json"])); var d = o.load ? o.load(Object.assign({}, values)) : o.data; view(d); when.textContent = d === null || d === undefined ? "" : "read just now"; }
-    var params = fields.length ? h("div", { "class": "params" }, fields.map(function (f) { return field(f, values, function () { line.textContent = lineFor(o.path, fields, values, (o.extra || []).concat(["--json"])); }); })) : null;
-    var again = NS.HaloButton({ label: o.readLabel || "Read it again", size: "small", glyph: "\u21bb", onPress: read });
-    var el = h("section", { "class": "ls-readout", "aria-label": o.title || o.path }, [
-      h("div", { "class": "bar" }, [o.title ? h(o.heading || "h4", { "class": "t", text: o.title }) : null, when, h("span", { "class": "grow" }), again]),
-      o.why ? h("p", { "class": "why", text: o.why }) : null, params, body, h("p", { "class": "from" }, ["Read with ", line])]);
-    if (o.lazy) { line.textContent = lineFor(o.path, fields, values, (o.extra || []).concat(["--json"])); view(null); } else { read(); }
-    return { el: el, read: read, values: values };
-  }
-
-  Object.assign(NS, { ActionForm: ActionForm, ActionRow: ActionRow, SettingRow: SettingRow, ItemList: ItemList, Readout: Readout, controlLine: lineFor });
-})();
-/* end stage 13 */
 
 /* ---------- Stage 14: what main's Studio built since the design ---------- */
 (function () {
@@ -5611,3 +5382,239 @@
   })();
 })();
 /* end stage 14 */
+/* ---------- Stage 13: commands as controls. Every command a page offers is a control made for it, not a form built from its options. ---------- */
+(function () {
+  "use strict";
+  var NS = window.LoadoutStudio = window.LoadoutStudio || {};
+  function h(tag, attrs, kids) {
+    var el = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) {
+      var v = attrs[k];
+      if (v === null || v === undefined || v === false) { return; }
+      if (k === "text") { el.textContent = v; } else if (k === "class") { el.className = v; } else if (k.slice(0, 2) === "on") { el.addEventListener(k.slice(2), v); } else { el.setAttribute(k, v === true ? "" : v); }
+    });
+    (kids || []).forEach(function (c) { if (c) { el.appendChild(typeof c === "string" ? document.createTextNode(c) : c); } });
+    return el;
+  }
+  function uid(p) { return p + Math.random().toString(36).slice(2, 7); }
+  function q(v) { v = String(v); if (/^<[^<>\s]+>$/.test(v)) { return v; } return v === "" || /[\s"'$`\\|&;<>()*?!#~]/.test(v) ? "\"" + v.replace(/(["\\$`])/g, "\\$1") + "\"" : v; }
+  function said(el, t, bad) { el.textContent = t ? (bad ? "" : "\u2713 ") + t : ""; el.classList.toggle("bad", !!bad); }
+
+  /* The line a set of fields makes: arguments in order, then each option given, then anything extra. */
+  function lineFor(path, fields, values, extra) {
+    var args = [], opts = [];
+    fields.forEach(function (f) {
+      var v = values[f.name];
+      if (f.flags && Object.prototype.hasOwnProperty.call(f.flags, v)) { if (f.flags[v]) { opts.push(f.flags[v]); } return; }
+      if (f.always && (v === "" || v === undefined || v === null)) { opts.push(f.name); return; }
+      if (f.name.slice(0, 1) !== "-") { if (f.kind === "lines" && v) { String(v).split("\n").map(function (x) { return x.trim(); }).filter(Boolean).forEach(function (x) { args.push(q(x)); }); return; } if (v !== "" && v !== undefined && v !== null) { args.push(q(v)); } else if (f.required) { args.push("<" + (f.placeholder || f.name) + ">"); } return; }
+      if (f.kind === "flag") { if (v) { opts.push(f.name); } return; }
+      if (v === "" || v === undefined || v === null) { return; }
+      if (f.kind === "lines") { String(v).split("\n").map(function (s) { return s.trim(); }).filter(Boolean).forEach(function (s) { opts.push(f.name + " " + q(s)); }); return; }
+      opts.push(f.joined ? f.name + "=" + q(v) : f.name + " " + q(v));
+    });
+    return "$ loadout " + [path].concat(args, opts, extra || []).join(" ");
+  }
+
+  /* One field, in plain words, with the option it sets shown small beside its label. */
+  function field(f, values, onChange) {
+    var id = uid("ls-cf-"), v = values[f.name], flag = f.name.slice(0, 1) === "-" ? h("code", { "class": "opt", text: f.name }) : null;
+    function set(x) { values[f.name] = x; onChange(); }
+    if (f.fixed) { return h("div", { "class": "ls-cfield fixed" }, [h("span", { "class": "cl", text: f.label }), h("span", { "class": "val" }, [f.kind === "flag" ? (v ? "yes" : "no") : String(v), " ", flag])]); }
+    if (f.kind === "flag") {
+      var cb = h("input", { type: "checkbox", id: id, disabled: f.fixed ? true : null, onchange: function () { set(cb.checked); } }); cb.checked = !!v;
+      return h("label", { "class": "ls-cfield flag", "for": id }, [cb, h("span", { "class": "t" }, [f.label, f.hint ? h("small", { text: f.hint }) : null, flag])]);
+    }
+    var inp;
+    if (f.kind === "choice") {
+      inp = h("select", { "class": "ls-text", id: id, disabled: f.fixed ? true : null, onchange: function () { set(inp.value); } },
+        [f.required ? (v === undefined || v === null || v === "" ? h("option", { value: "", text: f.placeholder || "Choose one", disabled: true, selected: true }) : null) : h("option", { value: "", text: f.unset || "not given" })].concat((f.options || []).map(function (o) { var val = Array.isArray(o) ? o[0] : o; var op = h("option", { value: val, text: Array.isArray(o) ? o[1] : o }); if (val === v) { op.selected = true; } return op; })));
+    } else {
+      inp = h(f.kind === "lines" ? "textarea" : "input", { "class": "ls-text", id: id, type: f.kind === "number" ? "number" : null, rows: f.kind === "lines" ? 3 : null, placeholder: f.placeholder || null, autocomplete: "off", spellcheck: "false", readonly: f.fixed ? true : null, oninput: function () { set(inp.value); } });
+      inp.value = v === undefined || v === null ? "" : v;
+    }
+    return h("div", { "class": "ls-cfield" + (f.wide || f.kind === "lines" ? " wide" : "") }, [h("label", { "class": "cl", "for": id }, [f.label, f.required ? null : h("span", { "class": "opt-word", text: " (optional)" }), " ", flag]), inp, f.hint ? h("span", { "class": "hint", text: f.hint }) : null]);
+  }
+
+  function confirmThen(a, go) {
+    if (!a.ask) { go(); return; }
+    NS.Dialog({ title: a.askTitle || a.label, why: a.ask, danger: !!a.danger, role: "alertdialog", actions: [{ label: a.yes || a.label, kind: a.danger ? "danger" : "", solid: true, cmd: a.cmd, onPress: function () { go(); } }] }).open();
+  }
+
+  /* ActionForm: one thing a command does, in place. The fields people use, in plain words; every other option under More options; the exact line it will run; Preview when it can try it first; then the action. */
+  var EFFECT = { reads: "reads only", changes: "changes something", session: "opens a terminal here, hosted by the daemon" };
+  function ActionForm(o) {
+    o = o || {};
+    var fields = o.fields || [], values = {}, effect = o.effect || "changes";
+    fields.forEach(function (f) { values[f.name] = f.value !== undefined ? f.value : (f.kind === "flag" ? false : ""); });
+    var main = fields.filter(function (f) { return !f.more; }), more = fields.filter(function (f) { return f.more; });
+    var line = h("code", { "class": "ls-cmdline", "aria-live": "polite" }), acts = h("div", { "class": "ls-answers" }), out = h("p", { "class": "ls-said", role: "status" }), result = h("div", { "class": "result" });
+    var moreCount = h("span", { "class": "n" });
+    var kids = [o.title ? h(o.heading || "h4", { "class": "t", text: o.title }) : null, o.why ? h("p", { "class": "why", text: o.why }) : null];
+    if (main.length) { kids.push(h("div", { "class": "fields" }, main.map(function (f) { return field(f, values, paint); }))); }
+    if (more.length) {
+      kids.push(h("details", { "class": "more" }, [h("summary", {}, ["More options ", moreCount]), h("div", { "class": "fields" }, more.map(function (f) { return field(f, values, paint); }))]));
+    }
+    kids.push(line, acts, out, result);
+    if (o.note) { kids.push(h("p", { "class": "note", text: o.note })); }
+    var el = h("section", { "class": "ls-aform" + (o.compact ? " compact" : ""), "data-effect": effect, "aria-label": o.title || o.path }, kids);
+    function reads() { if (o.applyWith) { return false; } return effect === "reads" || (effect === "changes" && o.changesOnlyWith && !o.changesOnlyWith.some(function (n) { return !!values[n]; })); }
+    function acting(preview) { return (o.extra || []).concat(preview ? (o.previewWith || (o.applyWith ? [] : ["--dry-run"])) : (o.applyWith || [])); }
+    function missing() { var m = fields.filter(function (f) { return f.required && !String(values[f.name] || "").trim(); })[0]; return m ? "say " + m.label.toLowerCase() + " first" : null; }
+    function run(preview) {
+      var l = lineFor(o.path, fields, values, acting(preview));
+      var r = o.onRun ? o.onRun(Object.assign({}, values), { preview: !!preview, line: l }) : null;
+      result.textContent = "";
+      if (r && r.nodeType) { result.appendChild(r); said(out, preview ? "Previewed: nothing changed" : (o.said || "Done")); return; }
+      said(out, typeof r === "string" ? r : (preview ? "Previewed: nothing changed" : (o.said || "Done")));
+    }
+    function paint() {
+      line.textContent = lineFor(o.path, fields, values, acting(false));
+      var set = more.filter(function (f) { var v = values[f.name]; return f.kind === "flag" ? !!v : v !== "" && v !== undefined && v !== null; }).length;
+      moreCount.textContent = more.length ? "\u00b7 " + more.length + (set ? ", " + set + " set" : "") : "";
+      acts.textContent = "";
+      var dis = o.disabledReason || missing();
+      if (effect === "session") { acts.appendChild(NS.HaloButton({ label: o.label || "Open it in a terminal", size: "small", glyph: "\u25b8", solid: true, cmd: o.disabledReason || missing() ? null : EFFECT.session, disabledReason: dis, onPress: function () { run(false); } })); return; }
+      var r = reads();
+      if (!r && (o.dryRun || o.applyWith)) { acts.appendChild(NS.HaloButton({ label: o.previewLabel || "Preview", size: "small", cmd: o.previewWith ? "adds " + o.previewWith.join(" ") + " \u00b7 changes nothing" : o.applyWith ? "runs it without " + o.applyWith.join(" ") + " \u00b7 changes nothing" : "adds --dry-run \u00b7 changes nothing", disabledReason: missing(), onPress: function () { run(true); } })); }
+      var a = { label: o.label || (r ? "Show it" : "Do it"), size: "small", solid: !r, kind: o.danger ? "danger" : "", cmd: r ? EFFECT.reads : EFFECT.changes, disabledReason: (r ? missing() : dis), ask: o.ask, yes: o.yes };
+      a.onPress = function () { confirmThen({ label: a.label, ask: o.ask, yes: o.yes, danger: o.danger, cmd: lineFor(o.path, fields, values, acting(false)) }, function () { run(false); }); };
+      acts.appendChild(NS.HaloButton(a));
+    }
+    paint();
+    return { el: el, values: values, line: function () { return lineFor(o.path, fields, values, acting(false)); }, set: function (k, v) { values[k] = v; paint(); }, result: result };
+  }
+
+  /* ActionRow: things done with one press, each with its line under it. */
+  function ActionRow(o) {
+    o = o || {};
+    var out = h("p", { "class": "ls-said", role: "status" });
+    var row = h("div", { "class": "ls-answers" });
+    (o.actions || []).forEach(function (a) {
+      row.appendChild(NS.HaloButton({ label: a.label, size: "small", kind: a.danger ? "danger" : "", glyph: a.glyph, cmd: a.cmd, disabledReason: a.disabledReason, onPress: function () { confirmThen(a, function () { var r = a.onPress && a.onPress(); said(out, typeof r === "string" ? r : (a.said || "Done")); }); } }));
+    });
+    return h("div", { "class": "ls-arow" }, [o.title ? h("h4", { "class": "t", text: o.title }) : null, o.why ? h("p", { "class": "why", text: o.why }) : null, row, out]);
+  }
+
+  /* SettingRow: a value a command keeps. What it is now, a control to change it, and the line that sets or clears it. */
+  function SettingRow(o) {
+    o = o || {};
+    var cur = o.value === undefined || o.value === null ? "" : String(o.value), draft = cur, id = uid("ls-sr-");
+    var now = h("span", { "class": "now" }), line = h("code", { "class": "ls-cmd" }), out = h("p", { "class": "ls-said", role: "status" }), acts = h("div", { "class": "acts" });
+    var ctl;
+    if (o.kind === "switch") {
+      ctl = NS.Switch({ label: o.label, sub: o.sub, checked: cur === "on" || cur === "true", onChange: function (on) { draft = on ? "on" : "off"; commit(); } });
+    } else if (o.kind === "choice") {
+      ctl = h("select", { "class": "ls-text", id: id, onchange: function () { draft = ctl.value; paint(); } }, (cur ? [] : [h("option", { value: "", text: o.choose || "Choose one\u2026" })]).concat((o.options || []).map(function (x) { var val = Array.isArray(x) ? x[0] : x; var op = h("option", { value: val, text: Array.isArray(x) ? x[1] : x }); if (val === cur) { op.selected = true; } return op; })));
+    } else {
+      ctl = h("input", { "class": "ls-text", id: id, type: o.kind === "number" ? "number" : "text", placeholder: o.placeholder || null, autocomplete: "off", spellcheck: "false", oninput: function () { draft = ctl.value; paint(); } });
+      ctl.value = cur;
+    }
+    function commit() { var v = draft.trim(); var r = v ? (o.onSet && o.onSet(v)) : (o.onClear && o.onClear()); cur = v; said(out, typeof r === "string" ? r : (v ? (o.setSaid || "Set") : (o.clearSaid || "Cleared"))); paint(); }
+    function paint() {
+      var v = String(draft).trim();
+      now.textContent = cur ? (o.show ? o.show(cur) : cur) : (o.unset || "not set");
+      now.classList.toggle("unset", !cur);
+      line.textContent = v ? o.setCmd(v) : (cur && o.clearCmd ? o.clearCmd : o.setCmd("<" + (o.valueWord || "value") + ">"));
+      acts.textContent = "";
+      if (o.kind === "switch") { line.textContent = o.setCmd(cur === "on" ? "off" : "on"); return; }
+      acts.appendChild(NS.HaloButton({ label: o.setLabel || "Set it", size: "small", solid: true, disabledReason: !v ? "write a value first" : v === cur ? "that is already the value" : null, onPress: commit }));
+      if (o.clearCmd && cur) { acts.appendChild(NS.HaloButton({ label: o.clearLabel || "Clear it", size: "small", onPress: function () { draft = ""; if (ctl.value !== undefined && o.kind !== "choice") { ctl.value = ""; } commit(); } })); }
+    }
+    paint();
+    var head = o.kind === "switch" ? [ctl] : [h("label", { "class": "nm", "for": id, text: o.label }), o.sub ? h("span", { "class": "sub", text: o.sub }) : null, h("span", { "class": "nowwrap" }, [h("span", { "class": "k", text: "now " }), now])];
+    return h("div", { "class": "ls-setrow" + (o.kind === "switch" ? " sw" : "") }, [h("div", { "class": "head" }, head), o.kind === "switch" ? null : h("div", { "class": "ctl" }, [ctl, acts]), line, out]);
+  }
+
+  /* ItemList: the things a command keeps, each with what can be done to it, and a way to add one. The commands a row's buttons run show under the row, for whichever button is pointed at or focused. */
+  function ItemList(o) {
+    o = o || {};
+    var items = (o.items || []).slice(), out = h("p", { "class": "ls-said", role: "status" });
+    var list = h("ul", { "class": "rows" }), addBox = h("div", { "class": "add", hidden: true }), count = h("span", { "class": "count" });
+    var addBtn = o.add ? h("button", { type: "button", "class": "addbtn", "aria-expanded": "false", onclick: function () { var open = addBox.hidden; addBox.hidden = !open; addBtn.setAttribute("aria-expanded", String(open)); if (open) { var f = addBox.querySelector("input, select, textarea"); if (f) { f.focus(); } } } }, ["+ ", o.add.label || "Add one"]) : null;
+    if (o.add) { var form = ActionForm(Object.assign({ compact: true }, o.add.form, { onRun: function (v, info) { var r = o.add.form.onRun ? o.add.form.onRun(v, info) : null; if (!info.preview && o.add.toItem) { var it = o.add.toItem(v); if (it) { items.unshift(it); paint(); addBox.hidden = true; addBtn.setAttribute("aria-expanded", "false"); said(out, o.add.said ? o.add.said(it) : "Added " + it.name); } } return r; } })); addBox.appendChild(form.el); }
+    function row(it) {
+      var peek = h("code", { "class": "ls-cmd peek" });
+      var acts = h("div", { "class": "acts" });
+      var det = it.detail || (it.actions || []).some(function (a) { return a.form; }) ? h("div", { "class": "det", hidden: true }) : null;
+      var first = null;
+      (it.actions || []).forEach(function (a) {
+        var b = h("button", { type: "button", "class": "rb" + (a.danger ? " danger" : ""), disabled: a.disabledReason ? true : null, title: a.disabledReason || null, text: a.label });
+        function show() { peek.textContent = a.disabledReason ? a.label + ": " + a.disabledReason : a.cmd || ""; }
+        b.addEventListener("mouseenter", show); b.addEventListener("focus", show);
+        b.addEventListener("click", function () {
+          if (a.form && det) { var open = det.dataset.form === a.label && !det.hidden; det.textContent = ""; det.hidden = open; det.dataset.form = open ? "" : a.label;
+            if (!open) { det.appendChild(ActionForm(Object.assign({ compact: true }, a.form, { onRun: function (v, info) { var r = a.form.onRun ? a.form.onRun(v, info, it) : null; if (!info.preview && a.removes) { items = items.filter(function (x) { return x !== it; }); paint(); } if (!info.preview) { said(out, a.said ? (typeof a.said === "function" ? a.said(it) : a.said) : a.label + ": done"); } return r; } })).el); }
+            return; }
+          confirmThen({ label: a.label + (a.ask ? "" : ""), askTitle: a.askTitle, ask: a.ask, yes: a.yes, danger: a.danger, cmd: a.cmd }, function () {
+          var r = a.onPress && a.onPress(it);
+          if (a.removes) { items = items.filter(function (x) { return x !== it; }); paint(); }
+          if (r && r.nodeType && det) { det.textContent = ""; det.appendChild(r); det.hidden = false; }
+          said(out, typeof r === "string" ? r : (a.said ? (typeof a.said === "function" ? a.said(it) : a.said) : a.label + ": done")); }); });
+        acts.appendChild(b); if (!first) { first = a; }
+      });
+      function reset() { peek.textContent = first && !first.disabledReason ? first.cmd || "" : ""; }
+      reset();
+      acts.addEventListener("mouseleave", function () { if (!acts.contains(document.activeElement)) { reset(); } });
+      acts.addEventListener("focusout", function (e) { if (!acts.contains(e.relatedTarget)) { reset(); } });
+      var openBtn = it.detail ? h("button", { type: "button", "class": "rb more", "aria-expanded": "false", text: it.detailLabel || "Details", onclick: function () { var open = det.hidden; if (open && !det.firstChild) { det.appendChild(it.detail()); } det.hidden = !open; openBtn.setAttribute("aria-expanded", String(open)); } }) : null;
+      if (openBtn) { acts.insertBefore(openBtn, acts.firstChild); }
+      return h("li", { "class": "row" }, [
+        h("div", { "class": "who" }, [h("span", { "class": "nm", text: it.name }), it.sub ? h("span", { "class": "sub", text: it.sub }) : null]),
+        it.word ? NS.Signal(it.word) : h("span", {}),
+        h("div", { "class": "facts" }, (it.facts || []).map(function (f) { return h("span", { text: f }); })),
+        acts, peek, det]);
+    }
+    function paint() {
+      list.textContent = "";
+      count.textContent = items.length + " " + (items.length === 1 ? (o.one || "item") : (o.many || "items"));
+      if (!items.length) { list.appendChild(h("li", { "class": "empty", text: o.empty || "None yet." })); }
+      items.forEach(function (it) { list.appendChild(row(it)); });
+    }
+    paint();
+    var el = h("section", { "class": "ls-ilist", "aria-label": o.title || o.label || null }, [
+      h("div", { "class": "bar" }, [o.title ? h(o.heading || "h4", { "class": "t", text: o.title }) : null, count, h("span", { "class": "grow" }), addBtn]),
+      o.why ? h("p", { "class": "why", text: o.why }) : null, addBox, list, out,
+      o.readCmd ? h("p", { "class": "from" }, ["From ", h("code", { "class": "ls-cmd", text: o.readCmd }), o.asOf ? " \u00b7 " + o.asOf : ""]) : null]);
+    return { el: el, items: function () { return items; }, set: function (xs) { items = xs.slice(); paint(); } };
+  }
+
+  /* Readout: what a reading command says, drawn as a view, never as a transcript. Small settings beside it change what it reads; the line it reads with is under it. */
+  function Readout(o) {
+    o = o || {};
+    var fields = o.params || [], values = {};
+    fields.forEach(function (f) { values[f.name] = f.value !== undefined ? f.value : (f.kind === "flag" ? false : ""); });
+    var body = h("div", { "class": "body" }), line = h("code", { "class": "ls-cmd" }), when = h("span", { "class": "when" });
+    function view(data) {
+      body.textContent = "";
+      if (data === null || data === undefined) { body.appendChild(h("p", { "class": "calm", text: o.waiting || "Not read yet." })); return; }
+      var kind = o.view || "list", node;
+      if (o.render) { node = o.render(data, values); }
+      else if (kind === "figures") { node = h("dl", { "class": "figs" }, data.map(function (f) { return h("div", { "class": "fig" }, [h("dt", { text: f.label }), h("dd", {}, [h("b", { text: f.value }), f.note ? h("small", { text: f.note }) : null])]); })); }
+      else if (kind === "table") {
+        var cols = o.columns || Object.keys(data[0] || {}).map(function (k) { return { key: k, label: k }; });
+        node = data.length ? h("div", { "class": "tw" }, [h("table", {}, [h("thead", {}, [h("tr", {}, cols.map(function (c) { return h("th", { scope: "col", text: c.label, "class": c.num ? "num" : null }); }))]), h("tbody", {}, data.map(function (r) { return h("tr", {}, cols.map(function (c) { var v = c.format ? c.format(r[c.key], r) : r[c.key]; return h("td", { "class": c.num ? "num" : null }, [v && v.nodeType ? v : String(v === undefined || v === null ? "" : v)]); })); }))])]) : h("p", { "class": "calm", text: o.empty || "Nothing to show." });
+      }
+      else if (kind === "document") { node = NS.Markdown ? NS.Markdown(String(data)) : h("pre", { text: String(data) }); }
+      else if (kind === "findings") { node = NS.HealthList(Object.assign({ findings: data.findings || data }, data.findings ? data : {})); }
+      else { node = data.length ? h("ul", { "class": "plain" }, data.map(function (x) { return h("li", {}, typeof x === "string" ? [x] : [h("b", { text: x.name }), x.sub ? " \u00b7 " + x.sub : ""]); })) : h("p", { "class": "calm", text: o.empty || "Nothing to show." }); }
+      body.appendChild(node);
+    }
+    function read() { line.textContent = lineFor(o.path, fields, values, (o.extra || []).concat(["--json"])); var d = o.load ? o.load(Object.assign({}, values)) : o.data; view(d); when.textContent = d === null || d === undefined ? "" : "read just now"; }
+    var params = fields.length ? h("div", { "class": "params" }, fields.map(function (f) { return field(f, values, function () { line.textContent = lineFor(o.path, fields, values, (o.extra || []).concat(["--json"])); }); })) : null;
+    var again = NS.HaloButton({ label: o.readLabel || "Read it again", size: "small", glyph: "\u21bb", onPress: read });
+    var el = h("section", { "class": "ls-readout", "aria-label": o.title || o.path }, [
+      h("div", { "class": "bar" }, [o.title ? h(o.heading || "h4", { "class": "t", text: o.title }) : null, when, h("span", { "class": "grow" }), again]),
+      o.why ? h("p", { "class": "why", text: o.why }) : null, params, body, h("p", { "class": "from" }, ["Read with ", line])]);
+    if (o.lazy) { line.textContent = lineFor(o.path, fields, values, (o.extra || []).concat(["--json"])); view(null); } else { read(); }
+    return { el: el, read: read, values: values };
+  }
+
+  /* Commands shown: always, on hover (the default) or never. Studio keeps it as studio-commands. */
+  var COMMANDS = ["always", "hover", "never"];
+  function setCommands(v, el) { (el || document.documentElement).setAttribute("data-commands", COMMANDS.indexOf(v) >= 0 ? v : "hover"); }
+  function commandsShown() { return document.documentElement.getAttribute("data-commands") || "hover"; }
+
+  Object.assign(NS, { ActionForm: ActionForm, ActionRow: ActionRow, SettingRow: SettingRow, ItemList: ItemList, Readout: Readout, controlLine: lineFor, COMMANDS: COMMANDS, setCommands: setCommands, commandsShown: commandsShown });
+})();
+/* end stage 13 */

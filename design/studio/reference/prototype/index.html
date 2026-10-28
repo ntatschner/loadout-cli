@@ -522,11 +522,11 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
   var PREF_KEY = "studio-prototype-appearance";
   function loadPrefs() { try { return JSON.parse(localStorage.getItem(PREF_KEY) || "null") || {}; } catch (e) { return {}; } }
   function savePrefs() { try { localStorage.setItem(PREF_KEY, JSON.stringify(P)); } catch (e) { /* storage blocked: the choice lasts this visit */ } }
-  var P = Object.assign({ theme: null, accent: "cyan", density: "comfortable", motion: "full", halo: "orbit", keys: true, mode: "default", deckLayout: 2 }, loadPrefs());
+  var P = Object.assign({ theme: null, accent: "cyan", density: "comfortable", motion: "full", halo: "orbit", commands: "hover", keys: true, mode: "default", deckLayout: 2 }, loadPrefs());
   var hostTheme = root.getAttribute("data-theme");
   function applyPrefs() {
     var t = P.theme || (hostTheme === "light" || hostTheme === "dark" ? hostTheme : S.preferredTheme());
-    S.setTheme(t); S.setAccent(P.accent); S.setDensity(P.density); S.setMotion(P.motion); S.setBackdrop(P.backdrop || "map");
+    S.setTheme(t); S.setAccent(P.accent); S.setDensity(P.density); S.setMotion(P.motion); S.setBackdrop(P.backdrop || "map"); S.setCommands(P.commands || "hover");
     root.setAttribute("data-mode", P.mode || "default");
   }
   applyPrefs();
@@ -1359,7 +1359,8 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     acts.push({ glyph: "↻", label: "Refine the browser launcher idea", sub: "$ loadout idea refine browser-launcher", kind: "action", run: refine },
       { glyph: "▶", label: "Mark upload-retries doing", sub: "$ loadout task declare upload-retries doing --project starstats", kind: "action", run: function () { var k = line("k1"); k.stage = 2; k.note = "doing"; render(); } },
       { glyph: "◎", label: "Enter Ambient", sub: "changes nothing · A", kind: "action", run: function () { setAmbient(true); } },
-      { glyph: "◐", label: "Appearance…", sub: "theme, accent, density, motion, halo", kind: "action", run: openAppearance });
+      { glyph: "◐", label: "Appearance…", sub: "theme, accent, density, motion, halo, commands", kind: "action", run: openAppearance });
+    [["always", "Show commands always"], ["hover", "Show commands on hover"], ["never", "Hide commands"]].forEach(function (c) { if ((P.commands || "hover") !== c[0]) { acts.push({ glyph: "$", label: c[1], sub: "$ loadout config set studio-commands " + c[0], kind: "action", run: function () { P.commands = c[0]; savePrefs(); applyPrefs(); said(c[0] === "never" ? "Commands are hidden. Terminal-only ones still show." : c[0] === "hover" ? "Commands show when you point at or tab to a control" : "Commands show everywhere", "$ loadout config set studio-commands " + c[0]); } }); } });
     S.CommandPalette({ groups: [{ name: "Go to", items: go1 }, { name: "In flight", items: flight }, { name: "Do", items: acts }], bindKeys: false }).open();
   }
 
@@ -1378,6 +1379,8 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     f.appendChild(seg("motion", "Motion", [["full", "Full"], ["reduced", "Reduced"], ["none", "None"]], P.motion, function (v) { P.motion = v; }));
     f.appendChild(seg("backdrop", "Background", [["plain", "Plain"], ["map", "Field map, still"], ["map-animated", "Field map, animated"]], P.backdrop || "map", function (v) { P.backdrop = v; }));
     f.appendChild(el("p", { "class": "calm", style: "margin: -4px 0 0; font-size: 12.5px" }, ["The animated map moves only under full motion, and never in Pure Focus. High contrast keeps the plain ground. ", el("code", { "class": "ls-cmd", text: "$ loadout config set studio-backdrop " + (P.backdrop || "map") })]));
+    f.appendChild(seg("commands", "Commands", [["always", "Always shown"], ["hover", "On hover"], ["never", "Never shown"]], P.commands || "hover", function (v) { P.commands = v; }));
+    f.appendChild(el("p", { "class": "calm", style: "margin: -4px 0 0; font-size: 12.5px" }, ["On hover, a button's command shows while you point at it or tab to it, in the line kept for it, so nothing moves. Terminal-only commands and the Commands page always show theirs. ", el("code", { "class": "ls-cmd", text: "$ loadout config set studio-commands " + (P.commands || "hover") })]));
     f.appendChild(seg("halo", "Lens halo", [["orbit", "Orbit"], ["gyroscope", "Gyroscope"]], P.halo, function (v) { P.halo = v; }));
     f.appendChild(S.Switch({ label: "Single-letter shortcuts", sub: "A for Ambient, N for a new session", checked: P.keys, onChange: function (v) { P.keys = v; savePrefs(); } }));
     f.appendChild(el("p", { "class": "calm", style: "margin: 0; font-size: 12.5px" }, ["Kept in this browser for the prototype. Studio keeps the halo in Loadout's config: ", el("code", { "class": "ls-cmd", text: "$ loadout config set studio-halo orbit" }), " (a proposed key)."]));
@@ -3558,7 +3561,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     if (sec === "machine") {
       var fixable = DOCTOR.checks.some(function (c) { return c.fixable; });
       pane.appendChild(block("z-smc", "How this machine stands", (plcRead("doctor") ? [S.HealthList({ findings: DOCTOR.checks, verdict: DOCTOR.verdict, from: "$ loadout doctor" })] : [el("p", { "class": "calm", role: "status", text: "Checking…" })]).concat([C.doctor(fixable)])));
-      pane.appendChild(block("z-smo", "More", [C.machineMore(), el("p", { "class": "ls-from" }, ["Every command also has a form on the ", el("a", { href: "#commands", text: "Commands" }), " page."])]));
+      pane.appendChild(block("z-smo", "More", [C.machineMore()]));
     }
   }
 
@@ -5040,7 +5043,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     var jobId = rest[0] === "run" ? (rest[1] || null) : null, job = jobId ? cmdJob(jobId) : null;
     var path = rest[0] === "run" ? (job ? job.path : "") : rest.join(" "), chosen = cmdOf(path), ready = plcRead("commands");
     pageHead(main, "Commands", "everything Loadout can do, each with the line it runs");
-    var wrap = el("div", { "class": "cmdwrap" }), side = el("aside", { "class": "cmdside", "aria-label": "Commands" }), body = el("section", { "class": "cmdmain", "aria-label": "Command" });
+    var wrap = el("div", { "class": "cmdwrap", "data-commands": "always" }), side = el("aside", { "class": "cmdside", "aria-label": "Commands" }), body = el("section", { "class": "cmdmain", "aria-label": "Command" });
     var find = el("input", { type: "search", "class": "ls-text", name: "find", placeholder: "Find a command", autocomplete: "off", "data-k": "cmd-find", oninput: function () { CMD.find = find.value; list(); } });
     find.value = CMD.find;
     side.appendChild(el("label", { "class": "find" }, [el("span", { "class": "ls-sr", text: "Find a command" }), find]));

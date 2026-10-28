@@ -1894,104 +1894,6 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 .ls-officepanel .said { min-height: 1.2em; margin: 8px 0 0; font: 12px var(--font-mono); color: var(--good-text); }
 .ls-officepanel .close { float: right; min-width: 36px; min-height: 36px; border: 0; background: none; color: var(--ink); box-shadow: inset 0 0 0 1px var(--control-edge); cursor: pointer; font-size: 16px; }
 .ls-officepanel .close:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-/* ---------- Stage 13: commands as controls ---------- */
-.ls-aform, .ls-ilist, .ls-readout, .ls-arow, .ls-setrow { --c: var(--accent); container-type: inline-size; min-width: 0; }
-.ls-aform, .ls-ilist, .ls-readout { padding: calc(var(--space-4) * var(--density)); background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule); }
-.ls-aform.compact { padding: calc(var(--space-3) * var(--density)) 0 0; background: none; box-shadow: none; }
-.ls-aform + .ls-aform, .ls-ilist + .ls-ilist, .ls-readout + .ls-readout, .ls-aform + .ls-ilist, .ls-ilist + .ls-aform, .ls-readout + .ls-aform, .ls-aform + .ls-readout, .ls-ilist + .ls-readout, .ls-readout + .ls-ilist { margin-top: calc(var(--space-3) * var(--density)); }
-.ls-aform > .t, .ls-ilist .bar > .t, .ls-readout .bar > .t, .ls-arow > .t { margin: 0; font-size: 16px; font-weight: 400; color: var(--ink-strong); }
-.ls-aform > .why, .ls-ilist > .why, .ls-readout > .why, .ls-arow > .why { margin: 4px 0 0; font-size: 13.5px; color: var(--muted); }
-.ls-aform .fields, .ls-readout .params { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 12px 18px; margin-top: 12px; }
-.ls-cfield { display: grid; gap: 6px; align-content: start; min-width: 0; }
-.ls-cfield.wide { grid-column: 1 / -1; }
-.ls-cfield > .cl { font-size: 13.5px; font-weight: 500; color: var(--ink-soft); }
-.ls-cfield.fixed { gap: 2px; }
-.ls-cfield.fixed .val { color: var(--ink-strong); font-size: 14px; overflow-wrap: anywhere; }
-.ls-cfield .opt-word { font-weight: 400; color: var(--muted); }
-.ls-cfield .opt { font-family: var(--font-mono); font-size: 11px; font-weight: 400; color: var(--muted); }
-.ls-cfield .hint { font-size: 12.5px; color: var(--muted); }
-.ls-cfield.flag { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 10px; padding: 8px 0; cursor: pointer; }
-.ls-cfield.flag input { width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--accent); }
-.ls-cfield.flag .t { color: var(--ink); font-size: 14px; }
-.ls-cfield.flag .t small { display: block; font-size: 12.5px; color: var(--muted); }
-.ls-cfield.flag .t .opt { display: block; margin-top: 2px; }
-.ls-aform .more { margin-top: 12px; box-shadow: 0 -1px 0 var(--rule); padding-top: 10px; }
-.ls-aform .more > summary { display: inline-flex; align-items: center; gap: 8px; min-height: 32px; cursor: pointer; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); list-style: none; }
-.ls-aform .more > summary::-webkit-details-marker { display: none; }
-.ls-aform .more > summary::before { content: ""; width: 7px; height: 7px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform var(--dur-quick) var(--ease-out); }
-.ls-aform .more[open] > summary::before { transform: rotate(45deg); }
-.ls-aform .more > summary .n { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0; text-transform: none; color: var(--muted); }
-.ls-aform .more > summary:focus-visible, .ls-ilist .addbtn:focus-visible, .ls-ilist .rb:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.ls-aform > .ls-cmdline { margin-top: 12px; }
-.ls-aform .note { margin: 8px 0 0; font-size: 12.5px; color: var(--muted); }
-.ls-aform .result:empty { display: none; }
-.ls-aform .result { margin-top: 12px; }
-.ls-said.bad { color: var(--bad-text); }
-
-.ls-arow .ls-answers { margin-top: 10px; }
-
-.ls-setrow { display: grid; gap: 8px; padding: 12px 0; box-shadow: 0 1px 0 var(--rule); }
-.ls-setrow .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
-.ls-setrow .nm { font-size: 15px; color: var(--ink-strong); }
-.ls-setrow .sub { flex-basis: 100%; font-size: 12.5px; color: var(--muted); order: 3; }
-.ls-setrow .nowwrap { margin-left: auto; font-family: var(--font-mono); font-size: 12px; color: var(--ink-soft); }
-.ls-setrow .nowwrap .k { color: var(--muted); }
-.ls-setrow .now.unset { color: var(--muted); font-style: italic; }
-.ls-setrow .ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
-.ls-setrow .ctl > .ls-text { flex: 1 1 220px; max-width: 420px; }
-.ls-setrow .ctl .acts { display: flex; flex-wrap: wrap; gap: 8px 22px; }
-.ls-setrow.sw .head { align-items: center; }
-
-.ls-ilist .bar, .ls-readout .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
-.ls-ilist .bar .grow, .ls-readout .bar .grow { flex: 1; }
-.ls-ilist .count, .ls-readout .when { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
-.ls-ilist .addbtn { min-height: 36px; padding: 0 14px; border: 0; background: none; color: var(--accent-text); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent); font: 500 12px/1 var(--font-sans); letter-spacing: .2em; text-transform: uppercase; cursor: pointer; }
-.ls-ilist .addbtn[aria-expanded="true"] { background: var(--tint-picked-c); }
-.ls-ilist .add { margin-top: 10px; padding: 0 12px 12px; box-shadow: inset 3px 0 0 var(--accent); background: color-mix(in srgb, var(--accent) 5%, transparent); }
-.ls-ilist .rows { margin: 12px 0 0; padding: 0; list-style: none; }
-.ls-ilist .row { display: grid; grid-template-columns: minmax(0, 1.4fr) auto minmax(0, 1fr); grid-template-areas: "who sig facts" "acts acts acts" "peek peek peek" "det det det"; gap: 6px 14px; align-items: center; padding: 12px 0; box-shadow: 0 -1px 0 var(--rule); }
-.ls-ilist .row > .who { grid-area: who; min-width: 0; }
-.ls-ilist .row > .ls-sig, .ls-ilist .row > span:empty { grid-area: sig; }
-.ls-ilist .row > .facts { grid-area: facts; display: flex; flex-wrap: wrap; gap: 2px 14px; font-family: var(--font-mono); font-size: 12px; color: var(--ink-soft); justify-content: flex-end; text-align: right; }
-.ls-ilist .row > .acts { grid-area: acts; display: flex; flex-wrap: wrap; gap: 6px; }
-/* One line, always there, so pointing at another button never moves the row: a long command scrolls sideways in place. */
-.ls-ilist .row > .peek { grid-area: peek; display: block; min-height: 18px; color: var(--muted); white-space: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
-.ls-ilist .row > .det { grid-area: det; padding: 10px 12px; background: var(--surface-2); }
-.ls-ilist .nm { display: block; color: var(--ink-strong); font-size: 15px; overflow-wrap: anywhere; }
-.ls-ilist .who .sub { display: block; font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
-.ls-ilist .rb { min-height: 32px; padding: 0 12px; border: 0; background: none; color: var(--ink); box-shadow: inset 0 0 0 1px var(--control-edge); font: 500 11px/1 var(--font-sans); letter-spacing: .18em; text-transform: uppercase; cursor: pointer; }
-.ls-ilist .rb:hover:not(:disabled) { background: var(--tint-hover-c); }
-.ls-ilist .rb.danger { color: var(--bad-text); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bad) 60%, transparent); }
-.ls-ilist .rb.more { color: var(--accent-text); }
-.ls-ilist .rb[aria-expanded="true"] { background: var(--tint-picked-c); }
-.ls-ilist .rb:disabled { opacity: .5; cursor: default; }
-.ls-ilist .empty { padding: 14px 0; color: var(--muted); box-shadow: 0 -1px 0 var(--rule); }
-.ls-ilist .from, .ls-readout .from { margin: 10px 0 0; font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
-@container (max-width: 520px) {
-  .ls-ilist .row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "who sig" "facts facts" "acts acts" "peek peek" "det det"; }
-  .ls-ilist .row > .facts { justify-content: flex-start; text-align: left; }
-}
-
-.ls-readout .body { margin-top: 12px; min-width: 0; }
-.ls-readout .figs { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 1fr)); gap: 12px 18px; margin: 0; }
-.ls-readout .figs .fig { display: flex; flex-direction: column-reverse; gap: 2px; min-width: 0; }
-.ls-readout .figs dt { font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
-.ls-readout .figs dd { margin: 0; }
-.ls-readout .figs dd b { display: block; font-size: 26px; font-weight: 200; color: var(--ink-strong); font-variant-numeric: tabular-nums; }
-.ls-readout .figs dd small { display: block; font-size: 12px; color: var(--muted); }
-.ls-readout .tw { overflow-x: auto; max-width: 100%; }
-.ls-readout table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-.ls-readout th { text-align: left; font-size: 11.5px; font-weight: 500; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-soft); padding: 6px 10px 6px 0; box-shadow: inset 0 -1px 0 var(--rule); }
-.ls-readout td { padding: 7px 10px 7px 0; color: var(--ink); box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--rule) 60%, transparent); vertical-align: top; overflow-wrap: anywhere; }
-.ls-readout .num { text-align: right; font-family: var(--font-mono); font-size: 12.5px; font-variant-numeric: tabular-nums; }
-.ls-readout ul.plain { margin: 0; padding: 0; list-style: none; }
-.ls-readout ul.plain li { padding: 6px 0; box-shadow: 0 -1px 0 var(--rule); color: var(--ink); overflow-wrap: anywhere; }
-.ls-readout ul.plain li b { color: var(--ink-strong); font-weight: 500; }
-/* A long label wraps rather than pushing the page sideways at 320px; its command scrolls in place. */
-.ls-arow .ls-action, .ls-aform .ls-action, .ls-setrow .ls-action, .ls-ilist .ls-action { min-width: 0; max-width: 100%; grid-template-columns: minmax(0, 1fr); }
-.ls-arow .ls-halo, .ls-aform .ls-halo, .ls-setrow .ls-halo, .ls-ilist .ls-halo { white-space: normal; text-align: left; max-width: 100%; }
-.ls-arow .ls-action > .ls-cmd, .ls-aform .ls-action > .ls-cmd, .ls-setrow .ls-action > .ls-cmd, .ls-ilist .ls-action > .ls-cmd { max-width: 100%; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
-/* end stage 13 */
 
 /* ---------- Stage 14: what main's Studio built since the design ---------- */
 /* --- AskPane --- */
@@ -2380,3 +2282,116 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
   overflow: auto;
 }
 /* end stage 14 */
+/* ---------- Stage 13: commands as controls ---------- */
+.ls-aform, .ls-ilist, .ls-readout, .ls-arow, .ls-setrow { --c: var(--accent); container-type: inline-size; min-width: 0; }
+.ls-aform, .ls-ilist, .ls-readout { padding: calc(var(--space-4) * var(--density)); background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule); }
+.ls-aform.compact { padding: calc(var(--space-3) * var(--density)) 0 0; background: none; box-shadow: none; }
+.ls-aform + .ls-aform, .ls-ilist + .ls-ilist, .ls-readout + .ls-readout, .ls-aform + .ls-ilist, .ls-ilist + .ls-aform, .ls-readout + .ls-aform, .ls-aform + .ls-readout, .ls-ilist + .ls-readout, .ls-readout + .ls-ilist { margin-top: calc(var(--space-3) * var(--density)); }
+.ls-aform > .t, .ls-ilist .bar > .t, .ls-readout .bar > .t, .ls-arow > .t { margin: 0; font-size: 16px; font-weight: 400; color: var(--ink-strong); }
+.ls-aform > .why, .ls-ilist > .why, .ls-readout > .why, .ls-arow > .why { margin: 4px 0 0; font-size: 13.5px; color: var(--muted); }
+.ls-aform .fields, .ls-readout .params { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 12px 18px; margin-top: 12px; }
+.ls-cfield { display: grid; gap: 6px; align-content: start; min-width: 0; }
+.ls-cfield.wide { grid-column: 1 / -1; }
+.ls-cfield > .cl { font-size: 13.5px; font-weight: 500; color: var(--ink-soft); }
+.ls-cfield.fixed { gap: 2px; }
+.ls-cfield.fixed .val { color: var(--ink-strong); font-size: 14px; overflow-wrap: anywhere; }
+.ls-cfield .opt-word { font-weight: 400; color: var(--muted); }
+.ls-cfield .opt { font-family: var(--font-mono); font-size: 11px; font-weight: 400; color: var(--muted); }
+.ls-cfield .hint { font-size: 12.5px; color: var(--muted); }
+.ls-cfield.flag { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 10px; padding: 8px 0; cursor: pointer; }
+.ls-cfield.flag input { width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--accent); }
+.ls-cfield.flag .t { color: var(--ink); font-size: 14px; }
+.ls-cfield.flag .t small { display: block; font-size: 12.5px; color: var(--muted); }
+.ls-cfield.flag .t .opt { display: block; margin-top: 2px; }
+.ls-aform .more { margin-top: 12px; box-shadow: 0 -1px 0 var(--rule); padding-top: 10px; }
+.ls-aform .more > summary { display: inline-flex; align-items: center; gap: 8px; min-height: 32px; cursor: pointer; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); list-style: none; }
+.ls-aform .more > summary::-webkit-details-marker { display: none; }
+.ls-aform .more > summary::before { content: ""; width: 7px; height: 7px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform var(--dur-quick) var(--ease-out); }
+.ls-aform .more[open] > summary::before { transform: rotate(45deg); }
+.ls-aform .more > summary .n { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0; text-transform: none; color: var(--muted); }
+.ls-aform .more > summary:focus-visible, .ls-ilist .addbtn:focus-visible, .ls-ilist .rb:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ls-aform > .ls-cmdline { margin-top: 12px; }
+.ls-aform .note { margin: 8px 0 0; font-size: 12.5px; color: var(--muted); }
+.ls-aform .result:empty { display: none; }
+.ls-aform .result { margin-top: 12px; }
+.ls-said.bad { color: var(--bad-text); }
+
+.ls-arow .ls-answers { margin-top: 10px; }
+
+.ls-setrow { display: grid; gap: 8px; padding: 12px 0; box-shadow: 0 1px 0 var(--rule); }
+.ls-setrow .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
+.ls-setrow .nm { font-size: 15px; color: var(--ink-strong); }
+.ls-setrow .sub { flex-basis: 100%; font-size: 12.5px; color: var(--muted); order: 3; }
+.ls-setrow .nowwrap { margin-left: auto; font-family: var(--font-mono); font-size: 12px; color: var(--ink-soft); }
+.ls-setrow .nowwrap .k { color: var(--muted); }
+.ls-setrow .now.unset { color: var(--muted); font-style: italic; }
+.ls-setrow .ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+.ls-setrow .ctl > .ls-text { flex: 1 1 220px; max-width: 420px; }
+.ls-setrow .ctl .acts { display: flex; flex-wrap: wrap; gap: 8px 22px; }
+.ls-setrow.sw .head { align-items: center; }
+
+.ls-ilist .bar, .ls-readout .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.ls-ilist .bar .grow, .ls-readout .bar .grow { flex: 1; }
+.ls-ilist .count, .ls-readout .when { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.ls-ilist .addbtn { min-height: 36px; padding: 0 14px; border: 0; background: none; color: var(--accent-text); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent); font: 500 12px/1 var(--font-sans); letter-spacing: .2em; text-transform: uppercase; cursor: pointer; }
+.ls-ilist .addbtn[aria-expanded="true"] { background: var(--tint-picked-c); }
+.ls-ilist .add { margin-top: 10px; padding: 0 12px 12px; box-shadow: inset 3px 0 0 var(--accent); background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.ls-ilist .rows { margin: 12px 0 0; padding: 0; list-style: none; }
+.ls-ilist .row { display: grid; grid-template-columns: minmax(0, 1.4fr) auto minmax(0, 1fr); grid-template-areas: "who sig facts" "acts acts acts" "peek peek peek" "det det det"; gap: 6px 14px; align-items: center; padding: 12px 0; box-shadow: 0 -1px 0 var(--rule); }
+.ls-ilist .row > .who { grid-area: who; min-width: 0; }
+.ls-ilist .row > .ls-sig, .ls-ilist .row > span:empty { grid-area: sig; }
+.ls-ilist .row > .facts { grid-area: facts; display: flex; flex-wrap: wrap; gap: 2px 14px; font-family: var(--font-mono); font-size: 12px; color: var(--ink-soft); justify-content: flex-end; text-align: right; }
+.ls-ilist .row > .acts { grid-area: acts; display: flex; flex-wrap: wrap; gap: 6px; }
+/* One line, always there, so pointing at another button never moves the row: a long command scrolls sideways in place. */
+.ls-ilist .row > .peek { grid-area: peek; display: block; min-height: 18px; color: var(--muted); white-space: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
+.ls-ilist .row > .det { grid-area: det; padding: 10px 12px; background: var(--surface-2); }
+.ls-ilist .nm { display: block; color: var(--ink-strong); font-size: 15px; overflow-wrap: anywhere; }
+.ls-ilist .who .sub { display: block; font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+.ls-ilist .rb { min-height: 32px; padding: 0 12px; border: 0; background: none; color: var(--ink); box-shadow: inset 0 0 0 1px var(--control-edge); font: 500 11px/1 var(--font-sans); letter-spacing: .18em; text-transform: uppercase; cursor: pointer; }
+.ls-ilist .rb:hover:not(:disabled) { background: var(--tint-hover-c); }
+.ls-ilist .rb.danger { color: var(--bad-text); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bad) 60%, transparent); }
+.ls-ilist .rb.more { color: var(--accent-text); }
+.ls-ilist .rb[aria-expanded="true"] { background: var(--tint-picked-c); }
+.ls-ilist .rb:disabled { opacity: .5; cursor: default; }
+.ls-ilist .empty { padding: 14px 0; color: var(--muted); box-shadow: 0 -1px 0 var(--rule); }
+.ls-ilist .from, .ls-readout .from { margin: 10px 0 0; font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+@container (max-width: 520px) {
+  .ls-ilist .row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "who sig" "facts facts" "acts acts" "peek peek" "det det"; }
+  .ls-ilist .row > .facts { justify-content: flex-start; text-align: left; }
+}
+
+.ls-readout .body { margin-top: 12px; min-width: 0; }
+.ls-readout .figs { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 1fr)); gap: 12px 18px; margin: 0; }
+.ls-readout .figs .fig { display: flex; flex-direction: column-reverse; gap: 2px; min-width: 0; }
+.ls-readout .figs dt { font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+.ls-readout .figs dd { margin: 0; }
+.ls-readout .figs dd b { display: block; font-size: 26px; font-weight: 200; color: var(--ink-strong); font-variant-numeric: tabular-nums; }
+.ls-readout .figs dd small { display: block; font-size: 12px; color: var(--muted); }
+.ls-readout .tw { overflow-x: auto; max-width: 100%; }
+.ls-readout table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.ls-readout th { text-align: left; font-size: 11.5px; font-weight: 500; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-soft); padding: 6px 10px 6px 0; box-shadow: inset 0 -1px 0 var(--rule); }
+.ls-readout td { padding: 7px 10px 7px 0; color: var(--ink); box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--rule) 60%, transparent); vertical-align: top; overflow-wrap: anywhere; }
+.ls-readout .num { text-align: right; font-family: var(--font-mono); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.ls-readout ul.plain { margin: 0; padding: 0; list-style: none; }
+.ls-readout ul.plain li { padding: 6px 0; box-shadow: 0 -1px 0 var(--rule); color: var(--ink); overflow-wrap: anywhere; }
+.ls-readout ul.plain li b { color: var(--ink-strong); font-weight: 500; }
+/* A long label wraps rather than pushing the page sideways at 320px; its command scrolls in place. */
+.ls-arow .ls-action, .ls-aform .ls-action, .ls-setrow .ls-action, .ls-ilist .ls-action { min-width: 0; max-width: 100%; grid-template-columns: minmax(0, 1fr); }
+.ls-arow .ls-halo, .ls-aform .ls-halo, .ls-setrow .ls-halo, .ls-ilist .ls-halo { white-space: normal; text-align: left; max-width: 100%; }
+.ls-arow .ls-action > .ls-cmd, .ls-aform .ls-action > .ls-cmd, .ls-setrow .ls-action > .ls-cmd, .ls-ilist .ls-action > .ls-cmd { max-width: 100%; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+
+/* Commands shown: always, on hover (the default) or never, as data-commands on <html> (setCommands; studio-commands).
+   On hover, a line keeps its place and only its ink comes and goes, so nothing moves; it stays in the page for screen readers.
+   A button's command shows while that button is pointed at or focused; a form's line while the form is; a "From" line while its block is.
+   Never removes the lines and the space kept for them. Always shown whatever the setting: TerminalOnly blocks (the command is the only
+   way to do them), anything inside [data-commands="always"] (the Commands page), and a disabled button's reason, which is not a command. */
+:root:not([data-commands="always"]) :is(.ls-cmd:not(.reason), .is-cmd) { opacity: var(--cmd-btn, 0); transition: opacity var(--dur-quick) var(--ease-out); }
+:root:not([data-commands="always"]) .ls-cmdline { opacity: var(--cmd-form, 0); transition: opacity var(--dur-quick) var(--ease-out); }
+:root:not([data-commands="always"]) :is(.ls-from, .ls-ilist .from, .ls-readout .from) { opacity: var(--cmd-from, 0); transition: opacity var(--dur-quick) var(--ease-out); }
+:is(:hover, :focus-within, [aria-selected="true"]) > :is(.ls-cmd, .is-cmd), .ls-tboard .task :is(.moves, .go):is(:hover, :focus-within) .ls-cmd, .ls-toast:is(:hover, :focus-within) .ls-cmd { --cmd-btn: 1; }
+:is(:hover, :focus-within) > .ls-cmdline, :is(.ls-aform, .cmdform, .ls-dialog):is(:hover, :focus-within) { --cmd-form: 1; }
+:is(:hover, :focus-within) > :is(.ls-from, .from), :is(section, .pblock, .ls-ilist, .ls-readout, li, .ls-dialog):is(:hover, :focus-within) { --cmd-from: 1; }
+.ls-tonly, [data-commands="always"] { --cmd-btn: 1; --cmd-form: 1; --cmd-from: 1; }
+:root[data-commands="never"] :is(.ls-cmd:not(.reason), .is-cmd, .ls-cmdline, .ls-from, .ls-ilist .from, .ls-readout .from):not(.ls-tonly *):not([data-commands="always"] *) { display: none; }
+:root[data-commands="never"] :is(.ls-tboard .task .moves, .ls-tboard .task .go):not([data-commands="always"] *) { padding-bottom: 0; }
+/* end stage 13 */
