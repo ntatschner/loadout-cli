@@ -419,12 +419,10 @@ public static class Program
         // make one. Named after the command, so the daemon's summary and a
         // status line's are told apart without opening them.
         var environment = provider.GetRequiredService<IEnvironmentProvider>();
-        var words = launcherArgs.Where(one => !one.StartsWith('-')).Take(2).ToArray();
-
         Loadout.Core.Diagnostics.ReadLedger.StartIfAsked(
             environment.GetVariable(Loadout.Core.Diagnostics.ReadLedger.Variable),
             paths.Paths.State,
-            words.Length == 0 ? "launcher" : string.Join('-', words),
+            Loadout.Core.Diagnostics.ReadLedger.Label(launcherArgs),
             environment.HomeDirectory);
 
         // How this person asked to be shown things, settled before the first

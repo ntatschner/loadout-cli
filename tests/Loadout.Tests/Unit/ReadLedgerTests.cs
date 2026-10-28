@@ -172,6 +172,27 @@ public sealed class ReadLedgerTests : IDisposable
     }
 
     [Fact]
+    public void The_summary_says_which_build_made_it()
+    {
+        _ledger.Write();
+
+        using var document = JsonDocument.Parse(File.ReadAllText(_ledger.Destination));
+        document.RootElement.GetProperty("version").GetString()
+            .Should().Be(typeof(ReadLedger).Assembly.GetName().Version!.ToString(3));
+    }
+
+    [Theory]
+    [InlineData(new[] { "team", "daemon", "--log", @"C:\state\teams\daemon.log" }, "team-daemon")]
+    [InlineData(new[] { "daemon", "--log", @"C:\state\teams\daemon.log" }, "daemon")]
+    [InlineData(new[] { "statusline", "30" }, "statusline-30")]
+    [InlineData(new[] { "--json", "task", "list" }, "task-list")]
+    [InlineData(new[] { "--json" }, "launcher")]
+    [InlineData(new[] { "task", "list", "extra" }, "task-list")]
+    [InlineData(new string[0], "launcher")]
+    public void A_process_is_named_by_the_words_before_its_first_option(string[] args, string label) =>
+        ReadLedger.Label(args).Should().Be(label);
+
+    [Fact]
     public void Without_being_asked_the_process_counts_nothing()
     {
         ReadLedger.StartIfAsked("0", _state, "status");

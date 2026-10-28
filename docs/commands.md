@@ -247,7 +247,8 @@ session state and the rest. As it ends, and every minute while it runs, it
 writes a summary to `read-trace` under the state directory, named after the
 command, such as `20261028-182844-31396-team-runs.json`. The minute is there
 because the daemon is more often stopped than left to exit, and a stopped
-process writes nothing on the way out.
+process writes nothing on the way out. Each summary records the Loadout version
+that wrote it, so a reading taken either side of an update can be told apart.
 
 Each read notes the file's length and last-write time, so the summary can tell
 a second read of the same contents from a read of new ones. `readsPerChange`
