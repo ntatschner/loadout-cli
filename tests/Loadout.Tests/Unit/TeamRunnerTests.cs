@@ -4043,6 +4043,18 @@ public sealed partial class TeamRunnerTests : IDisposable
             queue.Enqueue(lines);
         }
 
+        private readonly HashSet<string[]> _hanging = new(ReferenceEqualityComparer.Instance);
+
+        /// <summary>
+        /// A session of this role that writes these lines and then nothing,
+        /// hung until it is killed.
+        /// </summary>
+        public void ScriptHung(string role, params string[] lines)
+        {
+            Script(role, lines);
+            _hanging.Add(lines);
+        }
+
         private readonly Dictionary<string, string> _errors = new(StringComparer.Ordinal);
 
         private readonly Dictionary<string, Func<Task>> _holds = new(StringComparer.Ordinal);
@@ -4116,11 +4128,15 @@ public sealed partial class TeamRunnerTests : IDisposable
                 return Task.FromResult(OperationResult<HeadlessLaunch>.Fail($"no script for {role}"));
             }
 
-            var pipe = new StubProcessLauncher.StubPipedProcess(
-                string.Join("\n", queue.Dequeue()) + "\n",
-                0,
-                _errors.TryGetValue(role, out var error) ? error : string.Empty,
-                _holds.TryGetValue(role, out var hold) ? hold : null);
+            var lines = queue.Dequeue();
+
+            var pipe = _hanging.Contains(lines)
+                ? StubProcessLauncher.StubPipedProcess.Hanging(string.Join("\n", lines) + "\n")
+                : new StubProcessLauncher.StubPipedProcess(
+                    string.Join("\n", lines) + "\n",
+                    0,
+                    _errors.TryGetValue(role, out var error) ? error : string.Empty,
+                    _holds.TryGetValue(role, out var hold) ? hold : null);
 
             if (!_pipes.TryGetValue(role, out var pipes))
             {

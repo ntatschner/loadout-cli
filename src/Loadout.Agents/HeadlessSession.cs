@@ -29,7 +29,16 @@ public sealed class HeadlessSession : IAsyncDisposable
     private readonly List<string> _standardError = [];
     private readonly Task _errorPump;
     private readonly Func<string, CancellationToken, Task>? _identified;
+    private readonly Queue<string> _recent = new();
     private decimal _costSoFar;
+
+    // A read of the agent's output that was started and has not come back.
+    // A turn given up on as silent leaves it running rather than cancel it,
+    // because a reader cancelled mid-line is not one that can be read again.
+    private Task<string?>? _reading;
+
+    /// <summary>How many of the agent's last lines are kept for <see cref="RecentOutput"/>.</summary>
+    private const int RecentKept = 20;
 
     /// <param name="process">The agent, already started.</param>
     /// <param name="protocol">How the agent's wire format reads.</param>
@@ -65,6 +74,21 @@ public sealed class HeadlessSession : IAsyncDisposable
     /// <summary>Completes with the exit code once the agent has exited.</summary>
     public Task<int> Exited => _process.Exited;
 
+    /// <summary>
+    /// The last lines the agent wrote to its output, oldest first: what it
+    /// was doing when it went quiet, for the record of a turn given up on.
+    /// </summary>
+    public IReadOnlyList<string> RecentOutput
+    {
+        get
+        {
+            lock (_recent)
+            {
+                return _recent.ToList();
+            }
+        }
+    }
+
     /// <summary>Everything the agent has written to its error stream so far.</summary>
     public IReadOnlyList<string> StandardError
     {
@@ -89,17 +113,22 @@ public sealed class HeadlessSession : IAsyncDisposable
     /// the summary afterwards.
     /// </param>
     /// <param name="ct">Cancels the turn.</param>
+    /// <param name="quiet">
+    /// How long the agent may write nothing before the turn is given up on as
+    /// silent, or null to wait for as long as it takes.
+    /// </param>
     public async Task<HeadlessTurn> TurnAsync(
         string message,
         Func<HeadlessEvent, CancellationToken, Task>? watching = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        QuietLimit? quiet = null)
     {
         ArgumentNullException.ThrowIfNull(message);
 
         await _process.Input.WriteLineAsync(_protocol.EncodeUserMessage(message).AsMemory(), ct).ConfigureAwait(false);
         await _process.Input.FlushAsync(ct).ConfigureAwait(false);
 
-        return await ReadTurnAsync(watching, ct).ConfigureAwait(false);
+        return await ReadTurnAsync(watching, ct, quiet).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -139,16 +168,28 @@ public sealed class HeadlessSession : IAsyncDisposable
     /// </summary>
     /// <param name="watching">Called with each event as it arrives, as in <see cref="TurnAsync"/>.</param>
     /// <param name="ct">Cancels the read.</param>
+    /// <param name="quiet">As in <see cref="TurnAsync"/>.</param>
+    /// <remarks>
+    /// A turn given up on as silent comes back with <see cref="HeadlessTurn.Silent"/>
+    /// set rather than as an exception, and the agent is left running: whether
+    /// to kill it, and what to say to it afterwards, is the caller's to decide.
+    /// </remarks>
     public async Task<HeadlessTurn> ReadTurnAsync(
         Func<HeadlessEvent, CancellationToken, Task>? watching = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        QuietLimit? quiet = null)
     {
         var events = new List<HeadlessEvent>();
         HeadlessResult? result = null;
 
         while (result is null)
         {
-            var line = await _process.Output.ReadLineAsync(ct).ConfigureAwait(false);
+            var (line, silent) = await NextLineAsync(quiet, ct).ConfigureAwait(false);
+
+            if (silent)
+            {
+                return new HeadlessTurn(events, null, 0m) { Silent = true };
+            }
 
             if (line is null)
             {
@@ -156,6 +197,16 @@ public sealed class HeadlessSession : IAsyncDisposable
                 // caller gets what there was and a null result, and can tell
                 // the two apart from Exited.
                 break;
+            }
+
+            lock (_recent)
+            {
+                _recent.Enqueue(line.Length > 500 ? line[..500] + "…" : line);
+
+                while (_recent.Count > RecentKept)
+                {
+                    _recent.Dequeue();
+                }
             }
 
             foreach (var evt in _protocol.Decode(line))
@@ -202,6 +253,78 @@ public sealed class HeadlessSession : IAsyncDisposable
         }
 
         return new HeadlessTurn(events, result, cost);
+    }
+
+    /// <summary>
+    /// The agent's next line, or word that it has been silent for longer than
+    /// it was allowed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// With no limit, the read is the plain one it always was, so a caller
+    /// that never asked for one is not changed by it.
+    /// </para>
+    /// <para>
+    /// With one, the read races a timer that every line starts again. The
+    /// timer glances at the clock rather than sleeping the whole limit, so
+    /// that a question put to a person is noticed within a glance and the
+    /// clock stopped for it.
+    /// </para>
+    /// </remarks>
+    private async Task<(string? Line, bool Silent)> NextLineAsync(QuietLimit? quiet, CancellationToken ct)
+    {
+        if (quiet is null)
+        {
+            var plain = _reading is { } left
+                ? await left.WaitAsync(ct).ConfigureAwait(false)
+                : await _process.Output.ReadLineAsync(ct).ConfigureAwait(false);
+
+            _reading = null;
+
+            return (plain, false);
+        }
+
+        _reading ??= _process.Output.ReadLineAsync(CancellationToken.None).AsTask();
+
+        // Started on the first glance rather than here, so a line that was
+        // already waiting is read without the clock being looked at at all.
+        DateTimeOffset? deadline = null;
+
+        while (!_reading.IsCompleted)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var now = quiet.Time.GetUtcNow();
+
+            if (quiet.Held?.Invoke() == true)
+            {
+                // Waiting on a person. The clock stops, and starts again at
+                // its full length once they have answered.
+                deadline = null;
+            }
+            else
+            {
+                deadline ??= now + quiet.Limit;
+
+                if (now >= deadline)
+                {
+                    return (null, true);
+                }
+            }
+
+            var left = deadline is { } due && due - now < quiet.Glance ? due - now : quiet.Glance;
+
+            using var glance = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            var waited = quiet.WaitAsync(left, glance.Token);
+
+            await Task.WhenAny(_reading, waited).ConfigureAwait(false);
+            await glance.CancelAsync().ConfigureAwait(false);
+        }
+
+        var line = await _reading.ConfigureAwait(false);
+        _reading = null;
+
+        return (line, false);
     }
 
     /// <summary>

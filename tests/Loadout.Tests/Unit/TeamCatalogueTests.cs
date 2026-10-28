@@ -219,6 +219,7 @@ public sealed class TeamCatalogueTests : IDisposable
     [InlineData("lead: a\nnodes: { a: { role: role.project-lead } }\nrules: { gates: { merge: [nobody] } }", "team-merge-gate", "'nobody'")]
     [InlineData("lead: a\nnodes: { a: { role: role.project-lead } }\nrules: { take_recommendation_after: soon }", "team-recommendation-wait", "not a duration")]
     [InlineData("lead: a\nnodes: { a: { role: role.project-lead } }\nrules: { on_timeout: shrug }", "team-on-timeout", "think-again-once")]
+    [InlineData("lead: a\nnodes: { a: { role: role.project-lead } }\nrules: { quiet_limit: ages }", "team-quiet-limit", "not a duration")]
     public async Task A_team_that_would_not_make_sense_to_run_is_a_finding_that_says_what_to_change(
         string body, string rule, string detail)
     {
@@ -245,6 +246,19 @@ public sealed class TeamCatalogueTests : IDisposable
         team.DoneWhen.Should().Equal("the suite passes: all of it", "the page reads");
         team.Rules.TakeRecommendationAfter.Should().Be("30m");
         catalogue.Findings.Should().NotContain(f => f.Rule == "judged");
+    }
+
+    [Theory]
+    [InlineData("rules: { quiet_limit: 45m }", 45)]
+    [InlineData("rules: { autonomy: supervised }", 20)]
+    public async Task A_team_says_how_long_a_node_may_be_silent_and_twenty_minutes_when_it_does_not(string rules, int minutes)
+    {
+        WriteTeam("global", "name: patient\nlead: a\nnodes: { a: { role: role.project-lead } }\n" + rules + "\n");
+
+        var catalogue = await LoadAsync();
+
+        catalogue.Find("patient")!.Rules.Quiet.Should().Be(TimeSpan.FromMinutes(minutes));
+        catalogue.Findings.Should().NotContain(f => f.Rule == "patient");
     }
 
     /// <summary>

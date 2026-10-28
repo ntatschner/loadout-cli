@@ -98,6 +98,23 @@ public sealed class StubProcessLauncher : IProcessLauncher
             Exited = Task.FromResult(exitCode);
         }
 
+        private readonly TaskCompletionSource<int>? _untilKilled;
+
+        private StubPipedProcess(string output, TaskCompletionSource<int> untilKilled)
+        {
+            _untilKilled = untilKilled;
+            Output = new HangingReader(output, untilKilled.Task);
+            Error = new StringReader(string.Empty);
+            Exited = untilKilled.Task;
+        }
+
+        /// <summary>
+        /// A child that writes its lines and then nothing at all, and is still
+        /// running until it is killed: a hung agent.
+        /// </summary>
+        public static StubPipedProcess Hanging(string output) =>
+            new(output, new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously));
+
         /// <summary>Everything written to the child's input.</summary>
         public StringWriter Written { get; } = new();
 
@@ -124,9 +141,40 @@ public sealed class StubProcessLauncher : IProcessLauncher
             return Task.CompletedTask;
         }
 
-        public void Kill() => Killed = true;
+        public void Kill()
+        {
+            Killed = true;
+            _untilKilled?.TrySetResult(-1);
+        }
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+
+        /// <summary>Scripted output that says nothing more after its lines until the child is killed, and then ends.</summary>
+        private sealed class HangingReader : TextReader
+        {
+            private readonly StringReader _lines;
+            private readonly Task _killed;
+
+            public HangingReader(string output, Task killed)
+            {
+                _lines = new StringReader(output);
+                _killed = killed;
+            }
+
+            public override async ValueTask<string?> ReadLineAsync(CancellationToken ct)
+            {
+                if (await _lines.ReadLineAsync(ct).ConfigureAwait(false) is { } line)
+                {
+                    return line;
+                }
+
+                await _killed.WaitAsync(ct).ConfigureAwait(false);
+
+                return null;
+            }
+
+            public override string? ReadLine() => _lines.ReadLine();
+        }
 
         /// <summary>Scripted output that waits once before it starts.</summary>
         private sealed class HeldReader : TextReader

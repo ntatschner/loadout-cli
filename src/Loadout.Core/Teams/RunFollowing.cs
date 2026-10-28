@@ -86,8 +86,16 @@ public sealed record RunFollowing(RunSummary Run, BlockedLead? Lead, IReadOnlyDi
             text.AppendLine($"- Criteria it had not met: {string.Join("; ", unmet.Select(one => one.Criterion))}");
         }
 
+        var stuck = Run.Stuck.Select(one => one.Node).ToHashSet(StringComparer.Ordinal);
+
         foreach (var (node, branch) in Unmerged)
         {
+            if (stuck.Contains(node))
+            {
+                text.AppendLine($"- {node} went silent twice and was stopped before it finished, leaving branch `{branch}` unfinished. Merge it if it got far enough, or have it finished.");
+                continue;
+            }
+
             text.AppendLine($"- {node} left work on branch `{branch}`, which was never merged. Look at it before asking for the same work again.");
         }
 

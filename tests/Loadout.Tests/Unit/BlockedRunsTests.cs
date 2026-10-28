@@ -62,6 +62,7 @@ public sealed class BlockedRunsTests
     [InlineData("the lead reported done with 1 of 2 criteria unmet", "failed")]
     [InlineData("", "unrecorded")]
     [InlineData("abandoned: nothing was driving it", "dead")]
+    [InlineData("stalled: the lead wrote nothing for longer than 20m, twice", "stalled")]
     public void Every_ending_short_of_done_is_held(string ended, string kind)
     {
         BlockedRuns.KindOf(Run(ended)).Should().Be(kind);
@@ -78,6 +79,45 @@ public sealed class BlockedRunsTests
         // Stopped and needs-decision already belong to somebody: the person
         // who stopped it, and the person being asked.
         BlockedRuns.KindOf(Run(ended)).Should().BeNull();
+    }
+
+    [Fact]
+    public void A_stalled_run_suggests_carrying_on_the_first_time_and_setting_aside_once_its_chain_stalled_before()
+    {
+        var stalled = Run("stalled: the lead wrote nothing for longer than 20m, twice");
+
+        var first = BlockedRuns.Judge(stalled, null, chain: 2)!;
+        first.Kind.Should().Be("stalled");
+        first.Suggested.Action.Should().Be(BlockedAction.CarryOn);
+        first.Suggested.Rule.Should().Be("stalled");
+
+        var again = BlockedRuns.Judge(stalled, null, chain: 2, stalledBefore: true)!;
+        again.Suggested.Action.Should().Be(BlockedAction.SetAside);
+        again.Suggested.Rule.Should().Be("stalled-again");
+        again.Offered.Should().Contain(BlockedAction.CarryOn, "the person can still choose it");
+    }
+
+    [Fact]
+    public void A_done_run_with_a_worker_left_stuck_is_held_once_it_has_ended_naming_the_branch()
+    {
+        RunNode[] nodes =
+        [
+            new("lead", "role.project-lead", "done", 2, 0.10m, At),
+            new("implementer", "role.implementer", "stuck", 1, 0.02m, At, Branch: "teams-x-implementer"),
+        ];
+
+        var done = Run("done") with { Nodes = nodes };
+
+        var judged = BlockedRuns.Judge(done, null)!;
+        judged.Kind.Should().Be("unfinished");
+        judged.Suggested.Action.Should().Be(BlockedAction.CarryOn);
+        judged.Suggested.Reason.Should().Contain("implementer").And.Contain("'teams-x-implementer'");
+
+        // Counted towards the chain: past the limit, carrying on stops being the suggestion.
+        BlockedRuns.Judge(done, null, chain: BlockedRuns.ChainLimit)!.Suggested.Rule.Should().Be("chain");
+
+        // While it is still going, the lead is the one deciding.
+        BlockedRuns.KindOf(Run(null, running: true) with { Nodes = nodes }).Should().BeNull();
     }
 
     [Fact]

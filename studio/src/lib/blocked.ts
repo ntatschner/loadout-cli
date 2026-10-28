@@ -12,7 +12,7 @@ export interface BlockedRead {
   project: string | null;
   task: string | null;
   goal: string;
-  kind: 'blocked' | 'failed' | 'limited' | 'unrecorded' | 'dead' | 'handover';
+  kind: 'blocked' | 'failed' | 'limited' | 'unrecorded' | 'dead' | 'handover' | 'stalled' | 'unfinished';
   ended: string | null;
   cost: number;
   budget: number | null;

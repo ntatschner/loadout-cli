@@ -886,6 +886,10 @@ public sealed partial class TeamRunner : ITeamRunner
     /// <summary>The ending written when the process running the run was stopped mid-round.</summary>
     internal const string ProcessStopped = "stopped with the process running it";
 
+    /// <summary>The ending written when the lead went silent, was started again, and went silent again.</summary>
+    internal static string Stalled(TimeSpan? quiet) =>
+        $"stalled: the lead wrote nothing for longer than {TeamDuration.Spell(quiet ?? TeamRules.DefaultQuietLimit)}, twice";
+
     /// <summary>
     /// The category an ending falls into, written down beside it.
     /// </summary>
@@ -2180,7 +2184,7 @@ public sealed partial class TeamRunner : ITeamRunner
         /// the wrong way means waiting for exactly the spend somebody is trying
         /// to stop.
         /// </remarks>
-        public HeadlessSession? Steering { get; init; }
+        public HeadlessSession? Steering { get; set; }
 
         public async Task SawAsync(HeadlessEvent evt, CancellationToken ct)
         {

@@ -15,6 +15,13 @@ public sealed record HeadlessTurn(
     HeadlessResult? Result,
     decimal CostUsd)
 {
+    /// <summary>
+    /// Whether the turn was given up on because the agent wrote nothing for
+    /// longer than it was allowed. The agent is still running, and whoever
+    /// asked for the limit decides what to do with it.
+    /// </summary>
+    public bool Silent { get; init; }
+
     /// <summary>Whether the agent finished the turn, as opposed to going away mid-way.</summary>
     public bool Completed => Result is not null;
 

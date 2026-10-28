@@ -31,6 +31,8 @@ export function runWord(run: Run): string {
       return 'stopped';
     case 'abandoned':
       return 'abandoned';
+    case 'stalled':
+      return 'stalled';
     default:
       return run.ended ? 'stopped' : 'idle';
   }
@@ -48,6 +50,8 @@ export function livenessOf(run: Run): string | null {
       return 'possibly not responding';
     case 'unreadable':
       return 'owner unreadable';
+    case 'silent':
+      return run.owner ? `silent for an hour or more · pid ${run.owner.pid}` : 'silent for an hour or more';
     default:
       return null;
   }
@@ -188,6 +192,8 @@ export function nodeWord(state: string, activity: string, runWaiting = false): s
       return 'needs a decision';
     case 'ended':
       return 'stopped';
+    case 'stuck':
+      return 'stuck';
     default:
       return activity === 'working' ? 'working' : 'idle';
   }

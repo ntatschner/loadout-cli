@@ -150,6 +150,24 @@ public sealed class RunCloserTests : IDisposable
     }
 
     [Fact]
+    public void Close_refuses_a_held_run_however_long_it_has_been_silent_and_names_the_process_to_end()
+    {
+        // Silent for two hours under a live process: likely hung, but still
+        // held, and an ending written under it is one it may contradict.
+        var directory = Quiet(Write(Started, Lead, Worker));
+        _owners.Script(directory, new OwnerReading.Held(_owners.Owner));
+        var before = File.ReadAllText(Journal(directory));
+
+        var refused = Closer().Close(RunId, confirmed: true, "test");
+
+        refused.Failed.Should().BeTrue();
+        refused.ExitCode.Should().Be(ExitCode.PolicyViolation);
+        refused.Error.Should().Contain($"process {_owners.Owner.ProcessId}").And.Contain("end that process first");
+        File.ReadAllText(Journal(directory)).Should().Be(before);
+        _owners.Taken.Should().BeEmpty();
+    }
+
+    [Fact]
     public void Close_of_old_quiet_run_needs_confirmation()
     {
         var directory = Quiet(Write(Started, Lead));

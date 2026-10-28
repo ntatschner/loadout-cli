@@ -115,7 +115,8 @@ internal static class TeamStyle
         "run.started" or "run.finished" or "round.started" or "run.budget" => "bold",
         "node.asked" => "yellow",
         "node.answered" or "permission.asked" => entry.Yes("allowed") ? "green" : "red",
-        "node.failed" or "report.unreadable" or "request.refused" => "red",
+        "node.failed" or "report.unreadable" or "request.refused" or "node.stuck" or "run.stalled" => "red",
+        "node.silent" or "node.retried" => "yellow",
         "node.launched" => "blue",
         _ => null,
     };
@@ -156,13 +157,17 @@ internal static class TeamStyle
         Liveness.Finished => "finished",
         Liveness.NotResponding => "not-responding",
         Liveness.PossiblyNotResponding => "possibly-not-responding",
+        Liveness.Silent => "silent",
         _ => "live",
     };
 
-    /// <summary>Who last drove a run, for --json, or null when that is not known.</summary>
-    internal static object? OwnerJson(Liveness liveness) => liveness is Liveness.NotResponding { LastOwner: { } owner }
-        ? new { pid = owner.ProcessId, machine = owner.Machine, startedAt = owner.StartedAt }
-        : null;
+    /// <summary>Who last drove a run, or holds one that has gone silent, for --json, or null when that is not known.</summary>
+    internal static object? OwnerJson(Liveness liveness) => liveness switch
+    {
+        Liveness.NotResponding { LastOwner: { } owner } => new { pid = owner.ProcessId, machine = owner.Machine, startedAt = owner.StartedAt },
+        Liveness.Silent { Owner: { } owner } => new { pid = owner.ProcessId, machine = owner.Machine, startedAt = owner.StartedAt },
+        _ => null,
+    };
 
     /// <summary>Whether nothing, or possibly nothing, is driving the run.</summary>
     internal static bool Unowned(Liveness liveness) =>
@@ -180,10 +185,19 @@ internal static class TeamStyle
             $"[red]not responding[/] (last seen {TeamStatusCommand.Elapsed(now - run.LastSeen)} ago)",
         Liveness.PossiblyNotResponding possibly =>
             $"[yellow]possibly not responding[/] (quiet for {TeamStatusCommand.Elapsed(possibly.Quiet)})",
+        Liveness.Silent silent =>
+            $"[yellow]running, but silent[/] (nothing written for {TeamStatusCommand.Elapsed(silent.Quiet)}"
+            + (silent.Owner is { } owner ? $", still held by pid {owner.ProcessId})" : ")"),
         _ => null,
     };
 
-    /// <summary>The line saying how to end a run nothing drives.</summary>
-    internal static string CloseHint(string runId) =>
-        $"[dim]End it with:[/] loadout team runs close {Markup.Escape(runId)}";
+    /// <summary>The line saying how to end a run nothing drives, or one whose driver has gone silent.</summary>
+    internal static string CloseHint(string runId, Liveness? liveness = null) => liveness is Liveness.Silent silent
+        ? "[dim]A node may have hung, and a halt waits for a turn that is not coming back. If it has, end "
+            + (silent.Owner is { } owner
+                ? $"process {owner.ProcessId} (started {owner.StartedAt.ToLocalTime():yyyy-MM-dd HH:mm})"
+                : "the loadout process running it")
+            + " - every run that process drives stops with it - then close it with:[/] "
+            + $"loadout team runs close {Markup.Escape(runId)}"
+        : $"[dim]End it with:[/] loadout team runs close {Markup.Escape(runId)}";
 }
