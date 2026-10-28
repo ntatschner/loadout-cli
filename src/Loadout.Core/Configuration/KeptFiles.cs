@@ -48,21 +48,38 @@ public readonly record struct FileStamp(string Text, bool Settled)
 /// What is handed out is a copy, made by the function given, so a caller
 /// changing what it was given changes nothing kept.
 /// </para>
+/// <para>
+/// What is kept is shared by every instance of one <typeparamref name="T"/>
+/// in the process. Kept on the instance, it lasted one call inside the
+/// daemon, which builds each request services of its own, and the read trace
+/// found the daemon reading one idea hundreds of times while it changed a few.
+/// With <see cref="Loadout.Core.Reading.SharedReaders"/> off, each instance
+/// keeps its own again.
+/// </para>
 /// </remarks>
 /// <typeparam name="T">What each file holds.</typeparam>
 public sealed class KeptFiles<T>
     where T : class
 {
+    private static readonly ConcurrentDictionary<string, (string Stamp, string Revision, T Value)> Shared = new(StringComparer.Ordinal);
+
     private readonly YamlStore _yaml;
     private readonly Func<T> _empty;
     private readonly Func<T, T> _copy;
-    private readonly ConcurrentDictionary<string, (string Stamp, string Revision, T Value)> _kept = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, (string Stamp, string Revision, T Value)> _kept;
 
     public KeptFiles(YamlStore yaml, Func<T> empty, Func<T, T> copy)
+        : this(yaml, empty, copy, Loadout.Core.Reading.SharedReaders.Enabled)
+    {
+    }
+
+    /// <summary>Creates one that shares what it keeps with the process, or keeps its own.</summary>
+    internal KeptFiles(YamlStore yaml, Func<T> empty, Func<T, T> copy, bool shared)
     {
         _yaml = yaml;
         _empty = empty;
         _copy = copy;
+        _kept = shared ? Shared : new(StringComparer.Ordinal);
     }
 
     /// <summary>A file as it stands, from what was kept when it has not changed since.</summary>
