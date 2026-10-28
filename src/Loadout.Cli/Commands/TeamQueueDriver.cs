@@ -49,6 +49,7 @@ public sealed class TeamQueueDriver
     private readonly IRepositoryHost _host;
     private readonly IPullRequestReader _pulls;
     private readonly ILandingService _landings;
+    private readonly IDeliveryService _delivery;
     private readonly IWorkspaceManager _workspace;
     private readonly IPlatformPaths _paths;
     private readonly TimeProvider _time;
@@ -65,6 +66,7 @@ public sealed class TeamQueueDriver
         IRepositoryHost host,
         IPullRequestReader pulls,
         ILandingService landings,
+        IDeliveryService delivery,
         IWorkspaceManager workspace,
         IPlatformPaths paths,
         TimeProvider time)
@@ -80,6 +82,7 @@ public sealed class TeamQueueDriver
         _host = host;
         _pulls = pulls;
         _landings = landings;
+        _delivery = delivery;
         _workspace = workspace;
         _paths = paths;
         _time = time;
@@ -683,8 +686,7 @@ public sealed class TeamQueueDriver
     }
 
     /// <summary>A pull request's number from its address, or null.</summary>
-    internal static int? Number(string url) =>
-        url.TrimEnd('/').Split('/').LastOrDefault() is { } last && int.TryParse(last, out var number) ? number : null;
+    internal static int? Number(string url) => DeliveryService.Number(url);
 
     /// <summary>
     /// One look at every team's queue: settle what ran, notice merges, and in
@@ -726,6 +728,13 @@ public sealed class TeamQueueDriver
             var opened = window is null ? null : ScheduleService.Window(window, _time.GetUtcNow());
 
             await WindowAsync(team, window, opened, firing, say, tell, ct).ConfigureAwait(false);
+        }
+
+        // Every landing with a pull request, not only a queued run's own: a
+        // node branch opened from the waiting list has no queue run to check.
+        if (await _delivery.MergedAsync(ct).ConfigureAwait(false) is > 0 and var landed)
+        {
+            say($"{landed} waiting branch(es) merged");
         }
     }
 
