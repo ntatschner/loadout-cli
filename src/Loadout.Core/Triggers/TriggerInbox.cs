@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Loadout.Core.Diagnostics;
 using Loadout.Models.Triggers;
 
 namespace Loadout.Core.Triggers;
@@ -158,6 +159,7 @@ public sealed class TriggerInbox
 
             try
             {
+                using var trace = ReadLedger.Begin(file.FullName);
                 if (JsonSerializer.Deserialize<TriggerAsk>(File.ReadAllText(file.FullName), TriggerJournal.Json) is { } one
                     && one.Id == id)
                 {
@@ -214,6 +216,7 @@ public sealed class TriggerInbox
 
         try
         {
+            using var trace = ReadLedger.Begin(path);
             var answer = JsonSerializer.Deserialize<TriggerAnswer>(File.ReadAllText(path), TriggerJournal.Json);
             Delete(path);
 

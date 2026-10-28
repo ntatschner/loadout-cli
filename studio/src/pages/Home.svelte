@@ -10,12 +10,14 @@
   import TubeMap from '../lib/components/TubeMap.svelte';
   import LineStrip from '../lib/components/LineStrip.svelte';
   import NetworkStatus from '../lib/components/NetworkStatus.svelte';
+  import MapFilterBar from '../lib/components/MapFilterBar.svelte';
   import Core from './Core.svelte';
   import Panel from './Panel.svelte';
   import { actionsFor } from '../lib/actions';
   import { command } from '../lib/commands';
   import { LENS_PANELS, MAP_PANELS, PANEL_NAMES, hide, move, place, readLayout, saved, show, type Layout } from '../lib/layout';
-  import { clockOf, hiddenOf, inFlight, type Work } from '../lib/lines';
+  import { clockOf, hiddenOf, type Work } from '../lib/lines';
+  import { PRESETS, filterLines, filterOf, hiddenNote, keysOf, presetOf, projectsIn, type MapFilter } from '../lib/mapFilter';
   import { router } from '../lib/router.svelte';
   import { reveal, revealParts } from '../lib/reveal.svelte';
   import { rankUrgent, wordFor } from '../lib/signals';
@@ -44,22 +46,45 @@
   });
 
   const lines = $derived(studio.lines);
-  const focus = $derived(lines.find((line) => line.id === focusId) ?? rankUrgent(lines)[0] ?? lines[0]);
-  const index = $derived(focus ? lines.indexOf(focus) : -1);
-  const ranked = $derived(rankUrgent(lines));
 
-  // The tube map alone narrows to work in flight; every other panel keeps
-  // the lot. Chosen here at once, and kept as studio-map-scope.
-  let scopeChosen = $state<'inflight' | 'all' | null>(null);
-  const scope = $derived(scopeChosen ?? studio.prefs?.mapScope ?? 'inflight');
-  const drawn = $derived(scope === 'all' ? lines : inFlight(lines, studio.now));
+  // The filters narrow the Map and the Lens alike; the header's count, the
+  // network status and the spend keep the lot. Chosen here at once, and kept
+  // as studio-map-kinds, studio-map-states and studio-map-projects.
+  let filterChosen = $state<MapFilter | null>(null);
+  const filter = $derived(filterChosen ?? filterOf(studio.prefs));
+  const filtered = $derived(filterLines(lines, filter, studio.now));
+  const drawn = $derived(filtered.drawn);
+  const note = $derived(hiddenNote(filtered.hidden));
   const hidden = $derived(hiddenOf(lines, drawn));
+  const waitingHidden = $derived(filtered.hidden.filter((line) => line.waiting).length);
   const pickedLine = $derived(drawn.find((line) => line.id === picked) ?? drawn[0]);
 
-  function scopeTo(next: 'inflight' | 'all') {
-    scopeChosen = next;
-    void studio.setPreference('studio-map-scope', next);
+  // A line asked for by name is shown even when the filters hide it, with
+  // the note: clearing filters somebody saved, unasked, would be a surprise.
+  const named = $derived(lines.find((line) => line.id === focusId));
+  const ranked = $derived(rankUrgent(drawn));
+  const focus = $derived(named ?? ranked[0] ?? drawn[0]);
+  const focusHidden = $derived(!!focus && !drawn.some((line) => line.id === focus.id));
+  const index = $derived(focus ? drawn.findIndex((line) => line.id === focus.id) : -1);
+
+  /** Writes what changed. In flight is the three keys unset, as a fresh config has them. */
+  function filterTo(next: MapFilter) {
+    const was = keysOf(filter);
+    const inflight = presetOf(next) === 'inflight';
+
+    filterChosen = next;
+
+    keysOf(next).forEach(([key, value], i) => {
+      if (inflight || value !== was[i][1]) {
+        void studio.setPreference(key, inflight ? '' : value);
+      }
+    });
   }
+
+  const everything = (event: Event) => {
+    event.preventDefault();
+    filterTo(PRESETS.all);
+  };
 
   const lens: Layout = $derived(readLayout(studio.prefs?.layoutLens, LENS_PANELS));
   const map: Layout = $derived(readLayout(studio.prefs?.layoutMap, MAP_PANELS));
@@ -120,8 +145,8 @@
   }
 
   function step(by: number) {
-    if (lines.length) {
-      focusId = lines[(index + by + lines.length) % lines.length].id;
+    if (drawn.length) {
+      focusId = drawn[(index + by + drawn.length) % drawn.length].id;
     }
   }
 </script>
@@ -159,6 +184,14 @@
   </div>
 {/if}
 
+{#snippet hiddenLink()}
+  <p class="calm small">{note}. <a href="#home" onclick={everything}>Show everything</a></p>
+{/snippet}
+
+{#if lines.length}
+  <MapFilterBar {filter} projects={projectsIn(lines, filter.projects)} onchange={filterTo} />
+{/if}
+
 {#if !lines.length}
   <div class="placeholder">
     <p class="calm">Nothing is in flight: no session, team run, idea being shaped or task being done. Start a session from here, or from a terminal.</p>
@@ -188,10 +221,13 @@
             dragging = null;
           }}
           number={view === 'lens' ? `0${LENS_PANELS.indexOf(panel as never) + 1}` : ''}
-          count={panel === 'needs' ? ranked.length : panel === 'all' ? lines.length : undefined}
+          count={panel === 'needs' ? ranked.length : panel === 'all' ? drawn.length : undefined}
         >
           {#if panel === 'focus' && focus}
             <div class="halo-col">
+              {#if focusHidden}
+                <p class="calm small">The filters hide this one; it is shown because it was asked for. {note}. <a href="#home" onclick={everything}>Show everything</a></p>
+              {/if}
               {#if editing}
                 <div class="halostyle" role="radiogroup" aria-label="Halo style">
                   {#each ['orbit', 'gyroscope'] as style (style)}
@@ -222,11 +258,12 @@
               {/if}
               <div class="stepper">
                 <HaloButton label="Prev" size="small" onpress={() => step(-1)} />
-                {index + 1} of {lines.length}
+                {index < 0 ? '–' : index + 1} of {drawn.length}
                 <HaloButton label="Next" size="small" onpress={() => step(1)} />
               </div>
             </div>
           {:else if panel === 'needs'}
+            {#if note}{@render hiddenLink()}{/if}
             {#if !ranked.length}
               <p class="calm">Nothing needs you.</p>
             {:else}
@@ -245,7 +282,7 @@
             {/if}
           {:else if panel === 'all'}
             <ul class="rows" aria-label="Everything">
-              {#each lines as line (line.id)}
+              {#each drawn as line (line.id)}
                 {@const top = ranked[0]}
                 <li>
                   <button
@@ -302,19 +339,11 @@
           {:else if panel === 'status'}
             <NetworkStatus {lines} clock={clockOf(new Date(studio.now).toISOString())} {oldest} />
           {:else if panel === 'map'}
-            <div class="mapscope">
-              <div class="views" role="group" aria-label="What the map draws">
-                <button type="button" aria-pressed={scope === 'inflight' ? 'true' : 'false'} onclick={() => scopeTo('inflight')}>In flight</button>
-                <button type="button" aria-pressed={scope === 'all' ? 'true' : 'false'} onclick={() => scopeTo('all')}>Everything</button>
-              </div>
-              {#if scope === 'inflight' && hidden}
-                <span class="calm small">{lines.length - drawn.length} hidden</span>
-              {/if}
-            </div>
             {#if drawn.length}
+              {#if note}{@render hiddenLink()}{/if}
               <TubeMap lines={drawn} bind:picked idleAfter={studio.idleAfter} />
             {:else}
-              <p class="calm">Nothing in flight. {hidden} {lines.length - drawn.length === 1 ? 'is' : 'are'} off the map. <a href="#home" onclick={(event) => { event.preventDefault(); scopeTo('all'); }}>Show everything</a></p>
+              <p class="calm">Nothing to draw. {hidden} {lines.length - drawn.length === 1 ? 'is' : 'are'} hidden by the filters{waitingHidden ? `, ${waitingHidden} waiting on you` : ''}. <a href="#home" onclick={everything}>Show everything</a></p>
             {/if}
           {:else if panel === 'strip' && pickedLine}
             <LineStrip

@@ -24,7 +24,9 @@ internal static class StudioPreferences
         idleAfter = studio?.IdleAfter ?? 10,
         layoutLens = studio?.LayoutLens,
         layoutMap = studio?.LayoutMap,
-        mapScope = studio?.MapScope ?? "inflight",
+        mapKinds = studio?.MapKinds,
+        mapStates = studio?.MapStates,
+        mapProjects = studio?.MapProjects,
         panels = new { lens = StudioLayouts.Lens, map = StudioLayouts.Map },
         views = ListViews.All.ToDictionary(view => view.Name, view => ListViews.Saved(studio, view.Name)),
     };

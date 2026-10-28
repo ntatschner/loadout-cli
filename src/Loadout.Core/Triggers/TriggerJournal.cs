@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Loadout.Core.Diagnostics;
 using Loadout.Platform.Abstractions;
 
 namespace Loadout.Core.Triggers;
@@ -434,6 +435,7 @@ public sealed class TriggerJournal
 
         try
         {
+            using var trace = ReadLedger.Begin(file);
             using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             using var reader = new StreamReader(stream, Encoding.UTF8);
 

@@ -210,7 +210,8 @@ public sealed class ConfigGetCommand : AsyncCommand<ConfigGetCommand.Settings>
         entry.IsMachineLocal ? "machines.yaml" : "config.yaml");
 
     internal static string UnknownKeyMessage(string key) =>
-        $"'{key}' is not a known setting. Available: "
+        ConfigKeys.Retired(key)
+        ?? $"'{key}' is not a known setting. Available: "
         + string.Join(", ", ConfigKeys.All.Select(e => e.Key));
 }
 

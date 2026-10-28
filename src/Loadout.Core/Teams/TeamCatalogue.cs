@@ -1,4 +1,5 @@
 using System.Text;
+using Loadout.Core.Diagnostics;
 using Loadout.Core.Instructions;
 using Loadout.Models.Instructions;
 using Loadout.Models.Teams;
@@ -434,6 +435,15 @@ public sealed class TeamCatalogue : ITeamCatalogue
             Error("team-recommendation-wait", $"Team '{team.Name}' sets take_recommendation_after to '{after}', which is not a duration. Write it as 30m, 2h or 1d.");
         }
 
+        // Read as the default otherwise, which would leave the author thinking
+        // they had given a slow node an hour when it has twenty minutes.
+        if (team.Rules.QuietLimit is { Length: > 0 } quiet
+            && !TeamDuration.IsNever(quiet)
+            && TeamDuration.Parse(quiet) is null)
+        {
+            Error("team-quiet-limit", $"Team '{team.Name}' sets quiet_limit to '{quiet}', which is not a duration. Write it as 20m, 1h or never.");
+        }
+
         if (team.Rules.OnTimeout is { Length: > 0 } onTimeout && TeamTimeout.Parse(onTimeout) is null)
         {
             Error("team-on-timeout", $"Team '{team.Name}' sets on_timeout to '{onTimeout}'. {TeamTimeout.Refusal(onTimeout)}");
@@ -514,6 +524,7 @@ public sealed class TeamCatalogue : ITeamCatalogue
 
             try
             {
+                using var trace = ReadLedger.Begin(file);
                 text = await File.ReadAllTextAsync(file, ct).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

@@ -208,6 +208,26 @@ public sealed class TeamRules
     /// limit and the budget still bound it, including under think-again.
     /// </remarks>
     public string? OnTimeout { get; set; }
+
+    /// <summary>
+    /// How long a node may go without writing anything before its turn is
+    /// taken as hung, as 20m, 1h or <c>never</c>. Empty means
+    /// <see cref="DefaultQuietLimit"/>.
+    /// </summary>
+    /// <remarks>
+    /// A turn that goes past it is killed and tried once more; a second
+    /// silence marks the node stuck. Time a node spends waiting on a person's
+    /// answer to its question is not counted.
+    /// </remarks>
+    public string? QuietLimit { get; set; }
+
+    /// <summary>The silence a node is allowed when the team file says nothing.</summary>
+    public static readonly TimeSpan DefaultQuietLimit = TimeSpan.FromMinutes(20);
+
+    /// <summary>The silence a node is allowed, or null where the team said never.</summary>
+    public TimeSpan? Quiet => TeamDuration.IsNever(QuietLimit)
+        ? null
+        : TeamDuration.Parse(QuietLimit) ?? DefaultQuietLimit;
 }
 
 /// <summary>What a run may spend, in three currencies.</summary>

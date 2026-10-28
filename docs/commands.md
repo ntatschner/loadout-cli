@@ -239,6 +239,26 @@ If the daemon is a different version, isn't running, or can't be reached
 within two seconds, the command runs where you typed it. To run everything
 here regardless, set `LOADOUT_LOCAL=1`.
 
+## Counting what Loadout reads
+
+Set `LOADOUT_READ_TRACE=1` and each Loadout process counts the files it reads:
+run journals, the event feed, transcripts, configuration, memory topics,
+session state and the rest. As it ends, and every minute while it runs, it
+writes a summary to `read-trace` under the state directory, named after the
+command, such as `20261028-182844-31396-team-runs.json`. The minute is there
+because the daemon is more often stopped than left to exit, and a stopped
+process writes nothing on the way out.
+
+Each read notes the file's length and last-write time, so the summary can tell
+a second read of the same contents from a read of new ones. `readsPerChange`
+is that figure: above one, a file was read again when nothing in it had
+changed. Files of the same kind, such as every run's journal, are grouped
+under one pattern, and the exact files are listed beside them.
+
+It counts only the reads it was put around, so treat it as a floor. A command
+handed to the daemon is counted in the daemon's summary, not its own; set
+`LOADOUT_LOCAL=1` as well to keep them apart. Off, it costs nothing.
+
 ## Filtering and sorting a list
 
 Every list takes one query, written on one line:

@@ -149,8 +149,14 @@ export interface Preferences {
   idleAfter: number;
   layoutLens: string | null;
   layoutMap: string | null;
-  /** What the tube map draws: work in flight, or every line. Missing from an older daemon, which reads as 'inflight'. */
+  /** The retired scope, sent only by a daemon older than the three filter keys: 'all' reads as Everything. */
   mapScope?: 'inflight' | 'all';
+  /** studio-map-kinds as set, comma-separated; null when unset, which reads as In flight's. Missing from an older daemon. */
+  mapKinds?: string | null;
+  /** studio-map-states as set, comma-separated; null when unset, which reads as In flight's. */
+  mapStates?: string | null;
+  /** studio-map-projects: the projects Home hides, '(no project)' among them for work outside any. */
+  mapProjects?: string | null;
   panels: { lens: string[]; map: string[] };
   /** Each list's saved query, by view; null where nothing is saved and the list opens with its default. */
   views?: Record<string, string | null>;
@@ -480,7 +486,7 @@ export interface Run {
   numbers?: RunNumbers;
   turns?: { at: string; node: string; round: number; attempt: number; exchanges: number; cost: number; denials: number; completed: boolean; status: string | null; outcome: string | null }[];
   /** Whether the process driving it is still there. Absent, or a word not here, reads as live. */
-  liveness?: 'live' | 'not-responding' | 'possibly-not-responding' | 'unreadable' | 'finished';
+  liveness?: 'live' | 'not-responding' | 'possibly-not-responding' | 'unreadable' | 'silent' | 'finished';
   /** The process that holds the run's owner lock, when it could be read. */
   owner?: { pid: number; machine: string; startedAt: string };
 }

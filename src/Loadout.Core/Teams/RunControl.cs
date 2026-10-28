@@ -1,3 +1,4 @@
+using Loadout.Core.Diagnostics;
 using Loadout.Models.Teams;
 
 namespace Loadout.Core.Teams;
@@ -64,6 +65,7 @@ public static class RunControl
         {
             var path = Path.Combine(directory, BudgetFile);
 
+            using var trace = ReadLedger.Begin(path);
             return File.Exists(path) && UsdCap.TryParse(File.ReadAllText(path), out var cap)
                 ? cap
                 : UsdCap.Unset;
@@ -132,6 +134,7 @@ public static class RunControl
             {
                 try
                 {
+                    using var trace = ReadLedger.Begin(file);
                     var text = File.ReadAllText(file);
 
                     if (!string.IsNullOrWhiteSpace(text))

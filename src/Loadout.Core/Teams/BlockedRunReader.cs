@@ -135,7 +135,14 @@ public sealed class BlockedRunReader
             return null;
         }
 
-        return BlockedRuns.Judge(run, Lead(run), Before(run).Count + 1, dead);
+        var before = Before(run);
+
+        return BlockedRuns.Judge(
+            run,
+            Lead(run),
+            before.Count + 1,
+            dead,
+            stalledBefore: before.Any(one => RunOutcomes.Of(one) == Loadout.Models.Teams.RunOutcome.Stalled));
     }
 
     /// <summary>The runs this one carries on from, oldest first, not including it.</summary>

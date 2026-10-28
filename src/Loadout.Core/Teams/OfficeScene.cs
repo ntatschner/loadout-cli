@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Loadout.Core.Diagnostics;
 
 namespace Loadout.Core.Teams;
 
@@ -480,6 +481,7 @@ public static class OfficeScenes
 
         try
         {
+            using var trace = ReadLedger.Begin(path);
             scene = JsonSerializer.Deserialize<OfficeScene>(File.ReadAllText(path));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

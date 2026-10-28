@@ -93,6 +93,9 @@ public static class ConfigKeys
         // own; how long things are kept is one question in any case. How long
         // a run waits for you joined it for the same two reasons: the machine's
         // page was full again, and it is the same question asked of a run.
+        // How long a session in Studio may go quiet joined it when the map's
+        // filters filled Studio's page, and it is that question asked of a
+        // session.
         public const string Keeping = "Waiting and keeping";
         public const string Accessibility = "Accessibility";
         public const string Studio = "Studio";
@@ -633,14 +636,32 @@ public static class ConfigKeys
             Group: Groups.Studio,
             WhenUnset: "the layout as drawn: Network status, the map, the picked line"),
 
-        new("studio-map-scope",
-            "What Studio's tube map draws: inflight (work going on, and failed runs and sessions for a day) or all",
-            (c, _) => c.Studio.MapScope ?? string.Empty,
-            (c, _, v) => c.Studio.MapScope = Optional(v, "inflight", "all"),
+        new("studio-map-kinds",
+            "Which kinds of work Studio's Map and Lens show: runs, sessions, ideas and tasks, comma-separated",
+            (c, _) => c.Studio.MapKinds ?? string.Empty,
+            (c, _, v) => c.Studio.MapKinds = Words(v, StudioMap.Kinds),
             false,
-            Sample: "all",
+            Sample: "runs, sessions",
             Group: Groups.Studio,
-            WhenUnset: "inflight: ideas, finished runs and sessions that ended cleanly stay off the map"),
+            WhenUnset: "runs, sessions and tasks, as In flight shows them"),
+
+        new("studio-map-states",
+            "Which states Studio's Map and Lens show: waiting, running, failed and ended, comma-separated",
+            (c, _) => c.Studio.MapStates ?? string.Empty,
+            (c, _, v) => c.Studio.MapStates = Words(v, StudioMap.States),
+            false,
+            Sample: "waiting, failed",
+            Group: Groups.Studio,
+            WhenUnset: "waiting, running and failed: nothing that has ended, as In flight shows it"),
+
+        new("studio-map-projects",
+            $"Projects Studio's Map and Lens hide, comma-separated, with {StudioMap.NoProject} for work outside any project",
+            (c, _) => c.Studio.MapProjects ?? string.Empty,
+            (c, _, v) => c.Studio.MapProjects = Names(v),
+            false,
+            Sample: $"starstats, {StudioMap.NoProject}",
+            Group: Groups.Studio,
+            WhenUnset: "every project shown, and work outside any project too"),
 
         new("studio-theme",
             "Studio's theme: dark, light, hc-dark or hc-light",
@@ -695,7 +716,7 @@ public static class ConfigKeys
             (c, _, v) => c.Studio.IdleAfter = v.Trim().Length == 0 ? null : Minutes(v),
             false,
             Sample: "10",
-            Group: Groups.Studio,
+            Group: Groups.Keeping,
             WhenUnset: "10"),
 
         new("studio-background-limit",
@@ -706,7 +727,7 @@ public static class ConfigKeys
             (c, _, v) => c.Studio.BackgroundLimit = v.Trim().Length == 0 ? null : Minutes(v),
             false,
             Sample: "60",
-            Group: Groups.Studio,
+            Group: Groups.Keeping,
             WhenUnset: "30. A scheduled wakeup goes by its own time instead"),
 
         // One per list that keeps its query. Checked against that list's
@@ -1051,6 +1072,26 @@ public static class ConfigKeys
         return string.Join(", ", pairs.Select(pair => string.Join("=", pair.Split('=', StringSplitOptions.TrimEntries))));
     }
 
+    /// <summary>
+    /// Some of the words allowed, comma-separated, kept in the order they are
+    /// listed in rather than typed in, or null for an empty value, which
+    /// unsets it.
+    /// </summary>
+    private static string? Words(string value, IReadOnlyList<string> allowed)
+    {
+        var given = SplitActions(value).Select(word => OneOf(word, [.. allowed])).ToHashSet(StringComparer.Ordinal);
+
+        return given.Count == 0 ? null : string.Join(", ", allowed.Where(given.Contains));
+    }
+
+    /// <summary>Names, comma-separated, each once, or null for an empty value, which unsets it.</summary>
+    private static string? Names(string value)
+    {
+        var names = SplitActions(value).Distinct(StringComparer.Ordinal).ToList();
+
+        return names.Count == 0 ? null : string.Join(", ", names);
+    }
+
     /// <summary>One of the values allowed, or null for an empty value, which unsets it.</summary>
     private static string? Optional(string value, params string[] allowed) =>
         value.Trim().Length == 0 ? null : OneOf(value, allowed);
@@ -1212,4 +1253,21 @@ public static class ConfigKeys
 
     public static Entry? Find(string key) =>
         All.FirstOrDefault(e => string.Equals(e.Key, key, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// What to use instead of a setting that has been retired, or null for a
+    /// key that never was one.
+    /// </summary>
+    /// <remarks>
+    /// Said rather than reported as unknown, so a script or a habit that still
+    /// sets the old key is told where the setting went instead of being shown
+    /// every key there is.
+    /// </remarks>
+    public static string? Retired(string key) =>
+        string.Equals(key.Trim(), "studio-map-scope", StringComparison.OrdinalIgnoreCase)
+            ? "'studio-map-scope' has been retired. Studio's Map and Lens are filtered by three settings now: "
+                + "studio-map-kinds, studio-map-states and studio-map-projects. What 'all' gave is "
+                + $"studio-map-kinds \"{string.Join(", ", StudioMap.Kinds)}\" and studio-map-states \"{string.Join(", ", StudioMap.States)}\"; "
+                + "unsetting all three gives In flight."
+            : null;
 }

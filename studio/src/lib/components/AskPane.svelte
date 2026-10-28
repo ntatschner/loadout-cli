@@ -13,10 +13,12 @@
     /** Asks the agent the request as it was typed. */
     onagent: (query: string) => void;
     approve: (plan: AskPlan, team: string | null, cap: string) => Promise<string>;
+    /** Called once a plan is approved. */
+    onapproved?: () => void;
     onclear: () => void;
   }
 
-  let { turns, asking, onrewrite, onagent, approve, onclear }: Props = $props();
+  let { turns, asking, onrewrite, onagent, approve, onapproved = undefined, onclear }: Props = $props();
 </script>
 
 <div class="ls-ask" aria-live="polite">
@@ -55,7 +57,7 @@
           </ol>
         {/if}
         {#if reply.plan}
-          <AskPlanCard plan={reply.plan} {approve} />
+          <AskPlanCard plan={reply.plan} {approve} {onapproved} />
         {/if}
         {#if reply.nearMisses.length}
           <ul class="near" aria-label="Closest requests Loadout can answer">

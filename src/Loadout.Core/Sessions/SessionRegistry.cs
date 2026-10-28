@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using Loadout.Core.Diagnostics;
 using Loadout.Platform.Abstractions;
 
 namespace Loadout.Core.Sessions;
@@ -340,6 +341,7 @@ internal sealed class SessionRegistry : ISessionRegistry
 
             try
             {
+                using var trace = ReadLedger.Begin(file);
                 entry = JsonSerializer.Deserialize<Entry>(
                     await File.ReadAllTextAsync(file, ct).ConfigureAwait(false));
             }

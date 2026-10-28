@@ -9,9 +9,11 @@
     plan: AskPlan;
     /** Carries the plan out and says what happened, or throws with why not. */
     approve: (plan: AskPlan, team: string | null, cap: string) => Promise<string>;
+    /** Called once a plan is approved, so the palette can take focus back. */
+    onapproved?: () => void;
   }
 
-  let { plan, approve }: Props = $props();
+  let { plan, approve, onapproved = undefined }: Props = $props();
 
   const uid = `ls-ap-${Math.random().toString(36).slice(2, 7)}`;
   // Seeded once from the plan; edited by the person from then on.
@@ -40,6 +42,9 @@
 
     try {
       done = await approve(plan, team || null, cap);
+      // Approve is held from here on, so focus left on it would go nowhere.
+      // A refusal leaves it where it is: the button can be pressed again.
+      onapproved?.();
     } catch (error) {
       failed = error instanceof Error ? error.message : String(error);
     } finally {

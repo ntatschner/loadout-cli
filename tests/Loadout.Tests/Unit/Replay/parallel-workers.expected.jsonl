@@ -12,17 +12,17 @@
 {"at":"<t>","run":"<run>","node":"implementer/2","kind":"node.turn","data":{"attempt":1,"completed":true,"turns":2,"cost":0.03,"subtype":"success","denials":0,"unparsed":0,"session":"impl-2"}}
 {"at":"<t>","run":"<run>","node":"implementer/2","kind":"report.checked","data":{"status":"done","outcome":"accepted","Reasons":[],"coverage":null,"goalUnderstood":null}}
 {"at":"<t>","run":"<run>","node":"implementer/2","kind":"node.ended","data":{"exit":0,"killed":false,"stderr":""}}
-{"at":"<t+19>","run":"<run>","node":null,"kind":"round.ended","data":{"round":1,"requests":2,"quiet":0}}
-{"at":"<t+20>","run":"<run>","node":null,"kind":"round.started","data":{"round":2,"of":5}}
-{"at":"<t+21>","run":"<run>","node":"lead","kind":"node.turn","data":{"attempt":1,"completed":true,"turns":2,"cost":0.04,"subtype":"success","denials":0,"unparsed":0,"session":"lead-1"}}
-{"at":"<t+22>","run":"<run>","node":"lead","kind":"report.checked","data":{"status":"done","outcome":"accepted","Reasons":[],"coverage":null,"goalUnderstood":null}}
-{"at":"<t+23>","run":"<run>","node":"lead","kind":"gate.reminded","data":{"pending":["reviewer decided nothing","verifier decided nothing"]}}
-{"at":"<t+24>","run":"<run>","node":null,"kind":"round.started","data":{"round":3,"of":5}}
-{"at":"<t+25>","run":"<run>","node":"lead","kind":"node.turn","data":{"attempt":1,"completed":true,"turns":2,"cost":0.00,"subtype":"success","denials":0,"unparsed":0,"session":"lead-1"}}
-{"at":"<t+26>","run":"<run>","node":"lead","kind":"report.checked","data":{"status":"done","outcome":"accepted","Reasons":[],"coverage":null,"goalUnderstood":null}}
-{"at":"<t+27>","run":"<run>","node":"lead","kind":"node.ended","data":{"exit":0,"killed":false,"stderr":""}}
-{"at":"<t+28>","run":"<run>","node":null,"kind":"gate.refused","data":{"gate":["reviewer","verifier"],"decisions":{}}}
-{"at":"<t+29>","run":"<run>","node":null,"kind":"run.finished","data":{"ended":"done","outcome":"done","cost":0.15,"rounds":3,"merged":[]}}
+{"at":"<t+20>","run":"<run>","node":null,"kind":"round.ended","data":{"round":1,"requests":2,"quiet":0}}
+{"at":"<t+21>","run":"<run>","node":null,"kind":"round.started","data":{"round":2,"of":5}}
+{"at":"<t+22>","run":"<run>","node":"lead","kind":"node.turn","data":{"attempt":1,"completed":true,"turns":2,"cost":0.04,"subtype":"success","denials":0,"unparsed":0,"session":"lead-1"}}
+{"at":"<t+23>","run":"<run>","node":"lead","kind":"report.checked","data":{"status":"done","outcome":"accepted","Reasons":[],"coverage":null,"goalUnderstood":null}}
+{"at":"<t+24>","run":"<run>","node":"lead","kind":"gate.reminded","data":{"pending":["reviewer decided nothing","verifier decided nothing"]}}
+{"at":"<t+25>","run":"<run>","node":null,"kind":"round.started","data":{"round":3,"of":5}}
+{"at":"<t+26>","run":"<run>","node":"lead","kind":"node.turn","data":{"attempt":1,"completed":true,"turns":2,"cost":0.00,"subtype":"success","denials":0,"unparsed":0,"session":"lead-1"}}
+{"at":"<t+27>","run":"<run>","node":"lead","kind":"report.checked","data":{"status":"done","outcome":"accepted","Reasons":[],"coverage":null,"goalUnderstood":null}}
+{"at":"<t+28>","run":"<run>","node":"lead","kind":"node.ended","data":{"exit":0,"killed":false,"stderr":""}}
+{"at":"<t+29>","run":"<run>","node":null,"kind":"gate.refused","data":{"gate":["reviewer","verifier"],"decisions":{}}}
+{"at":"<t+30>","run":"<run>","node":null,"kind":"run.finished","data":{"ended":"done","outcome":"done","cost":0.15,"rounds":3,"merged":[]}}
 {"task":{"slug":"demo","id":"team-<run>","state":"Doing","by":"team iterating-project","title":"Add --since to loadout usage.","note":"supervised, running"}}
 {"task":{"slug":"demo","id":"team-<run>","state":"Done","by":"team iterating-project","title":"Add --since to loadout usage.","note":"done; 3 round(s), $0.15. loadout team status <run>"}}
 {"files":["brief-implementer-1-1.json","brief-implementer-2-1.json","brief-lead.json","final-report.json","journal.jsonl","policy-implementer-1.json","policy-implementer-2.json","policy-lead.json","report-implementer-1-1.json","report-implementer-2-1.json","stream-implementer-1.jsonl","stream-implementer-2.jsonl","stream-lead.jsonl"]}

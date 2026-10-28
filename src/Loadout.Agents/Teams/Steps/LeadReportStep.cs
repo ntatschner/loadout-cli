@@ -29,9 +29,38 @@ internal sealed class LeadReportStep
     {
         var (team, console, autonomy, standing) = (run.Team, run.Console, run.Autonomy, run.Standing);
 
-        var turn = await _sessions.TurnAsync(run.Lead!, run.LeadBrief, run.Prompt, journal, ct).ConfigureAwait(false);
+        var turn = await _sessions.TurnAsync(
+            run.Lead!,
+            run.LeadBrief,
+            run.Prompt,
+            journal,
+            ct,
+            (conversation, token) => _sessions.StartAsync(
+                run, run.Request, team, run.LeadNode, run.LeadRole, run.LeadBrief, dryRun: false, token, conversation),
+            team.Rules.Quiet).ConfigureAwait(false);
+
         var report = turn.Report;
         run.Cost += turn.Cost;
+
+        // Started again after going silent: the run ends this one, not the
+        // one it began with, which has already gone.
+        if (turn.Launch is not null)
+        {
+            run.Lead = turn.Launch;
+        }
+
+        if (turn.Stuck)
+        {
+            // Nothing can go on without a lead, and a run that kept its lock
+            // with a hung lead under it read as running for ever.
+            run.Ended = TeamRunner.Stalled(team.Rules.Quiet);
+
+            await journal.WriteAsync("run.stalled", team.Lead, new { said = turn.Said }, ct).ConfigureAwait(false);
+
+            console.Note($"The lead went silent twice, so the run has stopped: {run.Ended}.");
+
+            return new LeadTurn(run.Ended, false, null);
+        }
 
         if (turn.Halted)
         {
