@@ -64,3 +64,4 @@ step, and every term explained the first time it appears.
 ## Internals
 
 - [Architecture and building](architecture.md) — the platform seam, the build, testing, signing
+- [What Loadout reads](reading-files.md) — how often each file is read again, and which are moving to a shared reader
