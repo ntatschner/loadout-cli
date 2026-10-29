@@ -1994,6 +1994,7 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 .ls-officepanel .close:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 
+
 /* ---------- Stage 14: what main's Studio built since the design ---------- */
 /* --- AskPane --- */
 .ls-ask { padding: 0 18px; }

@@ -1854,7 +1854,7 @@
       Promise.resolve(got).then(function (r) { if (picked === f.key) { paintBody(f, kind, r || {}); } }, function (err) { vbody.appendChild(h("p", { "class": "notice bad", text: "✕ It could not be read: " + (err && err.message || err) })); });
       vbody.appendChild(h("p", { "class": "empty", role: "status", text: "Reading…" }));
       var dl = NS.HaloButton({ label: "Download", size: "small", glyph: "↓", disabledReason: f.bytes === null ? "nothing is there now" : (f.change === "removed" ? "removed by this commit" : null), onPress: function () { said.textContent = "✓ Downloading " + base(f.path) + (f.loose ? ", as it is on disk now." : ", as " + f.commit + " left it."); if (o.onDownload) { o.onDownload(f); } } });
-      var cp = NS.HaloButton({ label: "Copy path", size: "small", onPress: function () { var full = (o.repository ? o.repository.replace(/[\\/]$/, "") + "/" : "") + f.path; try { navigator.clipboard.writeText(full); } catch (e) { /* the path is on screen either way */ } said.textContent = "✓ Copied " + full; } });
+      var cp = NS.HaloButton({ label: "Copy path", size: "small", onPress: function () { var full = (o.repository ? o.repository.replace(/[\\/]$/, "") + "/" : "") + f.path; var shown = function (ok) { said.textContent = ok ? "\u2713 Copied " + full : "Select the path to copy it."; }; try { var pr = navigator.clipboard.writeText(full); if (pr && pr.then) { pr.then(function () { shown(true); }, function () { shown(false); }); } else { shown(true); } } catch (e) { shown(false); } } });
       vfoot.appendChild(dl); vfoot.appendChild(cp);
       vfoot.appendChild(h("code", { "class": "ls-cmd", text: f.loose ? "In a terminal: $ cat " + f.path : "In a terminal: $ git -C " + (o.repository || "<repo>") + " show " + (f.change === "removed" ? f.commit + "~1" : f.commit) + ":" + f.path }));
     }
@@ -4146,6 +4146,7 @@
 })();
 
 
+
 /* ---------- Stage 14: what main's Studio built since the design ---------- */
 (function () {
   "use strict";
@@ -6329,6 +6330,7 @@
       }
 
       function paintSheet() {
+        if (!editing) { return; }
         keep(sheet, function () {
           sheet.textContent = "";
           var v = editing.values, changing = editing.changing;
