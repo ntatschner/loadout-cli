@@ -1,4 +1,4 @@
-<!-- @dsCard group="Sessions" height=760 width=1300 subtitle="The session page: the terminal first, details in a side panel that folds away" -->
+<!-- @dsCard group="Sessions" height=1140 width=1300 subtitle="The session page: the terminal first, details in a side panel that folds away: facts, status, events, actions" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -15,7 +15,7 @@
 </style>
 </head>
 <body class="ls">
-<div id="v" style="height: 700px; display: grid"></div>
+<div id="v" style="min-height: 700px; display: grid"></div>
 <script>
 (function () {
   var S = window.LoadoutStudio;
@@ -31,12 +31,21 @@
     [["  Passed! ", "fg-bright-green bold"], ["14 passed, 0 failed", "fg-green"]],
     [["● ", "fg-magenta"], ["The upload retries three times with backoff. Tests pass.", "fg-bright-white"]]
   ];
-  var V = S.SessionView({ line: { title: "add a retry to the upload step", where: "loadout-cli", agent: "Claude Code", mode: "implement", time: "21 min" },
-    terminal: { project: "loadout-cli", agent: "claude", sessionId: "3f9c2a1e", state: "approval", lines: OUT },
-    facts: [["Project", "loadout-cli"], ["Agent", "Claude Code"], ["Mode", "implement"], ["Running", "21 min"], ["Quiet", "1 min"], ["Tokens", "in 9,120 \u00b7 out 3,880"]],
-    loaded: [["foundation", "Change safety, Engineering core, \u2026"], ["language", "C#"], ["framework", ".NET"], ["specialists", "about 1,456 tokens, 12% of 12,000"]],
+  var STATUS = { version: 1, at: "2026-10-27T12:00:12Z", refreshSeconds: 30, terminal: "off", wrapping: false, model: "Opus 5.5",
+    context: { usedPercent: 42, inputTokens: 84000, windowSize: 200000, uncachedTokens: 1200, cacheReadTokens: 79800, cacheWriteTokens: 3000, outputTokens: 900 },
+    cost: { usd: 1.234, durationMs: 1260000, linesAdded: 40, linesRemoved: 7 }, limits: { fiveHour: { usedPercent: 61.5, resetsAt: "2026-10-27T14:10:00Z" }, sevenDay: null, spend: null },
+    project: "loadout-cli", specialists: ["role.implementer", "language.csharp"] };
+  var NOW = Date.parse("2026-10-27T12:00:20Z");
+  var V = S.SessionView({ line: { title: "add a retry to the upload step", where: "loadout-cli", agent: "claude", mode: "implement", time: "21 min" },
+    terminal: { project: "loadout-cli", agent: "claude", sessionId: "3f9c2a1e", state: "approval", lines: OUT, foot: S.StatusStrip ? S.StatusStrip({ status: STATUS, now: NOW }) : null },
+    facts: [["Project", "loadout-cli"], ["Agent", "claude"], ["Mode", "implement"], ["Task", "upload-retries"], ["Running", "21 min"], ["Quiet", "1 min"], ["Memory", "212 MB"], ["Windows", "2"], ["Drawn with", "webgl"]],
+    status: STATUS, now: NOW,
     events: [["14:06", "asked for approval"], ["14:02", "tests passed"], ["13:45", "started"]],
-    actions: [{ label: "End the session", kind: "danger", cmd: "stops the agent in this terminal" }] });
+    commands: [{ why: "Started with:", command: "$ loadout loadout-cli --task-id upload-retries --mode implement" }, { why: "Carry this conversation on in a terminal instead:", command: S.resumeCommand("3f9c2a1e", "loadout-cli") }],
+    note: "Sessions survive a reload of this page, not a restart of the daemon.",
+    actions: [{ label: "End the session", kind: "danger", cmd: "stops the agent in this terminal" }],
+    /* Another window holds the input: this one can take it over. */
+    button: { label: "Type here instead", cmd: "another window holds the input · takes it over", onPress: function () { V.setButton(null); } } });
   document.getElementById("v").appendChild(V.el);
 })();
 </script>

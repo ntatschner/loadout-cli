@@ -1,4 +1,4 @@
-<!-- @dsCard group="Modes" height=260 width=1200 subtitle="Every session as a tab, with its state, its key and whether it has written since you looked" -->
+<!-- @dsCard group="Modes" height=360 width=1200 subtitle="Every session as a tab: its state, context, key and new output; close, rename, move, hide, and a menu on each" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -15,27 +15,35 @@
 </style>
 </head>
 <body class="ls">
-<div id="a"></div><p class="out" role="status" id="out"></p>
+<p class="lab">Tabs</p>
+<div id="a"></div><p class="out" role="status" id="out">Right-click a tab, or Shift F10, for its menu; F2 renames; drag to move.</p>
+<p class="lab" style="margin-top: 70px">Only watching: no Rename, no End</p>
+<div id="w"></div>
 <script>
 (function () {
   var S = window.LoadoutStudio;
   var SESS = [
-    { id: "s1", title: "why is this postgres query so slow", word: "working", where: "starstats", agent: "claude" },
-    { id: "s2", title: "add a retry to the upload step", word: "needs approval", where: "loadout-cli", agent: "claude", unread: true },
-    { id: "s3", title: "tidy the deploy script", word: "idle", where: "starstats", agent: "codex" },
-    { id: "s4", title: "review the memory compress change", word: "working", where: "loadout-cli", agent: "claude", unread: true }
+    { id: "s1", hid: "4f2a9c", title: "why is this postgres query so slow", word: "working", where: "starstats", agent: "claude", project: "starstats", launchTitle: "why is this postgres query so slow", namesAgent: true, context: 42 },
+    { id: "s2", hid: "8b31d0", title: "upload retries", word: "needs approval", where: "loadout-cli", agent: "claude", project: "loadout-cli", launchTitle: "add a retry to the upload step", namesAgent: true, unread: true, context: 78 },
+    { id: "s3", hid: "c07e55", title: "tidy the deploy script", word: "ended", where: "starstats", agent: "codex", project: "starstats", ended: true },
+    { id: "s4", hid: "e91f02", title: "review the memory compress change", word: "working", where: "loadout-cli", agent: "claude", project: "loadout-cli", unread: true, context: 93 }
   ];
-  var LINES = {
-    s1: [[["› ", "fg-cyan"], ["loadout starstats --task \"why is this postgres query so slow\" --mode investigate", ""]], [["● ", "fg-green"], ["Running ", "bold"], ["EXPLAIN ANALYZE on the daily totals query", "fg-blue"]], [["  Seq Scan on events  (rows=1,840,211)", "fg-bright-black"]]],
-    s2: [[["● ", "fg-green"], ["Edit ", "bold"], ["src/Upload/Uploader.cs", "fg-blue"]], [["  Passed! ", "fg-bright-green bold"], ["14 passed, 0 failed", "fg-green"]], [["? Overwrite docs/images/dashboard-office.png?", "fg-yellow bold"]]],
-    s3: [[["● ", "fg-green"], ["Read ", "bold"], ["deploy/deploy.sh", "fg-blue"]]],
-    s4: [[["● ", "fg-green"], ["Read ", "bold"], ["src/Loadout.Core/Memory/Compress.cs", "fg-blue"]], [["● ", "fg-magenta"], ["The compress step keeps the newest entry when two collide.", "fg-bright-white"]]]
-  };
-  var STATE = { s1: "working", s2: "approval", s3: "idle", s4: "working" };
-  function term(id) { var s = SESS.filter(function (x) { return x.id === id; })[0]; return S.Terminal({ title: s.title, project: s.where, agent: s.agent, state: STATE[id], lines: LINES[id] }); }
-  var cur = "s1";
-  function draw() { var a = document.getElementById("a"); a.textContent = ""; a.appendChild(S.SessionTabs({ sessions: SESS, current: cur, onPick: function (id) { cur = id; draw(); a.querySelector('[data-id="' + id + '"]').focus(); document.getElementById("out").textContent = "Showing " + id; }, onNew: function () { document.getElementById("out").textContent = "Opens the launch sheet"; } })); }
-  draw();
+  var HIDDEN = [{ id: "s5", hid: "5d4c11", title: "watch the nightly build", word: "idle", where: "loadout-cli", agent: "claude", project: "loadout-cli" }];
+  var out = document.getElementById("out");
+  function said(t) { out.textContent = t; }
+  var T = S.SessionTabs({ sessions: SESS, hidden: HIDDEN, current: "s1",
+    onPick: function (id) { said("Showing " + id); },
+    onMaximise: function (id) { said("Shows " + id + " alone"); },
+    onNew: function () { said("Opens the launch sheet"); },
+    onMove: function (order) { said("New order: " + order.join(", ") + " · this browser only"); },
+    onRename: function (id, name) { said(name === null ? "Back to its launch name" : "Renamed to " + name); },
+    onHide: function (id) { said("Hidden from this browser's strip: " + id + " · it still runs"); },
+    onUnhide: function (id) { said("Back on the strip: " + id); },
+    onClear: function (id) { said("Cleared " + id + " from this browser"); },
+    onEnd: function (id) { said("$ loadout session end " + id + " --yes"); } });
+  document.getElementById("a").appendChild(T);
+  var W = S.SessionTabs({ label: "Sessions, only watching", changes: false, sessions: SESS.slice(0, 2), current: "s2", onPick: function () {} });
+  document.getElementById("w").appendChild(W);
 })();
 </script>
 </body>

@@ -13,11 +13,17 @@ Terminal is the agent's own screen inside Studio: a slim bar saying what the ses
 
 - The session's Signal, then project and agent, then the size (80 × 24).
 - Text size A− and A+, and Fit, which scales 80 columns to the width. On a phone, Fit is on: the terminal keeps 80 columns and scales down; zooming in scrolls inside the terminal, never the page.
-- While the terminal has focus, the bar says "Ctrl+] leaves the terminal".
+- While the terminal has focus, the bar says "Ctrl+] leaves the terminal" and "Ctrl+V paste · Alt+V image · right-click copy or paste".
+- Where the browser refuses the clipboard (or has none), the bar says "The browser refused the clipboard", in the Bad colour, as an alert, so a copy or paste that did nothing says why.
+
+## The foot
+
+- `foot` (or `setFoot(node)`) puts a row under the screen: the session's StatusStrip, as main's Terminal takes it.
 
 ## Typing
 
-- Keys go straight to the agent, Tab and arrows included, as in a real terminal. Ctrl+] hands focus back to the page (the next control, or `leaveTo`), so a keyboard user is never stuck.
+- Keys go straight to the agent, Tab and arrows included, as in a real terminal. Ctrl+] hands focus back to the page (`leaveTo`; else a cancelable `leaveterminal` event the page around answers, as TermDeck does with the tab; else the next control), so a keyboard user is never stuck.
+- Ctrl+V and Ctrl+Shift+V paste; Alt+V is left to the agent (Claude Code's image paste). Ctrl+C copies a selection and clears it; with nothing selected it is the interrupt. Right-click copies a selection, otherwise pastes.
 - Studio never types into a session for you. A question in a session is answered in its terminal.
 
 ## States
@@ -30,7 +36,8 @@ Terminal is the agent's own screen inside Studio: a slim bar saying what the ses
 | unknown | unknown | nothing | on |
 | waiting | waiting for you | "It has finished and is waiting for your next message." with Type a reply | on |
 | approval | needs approval | "It is asking for approval. The choices are in the terminal; answer them there." with Go to the question | on |
-| ended | ended | "Ended. Its transcript is kept." and `$ loadout resume <session-id>` | off |
+| background | waiting on background work | nothing: quiet on purpose, no badge, sound or count; it turns into waiting for you if the work goes silent past its time | on |
+| ended | ended | "Ended. Its transcript is kept." and "Carry it on in a terminal: `$ loadout resume <session-id> --project <project>`" (`--last` where no conversation is known, `--all` where no project is) | off |
 | error | exited with an error | the exit code, and the resume command | off |
 | reconnecting | reconnecting | "Lost touch with the daemon. Reconnecting; the output so far is kept." with Try now | off |
 | watch | only watching | "Only watching: typing is off. Start Studio without --watch-only to type into a session." | off |

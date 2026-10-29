@@ -21,6 +21,7 @@ Splitter is the divider between two panes of a split, for every split Studio has
 - Do keep the fraction, not pixels, so a split keeps its proportions as the window changes.
 - Do hide it where the layout stacks (WorkDesk under 1024px, the page beside under 1100px).
 - Don't give a split its own keys. Every split takes these.
+- Its class name, `ls-split`, is TokenSplit's too. Its rules are held to `.ls-split:where([role="separator"])`, so TokenSplit's figures stay in the page flow; a page rule that places or hides a divider can still say `.ls-desk > .ls-split`, since `:where()` adds no weight. (Main's components.css has the clash: there TokenSplit is laid out as a divider.)
 
 ## Accessibility
 

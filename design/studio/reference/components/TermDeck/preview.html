@@ -1,4 +1,4 @@
-<!-- @dsCard group="Modes" height=760 width=1300 subtitle="Terminal Focus: tabs over one, two or four terminals, find, and keys to move between them" -->
+<!-- @dsCard group="Modes" height=760 width=1300 subtitle="Terminal Focus: tabs over one, two or four terminals with dividers, find, launches that take a pane, and keys to move between them" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -15,25 +15,46 @@
 </style>
 </head>
 <body class="ls">
-<div id="d" style="height: 680px"></div>
+<div id="d" style="height: 640px"></div>
+<p class="out" role="status" id="out">Press + to start a session: it takes a pane of its own.</p>
 <script>
 (function () {
   var S = window.LoadoutStudio;
   var SESS = [
-    { id: "s1", title: "why is this postgres query so slow", word: "working", where: "starstats", agent: "claude" },
-    { id: "s2", title: "add a retry to the upload step", word: "needs approval", where: "loadout-cli", agent: "claude", unread: true },
-    { id: "s3", title: "tidy the deploy script", word: "idle", where: "starstats", agent: "codex" },
-    { id: "s4", title: "review the memory compress change", word: "working", where: "loadout-cli", agent: "claude", unread: true }
+    { id: "s1", hid: "4f2a9c", title: "why is this postgres query so slow", word: "working", where: "starstats", agent: "claude", project: "starstats", launchTitle: "why is this postgres query so slow", namesAgent: true, context: 42 },
+    { id: "s2", hid: "8b31d0", title: "add a retry to the upload step", word: "needs approval", where: "loadout-cli", agent: "claude", project: "loadout-cli", unread: true, context: 78 },
+    { id: "s3", hid: "c07e55", title: "tidy the deploy script", word: "ended", where: "starstats", agent: "codex", project: "starstats", ended: true },
+    { id: "s4", hid: "e91f02", title: "review the memory compress change", word: "working", where: "loadout-cli", agent: "claude", project: "loadout-cli", unread: true, context: 93 }
   ];
+  var HIDDEN = [{ id: "s5", hid: "5d4c11", title: "watch the nightly build", word: "idle", where: "loadout-cli", agent: "claude", project: "loadout-cli" }];
   var LINES = {
     s1: [[["› ", "fg-cyan"], ["loadout starstats --task \"why is this postgres query so slow\" --mode investigate", ""]], [["● ", "fg-green"], ["Running ", "bold"], ["EXPLAIN ANALYZE on the daily totals query", "fg-blue"]], [["  Seq Scan on events  (rows=1,840,211)", "fg-bright-black"]]],
     s2: [[["● ", "fg-green"], ["Edit ", "bold"], ["src/Upload/Uploader.cs", "fg-blue"]], [["  Passed! ", "fg-bright-green bold"], ["14 passed, 0 failed", "fg-green"]], [["? Overwrite docs/images/dashboard-office.png?", "fg-yellow bold"]]],
     s3: [[["● ", "fg-green"], ["Read ", "bold"], ["deploy/deploy.sh", "fg-blue"]]],
-    s4: [[["● ", "fg-green"], ["Read ", "bold"], ["src/Loadout.Core/Memory/Compress.cs", "fg-blue"]], [["● ", "fg-magenta"], ["The compress step keeps the newest entry when two collide.", "fg-bright-white"]]]
+    s4: [[["● ", "fg-green"], ["Read ", "bold"], ["src/Loadout.Core/Memory/Compress.cs", "fg-blue"]], [["● ", "fg-magenta"], ["The compress step keeps the newest entry when two collide.", "fg-bright-white"]]],
+    s5: [[["● ", "fg-green"], ["Waiting on ", "bold"], ["the nightly build", "fg-blue"]]],
+    s6: [[["› ", "fg-cyan"], ["loadout loadout-cli --task \"write the 0.110 release notes\"", ""]]]
   };
-  var STATE = { s1: "working", s2: "approval", s3: "idle", s4: "working" };
-  function term(id) { var s = SESS.filter(function (x) { return x.id === id; })[0]; return S.Terminal({ title: s.title, project: s.where, agent: s.agent, state: STATE[id], lines: LINES[id] }); }
-  var D = S.TermDeck({ sessions: SESS, current: "s1", layout: 2, terminal: term });
+  var STATE = { s1: "working", s2: "approval", s3: "ended", s4: "working", s5: "idle", s6: "working" };
+  var all = SESS.concat(HIDDEN);
+  function term(id) { var s = all.filter(function (x) { return x.id === id; })[0]; return S.Terminal({ title: s.title, project: s.where, agent: s.agent, sessionId: s.hid, state: STATE[id], lines: LINES[id] }); }
+  var out = document.getElementById("out");
+  function said(t) { out.textContent = t; }
+  var D = S.TermDeck({ sessions: SESS, hidden: HIDDEN, current: "s1", layout: 2, terminal: term, active: { s1: 3, s2: 2, s4: 1 },
+    onNew: function () {
+      /* A launch: the new session arrives in the daemon's list, and takes a pane of its own. */
+      var s = { id: "s6", hid: "a6b7c8", title: "write the 0.110 release notes", word: "working", where: "loadout-cli", agent: "claude", project: "loadout-cli", context: 4 };
+      all.push(s); SESS = SESS.filter(function (x) { return x.id !== "s6"; }).concat([s]);
+      D.update({ sessions: SESS, hidden: HIDDEN, launch: "s6" });
+    },
+    /* The page keeps the strip as this browser arranged it, as main's TerminalFocus does. */
+    onMove: function (order) { SESS = order.map(function (id) { return SESS.filter(function (x) { return x.id === id; })[0]; }); said("New order · this browser only"); },
+    onRename: function (id, name) { said(name === null ? "Back to its launch name" : "Renamed to " + name); },
+    onHide: function (id) { HIDDEN = HIDDEN.concat(SESS.filter(function (x) { return x.id === id; })); SESS = SESS.filter(function (x) { return x.id !== id; }); said("Hidden from this browser's strip · it still runs"); },
+    onUnhide: function (id) { SESS = SESS.concat(HIDDEN.filter(function (x) { return x.id === id; })); HIDDEN = HIDDEN.filter(function (x) { return x.id !== id; }); },
+    onClear: function (id) { SESS = SESS.filter(function (x) { return x.id !== id; }); said("Cleared from this browser"); },
+    onEnd: function (id) { said("Ended " + id); },
+    onSplit: function (n, f) { said("Divider for " + n + " panes at " + f.map(function (x) { return Math.round(x * 100) + "%"; }).join(", ")); } });
   document.getElementById("d").appendChild(D.el);
 })();
 </script>
