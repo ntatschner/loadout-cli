@@ -503,6 +503,53 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
 .ctl-t td { padding: 7px 10px 7px 0; color: var(--ink); box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--rule) 60%, transparent); vertical-align: top; overflow-wrap: anywhere; }
 .ctl-pre { margin: 0; padding: 10px 12px; background: var(--surface-2); color: var(--ink); font-family: var(--font-mono); font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .ok-line { margin: 0; color: var(--ink); }
+/* the shell, as main's styles/studio.css: watching only, the daemon out of reach, a newer daemon, signed out, the rail's foot, Ambient's switch */
+.watchbanner { display: grid; gap: var(--space-1); margin: 0 0 var(--space-6); padding: var(--space-3) var(--space-4); border-radius: var(--radius-chip); background: var(--needs-wash); box-shadow: inset 3px 0 0 var(--needs); }
+.watchbanner p { margin: 0; color: var(--needs-text); }
+.watchbanner .ls-cmd { overflow-wrap: anywhere; }
+/* Watching only, a held button's reason is its whole command, so it wraps rather than pushing the page sideways. */
+.ls-action > .ls-cmd.reason { white-space: normal; overflow-wrap: anywhere; }
+.ls-tboard .task :is(.moves, .go) > .ls-action:has(> .ls-cmd.reason) { position: static; }
+:root .ls-tboard .task :is(.moves, .go) .ls-action > .ls-cmd.reason { top: auto; bottom: 0; right: 0; white-space: nowrap; }
+.page > p.offline { margin: 0 0 var(--space-5); padding: var(--space-3) var(--space-4); border-radius: var(--radius-chip); background: var(--bad-wash); color: var(--bad-text); }
+.reloadnote { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin: 0 0 var(--space-5); padding: var(--space-3) var(--space-4); border-radius: var(--radius-chip); box-shadow: inset 3px 0 0 var(--accent); }
+.reloadnote p { margin: 0; flex: 1 1 24ch; }
+.signedout { max-width: 640px; display: grid; gap: var(--space-4); align-content: start; padding-top: 12vh; }
+.signedout h1 { margin: 0; font-size: 30px; line-height: 34px; font-weight: 200; color: var(--ink-strong); }
+.signedout .mark { display: flex; gap: 10px; align-items: center; font-size: 12px; letter-spacing: .3em; color: var(--ink-soft); }
+.signedout .mark i { width: 14px; height: 14px; border-radius: 50%; box-shadow: 0 0 0 2px var(--accent); }
+.signedout .ls-action { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); }
+.signedout .ls-cmdline { overflow-wrap: anywhere; }
+.signedout.page { padding-left: max(28px, env(safe-area-inset-left, 0px)); }
+body.sh-out #nav, body.sh-out #modebar { display: none; }
+.ls-railnav .ls-report { margin-top: auto; }
+.ambswitch { display: flex; justify-content: flex-end; margin-top: var(--space-3); }
+.ambswitch > * { flex: 0 1 auto; width: auto; max-width: 100%; }
+.amb .stage.roomy { padding: 90px 0 70px; }
+.corecmds { justify-content: center; margin: var(--space-2) auto 0; max-width: 520px; }
+.appear .seg .ls-cmd { margin-top: var(--space-2); overflow-wrap: anywhere; }
+.appear .seg .calm.small { margin: 6px 0 0; font-size: 12.5px; }
+.shstates { margin-top: 18px; }
+.shstates .ls-answers { margin-top: 10px; }
+/* Pure Focus: the desk's list and actions widths, dragged and kept (main's WorkDesk split) */
+@media (min-width: 1024px) { .ls-desk.sh-split { grid-template-columns: var(--desk-cols); } }
+/* Notifications, as main's components.css: Earlier, the history, and chips that give way near the pointer */
+.ls-toasts [data-gives-way] { transition: opacity var(--dur-quick); }
+.ls-toasts.near [data-gives-way] { opacity: .18; pointer-events: none; }
+.ls-toasts.calm [data-gives-way] { transition: none; }
+.ls-toast .n, .ls-toast-chip .n, .ls-toast-history .n { font-style: normal; font-variant-numeric: tabular-nums; color: var(--muted); }
+.ls-toast-past { min-height: var(--control-sm); padding: 0 12px; border: 0; border-radius: var(--radius-pill); background: var(--surface); color: var(--muted); font: inherit; font-family: var(--font-sans); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; cursor: pointer; box-shadow: 0 0 0 1px var(--rule), var(--shadow-float); }
+.ls-toast-past b { font-weight: 600; color: var(--ink-strong); letter-spacing: 0; }
+.ls-toast-past:hover, .ls-toast-past:focus-visible { color: var(--ink-strong); outline: 2px solid var(--focus); outline-offset: 2px; }
+.ls-toast-history { width: 100%; max-height: min(360px, 50vh); overflow: auto; padding: 10px 14px; background: var(--surface); box-shadow: 0 0 0 1px var(--rule), var(--shadow-float); }
+.ls-toast-history ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.ls-toast-history li { --c: var(--moving); display: grid; grid-template-columns: 20px 1fr; gap: 2px 10px; align-items: start; font-size: 13px; color: var(--ink); }
+.ls-toast-history li.done { --c: var(--good); } .ls-toast-history li.needs { --c: var(--needs); } .ls-toast-history li.problem { --c: var(--bad); }
+.ls-toast-history .gl { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; font-size: 11px; font-weight: 600; color: var(--on-signal); background: var(--c); }
+.ls-toast-history b { font-weight: 500; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--c); }
+.ls-toast-history .ls-cmd { grid-column: 2; font-size: 11px; }
+.ls-toast-history .clear { margin-top: 8px; padding: 0; border: 0; background: none; color: var(--muted); font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; }
+.ls-toast-history .clear:hover, .ls-toast-history .clear:focus-visible { color: var(--ink-strong); outline: 2px solid var(--focus); outline-offset: 2px; }
 </style>
 
 <a class="skip" href="#main">Skip to the page</a>
@@ -526,11 +573,12 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
   var hostTheme = root.getAttribute("data-theme");
   function applyPrefs() {
     var t = P.theme || (hostTheme === "light" || hostTheme === "dark" ? hostTheme : S.preferredTheme());
-    S.setTheme(t); S.setAccent(P.accent); S.setDensity(P.density); S.setMotion(P.motion); S.setBackdrop(P.backdrop || "map"); S.setCommands(P.commands || "hover");
+    S.setTheme(t); S.setAccent(P.accent); S.setDensity(P.density); S.setMotion(P.motion); S.setBackdrop(P.backdrop || "plain"); S.setCommands(P.commands || "hover");
     root.setAttribute("data-mode", P.mode || "default");
+    shFieldmap();
   }
   applyPrefs();
-  /* The field map: one embossed survey map behind every page; data-backdrop and the motion setting decide whether it shows and whether it moves. */
+  /* The field map: one embossed survey map behind every page; it follows data-fieldmap, which shFieldmap() writes from resolveBackdrop(). */
   S.FieldMap();
   new MutationObserver(function () {
     var v = root.getAttribute("data-theme");
@@ -666,30 +714,21 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
 
   /* ---------- routing ---------- */
   var PAGES = [["home", "Home"], ["sessions", "Sessions"], ["ideas", "Ideas"], ["teams", "Teams"], ["events", "Events"], ["memory", "Memory"], ["context", "Context"], ["spend", "Spend"], ["projects", "Projects"], ["commands", "Commands"], ["settings", "Settings"]];
-  var ELSEWHERE = { ideas: ["Ideas", "$ loadout idea list", "Ideas you are shaping, a round at a time."], teams: ["Teams", "$ loadout team list", "Teams and their runs."], memory: ["Memory", "$ loadout memory list starstats", "What each project remembers, by topic."],
-    context: ["Context", "$ loadout instructions explain", "What a session reads before it starts, and what it costs in tokens."], spend: ["Spend", "$ loadout usage", "Tokens used, by day, project and model."], projects: ["Projects", "$ loadout project list", "The projects Loadout knows on this machine."] };
   function route() { var h = (location.hash || "#home").slice(1); return h || "home"; }
   function go(r) { if (location.hash.slice(1) === r) { render(); } else { location.hash = r; } }
-  window.addEventListener("hashchange", function () { if (FOCUS) { FOCUS.close(); FOCUS = null; } render(); var m = document.getElementById("main"); if (m) { m.focus({ preventScroll: true }); } window.scrollTo(0, 0); });
+  /* Main's addresses (#session/<id>, #home/<line>, #teams/<run>, ?beside=) are read into the prototype's own first. */
+  window.addEventListener("hashchange", function () { shCanon(); if (FOCUS) { FOCUS.close(); FOCUS = null; } render(); var m = document.getElementById("main"); if (m) { m.focus({ preventScroll: true }); } window.scrollTo(0, 0); });
 
   /* ---------- the rail ---------- */
   function renderNav() {
-    var w = ST.lines.filter(function (l) { return l.waiting; }), r = route(), cur = r.indexOf("session") === 0 ? "sessions" : (teamsRoute(r) ? "teams" : r.split("/")[0]);
-    var sw = w.filter(function (l) { return l.kind === "session"; }).length, tw = w.filter(function (l) { return l.kind === "team run"; }).length;
-    var running = ST.lines.filter(function (l) { return l.kind === "session" && l.stage === 2 && !l.waiting; }).length;
-    var facts = { home: [w.length ? w.length + " waiting on you" : "all calm", !!w.length], sessions: [sw ? sw + " waiting on you" : running + " running", !!sw], ideas: [IDEAS.filter(function (x) { return !x.accepted; }).length + " being shaped", IDEAS.some(function (x) { return ideaWord(x) === "waiting for you"; })],
-      teams: [teamsWaiting() ? teamsWaiting() + " waiting on you" : "all calm", !!teamsWaiting()], memory: [Object.keys(MEM).reduce(function (n, k) { return n + MEM[k].project.length + MEM[k].user.length + MEM[k].machine.length; }, 0) + " topics", false], context: ["2,403 tokens", false], spend: ["11.3M tokens this month", false], projects: [PROJ.length + " projects", false], settings: ["", false] };
-    plcRailFacts(facts); if (/^(events|commands)\b/.test(r)) { cur = r.split(/[/?]/)[0]; }
+    var r = route(), cur = r.indexOf("session") === 0 ? "sessions" : (teamsRoute(r) ? "teams" : r.split(/[/?]/)[0]);
+    var facts = shRailFacts();
     var nav = document.getElementById("nav"); nav.textContent = "";
-    var rail = S.SideRail({ current: cur, onSearch: openPalette, pages: PAGES.map(function (p) { return { key: p[0], name: p[1], fact: facts[p[0]][0], need: facts[p[0]][1], href: "#" + p[0] }; }) });
-    var foot = el("button", { type: "button", "class": "ls-rl ls-appearance", onclick: openAppearance, "data-k": "appearance" }, [svgIcon("M10 3a7 7 0 1 0 0 14a3.5 3.5 0 0 1 0-7a3.5 3.5 0 0 0 0-7z M10 3a7 7 0 0 1 0 14"), el("span", { "class": "n", text: "Appearance" }), el("span", { "class": "f", text: themeName() })]);
-    rail.querySelector(".ls-railnav").appendChild(foot);
-    plcRailIcons(rail);
+    var rail = S.SideRail({ current: cur, onSearch: openPalette, pages: PAGES.map(function (p) { return { key: p[0], name: p[1], fact: facts[p[0]][0], need: facts[p[0]][1] }; }), foot: function () { return shRailFoot(); } });
     nav.appendChild(rail);
     renderModebar();
   }
   function svgIcon(d) { var ns = "http://www.w3.org/2000/svg", v = document.createElementNS(ns, "svg"), p = document.createElementNS(ns, "path"); v.setAttribute("viewBox", "0 0 20 20"); v.setAttribute("aria-hidden", "true"); p.setAttribute("d", d); p.setAttribute("fill", "none"); p.setAttribute("stroke", "currentColor"); p.setAttribute("stroke-width", "1.6"); v.appendChild(p); return v; }
-  function themeName() { return { dark: "Dark", light: "Light", "hc-dark": "High contrast dark", "hc-light": "High contrast light" }[root.getAttribute("data-theme")] + " · " + P.accent; }
 
   /* ---------- Home ---------- */
   /* Home's two views are panels in an order, some hidden, edited in place and kept in Loadout's config as studio-layout-lens and studio-layout-map (main's lib/layout.ts and pages/Panel.svelte). */
@@ -880,26 +919,43 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
   }
 
   /* ---------- Ambient ---------- */
+  /* Ambient: Home for a screen across the room (main's Ambient.svelte). Fullscreen is this browser's choice, entered again each time once chosen. */
   function setAmbient(on) {
     ST.ambient = on; var a = document.getElementById("amb");
-    a.hidden = !on; document.body.style.overflow = on ? "hidden" : "";
-    if (on) { renderAmbient(); setTimeout(function () { var b = a.querySelector("button"); if (b) { b.focus(); } }, 30); } else { a.textContent = ""; var b = document.querySelector('[data-k="ambient"]'); if (b) { b.focus(); } }
+    a.hidden = !on; document.body.style.overflow = on ? "hidden" : ""; document.body.classList.toggle("ambient-open", on);
+    if (on) { SH.ambFocus = null; renderAmbient(); if (P.ambFull) { ambFullscreen(true, true); } setTimeout(function () { var b = a.querySelector("button"); if (b) { b.focus(); } }, 30); }
+    else { a.textContent = ""; ambFullscreen(false, true); var b = document.querySelector('[data-k="ambient"]'); if (b) { b.focus(); } }
+    shFieldmap();
+  }
+  function ambFullscreen(on, entering) {
+    if (!entering) { P.ambFull = on; savePrefs(); }
+    try {
+      var t = null;
+      if (on && !document.fullscreenElement && root.requestFullscreen) { t = root.requestFullscreen(); } else if (!on && document.fullscreenElement && document.exitFullscreen) { t = document.exitFullscreen(); }
+      if (t && t.catch) { t.catch(function () { /* the browser refused without a press: the choice is kept for next time */ }); }
+    } catch (e) { /* refused: Ambient carries on in the window */ }
   }
   function renderAmbient() {
     var a = document.getElementById("amb"); if (!ST.ambient) { return; }
     var keep = document.activeElement && a.contains(document.activeElement) ? document.activeElement.getAttribute("data-k") : null;
     a.textContent = "";
-    var f = waitingLines()[0] ? line(waitingLines()[0].id) : (line(ST.focus) || ST.lines[0]);
+    var ranked = waitingLines(), f = line(SH.ambFocus) || (ranked[0] ? line(ranked[0].id) : null) || ST.lines[0] || null;
     var w = ST.lines.filter(function (l) { return l.waiting; }), running = ST.lines.filter(function (l) { return l.stage === 2 && !l.waiting && !l.blocked; }).length;
     var oldest = w.length ? Math.max(1, ST.clock - Math.min.apply(null, w.map(function (l) { return l.askedAt || ST.clock; }))) + " min" : "none";
     a.setAttribute("role", "region"); a.setAttribute("aria-label", "Ambient");
     a.appendChild(el("div", { "class": "bar" }, [
-      el("div", { "class": "kpis", role: "group", "aria-label": "Key numbers" }, [["Running", String(running), ""], ["Waiting for you", String(w.length), w.length ? "warm" : ""], ["Oldest question", oldest, w.length ? "warm" : ""], ["Tokens today", ST.tokens.toLocaleString("en-GB"), ""]].map(function (k) { return el("div", { "class": k[2] }, [el("b", { text: k[1] }), el("span", { text: k[0] })]); })),
-      el("div", { "class": "ls-answers", style: "margin: 0" }, [halo({ label: "New session", size: "small", onPress: function () { setAmbient(false); go("sessions"); setTimeout(openLaunch, 60); } }, "amb-new"), halo({ label: "Leave ambient", size: "small", onPress: function () { setAmbient(false); } }, "amb-leave")])]));
-    var others = ST.lines.filter(function (l) { return l.id !== f.id; }).map(function (l) { return { title: l.title, word: wordOf(l), onPick: function () { ST.focus = l.id; renderAmbient(); render(); } }; });
-    var big = window.innerWidth >= 900;
-    var H = S.Halo({ style: P.halo, stage: f.waiting ? 3 : f.stage, core: coreFor(f), hour: ((f.mins || 0) % 60) / 60, spend: f.cap ? f.cost / f.cap : null, orbiters: big ? others : null, orbitRadius: 330 });
-    a.appendChild(el("div", { "class": "stage", style: big ? "padding: 90px 0 70px" : "" }, [H.el]));
+      el("div", { "class": "kpis", role: "group", "aria-label": "Key numbers" }, [["Running", String(running), ""], ["Waiting for you", String(w.length), w.length ? "warm" : ""], ["Oldest question", oldest, w.length ? "warm" : ""], ["In view", String(ST.lines.length), ""]].map(function (k) { return el("div", { "class": k[2] }, [el("b", { text: k[1] }), el("span", { text: k[0] })]); })),
+      el("div", { "class": "ls-answers", style: "margin: 0" }, [halo({ label: "New session", size: "small", disabledReason: P.watchOnly ? SH_WATCH : undefined, onPress: function () { setAmbient(false); openLaunch(); } }, "amb-new"), halo({ label: "Leave ambient", size: "small", onPress: function () { setAmbient(false); } }, "amb-leave")])]));
+    a.appendChild(el("div", { "class": "ambswitch" }, [key(S.Switch({ label: "Fullscreen", sub: "kept in this browser", checked: !!P.ambFull, onChange: function (v) { ambFullscreen(v); } }), "amb-full")]));
+    if (!f) { a.appendChild(el("p", { "class": "calm", text: "Nothing is in flight." })); }
+    else {
+      var big = window.innerWidth >= 900;
+      var others = big ? ST.lines.filter(function (l) { return l.id !== f.id; }).slice(0, 8).map(function (l) { return { title: l.title, word: sessWord(l), onPick: function () { SH.ambFocus = l.id; renderAmbient(); } }; }) : null;
+      var H = S.Halo({ style: P.halo, stage: f.waiting ? 3 : f.stage, core: coreFor(f, true), hour: ((f.mins || 0) % 60) / 60, spend: f.cap ? f.cost / f.cap : null, orbiters: others, orbitRadius: 330 });
+      a.appendChild(el("div", { "class": "stage" + (big ? " roomy" : "") }, [H.el]));
+      var acts = actionsFor(f);
+      if (acts.length) { a.appendChild(el("div", { "class": "ls-answers corecmds" }, acts.map(function (x) { return halo(Object.assign({ size: "small" }, x, { onPress: function () { var r = x.onPress ? x.onPress() : null; if (typeof r === "string") { said(r, x.cmd, "done"); } render(); } }), "amb-" + x.label); }))); }
+    }
     a.appendChild(el("div", { "class": "strip", "aria-hidden": "true" }, ST.feed.slice(0, 3).map(function (e) { return el("div", {}, [el("span", { "class": "tm", text: e.t }), e.text]); })));
     if (keep) { var k = a.querySelector('[data-k="' + keep + '"]'); if (k) { k.focus(); } }
   }
@@ -1334,6 +1390,247 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     setTimeout(function () { build(); paintActs(); }, 200);
   }
   var nextCode = 9;
+  /* ---------- the shell: watching only, the banners, signed out, notifications, the field map and the address, as main's App.svelte ---------- */
+  var SH = { offline: null, newVersion: null, loading: false, focusing: null, ambFocus: null };
+  var SH_WATCH = "Studio is only watching: type the command in a terminal";
+  /* Report a problem: the Studio bug form, with the version and platform filled in through the form's field ids (main's report.ts). */
+  var SH_REPORT = "https://github.com/ntatschner/loadout-cli/issues/new?template=studio_bug.yml&version=0.109.3&platform=linux-x64";
+
+  /* Watching only, every action that changes something shows its command for a terminal instead, as main's actions.ts does; opening or reading something changes nothing, so it stays. */
+  function shRefused(o) {
+    var c = o.cmd || "";
+    if (o.disabledReason || o.inactive || !o.onPress) { return null; }
+    if (/launch sheet|opens New session|opens Start a run|opens the sheet|fills Start a run|hosted by the daemon|hosted terminal/.test(c)) { return SH_WATCH; }
+    if (/reads only|changes nothing/.test(c)) { return null; }
+    var m = /(?:^|· )(\$ loadout[^·]*)/.exec(c);
+    if (m) { return m[1].trim() + " · in a terminal"; }
+    if (c === "stops the agent in this terminal") { return "Studio is only watching: end it from where it runs"; }
+    if (c === "changes something") { return "Studio is only watching: preview it, or type the command in a terminal"; }
+    return null;
+  }
+  /* The one place watching only reaches every HaloButton, the controls' and the dialogs' included: each one that would change something is drawn disabled, with why in place of its command. */
+  var shHalo0 = S.HaloButton;
+  S.HaloButton = function (o) { var why = P.watchOnly && o ? shRefused(o) : null; return shHalo0(why ? Object.assign({}, o, { disabledReason: why }) : o); };
+  /* A SettingRow has no disabled state of its own: watching only, its control is held and its line says why. */
+  var shSetRow0 = S.SettingRow;
+  S.SettingRow = function (o) {
+    var n = shSetRow0(o);
+    if (!P.watchOnly) { return n; }
+    Array.prototype.forEach.call(n.querySelectorAll("input, select, textarea, button"), function (x) { x.disabled = true; x.setAttribute("aria-disabled", "true"); });
+    var c = n.querySelector(":scope > .ls-cmd"); if (c) { c.textContent = "Studio is only watching · " + c.textContent; }
+    return n;
+  };
+  /* An ItemList's row buttons are its own: watching only, each that would change something is held with its command, and its add form too. */
+  var shItems0 = S.ItemList;
+  S.ItemList = function (o) {
+    if (!P.watchOnly || !o) { return shItems0(o); }
+    function held(xs) {
+      return (xs || []).map(function (it) {
+        return Object.assign({}, it, { actions: (it.actions || []).map(function (a) { var why = shRefused({ cmd: a.cmd || (a.form ? "changes something" : ""), onPress: true, disabledReason: a.disabledReason }); return why ? Object.assign({}, a, { disabledReason: why, form: null }) : a; }) });
+      });
+    }
+    var list = shItems0(Object.assign({}, o, { items: held(o.items), add: o.add ? Object.assign({}, o.add, { form: Object.assign({}, o.add.form, { disabledReason: SH_WATCH }) }) : o.add }));
+    var set0 = list.set; list.set = function (xs) { set0(held(xs)); };
+    return list;
+  };
+
+  /* The rail's facts, as main's App.svelte words them; Events, Commands, Spend and Settings come from their own pages' reads. */
+  function shRailFacts() {
+    var w = ST.lines.filter(function (l) { return l.waiting; });
+    var running = ST.lines.filter(function (l) { return l.kind === "session" && l.stage === 2; }).length;
+    var live = IDEAS.filter(function (x) { return !x.accepted; }), iw = live.filter(function (x) { return ideaWord(x) === "waiting for you"; }).length;
+    var tw = teamsWaiting(), tr = TR.filter(function (r) { return teamRunning(r); }).length;
+    var facts = { home: [w.length ? w.length + " waiting on you" : "all calm", !!w.length], sessions: [running + " running", false],
+      ideas: [iw ? iw + " waiting on you" : live.length + " being shaped", !!iw], teams: [tw ? tw + " waiting on you" : tr + " running", !!tw],
+      memory: ["by topic", false], context: ["what a session reads", false], spend: ["tokens and cost", false], projects: ["", false], settings: ["", false] };
+    plcRailFacts(facts);
+    return facts;
+  }
+  /* The rail's foot: Report a problem, then Appearance, in the rail and in the slid-in list alike. */
+  function shRailFoot() {
+    var t = P.theme ? { dark: "Dark", light: "Light", "hc-dark": "High contrast dark", "hc-light": "High contrast light" }[P.theme] : "Follows the system";
+    var foot = document.createDocumentFragment();
+    [el("a", { "class": "ls-rl ls-report", href: SH_REPORT, target: "_blank", rel: "noopener noreferrer" }, [svgIcon("M5 17.5 V3 M5 3.5 H15 L12.5 7 L15 10.5 H5"), el("span", { "class": "n", text: "Report a problem" }), el("span", { "class": "f", text: "opens GitHub" })]),
+      el("button", { type: "button", "class": "ls-rl ls-appearance", onclick: openAppearance, "data-k": "appearance" }, [svgIcon("M10 3a7 7 0 1 0 0 14a3.5 3.5 0 0 1 0-7a3.5 3.5 0 0 0 0-7z M10 3a7 7 0 0 1 0 14"), el("span", { "class": "n", text: "Appearance" }), el("span", { "class": "f", text: t + " · " + P.accent })])].forEach(function (n) { foot.appendChild(n); });
+    return foot;
+  }
+
+  /* What is behind the page: resolveBackdrop() from the setting and all that overrides it, written as data-fieldmap. Read again on a change of mode, Ambient, what waits, the tab and where the keyboard is. */
+  function shFieldmap() {
+    if (typeof ST === "undefined" || !ST || !S.resolveBackdrop) { return; }
+    var a = document.activeElement, waiting = 0;
+    try { waiting = waitingNow().length; } catch (e) { waiting = 0; }
+    S.setFieldmap(S.resolveBackdrop({ setting: root.getAttribute("data-backdrop"), theme: root.getAttribute("data-theme") || "dark", mode: P.mode || "default", ambient: !!ST.ambient,
+      motion: S.motion ? S.motion() : "full", waiting: waiting, hidden: document.visibilityState === "hidden", terminalFocused: !!(a && a.closest && a.closest(".ls-term, .xterm")) }));
+  }
+  document.addEventListener("visibilitychange", shFieldmap);
+  document.addEventListener("focusin", shFieldmap);
+  document.addEventListener("focusout", function () { setTimeout(shFieldmap, 0); });
+  try { var shReduced = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : null; if (shReduced && shReduced.addEventListener) { shReduced.addEventListener("change", shFieldmap); } } catch (e) { /* an old browser: the setting alone decides */ }
+
+  /* Above every page: watching only, the daemon out of reach, and a newer daemon than this page. */
+  function shBanners(main) {
+    if (P.watchOnly) { main.appendChild(el("div", { "class": "watchbanner", role: "note", "data-commands": "always" }, [el("p", { text: "Studio is only watching, so nothing here can change a run, an idea or a task. Each action shows the command to type in a terminal instead." }), el("code", { "class": "ls-cmd", text: "started with loadout dashboard --watch-only" })])); }
+    if (SH.offline) { main.appendChild(el("p", { "class": "offline", role: "alert", text: SH.offline })); }
+    if (SH.newVersion) {
+      var v = SH.newVersion;
+      main.appendChild(el("div", { "class": "reloadnote", role: "status" }, [el("p", { text: "The daemon is now on " + v + ". This page is from the version before, so reload it to use the new one." }),
+        halo({ label: "Reload", size: "small", onPress: function () { SH.newVersion = null; said("Reloaded: this page is from " + v + " now", ""); shRedraw(); } }, "sh-reload"),
+        halo({ label: "Later", size: "small", onPress: function () { SH.newVersion = null; shRedraw(); } }, "sh-later")]));
+    }
+  }
+  /* Draws everything again, the desk and the deck included, for a change of state the whole shell follows. */
+  function shRedraw() { if (PURE) { PURE.desk.destroy(); PURE = null; LIVE = null; } DECK = null; lastTeams = ""; MBSIG = ""; PV++; TV++; render(); }
+
+  /* Signed out: a browser the daemon does not know sees how to open Studio signed in, and nothing else (main's SignedOut.svelte). */
+  function shSignOut() { said("Every browser is signed out, this one included", "$ loadout dashboard sign-out", "done"); P.signedOut = true; savePrefs(); setTimeout(render, 400); }
+  function renderSignedOut() {
+    if (ST.ambient) { setAmbient(false); }
+    if (FOCUS) { FOCUS.close(); FOCUS = null; }
+    if (PURE) { PURE.desk.destroy(); PURE = null; LIVE = null; }
+    if (BESIDE) { BESIDE.destroy(); BESIDE = null; }
+    DECK = null; lastTeams = "";
+    document.body.classList.add("sh-out");
+    var main = document.getElementById("main"); main.className = "page signedout"; main.setAttribute("data-commands", "always"); main.textContent = "";
+    var hold = el("span", {});
+    function copyBtn(copied) {
+      hold.textContent = "";
+      hold.appendChild(halo({ label: copied ? "Copied" : "Copy", size: "small", onPress: function () {
+        var done = function () { copyBtn(true); }, fail = function () { copyBtn(false); };
+        try { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText("loadout dashboard --open").then(done, fail); } else { fail(); } } catch (e) { fail(); }
+      } }, "so-copy"));
+    }
+    copyBtn(false);
+    main.appendChild(el("div", { "class": "mark" }, [el("i", { "aria-hidden": "true" }), el("b", { text: "LOADOUT" }), " STUDIO"]));
+    main.appendChild(el("h1", { text: "This browser isn't signed in to Studio" }));
+    main.appendChild(el("p", { "class": "calm", text: "Studio only answers browsers it has signed in. In a terminal on this machine, run:" }));
+    main.appendChild(el("div", { "class": "ls-action" }, [el("code", { "class": "ls-cmdline", text: "$ loadout dashboard --open" }), hold]));
+    main.appendChild(el("p", { "class": "calm small", text: "It opens Studio in your browser, signed in. Signing in lasts 90 days, or until somebody signs every browser out." }));
+    main.appendChild(el("p", { "class": "sample" }, ["This prototype: ", key(el("button", { type: "button", "class": "linkish", text: "sign this browser in again", onclick: function () { P.signedOut = false; savePrefs(); document.body.classList.remove("sh-out"); main.className = "page"; main.removeAttribute("data-commands"); shRedraw(); } }), "so-back"), ", as the command would."]));
+  }
+
+  /* The address as main writes it, #session/<id>, #home/<line>, #teams/<run>, #teams/+bin, #teams/+team/<name>, and ?beside=<page>, read into the prototype's own. */
+  function shCanon() {
+    var raw = (location.hash || "").replace(/^#/, ""), slash = raw.charAt(0) === "/", h = raw.replace(/^\/+/, ""), q = "", i = h.indexOf("?");
+    if (i >= 0) { q = h.slice(i + 1); h = h.slice(0, i); }
+    var parts = h.split("/").filter(Boolean).map(function (x) { try { return decodeURIComponent(x); } catch (e) { return x; } }), to = null;
+    if (parts[0] === "events") { return; }
+    if (parts[0] === "session" && parts[1]) { to = "session-" + parts[1]; }
+    else if (parts[0] === "home" && parts.length > 1) { if (line(parts[1])) { ST.focus = parts[1]; ST.picked = parts[1]; ST.view = "lens"; } to = "home"; }
+    else if (parts[0] === "teams" && parts[1]) { to = parts[1] === "+team" && parts[2] ? "team-" + parts[2] : parts[1].charAt(0) === "+" ? "teams-" + parts[1].slice(1) : "run-" + parts[1]; }
+    if (q.indexOf("beside=") === 0 && (parts[0] === "session" || parts[0] === "home" || parts[0] === "sessions")) {
+      var b = q.slice(7).split("/").map(function (x) { try { return decodeURIComponent(x); } catch (e) { return x; } }).join("/");
+      if (parts[0] === "session" && parts[1]) { P.deckCurrent = parts[1]; }
+      if (P.mode === "terminals" && pagesRoute(b)) { to = b; } else if (to === null) { to = parts.join("/") || "home"; }
+    } else if (to === null && (slash || q)) { to = parts.join("/") || "home"; }
+    if (to !== null && to !== raw) { history.replaceState(history.state, "", "#" + to); }
+  }
+  /* Whether the route is one Pure Focus draws as a desk, where its own single keys are the only ones. */
+  function shPureHere() { var r = route(); return P.mode === "pure" && (r === "home" || r === "sessions" || r === "teams" || r.indexOf("session-") === 0 || r.indexOf("run-") === 0 || (pagesRoute(r) && r.indexOf("+") < 0)); }
+
+  /* Notifications, as main's Toasts: Done and notices fold to a chip after 4 seconds and leave after 10, into Earlier; the same one again counts; in Pure Focus, a page desk or a session's page everything arrives as a chip, and Done and notice chips go see-through near the pointer; Ctrl+Shift+X folds what is open and, pressed again, clears what is not waiting on you. */
+  function shToasts(region) {
+    var LV = { done: ["✓", "Done"], info: ["↻", "For your information"], needs: ["!", "Needs you"], problem: ["✕", "Problem"] };
+    var OPEN_FOR = 4, GONE_AFTER = 10, list = [], past = [], seq = 0, tucked = false, place = null, near = false, pointed = null, focused = null, showPast = false;
+    var polite = el("p", { role: "status", "class": "ls-sr" }), alert = el("p", { role: "alert", "class": "ls-sr" });
+    region.classList.add("ls-toasts"); region.setAttribute("role", "region"); region.setAttribute("aria-label", "Notifications"); region.setAttribute("aria-keyshortcuts", "Control+Shift+X");
+    region.parentNode.insertBefore(polite, region.nextSibling); region.parentNode.insertBefore(alert, polite.nextSibling);
+    function shown(t) { return t.settled ? "done" : t.level; }
+    function timed(t) { return t.level === "done" || t.level === "info" || t.settled; }
+    function givesWay(t) { return place !== null && shown(t) !== "needs" && shown(t) !== "problem"; }
+    function full() { return !S.motion || S.motion() === "full"; }
+    function remember(gone) {
+      if (!gone.length) { return; }
+      gone.forEach(function (t) { if (pointed === t.id) { pointed = null; } if (focused === t.id) { focused = null; } });
+      past = gone.map(function (t) { return { id: t.id, level: shown(t), text: t.text, cmd: t.cmd, count: t.count }; }).concat(past).slice(0, 50);
+    }
+    function leave(gone) { var ids = gone.map(function (t) { return t.id; }); list = list.filter(function (t) { return ids.indexOf(t.id) < 0; }); remember(gone); paint(); }
+    function watch(n, t) {
+      n.addEventListener("mouseenter", function () { pointed = t.id; }); n.addEventListener("mouseleave", function () { if (pointed === t.id) { pointed = null; } });
+      n.addEventListener("focusin", function () { focused = t.id; }); n.addEventListener("focusout", function () { if (focused === t.id) { focused = null; } });
+    }
+    function paint() {
+      var a = document.activeElement, keep = a && region.contains(a) ? a.getAttribute("data-tk") : null;
+      region.textContent = ""; region.classList.toggle("near", near); region.classList.toggle("calm", !full());
+      list.forEach(function (t) {
+        var lv = shown(t), L = LV[lv], anim = t.fresh && full() ? " anim" : "";
+        if (t.folded) {
+          var chip = el("button", { type: "button", "class": "ls-toast-chip " + lv + anim, "data-gives-way": givesWay(t) ? "" : null, "data-tk": "c" + t.id, "aria-label": L[1] + ": " + t.text + (t.count > 1 ? ", " + t.count + " times" : "") + ". Open it",
+            onclick: function () { t.folded = false; t.aged = 0; if (focused === t.id) { focused = null; } paint(); var x = region.querySelector('[data-tk="x' + t.id + '"]'); if (x) { x.focus({ preventScroll: true }); } } },
+            [el("span", { "class": "gl", "aria-hidden": "true", text: L[0] }), el("b", { text: L[1] }), el("span", { text: t.text }), t.count > 1 ? el("i", { "class": "n", "aria-hidden": "true", text: "×" + t.count }) : null]);
+          watch(chip, t); region.appendChild(chip); return;
+        }
+        var card = el("div", { "class": "ls-toast " + lv + anim, role: "group", "aria-label": L[1] }, [
+          el("div", { "class": "th" }, [el("span", { "class": "gl", "aria-hidden": "true", text: L[0] }), el("span", { "class": "lv" }, [L[1], t.count > 1 ? el("i", { "class": "n", text: " ×" + t.count }) : null]),
+            el("button", { type: "button", "class": "x", "data-tk": "x" + t.id, "aria-label": "Dismiss: " + t.text, text: "✕", onclick: function () { leave([t]); } })]),
+          el("p", { text: t.text }), t.cmd ? el("code", { "class": "ls-cmd", text: t.cmd }) : null,
+          t.actions.length ? el("div", { "class": "acts" }, t.actions.map(function (ac, i) { return key(S.HaloButton({ label: ac.label, kind: ac.kind || "", size: "small", cmd: ac.cmd, onPress: function () { var w = ac.onPress ? ac.onPress() : null; settle(t.id, typeof w === "string" && w ? w : ac.label); } }), "t" + t.id + "a" + i); })) : null]);
+        watch(card, t); region.appendChild(card);
+      });
+      if (past.length) {
+        region.appendChild(el("button", { type: "button", "class": "ls-toast-past", "aria-expanded": showPast ? "true" : "false", "data-tk": "past", onclick: function () { showPast = !showPast; paint(); } }, ["Earlier ", el("b", { text: String(past.length) })]));
+        if (showPast) {
+          region.appendChild(el("div", { "class": "ls-toast-history", role: "group", "aria-label": "Earlier notifications, this session" }, [
+            el("ul", {}, past.map(function (g) { return el("li", { "class": g.level }, [el("span", { "class": "gl", "aria-hidden": "true", text: LV[g.level][0] }), el("span", { "class": "t" }, [el("b", { text: LV[g.level][1] }), " " + g.text, g.count > 1 ? el("i", { "class": "n", text: " ×" + g.count }) : null]), g.cmd ? el("code", { "class": "ls-cmd", text: g.cmd }) : null]); })),
+            el("button", { type: "button", "class": "clear", "data-tk": "clear", text: "Clear", onclick: function () { past = []; showPast = false; paint(); } })]));
+        }
+      }
+      if (keep) { var k = region.querySelector('[data-tk="' + keep + '"]'); if (k) { k.focus({ preventScroll: true }); } }
+    }
+    function add(t) {
+      var cmd = t.cmd || "", level = t.level || "info";
+      if (level === "done" || level === "info") {
+        var same = list.filter(function (x) { return x.level === level && !x.settled && x.text === t.text && x.cmd === cmd; })[0];
+        if (same) { same.count += 1; same.aged = 0; polite.textContent = LV[level][1] + ": " + t.text + ", " + same.count + " times"; paint(); return same.id; }
+      }
+      list.forEach(function (x) { x.fresh = false; });
+      var n = { id: ++seq, level: level, text: t.text || "", cmd: cmd, actions: t.actions || [], aged: 0, folded: tucked, settled: false, fresh: true, count: 1 };
+      list.unshift(n);
+      if (level === "problem") { alert.textContent = "Problem: " + n.text; } else { polite.textContent = LV[level][1] + ": " + n.text; }
+      paint(); return n.id;
+    }
+    function settle(id, words) {
+      list.forEach(function (x) { if (x.id === id) { x.settled = true; x.aged = 0; x.text = words || x.text; x.actions = []; x.fresh = false; } });
+      polite.textContent = words || ""; if (focused === id) { focused = null; } paint();
+    }
+    function tuck(on) {
+      if (on === tucked) { return; }
+      tucked = on;
+      list.forEach(function (x) { if (on) { x.folded = true; x.fresh = false; } else if (!timed(x)) { x.folded = false; x.fresh = false; } });
+      paint();
+    }
+    function sweep() {
+      if (list.some(function (x) { return !x.folded; })) { list.forEach(function (x) { x.folded = true; x.fresh = false; }); paint(); return; }
+      leave(list.filter(timed));
+    }
+    function tick() {
+      var gone = [], changed = false;
+      list = list.filter(function (t) {
+        if (!timed(t) || t.id === pointed || t.id === focused) { return true; }
+        t.aged += 1;
+        if (t.aged >= GONE_AFTER) { gone.push(t); changed = true; return false; }
+        if (t.aged >= OPEN_FOR && !t.folded) { t.folded = true; t.fresh = false; changed = true; }
+        return true;
+      });
+      remember(gone);
+      if (changed) { paint(); }
+    }
+    var timer = setInterval(tick, 1000);
+    /* A chip that lets clicks through never sees the pointer, so the page is watched instead, and only in a named place. */
+    window.addEventListener("pointermove", function (e) {
+      if (place === null) { if (near) { near = false; region.classList.remove("near"); } return; }
+      var now = Array.prototype.some.call(region.querySelectorAll("[data-gives-way]"), function (c) { var b = c.getBoundingClientRect(), dx = Math.max(b.left - e.clientX, 0, e.clientX - b.right), dy = Math.max(b.top - e.clientY, 0, e.clientY - b.bottom); return Math.sqrt(dx * dx + dy * dy) <= 48; });
+      if (now !== near) { near = now; region.classList.toggle("near", near); }
+    }, { passive: true });
+    /* Ctrl+Shift+X, caught before a terminal takes it. */
+    window.addEventListener("keydown", function (e) {
+      if (e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey && e.code === "KeyX" && list.length) { e.preventDefault(); e.stopPropagation(); sweep(); }
+    }, true);
+    return { add: add, settle: settle, sweep: sweep, stop: function () { clearInterval(timer); },
+      place: function (p) { p = p || null; if (p === place) { return; } place = p; if (p === null && near) { near = false; } tuck(p !== null); paint(); } };
+  }
+  function shToastPlace(r) { return shPureHere() ? (pagesRoute(r) ? "desk" : "pure") : (r.indexOf("session-") === 0 ? "session" : null); }
+
   function launch(o) {
     var c = o.cmd || ("$ loadout launch " + o.project + (o.task ? " --task \"" + o.task + "\"" : ""));
     var id = sessAdd({ project: o.project, agent: o.agent, title: o.task, task: o.taskId ? null : o.task, taskId: o.taskId, mode: o.mode, cmd: c, specialists: o.specialists });
@@ -1342,51 +1639,142 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     sessReveal(id, true);
   }
 
-  /* ---------- palette ---------- */
+  /* ---------- the command palette, as main's: Go to, In flight and Do; search everywhere; and Ask Loadout ---------- */
+  var PAL = null, PAL_O = null, PAL_ASK = null;
+  function palMatch(q, t) { t = t.toLowerCase(); return q.toLowerCase().split(/\s+/).filter(Boolean).every(function (w) { return t.indexOf(w) >= 0; }); }
+  /* Main's paletteGroups(): every page; each line in flight, a session going to its page and anything else to Home focused on it; and Do, from every line's own actions. */
+  function palGroups() {
+    var goTo = PAGES.map(function (p) { return { key: "go-" + p[0], glyph: "→", label: p[1], sub: "page", kind: "page", run: function () { go(p[0]); } }; });
+    var flight = ST.lines.map(function (l) { return { key: "in-" + l.id, glyph: l.waiting ? "!" : "▶", label: l.title, sub: l.where + " · " + sessWord(l), need: !!l.waiting, kind: l.kind, run: function () { if (l.kind === "session") { go("session-" + l.id); } else { ST.focus = l.id; ST.picked = l.id; ST.view = "lens"; go("home"); } } }; });
+    var doing = [];
+    if (!P.watchOnly) {
+      doing.push({ key: "do-start", glyph: "+", label: "Start a session…", sub: "opens New session · $ loadout launch <project>", kind: "action", run: function () { if (ST.ambient) { setAmbient(false); } openLaunch(); } });
+      /* What each piece of work in flight offers, beside its own command. */
+      ST.lines.forEach(function (l) {
+        actionsFor(l).forEach(function (a) {
+          if (!a.onPress || (a.cmd || "").indexOf("changes nothing") >= 0) { return; }
+          doing.push({ key: "do-" + l.id + "-" + a.label, glyph: a.glyph || "▶", label: a.label + ": " + l.title, sub: a.cmd, need: !!l.waiting, kind: "action", run: function () { var r = a.onPress(); if (typeof r === "string") { said(r, a.cmd, "done"); } render(); } });
+        });
+      });
+    }
+    /* The modes are this browser's own, so they are offered even while Studio only watches. */
+    S.MODES.forEach(function (m) { doing.push({ key: "do-mode-" + m.key, glyph: "◐", label: "Mode: " + m.name, sub: m.desc + " · Ctrl Shift M cycles", kind: "action", run: function () { setMode(m.key); } }); });
+    doing.push({ key: "do-ambient", glyph: "◎", label: "Enter Ambient", sub: "changes nothing · A", kind: "action", run: function () { var here = route() === "home"; go("home"); setTimeout(function () { setAmbient(true); }, here ? 0 : 90); } },
+      { key: "do-appearance", glyph: "◐", label: "Appearance…", sub: "theme, accent, density, motion, background, halo, commands", kind: "action", run: openAppearance });
+    /* How commands show: kept in Loadout's config, so a setting like the rest of Appearance (the controls round's studio-commands). */
+    if (!P.watchOnly) { [["always", "Show commands always"], ["hover", "Show commands on hover"], ["never", "Hide commands"]].forEach(function (c) { if ((P.commands || "hover") !== c[0]) { doing.push({ key: "do-commands-" + c[0], glyph: "$", label: c[1], sub: "$ loadout config set studio-commands " + c[0], kind: "action", run: function () { P.commands = c[0]; savePrefs(); applyPrefs(); said(c[0] === "never" ? "Commands are hidden. Terminal-only ones still show." : c[0] === "hover" ? "Commands show when you point at or tab to a control" : "Commands show everywhere", "$ loadout config set studio-commands " + c[0]); } }); } }); }
+    return [{ name: "Go to", items: goTo }, { name: "In flight", items: flight }, { name: "Do", items: doing }];
+  }
+  /* Search everywhere: what 'loadout find --query=<q> --limit 5' finds in tasks, ideas, sessions, team runs and projects, each hit going to where it is shown (main's search.ts). */
+  function shFind(q) {
+    var hit = function (t) { return palMatch(q, t); }, kinds = [];
+    var tasks = []; Object.keys(TASKS).forEach(function (p) { (TASKS[p] || []).forEach(function (t) { if (hit(t.title + " " + t.id)) { tasks.push({ id: t.id, title: t.title, project: p === "~" ? null : p, state: t.state }); } }); });
+    var ideas = IDEAS.filter(function (x) { return hit(x.title + " " + x.id); }).map(function (x) { return { id: x.id, title: x.title, project: x.list === "~" ? null : x.list, state: ideaWord(x) }; });
+    var sessions = ST.lines.filter(function (l) { return l.kind === "session" && hit(l.title); }).map(function (l) { return { id: l.id, title: l.title, project: l.where, state: l.stage === 4 ? "ended" : sessWord(l) }; })
+      .concat(ST.recent.filter(function (x) { return hit(x[3]); }).map(function (x) { return { id: "r-" + x[3], title: x[3], project: x[2], state: "ended" }; }));
+    var runs = TR.filter(function (r) { return hit(r.goal + " " + r.team + " " + r.id); }).map(function (r) { return { id: r.id, title: r.goal, project: r.project, state: runWord(r) }; });
+    var projects = PROJ.filter(function (p) { return hit(p.name + " " + p.id); }).map(function (p) { return { id: p.id, title: p.name, project: null, state: p.available ? "on this machine" : "not on this machine" }; });
+    [["task", "Tasks", tasks], ["idea", "Ideas", ideas], ["session", "Sessions", sessions], ["run", "Team runs", runs], ["project", "Projects", projects]].forEach(function (g) { if (g[2].length) { kinds.push(g); } });
+    return kinds.map(function (g) {
+      return { name: g[1] + " found", items: g[2].slice(0, 5).map(function (h) { return { key: "find-" + g[0] + "-" + (h.project || "~") + "-" + h.id, glyph: "⌕", label: h.title, sub: [h.state, h.project].filter(Boolean).join(" · "), kind: g[0],
+        run: function () { if (g[0] === "task") { go("projects/" + (h.project || "+tasks")); } else if (g[0] === "idea") { go("ideas/" + (h.project || "~") + "/" + h.id); } else if (g[0] === "run") { go("run-" + h.id); } else if (g[0] === "project") { go("projects/" + h.id); } else { go("sessions"); } } }; }) };
+    });
+  }
+  /* What 'loadout ask --json' answers, for the prototype: spend, tasks, a plan to approve, or the closest requests it can answer and the agent instead. */
+  function shAsker(query) {
+    var q = query.toLowerCase(), reply;
+    var easy = [{ project: "starstats", id: "upload-retries", title: "Retry the upload with backoff", score: 0.82, reasons: ["small: one file changes", "a test already covers the upload"] }, { project: "loadout-cli", id: "specialist-examples", title: "Add value examples to specialist docs", score: 0.74, reasons: ["documents only", "nothing else waits on it"] }];
+    if (/spen[dt]|cost|money|\$/.test(q)) {
+      reply = { query: query, kind: "answer", answeredBy: "loadout", summary: "This week the agents used 2.4M tokens, about $18.40 at list rates.", spend: { usd: 18.4, basis: "list rates", models: [{ model: "opus", tokens: 1240000, usd: 12.1 }, { model: "sonnet", tokens: 1032000, usd: 6.3 }, { model: "gpt-5-codex", tokens: 131000, usd: null }], caveat: "gpt-5-codex has no price on this machine, so its tokens are not in the figure." }, tasks: [], plan: null, nearMisses: [] };
+    } else if (/terminal|open .*(task|session)|start sessions/.test(q)) {
+      reply = { query: query, kind: "plan", answeredBy: "loadout", summary: "Open a terminal for each of the two easy tasks.", tasks: easy, nearMisses: [],
+        plan: { shape: "terminals", team: null, teamChoices: [], capped: false, cap: null, capNone: false, left: ["new-bucket: blocked, waiting on access to the new bucket"], needs: [], steps: easy.map(function (t) { return { kind: "open-terminal", project: t.project, task: t.id, says: "Open " + t.id + ", " + t.title, reasons: t.reasons }; }) } };
+    } else if (/queue|team|run them|start/.test(q)) {
+      reply = { query: query, kind: "plan", answeredBy: "loadout", summary: "Queue the two easy tasks for a team and start it on them, sharing one cap.", tasks: easy, nearMisses: [],
+        plan: { shape: "team-queue", team: /review/.test(q) ? "quick-review" : null, teamChoices: ["quick-review", "iterating-project", "bug-hunt"], capped: true, cap: null, capNone: false, left: ["new-bucket: blocked, waiting on access to the new bucket"], needs: [],
+          steps: easy.map(function (t) { return { kind: "queue-task", project: t.project, task: t.id, says: "Queue " + t.id + ", " + t.title, reasons: t.reasons }; }).concat([{ kind: "start-team", project: null, task: null, says: "Start the team on them", reasons: [] }]) } };
+    } else if (/easy|task|work first|next/.test(q)) {
+      reply = { query: query, kind: "answer", answeredBy: "loadout", summary: "Two tasks look easy. Move uploads to the new bucket needs work first: it is blocked.", tasks: easy, plan: null, nearMisses: [] };
+    } else {
+      reply = { query: query, kind: "unplaced", answeredBy: "loadout", summary: "Loadout can't answer that from its own records.", tasks: [], plan: null,
+        nearMisses: [{ shape: "spend", rewrite: "what did I spend this week" }, { shape: "tasks", rewrite: "which tasks are easy" }, { shape: "team-queue", rewrite: "queue the easy tasks for a team" }],
+        agentOffer: { estimatedUsd: 0.4, basis: "about 14,000 tokens on sonnet, from your last asks" } };
+    }
+    return new Promise(function (ok) { setTimeout(function () { ok(reply); }, 650); });
+  }
+  /* Asking the agent spends a turn, so it is a job; watching only, it is refused. */
+  function shAgent(query, resume) {
+    if (P.watchOnly) { return Promise.reject(new Error("Studio is only watching, so the agent was not asked. In a terminal: $ loadout ask --use-agent --query=\"" + query + "\"")); }
+    return new Promise(function (ok) { setTimeout(function () { ok({ query: query, kind: "answer", answeredBy: "agent", agentCostUsd: 0.37, agentSession: resume || "c41e9a02", summary: "The agent read the last week of runs: release-crew waits on you for the push, and the docs run is spending three times its usual on docs-auditor/1. Nothing else needs a decision.", tasks: [], plan: null, nearMisses: [] }); }, 1200); });
+  }
+  /* A plan is carried out only from its card's Approve, through the same commands the terminal would run. */
+  function shApprove(plan, team, cap) {
+    if (P.watchOnly) { return Promise.reject(new Error("Studio is only watching, so nothing was started.")); }
+    var tasks = plan.steps.filter(function (s) { return s.task; }), c = String(cap || "").trim().replace(/^\$/, "");
+    if (plan.shape === "terminals") { said("Opened " + tasks.length + " terminals", tasks.map(function (s) { return "$ loadout launch " + s.project + " --task-id " + s.task; }).join(" · "), "done"); return Promise.resolve("Opened " + tasks.length + " terminal(s), each with its task. They are on the Sessions page."); }
+    if (plan.steps.some(function (s) { return s.kind === "start-team"; })) {
+      said("Started " + team + " on " + tasks.length + " tasks", "$ loadout team queue run-now " + team + tasks.map(function (s) { return " --task " + s.project + "/" + s.task; }).join("") + " --usd " + c, "done");
+      return Promise.resolve("Started " + team + " on " + tasks.length + " task(s), sharing a cap of " + (c.toLowerCase() === "none" ? "none" : "$" + Number(c).toFixed(2)) + ". The Jobs strip shows how it goes.");
+    }
+    said("Queued " + tasks.length + " tasks for " + team, tasks.map(function (s) { return "$ loadout team queue add " + team + " " + s.task + " --project " + s.project; }).join(" · "), "done");
+    return Promise.resolve("Queued " + tasks.length + " task(s) for " + team + ". Nothing has started.");
+  }
+  /* One palette for the visit, so Ask Loadout's conversation is kept when it closes; its groups are read again each time it opens. */
   function openPalette() {
-    var go1 = PAGES.map(function (p) { return { glyph: "→", label: p[1], sub: "page", kind: "page", run: function () { go(p[0]); } }; });
-    var flight = ST.lines.map(function (l) { return { glyph: l.waiting ? "!" : "▶", label: l.title, sub: l.where + " · " + wordOf(l), need: !!l.waiting, kind: "focus", run: function () { ST.focus = l.id; ST.view = "lens"; go("home"); } }; });
-    var acts = [{ glyph: "+", label: "Start a session…", sub: "opens New session · $ loadout <project> --task \"…\"", kind: "action", run: function () { go("sessions"); setTimeout(openLaunch, 60); } },
-      { glyph: "◐", label: "Mode: Default", sub: "Studio as it is · Ctrl Shift M cycles", kind: "action", run: function () { setMode("default"); } },
-      { glyph: "◐", label: "Mode: Terminals", sub: "Terminal Focus: sessions as tabs and panes", kind: "action", run: function () { setMode("terminals"); } },
-      { glyph: "◐", label: "Mode: Teams", sub: "Team Focus: every live run on one board", kind: "action", run: function () { setMode("teams"); } },
-      { glyph: "◐", label: "Mode: Minimal", sub: "one quiet column of what is live", kind: "action", run: function () { setMode("minimal"); } },
-      { glyph: "◐", label: "Mode: Pure Focus", sub: "list, view and actions; every key shown; effects off", kind: "action", run: function () { setMode("pure"); } },
-      { glyph: "▶", label: "Start a team run…", sub: "opens Start a run · $ loadout team run <team> \"…\"", kind: "action", run: function () { go("teams"); setTimeout(function () { openSheet("run"); }, 60); } }];
-    var t = line("t1");
-    if (t.waiting) { acts.push({ glyph: "✓", label: "Yes: push the tag v0.66.0", sub: "$ loadout team gate 20261017-1314-9c0d --gate g3 --answer yes --by dashboard", need: true, kind: "action", run: function () { answerGate(true); TV++; render(); } }, { glyph: "✕", label: "No: don't push the tag v0.66.0", sub: "$ loadout team gate 20261017-1314-9c0d --gate g3 --answer no --by dashboard", kind: "action", run: function () { answerGate(false); TV++; render(); } }); }
-    if (t.stage === 2 && !t.held) { acts.push({ glyph: "‖", label: "Hold release-crew after this round", sub: "$ loadout team halt --pause", kind: "action", run: function () { t.held = true; render(); } }); }
-    acts.push({ glyph: "↻", label: "Refine the browser launcher idea", sub: "$ loadout idea refine browser-launcher", kind: "action", run: refine },
-      { glyph: "▶", label: "Mark upload-retries doing", sub: "$ loadout task declare upload-retries doing --project starstats", kind: "action", run: function () { var k = line("k1"); k.stage = 2; k.note = "doing"; render(); } },
-      { glyph: "◎", label: "Enter Ambient", sub: "changes nothing · A", kind: "action", run: function () { setAmbient(true); } },
-      { glyph: "◐", label: "Appearance…", sub: "theme, accent, density, motion, halo, commands", kind: "action", run: openAppearance });
-    [["always", "Show commands always"], ["hover", "Show commands on hover"], ["never", "Hide commands"]].forEach(function (c) { if ((P.commands || "hover") !== c[0]) { acts.push({ glyph: "$", label: c[1], sub: "$ loadout config set studio-commands " + c[0], kind: "action", run: function () { P.commands = c[0]; savePrefs(); applyPrefs(); said(c[0] === "never" ? "Commands are hidden. Terminal-only ones still show." : c[0] === "hover" ? "Commands show when you point at or tab to a control" : "Commands show everywhere", "$ loadout config set studio-commands " + c[0]); } }); } });
-    S.CommandPalette({ groups: [{ name: "Go to", items: go1 }, { name: "In flight", items: flight }, { name: "Do", items: acts }], bindKeys: false }).open();
+    if (!PAL) {
+      PAL_ASK = S.AskPane({ turns: [], asking: false });
+      PAL_O = { groups: [], bindKeys: false, search: shFind, ask: { asker: shAsker, agent: shAgent, approve: shApprove, conversation: PAL_ASK } };
+      PAL = S.CommandPalette(PAL_O);
+    }
+    PAL_O.groups = palGroups();
+    PAL.open();
   }
 
-  /* ---------- appearance ---------- */
+  /* ---------- appearance: kept in Loadout's config (main's Appearance.svelte) ---------- */
+  var SH_THEMES = [["", "Follow the system"], ["dark", "Dark"], ["light", "Light"], ["hc-dark", "High contrast dark"], ["hc-light", "High contrast light"]];
   function appearanceForm() {
-    var f = el("div", { "class": "appear" });
-    function seg(name, legend, opts, val, set) {
-      var fs = el("fieldset", { "class": "seg" }, [el("legend", { text: legend })]), row = el("div", { "class": "opts" });
-      opts.forEach(function (o) { var id = "ap-" + name + "-" + o[0]; row.appendChild(el("label", { "for": id }, [el("input", { type: "radio", name: "ap-" + name, id: id, value: o[0], checked: val === o[0] ? true : null, onchange: function () { set(o[0]); savePrefs(); applyPrefs(); renderNav(); render(); } }), o[1]])); });
-      fs.appendChild(row); return fs;
+    /* Each group's line is the setting it keeps, so it shows whatever the commands setting says. */
+    var f = el("div", { "class": "appear", "data-commands": "always" });
+    function seg(name, cfg, legend, opts, val, set, note) {
+      var fs = el("fieldset", { "class": "seg", disabled: P.watchOnly ? true : null }, [el("legend", { text: legend })]), row = el("div", { "class": "opts" });
+      var lineOf = function (v) { var l = "$ loadout config set " + cfg + " " + (v === "" ? "\"\"" : v); return P.watchOnly ? "Studio is only watching · " + l : l; };
+      var code = el("code", { "class": "ls-cmd", text: lineOf(val) });
+      opts.forEach(function (o) { var id = "ap-" + name + "-" + (o[0] || "system"); row.appendChild(el("label", { "for": id }, [el("input", { type: "radio", name: "ap-" + name, id: id, value: o[0], checked: val === o[0] ? true : null, onchange: function () { set(o[0]); code.textContent = lineOf(o[0]); savePrefs(); applyPrefs(); renderNav(); render(); } }), o[1]])); });
+      fs.appendChild(row); fs.appendChild(code);
+      if (note) { fs.appendChild(el("p", { "class": "calm small", text: note })); }
+      return fs;
     }
-    var cur = root.getAttribute("data-theme");
-    f.appendChild(seg("theme", "Theme", [["dark", "Dark"], ["light", "Light"], ["hc-dark", "High contrast dark"], ["hc-light", "High contrast light"]], P.theme || cur, function (v) { P.theme = v; }));
-    f.appendChild(seg("accent", "Accent", [["cyan", "Cyan"], ["ice", "Ice"], ["magenta", "Magenta"], ["violet", "Violet"]], P.accent, function (v) { P.accent = v; }));
-    f.appendChild(seg("density", "Density", [["compact", "Compact"], ["comfortable", "Comfortable"], ["roomy", "Roomy"]], P.density, function (v) { P.density = v; }));
-    f.appendChild(seg("motion", "Motion", [["full", "Full"], ["reduced", "Reduced"], ["none", "None"]], P.motion, function (v) { P.motion = v; }));
-    f.appendChild(seg("backdrop", "Background", [["plain", "Plain"], ["map", "Field map, still"], ["map-animated", "Field map, animated"]], P.backdrop || "map", function (v) { P.backdrop = v; }));
-    f.appendChild(el("p", { "class": "calm", style: "margin: -4px 0 0; font-size: 12.5px" }, ["The animated map moves only under full motion, and never in Pure Focus. High contrast keeps the plain ground. ", el("code", { "class": "ls-cmd", text: "$ loadout config set studio-backdrop " + (P.backdrop || "map") })]));
-    f.appendChild(seg("commands", "Commands", [["always", "Always shown"], ["hover", "On hover"], ["never", "Never shown"]], P.commands || "hover", function (v) { P.commands = v; }));
-    f.appendChild(el("p", { "class": "calm", style: "margin: -4px 0 0; font-size: 12.5px" }, ["On hover, a button's command floats in under it while you point at it or tab to it, and takes no space. Terminal-only commands and the Commands page always show theirs. ", el("code", { "class": "ls-cmd", text: "$ loadout config set studio-commands " + (P.commands || "hover") })]));
-    f.appendChild(seg("halo", "Lens halo", [["orbit", "Orbit"], ["gyroscope", "Gyroscope"]], P.halo, function (v) { P.halo = v; }));
-    f.appendChild(S.Switch({ label: "Single-letter shortcuts", sub: "A for Ambient, N for a new session", checked: P.keys, onChange: function (v) { P.keys = v; savePrefs(); } }));
-    f.appendChild(el("p", { "class": "calm", style: "margin: 0; font-size: 12.5px" }, ["Kept in this browser for the prototype. Studio keeps the halo in Loadout's config: ", el("code", { "class": "ls-cmd", text: "$ loadout config set studio-halo orbit" }), " (a proposed key)."]));
+    f.appendChild(seg("theme", "studio-theme", "Theme", SH_THEMES, P.theme || "", function (v) { P.theme = v || null; }));
+    f.appendChild(seg("accent", "studio-accent", "Accent", [["cyan", "Cyan"], ["ice", "Ice"], ["magenta", "Magenta"], ["violet", "Violet"]], P.accent, function (v) { P.accent = v; }));
+    f.appendChild(seg("density", "studio-density", "Density", [["compact", "Compact"], ["comfortable", "Comfortable"], ["roomy", "Roomy"]], P.density, function (v) { P.density = v; }));
+    f.appendChild(seg("motion", "studio-motion", "Motion", [["full", "Full"], ["reduced", "Reduced"], ["none", "None"]], P.motion, function (v) { P.motion = v; }));
+    f.appendChild(seg("backdrop", "studio-backdrop", "Background", [["plain", "Plain"], ["map", "Field map, still"], ["map-animated", "Field map, animated"]], P.backdrop || "plain", function (v) { P.backdrop = v; },
+      "The animated map moves only under full motion and pauses while anything waits for you. Pure Focus, Ambient and high contrast keep the plain ground."));
+    f.appendChild(seg("halo", "studio-halo", "Lens halo", [["orbit", "Orbit"], ["gyroscope", "Gyroscope"]], P.halo, function (v) { P.halo = v; }));
+    f.appendChild(seg("commands", "studio-commands", "Commands", [["always", "Always shown"], ["hover", "On hover"], ["never", "Never shown"]], P.commands || "hover", function (v) { P.commands = v; },
+      "On hover, a button's command floats in under it while you point at it or tab to it, and takes no space. Terminal-only commands and the Commands page always show theirs."));
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) { f.appendChild(el("p", { "class": "calm small", text: "This system asks for reduced motion, so nothing loops or travels whatever is chosen here." })); }
     return f;
   }
-  function openAppearance() { S.Dialog({ title: "Appearance", why: "Every Studio screen follows these.", content: appearanceForm(), cancelLabel: "Done" }).open(); }
+  /* The prototype's own switches, for the states Studio reaches from outside the page: started with --watch-only, the daemon gone, the daemon updated, the first read, and signed out. */
+  function shStates(onWatch, close) {
+    function flip(label, sub, on, set, k) { return key(S.Switch({ label: label, sub: sub, checked: on, onChange: function (v) { set(v); shRedraw(); } }), k); }
+    return el("fieldset", { "class": "seg shstates" }, [el("legend", { text: "This prototype: Studio's other states" }),
+      flip("Only watching", "as if Studio was started with loadout dashboard --watch-only · kept in this browser", !!P.watchOnly, function (v) { P.watchOnly = v; savePrefs(); if (onWatch) { onWatch(); } }, "st-watch"),
+      flip("The daemon can't be reached", "the alert at the top of every page", !!SH.offline, function (v) { SH.offline = v ? "Studio cannot reach the daemon. It may have stopped: loadout daemon status" : null; }, "st-offline"),
+      flip("A newer daemon", "as if the daemon was updated to 0.110.0 under this page", !!SH.newVersion, function (v) { SH.newVersion = v ? "0.110.0" : null; }, "st-version"),
+      flip("Before the first read", "what a page shows until the daemon has answered", !!SH.loading, function (v) { SH.loading = v; }, "st-loading"),
+      el("div", { "class": "ls-answers" }, [
+        halo({ label: "Show the signed-out page", size: "small", cmd: "as if every browser was signed out · changes nothing", onPress: function () { close(); P.signedOut = true; savePrefs(); render(); } }, "st-out")])]);
+  }
+  function openAppearance() {
+    var d = null, form = appearanceForm(), box = el("div", {});
+    var states = shStates(function () { var nf = appearanceForm(); box.replaceChild(nf, form); form = nf; }, function () { if (d) { d.close(); } });
+    box.appendChild(form); box.appendChild(states);
+    box.appendChild(el("div", { "class": "acts" }, [halo({ label: "Done", size: "small", onPress: function () { d.close(); } }, "ap-done")]));
+    d = S.Dialog({ title: "Appearance", why: "Every Studio screen follows these, in every browser: they are kept in Loadout's config.", content: box });
+    d.open();
+  }
 
   /* ---------- Teams: runs, the teams you can run, and the parts around them ---------- */
   var TEAMLIB = [
@@ -1965,15 +2353,15 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     if (m === P.mode) { return; }
     if (FOCUS) { FOCUS.close(); FOCUS = null; }
     if (!fromSwitch && MB) { MB.switcher.set(m); }
-    S.morph(function () { P.mode = m; savePrefs(); applyMode(); DECK = null; if (PURE) { PURE.desk.destroy(); PURE = null; LIVE = null; } lastTeams = ""; render(); });
+    S.morph(function () { P.mode = m; savePrefs(); applyMode(); shFieldmap(); DECK = null; if (PURE) { PURE.desk.destroy(); PURE = null; LIVE = null; } lastTeams = ""; render(); });
     toasts.add({ level: "info", text: "Mode: " + S.MODES.filter(function (x) { return x.key === m; })[0].name, cmd: "kept in this browser · Ctrl Shift M cycles" });
   }
   function cycleMode() { var ks = S.MODES.map(function (x) { return x.key; }); setMode(ks[(ks.indexOf(P.mode) + 1) % ks.length]); }
   function waitingNow() {
     var out = [];
-    ST.lines.filter(function (l) { return l.kind === "session" && l.waiting; }).forEach(function (l) { out.push({ kind: "session", id: l.id, at: l.askedAt || 0, label: l.title + " needs approval" }); });
-    TR.filter(function (r) { return runWord(r) === "waiting for you"; }).forEach(function (r) { var g = runGate(r); out.push({ kind: "run", id: r.id, at: r.line ? (tline(r).askedAt || 0) : -1, label: g ? g.question : r.goal }); });
-    TR.filter(function (r) { return runWord(r) === "stalled"; }).forEach(function (r) { out.push({ kind: "run", id: r.id, at: -2, stalled: true, label: r.goal + " has stalled: no done-when moved for " + r.stalled + " rounds" }); });
+    /* As main's App.svelte: a session says which kind of wait it is; a run, what it asks. A stalled run is on Teams, not here. */
+    ST.lines.filter(function (l) { return l.kind === "session" && l.waiting; }).forEach(function (l) { out.push({ kind: "session", id: l.id, at: l.askedAt || 0, label: l.title + (l.approval ? " needs approval" : " is waiting for you") }); });
+    TR.filter(function (r) { return runWord(r) === "waiting for you"; }).forEach(function (r) { var g = runGate(r); out.push({ kind: "run", id: r.id, at: r.line ? (tline(r).askedAt || 0) : -1, label: g ? (g.brief || g.question) : r.goal }); });
     return out.sort(function (a, b) { return a.at - b.at; });
   }
   function goWaiting(w) {
@@ -1984,7 +2372,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
   function renderModebar() {
     var w = waitingNow(), compact = window.innerWidth < 600, sig = w.map(function (x) { return x.label; }).join("|") + "|" + compact;
     if (MB && sig === MBSIG) { if (MB.switcher.mode !== (P.mode || "default")) { MB.switcher.set(P.mode); } return; }
-    MBSIG = sig;
+    MBSIG = sig; shFieldmap();
     var host = document.getElementById("modebar"); host.textContent = "";
     MB = S.ModeBar({ mode: P.mode || "default", compact: compact, onMode: function (m) { setMode(m, true); }, onSearch: openPalette, waiting: w, onWaiting: goWaiting });
     host.appendChild(MB.el);
@@ -2373,12 +2761,18 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
   /* Minimal */
   function quietItems() {
     var out = [];
-    ST.lines.filter(function (l) { return l.kind === "session" && l.stage !== 4; }).forEach(function (l) { out.push({ id: l.id, kind: "session", title: l.title, word: wordOf(l), where: l.where, ask: l.waiting ? "Asks for approval. Answer it in the terminal." : "" }); });
-    TR.filter(function (r) { var w = runWord(r); return w !== "done" && w !== "stopped" && w !== "failed"; }).forEach(function (r) { var g = runGate(r); out.push({ id: r.id, kind: "team run", title: r.goal, word: runWord(r), where: r.team, ask: g ? g.question : "" }); });
+    /* As main's Quiet.svelte: a waiting session's line says which kind of wait; a run's, its gate's brief or question. */
+    ST.lines.filter(function (l) { return l.kind === "session" && l.stage !== 4; }).forEach(function (l) { out.push({ id: l.id, kind: "session", title: l.title, word: wordOf(l), where: l.where, ask: l.waiting ? (l.approval ? "Asks for approval. Answer it in the terminal." : "Waiting for you. Answer it in the terminal.") : "" }); });
+    TR.filter(function (r) { var w = runWord(r); return w !== "done" && w !== "stopped" && w !== "failed" && w !== "limited"; }).forEach(function (r) { var g = runGate(r); out.push({ id: r.id, kind: "team run", title: r.goal, word: runWord(r), where: r.team, ask: g ? (g.brief || g.question || "") : "" }); });
     return out;
   }
   function renderQuiet(main) {
-    main.appendChild(el("div", { "class": "quietwrap" }, [S.QuietList({ items: quietItems(), onOpen: function (x, from) { openQuiet(x, from); } })]));
+    var items = quietItems();
+    main.appendChild(el("h1", { "class": "ls-vh", text: "What is live" }));
+    main.appendChild(el("div", { "class": "quietwrap" }, [S.QuietList({ items: items, onOpen: function (x, from) { openQuiet(x, from); } })]));
+    /* A jump from elsewhere, the ModeBar's count or a launch, waits until what it names is listed. */
+    var want = SH.focusing, it = want ? items.filter(function (x) { return x.id === want.id && x.kind === want.kind; })[0] : null;
+    if (it) { SH.focusing = null; setTimeout(function () { openQuiet(it, null); }, 0); }
   }
   function openQuiet(x, from) {
     if (FOCUS) { FOCUS.close(); FOCUS = null; }
@@ -2389,12 +2783,18 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
       setTimeout(function () { t.focus(); }, 560);
       return;
     }
-    var r = TR.filter(function (y) { return y.id === x.id; })[0]; if (!r) { return; }
+    var r = TR.filter(function (y) { return y.id === x.id; })[0];
+    /* A run opened after it ended: its page says how. */
+    if (!r || r.ended) {
+      FOCUS = S.FocusFrame({ title: x.title || (r ? r.goal : x.id), word: "ended", content: el("p", { "class": "calm" }, ["That run has ended. ", el("a", { href: "#run-" + x.id, text: "Its page" }), " says how."]), from: from, onClose: function () { FOCUS = null; } });
+      return;
+    }
     var g = runGate(r), box = el("div", { "class": "qrun" });
-    if (g) { box.appendChild(S.Gate(Object.assign({ run: r.id }, g, { onAnswer: function (a, ex) { g.onAnswer(a, ex); setTimeout(function () { if (FOCUS) { FOCUS.close(); } }, 1200); } }))); }
+    if (g) { box.appendChild(S.Gate(Object.assign({ run: r.id }, g, { disabledReason: P.watchOnly ? SH_WATCH : null, onAnswer: function (a, ex) { g.onAnswer(a, ex); setTimeout(function () { if (FOCUS) { FOCUS.close(); } }, 1200); } }))); }
     box.appendChild(S.RunShape({ rounds: r.shape, next: r.ended ? null : "the next round", end: r.end || null }));
     box.appendChild(S.DoneWhen(r.done));
-    box.appendChild(el("p", { "class": "calm", style: "font-size: 13px" }, ["Everything else about it is on its page: ", el("a", { href: "#run-" + r.id, text: "open it in full" }), "."]));
+    /* Opening it in full is Default's page, so it leaves Minimal for Default. */
+    box.appendChild(el("p", { "class": "calm small" }, ["Everything else about it is on its page: ", el("a", { href: "#run-" + r.id, text: "open it in full", onclick: function () { setMode("default"); } }), "."]));
     FOCUS = S.FocusFrame({ title: r.goal, sub: r.team + " · " + r.project + " · round " + r.round, word: runWord(r), content: box, from: from, onClose: function () { FOCUS = null; } });
   }
 
@@ -2421,13 +2821,15 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     if (x.kind === "session") { var t = makeTerm(x.id); LIVE = { id: x.id, t: t }; return { el: t.el, term: t }; }
     var box = el("div", { "class": "pview" });
     if (x.kind === "team run") {
-      var r = pureItemRun(x.id), g = runGate(r);
+      var r = pureItemRun(x.id);
+      if (!r) { box.appendChild(el("p", { "class": "calm", text: "That run is no longer here." })); return { el: box }; }
+      var g = runGate(r);
       if (r.said) { box.appendChild(el("p", { "class": "ls-said", text: "✓ " + r.said })); }
-      if (g) { box.appendChild(S.Gate(Object.assign({ run: r.id }, g))); }
+      if (g) { box.appendChild(S.Gate(Object.assign({ run: r.id }, g, { disabledReason: P.watchOnly ? SH_WATCH : null }))); }
       box.appendChild(S.RunShape({ rounds: r.shape, next: r.ended ? null : "the next round", end: r.end || null }));
       box.appendChild(S.DoneWhen(r.done));
       box.appendChild(S.Crew({ nodes: r.crew }));
-      box.appendChild(el("p", { "class": "calm", style: "font-size: 13px" }, ["Its five depths are on its full page: ", el("a", { href: "#run-" + r.id, text: "open it" }), ", or type ", el("kbd", { "class": "ls-kbd", text: ":" }), " open."]));
+      box.appendChild(el("p", { "class": "calm small" }, ["Its five depths are on its full page: press the number beside Open its full page, or type ", el("kbd", { "class": "ls-kbd", text: ":" }), " open."]));
       return { el: box };
     }
     var l = line(x.id);
@@ -2435,49 +2837,90 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     (l.events || []).slice(0, 4).forEach(function (e) { box.appendChild(el("p", { "class": "calm", style: "margin: 6px 0 0; font-size: 13px" }, [el("span", { "class": "mono", style: "margin-right: 10px", text: e.t }), e.text])); });
     return { el: box };
   }
+  /* The actions for the picked thing: the same, with the same commands, as anywhere else (main's PureFocus.svelte). */
   function pureActions(x) {
-    function from(list) { return list.map(function (a) { return { label: a.label, cmd: a.cmd, kind: a.kind === "danger" ? "danger" : (a.kind || ""), disabledReason: a.disabledReason, run: function () { var r = a.onPress ? a.onPress() : null; setTimeout(function () { render(); }, 30); return typeof r === "string" ? r : a.label; } }; }); }
+    var watch = P.watchOnly ? SH_WATCH : null;
+    function from(list) { return list.map(function (a) { var why = a.disabledReason || (P.watchOnly ? shRefused(a) : null); return { label: a.label, cmd: a.cmd, kind: a.kind === "danger" ? "danger" : (a.kind || ""), disabledReason: why, run: function () { var r = a.onPress ? a.onPress() : null; setTimeout(function () { render(); }, 30); return typeof r === "string" ? r : a.label; } }; }); }
     if (x.kind === "session") {
       var l = line(x.id);
-      if (l.stage === 4) { return [{ label: "Carry it on in a terminal", cmd: "$ loadout resume " + (l.id === "s2" ? "3f9c2a1e" : "7b21d0c4"), disabledReason: "terminal only: Studio shows the command" }]; }
-      return [{ label: l.waiting ? "Go to the question" : "Type into it", kind: l.waiting ? "needs" : "", cmd: "focuses its terminal · answered there", run: function () { if (LIVE && LIVE.t) { LIVE.t.focus(); } return "Focused the terminal. Ctrl+] leaves it."; } },
-        { label: "End the session", kind: "danger", cmd: "stops the agent in this terminal", run: function () { l.stage = 4; l.waiting = false; l.note = "ended by you"; addEvent(l, "ended", "You ended " + l.title); setTimeout(render, 30); return "Ended " + l.title; } }];
+      if (!l || l.stage === 4) { return [{ label: "Carry it on in a terminal", cmd: "$ loadout resume " + (l && l.id === "s2" ? "3f9c2a1e" : "7b21d0c4") + " --project " + (l ? l.where : "starstats") }]; }
+      return [{ label: l.waiting ? "Go to the question" : "Type into it", kind: l.waiting ? "needs" : "", cmd: "puts the keyboard in its terminal · answered there", run: function () { if (LIVE && LIVE.t) { LIVE.t.focus(); } return "The keyboard is in its terminal. Ctrl+] leaves it."; } },
+        { label: "End the session", kind: "danger", cmd: "stops the agent in this terminal", disabledReason: P.watchOnly ? "Studio is only watching: end it from where it runs" : null, run: function () { l.stage = 4; l.waiting = false; l.note = "ended by you"; addEvent(l, "ended", "You ended " + l.title); setTimeout(render, 30); return "Ended " + l.title; } }];
     }
     if (x.kind === "team run") {
-      var r = pureItemRun(x.id), g = runGate(r), out = [];
+      var r = pureItemRun(x.id), out = [];
+      if (!r) { return []; }
+      var g = runGate(r), tl = tline(r), w = runWord(r);
       if (g) {
         var opts = g.kind === "confirm" ? ["yes", "no"] : (g.kind === "brief" ? ["yes", "no"] : g.options || []);
-        opts.forEach(function (op) { out.push({ label: g.kind === "brief" ? (op === "yes" ? "Send the brief" : "Don't send it") : (op === "yes" ? "Yes" : op === "no" ? "No" : op), kind: "needs", cmd: "$ loadout team gate " + r.id + " --gate " + g.gate + " --answer " + S.shellQuote(op) + " --by dashboard", run: function () { g.onAnswer(op, {}); return "Answered: " + op; } }); });
-        if (g.kind === "question" || g.kind === "readings") { out.push({ label: "Think again", cmd: "$ loadout team gate " + r.id + " --gate " + g.gate + " --think-again --by dashboard", run: function () { g.onAnswer("Think again", {}); return "Sent back to the lead"; } }); }
+        opts.forEach(function (op) { out.push({ label: g.kind === "brief" ? (op === "yes" ? "Send the brief" : "Don't send it") : (op === "yes" ? "Yes" : op === "no" ? "No" : op), kind: "needs", cmd: "$ loadout team gate " + r.id + " --gate " + g.gate + " --answer " + S.shellQuote(op) + " --by dashboard", disabledReason: watch, run: function () { g.onAnswer(op, {}); return "Answered: " + op; } }); });
+        if (g.kind === "question" || g.kind === "readings") { out.push({ label: "Think again", cmd: "$ loadout team gate " + r.id + " --gate " + g.gate + " --think-again --by dashboard", disabledReason: watch, run: function () { g.onAnswer("Think again", {}); return "Sent back to the lead"; } }); }
       }
-      return out.concat(from(runActs(r)));
+      /* A running run offers all three together, as main does. */
+      if (!r.ended && ["done", "stopped", "failed", "limited"].indexOf(w) < 0) {
+        out.push({ label: "Hold after this round", cmd: "$ loadout team halt " + r.id + " --pause", disabledReason: watch, run: function () { if (tl) { tl.held = true; } r.held = true; TV++; setTimeout(render, 30); return "It holds after this round"; } },
+          { label: "Let it carry on", cmd: "$ loadout team halt " + r.id + " --resume", disabledReason: watch, run: function () { if (tl) { tl.held = false; } r.held = false; TV++; setTimeout(render, 30); return "It carries on"; } },
+          { label: "Stop after this round", kind: "danger", cmd: "$ loadout team halt " + r.id, disabledReason: watch, run: function () { r.ended = "stopped"; r.end = { word: "stopped", text: "Stopped by you after round " + r.round }; TV++; setTimeout(render, 30); return "It stops after this round"; } });
+      }
+      out.push({ label: "Open its full page", cmd: "the five depths, in Default · changes nothing", run: function () { setMode("default"); setTimeout(function () { go("run-" + r.id); }, 60); return "Opened its full page"; } });
+      return out;
     }
-    return from(actionsFor(line(x.id)));
+    var ln = line(x.id);
+    return ln ? from(actionsFor(ln)) : [];
   }
+  var PURE_SCOPES = [["all", "everything"], ["needs", "what needs you"], ["sessions", "sessions"], ["runs", "team runs"], ["ideas", "ideas"], ["tasks", "tasks"]];
+  /* The list, scoped: Home's desk keeps whatever was chosen last. */
+  function pureList(where, words) {
+    P.pureScope = where; savePrefs();
+    if (route() !== "home") { go("home"); } else if (PURE && !PURE.page) { pureScope(where); }
+    toasts.add({ level: "info", text: "The list: " + words, cmd: "G then a letter" });
+  }
+  /* The command bar's matches: the picked thing's actions, places and things, and every loadout command Studio has a form for. */
   function pureCommands(q, picked) {
     var rows = [];
     if (picked) { pureActions(picked).forEach(function (a, i) { rows.push({ kind: "action", label: (i + 1) + "  " + a.label, cmd: a.disabledReason || a.cmd, run: function () { if (PURE) { setTimeout(function () { PURE.desk.select(picked.id, true); }, 0); } if (!a.disabledReason && a.run) { var said = a.run(); toasts.add({ level: "info", text: said || a.label, cmd: a.cmd || "" }); } } }); }); }
-    [["Everything", "all"], ["Needs you", "needs"], ["Sessions", "sessions"], ["Team runs", "runs"], ["Ideas, in this list", "ideas"], ["Tasks", "tasks"]].forEach(function (s) { rows.push({ kind: "go", label: s[0], cmd: "the list, scoped", run: function () { P.pureScope = s[1]; savePrefs(); if (PURE && PURE.page) { go("home"); } else { pureScope(s[1]); } } }); });
-    Object.keys(PAGE_NAMES).forEach(function (k) { rows.push({ kind: "go", label: PAGE_NAMES[k], cmd: "its desk \u00b7 G then " + Object.keys(GOKEYS).filter(function (x) { return GOKEYS[x] === k; })[0].toUpperCase(), run: function () { go(k); } }); });
+    PURE_SCOPES.forEach(function (s) { rows.push({ kind: "go", label: "The list: " + s[1], cmd: "changes nothing", run: function () { pureList(s[0], s[1]); } }); });
+    ["i", "p", "c", "m", "u", "o"].forEach(function (k) { rows.push({ kind: "go", label: PAGE_NAMES[GOKEYS[k]], cmd: "its desk · G then " + k.toUpperCase(), run: function () { go(GOKEYS[k]); } }); });
     pureGroups("all").forEach(function (g) { g.items.forEach(function (x) { rows.push({ kind: "go", label: x.title, cmd: x.kind + " · " + x.word, run: function () { if (PURE) { PURE.desk.select(x.id); } } }); }); });
-    if (picked && picked.kind === "team run") { rows.push({ kind: "go", label: "Open its full page", cmd: "the five depths", run: function () { setMode("default"); setTimeout(function () { go("run-" + picked.id); }, 60); } }); }
-    [["Start a session", "$ loadout <project> --task \"…\"", function () { openLaunch(); }], ["Start a team run", "$ loadout team run <team> \"<goal>\" --project <slug>", function () { openSheet("run"); }], ["Make a team", "$ loadout team new <name>", function () { openSheet("make"); }], ["Run one on a schedule", "$ loadout team schedule add <name> <team> \"<goal>\"", function () { openSheet("schedule"); }],
-      ["What the agents have cost", "$ loadout usage", null], ["The bin", "$ loadout team bin", function () { setMode("default"); setTimeout(function () { go("teams-bin"); }, 60); }], ["Carry the last session on", "$ loadout resume --last", null]].forEach(function (c) {
-      rows.push({ kind: "command", label: c[0], cmd: c[1], run: c[2] || function () { toasts.add({ level: "info", text: c[0] + ": opens its form, filled in", cmd: c[1] }); } });
-    });
-    q = q.toLowerCase();
+    if (!P.watchOnly) { rows.push({ kind: "command", label: "Start a session", cmd: "$ loadout launch <project>", run: function () { openLaunch(); } }); }
+    /* Every loadout command Studio has a form for, each going to its form on Commands. */
+    CMD_CAT.forEach(function (c) { rows.push({ kind: "command", label: c.description || c.path, cmd: "$ loadout " + c.path, run: function () { go(cmdHref(c.path).slice(1)); } }); });
+    q = q.trim().toLowerCase();
     return rows.filter(function (r) { return !q || (r.label + " " + (r.cmd || "") + " " + r.kind).toLowerCase().indexOf(q) >= 0; });
   }
   function pureScope(s) { P.pureScope = s; savePrefs(); if (PURE) { PURE.desk.refresh(pureGroups(s)); PURE.sig = ""; renderModebar(); } }
+  /* The desk's list and actions widths, dragged with the dividers between them and kept in this browser; every desk shares them (main's WorkDesk split). */
+  function pureSplit(deskEl) {
+    var sp = P.deskSplit && P.deskSplit.length === 2 ? P.deskSplit.slice() : null, wide = 0;
+    var floor = Math.ceil(40 * 13 * 0.6 + 24);
+    function fl(px) { return wide > 0 ? Math.min(0.5, px / wide) : 0; }
+    function at() {
+      wide = deskEl.getBoundingClientRect().width;
+      var list = deskEl.querySelector(":scope > section.list"), acts = deskEl.querySelector(":scope > section.acts");
+      return sp || [wide && list ? list.getBoundingClientRect().width / wide : 0.25, wide && acts ? acts.getBoundingClientRect().width / wide : 0.2];
+    }
+    function cols() { if (sp) { deskEl.classList.add("sh-split"); deskEl.style.setProperty("--desk-cols", "minmax(250px, " + sp[0].toFixed(4) + "fr) minmax(0, " + (1 - sp[0] - sp[1]).toFixed(4) + "fr) minmax(230px, " + sp[1].toFixed(4) + "fr)"); } }
+    function sync() {
+      var v = at(), cl = function (x, a, b) { return S.Splitter.clamp(x, a, b); };
+      one.set({ value: cl(v[0], fl(250), 1 - v[1] - fl(floor)), min: fl(250), max: 1 - v[1] - fl(floor), reset: fl(320) });
+      two.set({ value: cl(1 - v[1], v[0] + fl(floor), 1 - fl(230)), min: v[0] + fl(floor), max: 1 - fl(230), reset: 1 - fl(280) });
+    }
+    function keep() { P.deskSplit = sp; savePrefs(); cols(); sync(); }
+    var one = S.Splitter({ "class": "first", label: "Width of the list", value: 0.25, reset: 0.25, onchange: function (to) { var v = at(); sp = [to, v[1]]; keep(); } });
+    var two = S.Splitter({ "class": "second", label: "Width of the actions", value: 0.8, reset: 0.8, onchange: function (b) { var v = at(); sp = [v[0], 1 - b]; keep(); } });
+    deskEl.appendChild(one.el); deskEl.appendChild(two.el); cols();
+    setTimeout(sync, 0);
+  }
   function renderPure(main, r) {
     var sel = r.indexOf("session-") === 0 ? r.slice(8) : (r.indexOf("run-") === 0 ? r.slice(4) : null);
     var scope = r === "sessions" ? "sessions" : (r === "teams" ? "runs" : (P.pureScope || "all"));
     var wrap = el("div", { "class": "deskwrap" });
     var d = S.WorkDesk({ groups: pureGroups(scope), selected: sel || P.pureSelected, view: pureView, actions: pureActions, commands: pureCommands, keys: P.keys,
       goKeys: GOKEYS, onGo: pureGo, onSelect: function (id) { P.pureSelected = id; savePrefs(); } });
-    wrap.appendChild(d.el); main.appendChild(wrap);
+    wrap.appendChild(d.el); main.appendChild(wrap); pureSplit(d.el);
     PURE = { route: r, desk: d, sig: pureSig() };
   }
+
   function pureSig() { return JSON.stringify(pureGroups(P.pureScope || "all").map(function (g) { return g.items.map(function (x) { return x.id + x.word; }); })) + TV; }
   function refreshPure() {
     var s = pureSig(); if (s === PURE.sig) { return; }
@@ -3517,7 +3960,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
       pane.appendChild(block("z-sl", "Layouts", [el("p", { "class": "lead", text: "Home's Lens and Map are edited in place, from Edit layout on Home. These put them back as they came." }), el("div", { "class": "ls-answers" }, [halo({ label: "Reset the Lens", size: "small", cmd: "$ loadout config set studio-layout-lens \"\"", onPress: function () { said("The Lens is back as it came", "$ loadout config set studio-layout-lens \"\""); } }), halo({ label: "Reset the Map", size: "small", cmd: "$ loadout config set studio-layout-map \"\"", onPress: function () { said("The Map is back as it came", "$ loadout config set studio-layout-map \"\""); } })])]));
       var idle = el("input", { "class": "ls-text", type: "number", id: "s-idle", min: "1", max: "1440", value: "10", style: "max-width: 120px", "data-k": "s-idle", oninput: function () { il.textContent = "$ loadout config set studio-idle-after " + (idle.value || "10"); } }), il = el("code", { "class": "ls-cmd", text: "$ loadout config set studio-idle-after 10" });
       pane.appendChild(block("z-sk", "Ambient, keys and alerts", [S.Switch({ label: "Red Alert", sub: "light the page’s edge when something needs you · $ loadout config set studio-red-alert " + (P.redAlert ? "off" : "on"), checked: !!P.redAlert, onChange: function (v) { P.redAlert = v; savePrefs(); refreshAlert(); said(v ? "Red Alert is on: the page’s edge lights when something needs you" : "Red Alert is off", "$ loadout config set studio-red-alert " + (v ? "on" : "off")); } }), S.Switch({ label: "Single-letter shortcuts", sub: "A for Ambient, N for a new session · kept in this browser", checked: P.keys, onChange: function (v) { P.keys = v; savePrefs(); } }), S.Switch({ label: "Ambient fills the screen", sub: "kept in this browser", checked: !!P.ambFull, onChange: function (v) { P.ambFull = v; savePrefs(); } }), el("div", { "class": "ls-field", style: "margin-top: 10px" }, [el("label", { "class": "lab", "for": "s-idle", text: "A quiet session reads idle after, in minutes" }), idle, il])]));
-      pane.appendChild(block("z-ss", "Signing in", [el("p", { "class": "lead" }, ["This browser is signed in to Studio on port 4417. Signing out signs out every browser on this machine; open Studio again with ", el("code", { "class": "ls-cmd", text: "$ loadout dashboard --open --studio" }), "."]), halo({ label: "Sign out every browser", kind: "danger", size: "small", cmd: "$ loadout dashboard sign-out", onPress: function () { S.Dialog({ title: "Sign every browser out?", why: "Every browser signed in to Studio or the dashboard on this machine is signed out, this one included. Nothing else changes.", danger: true, role: "alertdialog", actions: [{ label: "Sign out", kind: "danger", cmd: "$ loadout dashboard sign-out", onPress: function () { said("This prototype stays signed in. In Studio, this page now asks you to open it again.", "$ loadout dashboard sign-out"); } }] }).open(); } }, "s-signout")]));
+      pane.appendChild(block("z-ss", "Signing in", [el("p", { "class": "lead" }, ["This browser is signed in to Studio on port 4417. Signing out signs out every browser on this machine; open Studio again with ", el("code", { "class": "ls-cmd", text: "$ loadout dashboard --open --studio" }), "."]), halo({ label: "Sign out every browser", kind: "danger", size: "small", cmd: "$ loadout dashboard sign-out", onPress: function () { S.Dialog({ title: "Sign every browser out?", why: "Every browser signed in to Studio or the dashboard on this machine is signed out, this one included. Nothing else changes.", danger: true, role: "alertdialog", actions: [{ label: "Sign out", kind: "danger", cmd: "$ loadout dashboard sign-out", onPress: function () { shSignOut(); } }] }).open(); } }, "s-signout")]));
       pane.appendChild(block("z-st", "Done in a terminal", [el("p", { "class": "lead", text: "These are only ever done where you type, so that nothing a page can press reads a secret back or makes an agreement for you." }),
         S.TerminalOnly({ title: "The passphrase for typing at a team's node", why: "It " + cmdOf("team attach set").reach.reason + ".", command: "$ loadout team attach set", fact: "Passphrase: set" }),
         S.TerminalOnly({ title: "Agree to a tool's tests running on this machine", why: "Agreeing to a tool's tests is made in a terminal on purpose.", command: "$ loadout tools verify <tool> --agree" }),
@@ -3717,55 +4160,81 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
 
   /* Minimal: each page is one quiet column. */
   function ideaWorkFor(x) { return pagePart("ideas/" + x.list + "/" + x.id, ".work"); }
+  /* As main's pages/quiet: what each page would have you act on, from the same reads the page makes, and the page's own calm sentence when there is none. */
+  var QUIET_CALM = { ideas: "No idea waits for you.", projects: "Nothing is blocked, and nothing needs putting right.", context: "Its documents and its specialists' checks find nothing to put right.", settings: "Nothing on this machine needs putting right.", memory: "The audit finds nothing to put right.", spend: "Nothing is running." };
   function quietFor(r) {
     var b = pageBase(r), items = [], sentence = el("p", {}), open = {};
     function B(t) { return el("b", { text: t }); }
+    function s(n, one, many) { return n + " " + (n === 1 ? one : many); }
     if (b === "ideas") {
       var live = IDEAS.filter(function (x) { return !x.accepted; }), wait = live.filter(function (x) { return ideaWord(x) === "waiting for you"; });
-      live.forEach(function (x) { var u = x.questions.filter(function (q) { return !q.answer; }), w = ideaWord(x); items.push({ id: x.id, kind: "idea", title: x.title, word: w, where: x.list === "~" ? "workspace-wide" : x.list, ask: w === "last round failed" ? "The last round failed. Try it again or clear the marker." : u.length ? u[0].question + (u.length > 1 ? " (and " + (u.length - 1) + " more)" : "") : "" }); open[x.id] = function () { return { title: x.title, sub: x.id + " · " + x.list, word: w, content: ideaWorkFor(x) }; }; });
-      sentence.append(B(live.length + " ideas"), " being shaped", wait.length ? "; " : ".", wait.length ? B(wait.length + " waits for your answers") : "", wait.length ? "." : "");
+      live.forEach(function (x) {
+        var u = x.questions.filter(function (q) { return !q.answer; }), w = ideaWord(x);
+        var fl = ideaFailure(x), failed = fl ? "Its last round failed: " + fl.error : "";
+        items.push({ id: x.id, kind: "idea", title: x.title, word: w, where: x.list === "~" ? "workspace-wide" : x.list, ask: failed || (u.length ? u[0].question + (u.length > 1 ? " (and " + (u.length - 1) + " more)" : "") : "") });
+        open[x.id] = function () { return { title: x.title, sub: x.id + " · " + x.list, word: w, content: ideaWorkFor(x) }; };
+      });
+      sentence.append(s(live.length, "idea", "ideas") + " being shaped");
+      if (wait.length) { sentence.append("; ", B(wait.length + " wait" + (wait.length === 1 ? "s" : "") + " for your answers")); }
+      sentence.append(".");
     }
     if (b === "projects") {
       var blocked = 0, fix = 0;
-      PROJ.forEach(function (p) {
-        (TASKS[p.id] || []).filter(function (t) { return t.state === "blocked"; }).forEach(function (t) { blocked++; items.push({ id: "t-" + t.id, kind: "task", title: t.title, word: "blocked", where: p.id, ask: t.note || "" }); open["t-" + t.id] = function () { return { title: t.title, sub: "task · " + p.id, word: "blocked", content: S.TaskBoard({ tasks: [t], where: ["--project", p.id], onDeclare: function (tt, n) { said(tt.title + ": " + S.TASK_MOVE[n].toLowerCase(), "$ loadout task declare " + tt.id + " " + n + " --project " + p.id); PV++; } }).el }; }; });
-        (HEALTH[p.id] || []).filter(function (f) { return f.fixable; }).forEach(function (f, i) { fix++; var id = "h-" + p.id + i; items.push({ id: id, kind: "health", title: f.name + " \u00b7 " + f.detail, word: "to put right", where: p.id }); open[id] = function () { return { title: p.name + ": its health", sub: "loadout drift " + p.id, word: "to put right", content: pagePart("projects/" + p.id, '[aria-labelledby="z-dh"]') }; }; });
+      PROJ.map(function (p) { return p.id; }).concat(["~"]).forEach(function (pid) {
+        var p = proj(pid);
+        (TASKS[pid] || []).filter(function (t) { return t.state === "blocked"; }).forEach(function (t) { blocked++; var id = "task:" + pid + "/" + t.id; items.push({ id: id, kind: "task", title: t.title, word: "blocked", where: pid === "~" ? "no project yet" : pid, ask: t.note || "" }); open[id] = function () { return { title: t.title, sub: "task · " + (pid === "~" ? "no project yet" : pid), word: "blocked", content: S.TaskBoard({ tasks: [t], where: pid === "~" ? ["--global"] : ["--project", pid], onDeclare: function (tt, n) { said(tt.title + ": " + S.TASK_MOVE[n].toLowerCase(), "$ loadout task declare " + tt.id + " " + n + (pid === "~" ? " --global" : " --project " + pid)); PV++; } }).el }; }; });
+        if (!p) { return; }
+        (HEALTH[pid] || []).filter(function (f) { return f.fixable; }).forEach(function (f) { fix++; var id = "finding:" + pid + "/" + f.name; items.push({ id: id, kind: "finding", title: f.name, word: "to put right", where: pid, ask: f.detail || "" }); open[id] = function () { return { title: p.name + ": its health", sub: "loadout drift " + pid, word: "to put right", content: pagePart("projects/" + pid, '[aria-labelledby="z-dh"]') }; }; });
       });
-      sentence.append(PROJ.length + " projects, " + PROJ.filter(function (p) { return p.available; }).length + " on this machine. ");
-      if (blocked || fix) { sentence.append(B(blocked + " task" + (blocked === 1 ? " is" : "s are") + " blocked"), " and ", B(fix + " thing" + (fix === 1 ? "" : "s") + " can be put right"), "."); }
+      sentence.append(s(PROJ.length, "project", "projects") + ", " + PROJ.filter(function (p) { return p.available; }).length + " on this machine.");
+      if (blocked) { sentence.append(" ", B(blocked + " task" + (blocked === 1 ? " is" : "s are") + " blocked")); }
+      if (blocked && fix) { sentence.append(" and"); }
+      if (fix) { sentence.append(" ", B(s(fix, "thing", "things") + " can be put right")); }
+      if (blocked || fix) { sentence.append("."); }
     }
     if (b === "context") {
-      var slug = r.split("/")[1] || "loadout-cli", e = explain(slug), used = e.selected.reduce(function (s, x) { return s + x.estimatedTokens; }, 0);
-      sentence.append("A session on " + slug + " starts with ", B(used.toLocaleString("en-GB") + " tokens"), used > e.budget ? ", over its budget of " + e.budget.toLocaleString("en-GB") + "." : ", within its budget of " + e.budget.toLocaleString("en-GB") + ".");
-      [["docs", "2 places where the documents have come adrift", "README.md links a renamed page; a guide names --by week, which usage does not have"], ["health", "1 place where the project departs from a specialist", "practice.testing: three behaviours in one test"]].forEach(function (x) { items.push({ id: x[0], kind: "context", title: x[1], word: "to put right", where: slug, ask: x[2] }); open[x[0]] = function () { return { title: x[1], sub: "context · " + slug, word: "to put right", content: pagePart("context/" + slug + "/" + x[0], ".ctx") }; }; });
+      var slug = r.split("/")[1] || "loadout-cli", e = explain(slug), used = e.selected.reduce(function (n, x) { return n + x.estimatedTokens; }, 0), fig = function (n) { return n.toLocaleString("en-GB"); };
+      sentence.append("A session on " + slug + " starts with ", B(fig(used) + " tokens"), ", " + (used > e.budget ? fig(used - e.budget) + " over" : used >= e.budget * 0.9 ? "near" : "within") + " its budget of " + fig(e.budget) + ".");
+      [["docs", "documents", s(2, "place", "places") + " where the documents have come adrift", "README.md:14: links docs/old-guide.md, which was renamed"], ["health", "health", s(1, "place", "places") + " where the project departs from what its specialists ask", "practice.testing: one behaviour per test"]].forEach(function (x) {
+        items.push({ id: x[0], kind: x[1], title: x[2], word: "to put right", where: slug, ask: x[3] });
+        open[x[0]] = function () { return { title: x[2], sub: "context · " + slug, word: "to put right", content: pagePart("context/" + slug + "/" + x[0], ".ctx") }; };
+      });
     }
     if (b === "settings") {
-      items.push({ id: "machine", kind: "this machine", title: "The zsh completion is out of date", word: "to put right", where: "doctor", ask: "loadout doctor --fix puts it right." });
-      open.machine = function () { return { title: "This machine", sub: "loadout doctor", word: "to put right", content: pagePart("settings/machine", ".setpane") }; };
-      items.push({ id: "agents", kind: "pack", title: "The pack infra is not approved here", word: "not approved", where: "agents and packs" });
-      open.agents = function () { return { title: "Agents and packs", sub: "loadout pack list", word: "not approved", content: pagePart("settings/agents", ".setpane") }; };
-      if (DAEMON.held) { items.push({ id: "daemon", kind: "daemon", title: "The daemon's schedules are held", word: "held", where: "the daemon" }); open.daemon = function () { return { title: "The daemon", sub: "loadout daemon", word: "held", content: pagePart("settings/daemon", ".setpane") }; }; }
-      sentence.append("The daemon is ", B(DAEMON.held ? "running, its schedules held" : "running"), DAEMON.autostart ? " and starts when you log in. " : ". ", B("1 thing"), " on this machine can be put right.");
+      items.push({ id: "machine:shell integration", kind: "this machine", title: "shell integration", word: "to put right", where: "loadout doctor", ask: "the zsh completion is out of date" });
+      open["machine:shell integration"] = function () { return { title: "This machine", sub: "loadout doctor", word: "to put right", content: pagePart("settings/machine", ".setpane") }; };
+      items.push({ id: "agents:infra", kind: "pack", title: "infra", word: "not approved", where: "fetched, not approved here" });
+      open["agents:infra"] = function () { return { title: "Agents and packs", sub: "loadout pack list", word: "not approved", content: pagePart("settings/agents", ".setpane") }; };
+      if (DAEMON.held) { items.push({ id: "daemon:held", kind: "the daemon", title: "The daemon's schedules are held", word: "held", where: "nothing scheduled fires" }); open["daemon:held"] = function () { return { title: "The daemon", sub: "loadout daemon", word: "held", content: pagePart("settings/daemon", ".setpane") }; }; }
+      sentence.append("The daemon is ", B(DAEMON.held ? "running, with its schedules held" : "running"), " and " + (DAEMON.autostart ? "starts when you log in" : "does not start when you log in") + ". ", B("1 thing"), " on this machine can be put right.");
     }
     if (b === "memory") {
-      var n = Object.keys(MEM).reduce(function (s, k) { return s + MEM[k].project.length + MEM[k].user.length + MEM[k].machine.length; }, 0);
-      items.push({ id: "test-layout", kind: "topic", title: "test-layout differs from what the agent recorded", word: "needs a decision", where: "loadout-cli", ask: "Keep the workspace's copy, or bring the agent's in." });
-      open["test-layout"] = function () { return { title: "test-layout", sub: "memory · loadout-cli", word: "needs a decision", content: pagePart("memory/loadout-cli/project/test-layout", ".memmid") }; };
-      items.push({ id: "import", kind: "memory", title: "2 topics the agent recorded outside the workspace", word: "needs a decision", where: "loadout-cli", ask: "build-quirks and ci-secrets would come in with loadout memory import." });
-      open["import"] = function () { return { title: "Recorded outside the workspace", sub: "memory · loadout-cli", word: "needs a decision", content: pagePart("memory/loadout-cli", ".memside") }; };
-      sentence.append(B(n + " topics"), " across " + Object.keys(MEM).length + " projects. The audit of loadout-cli says ", B("needs a look"), ".");
+      var n = Object.keys(MEM).reduce(function (t, k) { return t + MEM[k].project.length + MEM[k].user.length + MEM[k].machine.length; }, 0), withTopics = Object.keys(MEM).filter(function (k) { return MEM[k].project.length + MEM[k].user.length + MEM[k].machine.length > 0; }).length;
+      items.push({ id: "topic:test-layout", kind: "drifted", title: "test-layout", word: "to put right", where: "loadout-cli", ask: "differs from what the agent recorded: keep the workspace's copy, or bring the agent's in" });
+      open["topic:test-layout"] = function () { return { title: "test-layout", sub: "memory · loadout-cli", word: "to put right", content: pagePart("memory/loadout-cli/project/test-layout", ".memmid") }; };
+      items.push({ id: "tools:agent", kind: "outside the workspace", title: "2 topics the agent recorded outside the workspace", word: "open", where: "loadout-cli", ask: "$ loadout memory import loadout-cli" });
+      open["tools:agent"] = function () { return { title: "Recorded outside the workspace", sub: "memory · loadout-cli", word: "open", content: pagePart("memory/loadout-cli", ".memside") }; };
+      sentence.append(B(s(n, "topic", "topics")), " across " + s(withTopics, "project", "projects") + ". The audit of loadout-cli says ", B("needs a look"), ".");
     }
     if (b === "spend") {
       var u = usageFor("project", "30");
       sentence.append(B(S.tokens(u.totals.billedInputEquivalent) + " tokens"), " billed as input in the last 30 days; the cache saved ", B("74%"), ".");
-      ST.lines.filter(function (l) { return l.kind === "session" && l.stage === 2; }).forEach(function (l) { items.push({ id: l.id, kind: "session", title: l.title, word: wordOf(l), where: l.where }); });
+      /* What loadout running says is running: Studio's own sessions open their terminal; one started in a terminal of its own cannot be shown here. */
+      ST.lines.filter(function (l) { return l.kind === "session" && l.stage === 2; }).forEach(function (l) { items.push({ id: "run:" + l.id, kind: "session", title: l.where, word: wordOf(l), where: (l.agent || "claude") + " · " + (l.mins || 0) + " min", hosted: l.id }); });
+      items.push({ id: "run:ext-1", kind: "session", title: "workspace", word: "working", where: "codex · 3 min" });
     }
     return { items: items, sentence: sentence, open: open };
   }
   function renderQuietPage(main, r) {
     var q = quietFor(r), b = pageBase(r);
-    var qp = S.QuietPage({ title: PAGE_NAMES[b], sentence: q.sentence, items: q.items, open: r.indexOf("/") > 0, calmText: "Nothing on " + PAGE_NAMES[b] + " needs you.",
+    var qp = S.QuietPage({ title: PAGE_NAMES[b], sentence: q.sentence, items: q.items, open: b !== "spend" && r.indexOf("/") > 0, calmText: QUIET_CALM[b] || "Nothing on " + PAGE_NAMES[b] + " needs you.",
       onOpen: function (x, from) {
+        if (b === "spend") {
+          if (x.hosted) { openQuiet({ id: x.hosted, kind: "session" }, from); return; }
+          if (FOCUS) { FOCUS.close(); FOCUS = null; }
+          FOCUS = S.FocusFrame({ title: x.title, sub: x.where, word: x.word, content: el("p", { "class": "calm", text: "It runs in a terminal of its own, outside Studio, so its terminal cannot be shown here. Studio shows what it spent once its transcript is read." }), from: from, onClose: function () { FOCUS = null; } });
+          return;
+        }
         if (x.kind === "session") { openQuiet(x, from); return; }
         var f = q.open[x.id] && q.open[x.id](); if (!f) { return; }
         if (FOCUS) { FOCUS.close(); FOCUS = null; }
@@ -3783,30 +4252,37 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     if (PURE && PURE.page) { go("home"); } else { pureScope(where); }
     toasts.add({ level: "info", text: "The list: " + { all: "everything", sessions: "sessions", runs: "team runs", tasks: "tasks", needs: "what needs you" }[where], cmd: "G then a letter" });
   }
-  function act(label, cmd, fn, kind, why) { return { label: label, cmd: cmd, kind: kind || "", disabledReason: why, run: function () { var r = fn ? fn() : null; if (cmd && cmd.indexOf("$ ") === 0) { said(typeof r === "string" ? r : label, cmd); } return typeof r === "string" ? r : label; } }; }
+  /* One numbered action on a desk. Watching only, one that would change something says why instead (main's DeskContext.refused). */
+  function act(label, cmd, fn, kind, why) {
+    var refused = !why && P.watchOnly && cmd ? shRefused({ cmd: cmd, onPress: true }) : null;
+    return { label: label, cmd: cmd, kind: kind || "", disabledReason: why || (refused ? SH_WATCH : null), run: function () { var r = fn ? fn() : null; if (cmd && cmd.indexOf("$ ") === 0) { said(typeof r === "string" ? r : label, cmd.replace(/ · .*$/, "")); } return typeof r === "string" ? r : label; } };
+  }
   function openForgetById(id) { var p = proj(id); if (p) { openForget(p); } return "Opened Forget " + (p ? p.name : id); }
+  /* Another project, for Context and Memory: the next in the list. */
+  function deskAnother(ids, slug, base) { var at = ids.indexOf(slug), next = ids[(at + 1) % ids.length]; if (!next || next === slug) { return "There is no other project"; } go(base + "/" + next); var p = proj(next); return "Now " + (p ? p.name : next); }
   var DESKS = {
     ideas: function () {
-      var groups = [], wait = IDEAS.filter(function (x) { return ideaWord(x) === "waiting for you" || ideaWord(x) === "last round failed"; });
-      function item(x) { var u = x.questions.filter(function (q) { return !q.answer; }).length; return { id: x.id, kind: "idea", title: x.title, meta: (x.list === "~" ? "workspace-wide" : x.list) + " · " + (u ? u + " question" + (u === 1 ? "" : "s") + " for you" : x.stage.toLowerCase()), word: ideaWord(x) }; }
+      var groups = [], wait = IDEAS.filter(function (x) { return !x.accepted && (ideaWord(x) === "waiting for you" || ideaWord(x) === "last round failed"); });
+      function item(x) { return { id: x.id, kind: "idea", title: x.title, meta: (x.list === "~" ? "workspace-wide" : x.list) + " · " + x.stage.toLowerCase(), word: ideaWord(x) }; }
       if (wait.length) { groups.push({ key: "needs", name: "Needs you", items: wait.map(item) }); }
-      var lists = {}; IDEAS.filter(function (x) { return wait.indexOf(x) < 0; }).forEach(function (x) { (lists[x.list] = lists[x.list] || []).push(x); });
+      var lists = {}; IDEAS.filter(function (x) { return !x.accepted && wait.indexOf(x) < 0; }).forEach(function (x) { (lists[x.list] = lists[x.list] || []).push(x); });
       Object.keys(lists).forEach(function (k) { groups.push({ key: k, name: k === "~" ? "Workspace-wide" : k, items: lists[k].map(item) }); });
       function find(id) { return IDEAS.filter(function (x) { return x.id === id; })[0]; }
       return { groups: groups, view: function (it) { var x = find(it.id); return { el: x ? ideaWorkFor(x) : el("p", { text: "Gone." }) }; },
         actions: function (it) {
           var x = find(it.id); if (!x) { return []; }
           var w = ideaWhere(x).join(" "), out = [], i1 = x.id === "browser-launcher" ? line("i1") : null;
-          if (i1 && i1.failed) { out.push(act("Try the round again", "$ loadout idea refine " + x.id + " " + w, function () { refine(); bump(); }, "needs")); out.push(act("Clear the marker", "$ loadout idea dismiss " + x.id + " " + w, function () { i1.failed = ""; bump(); })); }
-          else if (!x.accepted) { out.push(act("Take it one round further", "$ loadout idea refine " + x.id + " " + w, function () { if (i1) { refine(); } bump(); return "A round is running on the daemon"; })); }
-          if (x.plan && !x.accepted && x.plan.placement) { var to = x.plan.placement.slug; out.push(act("Accept it onto " + to, "$ loadout idea accept " + x.id + " " + w + " --to " + to, function () { x.accepted = { project: to, plan: "docs/plans/" + x.id + ".md", by: "you", when: "17 Oct" }; x.stage = "Accepted"; bump(); return "Accepted onto " + to; })); }
-          if (!x.accepted) { out.push(act("Forget this idea", "$ loadout idea remove " + x.id + " " + w, function () { IDEAS = IDEAS.filter(function (y) { return y !== x; }); bump(); return "Forgot " + x.title; }, "danger")); }
+          if (i1 && i1.failed) { out.push(act("Try the round again", "$ loadout idea refine " + x.id + " " + w, function () { refine(); bump(); })); out.push(act("Clear the marker", "$ loadout idea dismiss " + x.id + " " + w, function () { i1.failed = ""; bump(); })); }
+          else { out.push(act("Take it one round further", "$ loadout idea refine " + x.id + " " + w, function () { if (i1) { refine(); } bump(); return "A round is running on the daemon"; })); }
+          if (x.plan && x.plan.placement) { var pl = x.plan.placement, to = pl.slug; out.push(act("Accept it onto " + (pl.isNew ? "a new project, " + (pl.name || to) : to), "$ loadout idea accept " + x.id + " " + w + (pl.isNew ? " --new-project " + (pl.name || to) : " --to " + to), function () { x.accepted = { project: to, plan: "docs/plans/" + x.id + ".md", by: "you", when: "17 Oct" }; x.stage = "Accepted"; bump(); return "Accepted onto " + to; }, "needs")); }
+          else { out.push(act("Accept it", null, null, "", "there is no plan to accept yet")); }
+          out.push(act("Forget this idea", "$ loadout idea remove " + x.id + " " + w, function () { IDEAS = IDEAS.filter(function (y) { return y !== x; }); bump(); return "Forgot " + x.title; }, "danger"));
           out.push(act("Drop a new idea in", "opens the box · records nothing yet", function () { setMode("default"); setTimeout(function () { go("ideas/+add"); }, 60); }));
           return out;
         } };
     },
     projects: function () {
-      function item(p) { var b = (TASKS[p.id] || []).filter(function (t) { return t.state === "blocked"; }).length, f = (HEALTH[p.id] || []).filter(function (x) { return x.fixable; }).length; return { id: p.id, kind: "project", title: p.name, meta: p.id + (p.available ? " · " + p.branch + (b ? " · " + b + " blocked" : "") : " · elsewhere only"), word: !p.available ? "not on this machine" : f ? "to put right" : b ? "blocked" : "" }; }
+      function item(p) { return p.available ? { id: p.id, kind: "project", title: p.name, meta: p.id + " · " + (p.defaultAgent || ""), word: "" } : { id: p.id, kind: "project", title: p.name, meta: p.id, word: "not on this machine" }; }
       return { groups: [{ key: "here", name: "On this machine", items: PROJ.filter(function (p) { return p.available; }).map(item) }, { key: "away", name: "Not on this machine", items: PROJ.filter(function (p) { return !p.available; }).map(item) }].filter(function (g) { return g.items.length; }),
         view: function (it) { return { el: pagePart("projects/" + it.id, ".dossier") }; },
         actions: function (it) {
@@ -3814,66 +4290,71 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
           var out = [], fx = (HEALTH[p.id] || []).filter(function (f) { return f.fixable; }).length;
           if (p.available) { out.push(act("Open it in the editor", "$ loadout code " + p.id)); out.push(act("Open its folder", "$ loadout project open " + p.id)); }
           else { out.push(act("Clone it onto this machine", "$ loadout project clone " + p.id, function () { p.available = true; p.path = "~/code/" + p.id; bump(); return "Cloned " + p.id; })); }
-          if (fx) { out.push(act("Put " + fx + " right", "$ loadout drift " + p.id + " --fix --yes", function () { HEALTH[p.id] = HEALTH[p.id].filter(function (f) { return !f.fixable; }); bump(); return "Put " + fx + " right"; })); }
-          out.push(act("Onboard it with an agent", "opens a terminal here, hosted by the daemon", function () { return "In Studio, a terminal opens with loadout project onboard " + p.id; }));
-          out.push(act("Forget project…", "opens the dialog · changes nothing yet", function () { return openForgetById(p.id); }));
+          if (fx) { out.push(act("Put " + fx + " right", "$ loadout drift " + p.id + " --fix --yes", function () { HEALTH[p.id] = HEALTH[p.id].filter(function (f) { return !f.fixable; }); bump(); return "Put " + fx + " right"; }, "needs")); }
+          out.push(act("Onboard it", "$ loadout project onboard " + p.id + " · opens a hosted terminal", function () { return "A terminal opens here with loadout project onboard " + p.id; }));
+          /* Opening the dialog changes nothing, so it takes one press; the dialog asks before anything is forgotten. */
+          out.push(act("Forget project…", "opens the dialog · runs nothing yet", function () { return openForgetById(p.id); }));
           return out;
         } };
     },
     context: function (r) {
       var slug = r.split("/")[1] || "loadout-cli";
-      var secs = CSECT.map(function (c) { return { id: "sec-" + c[0], kind: "section", title: c[1], meta: "context · " + slug, word: c[0] === "docs" || c[0] === "health" ? "to put right" : "" }; });
-      var specs = Object.keys(SPECS).map(function (id) { var s = SPECS[id]; return { id: "spec-" + id, kind: "specialist", title: s.title, meta: id + " · " + s.tokens.toLocaleString("en-GB") + " tokens" + (s.always ? " · always" : ""), word: "" }; });
-      return { groups: [{ key: "secs", name: "Context of " + slug, items: secs }, { key: "specs", name: "Specialists", items: specs }],
+      var secs = CSECT.map(function (c) { return { id: "sec-" + c[0], kind: "section", title: c[1], meta: slug, word: "" }; });
+      var specs = Object.keys(SPECS).map(function (id) { var s = SPECS[id]; return { id: "spec-" + id, kind: "specialist", title: s.title, meta: (s.kind || id.split(".")[0]) + " · " + id, word: "" }; });
+      return { groups: [{ key: "secs", name: slug, items: secs }, { key: "specs", name: "Specialists", items: specs }],
         view: function (it) { var r2 = it.id.indexOf("sec-") === 0 ? "context/" + slug + "/" + it.id.slice(4) : "context/" + slug + "/specialist/" + it.id.slice(5); var d = pageRender(el("div", {}), r2), c = d.querySelector(".ctx"); return { el: c || d }; },
         actions: function (it) {
-          var out = [], sec = it.id.slice(4);
-          if (it.id === "sec-load") { ["implement", "advise", "investigate", "review"].forEach(function (m) { out.push(act("Explain it in " + m + " mode", "$ loadout instructions explain --project " + slug + " --mode " + m + " · reads only", function () { CX.mode = m; bump(); return "Explained, " + m + " mode"; })); }); }
-          if (it.id.indexOf("spec-") === 0) { var sid = it.id.slice(5); out.push(act("Copy it into the workspace to edit", "$ loadout instructions export " + sid + " --project " + slug)); out.push(act("Measure how often sessions did what it asks", "$ loadout instructions probe " + sid)); }
-          if (sec === "docs") { out.push(act("Bring the symbol index up to date", "$ loadout docs refresh --project " + slug)); }
-          if (sec === "health") { out.push(act("Which specialists launches reached", "$ loadout instructions stats --project " + slug + " · reads only")); }
-          if (sec === "voice") { out.push(act("Render it into the style specialist", "$ loadout voice render --project " + slug)); out.push(act("Learn it from your writing", "opens a terminal here, hosted by the daemon", function () { return "In Studio, a terminal opens with loadout voice learn --project " + slug; })); }
-          if (sec === "handoff") { out.push(act("Write or read a handoff", "$ loadout handoff " + slug)); }
-          PROJ.filter(function (p) { return p.available && p.id !== slug; }).forEach(function (p) { out.push(act("The same for " + p.id, "the context of another project", function () { go("context/" + p.id); })); });
+          var out = [], sec = it.id.indexOf("sec-") === 0 ? it.id.slice(4) : null;
+          function reads(label, cmd, fn) { out.push(act(label, cmd + " · reads only", fn || function () { return "Read. Nothing changed."; })); }
+          if (sec === "load") { ["implement", "advise", "investigate", "review"].forEach(function (m) { reads("Explain it in " + m + " mode", "$ loadout instructions explain --project " + slug + " --mode " + m, function () { CX.mode = m; bump(); return "Explained, " + m + " mode"; }); }); }
+          else if (sec === "specialists") { reads("Check the library", "$ loadout instructions validate " + slug); }
+          else if (sec === "rules") { reads("Audit the rules", "$ loadout rules audit " + slug); }
+          else if (sec === "docs") { out.push(act("Bring the symbol index up to date", "$ loadout docs refresh --project " + slug)); }
+          else if (sec === "health") { reads("Check it against its specialists", "$ loadout instructions audit --project " + slug); }
+          else if (sec === "voice") { out.push(act("Render it into the style specialist", "$ loadout voice render --project " + slug)); }
+          else if (sec === "handoff") { out.push(act("Write or read a handoff", null, null, "", "a handoff is written in its form, in the view")); }
+          else if (!sec) { out.push(act("How often sessions did what it asks", "$ loadout instructions probe " + it.id.slice(5))); }
+          out.push(act("The same for another project", "the next project · changes nothing", function () { return deskAnother(PROJ.filter(function (p) { return p.available; }).map(function (p) { return p.id; }), slug, "context"); }));
           return out;
         } };
     },
     settings: function () {
       var words = { studio: "", loadout: "", agents: "not approved", safety: "", daemon: DAEMON.held ? "held" : "running", machine: "to put right" };
-      return { groups: [{ key: "sections", name: "Settings", items: SSECT.map(function (s) { return { id: s[0], kind: "section", title: s[1], meta: s[2], word: words[s[0]] }; }) }],
+      return { groups: [{ key: "sections", name: "Settings", items: SSECT.map(function (s) { return { id: s[0], kind: "section", title: s[1], meta: "#settings/" + s[0], word: words[s[0]] }; }) }],
         view: function (it) { return { el: pagePart("settings/" + it.id, ".setpane") }; },
         actions: function (it) {
           var out = [];
-          if (it.id === "studio") { out.push(act("Reset the Lens", "$ loadout config set studio-layout-lens \"\"")); out.push(act("Reset the Map", "$ loadout config set studio-layout-map \"\"")); out.push(act("Sign out every browser", "$ loadout dashboard sign-out", function () { return "This prototype stays signed in"; }, "danger")); }
-          if (it.id === "agents") { out.push(act("Approve infra's pinned commit here", "$ loadout pack approve infra")); }
-          if (it.id === "daemon") {
+          if (it.id === "studio") { out.push(act("Reset the Lens", "$ loadout config set studio-layout-lens \"\"")); out.push(act("Reset the Map", "$ loadout config set studio-layout-map \"\"")); out.push(act("Sign out every browser", "$ loadout dashboard sign-out", function () { shSignOut(); return "Signed every browser out"; }, "danger")); }
+          else if (it.id === "agents") { /* Each pack fetched but not approved here, or nothing to approve. */ out.push(act("Approve infra", "$ loadout pack approve infra", function () { return "Approved infra's pinned commit here"; })); }
+          else if (it.id === "daemon") {
             out.push(DAEMON.held ? act("Let the schedules fire", "$ loadout daemon resume", function () { DAEMON.held = false; bump(); }) : act("Hold the schedules", "$ loadout daemon pause", function () { DAEMON.held = true; bump(); }));
-            out.push(act("Restart it", "$ loadout daemon restart", function () { return "In Studio, this page reconnects when it is back"; }, "danger"));
+            out.push(act("Restart it", "$ loadout daemon restart", function () { return "In Studio, this page reconnects when it is back"; }));
             out.push(act("Stop it", "$ loadout daemon stop", function () { return "In Studio, this page waits for it"; }, "danger"));
             out.push(DAEMON.autostart ? act("Stop it starting at log-in", "$ loadout daemon autostart disable", function () { DAEMON.autostart = false; bump(); }) : act("Start it at log-in", "$ loadout daemon autostart enable", function () { DAEMON.autostart = true; bump(); }));
           }
-          if (it.id === "machine") { out.push(act("Put right what can be put right", "$ loadout doctor --fix --yes")); out.push(act("Set the launcher up again", "opens a terminal here, hosted by the daemon", function () { return "In Studio, a terminal opens with loadout setup"; })); }
-          if (!out.length) { out.push(act("Change things in the view", "Enter opens the view; its forms show their commands", null, "", "this section's changes are in its forms")); }
+          else if (it.id === "machine") { out.push(act("Put right what can be put right", "$ loadout doctor --fix --yes")); out.push(act("Set the launcher up again", "$ loadout setup · opens a hosted terminal", function () { return "A terminal opens here with loadout setup"; })); }
+          else { out.push(act("Its changes are in its forms", null, null, "", "each one is changed where it is shown, in the view")); }
           return out;
         } };
     },
     memory: function (r) {
       var slug = r.split("/")[1] || "loadout-cli", m = MEM[slug] || { project: [], user: [], machine: [] };
-      var groups = STORES.map(function (s) { return { key: s[0], name: s[1], items: (m[s[0]] || []).map(function (t) { return { id: s[0] + "/" + t.name, kind: "topic", title: t.name, meta: t.description, word: t.name === "test-layout" ? "needs a decision" : "" }; }) }; }).filter(function (g) { return g.items.length; });
+      var groups = STORES.map(function (s) { return { key: s[0], name: s[1], items: (m[s[0]] || []).map(function (t) { return { id: s[0] + "/" + t.name, kind: "topic", title: t.name, meta: t.description, word: "" }; }) }; }).filter(function (g) { return g.items.length; });
       return { groups: groups, view: function (it) { return { el: pagePart("memory/" + slug + "/" + it.id, ".memmid") }; },
         actions: function (it) {
           var st = it.id.split("/")[0], nm = it.id.split("/")[1], out = [];
           if (st === "project") { out.push(act("Delete this topic", "$ loadout memory delete " + nm + " " + slug + " --yes", function () { m.project = m.project.filter(function (t) { return t.name !== nm; }); bump(); return "Deleted " + nm + ". A backup was taken first."; }, "danger")); }
           out.push(act("Rebuild the index", "$ loadout memory reindex " + slug));
           out.push(act("Clean up what the audit found", "$ loadout memory audit " + slug + " --clean --apply"));
-          out.push(act("Walk the topics nobody has revisited", "opens a terminal here, hosted by the daemon", function () { return "In Studio, a terminal opens with loadout memory review " + slug; }));
-          Object.keys(MEM).filter(function (k) { return k !== slug; }).forEach(function (k) { out.push(act("The memory of " + k, "another project's topics", function () { go("memory/" + k); })); });
+          out.push(act("Walk the topics nobody has revisited", "$ loadout memory review " + slug + " · opens a hosted terminal", function () { return "A terminal opens here with loadout memory review " + slug; }));
+          out.push(act("Another project's memory", "the next project · changes nothing", function () { return deskAnother(Object.keys(MEM), slug, "memory"); }));
           return out;
         } };
     },
     spend: function () {
-      var parts = [["z-pt", "Tokens", "billed as input, and what the cache saved"], ["z-pb", "Where it went", "by " + SPEND.by], ["z-pr", "Running now", "loadout running"], ["z-pl", "Launched this week", "loadout launches --days 7"], ["z-ps", "Recent sessions", "loadout sessions --limit 12"], ["z-pa", "What agents reported", "loadout telemetry status"], ["z-pm", "This machine", "loadout status"], ["z-value", "What it did", "what Loadout did for you, counted"]];
-      return { groups: [{ key: "spend", name: "Spend · the last " + ({ "1": "day", "7": "week", "30": "30 days", "90": "90 days" }[SPEND.days]), items: parts.map(function (x) { return { id: x[0], kind: "spend", title: x[1], meta: x[2], word: x[0] === "z-pr" ? "running" : "" }; }) }],
+      /* What it did is the prototype's own (renderValue), kept from the designed brief. */
+      var parts = [["z-pt", "Tokens"], ["z-pb", "Where it went"], ["z-pr", "Running now"], ["z-pl", "Launched this week"], ["z-ps", "Recent sessions"], ["z-pa", "What agents reported"], ["z-pm", "This machine"], ["z-value", "What it did"]];
+      return { groups: [{ key: "blocks", name: "Spend", items: parts.map(function (x) { return { id: x[0], kind: "block", title: x[1], meta: "", word: "" }; }) }],
         view: function (it) { var d = el("div", {}); if (it.id === "z-value") { renderValue(d); return { el: d }; } renderSpend(d); var n = d.querySelector('[aria-labelledby="' + it.id + '"]'); return { el: n || d }; },
         actions: function () {
           var out = [];
@@ -3894,7 +4375,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     var wrap = el("div", { "class": "deskwrap" });
     var d = S.WorkDesk({ groups: cfg.groups, selected: sel, label: PAGE_NAMES[b], view: cfg.view, actions: function (x) { return cfg.actions(x).map(function (a) { var run = a.run; return Object.assign({}, a, { run: function () { var s = run ? run() : a.label; setTimeout(function () { if (PURE && PURE.page) { PURE.desk.repaintActions(); } }, 40); return s; } }); }); }, commands: pureCommands, keys: P.keys, goKeys: GOKEYS, onGo: pureGo,
       onSelect: function (id) { P.pureSel[b] = id; savePrefs(); } });
-    wrap.appendChild(d.el); main.appendChild(wrap);
+    wrap.appendChild(d.el); main.appendChild(wrap); pureSplit(d.el);
     PURE = { route: r, desk: d, page: b, pv: PV, sub: sub };
   }
 
@@ -4662,15 +5143,6 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
   }
   /* The two whole pages stay put between the script's ticks, as the six pages do: they redraw when their own data changes. */
   function plcSteady(r) { return r === "events" || r.indexOf("events?") === 0 || r === "commands" || r.indexOf("commands/") === 0; }
-  var PLC_ICONS = { events: "M6 12.5 V8.5 A4 4 0 0 1 14 8.5 V12.5 L15.5 14.5 H4.5 Z M8.5 16.5 A1.5 1.5 0 0 0 11.5 16.5", commands: "M4 6 L9 10 L4 14 M11 14.5 H16" };
-  /* SideRail draws Home's icon for a page it has none for; Events and Commands get main's own. */
-  function plcRailIcons(rail) {
-    Object.keys(PLC_ICONS).forEach(function (k) {
-      Array.prototype.forEach.call(rail.querySelectorAll('a[href="#' + k + '"] svg'), function (svg) {
-        var p = svg.querySelector("path"); if (p) { p.setAttribute("d", PLC_ICONS[k]); }
-      });
-    });
-  }
   /* The rail's facts for the pages here, as main's App.svelte says them. */
   function plcRailFacts(facts) {
     var u = evtUnread(), running = CMD_JOBS.filter(function (j) { return j.state === "running"; }).length;
@@ -5086,12 +5558,10 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     wrap.appendChild(side); wrap.appendChild(body); main.appendChild(wrap);
   }
 
-  /* ---------- placeholder pages ---------- */
-  function renderElsewhere(main, r) {
-    if (r === "settings") { main.appendChild(el("div", { "class": "head" }, [el("h1", { text: "Settings" })])); main.appendChild(el("section", { "class": "placeholder", "aria-labelledby": "z-app" }, [zone("", "Appearance", "z-app"), appearanceForm()])); return; }
-    var e = ELSEWHERE[r] || ["Not found", "$ loadout --help", "This page doesn't exist."];
-    main.appendChild(el("div", { "class": "head" }, [el("h1", { text: e[0] })]));
-    main.appendChild(el("div", { "class": "placeholder" }, [el("p", { "class": "calm", text: e[2] + " This page isn't part of the prototype." }), S.Command({ why: "Until then, in a terminal:", command: e[1] })]));
+  /* ---------- an address Studio has no page for (main's Elsewhere.svelte) ---------- */
+  function renderElsewhere(main) {
+    main.appendChild(el("div", { "class": "head" }, [el("h1", { text: "Not found" })]));
+    main.appendChild(el("div", { "class": "placeholder" }, [el("p", { "class": "calm" }, ["Studio has no page at this address. Every page is in the rail, and everything Loadout can do is on ", el("a", { href: "#commands", text: "Commands" }), "."])]));
   }
 
   /* ---------- render, keeping focus where it was ---------- */
@@ -5099,7 +5569,10 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
   function pagesRoute(r) { var b = r.split("/")[0]; return ["ideas", "projects", "context", "settings", "memory", "spend"].indexOf(b) >= 0; }
   function teamsRoute(r) { return r === "teams" || r.indexOf("teams-") === 0 || r.indexOf("run-") === 0 || r.indexOf("team-") === 0; }
   function render() {
+    /* Signed out, the browser sees only how to sign in; it is drawn once, so the scripted agents' ticks leave it be. */
+    if (P.signedOut) { if (!document.body.classList.contains("sh-out") || !document.getElementById("main").childNodes.length) { renderSignedOut(); } return; }
     if (typeof refreshAlert === "function") { refreshAlert(); }
+    toasts.place(shToastPlace(route()));
     var rr = route(), t1 = line("t1"), i1 = line("i1"), sig = rr + "|" + TV + "|" + PV + "|" + (t1 ? [t1.waiting, t1.stage, t1.held].join(",") : "") + "|" + (i1 && rr.indexOf("ideas") === 0 ? [i1.stage, i1.failed].join(",") : "");
     var pureRoute = P.mode === "pure" && (rr === "home" || rr === "sessions" || rr === "teams" || rr.indexOf("session-") === 0 || rr.indexOf("run-") === 0 || (pagesRoute(rr) && rr.indexOf("+") < 0));
     if (pureRoute && PURE && PURE.route === rr && document.getElementById("main").childNodes.length) {
@@ -5124,7 +5597,9 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     if (PURE) { PURE.desk.destroy(); PURE = null; }
     if (BESIDE) { BESIDE.destroy(); BESIDE = null; }
     if (!pagesRoute(r) && r !== "teams-office" && !tfBesideRoute(r)) { P.lastFocus = r; }
-    if (P.mode === "pure" && pagesRoute(r) && r.indexOf("+") < 0) { renderPurePage(main, r); }
+    shBanners(main);
+    if (SH.loading) { main.appendChild(el("p", { "class": "calm", role: "status", text: "Reading what the daemon knows…" })); }
+    else if (P.mode === "pure" && pagesRoute(r) && r.indexOf("+") < 0) { renderPurePage(main, r); }
     else if ((P.mode === "terminals" || P.mode === "teams") && pagesRoute(r)) { renderBeside(main, r, P.mode); }
     else if (P.mode === "teams" && r.indexOf("session-") === 0) { renderBeside(main, r, "teams"); }
     else if (P.mode === "terminals" && r === "teams-office") { renderBeside(main, r, "terminals"); }
@@ -5162,7 +5637,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
   }
 
   /* ---------- time: the script, and the agents typing ---------- */
-  var toasts = S.Toasts(document.getElementById("toasts"));
+  var toasts = shToasts(document.getElementById("toasts"));
   function step() {
     if (ST.paused || ST.step >= SCRIPT.length) { return; }
     var r = SCRIPT[ST.step++](); ST.clock += 2; ST.tokens += 1800;
@@ -5195,16 +5670,21 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
 
   /* ---------- keys ---------- */
   window.addEventListener("keydown", function (e) {
-    if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) { e.preventDefault(); openPalette(); return; }
+    if (P.signedOut) { return; }
+    if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) { e.preventDefault(); if (PAL && document.querySelector(".ls-dialog.pal")) { PAL.close(); } else { openPalette(); } return; }
     if (e.ctrlKey && e.shiftKey && (e.key === "m" || e.key === "M")) { e.preventDefault(); cycleMode(); return; }
-    if (e.key === "Escape" && ST.ambient) { setAmbient(false); return; }
-    var t = e.target && e.target.tagName, typing = t === "INPUT" || t === "TEXTAREA" || (e.target && e.target.isContentEditable);
-    if (typing || e.ctrlKey || e.metaKey || e.altKey || !P.keys || document.querySelector(".ls-dialog")) { return; }
-    if (e.key === "a" || e.key === "A") { setAmbient(!ST.ambient); }
-    if ((e.key === "n" || e.key === "N")) { e.preventDefault(); if (ST.ambient) { setAmbient(false); } go("sessions"); setTimeout(openLaunch, 60); }
+    /* Escape leaves Ambient, unless a dialog over it takes it first. */
+    if (e.key === "Escape" && ST.ambient && !document.querySelector(".ls-dialog")) { e.preventDefault(); setAmbient(false); return; }
+    var t = e.target && e.target.tagName, typing = t === "INPUT" || t === "TEXTAREA" || (e.target && e.target.isContentEditable) || (e.target && e.target.closest && e.target.closest(".ls-term, .xterm"));
+    /* Pure Focus has its own single keys, every one shown, and these are not among them (main's App.svelte). */
+    if (typing || shPureHere() || e.ctrlKey || e.metaKey || e.altKey || !P.keys || document.querySelector(".ls-dialog")) { return; }
+    if ((e.key === "a" || e.key === "A") && route() === "home") { setAmbient(!ST.ambient); }
+    /* N opens the sheet over what is showing, which the launch then adds to; watching only, there is nothing to launch. */
+    else if ((e.key === "n" || e.key === "N") && !P.watchOnly) { e.preventDefault(); if (ST.ambient) { setAmbient(false); } openLaunch(); }
   });
   window.addEventListener("resize", function () { clearTimeout(window.__rz); window.__rz = setTimeout(render, 200); });
 
+  shCanon();
   render();
 })();
 </script>
