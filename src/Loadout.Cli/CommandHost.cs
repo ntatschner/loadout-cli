@@ -157,6 +157,9 @@ public sealed class CommandHost
             }
 
             Program.Configure(config, launcherArgs.Contains("--debug", StringComparer.Ordinal), json);
+
+            // A relative path is the caller's, not this process's.
+            config.SetInterceptor(new Loadout.Cli.Infrastructure.CallerPaths());
         });
 
         try

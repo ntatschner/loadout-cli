@@ -1,7 +1,9 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Loadout.Core.Diagnostics;
+using Loadout.Core.Reading;
 using Loadout.Core.Security;
 using Loadout.Models.Agents;
 using Loadout.Models.Instructions;
@@ -167,16 +169,29 @@ public interface ILaunchLedger
 /// </remarks>
 internal sealed class LaunchLedger : ILaunchLedger
 {
+    private static readonly ConcurrentDictionary<string, AppendOnlyFile<Parsed>> Shared = new(StringComparer.Ordinal);
+
     private readonly IFilePermissions _permissions;
     private readonly TimeProvider _time;
+    private readonly bool _shared;
     private readonly SemaphoreSlim _lock = new(1, 1);
 
     public LaunchLedger(IPlatformPaths paths, IFilePermissions permissions, TimeProvider time)
+        : this(paths, permissions, time, SharedReaders.Enabled)
+    {
+    }
+
+    /// <param name="paths">Where the state directory is.</param>
+    /// <param name="permissions">Restricts the file to its owner.</param>
+    /// <param name="time">The clock for each line's moment.</param>
+    /// <param name="shared">Whether reads go through the process's shared reading of the file.</param>
+    internal LaunchLedger(IPlatformPaths paths, IFilePermissions permissions, TimeProvider time, bool shared)
     {
         ArgumentNullException.ThrowIfNull(paths);
 
         _permissions = permissions;
         _time = time;
+        _shared = shared;
 
         Path = System.IO.Path.Combine(paths.Paths.State, "launches", "ledger.jsonl");
     }
@@ -387,6 +402,32 @@ internal sealed class LaunchLedger : ILaunchLedger
     /// </summary>
     private async Task<string?> ReadRowsAsync(Action<Row, DateTimeOffset> each, CancellationToken ct)
     {
+        if (!_shared)
+        {
+            return await ReadEveryRowAsync(each, ct).ConfigureAwait(false);
+        }
+
+        try
+        {
+            // One reading per file for the whole process, not per instance:
+            // the daemon builds a fresh ledger for every request Studio makes.
+            var file = Shared.GetOrAdd(System.IO.Path.GetFullPath(Path), path => new AppendOnlyFile<Parsed>(path, Parse));
+
+            foreach (var parsed in await file.ReadAsync(ct).ConfigureAwait(false) ?? [])
+            {
+                each(parsed.Row, parsed.When);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return $"Could not read the launch ledger at {Path}: {ex.Message}";
+        }
+
+        return null;
+    }
+
+    private async Task<string?> ReadEveryRowAsync(Action<Row, DateTimeOffset> each, CancellationToken ct)
+    {
         if (!File.Exists(Path))
         {
             return null;
@@ -399,29 +440,10 @@ internal sealed class LaunchLedger : ILaunchLedger
 
             while (await reader.ReadLineAsync(ct).ConfigureAwait(false) is { } line)
             {
-                if (string.IsNullOrWhiteSpace(line))
+                if (!string.IsNullOrWhiteSpace(line) && Parse(line) is { } parsed)
                 {
-                    continue;
+                    each(parsed.Row, parsed.When);
                 }
-
-                Row? row;
-
-                try
-                {
-                    row = JsonSerializer.Deserialize<Row>(line);
-                }
-                catch (JsonException)
-                {
-                    // A line half-written when something was killed mid-append.
-                    continue;
-                }
-
-                if (row is null || !TryMoment(row.When, out var when))
-                {
-                    continue;
-                }
-
-                each(row, when);
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -430,6 +452,23 @@ internal sealed class LaunchLedger : ILaunchLedger
         }
 
         return null;
+    }
+
+    private static Parsed? Parse(string line)
+    {
+        Row? row;
+
+        try
+        {
+            row = JsonSerializer.Deserialize<Row>(line);
+        }
+        catch (JsonException)
+        {
+            // A line half-written when something was killed mid-append.
+            return null;
+        }
+
+        return row is not null && TryMoment(row.When, out var when) ? new Parsed(row, when) : null;
     }
 
     private async Task AppendAsync(Row row, CancellationToken ct)
@@ -485,6 +524,9 @@ internal sealed class LaunchLedger : ILaunchLedger
             CultureInfo.InvariantCulture,
             DateTimeStyles.RoundtripKind,
             out when);
+
+    /// <summary>A line that parsed, with its moment.</summary>
+    private sealed record Parsed(Row Row, DateTimeOffset When);
 
     /// <summary>One line of the file.</summary>
     private sealed record Row(

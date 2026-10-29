@@ -262,6 +262,17 @@ It counts only the reads it was put around, so treat it as a floor. A command
 handed to the daemon is counted in the daemon's summary, not its own; set
 `LOADOUT_LOCAL=1` as well to keep them apart. Off, it costs nothing.
 
+The first summaries from a running daemon showed where the repeats were. The
+launch ledger, which grows by a line or two for every session started, was
+read whole by the daemon several times a minute, almost always unchanged. It
+is now read once per process and after that only from where the last read
+stopped. Each read still checks the file's length and last-write time first,
+so a new launch shows up on the very next read, as it did before. A ledger
+that has shrunk, or been rewritten rather than added to, is read whole again.
+Set `LOADOUT_SHARED_READERS=0` to go back to reading the whole file every
+time; it is there to tell a wrong answer from the sharing apart from one in
+the file.
+
 ## Filtering and sorting a list
 
 Every list takes one query, written on one line:
