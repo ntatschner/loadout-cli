@@ -49,6 +49,24 @@ public static class ReadLedger
     public static string Directory(string state) => Path.Combine(state, "read-trace");
 
     /// <summary>
+    /// What a process is called in its summary's name: the first two words of
+    /// its command, or "launcher" when it has none. Words after the command's
+    /// first option are left out, because an option's value is not part of
+    /// the command, and naming the daemon after its log's path told nobody
+    /// which process it was.
+    /// </summary>
+    public static string Label(IReadOnlyList<string> args)
+    {
+        var words = args
+            .SkipWhile(one => one.StartsWith('-'))
+            .TakeWhile(one => !one.StartsWith('-'))
+            .Take(2)
+            .ToArray();
+
+        return words.Length == 0 ? "launcher" : string.Join('-', words);
+    }
+
+    /// <summary>
     /// Starts counting when <paramref name="asked"/> is "1", and arranges for
     /// the summary to be written as the process ends and every minute before.
     /// </summary>
@@ -275,6 +293,7 @@ public static class ReadLedger
             return new LedgerSummary(
                 _label,
                 _process,
+                typeof(ReadLedger).Assembly.GetName().Version?.ToString(3) ?? "0.0.0",
                 _started,
                 DateTimeOffset.UtcNow,
                 patterns,
@@ -388,6 +407,7 @@ public sealed class ReadTrace : IDisposable
 /// <summary>What one process read, worst offender first.</summary>
 /// <param name="Process">The command the process ran.</param>
 /// <param name="Id">Its process id.</param>
+/// <param name="Version">The Loadout version that counted, so a reading can be matched to the build it measured.</param>
 /// <param name="Started">When counting began.</param>
 /// <param name="Written">When this summary was made.</param>
 /// <param name="Sources">Files grouped by <see cref="ReadLedger.Pattern"/>, most reads per change first.</param>
@@ -395,6 +415,7 @@ public sealed class ReadTrace : IDisposable
 public sealed record LedgerSummary(
     string Process,
     int Id,
+    string Version,
     DateTimeOffset Started,
     DateTimeOffset Written,
     IReadOnlyList<ReadSummary> Sources,
