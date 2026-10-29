@@ -34,8 +34,13 @@
   ];
   var T = S.Terminal({ title: "add a retry to the upload step", project: "loadout-cli", agent: "claude", sessionId: "3f9c2a1e", state: "working", lines: OUT.slice(0, 4), onRetry: function () { T.setState("working"); } });
   document.getElementById("t").appendChild(T.el);
+  /* The foot: the session's StatusStrip, as main's Terminal takes it. */
+  if (S.StatusStrip) { T.setFoot(S.StatusStrip({ now: Date.parse("2026-10-27T12:00:20Z"), status: { version: 1, at: "2026-10-27T12:00:12Z", refreshSeconds: 30, terminal: "off", wrapping: false, model: "Opus 5.5",
+    context: { usedPercent: 42, inputTokens: 84000, windowSize: 200000, uncachedTokens: 1200, cacheReadTokens: 79800, cacheWriteTokens: 3000, outputTokens: 900 },
+    cost: { usd: 1.234, durationMs: 600000, linesAdded: 40, linesRemoved: 7 }, limits: { fiveHour: { usedPercent: 61.5, resetsAt: "2026-10-27T14:10:00Z" }, sevenDay: null, spend: null },
+    project: "loadout-cli", specialists: ["role.implementer", "language.csharp"] } })); }
   var i = 4; var timer = setInterval(function () { if (i < OUT.length && T.state === "working") { T.write(OUT[i++]); } }, 1400);
-  var W = { connecting: "Connecting", working: "Working", idle: "Idle", unknown: "Unknown", waiting: "Waiting for you", approval: "Needs approval", ended: "Ended", error: "Exited with an error", reconnecting: "Reconnecting", watch: "Only watching", lost: "Lost" };
+  var W = { connecting: "Connecting", working: "Working", idle: "Idle", unknown: "Unknown", waiting: "Waiting for you", approval: "Needs approval", background: "Background work", ended: "Ended", error: "Exited with an error", reconnecting: "Reconnecting", watch: "Only watching", lost: "Lost" };
   var row = document.getElementById("states");
   S.TERMINAL_STATES.forEach(function (s) { row.appendChild(S.HaloButton({ label: W[s], size: "small", onPress: function () { T.setState(s, { code: 1 }); } })); });
 })();

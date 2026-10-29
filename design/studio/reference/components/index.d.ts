@@ -171,19 +171,25 @@ export declare function NetworkStatus(o: { lines: TubeLine[]; clock?: string; ol
 
 /* ---------- Addendum: the terminal and the session page ---------- */
 
-export type TerminalState = "connecting" | "working" | "idle" | "unknown" | "waiting" | "approval" | "ended" | "error" | "reconnecting" | "watch" | "lost";
+/** background: "waiting on background work", quiet on purpose (no ask, no badge, no count); it turns into waiting for you by itself if the work goes silent past its time. */
+export type TerminalState = "connecting" | "working" | "idle" | "unknown" | "waiting" | "approval" | "background" | "ended" | "error" | "reconnecting" | "watch" | "lost";
 /** One line of output as runs of [text, classes]: fg-<ansi>, fg-bright-<ansi>, bg-black, bold, ul. */
 export type TerminalRun = [string, string?];
 export interface TerminalOptions {
+  /** sessionId: the agent's own id for the conversation, for the resume line ("$ loadout resume <id> --project <project>", or --last, or --all where the project is not known). */
   title?: string; project?: string; agent?: string; label?: string; sessionId?: string;
   state?: TerminalState; size?: [number, number]; fit?: boolean; prompt?: boolean;
   lines?: (TerminalRun[] | string)[];
-  /** Where Ctrl+] sends focus; by default the next control on the page. */
+  /** Where Ctrl+] sends focus. Not given, the terminal raises a cancelable "leaveterminal" event (TermDeck takes it to the tab), and failing that the next control on the page. */
   leaveTo?: HTMLElement;
   onInput?: (text: string) => void; onRetry?: () => void; info?: { code?: number };
+  /** A row on the terminal's foot, under the screen: the session's StatusStrip (a node, or anything with .el). */
+  foot?: Node | { el: HTMLElement } | null;
 }
 /** The live terminal's reference look: bar, screen and the bar that says what the session needs. Build the real one on xterm.js themed from the term-* tokens. */
-export declare function Terminal(o: TerminalOptions): { el: HTMLElement; write: (runs: TerminalRun[] | string) => void; setState: (s: TerminalState, info?: { code?: number }) => void; focus: () => void; readonly state: TerminalState };
+export declare function Terminal(o: TerminalOptions): { el: HTMLElement; write: (runs: TerminalRun[] | string) => void; setState: (s: TerminalState, info?: { code?: number }) => void; /** Puts a row on the foot, or takes it away with null. */ setFoot: (node: Node | { el: HTMLElement } | null) => void; focus: () => void; readonly state: TerminalState };
+/** The line that carries a session on in a terminal: "$ loadout resume <agentSession> --project <project>", --last where no conversation is known, --all where no project is. */
+export declare function resumeCommand(agentSession?: string | null, project?: string | null): string;
 export declare const TERMINAL_STATES: TerminalState[];
 
 /** The session page: header, the terminal filling the page, and a side panel that folds away. */
@@ -192,7 +198,17 @@ export declare function SessionView(o: {
   terminal?: TerminalOptions;
   facts?: [string, string][]; loaded?: [string, string][]; events?: [string, string][];
   actions?: HaloButtonOptions[]; details?: boolean;
-}): { el: HTMLElement; terminal: ReturnType<typeof Terminal> };
+  /** In Actions, before the buttons: the commands that carry it on elsewhere ("Started with:", "Carry this conversation on in a terminal instead:"). */
+  commands?: { why?: string; command: string }[];
+  /** In Actions, under the commands: "Sessions survive a reload of this page, not a restart of the daemon." */
+  note?: string;
+  /** The session's status, drawn by StatusBlock after Facts, where main puts it; returned as statusBlock for set(). */
+  status?: SessionStatus; now?: number;
+  /** More side sections: a node, anything with .el, or { title, content }; at "facts" (after Facts, the default), "loaded", "events" or "actions" (after Actions). */
+  sections?: (Node | { el: HTMLElement; at?: "facts" | "loaded" | "events" | "actions" } | { title: string; content: Node | Node[]; at?: "facts" | "loaded" | "events" | "actions" })[];
+  /** A button in the header before Details, e.g. "Type here instead" when another window holds the input. */
+  button?: HaloButtonOptions | Node;
+}): { el: HTMLElement; terminal: ReturnType<typeof Terminal>; side: HTMLElement; head: HTMLElement; statusBlock: ReturnType<typeof StatusBlock> | null; /** Puts the header button, or takes it away with null. */ setButton: (b: HaloButtonOptions | Node | null) => void };
 
 /* ---------- Teams ---------- */
 
@@ -323,11 +339,62 @@ export declare function ModeSwitcher(o: { mode: StudioMode; onChange?: (m: Studi
 /** The bar at the top of every mode: the switcher, search, and whatever is waiting on you. */
 export declare function ModeBar(o: { mode: StudioMode; onMode?: (m: StudioMode) => void; compact?: boolean; onSearch?: () => void; waiting?: { label: string; [k: string]: unknown }[]; onWaiting?: (w: unknown) => void }): { el: HTMLElement; switcher: ReturnType<typeof ModeSwitcher> };
 
-export interface DeckSession { id: string; title: string; word: string; where?: string; agent?: string; unread?: boolean }
-/** Every session as a tab with its state, Ctrl+Alt+n on the first nine, and a new-output dot. */
-export declare function SessionTabs(o: { sessions: DeckSession[]; current?: string; controls?: string; onPick?: (id: string) => void; onMaximise?: (id: string) => void; onNew?: () => void; label?: string }): HTMLElement;
+export interface DeckSession { id: string; title: string; word: string; where?: string; agent?: string; unread?: boolean;
+  /** Whether it has ended: closing its tab then clears it rather than asking. */
+  ended?: boolean;
+  /** What it was launched as, for going back to after a rename. */
+  launchTitle?: string;
+  /** Whether its agent is known to be given its name as well. */
+  namesAgent?: boolean;
+  /** "launch" for an agent session (the default), "command" for a command that asks as it goes. */
+  kind?: "launch" | "command";
+  /** The project it runs in, for saying what ending it ends. */
+  project?: string | null;
+  /** How much of its context window is in use, drawn as a ContextMark; null where its status line has not said. */
+  context?: number | null;
+  /** The daemon's id for it, for the rename and end commands; defaults to id. */
+  hid?: string }
+/** Every session as a tab with its state, its context, Ctrl+Alt+n on the first nine, and a new-output dot. Each tab closes (an ended one clears; a running one asks Hide or End, and End asks again), renames in place (F2), moves (drag, Ctrl+Shift+arrows) and has a menu (right-click, the context-menu key, Shift+F10). Hidden tabs come back from "N hidden". Each change is made at once and told to its callback. */
+export declare function SessionTabs(o: { sessions: DeckSession[]; current?: string; controls?: string; onPick?: (id: string) => void; onMaximise?: (id: string) => void; onNew?: () => void; label?: string;
+  /** Running sessions this browser took off the strip. */
+  hidden?: DeckSession[];
+  /** false where Studio is only watching: no Rename and no End. */
+  changes?: boolean;
+  /** The strip's new order, every tab on it. */
+  onMove?: (order: string[]) => void;
+  /** A new name, or null for the one it was launched as ("$ loadout session rename <id> <name>|--reset"). */
+  onRename?: (id: string, name: string | null) => void;
+  onHide?: (id: string) => void; onUnhide?: (id: string) => void; onClear?: (id: string) => void;
+  /** Ended after its second ask ("$ loadout session end <id> --yes"). */
+  onEnd?: (id: string) => void }): HTMLElement & { /** The page's word again; a rename in progress is kept. */ update: (p: { sessions?: DeckSession[]; hidden?: DeckSession[]; current?: string | null; changes?: boolean }) => void; rename: (id: string) => void; closeMenu: () => void };
 /** Terminal Focus: tabs over one, two or four panes of Terminal, a find bar, and the keys. The deck makes no terminals itself: terminal(id) does. */
-export declare function TermDeck(o: { sessions: DeckSession[]; current?: string; layout?: 1 | 2 | 4; terminal: (id: string) => ReturnType<typeof Terminal>; onPick?: (id: string) => void; onLayout?: (n: number) => void; onNew?: () => void; onShown?: (ids: string[], terms: Record<string, ReturnType<typeof Terminal>>) => void }): { el: HTMLElement; pick: (id: string, focus?: boolean) => void; setLayout: (n: 1 | 2 | 4) => void; terminal: (id: string) => ReturnType<typeof Terminal> | undefined; update: (sessions: DeckSession[]) => void; readonly current: string; readonly layout: number };
+export declare function TermDeck(o: { sessions: DeckSession[]; current?: string; layout?: 1 | 2 | 4; terminal: (id: string) => ReturnType<typeof Terminal>; onPick?: (id: string) => void; onLayout?: (n: number) => void; onNew?: () => void; onShown?: (ids: string[], terms: Record<string, ReturnType<typeof Terminal>>) => void;
+  /** Running sessions this browser took off the strip, offered back from "N hidden". */
+  hidden?: DeckSession[];
+  /** false where Studio is only watching: no Rename and no End. */
+  changes?: boolean;
+  /** How many panes show where a launch grew past the layout chosen, kept by the page. */
+  grown?: 2 | 4 | null;
+  /** Which session each pane showed last time, kept by the page. */
+  slots?: (string | null)[];
+  /** Whether the sessions have been read yet; before then, none in a pane is said to have gone. Default true. */
+  listed?: boolean;
+  /** A session just started: it takes an empty pane, growing 1→2→4, else the pane of one ended or idle longest; said once beside Find. */
+  launch?: string | null;
+  /** When each session last wrote or was typed into (ms), for which pane gives way to a launch. */
+  active?: Record<string, number>;
+  /** Where the dividers were left: for two panes [column], for four [column, row]. */
+  splits?: { 2?: number[] | null; 4?: number[] | null };
+  onLaunched?: (id: string) => void; onGrown?: (panes: 1 | 2 | 4) => void; onSlots?: (slots: (string | null)[]) => void;
+  /** A divider moved, for the layout showing. */
+  onSplit?: (layout: 2 | 4, fractions: number[]) => void;
+  onMove?: (order: string[]) => void; onRename?: (id: string, name: string | null) => void; onHide?: (id: string) => void; onUnhide?: (id: string) => void; onClear?: (id: string) => void; onEnd?: (id: string) => void;
+  label?: string }): { el: HTMLElement; tabs: ReturnType<typeof SessionTabs>; pick: (id: string, focus?: boolean) => void; setLayout: (n: 1 | 2 | 4) => void; terminal: (id: string) => ReturnType<typeof Terminal> | undefined;
+  /** The daemon's list again, or a patch; current names a session to show, launch one just started. */
+  update: (p: DeckSession[] | { sessions?: DeckSession[]; hidden?: DeckSession[]; changes?: boolean; listed?: boolean; active?: Record<string, number>; current?: string; launch?: string | null }) => void;
+  /** A session just started: placed now if it is among the tabs, else once an update brings it. */
+  launch: (id: string) => void;
+  readonly current: string; readonly layout: number; readonly chosen: number; readonly slots: (string | null)[] };
 
 export interface BoardRun { id: string; goal: string; team: string; project?: string; word: string; round: number; rounds: { word: string; nodes?: [string, string][] }[]; spent?: number; cap?: number | null; projected?: number; gate?: GateOptions;
   /** Whether it is getting closer: a compact ProgressLine under the row. */

@@ -725,6 +725,8 @@
     unknown: { word: "unknown", typing: true },
     waiting: { word: "waiting for you", typing: true, ask: ["needs", "It has finished and is waiting for your next message.", "Type a reply"] },
     approval: { word: "needs approval", typing: true, ask: ["needs", "It is asking for approval. The choices are in the terminal; answer them there.", "Go to the question"] },
+    /* Quiet on purpose: no ask, so no badge, sound or count. It turns into waiting for you by itself if the work goes silent past its time. */
+    background: { word: "waiting on background work", typing: true },
     ended: { word: "ended", typing: false, ask: ["good", "Ended. Its transcript is kept.", null, "resume"] },
     error: { word: "exited with an error", typing: false, ask: ["bad", "Exited with an error (exit code {code}). Its transcript is kept.", null, "resume"] },
     reconnecting: { word: "reconnecting", typing: false, ask: ["rest", "Lost touch with the daemon. Reconnecting; the output so far is kept.", "Try now"] },
@@ -732,21 +734,51 @@
     lost: { word: "lost", typing: false, ask: ["bad", "This session ended when the daemon restarted. Its transcript is kept.", null, "resume"] }
   };
 
+  /* The line that carries a session on in a terminal: the project is named, since 'loadout resume' reads the folder it is typed in; every project is searched where it is not known. */
+  function resumeCommand(agentSession, project) {
+    var where = project ? "--project " + project : "--all";
+    return agentSession ? "$ loadout resume " + agentSession + " " + where : "$ loadout resume --last " + where;
+  }
+
   /* Terminal: the agent's own screen, in Studio's palette. The real one is xterm.js themed from the term-* tokens; this is its reference look. */
   function Terminal(o) {
     o = o || {};
-    var state = o.state || "working", cols = (o.size || [80, 24])[0], rows = (o.size || [80, 24])[1], size = 13, fit = !!o.fit, typed = "";
+    var state = o.state || "working", cols = (o.size || [80, 24])[0], rows = (o.size || [80, 24])[1], size = 13, fit = !!o.fit, typed = "", refused = null;
     var screen = h("pre", { "class": "screen", tabindex: "0", role: "log", "aria-label": "Terminal: " + (o.title || "session"), "aria-roledescription": "terminal" });
     var cursorLine = h("span"), cur = h("span", { "class": "cur", text: " " });
     var sig = h("span"), sizeEl = h("span", { "class": "size", text: cols + " × " + rows });
     var fitBtn = h("button", { type: "button", "class": "tbtn", "aria-pressed": fit ? "true" : "false", text: "Fit", title: "Fit 80 columns to the width", onclick: function () { setFit(!fit); } });
     var smaller = h("button", { type: "button", "class": "tbtn", "aria-label": "Smaller text", text: "A−", onclick: function () { zoom(-1); } });
     var larger = h("button", { type: "button", "class": "tbtn", "aria-label": "Larger text", text: "A+", onclick: function () { zoom(1); } });
-    var bar = h("div", { "class": "tbar" }, [sig, h("span", { text: (o.project || "") + (o.agent ? " · " + o.agent : "") }), sizeEl, h("span", { "class": "keyhint", text: "Ctrl+] leaves the terminal" }), h("span", { "class": "grow" }), smaller, larger, fitBtn]);
-    var askText = h("p"), askBtnWrap = h("span"), askCmd = h("span");
+    var grow = h("span", { "class": "grow" });
+    var bar = h("div", { "class": "tbar" }, [sig, h("span", { text: [o.project, o.agent].filter(Boolean).join(" · ") }), sizeEl, h("span", { "class": "keyhint", text: "Ctrl+] leaves the terminal" }), h("span", { "class": "keyhint", text: "Ctrl+V paste · Alt+V image · right-click copy or paste" }), grow, smaller, larger, fitBtn]);
+    var askText = h("p"), askBtnWrap = h("span"), askCmd = h("span", { style: "display: contents" });
     var ask = h("div", { "class": "ask", role: "status" }, [askText, askBtnWrap, askCmd]);
+    var footEl = h("div", { "class": "foot" });
     var el = h("section", { "class": "ls-term" + (fit ? " fit" : ""), "aria-label": o.label || "Live terminal" }, [bar, screen, ask]);
     screen.appendChild(cursorLine); cursorLine.appendChild(cur);
+    /* foot: a row under the screen, as main's Terminal has for the session's StatusStrip. A node, or anything with .el; null takes it away. */
+    function setFoot(node) {
+      footEl.textContent = "";
+      var n = node && node.el ? node.el : node;
+      if (n) { footEl.appendChild(n); if (!footEl.parentNode) { el.appendChild(footEl); } } else if (footEl.parentNode) { footEl.remove(); }
+    }
+    /* Said on the bar when the browser will not hand over or take the clipboard, so a copy or paste that did nothing says why. */
+    function clipboard(call) {
+      return Promise.resolve().then(function () { if (!navigator.clipboard) { throw new Error("no clipboard"); } return call(navigator.clipboard); })
+        .then(function (r) { setRefused(false); return r; }, function () { setRefused(true); return undefined; });
+    }
+    function setRefused(on) {
+      if (on && !refused) { refused = h("span", { role: "alert", text: "The browser refused the clipboard" }); bar.insertBefore(refused, grow); }
+      else if (!on && refused) { refused.remove(); refused = null; }
+    }
+    function selectionHere() { var sel = window.getSelection && window.getSelection(); return sel && !sel.isCollapsed && screen.contains(sel.anchorNode) ? sel : null; }
+    /* Copies what is selected and clears it, as Windows Terminal does. */
+    function copySelection(sel) { var text = sel.toString(); sel.removeAllRanges(); clipboard(function (b) { return b.writeText(text); }); }
+    function paste() {
+      if (!STATES[state].typing) { return; }
+      clipboard(function (b) { return b.readText(); }).then(function (text) { if (text) { typed += text.split("\n")[0]; paintPrompt(); screen.scrollTop = screen.scrollHeight; } });
+    }
 
     function zoom(d) { size = Math.max(9, Math.min(22, size + d)); el.style.setProperty("--term-size", size + "px"); setFit(false); }
     function setFit(v) { fit = v; el.classList.toggle("fit", fit); fitBtn.setAttribute("aria-pressed", fit ? "true" : "false"); }
@@ -770,23 +802,38 @@
         ask.hidden = false; ask.className = "ask " + st.ask[0];
         askText.textContent = st.ask[1].replace("{code}", info.code === undefined ? "1" : info.code);
         askBtnWrap.textContent = "";
-        if (st.ask[2] && NS.HaloButton) { askBtnWrap.appendChild(NS.HaloButton({ label: st.ask[2], size: "small", kind: st.ask[0] === "needs" ? "needs" : "", onPress: function () { if (s === "reconnecting") { if (o.onRetry) { o.onRetry(); } } else { screen.focus(); screen.scrollTop = screen.scrollHeight; } } })); }
+        if (st.ask[2] && NS.HaloButton) { askBtnWrap.appendChild(NS.HaloButton({ label: st.ask[2], size: "small", kind: st.ask[0] === "needs" ? "needs" : "", cmd: s === "reconnecting" ? "reconnects · changes nothing" : "puts the keyboard in the terminal", onPress: function () { if (s === "reconnecting") { if (o.onRetry) { o.onRetry(); } } else { screen.focus(); screen.scrollTop = screen.scrollHeight; } } })); }
         askCmd.textContent = "";
-        if (st.ask[3] === "resume") { askCmd.appendChild(h("code", { "class": "ls-cmd", text: "Carry it on in a terminal: $ loadout resume " + (o.sessionId || "<session-id>") })); }
+        if (st.ask[3] === "resume") { var line = resumeCommand(o.sessionId, o.project); askCmd.appendChild(NS.Command ? NS.Command({ why: "Carry it on in a terminal:", command: line }) : h("code", { "class": "ls-cmdline", text: "Carry it on in a terminal: " + line })); }
       } else { ask.hidden = true; }
       paintPrompt();
     }
     screen.addEventListener("keydown", function (e) {
-      if (e.ctrlKey && e.key === "]") { e.preventDefault(); var list = focusables(document.body), i = list.indexOf(screen); var next = o.leaveTo || list[i + 1] || list[0]; if (next) { next.focus(); } return; }
+      if (e.ctrlKey && !e.altKey && !e.metaKey && (e.key === "]" || e.code === "BracketRight")) {
+        e.preventDefault();
+        if (o.leaveTo) { o.leaveTo.focus(); return; }
+        /* Where nothing was named, the page around says where the keyboard goes (the tab in a deck); else the next control on the page. */
+        var asked = new CustomEvent("leaveterminal", { bubbles: true, cancelable: true });
+        if (!el.dispatchEvent(asked)) { return; }
+        var list = focusables(document.body), i = list.indexOf(screen); var next = list[i + 1] || list[0]; if (next) { next.focus(); } return;
+      }
+      var plainCtrl = e.ctrlKey && !e.altKey && !e.metaKey;
+      /* Ctrl+C copies a selection; with nothing selected it is the interrupt. */
+      if (plainCtrl && !e.shiftKey && (e.key === "c" || e.code === "KeyC")) { var sel = selectionHere(); if (sel) { e.preventDefault(); copySelection(sel); return; } }
+      /* Ctrl+V and Ctrl+Shift+V paste; Alt+V is left alone for Claude Code's image paste. */
+      if (plainCtrl && (e.key === "v" || e.key === "V" || e.code === "KeyV")) { e.preventDefault(); paste(); return; }
       if (!STATES[state].typing) { return; }
       if (e.key === "Tab") { e.preventDefault(); return; }
       if (e.key === "Enter") { e.preventDefault(); var t = typed; typed = ""; write([["› ", "fg-cyan"], [t, ""]]); paintPrompt(); if (o.onInput) { o.onInput(t); } return; }
       if (e.key === "Backspace") { e.preventDefault(); typed = typed.slice(0, -1); paintPrompt(); return; }
       if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) { e.preventDefault(); typed += e.key; paintPrompt(); screen.scrollTop = screen.scrollHeight; }
     });
+    /* Right-click copies a selection, otherwise pastes, in place of the browser's own menu for a web page. */
+    screen.addEventListener("contextmenu", function (e) { e.preventDefault(); var sel = selectionHere(); if (sel) { copySelection(sel); } else { paste(); } });
     (o.lines || []).forEach(write);
     setState(state, o.info);
-    return { el: el, write: write, setState: setState, focus: function () { screen.focus(); }, get state() { return state; } };
+    if (o.foot) { setFoot(o.foot); }
+    return { el: el, write: write, setState: setState, setFoot: setFoot, focus: function () { screen.focus(); }, get state() { return state; } };
   }
 
   /* SessionView: the session page. A slim header, the terminal filling the page, and a side panel that folds away. */
@@ -800,8 +847,24 @@
     var facts = (o.facts || []).length ? h("dl", {}, [].concat.apply([], o.facts.map(function (f) { return [h("dt", { text: f[0] }), h("dd", { text: f[1] })]; }))) : null;
     var loaded = (o.loaded || []).length ? h("dl", {}, [].concat.apply([], o.loaded.map(function (f) { return [h("dt", { text: f[0] }), h("dd", { text: f[1] })]; }))) : null;
     var events = (o.events || []).length ? h("ul", {}, o.events.map(function (e) { return h("li", {}, [h("b", { text: e[0] }), e[1]]); })) : null;
-    var acts = (o.actions || []).length && NS.HaloButton ? h("div", { "class": "ls-answers", style: "margin: 0" }, o.actions.map(function (a) { return NS.HaloButton(Object.assign({ size: "small" }, a)); })) : null;
-    [block("Facts", facts), block("This session loaded", loaded), block("Last events", events), block("Actions", acts)].forEach(function (b) { if (b) { side.appendChild(b); } });
+    /* Actions: the commands that carry it on elsewhere, a note, then the buttons, as main's session page lays them. */
+    var cmds = (o.commands || []).map(function (c) { return NS.Command ? NS.Command(c) : h("code", { "class": "ls-cmdline", text: (c.why ? c.why + " " : "") + c.command }); });
+    var btns = (o.actions || []).length && NS.HaloButton ? h("div", { "class": "ls-answers", style: "margin: 0" }, o.actions.map(function (a) { return NS.HaloButton(Object.assign({ size: "small" }, a)); })) : null;
+    var actKids = cmds.concat([o.note ? h("p", { "class": "calm small", text: o.note }) : null, btns]).filter(Boolean);
+    var acts = actKids.length ? (actKids.length === 1 ? actKids[0] : h("div", { "class": "acts" }, actKids)) : null;
+    /* Extra sections: a node, anything with .el (a StatusBlock), or { title, content }; each at "facts" (after Facts, where main puts the StatusBlock; the default), "loaded", "events" or "actions" (after Actions). */
+    function extra(x) {
+      if (!x) { return null; }
+      if (x.nodeType) { return x; }
+      if (x.el && !x.title) { return x.el; }
+      var c = x.content || x.el;
+      return block(x.title, Array.isArray(c) ? h("div", { "class": "acts" }, c) : c);
+    }
+    var at = { facts: [], loaded: [], events: [], actions: [] };
+    var statusBlock = o.status && NS.StatusBlock ? NS.StatusBlock({ status: o.status, now: o.now }) : null;
+    if (statusBlock) { at.facts.push(statusBlock.el); }
+    (o.sections || []).forEach(function (x) { var n = extra(x); if (n) { (at[x && x.at] || at.facts).push(n); } });
+    [block("Facts", facts)].concat(at.facts, [block("This session loaded", loaded)], at.loaded, [block("Last events", events)], at.events, [block("Actions", acts)], at.actions).forEach(function (b) { if (b) { side.appendChild(b); } });
     var open = o.details !== false && !(window.matchMedia && window.matchMedia("(max-width: 959px)").matches);
     var toggle = h("button", { type: "button", "class": "ls-halo small", "aria-expanded": open ? "true" : "false", "aria-controls": side.id, onclick: function () { open = !open; side.hidden = !open; toggle.setAttribute("aria-expanded", open ? "true" : "false"); toggle.lastChild.textContent = open ? "Hide details" : "Details"; } },
       [h("span", { "class": "ring", "aria-hidden": "true" }), open ? "Hide details" : "Details"]);
@@ -809,11 +872,20 @@
     /* Ctrl+] leaves the terminal for the details toggle, never for the next action, which may be End the session. */
     if (!termOpts.leaveTo) { termOpts.leaveTo = toggle; }
     var head = h("div", { "class": "shead" }, [h("div", { "class": "who" }, [h("h1", { text: l.title || "" }), h("span", { "class": "facts1", text: [l.where, l.agent, l.mode, l.time].filter(Boolean).join(" · ") })]), toggle]);
+    /* A button in the header, before Details: main's "Type here instead" when another window holds the input. HaloButton options or a node; null takes it away. */
+    var headBtn = null;
+    function setButton(b) {
+      if (headBtn) { headBtn.remove(); headBtn = null; }
+      if (!b) { return; }
+      headBtn = b.nodeType ? b : (b.el && b.el.nodeType ? b.el : (NS.HaloButton ? NS.HaloButton(Object.assign({ size: "small" }, b)) : null));
+      if (headBtn) { head.insertBefore(headBtn, toggle); }
+    }
+    setButton(o.button);
     var root = h("div", { "class": "ls-session" }, [head, term.el, side]);
-    return { el: root, terminal: term };
+    return { el: root, terminal: term, side: side, head: head, statusBlock: statusBlock, setButton: setButton };
   }
 
-  Object.assign(NS, { Terminal: Terminal, SessionView: SessionView, TERMINAL_STATES: Object.keys(STATES) });
+  Object.assign(NS, { Terminal: Terminal, SessionView: SessionView, TERMINAL_STATES: Object.keys(STATES), resumeCommand: resumeCommand });
 })();
 
 (function () {
@@ -1785,86 +1857,503 @@
     return { el: h("div", { "class": "ls-modebar", role: "region", "aria-label": "Mode" }, kids), switcher: sw };
   }
 
-  /* SessionTabs: every session as a tab, with its state and whether it has written since you looked. */
+  /* Shell words as main's commands.ts quotes them: $, ` and \ escaped too, so a line copied out of the page runs as shown. An empty value is "". */
+  function shellWord(v) { v = String(v); return v === "" || /[\s"'$`\\]/.test(v) ? "\"" + v.replace(/(["\\$`])/g, "\\$1") + "\"" : v; }
+  /* Renaming a hosted session, or giving it its launch name back (null). */
+  function renameCommand(id, name) { return "$ loadout session rename " + id + " " + (name === null ? "--reset" : shellWord(name)); }
+  /* Ending a hosted session. */
+  function endCommand(id) { return "$ loadout session end " + id + " --yes"; }
+  /* The strip's order with one tab moved along it by a step, kept at either end; the same list where it cannot move. */
+  function nudgeTab(shown, id, by) {
+    var from = shown.indexOf(id), to = Math.max(0, Math.min(shown.length - 1, from + by));
+    if (from < 0 || to === from) { return shown; }
+    var without = shown.filter(function (x) { return x !== id; });
+    return without.slice(0, to).concat([id], without.slice(to));
+  }
+  /* The strip's order with one tab put before another, or at the end where before is null. */
+  function placeTab(shown, id, before) {
+    var without = shown.filter(function (x) { return x !== id; }), at = before === null ? without.length : without.indexOf(before);
+    return at < 0 ? shown : without.slice(0, at).concat([id], without.slice(at));
+  }
+  function idOf(s) { return s.id; }
+
+  /* SessionTabs: every session as a tab, with its state, its context and whether it has written since you looked.
+     Each tab can be closed, renamed and moved, as main's SessionTabs.svelte: closing an ended tab clears it at once; closing a running one asks
+     whether to hide the tab or end the session, and ending asks again, naming what it ends. Rename and End are left out where Studio is only
+     watching. Everything is reached by keyboard too: F2 renames, Delete closes, Ctrl+Shift+arrows move, and the context-menu key or Shift+F10
+     opens the tab's menu. Each change is made here at once and told to its callback, so the strip works alone or under a page that keeps it. */
   function SessionTabs(o) {
     o = o || {};
+    var copy = function (s) { return Object.assign({}, s); };
+    var sessions = (o.sessions || []).map(copy), hidden = (o.hidden || []).map(copy), current = o.current === undefined ? null : o.current, changes = o.changes !== false;
+    var hintId = "ls-stabs-" + Math.random().toString(36).slice(2, 7);
+    var renaming = null, draft = "", menu = null, drag = null, swallow = false;
     var list = h("div", { role: "tablist", "aria-label": o.label || "Sessions" });
-    var tabs = (o.sessions || []).map(function (s, i) {
-      var f = NS.signalOf(s.word).family;
-      var t = h("button", { type: "button", role: "tab", "class": f === "needs" ? "needs" : null, "aria-selected": s.id === o.current ? "true" : "false", tabindex: s.id === o.current ? "0" : "-1", "aria-controls": o.controls || null, "aria-keyshortcuts": i < 9 ? "Control+Alt+" + (i + 1) : null, "data-id": s.id,
-        onclick: function () { if (o.onPick) { o.onPick(s.id); } }, ondblclick: function () { if (o.onMaximise) { o.onMaximise(s.id); } } },
-        [NS.Signal(s.word), h("span", { "class": "t", text: s.title }), h("span", { "class": "x", text: [s.where, s.agent].filter(Boolean).join(" · ") }), i < 9 ? h("span", { "class": "k", "aria-hidden": "true", text: "⌃⌥" + (i + 1) }) : null, s.unread ? h("span", { "class": "new", title: "New output since you looked" }, [h("span", { "class": "ls-vh", text: "new output" })]) : null]);
-      return t;
+    var addBtn = o.onNew ? h("button", { type: "button", "class": "add", "aria-label": "New session", title: "New session", onclick: function () { o.onNew(); }, text: "+" }) : null;
+    var hidBtn = null;
+    var root = h("div", { "class": "ls-stabs" }, [list, addBtn]);
+    function order() { return sessions.map(idOf); }
+    function byId(id) { return sessions.filter(function (s) { return s.id === id; })[0] || hidden.filter(function (s) { return s.id === id; })[0]; }
+    function hostOf(s) { return s.hid || s.id; }
+    function tabOf(id) { return Array.prototype.filter.call(list.querySelectorAll('[role="tab"]'), function (b) { return b.getAttribute("data-id") === id; })[0]; }
+    function focusTab(id) { setTimeout(function () { var b = tabOf(id); if (b) { b.focus(); } }, 0); }
+
+    /* ---------- the changes, made here and told to the page ---------- */
+    function doMove(next) {
+      var ids = order();
+      sessions = next.map(function (id) { return sessions[ids.indexOf(id)]; }).filter(Boolean);
+      paint(); if (o.onMove) { o.onMove(next); }
+    }
+    function move(id, by) { var next = nudgeTab(order(), id, by); if (next !== order()) { doMove(next); focusTab(id); } }
+    function doHide(id) { var s = byId(id); sessions = sessions.filter(function (x) { return x.id !== id; }); if (s && hidden.indexOf(s) < 0) { hidden.push(s); } paint(); if (o.onHide) { o.onHide(id); } }
+    function doClear(id) { sessions = sessions.filter(function (x) { return x.id !== id; }); hidden = hidden.filter(function (x) { return x.id !== id; }); paint(); if (o.onClear) { o.onClear(id); } }
+    function doUnhide(id) { var s = byId(id); hidden = hidden.filter(function (x) { return x.id !== id; }); if (s && sessions.indexOf(s) < 0) { sessions.push(s); } paint(); if (o.onUnhide) { o.onUnhide(id); } }
+    function doRename(id, name) { var s = byId(id); if (s) { s.launchTitle = s.launchTitle || s.title; s.title = name === null ? s.launchTitle : name; } paint(); if (o.onRename) { o.onRename(id, name); } }
+    function doEnd(id) { if (o.onEnd) { o.onEnd(id); } }
+    function pick(id) { setCurrent(id); if (o.onPick) { o.onPick(id); } }
+
+    /* ---------- closing ---------- */
+    function askEnd(id) {
+      var s = byId(id); if (!s || !NS.Dialog) { return; }
+      NS.Dialog({ danger: true, title: "End " + s.title + "?", why: "This stops its agent" + (s.project ? " in " + s.project : "") + ", and cannot be undone. The session stays listed, ended, so you can still see how it ended.",
+        actions: [{ label: "End session", kind: "danger", solid: true, cmd: endCommand(hostOf(s)), onPress: function () { doEnd(id); } }] }).open();
+    }
+    function close(id) {
+      var s = byId(id); if (!s) { return; }
+      /* Nothing is running to lose: cleared from this browser at once. */
+      if (s.ended) { doClear(id); return; }
+      /* Only watching: hiding is the one thing to do, and it can be undone. */
+      if (!changes || !NS.Dialog) { doHide(id); return; }
+      NS.Dialog({ title: "Close " + s.title + "?", why: "It is still running. Hide takes the tab off this browser's strip and leaves the session running, still on the Sessions page. End session stops its agent.",
+        actions: [{ label: "Hide", solid: true, cmd: "this browser only · changes nothing anywhere else", onPress: function () { doHide(id); } },
+          { label: "End session…", kind: "danger", cmd: "asks once more", onPress: function () { setTimeout(function () { askEnd(id); }, 0); } }] }).open();
+    }
+
+    /* ---------- renaming ---------- */
+    function startRename(id) {
+      closeMenu(false);
+      var s = byId(id); if (!s) { return; }
+      renaming = id; draft = s.title || "";
+      paint();
+      var f = list.querySelector("input.rename"); if (f) { f.focus(); f.select(); }
+      placeHint();
+    }
+    function finishRename(save) {
+      var id = renaming; if (id === null) { return; }
+      renaming = null;
+      var name = draft.trim(), s = byId(id);
+      /* Emptied, it goes back to the name it was launched as. */
+      if (save && s && name !== s.title) { doRename(id, name === "" ? null : name); } else { paint(); }
+      focusTab(id);
+    }
+
+    /* ---------- the menu: right-click, the context-menu key or Shift+F10 ---------- */
+    function items(forId) {
+      if (forId === null) { return hidden.map(function (s) { return { label: "Show " + s.title, run: function () { doUnhide(s.id); pick(s.id); focusTab(s.id); } }; }); }
+      var s = byId(forId); if (!s) { return []; }
+      var out = [], at = order().indexOf(s.id);
+      if (changes) {
+        out.push({ label: "Rename", hint: "F2", run: function () { startRename(s.id); } });
+        if (s.launchTitle && s.title !== s.launchTitle) { out.push({ label: "Back to “" + s.launchTitle + "”", cmd: renameCommand(hostOf(s), null), run: function () { doRename(s.id, null); focusTab(s.id); } }); }
+      }
+      if (at > 0) { out.push({ label: "Move left", hint: "Ctrl Shift ←", run: function () { move(s.id, -1); } }); }
+      if (at >= 0 && at < sessions.length - 1) { out.push({ label: "Move right", hint: "Ctrl Shift →", run: function () { move(s.id, 1); } }); }
+      if (s.ended) { out.push({ label: "Clear", hint: "Delete", run: function () { doClear(s.id); } }); }
+      else {
+        out.push({ label: "Hide", run: function () { doHide(s.id); } });
+        if (changes) { out.push({ label: "End session…", danger: true, run: function () { askEnd(s.id); } }); }
+      }
+      return out;
+    }
+    function away(e) { if (menu && !menu.el.contains(e.target)) { closeMenu(false); } }
+    function closeMenu(back) {
+      if (!menu) { return; }
+      var was = menu; menu = null; was.el.remove(); document.removeEventListener("pointerdown", away, true);
+      if (hidBtn) { hidBtn.setAttribute("aria-expanded", "false"); }
+      if (back) { if (was.for) { focusTab(was.for); } else if (hidBtn) { hidBtn.focus(); } }
+    }
+    function openMenu(forId, from, at) {
+      closeMenu(false);
+      var its = items(forId); if (!its.length) { return; }
+      var box = from && from.getBoundingClientRect(), x = at ? at.x : box ? box.left : 0, y = at ? at.y : box ? box.bottom : 0;
+      var m = h("div", { "class": "ls-tabmenu", role: "menu", tabindex: "-1", "aria-label": forId === null ? "Hidden tabs" : "Tab " + (byId(forId) || {}).title });
+      its.forEach(function (it) {
+        m.appendChild(h("button", { type: "button", role: "menuitem", tabindex: "-1", "class": it.danger ? "danger" : null, title: it.cmd || null, onclick: function () { closeMenu(false); it.run(); } },
+          [h("span", { text: it.label }), it.hint ? h("kbd", { text: it.hint }) : null]));
+      });
+      /* Kept inside the window, so a menu opened near an edge never scrolls the page sideways. */
+      m.style.left = Math.round(Math.max(8, Math.min(x, window.innerWidth - 228))) + "px";
+      m.style.top = Math.round(Math.max(8, Math.min(y, window.innerHeight - 38 * its.length - 20))) + "px";
+      m.addEventListener("keydown", function (e) {
+        var all = Array.prototype.slice.call(m.querySelectorAll('[role="menuitem"]')), i = all.indexOf(document.activeElement), d = { ArrowDown: 1, ArrowUp: -1 }[e.key];
+        if (d) { e.preventDefault(); all[(i + d + all.length) % all.length].focus(); }
+        else if (e.key === "Home" || e.key === "End") { e.preventDefault(); all[e.key === "Home" ? 0 : all.length - 1].focus(); }
+        else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeMenu(true); }
+        else if (e.key === "Tab") { closeMenu(false); }
+      });
+      document.body.appendChild(m);
+      menu = { for: forId, el: m };
+      if (forId === null && hidBtn) { hidBtn.setAttribute("aria-expanded", "true"); }
+      document.addEventListener("pointerdown", away, true);
+      setTimeout(function () { var f = m.querySelector('[role="menuitem"]'); if (f) { f.focus(); } }, 0);
+    }
+
+    /* ---------- dragging a tab along the strip ---------- */
+    function marks() {
+      Array.prototype.forEach.call(list.querySelectorAll(".tab"), function (t, i, all) {
+        var id = t.getAttribute("data-id"), moving = drag && drag.moved;
+        t.classList.toggle("dragging", !!(moving && drag.id === id));
+        t.classList.toggle("before", !!(moving && drag.before === id));
+        t.classList.toggle("after", !!(moving && drag.before === null && i === all.length - 1));
+      });
+    }
+    list.addEventListener("pointermove", function (e) {
+      if (!drag) { return; }
+      if (!drag.moved && Math.abs(e.clientX - drag.x) < 6) { return; }
+      if (!drag.moved) { drag.moved = true; try { list.setPointerCapture(e.pointerId); } catch (x) { /* already released */ } }
+      /* Before the first tab whose middle is past the pointer, or at the end. */
+      var mine = drag.id, past = order().filter(function (id) { var b = tabOf(id), r = b && b.getBoundingClientRect(); return id !== mine && r && e.clientX < r.left + r.width / 2; })[0];
+      drag.before = past === undefined ? null : past; marks();
     });
-    tabs.forEach(function (t) { list.appendChild(t); });
-    if (NS.roving) { NS.roving(tabs, function (i) { if (o.onPick) { o.onPick(o.sessions[i].id); } }); }
-    var add = o.onNew ? h("button", { type: "button", "class": "add", "aria-label": "New session", title: "New session", onclick: o.onNew, text: "+" }) : null;
-    return h("div", { "class": "ls-stabs" }, [list, add]);
+    function up() {
+      var was = drag; drag = null;
+      if (was && was.moved) {
+        swallow = true; setTimeout(function () { swallow = false; }, 0);
+        if (was.before !== undefined) { var next = placeTab(order(), was.id, was.before); if (next.join("\u0000") !== order().join("\u0000")) { doMove(next); return; } }
+      }
+      marks();
+    }
+    list.addEventListener("pointerup", up); list.addEventListener("pointercancel", up);
+
+    function keys(e, i) {
+      var s = sessions[i], n = sessions.length;
+      if (e.ctrlKey && e.shiftKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) { e.preventDefault(); move(s.id, e.key === "ArrowRight" ? 1 : -1); return; }
+      if (e.key === "F2" && changes) { e.preventDefault(); startRename(s.id); return; }
+      if (e.key === "Delete") { e.preventDefault(); close(s.id); return; }
+      if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) { e.preventDefault(); openMenu(s.id, e.currentTarget); return; }
+      var to = e.key === "ArrowRight" ? (i + 1) % n : e.key === "ArrowLeft" ? (i - 1 + n) % n : e.key === "Home" ? 0 : e.key === "End" ? n - 1 : null;
+      if (to === null) { return; }
+      e.preventDefault();
+      var b = tabOf(sessions[to].id); if (b) { b.focus(); }
+      pick(sessions[to].id);
+    }
+
+    function tab(s, i) {
+      var wrap = h("div", { "class": "tab", "data-id": s.id });
+      if (renaming === s.id) {
+        var inp = h("input", { "class": "rename", type: "text", maxlength: "80", autocomplete: "off", "aria-label": "New name for " + s.title, "aria-describedby": hintId });
+        inp.value = draft;
+        var cmd = h("code", { text: renameCommand(hostOf(s), draft.trim() === "" ? null : draft.trim()) });
+        inp.addEventListener("input", function () { draft = inp.value; cmd.textContent = renameCommand(hostOf(s), draft.trim() === "" ? null : draft.trim()); });
+        inp.addEventListener("keydown", function (e) { e.stopPropagation(); if (e.key === "Enter") { e.preventDefault(); finishRename(true); } else if (e.key === "Escape") { e.preventDefault(); finishRename(false); } });
+        inp.addEventListener("blur", function () { setTimeout(function () { if (renaming === s.id && document.activeElement !== list.querySelector("input.rename")) { finishRename(true); } }, 0); });
+        wrap.appendChild(inp);
+        wrap.appendChild(h("span", { "class": "hint", id: hintId }, [
+          "Enter saves, Escape cancels, empty goes back to “" + (s.launchTitle || s.title) + "”." + (s.kind === "launch" || s.kind === undefined ? (s.namesAgent ? " Its agent is given the name too." : " Only Loadout shows this name: its agent has not said it can take one.") : ""),
+          cmd]));
+        return wrap;
+      }
+      var fam = NS.signalOf(s.word).family, ctx = s.context !== null && s.context !== undefined && NS.ContextMark ? NS.ContextMark({ percent: s.context }).el : null;
+      var b = h("button", { type: "button", role: "tab", "class": fam === "needs" ? "needs" : null, "aria-selected": s.id === current ? "true" : "false", tabindex: s.id === current ? "0" : "-1", "aria-controls": o.controls || null, "aria-keyshortcuts": i < 9 ? "Control+Alt+" + (i + 1) : null, "aria-haspopup": "menu", "data-id": s.id },
+        [NS.Signal(s.word), h("span", { "class": "t", text: s.title }), h("span", { "class": "x", text: [s.where, s.agent].filter(Boolean).join(" · ") }), ctx,
+          i < 9 ? h("span", { "class": "k", "aria-hidden": "true", text: "⌃⌥" + (i + 1) }) : null,
+          s.unread ? h("span", { "class": "new", title: "New output since you looked" }, [h("span", { "class": "ls-vh", text: "new output" })]) : null]);
+      b.addEventListener("click", function () { if (!swallow) { pick(s.id); } });
+      b.addEventListener("dblclick", function () { if (o.onMaximise) { o.onMaximise(s.id); } });
+      b.addEventListener("keydown", function (e) { keys(e, i); });
+      b.addEventListener("pointerdown", function (e) { if (e.button === 0 && !renaming) { drag = { id: s.id, x: e.clientX, moved: false }; } });
+      b.addEventListener("contextmenu", function (e) { e.preventDefault(); openMenu(s.id, b, { x: e.clientX, y: e.clientY }); });
+      wrap.appendChild(b);
+      wrap.appendChild(h("button", { type: "button", "class": "close", tabindex: "-1", "aria-label": "Close " + s.title, title: s.ended ? "Clear this tab" : "Hide this tab, or end the session", text: "×", onclick: function () { close(s.id); } }));
+      return wrap;
+    }
+    function paint() {
+      var a = document.activeElement, keep = null, caret = null;
+      if (a && root.contains(a)) { keep = a.classList.contains("rename") ? "rename" : a.classList.contains("hid") ? "hid" : a.getAttribute("data-id"); if (keep === "rename") { caret = a.selectionStart; } }
+      list.textContent = "";
+      sessions.forEach(function (s, i) { list.appendChild(tab(s, i)); });
+      if (hidBtn) { hidBtn.remove(); hidBtn = null; }
+      if (hidden.length) {
+        hidBtn = h("button", { type: "button", "class": "hid", "aria-haspopup": "menu", "aria-expanded": menu && menu.for === null ? "true" : "false", text: hidden.length + " hidden" });
+        hidBtn.addEventListener("click", function () { if (menu && menu.for === null) { closeMenu(false); } else { openMenu(null, hidBtn); } });
+        root.insertBefore(hidBtn, addBtn);
+      }
+      if (keep) {
+        var n = keep === "rename" ? list.querySelector("input.rename") : keep === "hid" ? hidBtn : tabOf(keep);
+        if (n) { n.focus({ preventScroll: true }); if (keep === "rename" && typeof caret === "number") { try { n.setSelectionRange(caret, caret); } catch (x) { /* not text */ } } }
+      }
+      if (renaming) { setTimeout(placeHint, 0); }
+    }
+    /* The hint sits under the field. The strip scrolls sideways, which would clip it, so it is placed against the window instead (main's hint is drawn inside the strip, where it is cut off). */
+    function placeHint() {
+      var f = list.querySelector("input.rename"), hint = f && f.parentNode.querySelector(".hint");
+      if (!hint) { return; }
+      var r = f.getBoundingClientRect();
+      hint.style.position = "fixed"; hint.style.width = Math.max(r.width, 280) + "px";
+      hint.style.left = Math.round(Math.max(8, Math.min(r.left, window.innerWidth - hint.offsetWidth - 8))) + "px";
+      hint.style.top = Math.round(r.bottom) + "px";
+    }
+    function setCurrent(id) {
+      current = id;
+      Array.prototype.forEach.call(list.querySelectorAll('[role="tab"]'), function (b) { var on = b.getAttribute("data-id") === id; b.setAttribute("aria-selected", on ? "true" : "false"); b.tabIndex = on ? 0 : -1; });
+    }
+    paint();
+    /* The page's word again: new sessions, hidden ones, the current tab, or whether changes are allowed. A rename in progress is kept. */
+    root.update = function (p) {
+      p = p || {};
+      var full = false;
+      if (p.sessions) { sessions = p.sessions.map(copy); full = true; }
+      if (p.hidden) { hidden = p.hidden.map(copy); full = true; }
+      if (p.changes !== undefined && (p.changes !== false) !== changes) { changes = p.changes !== false; full = true; }
+      if (renaming && !byId(renaming)) { renaming = null; }
+      if (p.current !== undefined) { current = p.current; }
+      if (full) { paint(); } else if (p.current !== undefined) { setCurrent(current); }
+    };
+    root.rename = startRename;
+    root.closeMenu = function () { closeMenu(false); };
+    return root;
   }
 
-  /* TermDeck: Terminal Focus. Tabs over one, two or four panes; Ctrl+Alt+1-9 picks a session, Ctrl+Alt+arrows moves between panes. */
+  /* TermDeck: Terminal Focus, as main's TermDeck.svelte builds it. Sessions as tabs over one, two or four panes, each its own terminal.
+     Ctrl+Alt+1-9 picks a session by its tab and Ctrl+Alt+arrows move between the panes shown. Panes keep their places: clicking into one only
+     moves the highlight, and a session picked from its tab takes the highlighted pane. A session just started takes an empty pane instead,
+     growing the layout 1→2→4 to make one, and with four full the pane of one that has ended or been idle longest; panes grown that way are
+     given back as their sessions go, never below the layout you chose. Dividers between the panes are kept per layout. */
   var LAYOUTS = [[1, "One", "M2 2h16v12H2z"], [2, "Two side by side", "M2 2h16v12H2z M10 2v12"], [4, "Four", "M2 2h16v12H2z M10 2v12 M2 8h16"]];
+  /* How small a pane holding a terminal may go, 40 columns by 8 rows at 13px, in pixels (main's splits.ts terminalFloor). */
+  var TERM_FLOOR = { width: Math.ceil(40 * 13 * 0.6 + 24), height: Math.ceil(8 * 13 * 1.4 + 56) };
+  function floorOf(px, length) { return length > 0 ? Math.min(0.5, px / length) : 0; }
+  function clampSplit(v, min, max) { return min > max ? (min + max) / 2 : Math.min(max, Math.max(min, v)); }
+  function tracksOf(first) { return "minmax(0, " + first.toFixed(4) + "fr) minmax(0, " + (1 - first).toFixed(4) + "fr)"; }
+  /* The panes of a layout, each session in at most one, with nulls where a pane has nothing (main's lib/modes.ts, as are the three below). */
+  function padSlots(slots, n) { var out = (slots || []).slice(0, n).map(function (id, i, all) { return id && all.indexOf(id) === i ? id : null; }); while (out.length < n) { out.push(null); } return out; }
+  /* Which session each pane shows: a pick already in a pane changes nothing; one that is not takes the pane at `at`, else the first empty one. Only the first `fill` panes take spare tabs. */
+  function placeSlots(slots, p) {
+    var out = padSlots(slots, p.layout);
+    if (p.pick && out.indexOf(p.pick) < 0) { var at = p.at === undefined ? -1 : p.at, empty = out.indexOf(null); out[at >= 0 ? Math.min(at, p.layout - 1) : Math.max(0, empty)] = p.pick; }
+    var spare = p.order.filter(function (id) { return out.indexOf(id) < 0; }), fill = p.fill === undefined ? p.layout : p.fill;
+    return out.map(function (id, i) { return id || (i < fill ? spare.shift() : null) || null; });
+  }
+  /* Where a session just started goes: an empty pane (a gone one leaves its pane); else a layout grown 1→2→4; else, with four full, the pane of one ended, or else the one idle longest that is not waiting on you. */
+  function launchSlots(slots, p) {
+    var gone = p.gone || [], ended = p.ended || [], waiting = p.waiting || [], active = p.active || {};
+    var out = padSlots(slots, p.layout).map(function (id) { return id && gone.indexOf(id) >= 0 ? null : id; }), already = out.indexOf(p.pick);
+    if (already >= 0) { return { slots: out, layout: p.layout, at: already, grew: false, replaced: null, because: null }; }
+    var empty = out.indexOf(null);
+    if (empty >= 0) { out[empty] = p.pick; return { slots: out, layout: p.layout, at: empty, grew: false, replaced: null, because: null }; }
+    if (p.layout < 4) { var layout = p.layout === 1 ? 2 : 4, grown = padSlots(out, layout), g = grown.indexOf(null); grown[g] = p.pick; return { slots: grown, layout: layout, at: g, grew: true, replaced: null, because: null }; }
+    var end = -1; out.forEach(function (id, i) { if (end < 0 && id && ended.indexOf(id) >= 0) { end = i; } });
+    var at = end;
+    if (at < 0) {
+      var every = out.map(function (x, i) { return i; }), free = every.filter(function (i) { return waiting.indexOf(out[i]) < 0; }), pool = free.length ? free : every, quiet = function (i) { return active[out[i]] || 0; };
+      at = pool.reduce(function (best, i) { return quiet(i) < quiet(best) ? i : best; }, pool[0]);
+    }
+    var replaced = out[at]; out[at] = p.pick;
+    return { slots: out, layout: p.layout, at: at, grew: false, replaced: replaced, because: end >= 0 ? "ended" : "idle" };
+  }
+  /* Gives back panes a launch added once their sessions have gone: the smallest layout, never below the one chosen, that holds the sessions still listed. */
+  function shrinkSlots(slots, p) {
+    if (p.layout <= p.chosen) { return { slots: slots, layout: p.layout }; }
+    var kept = padSlots(slots, p.layout).filter(function (id) { return id && p.order.indexOf(id) >= 0; }), layout = [1, 2, 4].filter(function (n) { return n >= p.chosen && n >= kept.length; })[0] || 4;
+    return layout >= p.layout ? { slots: slots, layout: p.layout } : { slots: padSlots(kept, layout), layout: layout };
+  }
   function TermDeck(o) {
     o = o || {};
-    var layout = o.layout || 1, current = o.current || ((o.sessions || [])[0] || {}).id, terms = {}, panesEl = h("div", { "class": "panes l" + layout, id: "ls-deck-" + Math.random().toString(36).slice(2, 7) });
-    var top = h("div", { "class": "dtop" }), bar2 = h("div", { "class": "dtop" }), el = h("section", { "class": "ls-deck", "aria-label": "Terminals" }, [top, bar2, panesEl]);
-    var findIn = h("input", { "class": "ls-text", type: "search", placeholder: "Find in this terminal", "aria-label": "Find in the focused terminal", autocomplete: "off" }), findOut = h("span", { role: "status" });
-    function order() { return (o.sessions || []).map(function (s) { return s.id; }); }
-    function shown() { var ids = order(), out = [current]; ids.forEach(function (id) { if (out.length < layout && out.indexOf(id) < 0) { out.push(id); } }); return out.filter(Boolean); }
+    var copy = function (s) { return Object.assign({}, s); };
+    var all = (o.sessions || []).map(copy), hidden = (o.hidden || []).map(copy), changes = o.changes !== false, listed = o.listed !== false, launch = o.launch || null, active = o.active || {};
+    var chosen = [1, 2, 4].indexOf(o.layout) >= 0 ? o.layout : 1;
+    var panes = (o.grown === 2 || o.grown === 4) && o.grown > chosen ? o.grown : chosen;
+    var sp = o.splits || {}, split2 = (sp[2] && sp[2][0]) || 0.5, split4 = [(sp[4] && sp[4][0]) || 0.5, (sp[4] && sp[4][1]) || 0.5];
+    var terms = {}, arranged = padSlots(o.slots || [], panes), hi = 0, note = "", noteTimer = null, lastSig = "", splitters = {};
+    var panesEl = h("div", { "class": "panes l" + panes, id: "ls-deck-" + Math.random().toString(36).slice(2, 7) });
+    var lay = h("div", { "class": "lay", role: "radiogroup", "aria-label": "Panes" }, LAYOUTS.map(function (L) {
+      return h("button", { type: "button", role: "radio", "aria-checked": L[0] === panes ? "true" : "false", "aria-label": L[1], title: L[1], "data-n": String(L[0]), onclick: function () { setLayout(L[0]); } }, [icon(L[2], "0 0 20 16")]);
+    }));
+    var tabs = SessionTabs({ sessions: all, hidden: hidden, changes: changes, current: null, controls: panesEl.id, label: o.label,
+      onPick: function (id) { pick(id, false); },
+      onMaximise: function (id) { pick(id); setLayout(1); },
+      onNew: o.onNew ? function () { o.onNew(); } : null,
+      onMove: function (next) { var ids = order(); all = next.map(function (id) { return all[ids.indexOf(id)]; }).filter(Boolean); if (o.onMove) { o.onMove(next); } arrange(on()); paintBar2(); paintPanes(); },
+      onRename: function (id, name) { all.forEach(function (s) { if (s.id === id) { s.launchTitle = s.launchTitle || s.title; s.title = name === null ? s.launchTitle : name; } }); if (o.onRename) { o.onRename(id, name); } },
+      onHide: function (id) { var s = all.filter(function (x) { return x.id === id; })[0]; all = all.filter(function (x) { return x.id !== id; }); if (s) { hidden.push(s); } if (o.onHide) { o.onHide(id); } release(id); },
+      onUnhide: function (id) { var s = hidden.filter(function (x) { return x.id === id; })[0]; hidden = hidden.filter(function (x) { return x.id !== id; }); if (s) { all.push(s); } if (o.onUnhide) { o.onUnhide(id); } },
+      onClear: function (id) { all = all.filter(function (x) { return x.id !== id; }); hidden = hidden.filter(function (x) { return x.id !== id; }); if (o.onClear) { o.onClear(id); } release(id); },
+      onEnd: function (id) { if (o.onEnd) { o.onEnd(id); } } });
+    var top = h("div", { "class": "dtop" }, [tabs, lay]);
+    var waitHost = h("span", { style: "display: contents" }), noteEl = h("span", { "class": "note", role: "status" }), keysEl = h("span", { "class": "keys" });
+    var findIn = h("input", { "class": "ls-text", type: "search", placeholder: "Find in this terminal", "aria-label": "Find in the focused terminal: Enter for the next, Shift Enter for the one before", autocomplete: "off" }), findOut = h("span", { role: "status" });
+    var bar2 = h("div", { "class": "dtop" }, [waitHost, h("div", { "class": "find" }, [findIn, findOut]), noteEl, h("span", { "class": "grow", style: "flex: 1 1 auto" }), keysEl]);
+    var el = h("section", { "class": "ls-deck", "aria-label": "Terminals" }, [top, bar2, panesEl]);
+    var mq = window.matchMedia ? window.matchMedia("(max-width: 899px)") : null;
+
+    function order() { return all.map(idOf); }
+    function narrow() { return !!(mq && mq.matches); }
+    function on() { return arranged[hi] || order()[0] || null; }
+    /* Below 900px one pane, the highlighted one; the wider arrangement waits for the window to widen again. */
+    function shown() { var c = on(); return narrow() ? (c ? [c] : []) : arranged.filter(Boolean); }
+    function waiting() { return all.filter(function (s) { return NS.signalOf(s.word).family === "needs"; }); }
+    /* Dividers only where there is more than one pane to share the room. */
+    function split() { return !narrow() && panes > 1 && shown().length > 1; }
+    function titleOf(id) { var s = all.filter(function (x) { return x.id === id; })[0] || hidden.filter(function (x) { return x.id === id; })[0]; return s ? s.title : id; }
+    /* Puts a session in a pane if it is not in one, and highlights it. Spare tabs fill only the panes of the layout chosen, never with a launch still waiting for its own pane; panes a launch added are given back once their sessions have gone. */
+    function arrange(p, from, ids) {
+      ids = ids || order(); from = from || arranged;
+      var spare = launch ? ids.filter(function (x) { return x !== launch; }) : ids;
+      var placed = placeSlots(from, { order: spare, layout: panes, pick: p, at: hi, fill: chosen });
+      var fitted = listed ? shrinkSlots(placed, { layout: panes, chosen: chosen, order: ids }) : { slots: placed, layout: panes };
+      if (fitted.layout !== panes) { panes = fitted.layout; if (o.onGrown) { o.onGrown(panes); } }
+      var next = fitted.slots, at = p ? next.indexOf(p) : -1;
+      hi = at >= 0 ? at : Math.min(hi, panes - 1);
+      if (next.length !== arranged.length || next.some(function (x, i) { return x !== arranged[i]; })) { arranged = next; if (o.onSlots) { o.onSlots(next.slice()); } }
+    }
+    function say(t) { note = t; noteEl.textContent = t; if (noteTimer) { clearTimeout(noteTimer); } noteTimer = setTimeout(function () { note = ""; noteEl.textContent = ""; }, 10000); }
+    function focusSoon(id) { setTimeout(function () { if (terms[id] && terms[id].focus) { terms[id].focus(); } }, 0); }
+    /* A session just started: a pane of its own, the keyboard, and a word on where it went. */
+    function placeLaunch(id) {
+      var ids = order();
+      var p = launchSlots(arranged, { layout: panes, pick: id, ended: all.filter(function (s) { return s.ended; }).map(idOf), gone: arranged.filter(function (x) { return x && ids.indexOf(x) < 0; }), waiting: waiting().map(idOf), active: active });
+      /* The layout first, so the arrangement is never cut to the old one. */
+      if (p.layout !== panes) { panes = p.layout; if (o.onGrown) { o.onGrown(panes); } }
+      arranged = p.slots; hi = p.at; launch = null;
+      if (o.onSlots) { o.onSlots(p.slots.slice()); }
+      if (o.onLaunched) { o.onLaunched(id); }
+      if (o.onPick) { o.onPick(id); }
+      var where = "Opened in pane " + (p.at + 1);
+      say(p.grew ? where + ", added for it." : p.replaced ? where + ", in place of ‘" + titleOf(p.replaced) + "’, which " + (p.because === "ended" ? "had ended" : "had been idle longest") + ". It is still a tab." : where + ".");
+      paint(); focusSoon(id);
+    }
+    /* A tab hidden or cleared off the strip gives up its pane, which the next tab along fills. One that ends or goes stays where it was. */
+    function release(id) {
+      var freed = arranged.map(function (x) { return x === id ? null : x; });
+      arrange(freed[hi] || null, freed, order().filter(function (x) { return x !== id; }));
+      paint();
+    }
+    function pick(id, focus) {
+      arrange(id);
+      if (o.onPick) { o.onPick(id); }
+      paint();
+      if (focus !== false) { focusSoon(id); }
+    }
+    function setLayout(n) {
+      chosen = n;
+      var apply = function () { panes = n; arrange(arranged[hi] || null); paint(); };
+      if (NS.morph) { NS.morph(apply, { noVT: true, target: panesEl }); } else { apply(); }
+      if (o.onLayout) { o.onLayout(n); }
+    }
     function paintTop() {
-      top.textContent = "";
-      top.appendChild(SessionTabs({ sessions: o.sessions, current: current, controls: panesEl.id, onPick: function (id) { pick(id); }, onMaximise: function (id) { current = id; setLayout(1); }, onNew: o.onNew }));
-      var lay = h("div", { "class": "lay", role: "radiogroup", "aria-label": "Panes" }, LAYOUTS.map(function (L) { return h("button", { type: "button", role: "radio", "aria-checked": L[0] === layout ? "true" : "false", "aria-label": L[1], title: L[1], onclick: function () { setLayout(L[0]); } }, [icon(L[2], "0 0 20 16")]); }));
-      top.appendChild(lay);
+      tabs.update({ sessions: all, hidden: hidden, changes: changes, current: on() });
+      Array.prototype.forEach.call(lay.children, function (b) { b.setAttribute("aria-checked", b.getAttribute("data-n") === String(panes) ? "true" : "false"); });
     }
     function paintBar2() {
-      bar2.textContent = "";
-      var waiting = (o.sessions || []).filter(function (s) { return NS.signalOf(s.word).family === "needs"; });
-      if (waiting.length && NS.HaloButton) { bar2.appendChild(NS.HaloButton({ label: "Go to the one waiting", kind: "needs", size: "small", onPress: function () { pick(waiting[0].id, true); } })); }
-      bar2.appendChild(h("div", { "class": "find" }, [findIn, findOut]));
-      bar2.appendChild(h("span", { "class": "grow", style: "flex: 1 1 auto" }));
-      bar2.appendChild(h("span", { "class": "keys", text: "Ctrl Alt 1–9 picks · Ctrl Alt arrows move · Ctrl ] leaves a terminal" }));
+      waitHost.textContent = "";
+      var w = waiting();
+      if (w.length && NS.HaloButton) { waitHost.appendChild(NS.HaloButton({ label: "Go to the one waiting", kind: "needs", size: "small", onPress: function () { pick(w[0].id); } })); }
+      keysEl.textContent = "Ctrl Alt 1–9 picks · Ctrl Alt arrows move · Ctrl ] leaves a terminal · F2 renames a tab · Ctrl Shift arrows move it" + (split() ? " · drag a divider, or arrow it; Enter puts it back" : "");
+    }
+    function limits() { return { col: floorOf(TERM_FLOOR.width, panesEl.clientWidth - 10), row: floorOf(TERM_FLOOR.height, panesEl.clientHeight - 10) }; }
+    /* The tracks as main sets them: --deck-cols and --deck-rows on the panes, held to the floors as the window changes without moving what was kept. */
+    function tracks() {
+      var lim = limits(), col = clampSplit(panes === 4 ? split4[0] : split2, lim.col, 1 - lim.col), row = clampSplit(split4[1], lim.row, 1 - lim.row);
+      if (split()) { panesEl.style.setProperty("--deck-cols", tracksOf(col)); } else { panesEl.style.removeProperty("--deck-cols"); }
+      if (split() && panes === 4) { panesEl.style.setProperty("--deck-rows", tracksOf(row)); } else { panesEl.style.removeProperty("--deck-rows"); }
+      return { col: col, row: row, lim: lim };
+    }
+    function setColumn(v) { if (panes === 4) { split4 = [v, split4[1]]; if (splitters.cross) { splitters.cross.set({ column: v }); } if (o.onSplit) { o.onSplit(4, split4.slice()); } } else { split2 = v; if (o.onSplit) { o.onSplit(2, [v]); } } tracks(); }
+    function setRow(v) { split4 = [split4[0], v]; if (splitters.cross) { splitters.cross.set({ row: v }); } if (o.onSplit) { o.onSplit(4, split4.slice()); } tracks(); }
+    function setBoth(c, r) { split4 = [c, r]; if (splitters.cols) { splitters.cols.set({ value: c }); } if (splitters.rows) { splitters.rows.set({ value: r }); } if (o.onSplit) { o.onSplit(4, split4.slice()); } tracks(); }
+    function fitSplitters() {
+      if (!splitters.cols) { tracks(); return; }
+      var t = tracks();
+      splitters.cols.set({ value: t.col, min: t.lim.col, max: 1 - t.lim.col });
+      if (splitters.rows) { splitters.rows.set({ value: t.row, min: t.lim.row, max: 1 - t.lim.row }); }
+      if (splitters.cross) { splitters.cross.set({ column: t.col, row: t.row, colMin: t.lim.col, colMax: 1 - t.lim.col, rowMin: t.lim.row, rowMax: 1 - t.lim.row }); }
     }
     function paintPanes() {
-      var ids = shown();
-      panesEl.className = "panes l" + layout; panesEl.textContent = "";
+      var ids = shown(), cur = on(), have = order(), sig = ids.join("\u0000") + "#" + panes + "#" + narrow() + "#" + ids.map(function (id) { return listed && have.indexOf(id) < 0 ? 1 : 0; }).join("");
+      if (sig === lastSig) { Array.prototype.forEach.call(panesEl.querySelectorAll(".pane"), function (p) { p.classList.toggle("on", p.getAttribute("data-id") === cur); }); return; }
+      lastSig = sig; splitters = {};
+      panesEl.className = "panes l" + (narrow() ? 1 : panes); panesEl.textContent = "";
       ids.forEach(function (id) {
-        if (!terms[id]) { terms[id] = o.terminal(id); }
-        var pane = h("div", { "class": "pane" + (id === current ? " on" : ""), "data-id": id }, [terms[id].el]);
-        pane.addEventListener("focusin", function () { if (current !== id) { current = id; mark(); paintTop(); } });
+        var pane = h("div", { "class": "pane" + (id === cur ? " on" : ""), "data-id": id });
+        if (listed && have.indexOf(id) < 0) { pane.appendChild(h("p", { "class": "gone", role: "note", text: "This session is no longer in Studio. The pane keeps it until you pick another tab." })); }
+        if (!terms[id] && o.terminal) { terms[id] = o.terminal(id) || null; }
+        if (terms[id] && terms[id].el) { pane.appendChild(terms[id].el); }
+        pane.addEventListener("focusin", function () { if (on() !== id) { hi = arranged.indexOf(id); if (o.onPick) { o.onPick(id); } paintTop(); paintPanes(); } });
         panesEl.appendChild(pane);
       });
+      if (!ids.length) { panesEl.appendChild(h("p", { "class": "calm", text: "No sessions are running. Start one with the + beside the tabs, or N." })); }
+      /* After the panes, so a pane's place among its siblings is still its place in the grid. */
+      var t = tracks();
+      if (split() && NS.Splitter) {
+        splitters.cols = NS.Splitter({ "class": "cols", label: "Width of the panes", controls: panesEl.id, value: t.col, min: t.lim.col, max: 1 - t.lim.col, reset: 0.5, onchange: setColumn });
+        panesEl.appendChild(splitters.cols.el);
+        if (panes === 4) {
+          splitters.rows = NS.Splitter({ "class": "rows", orientation: "horizontal", label: "Height of the panes", controls: panesEl.id, value: t.row, min: t.lim.row, max: 1 - t.lim.row, reset: 0.5, onchange: setRow });
+          panesEl.appendChild(splitters.rows.el);
+          /* Where they cross, over both, so a drag there moves the two together. */
+          if (NS.SplitCross) { splitters.cross = NS.SplitCross({ column: t.col, row: t.row, colMin: t.lim.col, colMax: 1 - t.lim.col, rowMin: t.lim.row, rowMax: 1 - t.lim.row, reset: [0.5, 0.5], onchange: setBoth }); panesEl.appendChild(splitters.cross.el); }
+        }
+        /* The floors depend on the room the panes have, known once they are on the page. */
+        setTimeout(fitSplitters, 0);
+      }
       if (o.onShown) { o.onShown(ids, terms); }
     }
-    function mark() { Array.prototype.forEach.call(panesEl.children, function (p) { p.classList.toggle("on", p.getAttribute("data-id") === current); }); }
-    function pick(id, focus) {
-      var visible = shown().indexOf(id) >= 0; current = id;
-      paintTop();
-      if (!visible) { paintPanes(); } else { mark(); }
-      if (o.onPick) { o.onPick(id); }
-      if (focus !== false && terms[id]) { terms[id].focus(); }
-    }
-    function setLayout(n) { layout = n; NS.morph ? NS.morph(function () { paintTop(); paintPanes(); }, { noVT: true, target: panesEl }) : (paintTop(), paintPanes()); if (o.onLayout) { o.onLayout(n); } }
+    function paint() { paintTop(); paintBar2(); paintPanes(); }
+    /* Ctrl+Alt+1-9 picks a session by its tab; Ctrl+Alt+arrows move between the panes shown. Ctrl+Alt is AltGr on some layouts, so the digit is read from the physical key too. */
     el.addEventListener("keydown", function (e) {
       if (!(e.ctrlKey && e.altKey)) { return; }
-      var n = parseInt(e.key, 10), ids = order();
-      if (n >= 1 && n <= 9 && ids[n - 1]) { e.preventDefault(); pick(ids[n - 1]); return; }
-      var d = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
-      if (d) { e.preventDefault(); var s = shown(), i = s.indexOf(current); pick(s[(i + d + s.length) % s.length]); }
-    });
-    findIn.addEventListener("input", function () {
-      var q = findIn.value.trim().toLowerCase(), pane = panesEl.querySelector('.pane[data-id="' + current + '"]'), scr = pane && pane.querySelector(".screen");
-      if (!scr) { return; }
-      Array.prototype.forEach.call(scr.querySelectorAll("mark"), function (m) { m.replaceWith(document.createTextNode(m.textContent)); }); scr.normalize();
+      var m = /^Digit([1-9])$/.exec(e.code || ""), digit = m ? m[1] : (/^[1-9]$/.test(e.key) ? e.key : null), ids = order(), to = null;
+      if (digit) { to = ids[Number(digit) - 1] || null; }
+      else { var d = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key], s = shown(); if (d && s.length) { var i = Math.max(0, s.indexOf(on())); to = s[(i + d + s.length) % s.length]; } }
+      if (to) { e.preventDefault(); e.stopPropagation(); pick(to); }
+    }, true);
+    /* Ctrl+] in a terminal with nowhere named goes back to its tab. */
+    el.addEventListener("leaveterminal", function (e) { var b = tabs.querySelector('[role="tab"][aria-selected="true"]'); if (b) { e.preventDefault(); b.focus(); } });
+    /* Find searches the terminal that has the keyboard: Enter for the next match, Shift Enter for the one before, Escape clears. A terminal with find() of its own is asked; the reference one is searched in place. */
+    var hits = [], hit = -1;
+    function clearMarks(scr) { Array.prototype.forEach.call(scr.querySelectorAll("mark"), function (mk) { mk.replaceWith(document.createTextNode(mk.textContent)); }); scr.normalize(); }
+    function find(back) {
+      var q = findIn.value.trim(), t = terms[on()];
+      if (t && t.find) { findOut.textContent = q ? (t.find(q, back) ? "found" : "no match") : ""; if (!q && t.clearFind) { t.clearFind(); } return; }
+      var pane = Array.prototype.filter.call(panesEl.querySelectorAll(".pane"), function (p) { return p.getAttribute("data-id") === on(); })[0], scr = pane && pane.querySelector(".screen");
+      if (!scr) { findOut.textContent = q ? "no match" : ""; return; }
+      clearMarks(scr); hits = [];
       if (!q) { findOut.textContent = ""; return; }
-      var hits = 0, first = null, walker = document.createTreeWalker(scr, NodeFilter.SHOW_TEXT), nodes = [];
+      var lower = q.toLowerCase(), walker = document.createTreeWalker(scr, NodeFilter.SHOW_TEXT), nodes = [];
       while (walker.nextNode()) { nodes.push(walker.currentNode); }
-      nodes.forEach(function (t) { var i = t.nodeValue.toLowerCase().indexOf(q); if (i < 0) { return; } var r = t.splitText(i); r.splitText(q.length); var m = h("mark", { text: r.nodeValue }); r.replaceWith(m); hits++; if (!first) { first = m; } });
-      findOut.textContent = hits ? hits + (hits === 1 ? " match" : " matches") : "no match";
-      if (first && first.scrollIntoView) { first.scrollIntoView({ block: "center" }); }
-    });
-    paintTop(); paintBar2(); paintPanes();
-    return { el: el, pick: pick, setLayout: setLayout, terminal: function (id) { return terms[id]; }, update: function (sessions) { o.sessions = sessions; paintTop(); paintBar2(); }, get current() { return current; }, get layout() { return layout; } };
+      nodes.forEach(function (tn) { var i = tn.nodeValue.toLowerCase().indexOf(lower); if (i < 0) { return; } var r = tn.splitText(i); r.splitText(lower.length); var mk = h("mark", { text: r.nodeValue }); r.replaceWith(mk); hits.push(mk); });
+      hit = hits.length ? (back ? (hit - 1 + hits.length) % hits.length : (hit + 1) % hits.length) : -1;
+      findOut.textContent = hits.length ? "found" : "no match";
+      if (hit >= 0 && hits[hit].scrollIntoView) { hits[hit].scrollIntoView({ block: "nearest" }); }
+    }
+    findIn.addEventListener("input", function () { hit = -1; find(false); });
+    findIn.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); find(e.shiftKey); } else if (e.key === "Escape") { findIn.value = ""; hit = -1; find(false); } });
+    if (mq) { var redo = function () { lastSig = ""; paint(); }; if (mq.addEventListener) { mq.addEventListener("change", redo); } else if (mq.addListener) { mq.addListener(redo); } }
+    if (window.ResizeObserver) { new ResizeObserver(function () { if (split()) { fitSplitters(); } }).observe(panesEl); }
+
+    /* The first arrangement: the panes as they were, the session named, or a launch waiting for its pane. */
+    hi = Math.max(0, arranged.indexOf(o.current));
+    if (launch && order().indexOf(launch) >= 0) { arrange(null); placeLaunch(launch); }
+    else { arrange(o.current && order().indexOf(o.current) >= 0 ? o.current : (arranged[hi] || null)); paint(); }
+    return { el: el, tabs: tabs, pick: pick, setLayout: setLayout, terminal: function (id) { return terms[id]; },
+      /* The daemon's list again (an array), or a patch: sessions, hidden, changes, listed, active, current (a session the page names, which then takes the highlighted pane) and launch (one just started, placed by the launch rule once it is among the tabs). */
+      update: function (p) {
+        if (Array.isArray(p)) { p = { sessions: p }; }
+        p = p || {};
+        if (p.sessions) { all = p.sessions.map(copy); }
+        if (p.hidden) { hidden = p.hidden.map(copy); }
+        if (p.changes !== undefined) { changes = p.changes !== false; }
+        if (p.listed !== undefined) { listed = p.listed !== false; }
+        if (p.active) { active = p.active; }
+        if (p.launch !== undefined) { launch = p.launch || null; }
+        var ids = order();
+        if (launch && ids.indexOf(launch) >= 0) { placeLaunch(launch); return; }
+        arrange(p.current && ids.indexOf(p.current) >= 0 ? p.current : (arranged[hi] || null));
+        paint();
+      },
+      /* A session just started: placed now if it is among the tabs, else once an update brings it. */
+      launch: function (id) { launch = id; if (order().indexOf(id) >= 0) { placeLaunch(id); } },
+      get current() { return on(); }, get layout() { return panes; }, get chosen() { return chosen; }, get slots() { return arranged.slice(); } };
   }
 
   /* RunBoard: Team Focus. Every live run as a line, the one that needs you first, the teams along the top. */
