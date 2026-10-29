@@ -26,6 +26,7 @@
   import { lineFor } from '../lib/commandLine';
   import { holdPlace } from '../lib/holdPlace';
   import { runJob } from '../lib/jobs';
+  import { BACKFILL_WORDS, fieldWord, backfillLine, backfillPatience, backfillSummary, markWord, type BackfillOutcome } from '../lib/backfill';
   import { router } from '../lib/router.svelte';
   import { acceptWords, doneWhenLines, doneWhenWords, arrivalIn, gaps, keepUnchanged, needsChoice, nextStop, sendAnswers, stateWord, stopTarget, stopWords, type Arrival, type DumpItem, type Question, type Round } from '../lib/ideas';
   import { studio } from '../lib/state.svelte';
@@ -48,6 +49,8 @@
     failure?: { when: string | null; agent: string | null; model: string | null; error: string } | null;
     /** Where it was moved from, when it was. */
     moved?: { from: string | null; at: string } | null;
+    /** 'missing' when its plan lacks something the current contract asks for. */
+    mark?: string | null;
   }
 
   /** An idea that is a task on another list now, shown so it is not simply gone. */
@@ -100,7 +103,12 @@
       additions: Addition[];
       placement: { slug: string; isNew: boolean; name: string; reason: string } | null;
       doneWhen?: string[];
+      /** The fields a backfill pass wrote into this revision; emptied at acceptance. */
+      gapFilled?: string[];
     } | null;
+    /** The last backfill pass that could not fill its plan, when one could not. */
+    gapFillFailure?: { when: string | null; error: string } | null;
+    mark?: string | null;
     accepted: { project: string; plan: string; by: string; when: string } | null;
     /** What was added since it was asked; taken is when a round read it, null until one has. */
     notes?: { id: string; text: string; by: string; added: string; taken: string | null }[];
@@ -128,6 +136,7 @@
   let projects = $state<{ slug: string; name: string }[]>([]);
   let problem = $state<string | null>(null);
   let showing = $state<{ id: string; text: string } | null>(null);
+  let backfill = $state<BackfillOutcome | null>(null);
   // What is typed on the workbench and not sent, as the parts holding it report it.
   let drafted = $state<string[]>([]);
   let sentAnswers = $state<string[]>([]);
@@ -170,6 +179,34 @@
     } catch (error) {
       fail(error);
     }
+  }
+
+  // What a pass would do, read first and shown in a dialog: nothing is asked
+  // of an agent until Run is pressed, and Run says how many times it will be.
+  async function previewBackfill() {
+    try {
+      backfill = await readJson<BackfillOutcome>('backfill contract', [...BACKFILL_WORDS, '--dry-run']);
+    } catch (error) {
+      fail(error);
+    }
+  }
+
+  function runBackfill() {
+    const calls = backfill?.calls ?? 0;
+
+    backfill = null;
+    void studio.perform(
+      () => runJob('backfill contract', BACKFILL_WORDS, backfillPatience(calls)),
+      'Filled in what was missing',
+      lineFor('backfill contract', BACKFILL_WORDS),
+      async () => {
+        await loadList();
+
+        if (id) {
+          await loadIdea(id, where);
+        }
+      },
+    );
   }
 
   function loadDumps() {
@@ -622,6 +659,9 @@
   {#if !focused}
   <nav class="shelf" aria-label="Ideas">
     <ListToolbar noun="ideas" query={shelf.text} shape={shelf.shape} shown={ideas?.length ?? null} recorded={shelf.recorded} problem={shelf.problem} onchange={(query) => void shelf.ask(query)} />
+    <div class="backfill">
+      <HaloButton label="Fill in what's missing…" size="small" cmd={lineFor('backfill contract', [...BACKFILL_WORDS, '--dry-run'])} onpress={() => void previewBackfill()} />
+    </div>
     {#if shelf.error}
       <p class="offline" role="alert">{shelf.error}</p>
     {:else if ideas === null}
@@ -638,6 +678,7 @@
             <a href={href(one)} aria-current={!place && id === one.id && (one.project ?? null) === project ? 'page' : undefined}>
               <span class="t">{one.title}</span>
               <Signal word={stateWord(one)} />
+              {#if markWord(one.mark)}<span class="ls-tag needs">{markWord(one.mark)}</span>{/if}
               <span class="x">{one.failure ? 'last round failed' : one.unanswered ? `${one.unanswered} question${one.unanswered === 1 ? '' : 's'} for you` : one.stage}</span>
             </a>
           </li>
@@ -770,6 +811,8 @@
             <span>Done when <span class="hint">one condition a line: what must be true for it to be finished. Accepting confirms them, and a run for the task is held to them.</span></span>
             <textarea class="ls-text" name="accept-done-when" rows="4" bind:value={doneWhenText} disabled={!!refused}></textarea>
           </label>
+          {#if idea.plan?.gapFilled?.length}<p role="note"><span class="ls-tag needs">gap-filled</span> The {idea.plan.gapFilled.map(fieldWord).join(', ')} here {idea.plan.gapFilled.length === 1 ? 'was' : 'were'} written in by a backfill pass, not proposed with the rest of the plan. Read {idea.plan.gapFilled.length === 1 ? 'it' : 'them'} before accepting; accepting confirms {idea.plan.gapFilled.length === 1 ? 'it' : 'them'}.</p>{/if}
+          {#if idea.mark === 'missing' && idea.gapFillFailure}<p role="note"><span class="ls-tag needs">missing</span> The last backfill pass could not fill it: {idea.gapFillFailure.error}</p>{/if}
           {#if !doneWhenCount}<p><span class="ls-tag needs">no done-when</span> It can still be accepted, but a team queue will refuse the task until it has some.</p>{/if}
           {#if undecided}<p><span class="ls-tag needs">{undecided} layer{undecided === 1 ? ' has' : 's have'} no option chosen</span> It can still be accepted; the plan says so where it is written.</p>{/if}
           <div class="ls-answers flush">
@@ -878,6 +921,27 @@
     {/if}
   </section>
 </div>
+
+{#if backfill}
+  <Dialog
+    title="Fill in what's missing"
+    why={lineFor('backfill contract', [...BACKFILL_WORDS, '--dry-run'])}
+    cancelLabel={backfill.calls ? 'Not now' : 'Close'}
+    onclose={() => (backfill = null)}
+    actions={backfill.calls
+      ? [{ label: `Run, asking an agent ${backfill.calls} time${backfill.calls === 1 ? '' : 's'}`, solid: !refused, cmd: lineFor('backfill contract', BACKFILL_WORDS), disabledReason: refused, onpress: () => runBackfill() }]
+      : []}
+  >
+    <p>{backfillSummary(backfill)} Every list is looked at. An idea's plan gets what it lacks as a new revision, marked gap-filled until you accept it; a task gets a proposed done-when, held until you record it.</p>
+    {#if backfill.found.length}
+      <ul class="backfill-found">
+        {#each backfill.found as one (`${one.kind}/${one.project ?? '~'}/${one.id}`)}
+          <li class={one.skipped ? 'skipped' : ''}>{backfillLine(one)}</li>
+        {/each}
+      </ul>
+    {/if}
+  </Dialog>
+{/if}
 
 {#if showing}
   <Dialog title={`Notes ${showing.id}`} why={lineFor('idea dump show', [showing.id])} cancelLabel="Close" onclose={() => (showing = null)}>

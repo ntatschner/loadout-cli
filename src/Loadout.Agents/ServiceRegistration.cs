@@ -50,6 +50,7 @@ public static class ServiceRegistration
         services.AddSingleton<Ideas.IDumpSplitter, Ideas.DumpSplitter>();
         services.AddSingleton<Core.Ask.IAskAgent, Ask.AskAgentRound>();
         services.AddSingleton<Tasks.IDoneWhenProposer, Tasks.DoneWhenProposer>();
+        services.AddSingleton<Backfill.IContractBackfiller, Backfill.ContractBackfiller>();
         services.AddSingleton<Core.Voice.VoiceEvidenceGatherer>();
         services.AddSingleton<Voice.IVoiceLearner, Voice.VoiceLearner>();
         services.AddSingleton<Voice.IVoiceGuideDrafter, Voice.VoiceGuideDrafter>();

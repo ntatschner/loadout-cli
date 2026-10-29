@@ -248,6 +248,7 @@ public sealed class TaskBatchTests : IDisposable
                 var type when type == typeof(TaskMove) => new TaskMove { From = "elsewhere", Utc = DateTimeOffset.UnixEpoch },
                 var type when type == typeof(List<string>) => new List<string> { "set-" + property.Name },
                 var type when type == typeof(List<TaskEvent>) => new List<TaskEvent> { new() { State = TaskState.Doing, By = "someone", Utc = DateTimeOffset.UnixEpoch, Reason = "why" } },
+                var type when type == typeof(TaskProposal) => new TaskProposal { DoneWhen = ["it works"], Why = "why", Utc = DateTimeOffset.UnixEpoch, Error = "it failed" },
                 var type => throw new InvalidOperationException($"TaskItem.{property.Name} is a {type.Name}, which this test does not know how to set."),
             });
         }
@@ -259,15 +260,19 @@ public sealed class TaskBatchTests : IDisposable
         copy.History.Should().NotBeSameAs(item.History);
         copy.History[0].Should().NotBeSameAs(item.History[0]);
         copy.DoneWhen.Should().NotBeSameAs(item.DoneWhen);
+        copy.Proposal.Should().NotBeSameAs(item.Proposal);
+        copy.Proposal!.DoneWhen.Should().NotBeSameAs(item.Proposal!.DoneWhen);
     }
 
-    [Fact]
-    public void The_service_has_its_own_batch_rather_than_the_one_at_a_time_default()
+    [Theory]
+    [InlineData(nameof(ITaskService.ApplyAsync))]
+    [InlineData(nameof(ITaskService.HoldProposalAsync))]
+    public void The_service_has_its_own_rather_than_the_default_for_the_doubles(string method)
     {
         var map = typeof(TaskService).GetInterfaceMap(typeof(ITaskService));
-        var apply = typeof(ITaskService).GetMethod(nameof(ITaskService.ApplyAsync))!;
+        var declared = typeof(ITaskService).GetMethod(method)!;
 
-        map.TargetMethods[Array.IndexOf(map.InterfaceMethods, apply)].DeclaringType.Should().Be(typeof(TaskService));
+        map.TargetMethods[Array.IndexOf(map.InterfaceMethods, declared)].DeclaringType.Should().Be(typeof(TaskService));
     }
 
     [Fact]

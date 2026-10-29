@@ -1502,6 +1502,7 @@ a.ls-ptile:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px;
 .ls-tboard .task.doing { box-shadow: inset 3px 0 0 var(--accent), inset 0 0 0 1px var(--rule); }
 .ls-tboard .task .tt { font-size: 14.5px; color: var(--ink-strong); overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
 .ls-tboard .task .tx { font-family: var(--font-mono); font-size: 11px; color: var(--muted); overflow-wrap: anywhere; }
+.ls-tboard .task .mark { justify-self: start; }
 .ls-tboard .task .note { margin: 0; font-size: 13px; color: var(--ink-soft); overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
 .ls-pager { display: flex; margin-top: 10px; flex-wrap: wrap; align-items: center; gap: 6px 16px; font-size: 13px; color: var(--ink-soft); }
 

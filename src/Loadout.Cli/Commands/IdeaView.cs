@@ -264,6 +264,23 @@ internal static class IdeaView
                 output.WriteLine($"  - {Markup.Escape(condition)}");
             }
 
+            // Said until acceptance, which is where the person confirms
+            // them, so nothing a pass wrote reads as something they had seen.
+            if (plan.GapFilled.Count > 0 && record.Accepted is null)
+            {
+                output.WriteLine(
+                    $"  [yellow]gap-filled:[/] [dim]{Markup.Escape(string.Join(", ", plan.GapFilled))} written in by a backfill "
+                    + $"pass in revision {plan.Revision}, not proposed with the rest of the plan. Read them before accepting it.[/]");
+            }
+
+            if (record.Accepted is null && record.GapFillFailure is { Error.Length: > 0 } unfilled
+                && Core.Backfill.ContractBackfill.MarkOf(record) != Core.Backfill.ContractMark.None)
+            {
+                output.WriteLine(
+                    $"  [yellow]missing:[/] [dim]the last backfill pass, {unfilled.Utc:yyyy-MM-dd}, could not fill it: "
+                    + $"{Markup.Escape(unfilled.Error)}[/]");
+            }
+
             output.WriteBlankLine();
             output.WriteLine(Placement(plan.Project));
 
