@@ -22,6 +22,7 @@ public sealed class WorkspaceManager : IWorkspaceManager
     private readonly IGitManager _git;
     private readonly YamlStore _yaml;
     private readonly TimeProvider _time;
+    private readonly KeptFiles<ProjectRegistry> _registry;
 
     public WorkspaceManager(IPlatformPaths paths, IGitManager git, YamlStore yaml, TimeProvider time)
     {
@@ -29,6 +30,7 @@ public sealed class WorkspaceManager : IWorkspaceManager
         _git = git;
         _yaml = yaml;
         _time = time;
+        _registry = new KeptFiles<ProjectRegistry>(yaml, () => new ProjectRegistry(), Copy);
     }
 
     /// <inheritdoc />
@@ -164,8 +166,34 @@ public sealed class WorkspaceManager : IWorkspaceManager
     }
 
     /// <inheritdoc />
-    public Task<OperationResult<ProjectRegistry>> ReadRegistryAsync(CancellationToken ct = default) =>
-        _yaml.LoadAsync(RegistryPath, () => new ProjectRegistry(), ct);
+    /// <remarks>
+    /// Kept parsed between reads, because the daemon asks for it hundreds of
+    /// times for every time it changes.
+    /// </remarks>
+    public async Task<OperationResult<ProjectRegistry>> ReadRegistryAsync(CancellationToken ct = default)
+    {
+        var read = await _registry.ReadAsync(RegistryPath, ct).ConfigureAwait(false);
+
+        return read.Succeeded
+            ? OperationResult<ProjectRegistry>.Ok(read.Value!.Value)
+            : OperationResult<ProjectRegistry>.Fail(read.Error!, read.ExitCode);
+    }
+
+    /// <summary>A registry nothing else holds, so a caller changing what it was given changes nothing kept.</summary>
+    internal static ProjectRegistry Copy(ProjectRegistry registry) => new()
+    {
+        SchemaVersion = registry.SchemaVersion,
+        Projects = [.. registry.Projects.Select(entry => new ProjectRegistryEntry
+        {
+            Id = entry.Id,
+            Slug = entry.Slug,
+            Name = entry.Name,
+            Remote = entry.Remote,
+            Aliases = [.. entry.Aliases],
+            DefaultAgent = entry.DefaultAgent,
+            EditorProfile = entry.EditorProfile,
+        })],
+    };
 
     /// <inheritdoc />
     public Task<OperationResult> WriteRegistryAsync(ProjectRegistry registry, CancellationToken ct = default) =>

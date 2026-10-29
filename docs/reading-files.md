@@ -81,8 +81,12 @@ about 7 MB each time it opened.
    read eight or nine times per change, all in the two seconds after it was
    written, when a file's length and time are not trusted to show the next
    write. That is deliberate, and the price of never missing one.
+5. **`machines.yaml` and the project registry.** Each was read 1,100 to
+   1,300 times an hour and changed about once. They are now kept the same way
+   as ideas and task lists. After: not measured. They were moved on the
+   strength of the four above, and through the same store.
 
-The reading after these changes was taken on version 0.109.1: forty minutes
+The reading after the first four was taken on version 0.109.1: forty minutes
 of the same kind of use, with Studio open throughout. The daemon made about
 18,000 reads an hour, much as before, but they are now spread over small files
 nothing had kept rather than one large file read over and over. It read more
@@ -98,13 +102,9 @@ told apart from one in the file, without waiting for a release.
 - **Codex session files.** 442 MB read and twenty reads per change, but 69 ms
   in all: the operating system already had them in memory. The bytes overstate
   what they cost.
-- **The small, much-repeated files:** trigger journals, running sessions,
-  `machines.yaml`, the project registry and run journals. Each is read
-  hundreds of times per change, and together they took under two seconds in
-  half an hour. They clear the bar and buy little. The shared readers have
-  now shown they work, so these are next, `machines.yaml` and the project
-  registry first: read nearly a thousand times an hour each and changed about
-  once.
+- **The small, much-repeated files:** trigger journals, running sessions and
+  run journals. Each is read hundreds of times per change, and together they
+  took under two seconds in half an hour. They clear the bar and buy little.
 
 ## Across processes
 
