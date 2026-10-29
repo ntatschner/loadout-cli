@@ -38,6 +38,12 @@ internal sealed class ClaudeSessionHistory : ISessionHistory
     /// </summary>
     private const int TailBytes = 128 * 1024;
 
+    /// <summary>
+    /// How much of the start of a transcript stands for its head when deciding
+    /// whether a file that has grown is the same file with more on the end.
+    /// </summary>
+    private const int StartBytes = 4096;
+
     /// <summary>How long a fallback summary may be, so a list stays one line per session.</summary>
     private const int SummaryLength = 60;
 
@@ -52,7 +58,7 @@ internal sealed class ClaudeSessionHistory : ISessionHistory
     /// Raise the version whenever <see cref="ReadAsync"/> or what it keeps
     /// changes.
     /// </remarks>
-    private static readonly TranscriptReadings<Reading> Readings = new("claude-sessions", version: 1);
+    private static readonly TranscriptReadings<Reading> Readings = new("claude-sessions", version: 2);
 
     private readonly IEnvironmentProvider _environment;
     private readonly string? _kept;
@@ -158,20 +164,39 @@ internal sealed class ClaudeSessionHistory : ISessionHistory
     /// What one transcript says about its session, or null when it could not
     /// be read and should be tried again.
     /// </summary>
-    private static async Task<Reading?> ReadingAsync(FileInfo file, CancellationToken ct) =>
-        new(await ReadAsync(file, ct).ConfigureAwait(false));
+    /// <remarks>
+    /// A live session's transcript changes with every turn, and its first four
+    /// hundred lines, megabytes of them in a long session, were parsed again
+    /// each time to find what they had already said. A transcript only ever
+    /// grows, so when the file is longer than when its head was read and
+    /// starts the same way, the head is taken from the last reading and only
+    /// the end is read, for a newer title. Anything else is read in full.
+    /// </remarks>
+    private static async Task<Reading?> ReadingAsync(FileInfo file, Reading? previous, CancellationToken ct)
+    {
+        if (previous?.Head is { } head
+            && file.Length >= head.Length
+            && await StartsAsAsync(file, head.Start, ct).ConfigureAwait(false))
+        {
+            var title = await ReadTitleFromEndAsync(file, ct).ConfigureAwait(false) ?? head.Title;
+
+            return new Reading(Session(file, head.Directory, head.Branch, title, head.FirstPrompt), head);
+        }
+
+        return await ReadAsync(file, ct).ConfigureAwait(false);
+    }
 
     /// <summary>
-    /// Builds one session from its transcript, or null when the file does not
-    /// hold enough to resume from.
+    /// Builds one session from its transcript, with no session when the file
+    /// does not hold enough to resume from, or null when it could not be read.
     /// </summary>
-    private static async Task<AgentSession?> ReadAsync(FileInfo file, CancellationToken ct)
+    private static async Task<Reading?> ReadAsync(FileInfo file, CancellationToken ct)
     {
         var id = Path.GetFileNameWithoutExtension(file.Name);
 
         if (string.IsNullOrWhiteSpace(id))
         {
-            return null;
+            return new Reading(null);
         }
 
         string? directory = null;
@@ -183,10 +208,18 @@ internal sealed class ClaudeSessionHistory : ISessionHistory
         // is any point looking at the tail.
         var complete = false;
 
+        // Taken before the head is read, so a transcript that grows during the
+        // read is never thought to have started longer than it did.
+        var length = file.Length;
+        string start;
+
         try
         {
+            start = await StartOfAsync(file, ct).ConfigureAwait(false);
+
             using var trace = ReadLedger.Begin(file.FullName);
-            using var reader = new StreamReader(file.OpenRead());
+            using var stream = file.OpenRead();
+            using var reader = new StreamReader(stream);
 
             for (var i = 0; i < HeadLines; i++)
             {
@@ -206,6 +239,8 @@ internal sealed class ClaudeSessionHistory : ISessionHistory
                 // its first guess.
                 Absorb(line, ref directory, ref branch, ref title, ref firstPrompt);
             }
+
+            trace?.Read(stream.Position);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
@@ -216,24 +251,60 @@ internal sealed class ClaudeSessionHistory : ISessionHistory
         {
             // Without a working directory the session cannot be attributed to a
             // project, and resuming it would start somewhere unexpected.
-            return null;
+            return new Reading(null);
         }
 
-        if (!complete)
+        if (complete)
         {
-            // A long transcript may have been renamed past the point the head
-            // reached, and the newest name is the one that describes it.
-            title = await ReadTitleFromEndAsync(file, ct).ConfigureAwait(false) ?? title;
+            // A head that reached the end is the whole file, and the next
+            // version is read in full: there is nothing to save by keeping it.
+            return new Reading(Session(file, directory, branch, title, firstPrompt));
         }
 
-        return new AgentSession(
+        var head = new Head(directory, branch, title, firstPrompt, length, start);
+
+        // A long transcript may have been renamed past the point the head
+        // reached, and the newest name is the one that describes it.
+        title = await ReadTitleFromEndAsync(file, ct).ConfigureAwait(false) ?? title;
+
+        return new Reading(Session(file, directory, branch, title, firstPrompt), head);
+    }
+
+    private static AgentSession Session(FileInfo file, string directory, string? branch, string? title, string? firstPrompt) =>
+        new(
             "claude",
-            id,
+            Path.GetFileNameWithoutExtension(file.Name),
             title ?? Summarise(firstPrompt),
             directory,
             branch is "HEAD" ? null : branch,
             new DateTimeOffset(file.LastWriteTimeUtc, TimeSpan.Zero),
             file.FullName);
+
+    /// <summary>Whether a transcript still starts as it did, and false when it cannot be opened, so it is read in full.</summary>
+    private static async Task<bool> StartsAsAsync(FileInfo file, string start, CancellationToken ct)
+    {
+        try
+        {
+            return await StartOfAsync(file, ct).ConfigureAwait(false) == start;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>A hash of the start of a transcript, which stays the same while the file only grows.</summary>
+    private static async Task<string> StartOfAsync(FileInfo file, CancellationToken ct)
+    {
+        using var trace = ReadLedger.Begin(file.FullName);
+        await using var stream = file.OpenRead();
+
+        var buffer = new byte[StartBytes];
+        var read = await stream.ReadAtLeastAsync(buffer, StartBytes, throwOnEndOfStream: false, ct).ConfigureAwait(false);
+
+        trace?.Read(read);
+
+        return Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(buffer.AsSpan(0, read)));
     }
 
     /// <summary>Takes whatever a transcript line has to offer, ignoring the rest.</summary>
@@ -372,6 +443,8 @@ internal sealed class ClaudeSessionHistory : ISessionHistory
                 stream.Seek(-TailBytes, SeekOrigin.End);
             }
 
+            trace?.Read(stream.Length - stream.Position);
+
             using var reader = new StreamReader(stream);
 
             // The first line after seeking is almost certainly cut in half.
@@ -427,5 +500,18 @@ internal sealed class ClaudeSessionHistory : ISessionHistory
     /// Wrapped, because a transcript with nothing to resume is an answer worth
     /// keeping too, and a reading of nothing would be read again every time.
     /// </remarks>
-    internal sealed record Reading(AgentSession? Session);
+    internal sealed record Reading(AgentSession? Session, Head? Head = null);
+
+    /// <summary>
+    /// What the first lines of a long transcript said, kept so that the next
+    /// version of the file, the same with more on the end, need not be parsed
+    /// from the start again.
+    /// </summary>
+    /// <param name="Directory">The working directory the session ran in.</param>
+    /// <param name="Branch">The branch, as recorded.</param>
+    /// <param name="Title">The newest title the head held.</param>
+    /// <param name="FirstPrompt">The first thing a person typed.</param>
+    /// <param name="Length">How long the file was when its head was read.</param>
+    /// <param name="Start">A hash of its first bytes then.</param>
+    internal sealed record Head(string Directory, string? Branch, string? Title, string? FirstPrompt, long Length, string Start);
 }

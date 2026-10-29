@@ -68,11 +68,12 @@ about 7 MB each time it opened.
    was nothing to compare.
 3. **Claude Code transcripts.** Two seconds, and each one read about two and a
    half times per change, because two scans that asked at once both read it.
-   They now share one read. After: about once per change. What is left is the
-   size of a live session's transcript, which is read whole each time it
-   changes; one of about 80 MB came to most of the six seconds transcripts
-   took in forty minutes. Reading only the end of a file that has grown is
-   the next thing to try here.
+   They now share one read. After: about once per change. What was left was a
+   live session's transcript: each change read and parsed its first four
+   hundred lines again, 2.1 MB of them in a 46 MB transcript, to find what
+   they had already said. A transcript only grows, so one that is longer and
+   starts the same way now keeps what its head said and reads only its last
+   128 KB, for a newer title. After: not measured.
 4. **Ideas and task lists.** These were already kept parsed between reads, but
    the daemon builds fresh services for every request, so what was kept lasted
    one request. In a second hour's reading an idea being refined was read up
@@ -117,8 +118,14 @@ the others waits until a measurement says it would pay.
 ## What these figures don't show
 
 - Parsing, mostly. The trace times the read and not what is done with it
-  afterwards, with one exception: `config.yaml`, `machines.yaml` and the
-  project registry are timed until their YAML has been parsed as well.
+  afterwards, with two exceptions: `config.yaml`, `machines.yaml` and the
+  project registry are timed until their YAML has been parsed, and a Claude
+  Code transcript's first lines until each has been parsed.
+- Bytes, for Claude Code transcripts in the readings above. The trace counts
+  a file's whole length unless the code reading it says it read less, and
+  the transcript reader did not say so. It reads the first lines and the end,
+  so the 346 MB in the first table, and the 4 GB of one live transcript in
+  the reading after, were far more than it read. It now says what it reads.
 - A fair comparison of time. The trace times each read from start to finish,
   so a busy machine makes every read look slower. In the forty-minute reading
   after the changes, `config.yaml` took four times as long per read as before,
