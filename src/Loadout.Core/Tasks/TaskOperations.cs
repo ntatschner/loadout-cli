@@ -31,6 +31,7 @@ namespace Loadout.Core.Tasks;
 /// <param name="Detail">The full description. Left as it was when null; an empty one clears it.</param>
 /// <param name="DoneWhen">What must be true for it to be finished. Left as it was when null; an empty list clears it.</param>
 /// <param name="Reason">Why, written on the history line this declare adds; one is added even when the state is unchanged.</param>
+/// <param name="Proposal">For hold, the proposal to hold.</param>
 public sealed record TaskOperation(
     string Op,
     string? Project = null,
@@ -44,12 +45,20 @@ public sealed record TaskOperation(
     string? Revision = null,
     string? Detail = null,
     IReadOnlyList<string>? DoneWhen = null,
-    string? Reason = null)
+    string? Reason = null,
+    TaskProposal? Proposal = null)
 {
     public const string Add = "add";
     public const string Declare = "declare";
     public const string Remove = "remove";
     public const string Move = "move";
+
+    /// <summary>
+    /// Holds a backfill pass's proposal on a task. Not one of <see cref="Ops"/>:
+    /// only <see cref="ITaskService.HoldProposalAsync"/> makes it, and a batch
+    /// from outside naming it is refused.
+    /// </summary>
+    internal const string Hold = "hold";
 
     /// <summary>Every op a batch takes, in the order they are documented.</summary>
     public static IReadOnlyList<string> Ops => [Add, Declare, Remove, Move];
@@ -227,6 +236,16 @@ public static class TaskOperations
             note = task.Note,
             detail = task.Detail,
             doneWhen = task.DoneWhen,
+            mark = Backfill.ContractBackfill.Name(Backfill.ContractBackfill.MarkOf(task)),
+            proposal = task.Proposal is { } proposal
+                ? new
+                {
+                    doneWhen = proposal.DoneWhen,
+                    why = proposal.Why.Length > 0 ? proposal.Why : null,
+                    at = proposal.Utc,
+                    error = proposal.Error.Length > 0 ? proposal.Error : null,
+                }
+                : null,
             history = task.History.Select(one => new
             {
                 state = one.State.ToString().ToLowerInvariant(),

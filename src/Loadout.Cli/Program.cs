@@ -832,6 +832,15 @@ public static class Program
             });
         });
 
+        TopBranch(config, "backfill", backfill =>
+        {
+            backfill.Describe(
+                "Bring open ideas and tasks up to what the current contract asks of them.",
+                CommandCategory.Workspace,
+                "backfill missing done-when contract old ideas tasks gap fill");
+            backfill.AddCommand<BackfillContractCommand>("contract");
+        });
+
         TopBranch(config, "tools", tools =>
         {
             tools.Describe(

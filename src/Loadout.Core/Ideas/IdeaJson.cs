@@ -42,6 +42,8 @@ public static class IdeaJson
             captured = record.CapturedUtc,
             error = failure?.Error,
             failure = Failure(failure),
+            mark = Backfill.ContractBackfill.Name(Backfill.ContractBackfill.MarkOf(record)),
+            gapFillFailure = Failure(record.GapFillFailure),
             lastRound = record.LastRound is not { } last ? null : new
             {
                 when = last.Utc,
@@ -127,6 +129,7 @@ public static class IdeaJson
                     request = addition.Request.Length > 0 ? addition.Request : null,
                 }),
                 doneWhen = plan.DoneWhen,
+                gapFilled = plan.GapFilled,
                 placement = new
                 {
                     slug = plan.Project.Slug.Length > 0 ? plan.Project.Slug : null,

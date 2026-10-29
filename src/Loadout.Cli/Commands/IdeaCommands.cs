@@ -496,6 +496,10 @@ public sealed class IdeaListCommand : AsyncCommand<IdeaListCommand.Settings>
         [CommandOption("--page <NUMBER>")]
         [Description("Which page to show, counted from 1. Needs --limit.")]
         public int Page { get; init; } = 1;
+
+        [CommandOption("--missing")]
+        [Description("Only ideas whose plan lacks something the current contract asks for, marked missing.")]
+        public bool Missing { get; init; }
     }
 
     /// <inheritdoc />
@@ -518,6 +522,7 @@ public sealed class IdeaListCommand : AsyncCommand<IdeaListCommand.Settings>
             .Where(idea => !settings.Global || idea.Place.Project is null)
             .Where(idea => settings.Project is not { Length: > 0 } only
                 || string.Equals(idea.Place.Project, only, StringComparison.OrdinalIgnoreCase))
+            .Where(idea => !settings.Missing || idea.Mark != Core.Backfill.ContractMark.None)
             .ToList();
 
         var config = await _configuration.LoadConfigAsync(cancellationToken).ConfigureAwait(false);
@@ -567,6 +572,7 @@ public sealed class IdeaListCommand : AsyncCommand<IdeaListCommand.Settings>
                     outdated = idea.Outdated,
                     running = idea.Running,
                     failure = IdeaView.Failure(idea.Failure),
+                    mark = Core.Backfill.ContractBackfill.Name(idea.Mark),
                     moved = TaskTrace.Json(idea.Moved),
                 }),
                 movedOn = gone.Select(one => new { id = one.Id, title = one.Title, from = one.From, to = one.Where, at = one.Utc }),
@@ -592,6 +598,8 @@ public sealed class IdeaListCommand : AsyncCommand<IdeaListCommand.Settings>
         {
             output.WriteLine(placed.Count > 0
                 ? "[dim]Nothing matches the filter.[/]"
+                : settings.Missing
+                    ? "[dim]No idea's plan lacks anything the current contract asks for.[/]"
                 : "[dim]No ideas yet. Drop one in with: loadout idea add \"...\"[/]");
 
             return CommandOutput.Success();
@@ -612,6 +620,7 @@ public sealed class IdeaListCommand : AsyncCommand<IdeaListCommand.Settings>
                 output.WriteLine(
                     $"  {Markup.Escape(idea.Place.Id),-28} {IdeaView.Marked(idea),-24} "
                     + Markup.Escape(idea.Title)
+                    + (Core.Backfill.ContractBackfill.Label(idea.Mark) is { } mark ? $"  [yellow]{mark}[/]" : string.Empty)
                     + (idea.Moved is { } came ? $"  [dim]{Markup.Escape(TaskTrace.From(came))}[/]" : string.Empty));
             }
 

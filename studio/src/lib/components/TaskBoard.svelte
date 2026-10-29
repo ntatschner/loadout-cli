@@ -11,6 +11,7 @@
   import Signal from './Signal.svelte';
   import TaskDetail from './TaskDetail.svelte';
   import { lineFor } from '../commandLine';
+  import { markWord } from '../backfill';
   import { declareWords, listHref, movedSaid, showWords, startable, startWords, TASK_MOVE, TASK_NEXT, taskKey, whereOf, whereSaid, type MovedAway, type Task } from '../tasks';
 
   interface Props {
@@ -87,6 +88,7 @@
   <article class={`task ${task.state}`} aria-label={`${task.title}, ${task.state}`}>
     <span class="tt">{task.title}</span>
     <span class="tx">{[mixed ? whereSaid(task.project) : '', task.id, task.kind, task.declaredBy, when(task.declared)].filter(Boolean).join(' · ')}</span>
+    {#if markWord(task.mark)}<span class="ls-tag needs mark">{markWord(task.mark)}</span>{/if}
     {#if task.moved}<span class="came">Moved here {movedSaid(task.moved)}</span>{/if}
     {#if task.note}<p class="note">{task.note}</p>{/if}
     <div class="moves">

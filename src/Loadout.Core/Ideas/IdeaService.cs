@@ -34,6 +34,7 @@ public sealed record IdeaPlace(string? Project, string Id)
 /// <param name="Running">True while a round on it is running on this machine.</param>
 /// <param name="Moved">Where it was moved from, or null when it has stayed where it was dropped in.</param>
 /// <param name="Outdated">How many of its questions may have been overtaken by a change since they were asked.</param>
+/// <param name="Mark">Whether its plan lacks something the current contract asks for.</param>
 public sealed record IdeaSummary(
     IdeaPlace Place,
     string Title,
@@ -45,7 +46,8 @@ public sealed record IdeaSummary(
     IdeaAttempt? Failure = null,
     bool Running = false,
     TaskMove? Moved = null,
-    int Outdated = 0);
+    int Outdated = 0,
+    Backfill.ContractMark Mark = Backfill.ContractMark.None);
 
 /// <summary>What accepting an idea did.</summary>
 /// <param name="Task">The task it became.</param>
@@ -202,6 +204,29 @@ public interface IIdeaService
     /// somebody has stopped refining. Answers and the plan stay as they are.
     /// </summary>
     Task<OperationResult<IdeaRecord>> DismissFailureAsync(IdeaPlace place, CancellationToken ct = default);
+
+    /// <summary>
+    /// Writes a backfill pass's done-when into an idea's plan as a new
+    /// revision, marked as gap-filled, changing nothing else in it.
+    /// </summary>
+    /// <param name="place">The idea.</param>
+    /// <param name="revision">The plan revision the pass read, so a plan changed since is refused rather than written over.</param>
+    /// <param name="doneWhen">The conditions.</param>
+    /// <param name="ct">Cancellation.</param>
+    Task<OperationResult<IdeaRecord>> FillGapsAsync(
+        IdeaPlace place,
+        int revision,
+        IReadOnlyList<string> doneWhen,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Notes that a backfill pass could not fill an idea's plan, replacing any
+    /// earlier note of it. Rounds and their failures are left alone.
+    /// </summary>
+    Task<OperationResult<IdeaRecord>> RecordGapFillFailureAsync(
+        IdeaPlace place,
+        IdeaAttempt attempt,
+        CancellationToken ct = default);
 
     /// <summary>
     /// Writes the plan out, and turns the idea into a task on the project it
@@ -417,7 +442,8 @@ internal sealed partial class IdeaService : IIdeaService
                     record is null ? null : IdeaWork.FailureOf(record),
                     _locks.Held(place),
                     item.Moved,
-                    record is null ? 0 : IdeaWork.OutdatedCount(record)));
+                    record is null ? 0 : IdeaWork.OutdatedCount(record),
+                    Backfill.ContractBackfill.MarkOf(record)));
             }
         }
 
@@ -816,6 +842,75 @@ internal sealed partial class IdeaService : IIdeaService
     public Task<OperationResult<IdeaRecord>> DismissFailureAsync(IdeaPlace place, CancellationToken ct = default) =>
         EditAsync(place, [Dismiss(place)], null, ct);
 
+    /// <inheritdoc />
+    public Task<OperationResult<IdeaRecord>> FillGapsAsync(
+        IdeaPlace place,
+        int revision,
+        IReadOnlyList<string> doneWhen,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(doneWhen);
+
+        var conditions = doneWhen.Select(one => one.Trim()).Where(one => one.Length > 0).ToList();
+
+        return ChangeAsync(place, string.Join(' ', conditions), record =>
+        {
+            // Asked again under the lock: somebody may have answered, asked or
+            // refined since the pass looked, and a revision written over that
+            // would make what they said look taken in.
+            if (record.Plan is not { } plan || plan.Revision != revision)
+            {
+                return $"{place.Id}'s plan has changed since the pass read it, so nothing was filled.";
+            }
+
+            if (Backfill.ContractBackfill.ForIdea(place.Project, new TaskItem { Id = place.Id, Kind = TaskKind.Idea }, record) is not { } finding
+                || !finding.Missing.Contains(IdeaContract.DoneWhen, StringComparer.Ordinal))
+            {
+                return $"{place.Id} no longer has an unaccepted plan missing its done-when, so nothing was filled.";
+            }
+
+            if (finding.Skipped is { } skipped)
+            {
+                return $"Nothing was filled for {place.Id}. {skipped}";
+            }
+
+            if (conditions.Count == 0)
+            {
+                return "There are no conditions to fill it with.";
+            }
+
+            plan.Revision++;
+            plan.ProposedUtc = _time.GetUtcNow();
+            plan.DoneWhen = conditions;
+            plan.GapFilled = [.. plan.GapFilled.Append(IdeaContract.DoneWhen).Distinct(StringComparer.Ordinal)];
+            record.GapFillFailure = null;
+
+            return null;
+        }, ct);
+    }
+
+    /// <inheritdoc />
+    public Task<OperationResult<IdeaRecord>> RecordGapFillFailureAsync(
+        IdeaPlace place,
+        IdeaAttempt attempt,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(attempt);
+
+        return ChangeAsync(place, attempt.Error, record =>
+        {
+            record.GapFillFailure = new IdeaAttempt
+            {
+                Utc = _time.GetUtcNow(),
+                Agent = attempt.Agent,
+                Model = attempt.Model,
+                Error = attempt.Error,
+            };
+
+            return null;
+        }, ct);
+    }
+
     /// <summary>Forgetting the latest failure without running another round.</summary>
     private static IdeaEdit Dismiss(IdeaPlace place) => new(
         null,
@@ -895,6 +990,10 @@ internal sealed partial class IdeaService : IIdeaService
         {
             record.Plan!.DoneWhen = [.. doneWhen.Select(one => one.Trim()).Where(one => one.Length > 0)];
         }
+
+        // Accepting is where the person confirms what a pass filled in, so
+        // nothing in the plan is unseen any more.
+        record.Plan!.GapFilled = [];
 
         var landed = new IdeaPlace(destination, place.Id);
         var planFile = $"ideas/{place.Id}.md";
