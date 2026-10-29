@@ -39,9 +39,15 @@ internal sealed class WholeFile
     /// <param name="path">The file.</param>
     public WholeFile(string path) => _path = path;
 
-    /// <summary>The one reader of <paramref name="path"/> in this process.</summary>
+    /// <summary>
+    /// The one reader of <paramref name="path"/> in this process, or a new one
+    /// each time with <see cref="SharedReaders"/> off, which reads the file on
+    /// every call.
+    /// </summary>
     public static WholeFile For(string path) =>
-        Shared.GetOrAdd(Path.GetFullPath(path), full => new WholeFile(full));
+        SharedReaders.Enabled
+            ? Shared.GetOrAdd(Path.GetFullPath(path), full => new WholeFile(full))
+            : new WholeFile(Path.GetFullPath(path));
 
     /// <summary>
     /// The file's text. Throws what reading the file throws, a missing file

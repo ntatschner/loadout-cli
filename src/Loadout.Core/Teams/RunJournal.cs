@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using Loadout.Core.Diagnostics;
+using Loadout.Core.Reading;
 using Loadout.Models.Results;
 
 namespace Loadout.Core.Teams;
@@ -800,30 +801,31 @@ public sealed class RunJournal : IRunJournal
                 $"No run named '{runId}' on this machine.", Models.ExitCode.ProjectNotFound);
         }
 
-        string[] lines;
+        IReadOnlyList<RunEvent>? events;
 
         try
         {
-            using var trace = ReadLedger.Begin(path);
-            lines = File.ReadAllLines(path);
+            events = Events(path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return OperationResult<IReadOnlyList<RunEvent>>.Fail($"The run's journal could not be read: {ex.Message}");
         }
 
-        var events = new List<RunEvent>();
-
-        foreach (var line in lines)
-        {
-            if (Parse(line) is { } parsed)
-            {
-                events.Add(parsed);
-            }
-        }
-
-        return OperationResult<IReadOnlyList<RunEvent>>.Ok(events);
+        return events is null
+            ? OperationResult<IReadOnlyList<RunEvent>>.Fail($"No run named '{runId}' on this machine.", Models.ExitCode.ProjectNotFound)
+            : OperationResult<IReadOnlyList<RunEvent>>.Ok(events);
     }
+
+    /// <summary>A journal's events, or null when there is no journal. Throws what reading it throws.</summary>
+    /// <remarks>
+    /// Through one reader per journal for the process, which parses only what
+    /// was appended since its last read. The event watch, each open run page
+    /// and the run summaries all read a running journal again every few
+    /// seconds, and a journal is only ever appended to.
+    /// </remarks>
+    private static IReadOnlyList<RunEvent>? Events(string path) =>
+        AppendOnlyFile<RunEvent>.For(path, Parse).Read();
 
     /// <summary>
     /// Whether an event belongs to the shape of a run rather than to the
@@ -893,30 +895,14 @@ public sealed class RunJournal : IRunJournal
             return null;
         }
 
-        string[] lines;
-
         try
         {
-            using var trace = ReadLedger.Begin(path);
-            lines = File.ReadAllLines(path);
+            return Events(path)?.LastOrDefault(entry => entry.Kind == "run.reopened")?.At;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return null;
         }
-
-        DateTimeOffset? reopened = null;
-
-        foreach (var line in lines)
-        {
-            if (line.Contains("\"run.reopened\"", StringComparison.Ordinal)
-                && Parse(line) is { Kind: "run.reopened" } entry)
-            {
-                reopened = entry.At;
-            }
-        }
-
-        return reopened;
     }
 
     /// <summary>
