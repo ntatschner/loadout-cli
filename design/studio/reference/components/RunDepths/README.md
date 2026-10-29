@@ -4,10 +4,10 @@ RunDepths is the lower half of a run's page: five tabs, reached with the keys 1 
 
 ## The five depths
 
-1. **What it said**, at two resolutions. The run's own journal, one line every few seconds with repeats counted (×6); or pick a node and see everything it did, every tool it called and everything it said, with sub-agents indented and marked. Under a live node's stream sits SayToNode.
+1. **What it said**, at two resolutions. The run's own journal, one line every few seconds with repeats counted (×6); or pick a node and see everything it did, every tool it called and everything it said, with sub-agents indented and marked. Under a live node's stream sits SayToNode. Both are drawn with main's Journal (stage 14's `Journal`, named "Journal" or "What implementer/1 did"); lines may be given as objects (`{ time, text, family, kind, sub, repeats }`) or as the older arrays.
 2. **What it cost.** RunNumbers first, then every exchange one by one: round, node, model, messages, refused, cost, and what the report came back as.
-3. **The papers.** The run's own summing-up first, then each node's brief beside its report, in the words the model saw. A brief you changed before it went out says so and shows the lead's original.
-4. **What it changed.** Each node's Patch, file summary first, with Open a pull request.
+3. **The papers.** The run's own summing-up first, then each node's brief beside its report, in the words the model saw. A brief you changed before it went out says so and shows the lead's original. Before the lead has briefed anyone: "No brief has gone out yet."
+4. **What it changed.** Each node's Patch, file summary first, with Open a pull request. A node whose diff could not be read (`{ node, error }` among the patches) says why in its place, "reviewer/1: …", as main.
 5. **What it delivered.** The Outbox: every file the run left behind, committed or not, in a tree beside a viewer that previews, shows the change and downloads.
 
 ## Where the data comes from

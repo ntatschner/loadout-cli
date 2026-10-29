@@ -536,6 +536,8 @@ textarea.ls-text { min-height: 88px; resize: vertical; font-family: var(--font-m
 .ls-run.needs { box-shadow: inset 3px 0 0 var(--needs), inset 0 0 0 1px var(--rule); }
 .ls-run.bad { box-shadow: inset 3px 0 0 var(--bad), inset 0 0 0 1px var(--rule); }
 .ls-run .top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; }
+/* What the daemon says of the process driving it, beside its word: Bad colour and words, as main's .ls-liveness. */
+.ls-liveness { font-size: 13px; color: var(--bad-text); box-shadow: inset 2px 0 0 var(--bad); padding: 0 var(--space-2); }
 .ls-run .goal { flex: 1 1 260px; min-width: 0; font-size: 18px; line-height: 1.3; font-weight: 300; color: var(--ink-strong); text-decoration: none; overflow-wrap: anywhere; }
 .ls-run a.goal:hover { color: var(--accent-text); text-decoration: underline; text-underline-offset: 3px; }
 .ls-run a.goal:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
@@ -817,6 +819,8 @@ textarea.ls-text { min-height: 88px; resize: vertical; font-family: var(--font-m
 .ls-bin .prune .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px 18px; }
 .ls-bin .sentence { margin: 0; font-size: 14px; color: var(--ink); }
 @media (max-width: 560px) { .ls-bin > ul > li { grid-template-columns: minmax(0, 1fr); } }
+.binlist { margin: 0 0 4px; padding-left: 18px; font-family: var(--font-mono); font-size: 12.5px; }
+.ls-sched .t em { overflow-wrap: anywhere; }
 
 /* ---------- Outbox: what a run delivered ---------- */
 .ls-outbox { --c: var(--accent); container-type: inline-size; display: grid; gap: 12px; min-width: 0; }
@@ -1062,6 +1066,11 @@ html[data-vt="fade"]::view-transition-group(*) { animation-duration: 0s; }
 @media (prefers-reduced-motion: reduce) { .ls-board .brow, .ls-mini .st.cur i { animation: none !important; } .ls-mini .seg.into::after { display: none; } }
 @media (max-width: 599px) { .ls-board .teams { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; } .ls-board .teams button { flex: none; } }
 @media (max-width: 899px) { .ls-board .brow { grid-template-columns: minmax(0, 1fr) auto; } .ls-board .brow .ls-mini { grid-column: 1 / -1; grid-row: 2; } .ls-board .brow .spend { grid-column: 1 / -1; text-align: left; } }
+/* In a column narrower than a row's four parts (Team Focus with a run open beside it) the row folds as it does on a narrow
+   screen, so the question under it wraps inside the column instead of running past its edge. */
+.ls-board { container-type: inline-size; }
+.ls-board .brow .ls-gate { min-width: 0; }
+@container (max-width: 780px) { .ls-board .brow { grid-template-columns: minmax(0, 1fr) auto; } .ls-board .brow .ls-mini { grid-column: 1 / -1; grid-row: 2; } .ls-board .brow .spend { grid-column: 1 / -1; text-align: left; } }
 
 /* ---------- QuietList: Minimal's one column ---------- */
 .ls-quiet { --c: var(--accent); margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; max-width: 720px; }
@@ -1717,6 +1726,20 @@ a.ls-ptile:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px;
 .ls-cgrid .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0; font-size: 12px; color: var(--muted); }
 .ls-cgrid .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .ls-cgrid .legend i { font-style: normal; font-family: var(--font-mono); font-weight: 600; }
+/* Narrower than a done-when and its rounds side by side (a phone): each done-when's words above, its rounds in a row under
+   them that wraps, each mark with its round over it, so nothing scrolls sideways however many rounds there are. */
+.ls-cgrid { container-type: inline-size; }
+@container (max-width: 520px) {
+  .ls-cgrid .scroll { overflow: visible; }
+  .ls-cgrid table, .ls-cgrid tbody { display: block; min-width: 0; }
+  .ls-cgrid thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .ls-cgrid tbody tr { display: flex; flex-wrap: wrap; gap: 2px 4px; padding: 8px 0; box-shadow: inset 0 -1px 0 var(--rule); }
+  .ls-cgrid tbody th[scope="row"], .ls-cgrid tbody td { box-shadow: none; }
+  .ls-cgrid tbody th[scope="row"] { flex: 1 1 100%; min-width: 0; max-width: none; padding: 0 0 4px; overflow-wrap: anywhere; }
+  .ls-cgrid tbody td { display: grid; justify-items: center; gap: 2px; padding: 3px 4px; }
+  .ls-cgrid tbody td::before { content: attr(data-r); content: attr(data-r) / ""; font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); }
+  .ls-cgrid tbody td.now::before { color: var(--ink-strong); text-decoration: underline 2px var(--accent); text-underline-offset: 3px; }
+}
 
 /* ---------- PickUpSheet: what a finished run needs to carry on ---------- */
 .ls-pickup { display: grid; gap: 12px; }

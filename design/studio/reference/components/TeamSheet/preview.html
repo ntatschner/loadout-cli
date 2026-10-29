@@ -32,9 +32,11 @@
   var HELD = { "loadout-cli": ["the suite passes"] };
   var s = document.getElementById("s"), k = document.getElementById("k");
   function show(kind) { s.textContent = ""; var h2 = document.createElement("h2"); h2.style.cssText = "margin: 0 0 14px; font-size: 21px; font-weight: 300; color: var(--ink-strong)"; h2.textContent = { run: "Start a run", make: "Make a team", schedule: "Run one on a schedule" }[kind]; s.appendChild(h2);
-    s.appendChild(S.TeamSheet({ kind: kind, teams: TEAMS, projects: PROJECTS, projectDoneWhen: HELD, daemon: true, preset: kind === "run" ? { team: "bug-hunt" } : {} }).el); }
+    s.appendChild(S.TeamSheet({ kind: kind, teams: TEAMS, projects: PROJECTS, projectDoneWhen: HELD, daemon: true, preset: kind === "run" ? { team: "bug-hunt" } : {}, onSubmit: submit }).el); }
+  /* As main: it says what onSubmit answers, or main's words when it answers nothing; a rejection is said with a cross. */
+  function submit(c, v) { return new Promise(function (ok, no) { setTimeout(function () { if (v.name === "quick-review") { no(new Error("a team called quick-review is already in the bin: put it back, or pick another name")); } else { ok(); } }, 500); }); }
   [["run", "Start a run"], ["make", "Make a team"], ["schedule", "On a schedule"]].forEach(function (x) { k.appendChild(S.HaloButton({ label: x[1], size: "small", onPress: function () { show(x[0]); } })); });
-  k.appendChild(S.HaloButton({ label: "Open as a sheet", size: "small", onPress: function () { S.TeamSheet({ kind: "run", teams: TEAMS, projects: PROJECTS, projectDoneWhen: HELD }).open(); } }));
+  k.appendChild(S.HaloButton({ label: "Open as a sheet", size: "small", onPress: function () { S.TeamSheet({ kind: "run", teams: TEAMS, projects: PROJECTS, projectDoneWhen: HELD, onSubmit: submit }).open(); } }));
   show("run");
 })();
 </script>

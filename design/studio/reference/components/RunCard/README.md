@@ -7,6 +7,7 @@ RunCard is one team run in a list: its goal, its state, the team, project, postu
 - `run`: id, goal, team, project, posture, the state word (`running`, `waiting for you`, `held after this round`, `done`, `failed`, `stopped`, `limited`), round, elapsed time, and the spend: `spent`, `cap` (or `uncapped: true` for no cap on purpose), `projected` and `rate`.
 - `gate`: the question it is waiting on (see Gate). It is answered here.
 - `reasons`: anything else that puts it in Needs you, each with what clears it.
+- `badge`: what the daemon says of the process driving it, beside its word in the Bad colour and words (`.ls-liveness`, a `status`), as main's `livenessOf` words it: "not responding · pid 48213", "possibly not responding", "owner unreadable", "silent for an hour or more · pid 51022". Or give `liveness` (`not-responding`, `possibly-not-responding`, `unreadable`, `silent`) and `pid` and it is worded for you; `live` and `finished` say nothing, as main. `LoadoutStudio.livenessOf(liveness, pid)` gives the same words for a page's own header.
 - `actions`: for a running run, Hold after this round (`team halt --pause`), Let it carry on (`--resume`) and Stop after this round (`team halt`); for one that ended, Run it again (fills Start a run, starts nothing), Pick it up where it stopped (`team resume`) and Forget it (`team runs remove`).
 
 ## The spend line

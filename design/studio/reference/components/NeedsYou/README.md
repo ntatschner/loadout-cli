@@ -10,6 +10,17 @@ NeedsYou is the top of the Teams page: every run that wants you, and why. Four r
 | `budget` | projected over | it is projected to overrun its budget | it slows, finishes, or you stop it |
 | `spent` | limited | it has spent its budget | you raise it, or it stops |
 
+A trigger rule wants you for four more, as main's `NEED_REASONS` has them; give its rule as the goal, "trigger rule" (or "trigger source") as the team, an empty `run`, and its own `text`:
+
+| Reason | Word | What it says | Clears when |
+|---|---|---|---|
+| `approval` | needs approval | A trigger rule wants to start a run that writes. | you approve or reject it |
+| `paused` | paused | It reached one of its caps and starts nothing until you resume it. | you resume it |
+| `stale` | held too long | It held events past the 24-hour window. | you release them, or they are dropped after a week |
+| `source` | stopped | A trigger source has stopped. | what stopped it is put right |
+
+A link with no `href` goes to `#teams`, as main.
+
 ## What you provide
 
 - `items`: one per reason, with the run, its goal and team, a link to its page, and the details (the node and how long it has been quiet, the projection).

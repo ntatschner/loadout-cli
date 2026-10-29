@@ -1,4 +1,4 @@
-<!-- @dsCard group="Teams" height=720 width=1100 subtitle="Every reason a run wants you, each saying what clears it" -->
+<!-- @dsCard group="Teams" height=1180 width=1100 subtitle="Every reason a run wants you, each saying what clears it" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -33,7 +33,11 @@
     { reason: "asked", run: RUN, team: "iterating-project", goal: "Add --since to loadout usage", href: "#", gate: { kind: "question", gate: "g4", node: "lead", asked: "asked 6 min ago", question: "The suite has two flaky tests unrelated to --since. Fix them in this run, or leave them?", options: ["Leave them", "Fix them here"], recommendation: "Leave them" } },
     { reason: "quiet", run: "20261017-1311-77e0", team: "docs-crew", goal: "Make the docs true", href: "#", node: "docs-auditor/1", quiet: "9 min (it usually takes 3)", actions: [{ label: "Look at what it is doing", cmd: "opens its stream · changes nothing" }] },
     { reason: "budget", run: "20261017-1311-77e0", team: "docs-crew", goal: "Make the docs true", href: "#", detail: "$26.30 of $20.00", actions: [{ label: "Change what it may spend", cmd: "$ loadout team budget 20261017-1311-77e0 --usd <figure or none>" }] },
-    { reason: "silent", run: "20261017-0950-5c1e", team: "bug-hunt", goal: "Find why the upload hangs on retry", href: "#", actions: [{ label: "Say something to the lead", cmd: "$ loadout team message 20261017-0950-5c1e --message \"\u2026\"" }] }
+    { reason: "silent", run: "20261017-0950-5c1e", team: "bug-hunt", goal: "Find why the upload hangs on retry", href: "#", actions: [{ label: "Say something to the lead", cmd: "$ loadout team message 20261017-0950-5c1e --message \"\u2026\"" }] },
+    { reason: "approval", run: "", team: "trigger rule", goal: "review-pulls", href: "#teams", text: "review-pulls wants to start quick-review on starstats for pull request #212, and that run writes.", actions: [{ label: "Approve", kind: "needs", cmd: "$ loadout trigger approve ap-7f2c" }, { label: "Reject", cmd: "$ loadout trigger reject ap-7f2c" }] },
+    { reason: "paused", run: "", team: "trigger rule", goal: "nightly-bugs", href: "#teams", actions: [{ label: "Resume it", cmd: "$ loadout trigger resume nightly-bugs" }] },
+    { reason: "stale", run: "", team: "trigger rule", goal: "review-pulls", href: "#teams", text: "2 event(s) held past the 24-hour window, the first about pull request #208.", actions: [{ label: "Release", cmd: "$ loadout trigger release review-pulls" }] },
+    { reason: "source", run: "", team: "trigger source", goal: "GitHub", href: "#teams", text: "GitHub stopped answering: gh is not signed in." }
   ] }));
 })();
 </script>

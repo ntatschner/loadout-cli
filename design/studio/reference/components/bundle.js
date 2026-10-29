@@ -47,6 +47,8 @@
   var GLYPHS = {"play": "M7 5 L15 10 L7 15 Z", "round": "M15.5 7 A6 6 0 1 0 16 11.5 M15.5 3 V7 H11.5", "needs": "M10 4 V11.5 M10 15 V15.2", "failed": "M6 6 L14 14 M14 6 L6 14", "blocked": "M4 10a6 6 0 1 0 12 0a6 6 0 1 0-12 0 M6.5 10 H13.5", "limited": "M4 14 A6 6 0 0 1 16 14 M10 14 L6.8 10.6", "done": "M5 10.5 L8.5 14 L15 6.5", "idle": "M5 10 H15", "open": "M5 10a5 5 0 1 0 10 0a5 5 0 1 0-10 0", "held": "M7.5 5.5 V14.5 M12.5 5.5 V14.5", "stopped": "M6 6 H14 V14 H6 Z", "unknown": "M7.5 7.5 A2.5 2.5 0 1 1 10 10 V11.5 M10 14.8 V15", "dropped": "M5 15 L15 5", "shaping": "M10 3 L16 10 L10 17 L4 10 Z"};
   var STATES = {"working": ["moving", "play", "breathe"], "running": ["moving", "play", "breathe"], "doing": ["moving", "play", "breathe"], "round running": ["moving", "round", "spin"], "needs a decision": ["needs", "needs", "pulse"], "waiting for you": ["needs", "needs", "pulse"], "failed": ["bad", "failed", "hard"], "last round failed": ["bad", "failed", "hard"], "blocked": ["bad", "blocked", "hard"], "limited": ["bad", "limited", "hard"], "done": ["good", "done", "settle"], "met": ["good", "done", "settle"], "accepted": ["good", "done", "settle"], "idle": ["rest", "idle", "dim"], "open": ["rest", "open", "still"], "captured": ["rest", "open", "still"], "shaping": ["rest", "shaping", "still"], "held": ["rest", "held", "still"], "held after this round": ["rest", "held", "still"], "stopped": ["rest", "stopped", "still"], "not attempted": ["rest", "open", "dashed"], "unknown": ["rest", "unknown", "flicker"], "dropped": ["rest", "dropped", "strike"], "needs approval": ["needs", "needs", "pulse"], "connecting": ["rest", "open", "dashed"], "reconnecting": ["rest", "round", "dashed"], "ended": ["good", "done", "settle"], "exited with an error": ["bad", "failed", "hard"], "only watching": ["rest", "held", "still"], "lost": ["bad", "blocked", "hard"], "unmet": ["bad", "failed", "hard"], "no verdict": ["rest", "unknown", "still"], "quiet": ["needs", "needs", "pulse"], "projected over": ["needs", "limited", "pulse"], "trusted": ["good", "done", "settle"], "not trusted": ["rest", "open", "still"], "changed since trusted": ["needs", "needs", "pulse"], "to put right": ["needs", "needs", "pulse"], "stalled": ["needs", "held", "pulse"], "not approved": ["rest", "open", "still"], "not on this machine": ["rest", "open", "dashed"], "scheduled": ["rest", "held", "still"]};
   var SVGNS = "http://www.w3.org/2000/svg";
+  /* Teams words as main's signals.ts has them since 0.104: a lead or a node that went silent twice and was given up on, and a run abandoned. */
+  STATES.stalled = ["bad", "blocked", "hard"]; STATES.stuck = ["bad", "blocked", "hard"]; STATES.abandoned = ["rest", "stopped", "still"];
 
   function h(tag, attrs, kids) {
     var el = document.createElement(tag);
@@ -915,11 +917,17 @@
     var bar = cap ? h("div", { "class": "bar", role: "meter", "aria-label": "Spent", "aria-valuemin": "0", "aria-valuemax": String(cap), "aria-valuenow": String(o.spent), "aria-valuetext": money(o.spent) + " of " + money(cap) + (over ? ", projected " + money(o.projected) + ", past its budget" : "") }, [h("i", { style: "width:" + pct.toFixed(1) + "%" }), over ? null : (o.projected ? h("u", { style: "left:" + Math.min(100, o.projected / cap * 100).toFixed(1) + "%" }) : null)]) : null;
     return h("div", { "class": "ls-spend" + (over ? " over" : "") }, [words, bar]);
   }
+  /* What the daemon can say of the process driving a run, as main's livenessOf words it; live, finished or unknown say nothing. */
+  function livenessOf(liveness, pid) {
+    var p = pid ? " · pid " + pid : "";
+    return { "not-responding": "not responding" + p, "possibly-not-responding": "possibly not responding", unreadable: "owner unreadable", silent: "silent for an hour or more" + p }[liveness] || null;
+  }
   function RunCard(o) {
     o = o || {}; var r = o.run || {};
     var fam = NS.signalOf(r.word || "running").family;
+    var badge = o.badge !== undefined ? o.badge : (o.liveness ? livenessOf(o.liveness, o.pid) : null);
     var el = h("article", { "class": "ls-run " + fam, "aria-label": r.goal });
-    el.appendChild(h("div", { "class": "top" }, [o.href ? h("a", { "class": "goal", href: o.href, text: r.goal }) : h("span", { "class": "goal", text: r.goal }), sig(r.word || "running")]));
+    el.appendChild(h("div", { "class": "top" }, [o.href ? h("a", { "class": "goal", href: o.href, text: r.goal }) : h("span", { "class": "goal", text: r.goal }), sig(r.word || "running"), badge ? h("span", { "class": "ls-liveness", role: "status", text: badge }) : null]));
     el.appendChild(h("span", { "class": "facts", text: [r.team, r.project, r.posture, r.round ? "round " + r.round + (r.rounds ? " of " + r.rounds : "") : null, r.elapsed, r.id].filter(Boolean).join(" \u00b7 ") }));
     if (o.progress && NS.ProgressLine) { el.appendChild(NS.ProgressLine(o.progress)); }
     if (r.spent !== undefined) { el.appendChild(Spend(r)); }
@@ -936,7 +944,12 @@
     quiet: ["quiet", "{node} has said nothing for {for}, three times its usual turn.", "it says anything at all"],
     budget: ["projected over", "It is projected to overrun its budget: {detail}.", "it slows, finishes, or you stop it"],
     spent: ["limited", "It has spent its budget.", "you raise it, or it stops"],
-    stalled: ["stalled", "No done-when has moved for {detail}, so it is held after this round.", "you let it carry on, tell it something, or stop it"]
+    stalled: ["stalled", "No done-when has moved for {detail}, so it is held after this round.", "you let it carry on, tell it something, or stop it"],
+    /* The trigger rules' reasons, as main's NEED_REASONS has them. */
+    approval: ["needs approval", "A trigger rule wants to start a run that writes.", "you approve or reject it"],
+    paused: ["paused", "It reached one of its caps and starts nothing until you resume it.", "you resume it"],
+    stale: ["held too long", "It held events past the 24-hour window.", "you release them, or they are dropped after a week"],
+    source: ["stopped", "A trigger source has stopped.", "what stopped it is put right"]
   };
   function NeedsYou(o) {
     o = o || {};
@@ -947,7 +960,7 @@
       var n = NEED[it.reason] || NEED.asked;
       var words = (it.text || n[1]).replace("{node}", it.node || "a node").replace("{for}", it.quiet || "a while").replace("{detail}", it.detail || "");
       return h("li", { "class": "need" }, [
-        h("div", { "class": "top" }, [h("a", { href: it.href || "#", text: it.goal }), sig(n[0])]),
+        h("div", { "class": "top" }, [h("a", { href: it.href || "#teams", text: it.goal }), sig(n[0])]),
         it.gate ? null : h("p", { text: words }),
         it.gate ? Gate(Object.assign({ compact: true, run: it.run }, it.gate)) : null,
         h("span", { "class": "clears", text: [it.team, it.run, "clears when " + (it.clears || n[2])].filter(Boolean).join(" \u00b7 ") }),
@@ -1027,13 +1040,21 @@
   function Journal(lines) {
     return h("ol", { "class": "log", tabindex: "0", "aria-label": "Journal" }, lines.map(function (l) { return h("li", { "class": (l[2] || "") + (l[4] ? " sub" : "") }, [h("span", { "class": "tm", text: l[0] }), h("span", { "class": "tx" }, [l[3] ? h("span", { "class": "k", text: l[3] }) : null, l[1], l[5] ? h("span", { "class": "x", text: "\u00d7" + l[5] }) : null])]); }));
   }
+  /* RunDepths draws its journal with main's Journal (stage 14's NS.Journal), which takes lines as objects; the
+     older [time, text, family, kind, sub, repeats] arrays are still taken. */
+  function journalOf(lines, label) {
+    var J = NS.Journal;
+    if (!J || J === Journal) { return Journal(lines); }
+    var made = J({ label: label || "Journal", lines: lines.map(function (l) { return Array.isArray(l) ? { time: l[0] || "", text: l[1] || "", family: l[2] || undefined, kind: l[3] || undefined, sub: !!l[4], repeats: l[5] || undefined } : l; }) });
+    return made.el || made;
+  }
   function Exchanges(rows) {
     var H = ["Round", "Node", "Model", "Messages", "Refused", "Cost", "Report"];
     return h("table", { "class": "ls-xch" }, [h("caption", { text: "Every exchange" }), h("thead", {}, [h("tr", {}, H.map(function (x, i) { return h("th", { scope: "col", "class": i >= 3 && i <= 5 ? "r" : null, text: x }); }))]),
       h("tbody", {}, rows.map(function (r) { return h("tr", {}, r.map(function (c, i) { return h("td", { "data-h": H[i], "class": (i >= 3 && i <= 5 ? "r" : "") + (i === 6 ? "rep" : "") || null }, [h("span", { text: i === 5 ? money(c) : String(c) })]); })); }))]);
   }
   function Papers(p) {
-    return h("div", { "class": "ls-papers" }, [p.summary ? h("p", { "class": "sum", text: p.summary }) : null].concat((p.pairs || []).map(function (x) {
+    return h("div", { "class": "ls-papers" }, [p.summary ? h("p", { "class": "sum", text: p.summary }) : null, (p.pairs || []).length ? null : h("p", { "class": "ls-note", text: "No brief has gone out yet." })].concat((p.pairs || []).map(function (x) {
       return h("section", { "class": "pair" }, [h("h4", {}, [x.node, h("span", { text: x.role || "" })]), h("div", { "class": "two" }, [
         h("div", {}, [h("h5", { text: "What it was told" }), h("p", { text: x.brief }), x.instead ? h("p", { "class": "changed", text: "You changed this brief before it went out. The lead wrote: " + x.instead }) : null]),
         h("div", {}, [h("h5", { text: "What it said it did" }), h("p", { text: x.report || "No report yet." })])])]);
@@ -1053,9 +1074,10 @@
         var s = o.said || {}, nodes = s.nodes || [];
         var picks = [h("button", { type: "button", "aria-pressed": node ? "false" : "true", text: "The run", onclick: function () { node = null; T.select(0); } })].concat(nodes.map(function (n) { return h("button", { type: "button", "aria-pressed": node === n ? "true" : "false", text: n, onclick: function () { node = n; T.select(0); } }); }));
         panel.appendChild(h("div", { "class": "who", role: "group", "aria-label": "Whose words" }, picks));
-        if (!node) { panel.appendChild(Journal(s.journal || [])); panel.appendChild(h("p", { "class": "src" }, ["One line every few seconds, repeats counted. ", cmd("$ loadout team log " + (o.run || "<run>") + " --events")])); }
+        if (!node) { panel.appendChild(journalOf(s.journal || [])); panel.appendChild(h("p", { "class": "src" }, ["One line every few seconds, repeats counted. ", cmd("$ loadout team log " + (o.run || "<run>") + " --events")])); }
         else {
-          panel.appendChild(Journal((s.streams || {})[node] || [["", "Nothing from " + node + " yet."]]));
+          var stream = (s.streams || {})[node] || [];
+          panel.appendChild(journalOf(stream.length ? stream : [{ time: "", text: "Nothing from " + node + " yet." }], "What " + node + " did"));
           panel.appendChild(h("p", { "class": "src", text: "Everything " + node + " did: every tool it called and everything it said. Sub-agents are marked." }));
           if (s.say) { var say = SayToNode(Object.assign({ run: o.run, node: node }, s.say, { state: (s.live || {})[node] ? s.say.state : "ended" })); say.style.marginTop = "12px"; panel.appendChild(say); }
         }
@@ -1067,7 +1089,8 @@
       else if (i === 3) {
         var ps = (o.changed || {}).patches || [];
         if (!ps.length) { panel.appendChild(h("p", { "class": "ls-note", text: "No node of this run produced a patch." })); }
-        ps.forEach(function (p, k) { var x = Patch(Object.assign({ run: o.run }, p)); if (k) { x.style.marginTop = "22px"; } panel.appendChild(x); });
+        /* A node whose diff could not be read says why, in its place, as main does. */
+        ps.forEach(function (p, k) { var x = p.error ? h("p", { "class": "ls-note", text: p.node + ": " + p.error }) : Patch(Object.assign({ run: o.run, goal: o.goal }, p)); if (k) { x.style.marginTop = "22px"; } panel.appendChild(x); });
       } else if (i === 4) { panel.appendChild(NS.Outbox(Object.assign({ run: o.run }, o.delivered || { repository: null, files: [] }))); }
     }
     function onKey(e) {
@@ -1113,8 +1136,14 @@
       field("Its title", t, "The run's goal unless you give one.", true), line]);
     paint();
     NS.Dialog({ title: "Open a pull request for " + o.node + "?", why: "This is the one thing on the page that reaches a remote. It pushes " + (o.branch || "the node's branch") + " to origin and opens the pull request with gh, using the GitHub login you already have.", content: content,
-      actions: [{ label: "Push and open it", kind: "needs", solid: true, cmd: "runs the command above", onPress: function () { said.textContent = "\u2713 Pushed " + (o.branch || "the branch") + " and opened a " + (draft ? "draft " : "") + "pull request."; if (o.onPr) { o.onPr({ draft: draft, title: title }); } } },
-        { label: "Say what it would do", cmd: "the same, with --dry-run · pushes nothing", onPress: function () { said.textContent = "\u2713 Dry run: it would push " + (o.branch || "the branch") + " and open the pull request. Nothing was pushed."; } }] }).open();
+      actions: [{ label: "Push and open it", kind: "needs", solid: true, cmd: "runs the command above", onPress: function () { prSay(o, said, { draft: draft, title: title, dry: false }); } },
+        { label: "Say what it would do", cmd: "the same, with --dry-run · pushes nothing", onPress: function () { prSay(o, said, { draft: draft, title: title, dry: true }); } }] }).open();
+  }
+  /* As main: onPr is asked both ways, dry or not, and what it answers (or resolves to) is what is said; with no answer, the words main falls back on. */
+  function prSay(o, said, p) {
+    var answer = o.onPr ? o.onPr(p) : null;
+    function show(a) { said.textContent = a === null || a === undefined || a === "" ? (p.dry ? "\u2713 Dry run: it would push " + (o.branch || "the branch") + " and open the pull request. Nothing was pushed." : "\u2713 Pushed " + (o.branch || "the branch") + " and opened a " + (p.draft ? "draft " : "") + "pull request.") : String(a); }
+    if (answer && typeof answer.then === "function") { answer.then(show, function (e) { said.textContent = "\u2715 " + ((e && e.message) || e); }); } else { show(answer); }
   }
 
   /* ---------- SayToNode: typing at a live node, behind a second credential ---------- */
@@ -1247,53 +1276,65 @@
     var V = { team: p.team || (kind === "make" ? "" : (runnable[0] || {}).name || ""), goal: p.goal || "", project: p.project || (projects[0] || {}).name || "", autonomy: p.autonomy || "", rounds: p.rounds || "", usd: p.usd || "", done: p.done || "", dropped: {}, after: p.after || "", timeout: "think-again-once", name: p.name || "", from: p.from || "", forProject: false, when: "every", at: "09:00", every: "24h" };
     var line = h("code", { "class": "ls-cmdline" }), foot = h("div", { "class": "foot" }), said = h("p", { "class": "ls-said", role: "status" });
     var el = h("div", { "class": "ls-sheet" });
+    function numeric(x) { x.setAttribute("inputmode", "numeric"); return x; }
     function team() { return teams.filter(function (t) { return t.name === V.team; })[0] || null; }
     function proj() { return projects.filter(function (x) { return x.name === V.project; })[0] || null; }
     function tasksHere() { return (o.tasks || []).filter(function (t) { return (t.project || V.project) === V.project && (t.state === "doing" || t.state === "open" || t.state === "blocked") && t.kind !== "idea"; }); }
-    function command() {
-      if (kind === "make") { return "$ loadout team new " + (V.name || "<name>") + (V.from ? " --from " + V.from : "") + (V.forProject ? " --for-this-project --project " + V.project : ""); }
-      if (kind === "schedule") { return "$ loadout team schedule add " + (V.name || "<name>") + " " + (V.team || "<team>") + " " + q(V.goal || "\u2026") + " --project " + V.project + (V.when === "at" ? " --at " + V.at : V.when === "on" ? " --on commit" : " --every " + (V.every || "24h")) + (V.autonomy ? " --autonomy " + V.autonomy : "") + (V.usd ? " --usd " + V.usd : ""); }
-      var c = "$ loadout team run " + (V.team || "<team>") + " " + q(V.goal || "\u2026") + " --project " + V.project + (V.task ? " --task " + V.task : "");
-      if (V.autonomy) { c += " --autonomy " + V.autonomy; }
-      if (V.rounds) { c += " --rounds " + V.rounds; }
-      if (V.usd) { c += " --usd " + V.usd; }
-      V.done.split("\n").map(function (s) { return s.trim(); }).filter(Boolean).forEach(function (d) { c += " --done-when " + q(d); });
-      var held = ((o.projectDoneWhen || {})[V.project] || []), dropped = held.filter(function (x) { return V.dropped[x]; });
-      if (held.length && dropped.length === held.length) { c += " --no-project-done-when"; } else { dropped.forEach(function (x) { c += " --drop-project-done-when " + q(x); }); }
-      if (V.after) { c += " --take-recommendation-after " + V.after; if (V.timeout !== "think-again-once") { c += " --on-timeout " + V.timeout; } }
-      return c;
+    /* The words after the command, as main's sheetWords has them; the line quotes each as a shell would need. */
+    function words() {
+      if (kind === "make") { return [V.name || "<name>"].concat(V.from ? ["--from", V.from] : [], V.forProject ? ["--for-this-project", "--project", V.project] : []); }
+      if (kind === "schedule") { return [V.name || "<name>", V.team || "<team>", V.goal.trim() || "…", "--project", V.project].concat(V.when === "at" ? ["--at", V.at] : V.when === "on" ? ["--on", "commit"] : ["--every", V.every.trim() || "24h"], V.autonomy ? ["--autonomy", V.autonomy] : [], V.usd ? ["--usd", V.usd] : []); }
+      var w = [V.team || "<team>", V.goal.trim() || "…", "--project", V.project].concat(V.task ? ["--task", V.task] : []);
+      if (V.autonomy) { w.push("--autonomy", V.autonomy); }
+      if (V.rounds) { w.push("--rounds", V.rounds); }
+      if (V.usd) { w.push("--usd", V.usd); }
+      V.done.split("\n").map(function (s) { return s.trim(); }).filter(Boolean).forEach(function (d) { w.push("--done-when", d); });
+      /* Each one left out is named, even all of them, as main's start route takes them. */
+      ((o.projectDoneWhen || {})[V.project] || []).filter(function (x) { return V.dropped[x]; }).forEach(function (x) { w.push("--drop-project-done-when", x); });
+      if (V.after) { w.push("--take-recommendation-after", V.after); if (V.timeout !== "think-again-once") { w.push("--on-timeout", V.timeout); } }
+      return w;
     }
+    function command() { return "$ " + { run: "loadout team run", make: "loadout team new", schedule: "loadout team schedule add" }[kind] + " " + words().map(q).join(" "); }
     function problem() {
       if (kind === "make") { return !V.name ? "give it a name first" : (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(V.name) ? "lowercase words joined by hyphens, as the built-in ones are" : (teams.some(function (t) { return t.name === V.name; }) ? "a team called " + V.name + " already exists" : null)); }
       if (kind === "schedule" && !V.name) { return "give the schedule a name first"; }
       var t = team();
       if (!t) { return "pick a team first"; }
       if (t.template) { return t.name + " is a shape to copy, not a team to run"; }
-      if ((t.problems || []).length) { return "it can't run here: " + t.problems[0]; }
+      if ((t.problems || []).length) { return "it can’t run here: " + t.problems[0]; }
       if (!V.goal.trim()) { return "say what the run is for first"; }
+      if (!V.project) { return "pick a project first"; }
+      if (kind === "schedule" && V.autonomy === "manual") { return "a schedule cannot be manual: nobody is there to answer when it fires"; }
       if (kind === "schedule" && V.when === "every" && !/^\d+\s*(m|h|d)$/.test(V.every.trim())) { return "say how often as 30m, 2h or 1d"; }
       if (kind === "schedule" && V.when === "every" && /^\d+\s*m$/.test(V.every.trim()) && parseInt(V.every, 10) < 5) { return "nothing may repeat faster than every five minutes"; }
       if (V.usd && !/^(none|\d+(\.\d+)?)$/i.test(V.usd.trim())) { return "a budget is a figure in US dollars, or none"; }
       if (V.usd && /^0+(\.0+)?$/.test(V.usd.trim())) { return "a budget of nothing is refused; say none for no cap"; }
+      if (V.rounds && !/^\d+$/.test(V.rounds.trim())) { return "rounds is a whole number"; }
       if (V.after && !/^(\d+\s*(m|h|d|mins?|minutes?|hours?|days?)|never|off)$/i.test(V.after.trim())) { return "write the wait as 30m, 2h or 1d"; }
       return null;
     }
+    var sending = false;
     function paintFoot() {
       line.textContent = command(); foot.textContent = "";
       var bad = problem(), go = { run: "Start the run", make: "Write it", schedule: "Schedule it" }[kind];
-      foot.appendChild(halo({ label: go, solid: true, glyph: "\u25b6", disabledReason: bad || (o.watchOnly ? "Studio is only watching: type the command in a terminal" : null), cmd: bad ? null : "runs the command above", onPress: submit }));
-      if (dlg) { foot.appendChild(halo({ label: "Cancel", size: "small", onPress: function () { dlg.close(); } })); }
+      foot.appendChild(halo({ label: go, solid: true, glyph: "▶", disabledReason: bad || (o.watchOnly ? "Studio is only watching: type the command in a terminal" : sending ? "sending…" : null), cmd: bad ? null : "runs the command above", onPress: submit }));
+      if (dlg) { foot.appendChild(halo({ label: "Close", size: "small", onPress: function () { dlg.close(); } })); }
     }
     function submit() {
       var c = command();
       if (kind === "run") {
-        NS.Dialog({ title: "Start " + V.team + " on \u201c" + V.goal.trim() + "\u201d?", why: "It spends money and edits " + V.project + ". Nothing starts until you say so.", actions: [{ label: "Start it", kind: "needs", solid: true, cmd: c, onPress: function () { finish(c); } }] }).open();
+        NS.Dialog({ title: "Start " + V.team + " on “" + V.goal.trim() + "”?", why: "It spends money and edits " + V.project + ". Nothing starts until you say so.", actions: [{ label: "Start it", kind: "needs", solid: true, cmd: c, onPress: function () { finish(c); } }] }).open();
       } else { finish(c); }
     }
+    /* As main: onSubmit says what to say (or resolves to it), or throws (or rejects) with why it was refused. The sheet stays open to say it. */
     function finish(c) {
-      said.textContent = kind === "run" ? "\u2713 Started. The run is on its page." : kind === "make" ? "\u2713 Written. $ loadout team edit " + V.name + " --path-only says where." : "\u2713 Scheduled. " + (o.daemon === false ? "It will not fire until the daemon is running." : "The daemon fires it.");
-      if (o.onSubmit) { o.onSubmit(c, Object.assign({}, V)); }
-      if (dlg) { setTimeout(function () { dlg.close(); }, 30); }
+      if (sending) { return; }
+      var plain = kind === "run" ? "Started. Its page opens as soon as the run is listed." : kind === "make" ? "Written. $ loadout team edit " + V.name + " --path-only says where." : o.daemon === false ? "Scheduled. It will not fire until the daemon is running." : "Scheduled. The daemon fires it.";
+      function ok(a) { sending = false; said.className = "ls-said"; said.textContent = "✓ " + (typeof a === "string" && a ? a : plain); paintFoot(); }
+      function no(e) { sending = false; said.className = "ls-said no"; said.textContent = "✕ " + ((e && e.message) || e); paintFoot(); }
+      var r;
+      try { r = o.onSubmit ? o.onSubmit(c, Object.assign({}, V)) : undefined; } catch (e) { no(e); return; }
+      if (r && typeof r.then === "function") { sending = true; paintFoot(); r.then(ok, no); } else { ok(r); }
     }
     function teamPicker(only) {
       var list = only ? runnable : teams;
@@ -1336,7 +1377,7 @@
       el.appendChild(pickBox);
       el.appendChild(field("What the run is for", goalBox, "With a task, the run moves it to doing, then done or blocked: --task. Its title and note are the goal.", true));
       el.appendChild(h("fieldset", {}, [h("legend", { text: "How it runs" }), NS.ModePicker({ label: "Posture", selected: postureIdx, options: POSTURES, onChange: function (n) { V.autonomy = n === ((team() || {}).posture || "supervised") ? "" : n; paintFoot(); } })]));
-      el.appendChild(h("div", { "class": "two" }, [field("Budget, in US dollars", text({ value: V.usd, placeholder: (team() || {}).budget ? "the team's " + team().budget : "a figure, or none", onInput: function (v) { V.usd = v.trim(); paintFoot(); } }), "Or none, for no cap on purpose."), field("Rounds at most", text({ value: V.rounds, type: "number", placeholder: "no limit", onInput: function (v) { V.rounds = v.trim(); paintFoot(); } }), "The budget is the cap that binds.")]));
+      el.appendChild(h("div", { "class": "two" }, [field("Budget, in US dollars", text({ value: V.usd, placeholder: (team() || {}).budget ? "the team's " + team().budget : "a figure, or none", onInput: function (v) { V.usd = v.trim(); paintFoot(); } }), "Or none, for no cap on purpose."), field("Rounds at most", numeric(text({ value: V.rounds, placeholder: "no limit", onInput: function (v) { V.rounds = v.trim(); paintFoot(); } })), "The budget is the cap that binds.")]));
       el.appendChild(field("Done when, one per line", doneBox, null, true));
       el.appendChild(held);
       el.appendChild(h("fieldset", {}, [h("legend", { text: "When nobody answers" }), h("div", { "class": "two" }, [field("Take the lead's recommendation after", text({ value: V.after, placeholder: "never", onInput: function (v) { V.after = v.trim(); paintFoot(); } }), "30m, 2h or 1d. Only the lead's own questions."), NS.Picker({ label: "What happens then", options: TIMEOUTS, onPick: function (x) { V.timeout = x.name; paintFoot(); } })])]));
@@ -1375,14 +1416,25 @@
   function Schedules(o) {
     o = o || {};
     var el = h("div", { "class": "ls-sched" });
-    var d = o.daemon || {};
+    var d = o.daemon || {}, gone = [];
     el.appendChild(h("p", { "class": "ls-note" + (d.running ? "" : " needs") }, [d.running ? (d.paused ? "The daemon is held: no schedule fires until it is resumed. " : "The daemon is running and fires these. ") : "The daemon is not running, so none of these will fire. ", d.running ? (d.paused ? cmd("$ loadout daemon resume") : null) : cmd("$ loadout daemon")]));
-    if (!(o.items || []).length) { el.appendChild(h("p", { "class": "ls-note", text: "Nothing is scheduled on this machine." })); return el; }
-    el.appendChild(h("ul", { "aria-label": "Runs on a schedule" }, o.items.map(function (s) {
-      var row = h("li", {}, [h("div", { "class": "t" }, [h("b", { text: s.name }), h("span", { text: s.team + " \u00b7 " + s.goal }), h("em", { text: [s.when, s.next ? "next " + s.next : null, s.autonomy, s.usd ? "$" + s.usd + " a run" : null].filter(Boolean).join(" \u00b7 ") })]),
-        halo({ label: "Stop it", size: "small", cmd: "$ loadout team schedule remove " + s.name, disabledReason: o.disabledReason || null, onPress: function () { if (o.onRemove) { o.onRemove(s.name); } row.remove(); } })]);
-      return row;
-    })));
+    var body = h("div", { style: "display: contents" });
+    el.appendChild(body);
+    /* As main: held says why it will not fire, after the rest; a removal answered false (or resolving false) keeps the row. */
+    function paint() {
+      body.textContent = "";
+      var shown = (o.items || []).filter(function (s) { return gone.indexOf(s.name) < 0; });
+      if (!shown.length) { body.appendChild(h("p", { "class": "ls-note", text: "Nothing is scheduled on this machine." })); return; }
+      body.appendChild(h("ul", { "aria-label": "Runs on a schedule" }, shown.map(function (s) {
+        return h("li", {}, [h("div", { "class": "t" }, [h("b", { text: s.name }), h("span", { text: s.team + " · " + s.goal }), h("em", { text: [s.when, s.next ? "next " + s.next : null, s.autonomy, s.usd ? "$" + s.usd + " a run" : null, s.held].filter(Boolean).join(" · ") })]),
+          halo({ label: "Stop it", size: "small", cmd: "$ loadout team schedule remove " + s.name, disabledReason: o.disabledReason || null, onPress: function () {
+            var r = o.onRemove ? o.onRemove(s.name) : undefined;
+            function after(v) { if (v !== false) { gone.push(s.name); paint(); } }
+            if (r && typeof r.then === "function") { r.then(after); } else { after(r); }
+          } })]);
+      })));
+    }
+    paint();
     return el;
   }
 
@@ -1412,44 +1464,56 @@
   function Bin(o) {
     o = o || {};
     var el = h("div", { "class": "ls-bin" }), entries = (o.entries || []).slice();
-    var list = h("ul", { "aria-label": "In the bin" }), said = h("p", { "class": "ls-said", role: "status" });
+    var list = h("ul", { "aria-label": "In the bin" }), said = h("p", { "class": "ls-said", role: "status" }), emptyActs = h("div", { "class": "ls-answers", style: "margin: 0" });
     function restoreCmd(e) { return e.kind === "run" ? "$ loadout team runs restore " + e.name : "$ loadout team restore " + e.name; }
+    /* As main: each callback may answer false (or resolve to false) where it was not done, and nothing changes. */
+    function then(r, done) { if (r && typeof r.then === "function") { r.then(done); } else { done(r); } }
     function paint() {
       list.textContent = "";
       if (!entries.length) { list.appendChild(h("li", {}, [h("span"), h("span", { "class": "ls-note", style: "margin: 0", text: "The bin is empty." }), h("span")])); }
       entries.forEach(function (e) {
-        list.appendChild(h("li", {}, [h("span", { "class": "kind", text: e.kind }), h("span", { "class": "t" }, [h("b", { text: e.name }), e.what ? h("span", { text: e.what }) : null, h("span", { "class": e.left <= 3 ? "soon" : null, text: "removed " + e.removed + " \u00b7 " + e.left + (e.left === 1 ? " day" : " days") + " left" + (e.size ? " \u00b7 " + e.size : "") })]),
-          halo({ label: "Put it back", size: "small", cmd: restoreCmd(e), disabledReason: o.disabledReason || null, onPress: function () { entries = entries.filter(function (x) { return x !== e; }); said.textContent = "\u2713 Put back: " + e.name + "."; if (o.onRestore) { o.onRestore(e); } paint(); } })]));
+        list.appendChild(h("li", {}, [h("span", { "class": "kind", text: e.kind }), h("span", { "class": "t" }, [h("b", { text: e.name }), e.what ? h("span", { text: e.what }) : null, h("span", { "class": e.left <= 3 ? "soon" : null, text: "removed " + e.removed + " · " + e.left + (e.left === 1 ? " day" : " days") + " left" + (e.size ? " · " + e.size : "") })]),
+          halo({ label: "Put it back", size: "small", cmd: restoreCmd(e), disabledReason: o.disabledReason || null, onPress: function () { then(o.onRestore ? o.onRestore(e) : undefined, function (v) { if (v === false) { return; } entries = entries.filter(function (x) { return x !== e; }); said.textContent = "✓ Put back: " + e.name + "."; paint(); }); } })]));
       });
+      emptyActs.textContent = "";
+      emptyActs.appendChild(halo({ label: "Empty it for good", kind: "danger", size: "small", cmd: "$ loadout team bin empty --yes", disabledReason: o.disabledReason || (entries.length ? null : "the bin is already empty"), onPress: function () {
+        NS.Dialog({ danger: true, title: "Empty the bin for good?", why: "This is the one thing here with no way back. It deletes:", content: h("ul", { "class": "binlist" }, entries.map(function (e) { return h("li", { text: e.kind + " " + e.name }); })),
+          actions: [{ label: "Empty it", kind: "danger", cmd: "$ loadout team bin empty --yes", onPress: function () { then(o.onEmpty ? o.onEmpty() : undefined, function (v) { if (v === false) { return; } entries = []; said.textContent = "✓ The bin is empty."; paint(); }); } }] }).open(); } }));
     }
     paint();
     el.appendChild(h("p", { "class": "ls-note", style: "margin: 0", text: "Removed runs and teams wait here for " + (o.keptDays || 30) + " days, then go for good. A run's branches were never touched, so they are not in here." }));
-    el.appendChild(list); el.appendChild(said);
-    el.appendChild(h("div", { "class": "ls-answers", style: "margin: 0" }, [halo({ label: "Empty it for good", kind: "danger", size: "small", cmd: "$ loadout team bin empty --yes", disabledReason: o.disabledReason || (entries.length ? null : "the bin is already empty"), onPress: function () {
-      NS.Dialog({ danger: true, title: "Empty the bin for good?", why: "This is the one thing here with no way back. It deletes:", content: h("ul", { style: "margin: 0 0 4px; padding-left: 18px; font-family: var(--font-mono); font-size: 12.5px" }, entries.map(function (e) { return h("li", { text: e.kind + " " + e.name }); })),
-        actions: [{ label: "Empty it", kind: "danger", cmd: "$ loadout team bin empty --yes", onPress: function () { entries = []; said.textContent = "\u2713 The bin is empty."; if (o.onEmpty) { o.onEmpty(); } paint(); } }] }).open(); } })]));
+    el.appendChild(list); el.appendChild(said); el.appendChild(emptyActs);
     /* Clear out runs: the same as team runs prune, said as a sentence before it goes. */
     var P = { outcome: "", older: "30d", keep: "20" };
-    var sentence = h("p", { "class": "sentence" }), pline = h("code", { "class": "ls-cmd" }), pacts = h("div", { "class": "ls-answers", style: "margin: 0" });
-    function pcmd(dry) { return "$ loadout team runs prune" + (P.outcome === "failed" ? " --failed" : P.outcome ? " --outcome " + P.outcome : "") + (P.older ? " --older-than " + P.older : "") + (P.keep ? " --keep " + P.keep : "") + (dry ? " --dry-run" : ""); }
+    var sentence = h("p", { "class": "sentence" }), pacts = h("div", { "class": "ls-answers", style: "margin: 0" });
+    function pcmd(dry) { return "$ loadout team runs prune" + (P.outcome === "failed" ? " --failed" : P.outcome ? " --outcome " + P.outcome : "") + (P.older ? " --older-than " + P.older : "") + (P.keep ? " --keep " + P.keep : "") + (dry ? " --dry-run" : " --yes"); }
+    /* As main's onprune(prune, dry): a dry run asks onPrune too, when it takes the second argument, and says what it answers (what would move);
+       the real one says what it answers, or that they are in the bin. A one-argument onPrune(line) is only called for the real one, as before. */
+    function clear(dry) {
+      var line = pcmd(dry), asks = o.onPrune && (!dry || o.onPrune.length >= 2);
+      var r = asks ? o.onPrune(line, dry, { outcome: P.outcome, olderThan: P.older, keep: P.keep }) : undefined;
+      then(r, function (a) { said.textContent = typeof a === "string" && a ? "✓ " + a : dry ? "✓ Dry run: it lists what it would take and why it keeps the rest. Nothing moved." : "✓ Cleared out. They are in the bin."; });
+    }
     function ppaint() {
       var none = !P.outcome && !P.older && !P.keep;
       sentence.textContent = none ? "Say which runs: an ending, an age or how many to keep." : "Moves " + (P.outcome ? "the " + P.outcome + " runs" : "the runs") + (P.older ? " older than " + P.older : "") + " to the bin" + (P.keep ? ", never the newest " + P.keep : "") + ", and never one still going or one that left a branch nothing merged.";
-      pline.textContent = pcmd(false); pacts.textContent = "";
-      pacts.appendChild(halo({ label: "Say which first", size: "small", cmd: pcmd(true), disabledReason: none ? "say which runs first" : null, onPress: function () { said.textContent = "\u2713 Dry run: it lists what it would take and why it keeps the rest. Nothing moved."; } }));
-      pacts.appendChild(halo({ label: "Clear them out", size: "small", cmd: pcmd(false), disabledReason: o.disabledReason || (none ? "say which runs first" : null), onPress: function () { NS.Dialog({ title: "Clear out these runs?", why: sentence.textContent + " They wait in the bin for " + (o.keptDays || 30) + " days.", actions: [{ label: "Clear them out", kind: "needs", cmd: pcmd(false), onPress: function () { said.textContent = "\u2713 Cleared out. They are in the bin."; if (o.onPrune) { o.onPrune(pcmd(false)); } } }] }).open(); } }));
+      pacts.textContent = "";
+      pacts.appendChild(halo({ label: "Say which first", size: "small", cmd: pcmd(true), disabledReason: none ? "say which runs first" : null, onPress: function () { clear(true); } }));
+      pacts.appendChild(halo({ label: "Clear them out", size: "small", cmd: pcmd(false), disabledReason: o.disabledReason || (none ? "say which runs first" : null), onPress: function () { NS.Dialog({ title: "Clear out these runs?", why: sentence.textContent + " They wait in the bin for " + (o.keptDays || 30) + " days.", actions: [{ label: "Clear them out", kind: "needs", cmd: pcmd(false), onPress: function () { clear(false); } }] }).open(); } }));
     }
-    var ENDS = ["any ending", "failed", "stopped", "limited", "blocked", "done", "needs-decision", "unrecorded"];
+    /* Main's endings since 0.104: abandoned, and stalled (a lead given up on). */
+    var ENDS = ["any ending", "failed", "stopped", "abandoned", "limited", "blocked", "done", "needs-decision", "unrecorded", "stalled"];
+    var keep = text({ value: P.keep, placeholder: "20", onInput: function (v) { P.keep = v.trim(); ppaint(); } }); keep.setAttribute("inputmode", "numeric");
     el.appendChild(h("details", {}, [h("summary", { text: "Clear out runs" }), h("div", { "class": "prune" }, [h("div", { "class": "two" }, [
       NS.Picker({ label: "Ending", options: ENDS.map(function (e) { return { name: e }; }), onPick: function (x, i) { P.outcome = i ? x.name : ""; ppaint(); } }),
       field("Older than", text({ value: P.older, placeholder: "30d", onInput: function (v) { P.older = v.trim(); ppaint(); } })),
-      field("Keep the newest", text({ value: P.keep, type: "number", placeholder: "20", onInput: function (v) { P.keep = v.trim(); ppaint(); } }))]), sentence, pacts])]));
+      field("Keep the newest", keep)]), sentence, pacts])]));
     ppaint();
     return el;
   }
 
   Object.assign(NS, { Gate: Gate, RunCard: RunCard, Spend: Spend, NeedsYou: NeedsYou, RunShape: RunShape, Crew: Crew, DoneWhen: DoneWhen, RunNumbers: RunNumbers, RunDepths: RunDepths, Journal: Journal, Exchanges: Exchanges, Papers: Papers, Patch: Patch, SayToNode: SayToNode,
-    TeamCard: TeamCard, TeamNodes: TeamNodes, TeamRules: TeamRules, RoleRecord: RoleRecord, TeamSheet: TeamSheet, Schedules: Schedules, Remedy: Remedy, Bin: Bin, shellQuote: q });
+    TeamCard: TeamCard, TeamNodes: TeamNodes, TeamRules: TeamRules, RoleRecord: RoleRecord, TeamSheet: TeamSheet, Schedules: Schedules, Remedy: Remedy, Bin: Bin, shellQuote: q, livenessOf: livenessOf });
 })();
 
 (function () {
@@ -1879,6 +1943,14 @@
     else if (end) { el.appendChild(h("span", { "class": "seg" })); el.appendChild(h("span", { "class": "st end" }, [h("i")])); }
     return el;
   }
+  /* Each row's rounds are drawn by main's MiniLine (stage 14's NS.MiniLine, which takes { rounds, end, running });
+     the positional one above stands in where that is not loaded. */
+  function boardLine(rounds, end, running) {
+    var ML = NS.MiniLine;
+    if (!ML || ML === MiniLine) { return MiniLine(rounds, end, running); }
+    var made = ML({ rounds: rounds, end: end, running: running });
+    return made.el || made;
+  }
   function RunBoard(o) {
     o = o || {};
     var el = h("section", { "class": "ls-board", "aria-label": o.label || "Live team runs" });
@@ -1893,8 +1965,8 @@
       var f = NS.signalOf(r.word).family, live = f === "moving" || f === "needs" || r.word === "held after this round";
       var over = r.cap && r.projected > r.cap;
       var row = h("li", { "class": "brow " + f + (o.picked === r.id ? " picked" : ""), style: "--i:" + i }, [
-        h("button", { type: "button", "class": "go", "aria-pressed": o.picked === r.id ? "true" : "false", onclick: function () { if (o.onPick) { o.onPick(r.id); } } }, [h("span", { "class": "t", text: r.goal }), h("span", { "class": "x", text: [r.team, r.project, "round " + r.round, (r.rounds || []).filter(function (x) { return x.word === "running"; }).length ? null : null].filter(Boolean).join(" · ") })]),
-        MiniLine(r.rounds || [], !live, live),
+        h("button", { type: "button", "class": "go", "aria-pressed": o.picked === r.id ? "true" : "false", onclick: function () { if (o.onPick) { o.onPick(r.id); } } }, [h("span", { "class": "t", text: r.goal }), h("span", { "class": "x", text: [r.team, r.project, r.round ? "round " + r.round : null].filter(Boolean).join(" · ") })]),
+        boardLine(r.rounds || [], !live, live),
         NS.Signal(r.word),
         h("span", { "class": "spend" }, [h("b", { text: "$" + Number(r.spent || 0).toFixed(2) }), r.cap ? " of $" + Number(r.cap).toFixed(0) : " no cap", over ? h("em", { text: "projected over" }) : null])
       ]);
@@ -2911,7 +2983,7 @@
       var tr = h("tr", {}, [h("th", { scope: "row" }, [c.text, h("span", { "class": "mv" + (stuck ? " stuck" : ""), text: nowV === "met" ? "met since round " + (at || 1) : (at === null ? "has not moved since round 1" : "last moved in round " + at) })])]);
       for (var k = 0; k < rounds; k++) {
         var v = c.verdicts[k], m = MARK[v] || ["·", "no verdict"], moved = k > 0 && v !== c.verdicts[k - 1] && v !== undefined;
-        tr.appendChild(h("td", { "class": cls(v) + (moved ? " moved" : "") }, [h("i", { "aria-hidden": "true", text: m[0] }), h("span", { "class": "ls-vh", text: "Round " + (k + 1) + ": " + m[1] + (moved ? ", changed" : "") })]));
+        tr.appendChild(h("td", { "class": cls(v) + (moved ? " moved" : "") + (k + 1 === now ? " now" : ""), "data-r": "R" + (k + 1) }, [h("i", { "aria-hidden": "true", text: m[0] }), h("span", { "class": "ls-vh", text: "Round " + (k + 1) + ": " + m[1] + (moved ? ", changed" : "") })]));
       }
       tb.appendChild(tr);
     });

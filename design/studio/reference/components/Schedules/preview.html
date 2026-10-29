@@ -1,4 +1,4 @@
-<!-- @dsCard group="Teams" height=380 width=1000 subtitle="Runs that start without you, and whether the daemon will fire them" -->
+<!-- @dsCard group="Teams" height=460 width=1000 subtitle="Runs that start without you, and whether the daemon will fire them" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -19,7 +19,7 @@
 <script>
 (function () {
   var S = window.LoadoutStudio;
-  var items = [{ name: "nightly-docs", team: "docs-crew", goal: "check the docs against the code", when: "every 24h", next: "tonight 23:00", autonomy: "autonomous", usd: "10" }, { name: "on-commit-bugs", team: "bug-hunt", goal: "look at what the suite is failing", when: "on commit", autonomy: "supervised" }];
+  var items = [{ name: "nightly-docs", team: "docs-crew", goal: "check the docs against the code", when: "every 24h", next: "tonight 23:00", autonomy: "autonomous", usd: "10" }, { name: "on-commit-bugs", team: "bug-hunt", goal: "look at what the suite is failing", when: "on commit", autonomy: "supervised" }, { name: "weekly-release", team: "release-crew", goal: "check the tree is fit to release", when: "at 09:00", autonomy: "supervised", held: "held" }];
   document.getElementById("s").appendChild(S.Schedules({ daemon: { running: true }, items: items }));
   document.getElementById("t").appendChild(S.Schedules({ daemon: { running: false }, items: items.slice(0, 1) }));
 })();

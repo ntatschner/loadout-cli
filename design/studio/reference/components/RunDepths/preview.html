@@ -1,4 +1,4 @@
-<!-- @dsCard group="Teams" height=900 width=1200 subtitle="Five depths of one run on keys 1 to 5: what it said, what it cost, the papers, what it changed, what it delivered" -->
+<!-- @dsCard group="Teams" height=1060 width=1200 subtitle="Five depths of one run on keys 1 to 5: what it said, what it cost, the papers, what it changed, what it delivered" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -17,6 +17,8 @@
 <body class="ls">
 <p style="margin: 0 0 10px; font-size: 13.5px; color: var(--muted)">Press 1 to 5 anywhere on the page, or use the arrow keys on the tabs.</p>
 <div id="d"></div>
+<p style="margin: 28px 0 10px; font-size: 13.5px; color: var(--muted)">Before any brief has gone out</p>
+<div id="e"></div>
 <script>
 (function () {
   var S = window.LoadoutStudio;
@@ -35,11 +37,14 @@
       { node: "reviewer/1", role: "role.reviewer", brief: "Review implementer/1's branch for the --since change. Do not commit or check anything out there.", report: "Two notes: the date parse should be invariant-culture; the help text should say inclusive or not." }] },
     changed: { patches: [{ node: "implementer/1", branch: "team/20261017-1402-ab3f/implementer-1", base: "4e1d2a0", goal: "Add --since to loadout usage", files: [["src/Loadout.Cli/Commands/UsageCommand.cs", 18, 2], ["tests/Loadout.Tests/UsageSinceTests.cs", 41, 0]],
       diff: [["@", "@@ src/Loadout.Cli/Commands/UsageCommand.cs"], [" ", "    [CommandOption(\"--json\")]"], ["+", "    [CommandOption(\"--since <DATE>\")]"], ["+", "    public DateOnly? Since { get; init; }"], [" ", ""], ["-", "    var entries = reader.Read();"], ["+", "    var entries = reader.Read().Where(e => settings.Since is null || e.Day > settings.Since);"]] },
-      { node: "planner/1", unmeasured: true }] },
+      { node: "planner/1", unmeasured: true },
+      { node: "reviewer/1", error: "its branch team/20261017-1402-ab3f/reviewer-1 is not in the repository any more." }] },
     delivered: { repository: "~/code/loadout-cli", files: [{ path: "src/Loadout.Cli/Commands/UsageCommand.cs", change: "changed", commit: "a4f21c9", node: "implementer/1", bytes: 6120 }, { path: "tests/Loadout.Tests/UsageSinceTests.cs", change: "added", commit: "a4f21c9", node: "implementer/1", bytes: 1830 }],
       loose: [{ path: "PLAN.md", kind: "plan", bytes: 3790, node: "planner/1" }], picked: "loose:PLAN.md",
       read: function (f) { return { text: f.path === "PLAN.md" ? "# Plan\n\n1. Add the option and a failing test\n2. Review, then run the whole suite\n" : "public sealed class UsageSinceTests\n{\n    // the new test\n}\n" }; } } });
   document.getElementById("d").appendChild(D.el);
+  /* A run whose lead has briefed nobody yet: its papers say so. */
+  document.getElementById("e").appendChild(S.RunDepths({ run: "20261017-1520-c0de", keys: false, selected: 2, papers: { pairs: [] } }).el);
 })();
 </script>
 </body>
