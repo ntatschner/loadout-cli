@@ -48,6 +48,7 @@ internal sealed class TranscriptReadings<T>
     private readonly string _name;
     private readonly int _version;
     private readonly ConcurrentDictionary<string, Entry> _entries = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<(string Path, long Length, long Written), Lazy<Task<T?>>> _pending = new();
 
     /// <param name="name">The directory its files are kept in, under the readings directory.</param>
     /// <param name="version">
@@ -84,6 +85,35 @@ internal sealed class TranscriptReadings<T>
             return held.Reading;
         }
 
+        // Studio asks for the history and the lost sessions together, and
+        // both scans used to read every changed transcript, so each was read
+        // twice. A scan arriving while the same file at the same length is
+        // being read waits for that read instead. The read is not stopped by
+        // the scan that started it giving up, since another may be waiting.
+        var key = (file.FullName, length, written);
+        var pending = _pending.GetOrAdd(
+            key, _ => new Lazy<Task<T?>>(() => ReadOnceAsync(key, file, kept, read)));
+
+        return await pending.Value.WaitAsync(ct).ConfigureAwait(false);
+    }
+
+    private async Task<T?> ReadOnceAsync(
+        (string Path, long Length, long Written) key, FileInfo file, string? kept, Func<FileInfo, CancellationToken, Task<T?>> read)
+    {
+        try
+        {
+            return await LoadOrReadAsync(file, key.Length, key.Written, kept, read).ConfigureAwait(false);
+        }
+        finally
+        {
+            _pending.TryRemove(key, out _);
+        }
+    }
+
+    private async Task<T?> LoadOrReadAsync(
+        FileInfo file, long length, long written, string? kept, Func<FileInfo, CancellationToken, Task<T?>> read)
+    {
+        var ct = CancellationToken.None;
         var stored = kept is null ? null : PathFor(kept, file.FullName);
 
         if (stored is not null && await LoadAsync(stored, ct).ConfigureAwait(false) is { } loaded
