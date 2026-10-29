@@ -1,4 +1,4 @@
-<!-- @dsCard group="Pages" height=720 width=1000 subtitle="One layer of an idea’s plan, its options side by side" -->
+<!-- @dsCard group="Pages" height=1250 width=1000 subtitle="One layer of an idea’s plan, its options side by side" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -12,6 +12,7 @@
   .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
   .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
   
+  #p .ls-layer + .ls-layer { margin-top: 18px; }
 </style>
 </head>
 <body class="ls">
@@ -30,8 +31,14 @@
       { id: "o2", title: "Its own server", detail: "loadout launcher serve, run when wanted.", pros: ["Nothing else needs to run"], cons: ["A second port", "Sessions live elsewhere"], recommended: false }
     ] } };
   var p = document.getElementById("p");
-  p.appendChild(S.PlanLayer({ idea: IDEA.id, where: IDEA.where, layer: IDEA.layer }));
-  p.appendChild(S.PlanLayer({ idea: IDEA.id, where: IDEA.where, addition: { id: "A1", title: "A link from the terminal launcher", why: "So people find the browser one from where they already are.", verdict: "Keep" } }));
+  /* Recorded after a moment, as the daemon reads it back. */
+  function later(ok) { return function () { return new Promise(function (done) { setTimeout(function () { done(ok); }, 700); }); }; }
+  p.appendChild(S.PlanLayer({ idea: IDEA.id, where: IDEA.where, layer: IDEA.layer, onChoose: later(true), onVerdict: later(true), onImprove: later(true) }));
+  p.appendChild(S.PlanLayer({ idea: IDEA.id, where: IDEA.where, onChoose: later(false), onVerdict: later(false), onImprove: later(false),
+    layer: { id: "L3", name: "Where the launch history lives", purpose: "Not recorded here: a round is running, so each change goes back.", chosen: null, verdict: "keep", options: [
+      { id: "o1", title: "In the project's .loadout folder", pros: ["Travels with the repository"], cons: ["Noise in git status"], recommended: true },
+      { id: "o2", title: "In the user's data folder", pros: ["Out of the repository"], cons: ["Lost when moving machine"] }] } }));
+  p.appendChild(S.PlanLayer({ idea: IDEA.id, where: IDEA.where, addition: { id: "A1", title: "A link from the terminal launcher", why: "So people find the browser one from where they already are.", verdict: "Keep" }, onVerdict: later(true), onImprove: later(true) }));
 })();
 </script>
 </body>

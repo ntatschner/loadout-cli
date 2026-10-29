@@ -1,4 +1,4 @@
-<!-- @dsCard group="Navigation" height=720 width=1180 subtitle="Icons with live counts; widens over the page on hover or focus. At 320px a Pages tab slides it in." -->
+<!-- @dsCard group="Navigation" height=860 width=1180 subtitle="Icons with live counts; widens over the page on hover or focus. At 320px a Pages tab slides it in." -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -16,20 +16,29 @@
 </head>
 <body class="ls">
 <div style="display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start">
-<div id="wide" style="position: relative; width: 760px; height: 660px; overflow: hidden; background: var(--ground); box-shadow: inset 0 0 0 1px var(--rule)">
-  <div style="padding: 24px 24px 0 108px"><p class="lab">Home</p><p style="margin: 0; max-width: 520px; color: var(--muted)">Hover the rail, or tab into it, and it widens over the page with a dim. The page never moves under it.</p></div>
+<div id="wide" style="position: relative; width: 760px; height: 800px; overflow: hidden; background: var(--ground); box-shadow: inset 0 0 0 1px var(--rule)">
+  <div style="padding: 24px 24px 0 108px"><p class="lab">Events</p><p style="margin: 0; max-width: 520px; color: var(--muted)">Hover the rail, or tab into it, and it widens over the page with a dim. The page never moves under it.</p></div>
 </div>
-<div id="narrow" style="position: relative; width: 320px; height: 660px; overflow: hidden; background: var(--ground); box-shadow: inset 0 0 0 1px var(--rule)">
+<div id="narrow" style="position: relative; width: 320px; height: 800px; overflow: hidden; background: var(--ground); box-shadow: inset 0 0 0 1px var(--rule)">
   <div style="padding: 24px 16px 0 52px"><p class="lab">At 320px</p><p style="margin: 0; color: var(--muted)">The Pages tab opens the same list over the page, with Close and Escape.</p></div>
 </div></div>
 <script>
 (function () {
   var S = window.LoadoutStudio;
-  var PAGES = [{ key: "home", name: "Home", fact: "2 waiting on you", need: true }, { key: "sessions", name: "Sessions", fact: "1 waiting on you", need: true }, { key: "ideas", name: "Ideas", fact: "1 being shaped" },
-    { key: "teams", name: "Teams", fact: "1 waiting on you", need: true }, { key: "memory", name: "Memory", fact: "12 topics" }, { key: "context", name: "Context", fact: "2,403 tokens" },
-    { key: "spend", name: "Spend", fact: "[N]% of threshold" }, { key: "projects", name: "Projects", fact: "3 projects" }, { key: "settings", name: "Settings" }];
-  document.getElementById("wide").appendChild(S.SideRail({ pages: PAGES, current: "home", contained: true }));
-  document.getElementById("narrow").appendChild(S.SideRail({ pages: PAGES, current: "home", narrow: true }));
+  var PAGES = [{ key: "home", name: "Home", fact: "2 waiting on you", need: true }, { key: "sessions", name: "Sessions", fact: "2 running" }, { key: "ideas", name: "Ideas", fact: "1 waiting on you", need: true },
+    { key: "teams", name: "Teams", fact: "1 waiting on you", need: true }, { key: "events", name: "Events", fact: "3 unread", need: true }, { key: "memory", name: "Memory", fact: "by topic" },
+    { key: "context", name: "Context", fact: "what a session reads" }, { key: "spend", name: "Spend", fact: "1.2M tokens this month" }, { key: "projects", name: "Projects", fact: "" },
+    { key: "commands", name: "Commands", fact: "everything else" }, { key: "settings", name: "Settings", fact: "" }];
+  var SVGNS = "http://www.w3.org/2000/svg";
+  function foot() {
+    var b = document.createElement("button"); b.type = "button"; b.className = "ls-rl ls-appearance";
+    var v = document.createElementNS(SVGNS, "svg"), p = document.createElementNS(SVGNS, "path"); v.setAttribute("viewBox", "0 0 20 20"); v.setAttribute("aria-hidden", "true");
+    p.setAttribute("d", "M10 3a7 7 0 1 0 0 14a3.5 3.5 0 0 1 0-7a3.5 3.5 0 0 0 0-7z M10 3a7 7 0 0 1 0 14"); p.setAttribute("fill", "none"); p.setAttribute("stroke", "currentColor"); p.setAttribute("stroke-width", "1.6"); v.appendChild(p);
+    var n = document.createElement("span"); n.className = "n"; n.textContent = "Appearance"; var f = document.createElement("span"); f.className = "f"; f.textContent = "Dark \u00b7 cyan";
+    b.appendChild(v); b.appendChild(n); b.appendChild(f); return b;
+  }
+  document.getElementById("wide").appendChild(S.SideRail({ pages: PAGES, current: "events", contained: true, foot: foot }));
+  document.getElementById("narrow").appendChild(S.SideRail({ pages: PAGES, current: "events", narrow: true, foot: foot }));
 })();
 </script>
 </body>

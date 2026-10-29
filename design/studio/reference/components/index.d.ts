@@ -40,7 +40,12 @@ export interface HaloButtonOptions {
   disabledReason?: string;
   /** Pressing does nothing, with no reason to give: "already first" is said by the page. Announced as disabled. */
   inactive?: boolean;
+  /** The id of a line that says more about the button, set as its aria-describedby: "3 left to decide on this idea". */
   describedBy?: string;
+  /** For keeping focus on this button across a redraw: set as data-k. */
+  key?: string;
+  /** Where a page's Next button finds this one: set as data-next ("send-answers", "rework:L2"). */
+  next?: string;
   onPress?: (e: MouseEvent) => void;
 }
 /** A word beside a ring of light. Returns the button, or a wrapper holding the button and its command. */
@@ -108,9 +113,14 @@ export declare function roving(items: HTMLElement[], pick: (index: number) => vo
 
 /* ---------- Stage 3: navigation, overlays, the halo and the map ---------- */
 
-export interface RailPage { key: "home" | "sessions" | "ideas" | "teams" | "memory" | "context" | "spend" | "projects" | "settings"; name: string; fact?: string; need?: boolean; href?: string }
-/** The side rail: page icons with live counts; widens over the page with a dim on hover or focus. Below 600px (or with narrow) a Pages tab slides it in. */
-export declare function SideRail(o: { pages: RailPage[]; current: string; label?: string; narrow?: boolean; contained?: boolean; onSearch?: () => void }): HTMLElement;
+/** href defaults to "#<key>". A key with no icon of its own is drawn with Home's. */
+export interface RailPage { key: "home" | "sessions" | "ideas" | "teams" | "events" | "memory" | "context" | "spend" | "projects" | "commands" | "settings"; name: string; fact?: string; need?: boolean; href?: string }
+/** The side rail: page icons with live counts; widens over the page with a dim on hover or focus. Below 600px (or with narrow) a Pages tab slides it in; going somewhere from it puts it away. */
+export declare function SideRail(o: {
+  pages: RailPage[]; current: string; label?: string; narrow?: boolean; contained?: boolean; onSearch?: () => void;
+  /** What sits at the foot of the rail, such as Report a problem and Appearance (`.ls-rl` rows). A function is called for the rail (false) and again for the slid-in list (true), so both have it; a node sits in the rail only. */
+  foot?: Node | ((inSlide: boolean) => Node | null);
+}): HTMLElement;
 export declare const NAV_ICONS: Record<string, string>;
 
 export interface DialogOptions {
@@ -127,9 +137,22 @@ export declare function Dialog(o: DialogOptions): { open: () => HTMLElement; clo
 /** A trigger that opens a listbox on a light tether. */
 export declare function Picker(o: { label: string; options: { name: string; sub?: string; glyph?: string }[]; selected?: number; onPick?: (option: { name: string; sub?: string }, index: number) => void }): HTMLElement;
 
-export interface PaletteRow { label: string; sub?: string; kind?: string; glyph?: string; need?: boolean; run?: (row: PaletteRow) => void }
-/** Ctrl or Cmd K: go to a page, find work in flight, or do something. Rows whose label matches rank above rows that match elsewhere. */
-export declare function CommandPalette(o: { groups: { name: string; items: PaletteRow[] }[]; placeholder?: string; bindKeys?: boolean; host?: HTMLElement; contained?: boolean; behind?: HTMLElement }): { open: () => void; close: () => void; unbind: () => void };
+export interface PaletteRow { label: string; sub?: string; kind?: string; glyph?: string; need?: boolean; key?: string; /** Running it leaves the palette open. */ stay?: boolean; run?: (row: PaletteRow) => void }
+/** Asking Loadout from the palette (main's PaletteAsk). Replies are what 'loadout ask --json' writes (AskReply, below). */
+export interface PaletteAsk {
+  asker: (query: string) => unknown;
+  /** Asks the agent, carrying on its conversation (resume) when there is one. */
+  agent?: (query: string, resume: string | null) => unknown;
+  approve: (plan: any, team: string | null, cap: string) => string | Promise<string>;
+  /** An AskPane to keep the conversation in, across palettes. Without one the palette keeps its own. */
+  conversation?: { el: HTMLElement; set: (p: object) => void; ask: (query: string, asker: (query: string) => unknown) => Promise<void>; clear: () => void; readonly asking?: boolean; readonly agentSession?: string | null };
+}
+/** Ctrl or Cmd K: go to a page, find work in flight, or do something. Rows whose label matches rank above rows that match elsewhere. With search, what is typed is also looked for everywhere; with ask, a leading '?' or the Ask Loadout row turns it into a conversation with Loadout, and focus comes back to the box once a plan is approved. */
+export declare function CommandPalette(o: { groups: { name: string; items: PaletteRow[] }[]; placeholder?: string; bindKeys?: boolean; host?: HTMLElement; contained?: boolean; behind?: HTMLElement;
+  /** Looks for what is typed everywhere, as more groups shown after the palette's own (two characters or more, after a 250ms pause). */
+  search?: (query: string) => { name: string; items: PaletteRow[] }[] | Promise<{ name: string; items: PaletteRow[] }[]>;
+  ask?: PaletteAsk;
+}): { open: () => void; close: () => void; unbind: () => void; readonly conversation: PaletteAsk["conversation"] | null };
 
 export interface HaloOptions {
   /** "orbit" (default) or "gyroscope". Chosen per component in Settings → Appearance and kept in Loadout's config (proposed key studio-halo). */
@@ -398,24 +421,88 @@ export interface Finding { name?: string; severity?: "error" | "warning" | "info
 export declare function HealthList(o: { findings: Finding[]; verdict?: string; from?: string; noneText?: string }): HTMLElement;
 /** Captured, Answering, Ready, Proposed, Accepted: where an idea stands, with its state word under the stage it is at. */
 export declare function IdeaStages(o: { stage: string; word?: string }): HTMLElement;
-export interface IdeaQuestion { id: string; question: string; why?: string; options?: string[]; recommendation?: string | null; answer?: string | null }
-/** The questions an agent asked, answered in the page: an option or your own words. Sent together, with or without another round. */
-export declare function QuestionSet(o: { id: string; where: string[]; questions: IdeaQuestion[]; disabledReason?: string; onSend?: (answers: { question: string; answer: string; line: string }[], refine: boolean, lines: string[]) => void }): { el: HTMLElement; readonly changed: IdeaQuestion[] };
+export interface IdeaQuestion {
+  id: string; question: string; why?: string | null; options?: string[]; recommendation?: string | null; answer?: string | null;
+  /** Which round asked it, counting from one. */
+  round?: number;
+  /** What it relates to, readably: "L2 Storage", "N3", "the ask". */
+  about?: string | null;
+  /** The agent's line saying what the question is in aid of. */
+  context?: string | null;
+  /** Why what it relates to may have changed since it was asked or last answered. */
+  outdated?: string | null;
+}
+/** One round of questions: what the agent took the idea to be when it asked. */
+export interface IdeaRound { round: number; understanding: string | null; questions: string[] }
+/** One answer ready to send, with its exact words and line ("$ loadout idea answer browser-launcher Q2 '--answer=Only this machine' --project loadout-cli"). */
+export interface IdeaAnswer { question: string; answer: string; words: string[]; line: string }
+/** The questions an agent asked, answered in the page: an option as a chip (the recommendation matched to one, as main's offeredChoices does, or added as a chip of its own), or your own words. Sent together, with or without another round; Accept all recommendations fills the open ones and sends nothing. */
+export declare function QuestionSet(o: {
+  id: string; where: string[]; questions: IdeaQuestion[];
+  /** The rounds they were asked in: "Understood as: …" is shown above each round's first question. */
+  rounds?: IdeaRound[];
+  disabledReason?: string;
+  /** Sends the answers (and refines after them when refine is true). Return or resolve false when they did not all go: nothing is marked sent. Nothing returned counts as sent. "It still stands" sends the saved answer again, alone, with refine false. */
+  onSend?: (answers: IdeaAnswer[], refine: boolean, lines: string[]) => void | boolean | Promise<boolean>;
+  /** Told which questions have an answer typed and not sent, and which were sent and not yet read back: what a page's Next button needs. Also accepted as ondraft. */
+  onDraft?: (drafted: string[], sent: string[]) => void;
+  /** Answers typed earlier and not sent, by question id, to start with. */
+  drafts?: Record<string, string>;
+}): {
+  el: HTMLElement;
+  /** The idea read again: drafts now saved are dropped, and so are answers sent once they read back. Where you are looking stays put. */
+  set: (p: { questions?: IdeaQuestion[]; rounds?: IdeaRound[]; disabledReason?: string | null }) => void;
+  /** The questions with a changed answer typed. */
+  readonly changed: IdeaQuestion[];
+  readonly answers: IdeaAnswer[];
+  readonly drafts: Record<string, string>;
+  /** Tells onDraft nothing is typed any more, as main does when the set goes. */
+  destroy: () => void;
+};
 export interface IdeaOption { id: string; title: string; detail?: string; pros?: string[]; cons?: string[]; recommended?: boolean }
 /** One layer of the plan, its options side by side; or an addition. Choose, keep, drop, or ask for it to be reworked. */
 export declare function PlanLayer(o: {
   idea: string; where: string[]; accepted?: boolean; disabledReason?: string;
   layer?: { id: string; name: string; purpose?: string; chosen?: string | null; verdict?: string; options: IdeaOption[] };
   addition?: { id: string; title: string; why?: string; verdict?: string };
-  onChoose?: (option: string) => void; onVerdict?: (verdict: "Keep" | "Drop") => void; onImprove?: (request: string) => void;
+  /** Each shows at once, and goes back to what it was, saying "✕ … was not recorded", when it returns or resolves false. Nothing returned counts as recorded. */
+  onChoose?: (option: string) => void | boolean | Promise<boolean>; onVerdict?: (verdict: "Keep" | "Drop") => void | boolean | Promise<boolean>; onImprove?: (request: string) => void | boolean | Promise<boolean>;
+  /** Told whether a rework request is written in the open box and not sent: a page's Next button goes to Send it back. Also accepted as onrework. */
+  onRework?: (pending: boolean) => void;
 }): HTMLElement;
 /** Notes from elsewhere, split into ideas and tasks; tick the pieces to record. */
 export declare function NoteDump(o: { dump: { id: string; source?: string; captured?: string; split?: string | null; items: { number: number; title: string; excerpt?: string; kind: string; recorded?: boolean }[] }; disabledReason?: string; onApply?: (numbers: string[]) => void; onSplit?: () => void; onShow?: () => void }): HTMLElement;
 /** One project on the Projects wall; or, with place, a way to add one. */
 export declare function ProjectTile(o: { project?: { id: string; name: string; available?: boolean; path?: string; defaultAgent?: string; pinned?: boolean; branch?: string | null; clean?: boolean | null }; href?: string; picked?: boolean; doing?: number; blocked?: number; findings?: number; ideas?: number; place?: string; sub?: string }): HTMLElement;
-export interface Task { id: string; title: string; state: "open" | "doing" | "blocked" | "done" | "dropped"; kind?: string; declaredBy?: string; declared?: string; note?: string | null }
-/** Open, Doing and Blocked side by side; done and dropped folded away. Each task moves on with `loadout task declare`. */
+export interface Task {
+  id: string; title: string; state: "open" | "doing" | "blocked" | "done" | "dropped"; kind?: string; declaredBy?: string; declared?: string; note?: string | null;
+  /** Where it was moved from, when it was: a project's slug, or null for the workspace-wide list. */
+  moved?: { from: string | null; at: string } | null;
+  /** The list it is on: a project's slug, or null for the workspace-wide one. Read on a mixed board. */
+  project?: string | null;
+  /** Whether it has a full description beyond its title, which 'task show' reads. */
+  hasDetail?: boolean;
+  /** "missing" for open or blocked work without a done-when, "proposalWaiting" when one is proposed for you to confirm. */
+  mark?: string | null;
+}
+/** A task that left a list, as that list shows it. It is not one of the list's tasks. */
+export interface MovedAway { id: string; title: string; kind?: string; /** The project it is on now, or null for the workspace-wide list. */ to: string | null; at: string }
+/** Open, Doing and Blocked side by side; done and dropped folded away. Each task moves on with `loadout task declare`; given a project and onStart, starts a session on it; History opens it in full. */
 export declare function TaskBoard(o: { tasks: Task[]; where: string[]; from?: string; disabledReason?: string; onDeclare?: (task: Task, state: string, was: string) => void;
+  /** What left this list: listed apart under Moved away, never in a column. */
+  away?: MovedAway[];
+  /** The project the tasks are on. Without one there is nothing to start a session in. */
+  project?: string;
+  /** Starts a session on a task: at once (Start: "$ loadout launch <project> --task-id <id>"), or with the launch sheet's options. Also accepted as onstart. */
+  onStart?: (task: Task, withOptions: boolean) => void;
+  /** The tasks come from more than one list: each card names its list, and its moves and start are on that list. */
+  mixed?: boolean;
+  /** The tasks are one page of a longer list: an empty column says "None on this page." */
+  paged?: boolean;
+  /** Opens a task in full somewhere else, such as the page's address; given the task with its list as project. Also accepted as onread. Without it, a TaskDetail dialog reads it with read. */
+  onRead?: (task: Task) => void;
+  /** For the TaskDetail dialog History opens when there is no onRead. */
+  read?: (path: "task show", words: string[]) => unknown; host?: HTMLElement; contained?: boolean; behind?: HTMLElement;
   /** Start a session on a task: opens the launch sheet with it picked (--task-id). Shown on open, doing and blocked tasks, never on ideas. */
   onSession?: (task: Task) => void;
   /** Run a team on a task: opens Start a run with it picked (--task). Disabled when a team run already has it in doing. */

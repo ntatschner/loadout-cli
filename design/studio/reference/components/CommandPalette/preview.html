@@ -23,11 +23,26 @@
   var S = window.LoadoutStudio;
   var out = document.getElementById("out");
   function did(r) { out.textContent = "\u2713 " + r.label + (r.sub && r.sub.indexOf("$") >= 0 ? " \u00b7 " + r.sub.slice(r.sub.indexOf("$")) : ""); }
-  var go = ["Home", "Sessions", "Ideas", "Teams", "Memory", "Context", "Spend", "Projects", "Settings"].map(function (n) { return { glyph: "\u2192", label: n, sub: "page", kind: "page", run: did }; });
+  var go = ["Home", "Sessions", "Ideas", "Teams", "Events", "Memory", "Context", "Spend", "Projects", "Commands", "Settings"].map(function (n) { return { glyph: "\u2192", label: n, sub: "page", kind: "page", run: did }; });
   var flight = [["!", "Release 0.66.0", "release-crew \u00b7 waiting for you", true], ["\u25b6", "why is this postgres query so slow", "starstats \u00b7 running 12 min"], ["!", "add a retry to the upload step", "loadout-cli \u00b7 waiting for you", true], ["\u25c7", "Run the launcher in a browser", "loadout-cli \u00b7 shaping, round 2"]].map(function (f) { return { glyph: f[0], label: f[1], sub: f[2], need: !!f[3], kind: "focus", run: did }; });
   var act = [["+", "Start a session\u2026", "opens New session \u00b7 $ loadout <project> --task \"\u2026\""], ["\u2713", "Approve: push the tag v0.66.0", "$ loadout team gate --answer Approve", true], ["\u2715", "Refuse: push the tag v0.66.0", "$ loadout team gate --answer Refuse"],
     ["\u2016", "Hold release-crew after this round", "$ loadout team halt --pause"], ["\u21bb", "Refine the browser launcher idea", "$ loadout idea refine browser-launcher"], ["\u25b6", "Mark upload-retries doing", "$ loadout task declare upload-retries doing --project starstats"], ["\u23fb", "Sign out every browser\u2026", "asks first \u00b7 $ loadout dashboard sign-out"]].map(function (d) { return { glyph: d[0], label: d[1], sub: d[2], need: !!d[3], kind: "action", run: did }; });
-  var P = S.CommandPalette({ groups: [{ name: "Go to", items: go }, { name: "In flight", items: flight }, { name: "Do", items: act }], host: document.getElementById("stage"), contained: true, behind: document.getElementById("page") });
+  /* Looked for everywhere, as main's search does: what is typed in sessions, ideas and tasks. */
+  function search(typed) {
+    return new Promise(function (done) { setTimeout(function () {
+      done(/upl/i.test(typed) ? [{ name: "Found in tasks", items: [{ glyph: "\u25c7", label: "Retry the upload step", sub: "starstats \u00b7 t-21 \u00b7 doing", kind: "task", run: did }] }] : []);
+    }, 300); });
+  }
+  /* Ask Loadout: made-up answers in the shape 'loadout ask --json' writes. */
+  var plan = { query: "queue the easy ones for a team and start it", kind: "plan", summary: "A plan to queue 2 tasks for a team and start it. Nothing starts until you approve it.",
+    plan: { shape: "team-queue", team: "reviewers", teamChoices: [], capped: true, cap: 25, capNone: false,
+      steps: [{ kind: "queue-task", project: "starstats", task: "t-14", says: "Queue t-14, Cache the leaderboard query", reasons: ["one file"] },
+        { kind: "start-team", project: null, task: null, says: "Start the team on its queue, sharing one cap", reasons: [] }], left: ["t-19 is blocked"], needs: [] } };
+  var spend = { query: "what did I spend this week", kind: "answer", summary: "About $41.20 across 37 sessions in the last 7 days, at list rates.", spend: { models: [{ model: "claude-opus-4", tokens: 2310400, usd: 36.85 }, { model: "claude-sonnet-4", tokens: 1102300, usd: 4.35 }] } };
+  function asker(query) { return new Promise(function (ok) { setTimeout(function () { ok(/queue|start/i.test(query) ? Object.assign({}, plan, { query: query }) : Object.assign({}, spend, { query: query })); }, 700); }); }
+  function approve(p, team, cap) { return new Promise(function (ok) { setTimeout(function () { ok("Started " + team + " on 1 task(s), sharing a cap of $" + Number(cap).toFixed(2) + ". The Jobs strip shows how it goes."); }, 700); }); }
+  var P = S.CommandPalette({ groups: [{ name: "Go to", items: go }, { name: "In flight", items: flight }, { name: "Do", items: act }], host: document.getElementById("stage"), contained: true, behind: document.getElementById("page"),
+    search: search, ask: { asker: asker, approve: approve, agent: function (query) { return asker(query); } } });
   document.getElementById("b").appendChild(S.HaloButton({ label: "Search", size: "small", onPress: P.open }));
   P.open();
 })();
