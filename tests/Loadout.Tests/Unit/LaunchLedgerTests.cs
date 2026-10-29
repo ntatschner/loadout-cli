@@ -62,8 +62,11 @@ public sealed class LaunchLedgerTests : IDisposable
 
         paths.EnsureDirectoriesExist();
 
-        _ledger = new LaunchLedger(paths, permissions, _time);
+        _ledger = new LaunchLedger(paths, permissions, _time, shared: true);
+        _direct = new LaunchLedger(paths, permissions, _time, shared: false);
     }
+
+    private readonly LaunchLedger _direct;
 
     public void Dispose()
     {
@@ -269,6 +272,30 @@ public sealed class LaunchLedgerTests : IDisposable
         // And the ending must not throw either, since it runs on the way out of
         // a session that has already done its work.
         await _ledger.RecordEndAsync(id, 0);
+    }
+
+    [Fact]
+    public async Task A_shared_reading_sees_each_new_line_on_the_next_read_and_agrees_with_a_direct_one()
+    {
+        // The daemon polls this file; the shared reading must never make a poll
+        // see a launch later than reading the file itself would have.
+        var first = await _ledger.RecordStartAsync(Launch("first"));
+        (await _ledger.ReadAsync(DateTimeOffset.MinValue)).Value!.Should().ContainSingle();
+
+        await _ledger.RecordEndAsync(first, 0);
+        await _ledger.RecordStartAsync(Launch("second"));
+        await _ledger.RecordHeadlessSessionAsync("node-session", "claude", "team-node", first);
+        await _ledger.RecordLinkAsync("person-session", "claude", first);
+
+        var shared = (await _ledger.ReadAsync(DateTimeOffset.MinValue)).Value!;
+        var direct = (await _direct.ReadAsync(DateTimeOffset.MinValue)).Value!;
+
+        shared.Select(record => record.Task).Should().Equal("first", "second");
+        shared[0].ExitCode.Should().Be(0);
+        shared.Should().BeEquivalentTo(direct);
+
+        (await _ledger.ReadHeadlessSessionsAsync()).Value!.Should().BeEquivalentTo((await _direct.ReadHeadlessSessionsAsync()).Value!);
+        (await _ledger.ReadLinksAsync()).Value!.Should().BeEquivalentTo((await _direct.ReadLinksAsync()).Value!);
     }
 
     private static NewLaunch Launch(string task) => new(
