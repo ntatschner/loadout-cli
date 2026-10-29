@@ -69,8 +69,29 @@ internal sealed class TranscriptReadings<T>
     /// <param name="kept">The readings directory, or null to keep nothing on disk.</param>
     /// <param name="read">Reads it, or returns null when it could not be read.</param>
     /// <param name="ct">Stops the read.</param>
-    internal async Task<T?> GetAsync(
+    internal Task<T?> GetAsync(
         FileInfo file, string? kept, Func<FileInfo, CancellationToken, Task<T?>> read, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(read);
+
+        return GetAsync(file, kept, (one, _, token) => read(one, token), ct);
+    }
+
+    /// <summary>
+    /// The reading of one file, as above, handing the read what was last read
+    /// from the file whatever its length then, so a file that has only grown
+    /// can be read from what it already said.
+    /// </summary>
+    /// <param name="file">The transcript, as it was found when the scan listed it.</param>
+    /// <param name="kept">The readings directory, or null to keep nothing on disk.</param>
+    /// <param name="read">
+    /// Reads it, given the last reading of the file or null when there is none,
+    /// or returns null when it could not be read. The last reading is of an
+    /// older version of the file, so the read has to check it still applies.
+    /// </param>
+    /// <param name="ct">Stops the read.</param>
+    internal async Task<T?> GetAsync(
+        FileInfo file, string? kept, Func<FileInfo, T?, CancellationToken, Task<T?>> read, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(file);
         ArgumentNullException.ThrowIfNull(read);
@@ -98,7 +119,7 @@ internal sealed class TranscriptReadings<T>
     }
 
     private async Task<T?> ReadOnceAsync(
-        (string Path, long Length, long Written) key, FileInfo file, string? kept, Func<FileInfo, CancellationToken, Task<T?>> read)
+        (string Path, long Length, long Written) key, FileInfo file, string? kept, Func<FileInfo, T?, CancellationToken, Task<T?>> read)
     {
         try
         {
@@ -111,23 +132,27 @@ internal sealed class TranscriptReadings<T>
     }
 
     private async Task<T?> LoadOrReadAsync(
-        FileInfo file, long length, long written, string? kept, Func<FileInfo, CancellationToken, Task<T?>> read)
+        FileInfo file, long length, long written, string? kept, Func<FileInfo, T?, CancellationToken, Task<T?>> read)
     {
         var ct = CancellationToken.None;
         var stored = kept is null ? null : PathFor(kept, file.FullName);
+        var previous = _entries.TryGetValue(file.FullName, out var held) ? held.Reading : null;
 
         if (stored is not null && await LoadAsync(stored, ct).ConfigureAwait(false) is { } loaded
             && loaded.Version == _version
-            && string.Equals(loaded.Path, file.FullName, StringComparison.Ordinal)
-            && loaded.Length == length
-            && loaded.Written == written)
+            && string.Equals(loaded.Path, file.FullName, StringComparison.Ordinal))
         {
-            _entries[file.FullName] = new Entry(length, written, loaded.Reading);
+            if (loaded.Length == length && loaded.Written == written)
+            {
+                _entries[file.FullName] = new Entry(length, written, loaded.Reading);
 
-            return loaded.Reading;
+                return loaded.Reading;
+            }
+
+            previous ??= loaded.Reading;
         }
 
-        var reading = await read(file, ct).ConfigureAwait(false);
+        var reading = await read(file, previous, ct).ConfigureAwait(false);
 
         // A file that could not be read is not remembered, so it is tried again.
         if (reading is not null)
