@@ -1,7 +1,9 @@
 using FluentAssertions;
 using Loadout.Cli.Commands;
+using Loadout.Core.Delivery;
 using Loadout.Core.Git;
 using Loadout.Core.Teams;
+using Loadout.Models.Delivery;
 using Loadout.Models.Projects;
 using Loadout.Models.Results;
 using Loadout.Models.Tasks;
@@ -33,6 +35,7 @@ public sealed class TeamQueueDriverTests : IDisposable
     private readonly FakeProcessInspector _processes = new();
     private readonly FakePullRequests _pulls = new();
     private readonly Clock _clock = new(Local(0, 23));
+    private readonly LandingService _landings;
     private readonly TeamQueueDriver _driver;
     private readonly List<string> _said = [];
     private readonly List<(string Title, string Detail)> _told = [];
@@ -45,14 +48,19 @@ public sealed class TeamQueueDriverTests : IDisposable
         _schedules = new ScheduleService(_space.Paths, _space.Yaml);
         _git = new FakeGit(repository) { AllowPush = true };
         _git.Commits["refs/remotes/origin/HEAD"] = "abc123";
+        _landings = new LandingService(_space.Paths, _space.Yaml, _clock);
 
         _driver = new TeamQueueDriver(
             _queues, _schedules, _space.Tasks, _journal, new FakeProjects("website", repository), _git,
-            _launcher, _processes, new GhRepositoryHost(_launcher, new StubResolver("gh")), _pulls, _space.Workspace,
+            _launcher, _processes, new GhRepositoryHost(_launcher, new StubResolver("gh")), _pulls, _landings,
+            Delivery(new GhRepositoryHost(_launcher, new StubResolver("gh"))), _space.Workspace,
             _space.Paths, _clock);
     }
 
     public void Dispose() => _space.Dispose();
+
+    private DeliveryService Delivery(IRepositoryHost host) =>
+        new(_landings, new FakeProjects("website", _space.Scratch("website")), _git, host, _pulls, _space.Tasks, _clock);
 
     private static DateTimeOffset Local(int day, int hour)
     {
@@ -247,11 +255,65 @@ public sealed class TeamQueueDriverTests : IDisposable
     }
 
     [Fact]
+    public async Task Only_the_runs_own_branch_gets_a_pull_request_and_a_node_branch_left_unmerged_waits_as_pending()
+    {
+        await ReadyAsync(projectMode: "ready");
+        await PassAsync();
+
+        var run = (await QueueAsync()).Runs.Single();
+        _journal.Add(QueueSettlingTests.Summary("r1", "done", finished: true) with
+        {
+            Started = _clock.Now,
+            Nodes =
+            [
+                new RunNode("implementer-1", "implementer", "done", 3, 1m, _clock.Now, Branch: "teams/r1/implementer-1"),
+                new RunNode("implementer-2", "implementer", "done", 3, 1m, _clock.Now, Branch: "teams/r1/implementer-2"),
+                new RunNode("reviewer", "reviewer", "done", 1, 0.2m, _clock.Now),
+            ],
+            Merged = ["teams/r1/implementer-1"],
+        });
+
+        await PassAsync();
+
+        _git.Pushed.Should().Equal(run.Branch);
+        _launcher.Requests.Where(one => one.Executable == "gh").Should().ContainSingle()
+            .Which.Arguments.Should().ContainInOrder("pr", "create", "--head", run.Branch);
+
+        var landings = (await _landings.LoadAsync("website")).Value!.Landings;
+        landings.Select(one => (one.Branch, one.State, one.Node)).Should().BeEquivalentTo(
+        [
+            (run.Branch, LandingState.Ready, string.Empty),
+            ("teams/r1/implementer-2", LandingState.Pending, "implementer-2"),
+        ]);
+        landings.Single(one => one.Branch == run.Branch).PullRequest.Should().Be("https://github.com/o/website/pull/42");
+        landings.Single(one => one.Node == "implementer-2").Why.Should().Contain($"Not merged into {run.Branch}");
+    }
+
+    [Fact]
+    public async Task A_met_run_with_no_pull_request_asked_for_leaves_its_branch_pending()
+    {
+        await ReadyAsync();
+        await PassAsync();
+
+        var run = (await QueueAsync()).Runs.Single();
+        _journal.Add(QueueSettlingTests.Summary("r1", "done", finished: true) with { Started = _clock.Now });
+
+        await PassAsync();
+
+        var landing = (await _landings.LoadAsync("website")).Value!.Landings.Should().ContainSingle().Subject;
+        landing.Branch.Should().Be(run.Branch);
+        landing.State.Should().Be(LandingState.Pending);
+        landing.Task.Should().Be("login");
+        landing.Why.Should().Contain("kept on this machine");
+    }
+
+    [Fact]
     public async Task Without_gh_the_branch_is_not_pushed_for_a_pull_request_that_could_never_open()
     {
         var driver = new TeamQueueDriver(
             _queues, _schedules, _space.Tasks, _journal, new FakeProjects("website", _space.Scratch("website")), _git,
-            _launcher, _processes, new GhRepositoryHost(_launcher, new StubResolver(null)), _pulls, _space.Workspace,
+            _launcher, _processes, new GhRepositoryHost(_launcher, new StubResolver(null)), _pulls, _landings,
+            Delivery(new GhRepositoryHost(_launcher, new StubResolver(null))), _space.Workspace,
             _space.Paths, _clock);
 
         await ReadyAsync(projectMode: "ready");
@@ -343,6 +405,7 @@ public sealed class TeamQueueDriverTests : IDisposable
         var task = await TaskAsync();
         task.State.Should().Be(TaskState.Done);
         task.History.Last().Reason.Should().Contain("pull request was merged");
+        (await _landings.LoadAsync("website")).Value!.Landings.Single().State.Should().Be(LandingState.Merged);
     }
 
     [Fact]

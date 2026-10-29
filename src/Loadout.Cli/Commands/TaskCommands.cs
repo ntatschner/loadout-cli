@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using Loadout.Cli.Infrastructure;
+using Loadout.Core.Backfill;
 using Loadout.Core.Configuration;
 using Loadout.Core.Git;
 using Loadout.Core.Lists;
@@ -125,6 +126,10 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
         [CommandOption("--page <NUMBER>")]
         [Description("Which page to show, counted from 1. Needs --limit.")]
         public int Page { get; init; } = 1;
+
+        [CommandOption("--missing")]
+        [Description("Only open and blocked tasks without a done-when: those marked missing, and those with a proposal waiting for you.")]
+        public bool Missing { get; init; }
     }
 
     /// <summary>
@@ -245,7 +250,13 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
             return output.Fail(applied);
         }
 
-        var paged = ListPages.Of(applied.Value!, settings.Page, settings.Limit);
+        // After the query, so --missing narrows whatever it kept rather than
+        // replacing it.
+        IReadOnlyList<TaskItem> kept = settings.Missing
+            ? [.. applied.Value!.Where(item => ContractBackfill.MarkOf(item) != ContractMark.None)]
+            : applied.Value!;
+
+        var paged = ListPages.Of(kept, settings.Page, settings.Limit);
 
         if (paged.Failed)
         {
@@ -283,6 +294,7 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
                     item.Note,
                     hasDetail = item.Detail.Length > 0,
                     doneWhen = item.DoneWhen,
+                    mark = ContractBackfill.Name(ContractBackfill.MarkOf(item)),
                     moved = TaskTrace.Json(item.Moved),
                     runs = counted ? ActivityOf(item).RunsOf(item.Id) : (int?)null,
                     launches = counted ? ActivityOf(item).LaunchesOf(item.Id) : (int?)null,
@@ -323,6 +335,8 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
         {
             output.WriteLine(recorded.Count == 0
                 ? $"[dim]{Markup.Escape(described)} has no tasks recorded.[/]"
+                : settings.Missing
+                    ? "[dim]No open or blocked task here lacks a done-when or has a proposal waiting.[/]"
                 : settings.Filter is { Length: > 0 } filter
                     ? $"[dim]Nothing matches {Markup.Escape(filter)}. {recorded.Count} recorded in total; without --filter, the open ones show.[/]"
                     : $"[dim]Nothing open. {recorded.Count} recorded in total; --all shows them.[/]");
@@ -340,8 +354,11 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
         {
             output.WriteLine(rows.Line(item, where[item]));
 
+            var mark = ContractBackfill.Label(ContractBackfill.MarkOf(item));
+
             output.WriteLine(
-                $"  [dim]{Markup.Escape(item.DeclaredBy.Length > 0 ? item.DeclaredBy : "nobody named")}"
+                (mark is null ? "  [dim]" : $"  [yellow]{mark}[/] [dim]· ")
+                + $"{Markup.Escape(item.DeclaredBy.Length > 0 ? item.DeclaredBy : "nobody named")}"
                 + $", {item.DeclaredUtc:yyyy-MM-dd}"
                 + (item.Moved is { } came ? $" · {Markup.Escape(TaskTrace.From(came))}" : string.Empty)
                 + (item.Detail.Length > 0 ? " · more with task show" : string.Empty)
@@ -1123,6 +1140,7 @@ public sealed class TaskShowCommand : AsyncCommand<TaskShowCommand.Settings>
         Section(output, "Note", task.Note);
         Section(output, "Detail", task.Detail);
         Section(output, "Done when", string.Join('\n', task.DoneWhen.Select(one => $"- {one}")));
+        Proposal(output, task, slug);
         Section(output, "Runs", string.Join('\n', chains.Select(chain => string.Join(
             " -> ",
             chain.Select(run => $"{run.RunId} ({Spelt(run) ?? "?"}" + (run.Resolved is { } dealt ? $", {dealt.Action}" : string.Empty) + ")")))));
@@ -1150,6 +1168,30 @@ public sealed class TaskShowCommand : AsyncCommand<TaskShowCommand.Settings>
         }
 
         return CommandOutput.Success();
+    }
+
+    /// <summary>A held proposal, with the command that records it, or why the last pass could not make one.</summary>
+    private static void Proposal(CommandOutput output, TaskItem task, string? slug)
+    {
+        if (task.Proposal is not { } proposal || ContractBackfill.MarkOf(task) == ContractMark.None)
+        {
+            return;
+        }
+
+        if (proposal.DoneWhen.Count == 0)
+        {
+            Section(output, "Missing", $"It has no done-when. The last backfill pass, {proposal.Utc:yyyy-MM-dd}, could not propose one: {Shown.Plainly(proposal.Error)}");
+
+            return;
+        }
+
+        Section(
+            output,
+            "Proposed done-when, waiting for you",
+            string.Join('\n', proposal.DoneWhen.Select(one => $"- {one}"))
+            + (proposal.Why.Length > 0 ? $"\n{proposal.Why}" : string.Empty)
+            + "\nNothing is recorded until you say so. To record them as they are, or edit them first:\n"
+            + TaskProposeDoneWhenCommand.Accepting(task.Id, task.State.ToString().ToLowerInvariant(), slug, proposal.DoneWhen));
     }
 
     private static string? Spelt(Core.Teams.RunSummary run) =>

@@ -9,7 +9,7 @@ machine and what comes in the box.
 | | Why |
 | --- | --- |
 | **Git** | Everything to do with the workspace and your repositories: cloning, status, staging, commits, pushes, hooks. Loadout never reimplements Git — it runs it. If it's missing you get "git was not found on PATH", not a mystery. |
-| **An agent** | At least one of `claude` or `codex` on `PATH`, or your own defined under `custom_agents`. Loadout starts them; it doesn't bundle them. |
+| **An agent** | At least one of `claude`, `codex` or `grok` on `PATH`, or your own defined under `custom_agents`. Loadout starts them; it doesn't bundle them. |
 
 That's it. The binaries are published self-contained, so **there's no .NET
 runtime to install**, no VM, no container and no background service.

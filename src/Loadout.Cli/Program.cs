@@ -415,6 +415,16 @@ public static class Program
             return (int)ExitCode.ConfigurationInvalid;
         }
 
+        // Counting reads, when asked to, from the first command that could
+        // make one. Named after the command, so the daemon's summary and a
+        // status line's are told apart without opening them.
+        var environment = provider.GetRequiredService<IEnvironmentProvider>();
+        Loadout.Core.Diagnostics.ReadLedger.StartIfAsked(
+            environment.GetVariable(Loadout.Core.Diagnostics.ReadLedger.Variable),
+            paths.Paths.State,
+            Loadout.Core.Diagnostics.ReadLedger.Label(launcherArgs),
+            environment.HomeDirectory);
+
         // How this person asked to be shown things, settled before the first
         // thing is drawn. One call reaches every table, tree and spinner in
         // the application, because it changes the console they all share.
@@ -822,6 +832,15 @@ public static class Program
             });
         });
 
+        TopBranch(config, "backfill", backfill =>
+        {
+            backfill.Describe(
+                "Bring open ideas and tasks up to what the current contract asks of them.",
+                CommandCategory.Workspace,
+                "backfill missing done-when contract old ideas tasks gap fill");
+            backfill.AddCommand<BackfillContractCommand>("contract");
+        });
+
         TopBranch(config, "tools", tools =>
         {
             tools.Describe(
@@ -989,6 +1008,18 @@ public static class Program
                 CommandCategory.Integration,
                 "spend budget threshold tokens cost warning");
             spend.AddCommand<SpendRefreshCommand>("refresh");
+        });
+
+        TopBranch(config, "pr", pr =>
+        {
+            pr.Describe(
+                "See the branches of work waiting to land, and their pull requests.",
+                CommandCategory.Start,
+                "pr pull request pending branch landing merge deliver");
+            pr.AddCommand<PrListCommand>("list");
+            pr.AddCommand<PrOpenCommand>("open");
+            pr.AddCommand<PrReadyCommand>("ready");
+            pr.AddCommand<PrMergeCommand>("merge");
         });
 
         TopBranch(config, "checkpoint", checkpoint =>

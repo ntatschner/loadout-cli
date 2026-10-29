@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.RegularExpressions;
+using Loadout.Core.Diagnostics;
 using Loadout.Core.Security;
 using Loadout.Models;
 using Loadout.Models.Instructions;
@@ -403,7 +404,17 @@ internal sealed partial class MemoryService : IMemoryService
 
         try
         {
-            text = await File.ReadAllTextAsync(path, ct).ConfigureAwait(false);
+            // The daemon parses every topic for each search and each page,
+            // and a topic changes far less often than that.
+            if (Loadout.Core.Reading.SharedReaders.Enabled)
+            {
+                text = await Loadout.Core.Reading.WholeFile.For(path).ReadTextAsync(ct).ConfigureAwait(false);
+            }
+            else
+            {
+                using var trace = ReadLedger.Begin(path);
+                text = await File.ReadAllTextAsync(path, ct).ConfigureAwait(false);
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -585,6 +596,7 @@ internal sealed partial class MemoryService : IMemoryService
 
         try
         {
+            using var trace = ReadLedger.Begin(indexPath);
             text = File.ReadAllText(indexPath);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -956,6 +968,7 @@ internal sealed partial class MemoryService : IMemoryService
 
         try
         {
+            using var trace = ReadLedger.Begin(path);
             var lines = (await File.ReadAllTextAsync(path, ct).ConfigureAwait(false))
                 .ReplaceLineEndings("\n")
                 .Split('\n')
@@ -1151,6 +1164,7 @@ internal sealed partial class MemoryService : IMemoryService
 
         try
         {
+            using var trace = ReadLedger.Begin(path);
             bytes = await File.ReadAllBytesAsync(path, ct).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -1349,6 +1363,7 @@ internal sealed partial class MemoryService : IMemoryService
 
         try
         {
+            using var trace = ReadLedger.Begin(topic.Path);
             text = await File.ReadAllTextAsync(topic.Path, ct).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -1411,6 +1426,7 @@ internal sealed partial class MemoryService : IMemoryService
 
         try
         {
+            using var trace = ReadLedger.Begin(path);
             text = await File.ReadAllTextAsync(path, ct).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -1484,6 +1500,7 @@ internal sealed partial class MemoryService : IMemoryService
 
             try
             {
+                using var trace = ReadLedger.Begin(path);
                 var text = await File.ReadAllTextAsync(path, ct).ConfigureAwait(false);
 
                 if (!string.IsNullOrWhiteSpace(text))

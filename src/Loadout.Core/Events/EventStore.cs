@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using Loadout.Core.Diagnostics;
 using Loadout.Platform.Abstractions;
 
 namespace Loadout.Core.Events;
@@ -137,6 +138,7 @@ public sealed class EventStore
 
         try
         {
+            using var trace = ReadLedger.Begin(FeedPath);
             using var stream = new FileStream(FeedPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             using var reader = new StreamReader(stream, Encoding.UTF8);
 
@@ -222,6 +224,8 @@ public sealed class EventStore
     {
         try
         {
+            using var trace = ReadLedger.Begin(MarksPath);
+
             return File.Exists(MarksPath)
                 ? JsonSerializer.Deserialize<EventMarks>(File.ReadAllText(MarksPath), Json) is { } marks
                     ? marks with { Read = marks.Read ?? [] }
@@ -261,6 +265,8 @@ public sealed class EventStore
     {
         try
         {
+            using var trace = ReadLedger.Begin(RecorderPath);
+
             return File.Exists(RecorderPath)
                 ? JsonSerializer.Deserialize<RecorderState>(File.ReadAllText(RecorderPath), Json) ?? RecorderState.Empty
                 : RecorderState.Empty;

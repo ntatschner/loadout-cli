@@ -1,13 +1,13 @@
 {"at":"<t+2>","run":"<run>","node":null,"kind":"run.started","data":{"team":"iterating-project","goal":"Add --since to loadout usage.","autonomy":"supervised","rounds":5,"project":"demo","path":null,"task":null,"origin":null,"follows":null,"budget":25,"uncapped":false,"takeRecommendationAfter":null}}
 {"at":"<t+3>","run":"<run>","node":"lead","kind":"node.launched","data":{"launch":"L-1","role":"role.project-lead","model":null,"resumed":false}}
 {"at":"<t+4>","run":"<run>","node":null,"kind":"round.started","data":{"round":1,"of":5}}
-{"at":"<t+5>","run":"<run>","node":"lead","kind":"node.asked","data":{"tool":"Bash","target":"dotnet test"}}
-{"at":"<t+6>","run":"<run>","node":"lead","kind":"node.answered","data":{"tool":"Bash","allowed":true,"chosen":"yes"}}
-{"at":"<t+8>","run":"<run>","node":"lead","kind":"node.turn","data":{"attempt":1,"completed":true,"turns":2,"cost":0.05,"subtype":"success","denials":0,"unparsed":0,"session":"lead-1"}}
-{"at":"<t+9>","run":"<run>","node":"lead","kind":"report.checked","data":{"status":"done","outcome":"accepted","Reasons":[],"coverage":null,"goalUnderstood":null}}
-{"at":"<t+10>","run":"<run>","node":null,"kind":"criteria.none","data":{"by":"lead","project":0}}
-{"at":"<t+11>","run":"<run>","node":"lead","kind":"node.ended","data":{"exit":0,"killed":false,"stderr":""}}
-{"at":"<t+12>","run":"<run>","node":null,"kind":"run.finished","data":{"ended":"done","outcome":"done","cost":0.05,"rounds":1,"merged":[]}}
+{"at":"<t+6>","run":"<run>","node":"lead","kind":"node.asked","data":{"tool":"Bash","target":"dotnet test"}}
+{"at":"<t+7>","run":"<run>","node":"lead","kind":"node.answered","data":{"tool":"Bash","allowed":true,"chosen":"yes"}}
+{"at":"<t+9>","run":"<run>","node":"lead","kind":"node.turn","data":{"attempt":1,"completed":true,"turns":2,"cost":0.05,"subtype":"success","denials":0,"unparsed":0,"session":"lead-1"}}
+{"at":"<t+10>","run":"<run>","node":"lead","kind":"report.checked","data":{"status":"done","outcome":"accepted","Reasons":[],"coverage":null,"goalUnderstood":null}}
+{"at":"<t+11>","run":"<run>","node":null,"kind":"criteria.none","data":{"by":"lead","project":0}}
+{"at":"<t+12>","run":"<run>","node":"lead","kind":"node.ended","data":{"exit":0,"killed":false,"stderr":""}}
+{"at":"<t+13>","run":"<run>","node":null,"kind":"run.finished","data":{"ended":"done","outcome":"done","cost":0.05,"rounds":1,"merged":[]}}
 {"task":{"slug":"demo","id":"team-<run>","state":"Doing","by":"team iterating-project","title":"Add --since to loadout usage.","note":"supervised, running"}}
 {"task":{"slug":"demo","id":"team-<run>","state":"Done","by":"team iterating-project","title":"Add --since to loadout usage.","note":"done; 1 round(s), $0.05. loadout team status <run>"}}
 {"files":["answer-lead-1.json","ask-lead-1.json","brief-lead.json","final-report.json","journal.jsonl","policy-lead.json","stream-lead.jsonl"]}

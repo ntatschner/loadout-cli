@@ -87,6 +87,12 @@ public static class RunOutcomes
             return RunOutcome.Limited;
         }
 
+        // "stalled: the lead wrote nothing for longer than 20m, twice".
+        if (Same(said, "stalled") || Starts(said, "stalled:"))
+        {
+            return RunOutcome.Stalled;
+        }
+
         // "stopped by request", "stopped by the person", "stopped at a
         // decision", "stopped before the lead was briefed".
         if (Starts(said, "stopped"))

@@ -77,6 +77,14 @@ public sealed class IdeaRecord
     /// <see cref="Failure"/> is written.
     /// </summary>
     public string LastError { get; set; } = string.Empty;
+
+    /// <summary>
+    /// What went wrong the last time a backfill pass tried to fill this plan's
+    /// missing fields, or null when it did not. Kept apart from
+    /// <see cref="Failure"/>, which is about rounds: a failed gap-fill is no
+    /// reason to say the last round failed.
+    /// </summary>
+    public IdeaAttempt? GapFillFailure { get; set; }
 }
 
 /// <summary>Something the person added to an idea after dropping it in.</summary>
@@ -236,6 +244,14 @@ public sealed class IdeaPlan
     /// through held to nothing more specific than "the suite passes".
     /// </remarks>
     public List<string> DoneWhen { get; set; } = [];
+
+    /// <summary>
+    /// The fields a backfill pass wrote into this revision, by their names in
+    /// the contract, such as <c>doneWhen</c>. Empty for a plan an agent
+    /// proposed whole, and emptied at acceptance, because accepting is where
+    /// the person confirms them.
+    /// </summary>
+    public List<string> GapFilled { get; set; } = [];
 }
 
 /// <summary>What the person has said about a piece of the plan.</summary>

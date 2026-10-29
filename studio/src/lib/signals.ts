@@ -33,6 +33,9 @@ export const SIGNAL_STATES: Record<string, [SignalFamily, string, string]> = {
   'last round failed': ['bad', 'failed', 'hard'],
   blocked: ['bad', 'blocked', 'hard'],
   limited: ['bad', 'limited', 'hard'],
+  // A lead, or a node, that went silent twice and was given up on.
+  stalled: ['bad', 'blocked', 'hard'],
+  stuck: ['bad', 'blocked', 'hard'],
   done: ['good', 'done', 'settle'],
   met: ['good', 'done', 'settle'],
   accepted: ['good', 'done', 'settle'],

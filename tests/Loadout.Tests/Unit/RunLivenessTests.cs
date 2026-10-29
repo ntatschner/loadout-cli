@@ -22,11 +22,22 @@ public sealed class RunLivenessTests
     }
 
     [Fact]
-    public void Held_lock_is_live()
+    public void Held_lock_written_to_lately_is_live()
     {
-        // However quiet: a lead's turn can say nothing for a long while.
-        RunLiveness.Of(Run(), new OwnerReading.Held(), Noon.AddHours(-5), Noon)
+        RunLiveness.Of(Run(), new OwnerReading.Held(), Noon.AddMinutes(-5), Noon)
             .Should().BeOfType<Liveness.Live>();
+    }
+
+    [Fact]
+    public void Held_lock_quiet_past_the_threshold_is_silent_and_names_its_holder_but_is_never_not_responding()
+    {
+        // A working node writes every few seconds, so an hour of nothing under
+        // a held lock is usually a hung node nothing will ever end. Still
+        // driven, though: something has it, and that must never read as gone.
+        var holder = new RunOwner(5150, Noon.AddDays(-1), "BOX", Noon.AddHours(-3));
+
+        RunLiveness.Of(Run(), new OwnerReading.Held(holder), Noon.AddHours(-3), Noon)
+            .Should().Be(new Liveness.Silent(TimeSpan.FromHours(3), holder));
     }
 
     [Fact]

@@ -105,6 +105,19 @@ public interface ITaskService
     /// </remarks>
     Task<OperationResult<IReadOnlyList<TaskMoved>>> MovedAsync(CancellationToken ct = default);
 
+    /// <summary>
+    /// Holds a proposed done-when on an open or blocked task with none, or
+    /// records why asking for one failed, without claiming anything about where
+    /// the work stands: who last declared it, and its history, are left alone.
+    /// </summary>
+    /// <remarks>The default refuses, for the doubles in the tests; the real service holds it.</remarks>
+    Task<OperationResult<TaskItem>> HoldProposalAsync(
+        string? projectSlug,
+        string id,
+        TaskProposal proposal,
+        CancellationToken ct = default) =>
+        Task.FromResult(OperationResult<TaskItem>.Fail("This task list cannot hold a proposal."));
+
     /// <summary>A list, with the revision a change made from it should name.</summary>
     /// <remarks>
     /// The default has no revision to give, which a caller reads as nothing to
@@ -310,6 +323,19 @@ internal sealed class TaskService : ITaskService
             [new TaskOperation(TaskOperation.Move, fromSlug, id, To: toSlug)], false, ct).ConfigureAwait(false));
 
     /// <inheritdoc />
+    public async Task<OperationResult<TaskItem>> HoldProposalAsync(
+        string? projectSlug,
+        string id,
+        TaskProposal proposal,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(proposal);
+
+        return One(await ApplyCoreAsync(
+            [new TaskOperation(TaskOperation.Hold, projectSlug, id, Proposal: proposal)], false, ct).ConfigureAwait(false));
+    }
+
+    /// <inheritdoc />
     public Task<OperationResult<TaskBatch>> ApplyAsync(IReadOnlyList<TaskOperation> operations, CancellationToken ct = default) =>
         ApplyCoreAsync(operations, true, ct);
 
@@ -457,6 +483,16 @@ internal sealed class TaskService : ITaskService
                 {
                     outcomes[index] = Failed(
                         index, operation, $"'{missing}' is not a project this workspace has.", ExitCode.ProjectNotFound);
+                }
+                else if (operation.Op == TaskOperation.Hold)
+                {
+                    // Only a backfill pass holds a proposal. One sent from a
+                    // page or an agent would be a done-when nobody asked for.
+                    outcomes[index] = Failed(
+                        index,
+                        operation,
+                        $"There is nothing called '{operation.Op}' to do to a task. It is one of {string.Join(", ", TaskOperation.Ops)}.",
+                        ExitCode.InvalidArguments);
                 }
                 else if (operation.Op == TaskOperation.Move && Carried(operation))
                 {
@@ -688,7 +724,7 @@ internal sealed class TaskService : ITaskService
     /// <summary>What can be refused about an operation from the operation alone.</summary>
     private static (string Error, ExitCode Code)? Precheck(TaskOperation operation)
     {
-        if (!TaskOperation.Ops.Contains(operation.Op))
+        if (!TaskOperation.Ops.Contains(operation.Op) && operation.Op != TaskOperation.Hold)
         {
             return ($"There is nothing called '{operation.Op}' to do to a task. It is one of {string.Join(", ", TaskOperation.Ops)}.",
                 ExitCode.InvalidArguments);
@@ -732,7 +768,7 @@ internal sealed class TaskService : ITaskService
     /// </remarks>
     private static string? Screened(TaskOperation operation)
     {
-        if (operation.Op is not (TaskOperation.Add or TaskOperation.Declare))
+        if (operation.Op is not (TaskOperation.Add or TaskOperation.Declare or TaskOperation.Hold))
         {
             return null;
         }
@@ -746,6 +782,9 @@ internal sealed class TaskService : ITaskService
                     operation.Detail ?? string.Empty,
                     .. operation.DoneWhen ?? [],
                     operation.Reason ?? string.Empty,
+                    .. operation.Proposal?.DoneWhen ?? [],
+                    operation.Proposal?.Why ?? string.Empty,
+                    operation.Proposal?.Error ?? string.Empty,
                 ]));
 
         return patterns.Count > 0
@@ -783,6 +822,44 @@ internal sealed class TaskService : ITaskService
                 groups[0].Changed = true;
 
                 return OperationResult<TaskItem>.Ok(Declare(list, operation, now));
+
+            case TaskOperation.Hold:
+            {
+                var id = operation.Id!.Trim();
+
+                if (list.Items.FirstOrDefault(item => Same(item.Id, id)) is not { } holding)
+                {
+                    return OperationResult<TaskItem>.Fail(
+                        $"'{id}' is not a task of {TaskPaths.Describe(operation.Project)}.", ExitCode.InvalidArguments);
+                }
+
+                // Read again under the lock, since somebody may have started
+                // the work or written a done-when since the pass looked.
+                if (Backfill.ContractBackfill.ForTask(operation.Project, holding) is not { } finding)
+                {
+                    return OperationResult<TaskItem>.Fail(
+                        $"'{holding.Id}' is no longer an open or blocked task without a done-when, so nothing was held.",
+                        ExitCode.InvalidArguments);
+                }
+
+                if (finding.Skipped is { } skipped)
+                {
+                    return OperationResult<TaskItem>.Fail($"Nothing was held for '{holding.Id}'. {skipped}", ExitCode.InvalidArguments);
+                }
+
+                var given = operation.Proposal!;
+
+                holding.Proposal = new TaskProposal
+                {
+                    DoneWhen = [.. given.DoneWhen.Select(one => one.Trim()).Where(one => one.Length > 0)],
+                    Why = given.Why.Trim(),
+                    Utc = now,
+                    Error = given.Error.Trim(),
+                };
+                groups[0].Changed = true;
+
+                return OperationResult<TaskItem>.Ok(holding);
+            }
 
             case TaskOperation.Remove:
             {
@@ -906,6 +983,14 @@ internal sealed class TaskService : ITaskService
         if (operation.DoneWhen is { } doneWhen)
         {
             existing.DoneWhen = [.. doneWhen.Select(one => one.Trim()).Where(one => one.Length > 0)];
+        }
+
+        // A held proposal only fills a gap. Once the task has a done-when, or
+        // the work is under way or over, there is no gap left for it to fill;
+        // a blocked task going back to open still has one, so it stays.
+        if (existing.Proposal is not null && Backfill.ContractBackfill.ForTask(operation.Project, existing) is null)
+        {
+            existing.Proposal = null;
         }
 
         // Said by whoever declared it, such as the queue saying where a run's
@@ -1034,6 +1119,9 @@ internal sealed class TaskService : ITaskService
         Note = item.Note,
         Detail = item.Detail,
         DoneWhen = [.. item.DoneWhen],
+        Proposal = item.Proposal is { } proposal
+            ? new TaskProposal { DoneWhen = [.. proposal.DoneWhen], Why = proposal.Why, Utc = proposal.Utc, Error = proposal.Error }
+            : null,
         History = [.. item.History.Select(one => new TaskEvent { State = one.State, By = one.By, Utc = one.Utc, Reason = one.Reason })],
         Moved = item.Moved is { } moved ? new TaskMove { From = moved.From, Utc = moved.Utc } : null,
     };

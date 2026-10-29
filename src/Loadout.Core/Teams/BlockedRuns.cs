@@ -102,7 +102,7 @@ public sealed record BlockedRaise(BlockedCap Cap, decimal Figure, decimal Used)
 
 /// <summary>A run that ended short of its done-when and has not been dealt with.</summary>
 /// <param name="Run">The run.</param>
-/// <param name="Kind">How it ended: <c>blocked</c>, <c>failed</c>, <c>limited</c>, <c>unrecorded</c>, <c>dead</c> or <c>handover</c>.</param>
+/// <param name="Kind">How it ended: <c>blocked</c>, <c>failed</c>, <c>limited</c>, <c>unrecorded</c>, <c>dead</c>, <c>handover</c>, <c>stalled</c> or <c>unfinished</c>.</param>
 /// <param name="Cap">For a limited run, what it ran out of.</param>
 /// <param name="Lead">What its lead last said, or null where it never reported.</param>
 /// <param name="Chain">How many runs in a row on its task, this one included, have ended without getting there.</param>
@@ -252,6 +252,13 @@ public static class BlockedRuns
             // run as one still read as running with nothing behind it, only
             // tidied, so it is held the same way.
             RunOutcome.Abandoned => "dead",
+            RunOutcome.Stalled => "stalled",
+
+            // The lead said done over a worker that went silent twice. The
+            // work is not all there, and nobody is going to say so unless
+            // this does. Only once the run has ended: while it is going, the
+            // lead is the one deciding what to do about it.
+            RunOutcome.Done when run.Unfinished.Count > 0 => "unfinished",
             _ => null,
         };
     }
@@ -276,7 +283,8 @@ public static class BlockedRuns
     /// <param name="lead">What its lead last said, or null.</param>
     /// <param name="chain">How many runs in a row on its task, this one included, ended short.</param>
     /// <param name="dead">Whether its process has gone while its journal says it is running.</param>
-    public static BlockedRun? Judge(RunSummary run, BlockedLead? lead, int chain = 1, bool dead = false)
+    /// <param name="stalledBefore">Whether a run earlier on its chain stalled too.</param>
+    public static BlockedRun? Judge(RunSummary run, BlockedLead? lead, int chain = 1, bool dead = false, bool stalledBefore = false)
     {
         ArgumentNullException.ThrowIfNull(run);
 
@@ -286,7 +294,7 @@ public static class BlockedRuns
         }
 
         var cap = kind == "limited" ? CapOf(run) : BlockedCap.None;
-        var facts = new Facts(run, kind, cap, lead, Math.Max(1, chain));
+        var facts = new Facts(run, kind, cap, lead, Math.Max(1, chain), stalledBefore);
         var open = Open(facts);
         var suggested = Suggest(facts, open);
 
@@ -370,7 +378,7 @@ public static class BlockedRuns
         return new BlockedSuggestion(BlockedAction.SetAside, "Nothing more specific applies, so file it and look at the task yourself.", "fallback");
     }
 
-    private sealed record Facts(RunSummary Run, string Kind, BlockedCap Cap, BlockedLead? Lead, int Chain)
+    private sealed record Facts(RunSummary Run, string Kind, BlockedCap Cap, BlockedLead? Lead, int Chain, bool StalledBefore = false)
     {
         public string Ended => Run.Ended?.Trim() ?? string.Empty;
 
@@ -390,6 +398,16 @@ public static class BlockedRuns
             + $"{first.Criterion.TrimEnd('.')}. {first.ToDo.TrimEnd('.')}. Tick each off on its page, or with "
             + $"'loadout team handover {run.RunId} --check {number}', and once every one is ticked it is judged again. "
             + "Set it aside only to file it without doing that.";
+    }
+
+    private static string Unfinished(RunSummary run)
+    {
+        var stuck = run.Stuck.Where(one => one.Branch is { Length: > 0 }).ToList();
+
+        return stuck.Count == 1
+            ? $"{stuck[0].Node} went silent twice and was stopped, leaving branch '{stuck[0].Branch}' unfinished."
+            : $"{stuck.Count} nodes went silent twice and were stopped, leaving branches "
+                + string.Join(", ", stuck.Select(one => $"'{one.Branch}'")) + " unfinished.";
     }
 
     private static string Money(decimal usd) => "$" + usd.ToString("0.00", CultureInfo.InvariantCulture);
@@ -458,6 +476,22 @@ public static class BlockedRuns
         new("halted", BlockedAction.SetAside,
             facts => facts.Kind == "failed" && facts.EndedWith("halted:"),
             facts => $"It was halted: {facts.Ended["halted:".Length..].Trim()}. Look at what it did before running it again."),
+
+        // Once a chain has stalled before, carrying on unattended is how one
+        // task goes on hanging a lead and paying for it.
+        new("stalled-again", BlockedAction.SetAside,
+            facts => facts.Kind == "stalled" && facts.StalledBefore,
+            facts => "Its lead went silent twice, and a run before it on this task stalled the same way. "
+                + "Something about the task or the machine is hanging the lead: look at it before running it again."),
+
+        new("stalled", BlockedAction.CarryOn,
+            facts => facts.Kind == "stalled",
+            facts => "Its lead wrote nothing for longer than the team allows, was started again, and went silent again. "
+                + "Carrying on starts a new lead from the work it left on its branches."),
+
+        new("unfinished", BlockedAction.CarryOn,
+            facts => facts.Kind == "unfinished",
+            facts => $"The lead reported done, but {Unfinished(facts.Run)} The next lead is told, and can merge or finish it."),
 
         new("dead", BlockedAction.CarryOn,
             facts => facts.Kind == "dead",

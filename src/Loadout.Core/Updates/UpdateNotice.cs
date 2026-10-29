@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Loadout.Core.Configuration;
+using Loadout.Core.Diagnostics;
 using Loadout.Platform.Abstractions;
 
 namespace Loadout.Core.Updates;
@@ -121,6 +122,7 @@ internal sealed class UpdateNotice : IUpdateNotice
                 return null;
             }
 
+            using var trace = ReadLedger.Begin(Path);
             return JsonSerializer.Deserialize<Answer>(File.ReadAllText(Path));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)

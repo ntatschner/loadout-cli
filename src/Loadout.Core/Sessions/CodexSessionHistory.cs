@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Loadout.Core.Diagnostics;
 using Loadout.Models.Results;
 using Loadout.Platform.Abstractions;
 
@@ -97,6 +98,7 @@ internal sealed class CodexSessionHistory : ISessionHistory
 
         try
         {
+            using var trace = ReadLedger.Begin(IndexPath);
             using var reader = new StreamReader(IndexPath);
 
             while (await reader.ReadLineAsync(ct).ConfigureAwait(false) is { } line)
@@ -147,6 +149,7 @@ internal sealed class CodexSessionHistory : ISessionHistory
     {
         try
         {
+            using var trace = ReadLedger.Begin(file.FullName);
             using var reader = new StreamReader(file.OpenRead());
 
             // The metadata is the first entry. Reading further would mean

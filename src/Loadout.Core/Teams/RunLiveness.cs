@@ -13,6 +13,28 @@ public abstract record Liveness
     /// <summary>Something is driving it, or it is too soon to say otherwise.</summary>
     public sealed record Live : Liveness;
 
+    /// <summary>
+    /// A process still holds the run, and the run has written nothing for a
+    /// long while.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Driven, so never closable and never read as not responding: something
+    /// still has it, and ending a run under a live process is the one mistake
+    /// to avoid. But a working node writes to the journal every few seconds,
+    /// so an hour of nothing usually means a node has hung - on a build with
+    /// no quiet limit, or with the team's limit turned off - and nothing will
+    /// ever end it. What this is for is naming the process to end.
+    /// </para>
+    /// <para>
+    /// Everything that does not know this case reads it as live, which is the
+    /// safe way to be wrong.
+    /// </para>
+    /// </remarks>
+    /// <param name="Quiet">How long since it last wrote anything.</param>
+    /// <param name="Owner">The process holding it, where that was written down.</param>
+    public sealed record Silent(TimeSpan Quiet, RunOwner? Owner) : Liveness;
+
     /// <summary>The run had an owner and that owner has gone.</summary>
     /// <param name="LastOwner">Who last drove it, where the record could be read.</param>
     public sealed record NotResponding(RunOwner? LastOwner) : Liveness;
@@ -78,8 +100,10 @@ public static class RunLiveness
 
         switch (owner)
         {
-            case OwnerReading.Held:
-                return new Liveness.Live();
+            case OwnerReading.Held held:
+                return Quiet(run, journalWritten, now) is var silence && silence >= OldRunQuiet
+                    ? new Liveness.Silent(silence, held.Owner)
+                    : new Liveness.Live();
 
             case OwnerReading.Free free:
                 return new Liveness.NotResponding(free.LastOwner);
@@ -88,11 +112,13 @@ public static class RunLiveness
                 return new Liveness.Unreadable(unknown.Why);
         }
 
-        var lastWrote = run.LastSeen > journalWritten ? run.LastSeen : journalWritten;
-        var quiet = now - lastWrote;
+        var quiet = Quiet(run, journalWritten, now);
 
         return quiet >= OldRunQuiet
             ? new Liveness.PossiblyNotResponding(quiet)
             : new Liveness.Live();
     }
+
+    private static TimeSpan Quiet(RunSummary run, DateTimeOffset journalWritten, DateTimeOffset now) =>
+        now - (run.LastSeen > journalWritten ? run.LastSeen : journalWritten);
 }

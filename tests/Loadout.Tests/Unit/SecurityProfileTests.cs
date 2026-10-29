@@ -1,12 +1,13 @@
+using FluentAssertions;
 using Loadout.Agents;
 using Loadout.Agents.Claude;
 using Loadout.Agents.Codex;
+using Loadout.Agents.Grok;
 using Loadout.Models.Agents;
 using Loadout.Models.Policies;
 using Loadout.Models.Projects;
 using Loadout.Platform.Common;
 using Loadout.Tests.Fakes;
-using FluentAssertions;
 using Xunit;
 
 namespace Loadout.Tests.Unit;
@@ -28,6 +29,7 @@ public sealed class SecurityProfileTests
         "--dangerously-skip-permissions",
         "--allow-dangerously-skip-permissions",
         "--dangerously-bypass-approvals-and-sandbox",
+        "--yolo",
         "bypassPermissions",
         "dontAsk",
         "danger-full-access",
@@ -45,6 +47,24 @@ public sealed class SecurityProfileTests
             {
                 // Claude is not installed on this machine, so there is nothing
                 // to assert about the arguments it would have received.
+                return;
+            }
+
+            invocation.Arguments.Should().NotContain(
+                a => a.Contains(forbidden, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(LooseningFlags))]
+    public async Task No_security_profile_can_loosen_grok(string forbidden)
+    {
+        foreach (var profile in SecurityProfile.CreateDefaults().Values)
+        {
+            var invocation = await BuildGrokAsync(profile);
+
+            if (invocation is null)
+            {
                 return;
             }
 
@@ -159,6 +179,15 @@ public sealed class SecurityProfileTests
     private static async Task<AgentInvocation?> BuildCodexAsync(SecurityProfile? profile)
     {
         var adapter = new CodexAdapter(Resolver(), new ThrottledProcessLauncher(), []);
+
+        var result = await adapter.BuildInvocationAsync(Context(profile));
+
+        return result.Succeeded ? result.Value : null;
+    }
+
+    private static async Task<AgentInvocation?> BuildGrokAsync(SecurityProfile? profile)
+    {
+        var adapter = new GrokAdapter(Resolver(), new ThrottledProcessLauncher(), []);
 
         var result = await adapter.BuildInvocationAsync(Context(profile));
 

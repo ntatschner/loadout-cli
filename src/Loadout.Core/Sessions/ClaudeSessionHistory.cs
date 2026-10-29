@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Loadout.Core.Diagnostics;
 using Loadout.Core.Transcripts;
 using Loadout.Models.Results;
 using Loadout.Platform.Abstractions;
@@ -184,6 +185,7 @@ internal sealed class ClaudeSessionHistory : ISessionHistory
 
         try
         {
+            using var trace = ReadLedger.Begin(file.FullName);
             using var reader = new StreamReader(file.OpenRead());
 
             for (var i = 0; i < HeadLines; i++)
@@ -362,6 +364,7 @@ internal sealed class ClaudeSessionHistory : ISessionHistory
     {
         try
         {
+            using var trace = ReadLedger.Begin(file.FullName);
             using var stream = file.OpenRead();
 
             if (stream.Length > TailBytes)

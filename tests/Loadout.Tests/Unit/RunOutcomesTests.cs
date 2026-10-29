@@ -55,6 +55,9 @@ public sealed class RunOutcomesTests
     // account for the goal is pointless if the answer is filed as success.
     [InlineData("the lead reported done without accounting for the goal", RunOutcome.Failed)]
     [InlineData("the lead reported done with 2 of 3 criteria unmet", RunOutcome.Failed)]
+
+    // The lead went silent, was started again, and went silent again.
+    [InlineData("stalled: the lead wrote nothing for longer than 20m, twice", RunOutcome.Stalled)]
     public void Each_ending_a_run_can_write_is_filed(string ended, RunOutcome expected)
     {
         RunOutcomes.From(ended).Should().Be(expected);

@@ -4,7 +4,7 @@
 Loadout.Models      Records, DTOs, config classes. No logic.
 Loadout.Platform    Abstractions + Windows / Linux / macOS / Unix implementations.
 Loadout.Core        Projects, Git, Workspace, Configuration, Security, Diagnostics.
-Loadout.Agents      Claude, Codex and generic adapters; the launch pipeline.
+Loadout.Agents      Claude, Codex, Grok and generic adapters; the launch pipeline.
 Loadout.Cli         The loadout executable.
 Loadout.Tui         The full-screen launcher, and the first-run questions.
 ```

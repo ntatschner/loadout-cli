@@ -92,6 +92,8 @@
 | `loadout task declare <id> <state> --title <line> --detail <text>` | A title is one line of 72 characters at most, so a list stays readable; the full description goes in `--detail`. A longer title is shortened at a word, the whole of it is kept at the start of the detail, and you're told so |
 | `loadout task declare <id> <state> --done-when <condition>` | What must be true for the task to be finished, repeated for each. Together they replace what it had, and `--no-done-when` clears them. A team run for the task is held to them |
 | `loadout task propose-done-when <id>` | An agent proposes two to five done-when from the task's title, detail and accepted plan. Recorded only with `--accept`, or a yes when it asks |
+| `loadout task list --missing` | Only open and blocked tasks without a done-when. Each is marked `missing`, or `proposal waiting` when a backfill pass has proposed one for you to confirm. `task show` prints the proposal with the `task declare` that records it, and recording it, or any done-when of your own, throws the proposal away |
+| `loadout backfill contract` | Fill in what open ideas and tasks lack under the current contract, on the project you are in, or `--all-projects` for every list. An idea's plan gets the missing fields as a new revision, marked gap-filled until you accept it. An open or blocked task gets a proposed done-when, held until you record it. Ideas still being questioned, or with answers or a request their plan hasn't taken in, are left for their next refine. `--dry-run` lists every gap and every skip with its reason, and counts the agent calls a real pass would make; `--limit <count>` caps a pass. A record that failed says why, and the next pass tries it again |
 | `loadout task show <id>` | One task in full: its detail, note, and every change of state with who said so and when, and the idea it was accepted from, if it was, with the revision of its list. Lists leave the detail out |
 | `loadout task shorten` | Shorten titles written before the 72-character limit, keeping each one whole in its detail and noting it in the history. `--every-list` covers every project and the workspace-wide list; `--dry-run` names what it would change |
 | `loadout task list --filter <query> --sort <fields>` | Keep and order the list with the same query syntax Studio uses, described under [Filtering and sorting a list](#filtering-and-sorting-a-list) |
@@ -105,6 +107,7 @@
 | `loadout idea note remove <id> <N>` | Take back a note you added, by its number as `idea show` lists it, `2` or `N2`. Only while no round has read it, since a note a round has read is part of what the plan was made from, and not while a round on the idea is running. A removed note's number is never given to another, so two screens open at once can't remove the wrong one |
 | `loadout idea show <id> --full` | Every option's detail, pros and cons, as Studio shows them. Without it you see the chosen option's detail only, and a line saying `--full` has more when it does |
 | `loadout idea list --limit <count> --page <number>` | Read a long idea list a page at a time, as `task list` does. `--json` says how many there are in all |
+| `loadout idea list --missing` | Only ideas whose plan lacks something the current contract asks for, marked `missing`. `loadout backfill contract` fills them in |
 | `loadout idea apply <file>` | Several answers, choices and verdicts at once from a JSON array, each idea's all or nothing. Described under [Ideas the same way](#ideas-the-same-way) |
 | `loadout idea refine <id>` | Have an agent take an idea one round further: ask its questions, propose a plan with options for each layer, or revise it. It asks the agent and model the last round that came back used, unless you give `--agent` or `--model`, and says which before it starts. One round per idea at a time on this machine |
 | `loadout idea dismiss <id>` | Clear the "last round failed" marker on an idea you have stopped refining, without paying for another round. Answers and the plan stay |
@@ -170,6 +173,10 @@
 | `loadout team handover` | What a run handed to you because only you could do it: a push, a CI run, or a check by hand. `--check <n>` ticks one off as review evidence in your name; once every one is ticked the run is judged again and ends done |
 | `loadout team name` | Name a run's room, or clear the name to get the worked-out one back |
 | `loadout team pr` | Open a pull request for what one node of a run produced |
+| `loadout pr list` | The branches waiting to land: a queued run's own branch with its pull request, and each node branch its gate did not merge, pending. Says how long each has waited and which have gone from the repository; `--all` adds the merged and abandoned |
+| `loadout pr open` | Push a pending branch and open its pull request against the default branch, titled from its task; `--draft` opens it as a draft |
+| `loadout pr ready` | Mark a waiting branch's draft pull request ready for review |
+| `loadout pr merge` | Ask for a waiting branch's pull request to be squash-merged once its required checks pass, with the message you give: `--subject` is required and `--body` is the rest, empty when left out. The branch stays ready in `pr list` until the merge is seen |
 | `loadout team say` | Say something to one node while it is still working |
 | `loadout team attach set` | Set the passphrase that lets the dashboard type at a running node |
 | `loadout team attach show` | Say whether one is set, never what it is |
@@ -234,6 +241,46 @@ command that reads what you pipe into it, such as `task apply` or
 If the daemon is a different version, isn't running, or can't be reached
 within two seconds, the command runs where you typed it. To run everything
 here regardless, set `LOADOUT_LOCAL=1`.
+
+## Counting what Loadout reads
+
+Set `LOADOUT_READ_TRACE=1` and each Loadout process counts the files it reads:
+run journals, the event feed, transcripts, configuration, memory topics,
+session state and the rest. As it ends, and every minute while it runs, it
+writes a summary to `read-trace` under the state directory, named after the
+command, such as `20261028-182844-31396-team-runs.json`. The minute is there
+because the daemon is more often stopped than left to exit, and a stopped
+process writes nothing on the way out. Each summary records the Loadout version
+that wrote it, so a reading taken either side of an update can be told apart.
+
+Each read notes the file's length and last-write time, so the summary can tell
+a second read of the same contents from a read of new ones. `readsPerChange`
+is that figure: above one, a file was read again when nothing in it had
+changed. Files of the same kind, such as every run's journal, are grouped
+under one pattern, and the exact files are listed beside them.
+
+It counts only the reads it was put around, so treat it as a floor. A command
+handed to the daemon is counted in the daemon's summary, not its own; set
+`LOADOUT_LOCAL=1` as well to keep them apart. Off, it costs nothing.
+
+The first summaries from a running daemon showed where the repeats were. The
+launch ledger, which grows by a line or two for every session started, was
+read whole by the daemon several times a minute, almost always unchanged. It
+is now read once per process and after that only from where the last read
+stopped. Each read still checks the file's length and last-write time first,
+so a new launch shows up on the very next read, as it did before. A ledger
+that has shrunk, or been rewritten rather than added to, is read whole again.
+
+Memory topics are kept the same way, whole: a topic is opened again only when
+its length or last-write time has moved. One written in the last two seconds
+is opened every time, because a rewrite to the same length can land inside one
+tick of the file system's clock and look unchanged. Ideas and task lists were
+already kept by that rule, but only for one request at a time inside the
+daemon; they are now kept for as long as it runs.
+
+Set `LOADOUT_SHARED_READERS=0` to go back to reading the whole file every
+time; it is there to tell a wrong answer from the sharing apart from one in
+the file.
 
 ## Filtering and sorting a list
 

@@ -76,7 +76,7 @@ export function paletteGroups(
 
   doing.push(
     { key: 'do-ambient', glyph: '◎', label: 'Enter Ambient', sub: 'changes nothing · A', kind: 'action', run: open.ambient },
-    { key: 'do-appearance', glyph: '◐', label: 'Appearance…', sub: 'theme, accent, density, motion, halo', kind: 'action', run: open.appearance },
+    { key: 'do-appearance', glyph: '◐', label: 'Appearance…', sub: 'theme, accent, density, motion, background, halo', kind: 'action', run: open.appearance },
   );
 
   return [

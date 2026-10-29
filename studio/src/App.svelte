@@ -42,6 +42,8 @@
   import { tokens } from './lib/glyphs';
   import type { RailPage } from './lib/types';
   import ModeBar from './lib/components/ModeBar.svelte';
+  import FieldMap from './lib/components/FieldMap.svelte';
+  import { resolveBackdrop } from './lib/backdrop';
   import Quiet from './pages/Quiet.svelte';
   import QuietIdeas from './pages/quiet/QuietIdeas.svelte';
   import QuietProjects from './pages/quiet/QuietProjects.svelte';
@@ -49,7 +51,7 @@
   import QuietSettings from './pages/quiet/QuietSettings.svelte';
   import QuietMemory from './pages/quiet/QuietMemory.svelte';
   import QuietSpend from './pages/quiet/QuietSpend.svelte';
-  import { besideReturn, isModeKey, isSixPage, PAGE_TITLES, type SixPage, type Waiting } from './lib/modes';
+  import { besideReturn, isModeKey, isSixPage, motionNow, PAGE_TITLES, type SixPage, type Waiting } from './lib/modes';
   import { besideOf } from './lib/reveal';
   import { reveal, revealParts } from './lib/reveal.svelte';
   import { readSplit, SPLIT_KEYS } from './lib/splits';
@@ -135,6 +137,49 @@
         at: line.askedAt ?? 0,
       })),
   );
+
+  // What is behind the page: resolveBackdrop() from the setting and all that
+  // overrides it, written as data-fieldmap for the CSS. The attributes
+  // applyPrefs() sets, the system's reduced motion, the tab and where the
+  // keyboard is all change outside Svelte, so each one bumps `looked`.
+  let looked = $state(0);
+  const look = () => looked++;
+
+  onMount(() => {
+    const watching = new MutationObserver(look);
+    watching.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-motion', 'data-backdrop'] });
+    const reduced = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+    reduced?.addEventListener?.('change', look);
+    document.addEventListener('visibilitychange', look);
+    document.addEventListener('focusin', look);
+    document.addEventListener('focusout', look);
+
+    return () => {
+      watching.disconnect();
+      reduced?.removeEventListener?.('change', look);
+      document.removeEventListener('visibilitychange', look);
+      document.removeEventListener('focusin', look);
+      document.removeEventListener('focusout', look);
+    };
+  });
+
+  const fieldmap = $derived.by(() => {
+    void looked;
+    const html = document.documentElement;
+
+    return resolveBackdrop({
+      setting: html.getAttribute('data-backdrop'),
+      theme: html.getAttribute('data-theme') ?? 'dark',
+      mode: studio.mode,
+      ambient,
+      motion: motionNow(),
+      waiting: modeWaiting.length,
+      hidden: document.visibilityState === 'hidden',
+      terminalFocused: !!document.activeElement?.closest('.xterm'),
+    });
+  });
+
+  $effect(() => document.documentElement.setAttribute('data-fieldmap', fieldmap));
 
   /** The oldest question, wherever the current mode shows it, so no focus mode ever hides one. */
   function goWaiting(waiting: Waiting) {
@@ -267,6 +312,7 @@
 {#if studio.signedOut}
   <SignedOut />
 {:else}
+  <FieldMap shown={fieldmap} />
   <a class="skip" href="#main" onclick={(event) => { event.preventDefault(); document.getElementById('main')?.focus(); }}>Skip to the page</a>
   <SideRail {pages} {current} onsearch={() => (palette = true)}>
     {#snippet foot()}

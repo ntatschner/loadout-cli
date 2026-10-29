@@ -25,7 +25,6 @@ body { margin: 0; background: var(--ground); color: var(--ink); }
 .views button { min-height: 40px; padding: 0 18px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 12.5px; font-weight: 500; letter-spacing: .24em; text-transform: uppercase; cursor: pointer; }
 .views button[aria-pressed="true"] { background: var(--tint-picked-c); color: var(--ink-strong); box-shadow: inset 0 -2px 0 var(--accent); }
 .views button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.mapscope { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 16px; }
 .sample { margin-top: 40px; font-size: 12.5px; color: var(--muted); }
 /* Lens */
 .lens { display: grid; grid-template-columns: minmax(0, 560px) minmax(0, 1fr); gap: 32px 40px; align-items: start; }
@@ -164,6 +163,10 @@ body { margin: 0; background: var(--ground); color: var(--ink); }
 .shelf > .calm { margin: 10px 10px 0; font-size: 12.5px; color: var(--muted); }
 .shelf a .x { grid-column: 1; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
 .shelf a .ls-sig { grid-row: 1 / span 2; grid-column: 2; }
+.shelf a .ls-tag { grid-column: 1; justify-self: start; }
+.shelf > .backfill { display: flex; justify-content: flex-end; margin: 2px 0 6px; }
+.backfill-found { margin: 10px 0 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; max-height: 50vh; overflow: auto; }
+.backfill-found .skipped { color: var(--muted); }
 .shelf a .ls-sig b { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 .shelf a.place .t { color: var(--accent-text); font-size: 13.5px; }
 .work { display: grid; gap: 16px; min-width: 0; }

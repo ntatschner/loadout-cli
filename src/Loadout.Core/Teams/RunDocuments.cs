@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using Loadout.Core.Diagnostics;
 using Loadout.Core.Security;
 using Loadout.Models;
 using Loadout.Models.Results;
@@ -228,6 +229,7 @@ public static class RunDocuments
 
         try
         {
+            using var trace = ReadLedger.Begin(path);
             var about = new FileInfo(path);
 
             if (about.Length > Most)

@@ -66,6 +66,19 @@ public sealed class RunOwnershipTests : IDisposable
     }
 
     [Fact]
+    public void Read_while_held_names_the_holder_from_beside_the_lock()
+    {
+        // The lock cannot be read while it is held, so a run that has gone
+        // silent under a live process could not say which process to end.
+        using var held = Ownership().Take(_run).Value!;
+
+        var reading = Ownership().Read(_run);
+
+        reading.Should().BeOfType<OwnerReading.Held>()
+            .Which.Owner.Should().BeEquivalentTo(new { ProcessId = 777, StartedAt = _processes.CurrentProcessStartedAt, Machine = Environment.MachineName });
+    }
+
+    [Fact]
     public void Read_after_release_reports_free_with_the_owner()
     {
         var ownership = Ownership();

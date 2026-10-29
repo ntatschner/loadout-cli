@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Loadout.Core.Diagnostics;
 
 namespace Loadout.Core.Statusline;
 
@@ -86,6 +87,7 @@ public static class TranscriptCache
     {
         try
         {
+            using var trace = ReadLedger.Begin(cache);
             return File.Exists(cache) ? JsonSerializer.Deserialize<Entry>(File.ReadAllText(cache), Json) is { Reading: not null } entry ? entry : null : null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or NotSupportedException)

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Loadout.Core.Diagnostics;
 using Loadout.Core.Transcripts;
 using Loadout.Models.Results;
 using Loadout.Platform.Abstractions;
@@ -196,6 +197,7 @@ internal sealed class ClaudeUsageHistory : IUsageHistory
 
         try
         {
+            using var trace = ReadLedger.Begin(file.FullName);
             using var reader = new StreamReader(file.OpenRead());
 
             while (await reader.ReadLineAsync(ct).ConfigureAwait(false) is { } line)

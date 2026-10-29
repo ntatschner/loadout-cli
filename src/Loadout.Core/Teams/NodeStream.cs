@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Loadout.Core.Diagnostics;
 using Loadout.Core.Security;
 using Loadout.Models;
 using Loadout.Models.Results;
@@ -155,6 +156,7 @@ public static class NodeStream
         try
         {
             // Shared, because the node may still be writing to it.
+            using var trace = ReadLedger.Begin(path);
             using var file = new FileStream(
                 path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
 
@@ -231,6 +233,7 @@ public static class NodeStream
 
         try
         {
+            using var trace = ReadLedger.Begin(path);
             using var file = new FileStream(
                 path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
 

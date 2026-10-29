@@ -5,6 +5,7 @@ using Loadout.Core.Tasks;
 using Loadout.Core.Teams;
 using Loadout.Core.Workspace;
 using Loadout.Models;
+using Loadout.Models.Delivery;
 using Loadout.Models.Results;
 using Loadout.Models.Tasks;
 using Loadout.Models.Teams;
@@ -47,6 +48,8 @@ public sealed class TeamQueueDriver
     private readonly IProcessInspector _processes;
     private readonly IRepositoryHost _host;
     private readonly IPullRequestReader _pulls;
+    private readonly ILandingService _landings;
+    private readonly IDeliveryService _delivery;
     private readonly IWorkspaceManager _workspace;
     private readonly IPlatformPaths _paths;
     private readonly TimeProvider _time;
@@ -62,6 +65,8 @@ public sealed class TeamQueueDriver
         IProcessInspector processes,
         IRepositoryHost host,
         IPullRequestReader pulls,
+        ILandingService landings,
+        IDeliveryService delivery,
         IWorkspaceManager workspace,
         IPlatformPaths paths,
         TimeProvider time)
@@ -76,6 +81,8 @@ public sealed class TeamQueueDriver
         _processes = processes;
         _host = host;
         _pulls = pulls;
+        _landings = landings;
+        _delivery = delivery;
         _workspace = workspace;
         _paths = paths;
         _time = time;
@@ -415,6 +422,14 @@ public sealed class TeamQueueDriver
             {
                 reason = $"Met its done-when on branch {run.Branch}, but the {kind} could not be opened: {run.Reason}";
             }
+
+            var summary = run.RunId.Length > 0 && _journal.Summarise(run.RunId) is { Succeeded: true } read ? read.Value : null;
+
+            // Kept rather than made a reason to stop: the pull request and the
+            // task matter more than the list, and a run that cannot be written
+            // down still lands.
+            await _landings.RecordAsync(run.Project, Landings(team, run, choice.Mode, reason, summary), ct)
+                .ConfigureAwait(false);
         }
         else
         {
@@ -443,6 +458,76 @@ public sealed class TeamQueueDriver
             one.Reason = run.Reason;
             one.Landed = true;
         }, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// What a met run leaves to land: its own branch, as its pull request left
+    /// it, and every node branch that was not merged into it, pending.
+    /// </summary>
+    /// <remarks>
+    /// Only the run's own branch gets a pull request, because that is where
+    /// the gate merged the nodes' work and so what the run delivers. A node
+    /// branch the gate did not take is still somebody's work, and is kept in
+    /// the list until a person decides what to do with it rather than being
+    /// opened as a second pull request nobody asked for.
+    /// </remarks>
+    /// <param name="team">The team whose queue ran it.</param>
+    /// <param name="run">The run.</param>
+    /// <param name="mode">The pull request mode it followed.</param>
+    /// <param name="why">What happened to its own branch, in a line.</param>
+    /// <param name="summary">The run's journal, read back, or null when it could not be.</param>
+    internal static IReadOnlyList<BranchLanding> Landings(
+        string team, QueueRun run, PullRequestMode mode, string why, RunSummary? summary)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+
+        var landings = new List<BranchLanding>();
+
+        if (run.Branch.Length > 0)
+        {
+            landings.Add(new BranchLanding
+            {
+                Branch = run.Branch,
+                Team = team,
+                RunId = run.RunId,
+                Task = run.Task,
+                State = run.PullRequest.Length == 0
+                    ? LandingState.Pending
+                    : mode == PullRequestMode.Draft ? LandingState.Draft : LandingState.Ready,
+                PullRequest = run.PullRequest,
+                Why = why,
+            });
+        }
+
+        if (summary is null)
+        {
+            return landings;
+        }
+
+        foreach (var node in summary.Nodes)
+        {
+            if (node.Branch is not { Length: > 0 } branch
+                || string.Equals(branch, run.Branch, StringComparison.Ordinal)
+                || summary.Merged.Contains(branch, StringComparer.Ordinal))
+            {
+                continue;
+            }
+
+            landings.Add(new BranchLanding
+            {
+                Branch = branch,
+                Team = team,
+                RunId = run.RunId,
+                Node = node.Node,
+                Task = run.Task,
+                State = LandingState.Pending,
+                Why = run.Branch.Length > 0
+                    ? $"Not merged into {run.Branch}, so not part of the run's pull request."
+                    : "Not merged by the run.",
+            });
+        }
+
+        return landings;
     }
 
     /// <summary>
@@ -565,7 +650,26 @@ public sealed class TeamQueueDriver
                 var number = Number(run.PullRequest);
                 var task = tasks.Succeeded ? TaskRuns.Find(run.Task, tasks.Value!) : null;
 
-                if (number is { } n && merged.Value!.Any(one => one.Number == n) && task is { State: TaskState.Blocked })
+                var isMerged = number is { } n && merged.Value!.Any(one => one.Number == n);
+
+                if (isMerged)
+                {
+                    await _landings.RecordAsync(
+                        run.Project,
+                        [new BranchLanding
+                        {
+                            Branch = run.Branch,
+                            Team = team,
+                            RunId = run.RunId,
+                            Task = run.Task,
+                            State = LandingState.Merged,
+                            PullRequest = run.PullRequest,
+                            Why = $"Its pull request was merged: {run.PullRequest}",
+                        }],
+                        ct).ConfigureAwait(false);
+                }
+
+                if (isMerged && task is { State: TaskState.Blocked })
                 {
                     await _tasks.DeclareAsync(
                         run.Project, run.Task, TaskState.Done, $"team {team} queue",
@@ -582,8 +686,7 @@ public sealed class TeamQueueDriver
     }
 
     /// <summary>A pull request's number from its address, or null.</summary>
-    internal static int? Number(string url) =>
-        url.TrimEnd('/').Split('/').LastOrDefault() is { } last && int.TryParse(last, out var number) ? number : null;
+    internal static int? Number(string url) => DeliveryService.Number(url);
 
     /// <summary>
     /// One look at every team's queue: settle what ran, notice merges, and in
@@ -625,6 +728,13 @@ public sealed class TeamQueueDriver
             var opened = window is null ? null : ScheduleService.Window(window, _time.GetUtcNow());
 
             await WindowAsync(team, window, opened, firing, say, tell, ct).ConfigureAwait(false);
+        }
+
+        // Every landing with a pull request, not only a queued run's own: a
+        // node branch opened from the waiting list has no queue run to check.
+        if (await _delivery.MergedAsync(ct).ConfigureAwait(false) is > 0 and var landed)
+        {
+            say($"{landed} waiting branch(es) merged");
         }
     }
 

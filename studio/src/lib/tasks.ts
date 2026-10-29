@@ -17,6 +17,8 @@ export interface Task {
   project?: string | null;
   /** Whether it has a full description beyond its title, which 'task show' reads. */
   hasDetail?: boolean;
+  /** 'missing' for open or blocked work without a done-when, 'proposalWaiting' when one is proposed for you to confirm. */
+  mark?: string | null;
 }
 
 /** One change of state, as 'task show' gives it. */

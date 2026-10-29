@@ -98,6 +98,19 @@ public sealed class TaskItem
     /// </remarks>
     public List<string> DoneWhen { get; set; } = [];
 
+    /// <summary>
+    /// A done-when a backfill pass asked an agent for and nobody has confirmed
+    /// yet, or what went wrong asking; null when there is neither.
+    /// </summary>
+    /// <remarks>
+    /// Apart from <see cref="DoneWhen"/> because nothing unconfirmed may become
+    /// a finish line: a team's queue reads <see cref="DoneWhen"/>, and an
+    /// unattended run is held to it. It goes when the gap does, so declaring
+    /// the task doing, done or dropped, or writing a done-when by hand, throws
+    /// it away; going from blocked back to open keeps it.
+    /// </remarks>
+    public TaskProposal? Proposal { get; set; }
+
     /// <summary>Every state declared for it, oldest first, added to and never rewritten.</summary>
     /// <remarks>
     /// <see cref="DeclaredBy"/> and <see cref="DeclaredUtc"/> stay as the latest
@@ -130,6 +143,27 @@ public sealed class TaskEvent
 
     /// <summary>What else changed, when something did. Empty is normal.</summary>
     public string Reason { get; set; } = string.Empty;
+}
+
+/// <summary>A done-when proposed for a task and held until a person confirms or edits it.</summary>
+/// <remarks>
+/// Either conditions waiting for review or a failure to retry, never both: a
+/// pass that gets an answer clears the failure, and a pass skips a task whose
+/// conditions are waiting.
+/// </remarks>
+public sealed class TaskProposal
+{
+    /// <summary>The conditions proposed, or empty when asking for them went wrong.</summary>
+    public List<string> DoneWhen { get; set; } = [];
+
+    /// <summary>The agent's sentence or two on how it chose them.</summary>
+    public string Why { get; set; } = string.Empty;
+
+    /// <summary>When they were proposed, or when asking last went wrong.</summary>
+    public DateTimeOffset Utc { get; set; }
+
+    /// <summary>What went wrong the last time a pass asked, or empty when nothing did.</summary>
+    public string Error { get; set; } = string.Empty;
 }
 
 /// <summary>Where a task came from, and when it left.</summary>

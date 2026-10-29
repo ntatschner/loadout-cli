@@ -95,8 +95,9 @@ internal static partial class DashboardActions
             // Studio's own settings, each a config key of the same name. The
             // page only ever sends these names; anything else falls through
             // to "no such setting" below.
-            "studio-halo" or "studio-layout-lens" or "studio-layout-map" or "studio-map-scope" or "studio-theme" or "studio-accent"
-                or "studio-density" or "studio-motion" or "studio-idle-after"
+            "studio-halo" or "studio-layout-lens" or "studio-layout-map" or "studio-theme" or "studio-accent"
+                or "studio-density" or "studio-motion" or "studio-backdrop" or "studio-idle-after"
+                or "studio-map-kinds" or "studio-map-states" or "studio-map-projects"
                 => ("config set", [change.What, change.Value ?? string.Empty]),
 
             // A list's saved query, which can start with a minus, so it goes
