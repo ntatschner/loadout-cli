@@ -493,11 +493,39 @@ export declare function ValueReport(o: { head?: string | Node; groups: { name: s
 /* ---------- The field map (stage 11) ---------- */
 
 export type Backdrop = "plain" | "map" | "map-animated";
-/** Set data-backdrop on <html>: the plain ground, the field map still (the default), or the field map with its scan. */
+/** Set data-backdrop on <html>: the studio-backdrop setting as kept. Plain (the default, and what anything unknown means), the field map still, or animated. What shows is resolveBackdrop()'s. */
 export declare function setBackdrop(value: Backdrop, el?: Element): void;
 export declare const BACKDROPS: Backdrop[];
-/** The embossed survey map behind every page: contour lines (every fifth heavier), grid squares and map references, the same map on every visit. Still unless data-backdrop is map-animated and motion is full and the mode isn't Pure; hidden for plain and both high-contrast themes. Mount once. */
-export declare function FieldMap(o?: { seed?: number; scale?: number; levels?: number; cell?: number; square?: number; host?: HTMLElement; width?: number; height?: number }): { el: HTMLElement; redraw: () => void; destroy: () => void };
+/** What is behind the page right now, written as data-fieldmap on <html>: the plain ground, the still map, or the map with its scan. */
+export type FieldMapShown = "plain" | "map" | "map-scan";
+export interface BackdropInputs {
+  /** The studio-backdrop setting as kept (data-backdrop); anything unknown is plain. */
+  setting?: string | null;
+  theme?: string;
+  /** The Studio mode: default, terminals, teams, minimal or pure. */
+  mode?: string;
+  /** Whether Ambient is on. */
+  ambient?: boolean;
+  /** The motion in force, the system's reduced motion included: motion(). */
+  motion?: "full" | "reduced" | "none";
+  /** How many things wait on you: the ModeBar's count. */
+  waiting?: number;
+  /** Whether the tab is hidden. */
+  hidden?: boolean;
+  /** Whether a terminal has the keyboard. */
+  terminalFocused?: boolean;
+}
+/** The one place that decides what shows. In order: high contrast, Pure Focus and Ambient are plain; then the setting; map-animated scans only under full motion while nothing waits, the tab is visible and no terminal has focus, and is the still map otherwise. */
+export declare function resolveBackdrop(o: BackdropInputs): FieldMapShown;
+/** Writes resolveBackdrop()'s answer as data-fieldmap on <html>, the one attribute the CSS keys off. Unknown values are plain. */
+export declare function setFieldmap(shown: FieldMapShown, el?: Element): void;
+/** The embossed survey map behind every page: contour lines (every fifth heavier), grid squares and map references, the same map on every visit. The CSS shows it from data-fieldmap alone (setFieldmap()): hidden under plain, still under map, scanning under map-scan. It draws only when first wanted, after the first paint, and 250ms after a resize. Mount once. */
+export declare function FieldMap(o?: {
+  /** What resolveBackdrop() says shows. Leave it out to follow data-fieldmap on <html>. */
+  shown?: FieldMapShown;
+  seed?: number; scale?: number; levels?: number; cell?: number; square?: number;
+  host?: HTMLElement; width?: number; height?: number;
+}): { el: HTMLElement; redraw: () => void; set: (shown: FieldMapShown) => void; destroy: () => void };
 
 /* ---------- The office (stage 12) ---------- */
 
