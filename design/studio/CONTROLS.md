@@ -1,10 +1,10 @@
 # Studio: commands as controls
 
-Studio's pages offer their commands as **drawers** today (0.103.1): 105 `CommandAction`s, each a closed line that opens into a form built from the command catalogue. This round replaces every one of them with a **control made for that command**: a form with words for its fields, a list whose members carry their own buttons, a setting changed where it is shown, or a proper view of what a read returns. The pages stay as they are; only how they offer commands changes.
+Studio's pages offer their commands as **drawers** today (0.109.3): 105 `CommandAction`s, each a closed line that opens into a form built from the command catalogue. This round replaces every one of them with a **control made for that command**: a form with words for its fields, a list whose members carry their own buttons, a setting changed where it is shown, or a proper view of what a read returns. The pages stay as they are; only how they offer commands changes.
 
 This is one piece of work: five components, every page's drawers swapped for them page by page, a fix to the task board, and the records. The last section, **Record it in Loadout**, writes records only and builds nothing else. Run it last.
 
-**Order.** This builds on `PAGES.md`, which is built (the six pages, by 0.85.1), and on the Teams places main has (0.103.1: Shared tools, Calls for help and the webhook, Blocked). It doesn't depend on `ROUND4.md`, `BACKGROUND.md` or `OFFICE.md`, and none of them depends on it. If one of them is built first, its own controls follow this brief's patterns.
+**Order.** This builds on `PAGES.md`, which is built (the six pages, by 0.85.1), and on the Teams places main has (0.109.3: Shared tools, Calls for help and the webhook, Blocked). It doesn't depend on `ROUND4.md`, `BACKGROUND.md` or `OFFICE.md`, and none of them depends on it. If one of them is built first, its own controls follow this brief's patterns.
 
 **This replaces a decision.** `PAGES.md` said "ActionDrawer replaces CommandAction's look, not its logic … fields from the command catalogue". That no longer holds: pages don't use drawers, and a control's fields are chosen and worded for its command. The Commands page keeps the catalogue-built form (`CommandForm`). Nothing else in `PAGES.md` changes.
 
@@ -104,7 +104,7 @@ All five follow the theme, density and motion settings. All five reflow to one c
 
 ## The task board, and button rows
 
-Main's task board hides a button's command until you point at it (`studio/src/styles/components.css`, the `.ls-tboard .task .moves .ls-cmd` rules, about lines 1525 to 1527 on 0.103.1). Showing it pushes everything under it down. Replace that with **one reserved line** under each task's buttons:
+Main's task board hides a button's command until you point at it (`studio/src/styles/components.css`, the `.ls-tboard .task .moves .ls-cmd` rules, about lines 1525 to 1528 on 0.109.3). Showing it pushes everything under it down. Replace that with **one reserved line** under each task's buttons:
 
 ```css
 .ls-tboard .task .moves, .ls-tboard .task .go { position: relative; padding-bottom: 20px; }
@@ -354,7 +354,7 @@ Tell me what each step did, and confirm that nothing was started: no session, ru
 
 # Every drawer, and what it becomes
 
-The 105 `CommandAction`s on main's pages (0.103.1), in file order. "Fixed" means the page already knows it and shows it as a fact. "Text only" means the command prints words, not JSON, when it succeeds.
+The 105 `CommandAction`s on main's pages (0.109.3), in file order. "Fixed" means the page already knows it and shows it as a fact. "Text only" means the command prints words, not JSON, when it succeeds.
 
 | # | Page in `studio/src/pages/` | Command | Becomes | In place | Under More options | Shows |
 |---|---|---|---|---|---|---|
@@ -384,11 +384,11 @@ The 105 `CommandAction`s on main's pages (0.103.1), in file order. "Fixed" means
 | 24 | `Context.svelte:456` | `voice time set` | SettingRow (choice), one per surface | the preset or policy, Set it | – | adds --layer codebase when the codebase's is picked |
 | 25 | `Context.svelte:457` | `voice time unset` | SettingRow Clear it | on each row | – | – |
 | 26 | `Context.svelte:462` | `handoff` | ItemList | rows from `handoff <project> --list --json`; Read it (--show --name), Copy it (--clipboard --name); add: --name | – | Read it shows the document under the row (text only) |
-| 27 | `Ideas.svelte:821` | `idea refine` | ActionForm | id and list fixed | --model | a line: a round is running |
-| 28 | `Ideas.svelte:822` | `idea improve` | ActionForm | id, piece fixed; --request | – | a line: sent back |
-| 29 | `Ideas.svelte:823` | `idea move` | ActionForm | id fixed; --to a choice of projects, or the workspace-wide list (--to-global) | – | – |
-| 30 | `Ideas.svelte:824` | `idea remove` | ActionForm (danger, asks) | id and list fixed | – | a line, then back to Ideas (text only) |
-| 31 | `Ideas.svelte:865` | `idea dump add` | ActionForm | --text, the list (--project or --global) | file, --no-split, --model | a line, and the dump joins the list below |
+| 27 | `Ideas.svelte:864` | `idea refine` | ActionForm | id and list fixed | --model | a line: a round is running |
+| 28 | `Ideas.svelte:865` | `idea improve` | ActionForm | id, piece fixed; --request | – | a line: sent back |
+| 29 | `Ideas.svelte:866` | `idea move` | ActionForm | id fixed; --to a choice of projects, or the workspace-wide list (--to-global) | – | – |
+| 30 | `Ideas.svelte:867` | `idea remove` | ActionForm (danger, asks) | id and list fixed | – | a line, then back to Ideas (text only) |
+| 31 | `Ideas.svelte:908` | `idea dump add` | ActionForm | --text, the list (--project or --global) | file, --no-split, --model | a line, and the dump joins the list below |
 | 32 | `Memory.svelte:183` | `memory delete` | ActionForm (danger) | topic and project fixed; preview with --dry-run, act with --yes after asking | – | facts and what links to it, from `--json` |
 | 33 | `Memory.svelte:215` | `memory write` | ActionForm | topic, --fact one a line (project fixed) | --description, --kind, --scope, --separate | a line: recorded |
 | 34 | `Memory.svelte:216` | `memory reindex` | ActionRow | Rebuild it | – | a line (text only) |
@@ -446,20 +446,20 @@ The 105 `CommandAction`s on main's pages (0.103.1), in file order. "Fixed" means
 | 86 | `Spend.svelte:279` | `usage` | Readout (table) and ActionForm (report) | --by, --days, --project; the report: --format | the report: --by, --days | the table from `--json`; the report as Markdown or CSV |
 | 87 | `Spend.svelte:280` | `spend refresh` | ActionForm | --project | – | the warnings, from `--json` |
 | 88 | `TeamPage.svelte:150` | `team capabilities` | Readout (table) | – | – | id, what it is, and whether it asks first, from `--json` |
-| 89 | `Teams.svelte:732` | `team blocked show` | Readout (document), opened from each blocked run's row | RUN fixed | – | how it ended, what stopped it, how far it got, and the suggested action |
-| 90 | `Teams.svelte:764` | `tools show` | ItemList row action (Details) | – | – | from `--json` |
-| 91 | `Teams.svelte:765` | `tools health` | ItemList row action (Health) | – | – | from `--json` |
-| 92 | `Teams.svelte:766` | `tools audit` | Readout (table) | --tool, --since as a choice | – | from `--json` `entries[]` |
-| 93 | `Teams.svelte:767` | `tools submit` | ActionForm | --kind, --text, --tool | --from-run, --script, --summary, --capabilities | – |
-| 94 | `Teams.svelte:768` | `tools used` | ItemList row action opening an ActionForm | TOOL fixed; --outcome | --note, --run, --team | – |
-| 95 | `Teams.svelte:769` | `tools verify` | ActionForm, and TerminalOnly for --agree | DRAFT | --by | – |
-| 96 | `Teams.svelte:770` | `tools promote` | ActionForm | DRAFT, --because, --source | --owner, --kind, --summary, --capabilities | – |
-| 97 | `Teams.svelte:771` | `tools deprecate` | ItemList row action opening an ActionForm | TOOL fixed; --replacement or --reason | – | – |
-| 98 | `Teams.svelte:772` | `tools retire` | ItemList row action (danger, asks), on held tools | – | – | – |
-| 99 | `Teams.svelte:773` | `tools trust` | TerminalOnly; Stop trusting it (--revoke) is a row action | – | – | – |
-| 100 | `Teams.svelte:799` | `team notify set` | ActionForm | WHERE, --url, --chat | – | a line (text only) |
-| 101 | `Teams.svelte:800` | `team notify test` | ActionRow (Send a test) | – | – | a line (text only) |
-| 102 | `Teams.svelte:801` | `team notify clear` | ActionRow (Stop sending, danger, asks) | – | – | a line (text only) |
-| 103 | `Teams.svelte:802` | `team webhook enable` | TerminalOnly | It shows a token once: reading a secret back stays in a terminal | – | – |
-| 104 | `Teams.svelte:803` | `team webhook disable` | ActionRow (Turn it off, danger, asks) | – | – | a line (text only) |
+| 89 | `Teams.svelte:750` | `team blocked show` | Readout (document), opened from each blocked run's row | RUN fixed | – | how it ended, what stopped it, how far it got, and the suggested action |
+| 90 | `Teams.svelte:782` | `tools show` | ItemList row action (Details) | – | – | from `--json` |
+| 91 | `Teams.svelte:783` | `tools health` | ItemList row action (Health) | – | – | from `--json` |
+| 92 | `Teams.svelte:784` | `tools audit` | Readout (table) | --tool, --since as a choice | – | from `--json` `entries[]` |
+| 93 | `Teams.svelte:785` | `tools submit` | ActionForm | --kind, --text, --tool | --from-run, --script, --summary, --capabilities | – |
+| 94 | `Teams.svelte:786` | `tools used` | ItemList row action opening an ActionForm | TOOL fixed; --outcome | --note, --run, --team | – |
+| 95 | `Teams.svelte:787` | `tools verify` | ActionForm, and TerminalOnly for --agree | DRAFT | --by | – |
+| 96 | `Teams.svelte:788` | `tools promote` | ActionForm | DRAFT, --because, --source | --owner, --kind, --summary, --capabilities | – |
+| 97 | `Teams.svelte:789` | `tools deprecate` | ItemList row action opening an ActionForm | TOOL fixed; --replacement or --reason | – | – |
+| 98 | `Teams.svelte:790` | `tools retire` | ItemList row action (danger, asks), on held tools | – | – | – |
+| 99 | `Teams.svelte:791` | `tools trust` | TerminalOnly; Stop trusting it (--revoke) is a row action | – | – | – |
+| 100 | `Teams.svelte:817` | `team notify set` | ActionForm | WHERE, --url, --chat | – | a line (text only) |
+| 101 | `Teams.svelte:818` | `team notify test` | ActionRow (Send a test) | – | – | a line (text only) |
+| 102 | `Teams.svelte:819` | `team notify clear` | ActionRow (Stop sending, danger, asks) | – | – | a line (text only) |
+| 103 | `Teams.svelte:820` | `team webhook enable` | TerminalOnly | It shows a token once: reading a secret back stays in a terminal | – | – |
+| 104 | `Teams.svelte:821` | `team webhook disable` | ActionRow (Turn it off, danger, asks) | – | – | a line (text only) |
 | 105 | `quiet/QuietProjects.svelte:99` | `drift` | ActionForm | PROJECT fixed; preview with --fix --dry-run, act with --fix --yes after asking | – | what each fix changes |
