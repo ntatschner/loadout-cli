@@ -247,9 +247,18 @@ export declare function Spend(r: RunSummary): HTMLElement;
 /** One run in a list, with what it asks answered in place. */
 export declare function RunCard(o: { run: RunSummary; href?: string; gate?: GateOptions; reasons?: { text: string; clears: string }[]; actions?: HaloButtonOptions[];
   /** Whether it is getting closer: a ProgressLine under its facts. */
-  progress?: Parameters<typeof ProgressLine>[0] }): HTMLElement;
+  progress?: Parameters<typeof ProgressLine>[0];
+  /** What is known of the process driving it, beside its word in the Bad colour, as main's livenessOf words it: "not responding · pid 48213", "possibly not responding", "owner unreadable", "silent for an hour or more". Null or absent says nothing (live, finished). */
+  badge?: string | null;
+  /** Or the daemon's word for it, worded as badge is: "not-responding", "possibly-not-responding", "unreadable", "silent"; "live", "finished" or anything else says nothing. Ignored when badge is given. */
+  liveness?: string;
+  /** The driving process, named after "not responding" and "silent". */
+  pid?: number }): HTMLElement;
+/** A run's liveness as its badge words it (main's livenessOf), or null when there is nothing to say. */
+export declare function livenessOf(liveness: string | null | undefined, pid?: number | null): string | null;
 
-export type NeedReason = "asked" | "silent" | "quiet" | "budget" | "spent" | "stalled";
+/** A run's reasons, and a trigger rule's (approval, paused, stale, source) as main's NEED_REASONS has them. */
+export type NeedReason = "asked" | "silent" | "quiet" | "budget" | "spent" | "stalled" | "approval" | "paused" | "stale" | "source";
 /** Every reason a run wants you. Each clears itself; nothing is dismissed by hand. */
 export declare function NeedsYou(o: { items: { reason: NeedReason; run: string; goal: string; team?: string; href?: string; node?: string; quiet?: string; detail?: string; text?: string; clears?: string; gate?: GateOptions; actions?: HaloButtonOptions[] }[] }): HTMLElement;
 
@@ -270,10 +279,15 @@ export type JournalLine = [string, string, string?, string?, boolean?, number?];
 /** The five depths of a run, on keys 1 to 5. */
 export declare function RunDepths(o: {
   run: string; selected?: number; node?: string; keys?: boolean; onSelect?: (i: number) => void;
-  said?: { journal: JournalLine[]; nodes?: string[]; streams?: Record<string, JournalLine[]>; live?: Record<string, boolean>; say?: Omit<SayToNodeOptions, "run" | "node"> };
+  /** Journal lines as arrays or as stage 14's JournalEntry objects; drawn with main's Journal. */
+  said?: { journal: (JournalLine | JournalEntry)[]; nodes?: string[]; streams?: Record<string, (JournalLine | JournalEntry)[]>; live?: Record<string, boolean>; say?: Omit<SayToNodeOptions, "run" | "node"> };
   cost?: { numbers?: Parameters<typeof RunNumbers>[0]; exchanges?: [number, string, string, number, number, number, string][] };
+  /** No pairs says "No brief has gone out yet." */
   papers?: { summary?: string; pairs: { node: string; role?: string; brief: string; report?: string; instead?: string }[] };
-  changed?: { patches: Omit<PatchOptions, "run">[] };
+  /** A node whose diff could not be read gives error in place of its patch, said as "node: error". */
+  changed?: { patches: (Omit<PatchOptions, "run"> | { node: string; error: string })[] };
+  /** The run's goal: each patch's pull-request title placeholder. */
+  goal?: string;
   /** The fifth depth: what it delivered (see Outbox). */
   delivered?: Omit<Parameters<typeof Outbox>[0], "run">;
 }): { el: HTMLElement; select: (i: number) => void; showNode: (node: string) => void; unbind: () => void };
@@ -281,7 +295,7 @@ export declare function Journal(lines: JournalLine[]): HTMLElement;
 export declare function Exchanges(rows: [number, string, string, number, number, number, string][]): HTMLElement;
 export declare function Papers(p: { summary?: string; pairs: { node: string; role?: string; brief: string; report?: string; instead?: string }[] }): HTMLElement;
 
-export interface PatchOptions { run: string; node: string; branch?: string; base?: string; goal?: string; files?: [string, number, number][]; diff?: [" " | "+" | "-" | "@", string][]; unmeasured?: boolean; pr?: boolean; disabledReason?: string; onPr?: (o: { draft: boolean; title: string }) => void }
+export interface PatchOptions { run: string; node: string; branch?: string; base?: string; goal?: string; files?: [string, number, number][]; diff?: [" " | "+" | "-" | "@", string][]; unmeasured?: boolean; pr?: boolean; disabledReason?: string; /** Asked both ways, as main's onpr: dry true for Say what it would do. What it answers, or resolves to, is said as it is; nothing, and main's own words are. A rejection is said with a cross. */ onPr?: (o: { draft: boolean; title: string; dry: boolean }) => string | null | void | Promise<string | null | void> }
 /** A node's patch, file summary first, with Open a pull request. */
 export declare function Patch(o: PatchOptions): HTMLElement;
 
@@ -302,13 +316,19 @@ export interface SheetTeam { name: string; description: string; nodes: number; l
 /** Start a run, Make a team, or Run one on a schedule. el is the form; open() shows it as a sheet. */
 export declare function TeamSheet(o: { kind: "run" | "make" | "schedule"; teams: SheetTeam[]; projects: { name: string; path: string }[];
   /** The recorded tasks a run can be for (Start a run only): picking one adds --task <id> and fills the goal from its title and note. */
-  tasks?: { id: string; title: string; state: string; kind?: string; note?: string | null; project?: string; declared?: string }[]; projectDoneWhen?: Record<string, string[]>; preset?: Record<string, string>; daemon?: boolean; watchOnly?: boolean; onSubmit?: (command: string, values: Record<string, unknown>) => void }): { el: HTMLElement; command: () => string; open: () => ReturnType<typeof Dialog> };
+  tasks?: { id: string; title: string; state: string; kind?: string; note?: string | null; project?: string; declared?: string }[]; projectDoneWhen?: Record<string, string[]>; preset?: Record<string, string>; daemon?: boolean; watchOnly?: boolean;
+  /** Runs it. What it answers, or resolves to, is said after a tick; nothing, and main's words are ("Started. Its page opens as soon as the run is listed."). Throwing or rejecting says why with a cross. The sheet stays open to say it. */
+  onSubmit?: (command: string, values: Record<string, unknown>) => string | void | Promise<string | void> }): { el: HTMLElement; command: () => string; open: () => ReturnType<typeof Dialog> };
 /** Runs that start without you, and whether the daemon will fire them. */
-export declare function Schedules(o: { daemon: { running: boolean; paused?: boolean }; items: { name: string; team: string; goal: string; when: string; next?: string; autonomy?: string; usd?: string }[]; onRemove?: (name: string) => void; disabledReason?: string }): HTMLElement;
+export declare function Schedules(o: { daemon: { running: boolean; paused?: boolean }; items: { name: string; team: string; goal: string; when: string; next?: string; autonomy?: string; usd?: string;
+  /** Why it will not fire, where it is held (main: "held"), said last on its line. */ held?: string | null }[];
+  /** Answering false, or resolving to false, keeps the row. */ onRemove?: (name: string) => boolean | void | Promise<boolean | void>; disabledReason?: string }): HTMLElement;
 /** A remedy: what it is, this machine's rule for its kind, whether this script is trusted, and the requests waiting on you. */
 export declare function Remedy(o: { team: string; name: string; kind: string; what: string; assumes: string; proves: string; revision: number; by?: string; rule: "trusted" | "ask" | "never"; trust: "trusted" | "not trusted" | "changed since trusted"; requests?: { id: string; node: string; run: string; problem: string; why: string; asked?: string }[]; onRead?: () => void; onApprove?: (id: string, reason: string) => void; onRefuse?: (id: string, reason: string) => void; disabledReason?: string }): HTMLElement;
 /** The bin: put things back, empty it for good, and clear out runs. */
-export declare function Bin(o: { keptDays?: number; entries: { kind: "run" | "team"; name: string; what?: string; removed: string; left: number; size?: string }[]; onRestore?: (e: unknown) => void; onEmpty?: () => void; onPrune?: (command: string) => void; disabledReason?: string }): HTMLElement;
+export declare function Bin(o: { keptDays?: number; entries: { kind: "run" | "team"; name: string; what?: string; removed: string; left: number; size?: string }[]; /** Each may answer false, or resolve to false, where it was not done. */ onRestore?: (e: unknown) => boolean | void | Promise<boolean | void>; onEmpty?: () => boolean | void | Promise<boolean | void>;
+  /** Clear out runs. As main's onprune(prune, dry): with a second parameter it is asked for the dry run too, and what it answers (what would move) is said; a one-argument onPrune(command) is only called for the real one. The real command ends --yes. */
+  onPrune?: (command: string, dry: boolean, prune: { outcome: string; olderThan: string; keep: string }) => string | void | Promise<string | void>; disabledReason?: string }): HTMLElement;
 /** A value as a shell needs it. */
 export declare function shellQuote(value: string): string;
 

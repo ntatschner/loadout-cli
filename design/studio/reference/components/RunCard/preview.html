@@ -1,4 +1,4 @@
-<!-- @dsCard group="Teams" height=760 width=1100 subtitle="One run in a list: its state, its spend and its projection, and what it asks answered in place" -->
+<!-- @dsCard group="Teams" height=1280 width=1100 subtitle="One run in a list: its state, its spend and its projection, and what it asks answered in place" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -37,6 +37,12 @@
     actions: [{ label: "Hold after this round", cmd: "$ loadout team halt 20261017-1311-77e0 --pause" }, { label: "Stop after this round", kind: "danger", cmd: "$ loadout team halt 20261017-1311-77e0" }] }));
   c.appendChild(S.RunCard({ href: "#", run: { id: "20261016-2300-0b9a", goal: "Check the docs against the code", team: "docs-crew", project: "loadout-cli", posture: "autonomous", word: "done", round: 4, elapsed: "52 min", spent: 9.4, cap: 20 },
     actions: [{ label: "Run it again", cmd: "fills Start a run from it · starts nothing" }, { label: "Forget it", cmd: "$ loadout team runs remove 20261016-2300-0b9a" }] }));
+  /* What the daemon says of the process driving it: a badge as main's livenessOf words it, or liveness and pid for those words. Live and finished say nothing. */
+  c.appendChild(S.RunCard({ href: "#", liveness: "not-responding", pid: 48213, run: { id: "20261017-0950-5c1e", goal: "Find why the upload hangs on retry", team: "bug-hunt", project: "starstats", posture: "supervised", word: "running", round: 2, elapsed: "2 h 4 min", spent: 4.2, cap: 15 },
+    actions: [{ label: "Stop after this round", kind: "danger", cmd: "$ loadout team halt 20261017-0950-5c1e" }] }));
+  c.appendChild(S.RunCard({ href: "#", badge: "possibly not responding", run: { id: "20261017-1105-e41a", goal: "Speed up the test suite", team: "iterating-project", project: "starstats", posture: "supervised", word: "running", round: 6, elapsed: "1 h 35 min" } }));
+  c.appendChild(S.RunCard({ href: "#", liveness: "unreadable", run: { id: "20261016-1730-91aa", goal: "Tidy the changelog", team: "docs-crew", project: "loadout-cli", posture: "autonomous", word: "running", round: 1, elapsed: "3 h 10 min" } }));
+  c.appendChild(S.RunCard({ href: "#", liveness: "silent", pid: 51022, run: { id: "20261016-1015-3d7b", goal: "Release 0.66.0", team: "release-crew", project: "loadout-cli", posture: "supervised", word: "stalled", round: 3, elapsed: "5 h" } }));
 })();
 </script>
 </body>

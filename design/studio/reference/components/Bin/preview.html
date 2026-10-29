@@ -22,7 +22,9 @@
   document.getElementById("b").appendChild(S.Bin({ keptDays: 30, entries: [
     { kind: "run", name: "20260917-1116-ed59", what: "iterating-project · tidy the launcher", removed: "17 Sep", left: 2, size: "1.2 MB" },
     { kind: "run", name: "20261002-0930-41aa", what: "bug-hunt · find the flaky upload test", removed: "2 Oct", left: 15, size: "640 KB" },
-    { kind: "team", name: "quick-review", what: "yours · for loadout-cli", removed: "9 Oct", left: 22 }] }));
+    { kind: "team", name: "quick-review", what: "yours · for loadout-cli", removed: "9 Oct", left: 22 }],
+    /* As main: a dry run asks too, and what it answers is said; the real one moves them. */
+    onPrune: function (line, dry, p) { return dry ? "Would move 3 runs to the bin: 20260921-1012-4be0, 20260924-1630-a91c, 20260930-0815-77d2. Keeps 20 newer, and 1 that left a branch nothing merged." : "Cleared out 3 runs, to the bin."; } }));
 })();
 </script>
 </body>

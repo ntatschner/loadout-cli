@@ -21,7 +21,9 @@
   var S = window.LoadoutStudio;
   document.getElementById("p").appendChild(S.Patch({ run: "20261017-1402-ab3f", node: "implementer/1", branch: "team/20261017-1402-ab3f/implementer-1", base: "4e1d2a0", goal: "Add --since to loadout usage",
     files: [["src/Loadout.Cli/Commands/UsageCommand.cs", 18, 2], ["tests/Loadout.Tests/UsageSinceTests.cs", 41, 0]],
-    diff: [["@", "@@ src/Loadout.Cli/Commands/UsageCommand.cs"], [" ", "    [CommandOption(\"--json\")]"], ["+", "    [CommandOption(\"--since <DATE>\")]"], ["+", "    public DateOnly? Since { get; init; }"], [" ", ""], ["-", "    var entries = reader.Read();"], ["+", "    var entries = reader.Read().Where(e => settings.Since is null || e.Day > settings.Since);"]] }));
+    diff: [["@", "@@ src/Loadout.Cli/Commands/UsageCommand.cs"], [" ", "    [CommandOption(\"--json\")]"], ["+", "    [CommandOption(\"--since <DATE>\")]"], ["+", "    public DateOnly? Since { get; init; }"], [" ", ""], ["-", "    var entries = reader.Read();"], ["+", "    var entries = reader.Read().Where(e => settings.Since is null || e.Day > settings.Since);"]],
+    /* As main: asked both ways; what it answers is said, as the job's output. */
+    onPr: function (p) { return p.dry ? "✓ Dry run: would push team/20261017-1402-ab3f/implementer-1 to origin and open a " + (p.draft ? "draft " : "") + "pull request against main. Nothing was pushed." : "✓ Opened https://github.com/loadout/loadout-cli/pull/412" + (p.draft ? " as a draft." : "."); } }));
 })();
 </script>
 </body>
