@@ -69,6 +69,9 @@ public sealed class YamlHold : IDisposable
 /// </summary>
 public sealed class YamlStore
 {
+    /// <summary>What each file loaded as, by path and type, while its stamp is unchanged.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<(string Path, Type Type), (string Stamp, object Value)> Loaded = new();
+
     private readonly IFilePermissions _permissions;
 
     private readonly IDeserializer _deserializer = new DeserializerBuilder()
@@ -121,6 +124,16 @@ public sealed class YamlStore
     /// Loads a YAML file, returning the supplied default when it does not
     /// exist. A missing config file is a first-run condition, not an error.
     /// </summary>
+    /// <remarks>
+    /// What a file parses to is kept for the process and handed out as a copy
+    /// while the file's length and last-write time are unchanged, by the rule
+    /// <see cref="KeptFiles{T}"/> keeps: never trusted in the two seconds after
+    /// a write, and only kept when the file was the same after the read as
+    /// before it. The daemon builds services for every request and its loops
+    /// asked for the same unchanged files hundreds of times an hour. A type
+    /// <see cref="ModelCopy"/> cannot copy, or <see cref="Reading.SharedReaders"/>
+    /// turned off, reads the file every time.
+    /// </remarks>
     public async Task<OperationResult<T>> LoadAsync<T>(
         string path,
         Func<T> createDefault,
@@ -134,19 +147,36 @@ public sealed class YamlStore
                 return OperationResult<T>.Ok(createDefault());
             }
 
-            using var trace = ReadLedger.Begin(path);
-            var text = await File.ReadAllTextAsync(path, ct).ConfigureAwait(false);
+            var keep = Reading.SharedReaders.Enabled && ModelCopy.Supports(typeof(T));
+            var stamp = keep ? FileStamp.Of(path) : default;
 
-            if (string.IsNullOrWhiteSpace(text))
+            if (keep && stamp.Settled && Loaded.TryGetValue((path, typeof(T)), out var kept) && kept.Stamp == stamp.Text)
+            {
+                return OperationResult<T>.Ok(ModelCopy.Of((T)kept.Value));
+            }
+
+            T? value;
+
+            using (ReadLedger.Begin(path))
+            {
+                var text = await File.ReadAllTextAsync(path, ct).ConfigureAwait(false);
+
+                value = string.IsNullOrWhiteSpace(text) ? null : _deserializer.Deserialize<T>(text);
+            }
+
+            if (value is null)
             {
                 return OperationResult<T>.Ok(createDefault());
             }
 
-            var value = _deserializer.Deserialize<T>(text);
+            // Kept only when the file is as it was before it was read, so a
+            // write landing in between is never remembered under the older stamp.
+            if (keep && stamp.Exists && FileStamp.Of(path).Text == stamp.Text)
+            {
+                Loaded[(path, typeof(T))] = (stamp.Text, ModelCopy.Of(value));
+            }
 
-            return value is null
-                ? OperationResult<T>.Ok(createDefault())
-                : OperationResult<T>.Ok(value);
+            return OperationResult<T>.Ok(value);
         }
         catch (YamlException ex)
         {
