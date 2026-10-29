@@ -180,7 +180,7 @@ public sealed class BackfillContractCommand : AsyncCommand<BackfillContractComma
 
             if (item.LastFailure is { } failure)
             {
-                output.WriteLine($"        [dim]last attempt failed:[/] {Markup.Escape(failure)}");
+                output.WriteLine($"        [dim]last attempt failed:[/] {Shown.Safely(failure)}");
             }
         }
 
@@ -195,7 +195,7 @@ public sealed class BackfillContractCommand : AsyncCommand<BackfillContractComma
         {
             if (result.Error is { } error)
             {
-                output.WriteLine($"[red]![/] {Markup.Escape(Named(result.Item))}: {Markup.Escape(error)} The next pass tries it again.");
+                output.WriteLine($"[red]![/] {Markup.Escape(Named(result.Item))}: {Shown.Safely(error)} The next pass tries it again.");
             }
             else if (result.Item.Kind == BackfillKind.Idea)
             {

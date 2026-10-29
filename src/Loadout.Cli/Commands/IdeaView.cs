@@ -278,7 +278,7 @@ internal static class IdeaView
             {
                 output.WriteLine(
                     $"  [yellow]missing:[/] [dim]the last backfill pass, {unfilled.Utc:yyyy-MM-dd}, could not fill it: "
-                    + $"{Markup.Escape(unfilled.Error)}[/]");
+                    + $"{Shown.Safely(unfilled.Error)}[/]");
             }
 
             output.WriteBlankLine();

@@ -1180,7 +1180,7 @@ public sealed class TaskShowCommand : AsyncCommand<TaskShowCommand.Settings>
 
         if (proposal.DoneWhen.Count == 0)
         {
-            Section(output, "Missing", $"It has no done-when. The last backfill pass, {proposal.Utc:yyyy-MM-dd}, could not propose one: {proposal.Error}");
+            Section(output, "Missing", $"It has no done-when. The last backfill pass, {proposal.Utc:yyyy-MM-dd}, could not propose one: {Shown.Plainly(proposal.Error)}");
 
             return;
         }
