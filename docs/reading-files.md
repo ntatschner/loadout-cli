@@ -86,13 +86,25 @@ about 7 MB each time it opened.
    1,300 times an hour and changed about once. They are now kept the same way
    as ideas and task lists. After: not measured. They were moved on the
    strength of the four above, and through the same store.
+6. **Every other YAML file loaded whole.** `config.yaml`, team queues and
+   schedules, idea dumps, delivery records, pack approvals and each project's
+   `project.yaml` came to about 1,300 loads an hour, hundreds per change.
+   What each parses to is now kept by the same rule and handed out as a copy.
+   A file whose type holds something that cannot be copied safely is read
+   every time, as before. After: not measured.
+7. **The journals, running sessions and Codex's history.** A day of the
+   trigger journal was read about 2,700 times per change, Codex's index 1,300,
+   a running session's entry 630 and a run's journal 41. The journals and the
+   index are now read once and then only where they grew; an entry is read
+   again only when it changes; and a Codex session's first line, which never
+   changes, is read once. After: not measured.
 
 The reading after the first four was taken on version 0.109.1: forty minutes
 of the same kind of use, with Studio open throughout. The daemon made about
 18,000 reads an hour, much as before, but they are now spread over small files
-nothing had kept rather than one large file read over and over. It read more
-bytes, nearly all of them Codex session files the operating system already
-had in memory and the one live transcript above.
+nothing had kept rather than one large file read over and over. It counted
+more bytes, nearly all of them Codex session files and the one live
+transcript above, but the trace overstated both, as the last section says.
 
 `LOADOUT_SHARED_READERS=0` puts every moved source back to reading the whole
 file every time. It is there so that a wrong answer from the sharing can be
@@ -100,12 +112,9 @@ told apart from one in the file, without waiting for a release.
 
 ## Left alone, for now
 
-- **Codex session files.** 442 MB read and twenty reads per change, but 69 ms
-  in all: the operating system already had them in memory. The bytes overstate
-  what they cost.
-- **The small, much-repeated files:** trigger journals, running sessions and
-  run journals. Each is read hundreds of times per change, and together they
-  took under two seconds in half an hour. They clear the bar and buy little.
+- **The few files read rarely.** The event feed's read marks, the memory
+  indexes, team definitions and the bin: each read a few dozen times an hour
+  at most, a few milliseconds in all. Nothing is gained by keeping them.
 
 ## Across processes
 
@@ -121,11 +130,13 @@ the others waits until a measurement says it would pay.
   afterwards, with two exceptions: `config.yaml`, `machines.yaml` and the
   project registry are timed until their YAML has been parsed, and a Claude
   Code transcript's first lines until each has been parsed.
-- Bytes, for Claude Code transcripts in the readings above. The trace counts
-  a file's whole length unless the code reading it says it read less, and
-  the transcript reader did not say so. It reads the first lines and the end,
-  so the 346 MB in the first table, and the 4 GB of one live transcript in
-  the reading after, were far more than it read. It now says what it reads.
+- Bytes, for Claude Code transcripts and Codex sessions in the readings
+  above. The trace counts a file's whole length unless the code reading it
+  says it read less, and neither reader said so. The transcript reader reads
+  the first lines and the end, and the Codex one only the first line, so the
+  346 MB and 442 MB in the first table, and the 4 GB of one live transcript in
+  the reading after, were far more than they read. Both now say what they
+  read.
 - A fair comparison of time. The trace times each read from start to finish,
   so a busy machine makes every read look slower. In the forty-minute reading
   after the changes, `config.yaml` took four times as long per read as before,
