@@ -219,7 +219,6 @@ body { background: var(--ground); color: var(--ink); }
 .trhead .topicname { margin: 0; }
 .jobhead { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-width: 0; }
 .jobhead .calm.small, .calm.small { font-size: 12.5px; overflow-wrap: anywhere; }
-.ls-liveness { font-size: 13px; color: var(--bad-text); box-shadow: inset 2px 0 0 var(--bad); padding: 0 8px; }
 .attention { margin: 0 0 12px; padding: 8px 12px; box-shadow: inset 3px 0 0 var(--needs); color: var(--ink); max-width: 80ch; }
 .rmain .src { margin: 6px 0 0; font-size: 12.5px; color: var(--muted); }
 .remteam { max-width: 420px; margin: 6px 0 18px; }
@@ -1501,7 +1500,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
   /* Whether a run is still going, as main's run.running: a run ends with an outcome, whatever its word. */
   function teamRunning(r) { var l = tline(r); if (l) { return l.stage !== 4; } return !r.ended; }
   /* What the daemon can say of the process driving a run, as a badge (main's livenessOf). */
-  function livenessOf(r) { return r.liveness === "not-responding" ? (r.owner ? "not responding · pid " + r.owner.pid : "not responding") : r.liveness === "possibly-not-responding" ? "possibly not responding" : r.liveness === "unreadable" ? "owner unreadable" : null; }
+  function livenessOf(r) { return S.livenessOf(r.liveness, r.owner ? r.owner.pid : null); }
   /* Nothing drives a run that still reads as running, so End run is all there is to do to it. */
   function unowned(r) { return teamRunning(r) && (r.liveness === "not-responding" || r.liveness === "possibly-not-responding"); }
   function runSummary(r) { return { id: r.id, goal: r.goal, team: r.team, project: r.project, posture: r.posture, word: runWord(r), round: r.round, rounds: r.roundLimit || undefined, elapsed: r.elapsed, spent: r.spent, cap: r.uncapped ? null : r.cap, uncapped: !!r.uncapped, projected: r.ended ? null : r.projected, rate: r.ended ? null : r.rate }; }
@@ -1539,17 +1538,14 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
       { label: "Stop after this round", kind: "danger", cmd: teamLines.stop(r.id), onPress: function () { teamStop(r); } }];
   }
   /* A run's card, with what the daemon says of its driver beside its word. */
-  function teamCard(r, acts) {
-    var c = S.RunCard({ href: "#run-" + r.id, run: runSummary(r), progress: progressOf(r), actions: acts });
-    var b = livenessOf(r), top = c.querySelector(".top");
-    if (b) { (top || c).appendChild(el("span", { "class": "ls-liveness", role: "status", text: b })); }
-    return c;
-  }
+  function teamCard(r, acts) { return S.RunCard({ href: "#run-" + r.id, run: runSummary(r), progress: progressOf(r), actions: acts, badge: livenessOf(r) }); }
+  /* The three sheets, as main's: each stays open to say how it went (what onSubmit answers); a run just started is followed to its page once it is listed, unless you have gone elsewhere. */
   function openSheet(kind, preset) {
-    S.TeamSheet({ kind: kind, teams: TEAMLIB, projects: TPROJ, projectDoneWhen: THELD, daemon: TEAMQ.daemon.running, tasks: allTasks(), preset: preset || {}, onSubmit: function (c, v) {
-      if (kind === "run") { var id = "20261017-" + (1600 + TR.length) + "-n" + TR.length + "ew"; TR.unshift({ id: id, goal: v.goal.trim(), team: v.team, project: v.project, posture: v.autonomy || "supervised", round: 1, roundLimit: v.rounds ? +v.rounds : 0, elapsed: "just now", spent: 0, cap: v.usd && v.usd !== "none" ? +v.usd : null, uncapped: v.usd === "none", projected: 0, rate: "$0.00 a minute", shape: [{ word: "running", lead: "reading the goal", nodes: [] }], crew: [{ node: "lead", role: "role.lead", model: "opus", word: "running", doing: "reading the goal", turns: 0, cost: 0 }], done: { criteria: v.done.split("\n").filter(function (s) { return s.trim(); }).map(function (s) { return { text: s.trim(), verdict: null }; }) } }); TV++; toasts.add({ level: "info", text: "Started. Its page opens as soon as the run is listed.", cmd: c }); setTimeout(function () { go("run-" + id); }, 900); }
-      if (kind === "make") { TEAMLIB.splice(TEAMLIB.length - 1, 0, { name: v.name, description: "Your team, written from " + (v.from || "an empty file") + ". Its nodes are in its file.", nodes: v.from ? (TEAMLIB.filter(function (t) { return t.name === v.from; })[0] || {}).nodes : 0, lead: "lead", posture: "supervised", origin: v.forProject ? "yours · " + v.project : "yours", from: v.forProject ? "project" : "workspace" }); TV++; toasts.add({ level: "info", text: "Written. $ loadout team edit " + v.name + " --path-only says where.", cmd: c }); setTimeout(function () { go("team-" + v.name); }, 60); }
-      if (kind === "schedule") { TS.scheds.push({ name: v.name, team: v.team, goal: v.goal.trim(), when: v.when === "at" ? "at " + v.at : v.when === "on" ? "on commit" : "every " + v.every, autonomy: v.autonomy || "supervised", usd: v.usd }); TV++; toasts.add({ level: "info", text: TEAMQ.daemon.running ? "Scheduled. The daemon fires it." : "Scheduled. It will not fire until the daemon is running.", cmd: c }); render(); }
+    var from = location.hash, dlg = null;
+    dlg = S.TeamSheet({ kind: kind, teams: TEAMLIB, projects: TPROJ, projectDoneWhen: THELD, daemon: TEAMQ.daemon.running, watchOnly: !!P.watchOnly, tasks: allTasks(), preset: preset || {}, onSubmit: function (c, v) {
+      if (kind === "run") { var id = "20261017-" + (1600 + TR.length) + "-n" + TR.length + "ew"; TR.unshift({ id: id, goal: v.goal.trim(), team: v.team, project: v.project, posture: v.autonomy || "supervised", round: 1, roundLimit: v.rounds ? +v.rounds : 0, elapsed: "just now", spent: 0, cap: v.usd && v.usd !== "none" ? +v.usd : null, uncapped: v.usd === "none", projected: 0, rate: "$0.00 a minute", shape: [{ word: "running", lead: "reading the goal", nodes: [] }], crew: [{ node: "lead", role: "role.lead", model: "opus", word: "running", doing: "reading the goal", turns: 0, cost: 0 }], done: { criteria: v.done.split("\n").filter(function (s) { return s.trim(); }).map(function (s) { return { text: s.trim(), verdict: null }; }) } }); TV++; setTimeout(function () { if (location.hash !== from) { return; } if (dlg) { dlg.close(); } go("run-" + id); }, 1600); return "Started. Its page opens as soon as the run is listed."; }
+      if (kind === "make") { TEAMLIB.splice(TEAMLIB.length - 1, 0, { name: v.name, description: "Your team, written from " + (v.from || "an empty file") + ". Its nodes are in its file.", nodes: v.from ? (TEAMLIB.filter(function (t) { return t.name === v.from; })[0] || {}).nodes : 0, lead: "lead", posture: "supervised", origin: v.forProject ? "yours · " + v.project : "yours", from: v.forProject ? "project" : "workspace" }); TV++; render(); return "Written. $ loadout team edit " + v.name + " --path-only says where."; }
+      if (kind === "schedule") { TS.scheds.push({ name: v.name, team: v.team, goal: v.goal.trim(), when: v.when === "at" ? "at " + v.at : v.when === "on" ? "on commit" : "every " + v.every, autonomy: v.autonomy || "supervised", usd: v.usd }); TV++; render(); return TEAMQ.daemon.running ? "Scheduled. The daemon fires it." : "Scheduled. It will not fire until the daemon is running."; }
     } }).open();
   }
   function teamsWaiting() { return TR.filter(function (r) { return runWord(r) === "waiting for you"; }).length; }
@@ -1582,7 +1578,6 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     stale: [{ rule: "dependency-nightly", subject: "clock at 02:00", agesOut: "2026-10-23T02:00:00Z" }, { rule: "dependency-nightly", subject: "clock at 02:00", agesOut: "2026-10-24T02:00:00Z" }],
     sources: { github: { problem: "GitHub refused the token in the credential store (401 Bad credentials), so no pull request or push events have been read since 06:12.", credential: "github-trigger" } }
   };
-  var TRIG_NEED = { approval: "needs approval", paused: "paused", stale: "held too long", source: "stopped" };
   function trigAnswer(verb, id, text) {
     return function () {
       if (verb === "approve") { TRIG.approvals.forEach(function (a) { if (a.id === id) { a.approved = true; } }); }
@@ -1606,12 +1601,6 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
       out.push({ reason: "stale", run: "", goal: rule, team: "trigger rule", href: "#teams", text: list.length + " event(s) held past the 24-hour window, the first about " + first.subject + ". Nothing is dropped before " + new Date(first.agesOut).toLocaleString() + ".", clears: "you release them, or they are dropped after a week", actions: [{ label: "Release", cmd: "loadout trigger release " + rule, onPress: trigAnswer("release", rule, rule + ": released the held events") }] }); });
     if (TRIG.sources.github && TRIG.sources.github.problem) { out.push({ reason: "source", run: "", goal: "GitHub", team: "trigger source", href: "#teams", text: TRIG.sources.github.problem, clears: "what stopped it is put right" }); }
     return out;
-  }
-  /* NeedsYou draws the four trigger reasons with the asked word; main's NEED_REASONS gives each its own, so the word is put right here. */
-  function needsWithWords(items) {
-    var box = S.NeedsYou({ items: items }), rows = box.querySelectorAll("li.need");
-    items.forEach(function (it, i) { var w = TRIG_NEED[it.reason], row = rows[i], old = row && row.querySelector(".top .ls-sig"); if (w && old) { old.replaceWith(S.Signal(w)); } });
-    return box;
   }
   function teamNeeds() {
     var needs = trigNeeds();
@@ -1658,7 +1647,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
 
   function renderTeams(main) {
     teamsHead(main, "teams");
-    main.appendChild(el("div", { "class": "tblock" }, [needsWithWords(teamNeeds())]));
+    main.appendChild(el("div", { "class": "tblock" }, [S.NeedsYou({ items: teamNeeds() })]));
     if (TEAMQ_BLOCKED.length) { var nb = TEAMQ_BLOCKED.length; main.appendChild(el("p", { "class": "calm", style: "margin: -10px 0 18px" }, [nb + " run" + (nb === 1 ? "" : "s") + " ended short of " + (nb === 1 ? "its" : "their") + " done-when and " + (nb === 1 ? "is" : "are") + " waiting on you: ", el("a", { href: "#teams-blocked", text: "see Blocked" }), "."])); }
     var read = teamQRead(TEAMQ.query), filtering = !!TEAMQ.query.trim() && read.kept !== null, shown = filtering ? read.kept : TR;
     var tb = S.ListToolbar({ noun: "runs", query: TEAMQ.query, shape: read.shape, shown: filtering ? shown.length : null, recorded: filtering ? TR.length : null, problem: read.problem, onchange: function (q) { TEAMQ.query = q; teamBump(); } });
@@ -1678,7 +1667,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     TEAMLIB.forEach(function (t) { tg.appendChild(S.TeamCard(Object.assign({}, t, { origin: teamOrigin(t), href: "#team-" + t.name, doneWhen: (t.doneWhen || []).length, onRun: function () { openSheet("run", { team: t.name }); }, onCopy: function () { openSheet("make", { from: t.name }); } }))); });
     tz.appendChild(tg); main.appendChild(tz);
     var sz = el("section", { "class": "tblock", "aria-labelledby": "z-sched" }, [zone("", "On a schedule", "z-sched"),
-      S.Schedules({ daemon: TEAMQ.daemon, items: TS.scheds.map(function (s) { return Object.assign({}, s, { autonomy: [s.autonomy, s.held].filter(Boolean).join(" · ") }); }), onRemove: function (n) { TS.scheds = TS.scheds.filter(function (s) { return s.name !== n; }); TV++; said(n + " will not fire again", "$ loadout team schedule remove " + n); } }),
+      S.Schedules({ daemon: TEAMQ.daemon, items: TS.scheds, disabledReason: teamWatch(), onRemove: function (n) { TS.scheds = TS.scheds.filter(function (s) { return s.name !== n; }); TV++; said(n + " will not fire again", "$ loadout team schedule remove " + n); } }),
       el("p", { "class": "calm", style: "margin-top: 10px; font-size: 12.5px" }, ["From ", el("code", { "class": "ls-cmd", text: "$ loadout team schedule list" }), "."])]);
     main.appendChild(sz);
     var qs = teamQueues(), shownQ = qs.filter(function (q) { return q.items.length || q.runs.length || q.settings.draftPullRequests || q.settings.prMode === "ready" || q.window || TEAMQ.queueing.indexOf(q.team) >= 0; }), unq = qs.filter(function (q) { return shownQ.indexOf(q) < 0; }).map(function (q) { return q.team; });
@@ -1692,12 +1681,38 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     }
     qz.appendChild(el("p", { "class": "calm", style: "margin-top: 10px; font-size: 12.5px" }, ["From ", el("code", { "class": "ls-cmd", text: "$ loadout team queue list <team>" }), "."]));
     main.appendChild(qz);
+    /* Waiting to land: one Landings kept across renders, so a squash message half written survives a reread. */
+    if (!TEAMQ_LAND) { TEAMQ_LAND = S.Landings({ landings: TEAMQ_LANDINGS, act: teamLandAct, disabledReason: teamWatch(), now: TEAMQ_NOW }); }
+    else { TEAMQ_LAND.set({ landings: TEAMQ_LANDINGS, disabledReason: teamWatch() }); }
+    main.appendChild(el("section", { "class": "tblock", "aria-labelledby": "tm-landing" }, [el("h2", { "class": "ls-zone", id: "tm-landing", text: "Waiting to land" }), el("div", { style: "max-width: 980px" }, [TEAMQ_LAND.el])]));
   }
+  /* The branches waiting to land, as 'loadout pr list --json' gives them: a queued run's own branch with its pull request, and each node branch its gate did not merge, pending. */
+  var TEAMQ_NOW = new Date("2026-10-17T15:00:00Z"), TEAMQ_LAND = null;
+  var TEAMQ_LANDINGS = [
+    { project: "starstats", branch: "team/20261016-1730-2bd4/implementer-1", state: "pending", team: "iterating-project", run: "20261016-1730-2bd4", node: "implementer-1", task: "charts-port", pullRequest: "", why: "its gate did not merge it: the run ran out of money first", created: "2026-10-16T19:34:00Z", mergeRequested: null, gone: false },
+    { project: "loadout-cli", branch: "queue/memory-import-notice", state: "ready", team: "iterating-project", run: "20261016-0100-a3f2", node: "", task: "memory-import-notice", pullRequest: "https://github.com/nigel/loadout-cli/pull/281", why: "the queued run's own branch", created: "2026-10-16T01:52:00Z", mergeRequested: null, gone: false },
+    { project: "starstats", branch: "team/20261016-2010-7f3c/implementer-1", state: "draft", team: "iterating-project", run: "20261016-2010-7f3c", node: "implementer-1", task: "daily-totals-index", pullRequest: "https://github.com/nigel/starstats/pull/214", why: "handed over: this team may not push", created: "2026-10-16T20:48:00Z", mergeRequested: null, gone: false },
+    { project: "loadout-cli", branch: "queue/readme-install", state: "ready", team: "docs-crew", run: "20261016-2200-6c0e", node: "", task: "readme-install", pullRequest: "https://github.com/nigel/loadout-cli/pull/279", why: "the queued run's own branch", created: "2026-10-16T23:10:00Z", mergeRequested: "2026-10-17T08:02:00Z", gone: false },
+    { project: "starstats", branch: "team/20261015-1105-9e21/implementer-2", state: "pending", team: "bug-hunt", run: "20261015-1105-9e21", node: "implementer-2", task: "", pullRequest: "", why: "its gate did not merge it", created: "2026-10-15T12:20:00Z", mergeRequested: null, gone: true }];
+  /* Runs 'loadout pr …' as a job, then reads the list again: opened, marked ready, or a squash-merge asked for. */
+  function teamLandAct(path, words, done) {
+    return new Promise(function (ok) { setTimeout(function () {
+      var one = TEAMQ_LANDINGS.filter(function (x) { return x.branch === words[0] && x.project === words[2]; })[0];
+      if (one && path === "pr open") { one.state = words.indexOf("--draft") >= 0 ? "draft" : "ready"; one.pullRequest = "https://github.com/nigel/" + one.project + "/pull/" + (215 + TEAMQ_LANDINGS.indexOf(one)); }
+      if (one && path === "pr ready") { one.state = "ready"; }
+      if (one && path === "pr merge") { one.mergeRequested = TEAMQ_NOW.toISOString(); }
+      said(done, "$ loadout " + path + " " + words.map(function (w) { return /\s/.test(w) ? S.shellQuote(w) : w; }).join(" "));
+      if (TEAMQ_LAND) { TEAMQ_LAND.set({ landings: TEAMQ_LANDINGS }); }
+      ok(true);
+    }, 500); });
+  }
+  /* Studio only watching: what main's Teams page says in place of each command it will not run. */
+  function teamWatch() { return P.watchOnly ? "Studio is only watching: type the command in a terminal" : undefined; }
   /* A team's origin, in main's words. */
   function teamOrigin(t) { return { pack: "from a pack", project: "this project’s", workspace: "yours" }[t.from] || "ships with Loadout"; }
   var DEPTHS = null;
   function sinceDepths(r) {
-    return { run: r.id, selected: TS.depth, node: TS.node, onSelect: function (i) { TS.depth = i; },
+    return { run: r.id, goal: r.goal, selected: TS.depth, node: TS.node, onSelect: function (i) { TS.depth = i; },
       said: { nodes: r.crew.map(function (c) { return c.node; }), live: {}, say: { state: "locked", onUnlock: function (p) { return p === "loadout"; } },
         journal: [["14:02", "started \u00b7 iterating-project on loadout-cli \u00b7 supervised", "", "run"], ["14:03", "the lead proposed 2 done-when; you changed one", "", "criteria"], ["14:05", "planner/1 briefed", "", "round 1"], ["14:09", "planner/1 reported: PLAN.md", "good", "report"], ["14:10", "implementer/1 and reviewer/1 briefed", "", "round 2"], ["14:11", "implementer/1 called Edit", "", "node", false, 6], ["14:24", "implementer/1 reported: commit a4f21c9", "good", "report"], ["14:27", "reviewer/1 asked to run dotnet format; you said yes", "needs", "asked"], ["14:31", "verifier/1 reported 2,843 passing, 2 flaky", "", "report"], ["14:33", "the lead asks whether to fix two flaky tests", "needs", "gate"]],
         streams: { "implementer/1": [["14:11", "Read src/Loadout.Cli/Commands/UsageCommand.cs", "", "tool"], ["14:12", "I'll add the option to the settings and filter in Execute.", "", "said"], ["14:13", "Explore: find every caller of UsageReader", "", "sub-agent", true], ["14:15", "Edit src/Loadout.Cli/Commands/UsageCommand.cs", "", "tool"], ["14:19", "Bash dotnet test --filter Usage", "", "tool"], ["14:23", "14 passed, 0 failed", "good", "tool"], ["14:24", "Committed a4f21c9.", "", "said"]] } },
@@ -1741,7 +1756,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
   }
   function plainDepths(r) {
     var refused = r.crew.reduce(function (a, c) { return a + (c.refused || 0); }, 0);
-    return { run: r.id, selected: TS.depth, onSelect: function (i) { TS.depth = i; },
+    return { run: r.id, goal: r.goal, selected: TS.depth, onSelect: function (i) { TS.depth = i; },
       said: { nodes: r.crew.map(function (c) { return c.node; }), journal: r.shape.map(function (s, i) { return ["", "round " + (i + 1) + ": " + s.lead, "", "round " + (i + 1)]; }), live: r.crew.reduce(function (m, c) { m[c.node] = teamRunning(r) && c.word === "running"; return m; }, {}), say: { state: TEAMQ.wiring.attach.set ? "locked" : "unset", onUnlock: function (p) { return p === "loadout"; }, onSend: function (m) { said("Sent to the node", "$ loadout team say " + r.id + " --node \u2026 --message \u2026"); } } },
       cost: { numbers: { rate: r.rate || "\u2014", spent: r.spent, cap: r.uncapped ? null : r.cap, projected: r.projected || r.spent, byRound: r.shape.map(function (s, i) { return ["Round " + (i + 1), 4 + i * 3]; }), byNode: r.crew.map(function (c) { return [c.node, c.turns * 2]; }),
         wrong: [["Refused", refused], ["Reports sent back", 0], ["Turns tried again", 0], ["Rounds with nothing asked", r.team === "bug-hunt" ? 2 : (r.attention || []).some(function (a) { return a.kind === "goingnowhere"; }) ? 1 : 0], ["Merge conflicts", 0]] },
@@ -1890,7 +1905,13 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
       offered: teamOffer(["carry-on", "requeue", "edit-requeue", "set-aside", "drop"]) }),
     teamBlocked({ id: "20261016-2010-7f3c", team: "iterating-project", project: "starstats", task: "daily-totals-index", goal: "Cache the daily totals query", kind: "handover", ended: "it handed over what only you can do", cost: 4.2, budget: 15, rounds: 3, merged: ["team/20261016-2010-7f3c/implementer-1"],
       suggested: { action: "set-aside", label: TEAMQ_ACT["set-aside"], reason: "Nothing left is the run's to do. It handed 2 criterion(s) to you, starting with: The index is in production. Tick each off on its page, or with 'loadout team handover 20261016-2010-7f3c --check 1', and once every one is ticked it is judged again. Set it aside only to file it without doing that.", rule: "handover" },
-      offered: teamOffer(["set-aside", "drop"]) })];
+      offered: teamOffer(["set-aside", "drop"]) }),
+    teamBlocked({ id: "20261017-0405-d71e", team: "iterating-project", project: "loadout-cli", task: "nightly-export", goal: "Move the nightly export to the new scheduler", kind: "stalled", ended: "stalled: the lead went silent twice and was given up on", cost: 5.2, budget: 15, rounds: 3, roundLimit: 6, unmerged: ["team/20261017-0405-d71e/implementer-1"],
+      suggested: { action: "carry-on", label: TEAMQ_ACT["carry-on"], reason: "Its lead went silent twice, so the run ended as stalled. No run before it on this task stalled, so a new run may get through: carry on and it starts where this one left off.", rule: "stalled" },
+      offered: teamOffer(["carry-on", "requeue", "edit-requeue", "set-aside", "drop"]) }),
+    teamBlocked({ id: "20261017-0615-4af0", team: "iterating-project", project: "starstats", task: "importer-retries", goal: "Add retries to the importer", kind: "unfinished", ended: "done, but implementer/2 went silent twice and was given up on", cost: 8.7, budget: 15, rounds: 4, roundLimit: 6, merged: ["team/20261017-0615-4af0/implementer-1"], unmerged: ["team/20261017-0615-4af0/implementer-2"],
+      suggested: { action: "set-aside", label: TEAMQ_ACT["set-aside"], reason: "It ended done, but implementer/2 got stuck and what it had is left unfinished on team/20261017-0615-4af0/implementer-2. Look at that branch; set it aside once nothing on it is wanted, or re-queue the task to finish it.", rule: "unfinished" },
+      offered: teamOffer(["set-aside", "requeue", "edit-requeue", "drop"]) })];
   function renderBlocked(main) {
     teamsHead(main, "teams-blocked", "Blocked");
     main.appendChild(el("p", { "class": "calm", text: "Runs that ended without meeting their done-when: blocked, failed, out of rounds or money, ended without saying, or whose process went away. Each has a suggestion and the reason for it; nothing happens until you confirm." }));
@@ -1921,11 +1942,14 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     main.appendChild(el("div", { style: "max-width: 900px" }, [S.Bin({ keptDays: 30, entries: TS.bin,
       onRestore: function (e) { TS.bin = TS.bin.filter(function (x) { return x !== e; }); TV++; said("Put back: " + e.name, e.kind === "run" ? "$ loadout team runs restore " + e.name : "$ loadout team restore " + e.name); },
       onEmpty: function () { TS.bin = []; TV++; said("The bin is empty", "$ loadout team bin empty --yes"); },
-      onPrune: function (line) {
+      disabledReason: teamWatch(),
+      /* Asked for the dry run too, as main's onprune(prune, dry): the dry run says what would move. */
+      onPrune: function (line, dry) {
         var m = /--outcome (\S+)/.exec(line), out = /--failed/.test(line) ? "failed" : m ? m[1] : "";
         var gone = TR.filter(function (r) { return !teamRunning(r) && r.ended !== "blocked" && (!out || r.ended === out) && !(r.handover && r.handover.branches.length); });
+        if (dry) { return gone.length ? "Would move " + gone.length + " run" + (gone.length === 1 ? "" : "s") + " to the bin: " + gone.map(function (r) { return r.id + " (" + r.ended + ")"; }).join(", ") + ". Nothing was moved." : "Nothing would move: no ended run matches."; }
         gone.forEach(function (r) { TS.bin.unshift({ kind: "run", name: r.id, what: r.team, removed: "17/10/2026", left: 30, size: "1.1 MB" }); });
-        TR = TR.filter(function (r) { return gone.indexOf(r) < 0; }); TV++; said("Cleared out, to the bin", "$ loadout team runs prune");
+        TR = TR.filter(function (r) { return gone.indexOf(r) < 0; }); TV++; said("Cleared out, to the bin", line);
       } })]));
   }
 
@@ -1973,7 +1997,7 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     var out = [];
     ST.lines.filter(function (l) { return l.kind === "session" && l.waiting; }).forEach(function (l) { out.push({ kind: "session", id: l.id, at: l.askedAt || 0, label: l.title + " needs approval" }); });
     TR.filter(function (r) { return runWord(r) === "waiting for you"; }).forEach(function (r) { var g = runGate(r); out.push({ kind: "run", id: r.id, at: r.line ? (tline(r).askedAt || 0) : -1, label: g ? g.question : r.goal }); });
-    TR.filter(function (r) { return runWord(r) === "stalled"; }).forEach(function (r) { out.push({ kind: "run", id: r.id, at: -2, stalled: true, label: r.goal + " has stalled: no done-when moved for " + r.stalled + " rounds" }); });
+    TR.filter(function (r) { return teamRunning(r) && runWord(r) === "stalled"; }).forEach(function (r) { out.push({ kind: "run", id: r.id, at: -2, stalled: true, label: r.goal + " has stalled: no done-when moved for " + r.stalled + " rounds" }); });
     return out.sort(function (a, b) { return a.at - b.at; });
   }
   function goWaiting(w) {
@@ -2353,9 +2377,6 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
     var w = teamsWaiting(), live = TR.filter(teamRunning).length;
     var grid = el("div", { "class": "tfocus" + (run || team ? " open" : "") });
     var board = S.RunBoard({ runs: boardRuns(), teams: boardTeams(), picked: run, team: team, onPick: function (id) { go("run-" + id); }, onTeam: function (n) { go("team-" + n); } });
-    /* Each row's rounds drawn by MiniLine, as main's board row does. */
-    var rows = boardRuns().slice().sort(function (a, b) { var k = function (x) { var f = S.signalOf(x.word).family; return f === "needs" ? 0 : f === "bad" ? 1 : f === "moving" ? 2 : 3; }; return k(a) - k(b); });
-    board.querySelectorAll("li.brow").forEach(function (li, i) { var b = rows[i], old = li.querySelector(".ls-mini"); if (!b || !old) { return; } var f = S.signalOf(b.word).family, going = f === "moving" || f === "needs" || b.word === "held after this round"; old.replaceWith(S.MiniLine({ rounds: b.rounds || [], end: !going, running: going }).el); });
     var left = el("div", { "class": "bcol" }, [el("div", { "class": "head", style: "margin-bottom: 14px" }, [el("div", {}, [el("h1", { text: "Teams" }), el("span", { "class": "fact" + (w ? " need" : ""), text: live + " live · " + (w ? w + " waiting on you" : "none waiting on you") })]), el("span", { "class": "grow" }),
       halo({ label: "Start a run", solid: true, size: "small", glyph: "▶", cmd: "opens the sheet · starts nothing yet", onPress: function () { openSheet("run"); } }, "tf-start")]),
       el("nav", { "class": "tsub", "aria-label": "Teams" }, [["teams", "Board"], ["teams-office", "Office"]].map(function (x) { return el("a", { href: "#" + x[0], "aria-current": x[0] === "teams" ? "page" : null, text: x[1] }); })),
@@ -3934,6 +3955,24 @@ pre.dumpshow { margin: 0; white-space: pre-wrap; font-family: var(--font-mono); 
       shape: [{ word: "done", lead: "listed every chart", nodes: [["reader/1", "done"]] }, { word: "done", lead: "ported the line charts", nodes: [["implementer/1", "done"]] }, { word: "done", lead: "ported the bar charts", nodes: [["implementer/1", "done"]] }, { word: "done", lead: "ported the maps", nodes: [["implementer/1", "done"]] }, { word: "limited", lead: "out of budget", nodes: [] }],
       crew: [{ node: "lead", role: "role.lead", model: "opus", word: "limited", doing: "out of budget", turns: 5, cost: 6.1 }, { node: "implementer/1", role: "role.implementer", model: "sonnet", word: "done", doing: "ported 14 of 18 charts", turns: 12, cost: 8.9 }],
       done: { by: "set by you", criteria: [{ text: "Every chart uses the new library", verdict: "unmet", meaning: "14 of 18 ported" }, { text: "The old library is removed", verdict: "not-attempted" }, { text: "Screenshots match", verdict: "met" }] } }
+  );
+  /* The silence watchdog (main 0.108): a run still held by its process but silent for an hour, named by its pid; a run whose lead went silent twice, ended as stalled; and a run whose worker got stuck, done but leaving an unfinished branch. */
+  TR.push(
+    { id: "20261017-0840-c2d9", goal: "Bring the CI images up to date", team: "iterating-project", project: "starstats", posture: "autonomous", round: 2, roundLimit: 6, elapsed: "6 h 20 min", spent: 4.4, cap: 20, projected: 4.6, rate: "$0.00 a minute",
+      liveness: "silent", owner: { pid: 51207, machine: "build-box", startedAt: "2026-10-17T08:40:00Z" },
+      shape: [{ word: "done", lead: "asked for an implementer", nodes: [["implementer/1", "done"]] }, { word: "running", lead: "asked the implementer again", nodes: [["implementer/1", "running"]] }],
+      crew: [{ node: "lead", role: "role.lead", model: "opus", word: "idle", doing: "waiting on implementer/1", turns: 2, cost: 1.3 }, { node: "implementer/1", role: "role.implementer", model: "sonnet", word: "running", doing: "nothing written for 1 h 12 min", turns: 7, cost: 3.1 }],
+      done: { by: "set by you", criteria: [{ text: "every CI image builds from the new base", verdict: null }, { text: "the suite passes on each image", project: true, verdict: null }] } },
+    { id: "20261017-0405-d71e", goal: "Move the nightly export to the new scheduler", team: "iterating-project", project: "loadout-cli", posture: "autonomous", round: 3, roundLimit: 6, elapsed: "1 h 34 min", spent: 5.2, cap: 15, ended: "stalled",
+      end: { word: "stalled", text: "Stalled: the lead went silent twice" },
+      shape: [{ word: "done", lead: "asked for a plan", nodes: [["planner/1", "done"]] }, { word: "done", lead: "asked for an implementer", nodes: [["implementer/1", "done"]] }, { word: "stalled", lead: "went silent, was stopped and tried once more, then went silent again", nodes: [] }],
+      crew: [{ node: "lead", role: "role.lead", model: "opus", word: "stuck", doing: "silent twice past its 20-minute quiet limit", turns: 3, cost: 2.4 }, { node: "planner/1", role: "role.planner", model: "sonnet", word: "done", doing: "wrote PLAN.md", turns: 2, cost: 0.5 }, { node: "implementer/1", role: "role.implementer", model: "sonnet", word: "done", doing: "committed 3b90e4f", turns: 8, cost: 2.3 }],
+      done: { by: "set by you", criteria: [{ text: "the nightly export runs from the new scheduler", verdict: "unmet" }, { text: "the old cron entry is gone", verdict: "not-attempted" }] } },
+    { id: "20261017-0615-4af0", goal: "Add retries to the importer", team: "iterating-project", project: "starstats", posture: "autonomous", round: 4, roundLimit: 6, elapsed: "2 h 2 min", spent: 8.7, cap: 15, ended: "done",
+      end: { word: "done", text: "The lead said done: 2 of 2 met" },
+      shape: [{ word: "done", lead: "asked for two implementers", nodes: [["implementer/1", "done"], ["implementer/2", "running"]] }, { word: "done", lead: "was told implementer/2 is stuck; carried on without it", nodes: [["implementer/2", "stuck"]] }, { word: "done", lead: "asked the verifier", nodes: [["verifier/1", "done"]] }, { word: "done", lead: "merged implementer/1", nodes: [] }],
+      crew: [{ node: "lead", role: "role.lead", model: "opus", word: "done", doing: "said done", turns: 4, cost: 2.6 }, { node: "implementer/1", role: "role.implementer", model: "sonnet", word: "done", doing: "committed 91d2c07", turns: 9, cost: 3.2 }, { node: "implementer/2", role: "role.implementer", model: "sonnet", word: "stuck", doing: "silent twice; its branch is unfinished", turns: 5, cost: 2.1 }, { node: "verifier/1", role: "role.verifier", model: "sonnet", word: "done", doing: "the importer suite passes", turns: 2, cost: 0.8 }],
+      done: { by: "set by you", criteria: [{ text: "an import that fails twice still lands", verdict: "met", evidence: ["verifier/1: ImportRetryTests"] }, { text: "the importer suite passes", project: true, verdict: "met" }] } }
   );
   function histOf(r) {
     if (r.hist) { return r.hist.map(function (x) { return { text: x[0], verdicts: x[1] }; }); }
