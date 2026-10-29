@@ -1,4 +1,4 @@
-<!-- @dsCard group="Foundations" height=640 width=1200 subtitle="The field map: an embossed survey map behind every page, still or with a slow scan" -->
+<!-- @dsCard group="Foundations" height=760 width=1200 subtitle="The field map: plain by default; an embossed survey map, still or with one slow neutral scan" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -8,25 +8,44 @@
   body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
   .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
   .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
-  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
-  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
-  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
-  
+  .note { margin: 8px 0 0; font-size: 12.5px; color: var(--muted); max-width: 72ch; }
+  #cmd { display: block; margin-top: 8px; font-family: var(--font-mono); font-size: 12px; color: var(--ink-soft); overflow-wrap: anywhere; }
+  .out { margin: 10px 0 0; font-family: var(--font-mono); font-size: 12px; color: var(--ink-soft); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; max-width: 700px; }
+  .cards div { padding: 14px 16px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule); color: var(--ink-strong); }
+  @media (max-width: 599px) { #frame .ls-railnav { display: none; } #frame .ls-pagestab { display: grid; } #frame .pg { margin-left: 44px !important; padding: 16px 12px !important; } }
 </style>
 </head>
 <body class="ls">
-<div id="frame" style="position: relative; height: 560px; overflow: hidden; box-shadow: inset 0 0 0 1px var(--rule); transform: translateZ(0)"><nav class="ls-railnav" style="position: absolute"><span class="mark"><i></i></span></nav><div style="position: relative; margin-left: 96px; padding: 24px 28px"><div class="ls-modebar" style="margin-bottom: 26px"><span class="calmword">the mode bar</span></div><h1 style="margin: 0 0 6px; font-size: 30px; font-weight: 200; color: var(--ink-strong)">Projects</h1><p style="margin: 0 0 18px; font-family: var(--font-mono); font-size: 12px; color: var(--muted)">3 known · 2 on this machine</p><div style="display: grid; grid-template-columns: repeat(3, 220px); gap: 8px"><div style="padding: 14px 16px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule); color: var(--ink-strong)">Loadout CLI</div><div style="padding: 14px 16px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule); color: var(--ink-strong)">StarStats</div><div style="padding: 14px 16px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule); color: var(--ink-strong)">Home lab</div></div></div></div>
-<p class="lab" style="margin-top: 14px">Background</p><div id="pick" class="row"></div>
+<div id="frame" style="position: relative; height: 520px; overflow: hidden; box-shadow: inset 0 0 0 1px var(--rule); transform: translateZ(0)"><nav class="ls-railnav" style="position: absolute"><span class="mark"><i></i></span></nav><button class="ls-pagestab" type="button">Pages</button><div class="pg" style="position: relative; margin-left: 96px; padding: 24px 28px"><div class="ls-modebar" style="margin-bottom: 26px"><span class="calmword">the mode bar</span></div><h1 style="margin: 0 0 6px; font-size: 30px; font-weight: 200; color: var(--ink-strong)">Projects</h1><p style="margin: 0 0 18px; font-family: var(--font-mono); font-size: 12px; color: var(--muted)">3 known · 2 on this machine</p><div class="cards"><div>Loadout CLI</div><div>StarStats</div><div>Home lab</div></div></div></div>
+<p class="lab" style="margin-top: 14px">Background</p><div id="pick"></div>
+<code id="cmd">loadout config set studio-backdrop map-animated</code>
+<p class="note">The animated map moves only under full motion and pauses while anything waits for you. Pure Focus, Ambient and high contrast keep the plain ground.</p>
+<div id="over" class="row" style="margin-top: 12px"></div>
+<p class="out" id="out" aria-live="polite"></p>
 <script>
 (function () {
   var S = window.LoadoutStudio;
-  var frame = document.getElementById("frame");
-  S.setBackdrop("map-animated");
-  var M = S.FieldMap({ host: frame, width: 1150, height: 560 });
+  var frame = document.getElementById("frame"), html = document.documentElement;
+  var state = { setting: "map-animated", waiting: 0, mode: "default", ambient: false };
+  /* As main's App does: one resolver from everything that overrides the setting, written as data-fieldmap. */
+  function look() {
+    var shown = S.resolveBackdrop({ setting: html.getAttribute("data-backdrop"), theme: html.getAttribute("data-theme") || "dark", mode: state.mode, ambient: state.ambient, motion: S.motion(), waiting: state.waiting, hidden: document.visibilityState === "hidden", terminalFocused: false });
+    S.setFieldmap(shown);
+    document.getElementById("out").textContent = "data-backdrop=" + html.getAttribute("data-backdrop") + " → data-fieldmap=" + shown;
+  }
+  S.setBackdrop(state.setting);
+  var M = S.FieldMap({ host: frame, width: 1150, height: 520 });
   M.el.style.position = "absolute"; M.el.style.zIndex = "0";
-  frame.querySelector("nav").style.zIndex = "2"; frame.children[2].style.zIndex = "1";
+  frame.querySelector("nav").style.zIndex = "2"; frame.querySelector(".ls-pagestab").style.zIndex = "2"; frame.querySelector(".pg").style.zIndex = "1";
   var pick = document.getElementById("pick");
-  pick.appendChild(S.ModePicker({ label: "Background", selected: 2, options: [{ name: "Plain" }, { name: "Field map, still" }, { name: "Field map, animated" }], onChange: function (n, i) { S.setBackdrop(S.BACKDROPS[i]); } }));
+  pick.appendChild(S.ModePicker({ label: "Background", selected: 2, options: [{ name: "Plain" }, { name: "Field map, still" }, { name: "Field map, animated" }], command: function (n) { return "loadout config set studio-backdrop " + S.BACKDROPS[["Plain", "Field map, still", "Field map, animated"].indexOf(n)]; }, onChange: function (n, i) { S.setBackdrop(S.BACKDROPS[i]); document.getElementById("cmd").textContent = "loadout config set studio-backdrop " + S.BACKDROPS[i]; look(); } }));
+  var over = document.getElementById("over");
+  over.appendChild(S.Switch({ label: "Something waits for you", sub: "The scan stops until nothing does", onChange: function (on) { state.waiting = on ? 1 : 0; look(); } }));
+  over.appendChild(S.Switch({ label: "Pure Focus", sub: "Plain ground", onChange: function (on) { state.mode = on ? "pure" : "default"; look(); } }));
+  over.appendChild(S.Switch({ label: "Ambient", sub: "Plain ground", onChange: function (on) { state.ambient = on; look(); } }));
+  new MutationObserver(look).observe(html, { attributes: true, attributeFilter: ["data-theme", "data-motion"] });
+  look();
 })();
 </script>
 </body>

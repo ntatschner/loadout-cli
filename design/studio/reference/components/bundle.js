@@ -3040,8 +3040,19 @@
   var SVGNS = "http://www.w3.org/2000/svg";
   function s(tag, attrs, kids) { var e = document.createElementNS(SVGNS, tag); Object.keys(attrs || {}).forEach(function (k) { if (attrs[k] !== null && attrs[k] !== undefined) { e.setAttribute(k, attrs[k]); } }); (kids || []).forEach(function (c) { if (c) { e.appendChild(c); } }); return e; }
   var BACKDROPS = ["plain", "map", "map-animated"];
-  /** Plain ground, the field map still (the default), or the field map with its scan. */
-  function setBackdrop(v, el) { (el || document.documentElement).setAttribute("data-backdrop", BACKDROPS.indexOf(v) >= 0 ? v : "map"); }
+  var SHOWN = ["plain", "map", "map-scan"];
+  /** The studio-backdrop setting as kept: the plain ground (the default, and what anything unknown means), the field map still, or animated. What shows is resolveBackdrop()'s. */
+  function setBackdrop(v, el) { (el || document.documentElement).setAttribute("data-backdrop", BACKDROPS.indexOf(v) >= 0 ? v : "plain"); }
+  /* What is behind the page right now. In order: high contrast, Pure Focus and Ambient keep the plain ground; then the setting; the scan runs only under full motion while nothing needs you, the tab is visible and no terminal has the keyboard. */
+  function resolveBackdrop(o) {
+    o = o || {};
+    if (o.theme === "hc-dark" || o.theme === "hc-light" || o.mode === "pure" || o.ambient) { return "plain"; }
+    if (o.setting === "map") { return "map"; }
+    if (o.setting !== "map-animated") { return "plain"; }
+    return o.motion === "full" && !(o.waiting > 0) && !o.hidden && !o.terminalFocused ? "map-scan" : "map";
+  }
+  /** Writes resolveBackdrop()'s answer as data-fieldmap on <html>, which is all the CSS keys off. Unknown values are plain. */
+  function setFieldmap(v, el) { (el || document.documentElement).setAttribute("data-fieldmap", SHOWN.indexOf(v) >= 0 ? v : "plain"); }
 
   /* A small deterministic value noise, so the map is the same on every visit. */
   function rng(seed) { var x = seed >>> 0 || 1; return function () { x ^= x << 13; x >>>= 0; x ^= x >>> 17; x ^= x << 5; x >>>= 0; return x / 4294967296; }; }
@@ -3078,16 +3089,26 @@
     return { minor: minor.join(""), index: index.join("") };
   }
 
-  /* FieldMap: the embossed survey map. Each contour is drawn three times: a light edge, a dark edge, and the line itself. */
+  /* FieldMap: the embossed survey map. Each contour is drawn three times: a light edge, a dark edge, and the line itself.
+     It draws only when first wanted, after the first paint, and again 250ms after a resize; a change of setting, theme or mode
+     never redraws it, since the CSS decides from data-fieldmap what shows. */
   var fmCount = 0;
+  /* Runs then once the browser is idle, or a frame from now where it cannot say. */
+  function later(then) {
+    if (typeof window.requestIdleCallback === "function") { var hi = window.requestIdleCallback(then, { timeout: 1000 }); return function () { window.cancelIdleCallback(hi); }; }
+    var hf = window.requestAnimationFrame(then); return function () { window.cancelAnimationFrame(hf); };
+  }
   function FieldMap(o) {
     o = o || {};
     var el = document.createElement("div"); el.className = "ls-fieldmap"; el.setAttribute("aria-hidden", "true");
-    var host = o.host || document.body, timer = null;
+    var host = o.host || document.body, timer = null, drawn = false, cancel = null, watch = null, shown = o.shown;
+    /* With no shown passed, it follows data-fieldmap on <html>, as main's App writes it. */
+    function now() { return shown !== undefined ? shown : (document.documentElement.getAttribute("data-fieldmap") || "plain"); }
     function draw() {
+      if (cancel) { cancel(); cancel = null; }
       var W = o.width || window.innerWidth, H = o.height || window.innerHeight, c = contours(W, H, o), sq = o.square || 200;
       var svg = s("svg", { viewBox: "0 0 " + W + " " + H, preserveAspectRatio: "none", focusable: "false" });
-      /* Each set of lines is drawn once, in defs, and reused four times (dark edge, light edge, line, scan), so the page holds its path data once. */
+      /* Each set of lines is drawn once, in defs, and reused (dark edge, light edge, line, scan), so the page holds its path data once. */
       var id = "ls-fm" + (++fmCount), MINOR = id + "-minor", INDEX = id + "-index";
       svg.appendChild(s("defs", {}, [s("path", { id: MINOR, d: c.minor }), s("path", { id: INDEX, d: c.index })]));
       function lines(ref, cls, w, dx, dy) { return s("use", { href: "#" + ref, "class": cls, fill: "none", "stroke-width": w, "stroke-linecap": "round", transform: dx || dy ? "translate(" + dx + " " + dy + ")" : null }); }
@@ -3101,17 +3122,28 @@
       svg.appendChild(s("g", {}, [lines(MINOR, "lo", 1.1, 0.7, 0.7), lines(MINOR, "hi", 1, -0.6, -0.6), lines(MINOR, "ln", 0.9)]));
       svg.appendChild(s("g", { "class": "ixg" }, [lines(INDEX, "lo", 1.8, 0.9, 0.9), lines(INDEX, "hi", 1.5, -0.8, -0.8), lines(INDEX, "ix", 1.3)]));
       svg.appendChild(refs);
+      /* The scan covers the page area only, from the rail's collapsed edge, so it never shows through the rail. */
       var scan = s("svg", { viewBox: "0 0 " + W + " " + H, preserveAspectRatio: "none", "class": "scan", focusable: "false" }, [lines(MINOR, "ln", 1.1), lines(INDEX, "ix", 1.6)]);
-      el.textContent = ""; el.appendChild(svg); el.appendChild(scan);
+      var zone = document.createElement("div"); zone.className = "scanzone"; zone.appendChild(scan);
+      el.textContent = ""; el.appendChild(svg); el.appendChild(zone);
+      drawn = true;
     }
-    draw();
+    function want() { if (now() !== "plain" && !drawn && !cancel) { cancel = later(function () { cancel = null; draw(); }); } }
     host.insertBefore(el, host.firstChild);
-    function onResize() { clearTimeout(timer); timer = setTimeout(draw, 250); }
+    want();
+    if (shown === undefined && typeof MutationObserver === "function") { watch = new MutationObserver(want); watch.observe(document.documentElement, { attributes: true, attributeFilter: ["data-fieldmap"] }); }
+    /* While the map is hidden, forget it, so it is drawn afresh when it next shows. */
+    function onResize() { clearTimeout(timer); timer = setTimeout(function () { if (now() === "plain") { drawn = false; el.textContent = ""; } else { draw(); } }, 250); }
     if (!o.width) { window.addEventListener("resize", onResize); }
-    return { el: el, redraw: draw, destroy: function () { window.removeEventListener("resize", onResize); el.remove(); } };
+    return {
+      el: el,
+      redraw: draw,
+      set: function (v) { shown = v; want(); },
+      destroy: function () { clearTimeout(timer); if (cancel) { cancel(); } if (watch) { watch.disconnect(); } window.removeEventListener("resize", onResize); el.remove(); }
+    };
   }
 
-  Object.assign(NS, { FieldMap: FieldMap, setBackdrop: setBackdrop, BACKDROPS: BACKDROPS });
+  Object.assign(NS, { FieldMap: FieldMap, setBackdrop: setBackdrop, BACKDROPS: BACKDROPS, resolveBackdrop: resolveBackdrop, setFieldmap: setFieldmap });
 })();
 
 (function () {
