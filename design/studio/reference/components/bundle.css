@@ -1993,6 +1993,7 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 .ls-officepanel .close { float: right; min-width: 36px; min-height: 36px; border: 0; background: none; color: var(--ink); box-shadow: inset 0 0 0 1px var(--control-edge); cursor: pointer; font-size: 16px; }
 .ls-officepanel .close:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
+
 /* ---------- Stage 14: what main's Studio built since the design ---------- */
 /* --- AskPane --- */
 .ls-ask { padding: 0 18px; }
@@ -2096,6 +2097,13 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 .ls-gate.handover .readings .m { font-size: 13.5px; color: var(--muted); }
 .ls-gate.handover .ls-chip { display: inline-block; padding: 1px 7px; border-radius: var(--radius-chip); box-shadow: inset 0 0 0 1px var(--control-edge); font-family: var(--font-mono); font-size: 11px; color: var(--ink-soft); white-space: nowrap; }
 .ls-gate.handover .ls-note { margin: 6px 0 0; font-size: 13px; color: var(--muted); }
+/* A branch name can be longer than a phone is wide: the words break anywhere rather than push the page sideways. */
+.ls-gate.handover, .ls-gate.handover .readings li { min-width: 0; }
+.ls-gate.handover .readings .c, .ls-gate.handover .readings .m, .ls-gate.handover .ls-note { overflow-wrap: anywhere; }
+.ls-gate.handover .ls-halo { max-width: 100%; white-space: normal; text-align: left; }
+.ls-gate.handover .ls-halo .ring { flex: none; }
+.ls-gate.handover .ls-action { min-width: 0; }
+.ls-gate.handover .ls-cmd { overflow-wrap: anywhere; }
 
 /* --- JobResult --- */
 /* JobResult: one command run from Studio. As main's studio.css, with the shell rules it leans on scoped here. */
@@ -2126,6 +2134,27 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 .ls-depths .log li.needs .tx { color: var(--needs-text); } .ls-depths .log li.bad .tx { color: var(--bad-text); } .ls-depths .log li.good .tx { color: var(--good); }
 .ls-depths .log li.sub { padding-left: 18px; }
 
+/* --- Landings --- */
+/* Main's own <style> block, scoped to the component. */
+.ls-landings .landings { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.ls-landings .landing { min-width: 0; }
+.ls-landings .landing p { margin: 2px 0 0; }
+.ls-landings .lbranch { margin-inline-start: 6px; font-family: var(--font-mono); overflow-wrap: anywhere; }
+.ls-landings .lgone { margin-inline-start: 6px; color: var(--needs-text); }
+.ls-landings .lacts { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-1); }
+.ls-landings .lmerge { display: grid; gap: var(--space-2); margin-top: var(--space-2); max-width: 60ch; }
+/* From main's pages.css and studio.css, which the design system lacks: the calm line, its small form, and links (.ls a in components.css). */
+.ls-landings .calm { margin: 0; color: var(--muted); }
+.ls-landings .calm.small { margin-top: var(--space-2); font-size: 13.5px; }
+.ls-landings .landing p.calm.small, .ls-landings .landing p.small { margin-top: 2px; }
+.ls-landings a:not([class]) { color: var(--accent-text); overflow-wrap: anywhere; }
+.ls-landings a:not([class]):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* From main's components.css (the design system has them too): fields. */
+.ls-landings .ls-field { display: grid; gap: 6px; justify-items: start; }
+.ls-landings .ls-field > .lab { font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+/* Long labels wrap at 320 rather than run off the screen, as the design system's forms do. */
+.ls-landings .ls-halo { white-space: normal; text-align: left; max-width: 100%; }
+
 /* --- ListToolbar --- */
 /* Main's own <style> block, scoped under the toolbar. */
 .ls-ltool { display: grid; gap: 8px; margin-bottom: 14px; }
@@ -2140,6 +2169,26 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 .ls-ltool .reset, .ls-ltool .clear { border: 0; background: none; padding: 0; color: var(--accent); font: inherit; font-size: 13px; text-decoration: underline; cursor: pointer; }
 .ls-ltool .count { margin: 0; font-size: 13px; color: var(--ink-soft); }
 .ls-ltool .problem { margin: 0; font-size: 13px; color: var(--bad-text); }
+
+/* --- MapFilterBar --- */
+/* Main's own <style> block, scoped to the component. */
+.ls-mapfilters { position: relative; min-width: 0; }
+.ls-mapfilters .mapfilters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 16px; min-width: 0; }
+.ls-mapfilters .custom { font-size: 12.5px; letter-spacing: .24em; text-transform: uppercase; color: var(--ink-soft); }
+.ls-mapfilters .chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; }
+.ls-mapfilters .chip { min-height: 32px; padding: 0 10px; border: 0; border-radius: var(--radius-chip); background: none; box-shadow: inset 0 0 0 1px var(--control-edge); color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; text-decoration: line-through; }
+.ls-mapfilters .chip[aria-pressed="true"] { background: var(--tint-picked-c); color: var(--ink-strong); text-decoration: none; }
+.ls-mapfilters .chip[aria-disabled="true"] { cursor: default; }
+.ls-mapfilters .chip:focus-visible, .ls-mapfilters summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ls-mapfilters .projects summary { min-height: 32px; display: inline-flex; align-items: center; cursor: pointer; font-size: 12.5px; color: var(--ink); }
+.ls-mapfilters .projects[open] .chips { margin-top: 8px; }
+/* From main's pages.css, which the design system lacks: the segmented presets, as Home's Map / Lens switch. */
+.ls-mapfilters .views { display: inline-flex; flex-wrap: wrap; max-width: 100%; box-shadow: inset 0 0 0 1px var(--control-edge); }
+.ls-mapfilters .views button { min-height: 40px; padding: 0 18px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 12.5px; font-weight: 500; letter-spacing: .24em; text-transform: uppercase; cursor: pointer; }
+.ls-mapfilters .views button[aria-pressed="true"] { background: var(--tint-picked-c); color: var(--ink-strong); box-shadow: inset 0 -2px 0 var(--accent); }
+.ls-mapfilters .views button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ls-mapfilters .ls-from { margin-top: -8px; }
+.ls-mapfilters .ls-from code { overflow-wrap: anywhere; }
 
 /* --- MiniLine --- */
 .ls-mini { position: relative; display: flex; align-items: flex-start; min-width: 0; padding: 4px 0 2px; }
@@ -2224,7 +2273,9 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 .ls-deck .panes > .ls-cross { grid-column: 2; grid-row: 2; }
 
 /* --- Splitter --- */
-/* Splitter: the divider between two panes, laid over the gap its grid leaves; the grid places it by column or row. As main's components.css. */
+/* Splitter: the divider between two panes, laid over the gap its grid leaves; the grid places it by column or row. As main's components.css,
+   but held to role="separator": TokenSplit's figures share the class name ls-split, and main lays them out as a divider too (absolute, centred).
+   :where() keeps the specificity main's rules have, so the page rules below that place or hide a divider still win. */
 .ls-split:where([role="separator"]) { position: absolute; z-index: 2; display: grid; place-items: center; touch-action: none; outline: none; }
 .ls-split:where([role="separator"]).vertical { top: 0; bottom: 0; left: 0; width: 12px; margin-left: calc(var(--split-gap, 0px) / -2 - 6px); cursor: col-resize; }
 .ls-split:where([role="separator"]).horizontal { left: 0; right: 0; top: 0; height: 12px; margin-top: calc(var(--split-gap, 0px) / -2 - 6px); cursor: row-resize; }
@@ -2235,6 +2286,8 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 .ls-split:where([role="separator"]).horizontal .grip::after { width: 28px; height: 4px; }
 .ls-split:where([role="separator"]):hover .grip, .ls-split:where([role="separator"]).dragging .grip { background: var(--accent); }
 .ls-split:where([role="separator"]):hover .grip::after, .ls-split:where([role="separator"]).dragging .grip::after { background: var(--accent); }
+.ls-split:where([role="separator"]):focus-visible .grip, .ls-split:where([role="separator"]):focus-visible .grip::after { background: var(--focus); }
+.ls-split:where([role="separator"]):focus-visible { box-shadow: 0 0 0 2px var(--focus); }
 /* Where main's splits place it. */
 .ls-deck .panes > .ls-split { --split-gap: 10px; }
 .ls-deck .panes > .ls-split.cols { grid-column: 2; }

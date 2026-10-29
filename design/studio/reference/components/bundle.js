@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format": 4, "namespace": "LoadoutStudio", "components": [{"name": "HaloButton"}, {"name": "StartRail"}, {"name": "Command"}, {"name": "Switch"}, {"name": "Tabs"}, {"name": "ModePicker"}, {"name": "Signal"}, {"name": "EventMark"}, {"name": "Urgency"}, {"name": "Meter"}, {"name": "Toasts"}, {"name": "SideRail"}, {"name": "Dialog"}, {"name": "Picker"}, {"name": "CommandPalette"}, {"name": "Halo"}, {"name": "TubeMap"}, {"name": "LineStrip"}, {"name": "NetworkStatus"}, {"name": "Terminal"}, {"name": "SessionView"}, {"name": "Gate"}, {"name": "RunCard"}, {"name": "NeedsYou"}, {"name": "RunShape"}, {"name": "Crew"}, {"name": "DoneWhen"}, {"name": "RunNumbers"}, {"name": "RunDepths"}, {"name": "Patch"}, {"name": "SayToNode"}, {"name": "TeamCard"}, {"name": "TeamNodes"}, {"name": "TeamRules"}, {"name": "RoleRecord"}, {"name": "TeamSheet"}, {"name": "Schedules"}, {"name": "Remedy"}, {"name": "Bin"}, {"name": "Outbox"}, {"name": "ModeSwitcher"}, {"name": "ModeBar"}, {"name": "SessionTabs"}, {"name": "TermDeck"}, {"name": "RunBoard"}, {"name": "QuietList"}, {"name": "FocusFrame"}, {"name": "WorkDesk"}, {"name": "ActionPane"}, {"name": "CommandBar"}, {"name": "KeyHelp"}, {"name": "ActionDrawer"}, {"name": "TerminalOnly"}, {"name": "HealthList"}, {"name": "IdeaStages"}, {"name": "QuestionSet"}, {"name": "PlanLayer"}, {"name": "NoteDump"}, {"name": "ProjectTile"}, {"name": "TaskBoard"}, {"name": "LoadStack"}, {"name": "ConfigList"}, {"name": "StoreList"}, {"name": "TopicEditor"}, {"name": "TokenSplit"}, {"name": "SpendBars"}, {"name": "PageBeside"}, {"name": "QuietPage"}, {"name": "ForgetProject"}, {"name": "ProgressLine"}, {"name": "CriteriaGrid"}, {"name": "PickUpSheet"}, {"name": "RefusalsList"}, {"name": "RedAlert"}, {"name": "TaskPicker"}, {"name": "ValueReport"}, {"name": "FieldMap"}, {"name": "OfficeView"}, {"name": "OfficePanel"}, {"name": "ActionForm"}, {"name": "ItemList"}, {"name": "SettingRow"}, {"name": "Readout"}, {"name": "ActionRow"}, {"name": "AskPane"}, {"name": "AskPlanCard"}, {"name": "BlockedRuns"}, {"name": "ContextMark"}, {"name": "ConversationList"}, {"name": "Handover"}, {"name": "JobResult"}, {"name": "Journal"}, {"name": "ListToolbar"}, {"name": "MiniLine"}, {"name": "ProgressRing"}, {"name": "QueuePanel"}, {"name": "Spend"}, {"name": "SplitCross"}, {"name": "Splitter"}, {"name": "StatusBlock"}, {"name": "StatusStrip"}, {"name": "TaskDetail"}, {"name": "TriggerRules"}]} */
+/* @ds-bundle: {"format": 4, "namespace": "LoadoutStudio", "components": [{"name": "HaloButton"}, {"name": "StartRail"}, {"name": "Command"}, {"name": "Switch"}, {"name": "Tabs"}, {"name": "ModePicker"}, {"name": "Signal"}, {"name": "EventMark"}, {"name": "Urgency"}, {"name": "Meter"}, {"name": "Toasts"}, {"name": "SideRail"}, {"name": "Dialog"}, {"name": "Picker"}, {"name": "CommandPalette"}, {"name": "Halo"}, {"name": "TubeMap"}, {"name": "LineStrip"}, {"name": "NetworkStatus"}, {"name": "Terminal"}, {"name": "SessionView"}, {"name": "Gate"}, {"name": "RunCard"}, {"name": "NeedsYou"}, {"name": "RunShape"}, {"name": "Crew"}, {"name": "DoneWhen"}, {"name": "RunNumbers"}, {"name": "RunDepths"}, {"name": "Patch"}, {"name": "SayToNode"}, {"name": "TeamCard"}, {"name": "TeamNodes"}, {"name": "TeamRules"}, {"name": "RoleRecord"}, {"name": "TeamSheet"}, {"name": "Schedules"}, {"name": "Remedy"}, {"name": "Bin"}, {"name": "Outbox"}, {"name": "ModeSwitcher"}, {"name": "ModeBar"}, {"name": "SessionTabs"}, {"name": "TermDeck"}, {"name": "RunBoard"}, {"name": "QuietList"}, {"name": "FocusFrame"}, {"name": "WorkDesk"}, {"name": "ActionPane"}, {"name": "CommandBar"}, {"name": "KeyHelp"}, {"name": "ActionDrawer"}, {"name": "TerminalOnly"}, {"name": "HealthList"}, {"name": "IdeaStages"}, {"name": "QuestionSet"}, {"name": "PlanLayer"}, {"name": "NoteDump"}, {"name": "ProjectTile"}, {"name": "TaskBoard"}, {"name": "LoadStack"}, {"name": "ConfigList"}, {"name": "StoreList"}, {"name": "TopicEditor"}, {"name": "TokenSplit"}, {"name": "SpendBars"}, {"name": "PageBeside"}, {"name": "QuietPage"}, {"name": "ForgetProject"}, {"name": "ProgressLine"}, {"name": "CriteriaGrid"}, {"name": "PickUpSheet"}, {"name": "RefusalsList"}, {"name": "RedAlert"}, {"name": "TaskPicker"}, {"name": "ValueReport"}, {"name": "FieldMap"}, {"name": "OfficeView"}, {"name": "OfficePanel"}, {"name": "ActionForm"}, {"name": "ItemList"}, {"name": "SettingRow"}, {"name": "Readout"}, {"name": "ActionRow"}, {"name": "AskPane"}, {"name": "AskPlanCard"}, {"name": "BlockedRuns"}, {"name": "ContextMark"}, {"name": "ConversationList"}, {"name": "Handover"}, {"name": "JobResult"}, {"name": "Journal"}, {"name": "ListToolbar"}, {"name": "MiniLine"}, {"name": "ProgressRing"}, {"name": "QueuePanel"}, {"name": "Spend"}, {"name": "SplitCross"}, {"name": "Splitter"}, {"name": "StatusBlock"}, {"name": "StatusStrip"}, {"name": "TaskDetail"}, {"name": "TriggerRules"}, {"name": "Landings"}, {"name": "MapFilterBar"}]} */
 /* Loadout Studio — plain JavaScript, no framework, no imports, no network.
    Components are CSS classes plus small helpers, written to port line for line to Svelte. */
 (function () {
@@ -4145,6 +4145,7 @@
   Object.assign(NS, { OfficeView: OfficeView, OfficePanel: OfficePanel });
 })();
 
+
 /* ---------- Stage 14: what main's Studio built since the design ---------- */
 (function () {
   "use strict";
@@ -4218,7 +4219,7 @@
             })));
           }
           if (reply.plan) {
-            if (!cards[turn.id] || cards[turn.id].source !== turn.reply.plan) { cards[turn.id] = { source: turn.reply.plan, card: NS.AskPlanCard({ plan: reply.plan, approve: o.approve }) }; }
+            if (!cards[turn.id] || cards[turn.id].source !== turn.reply.plan) { cards[turn.id] = { source: turn.reply.plan, card: NS.AskPlanCard({ plan: reply.plan, approve: o.approve, onapproved: function () { if (o.onapproved) { o.onapproved(); } } }) }; }
             kids.push(cards[turn.id].card.el);
           }
           if (reply.nearMisses.length) {
@@ -4280,13 +4281,16 @@
         set({ turns: turns, asking: true });
         var settled;
         try { settled = Promise.resolve(asker(query)); } catch (error) { settled = Promise.reject(error); }
-        return settled.then(function (reply) { put({ reply: reply }); }, function (error) { put({ failed: error && error.message ? error.message : "Loadout could not answer that." }); });
+        return settled.then(function (reply) { if (reply && reply.agentSession) { agentSession = reply.agentSession; } put({ reply: reply }); }, function (error) { put({ failed: error && error.message ? error.message : "Loadout could not answer that." }); });
       }
-      function clear() { set({ turns: [], asking: false }); }
+      /* The agent's conversation, once it has been asked, so a follow-up carries it on. */
+      var agentSession = null;
+      function clear() { agentSession = null; set({ turns: [], asking: false }); }
 
       o = o || {};
       set({ turns: o.turns || [], asking: !!o.asking });
-      return { el: el, set: set, ask: ask, clear: clear };
+      return { el: el, set: set, ask: ask, clear: clear,
+        get turns() { return state.turns; }, get asking() { return state.asking; }, get agentSession() { return agentSession; } };
     }
     AskPane.arrived = arrived;
     NS.AskPane = AskPane;
@@ -4384,7 +4388,12 @@
         busy = true; failed = null; paint();
         var settle = function () { busy = false; paint(); };
         try {
-          Promise.resolve(o.approve ? o.approve(plan, team || null, cap) : "Approved.").then(function (said) { done = said; settle(); }, function (error) { failed = error && error.message ? error.message : String(error); settle(); });
+          Promise.resolve(o.approve ? o.approve(plan, team || null, cap) : "Approved.").then(function (said) {
+            done = said;
+            /* Approve is held from here on, so focus left on it would go nowhere. A refusal leaves it where it is: the button can be pressed again. */
+            if (o.onapproved) { o.onapproved(); }
+            settle();
+          }, function (error) { failed = error && error.message ? error.message : String(error); settle(); });
         } catch (error) { failed = error && error.message ? error.message : String(error); settle(); }
       }
 
@@ -4831,6 +4840,118 @@
     NS.Journal = Journal;
   })();
 
+  /* --- Landings --- */
+  (function () {
+    /* Landings: the branches waiting to land: a queued run's own branch with its pull request, and each node branch
+       its gate did not merge, pending. Each can be opened, marked ready, or squash-merged with a message the person
+       writes, through the same commands as the terminal. As main's Landings.svelte. */
+
+    /* The words for 'loadout pr merge', leaving out a body nobody wrote. Joined with '=' so a message that starts with
+       a dash is still read as the value. */
+    function mergeWords(one, subject, body) {
+      var words = [one.branch, "--project", one.project, "--subject=" + String(subject).trim()];
+      return String(body).trim() ? words.concat(["--body=" + String(body).trim()]) : words;
+    }
+    function keyOf(one) { return one.project + " " + one.branch; }
+    function at(one) { return [one.branch, "--project", one.project]; }
+    function waited(created, now) {
+      var hours = (now.getTime() - new Date(created).getTime()) / 3600000;
+      if (hours < 1) { return "under an hour"; }
+      var count = hours < 24 ? Math.floor(hours) : Math.floor(hours / 24), unit = hours < 24 ? "hour" : "day";
+      return count === 1 ? "1 " + unit : count + " " + unit + "s";
+    }
+    function from(one) { return one.node ? one.node + " in run " + one.run : one.run ? "run " + one.run : "no run"; }
+
+    function Landings(o) {
+      var cur = Object.assign({ landings: [] }, o || {});
+      /* Kept here rather than on the row, so a refresh of the list every few seconds does not throw away a message half written. */
+      var merging = null, subject = "", body = "", pre = uid("lm");
+      var el = h("div", { "class": "ls-landings" });
+      var list = h("div");
+      el.appendChild(list);
+      /* Main's line is a calm small p with a code.ls-cmd; the design system's From line is .ls-from, which follows the commands setting. */
+      el.appendChild(h("p", { "class": "ls-from" }, ["From ", h("code", { text: "$ loadout pr list" }), "."]));
+
+      function act(path, words, done) { return cur.act ? cur.act(path, words, done) : undefined; }
+      function btn(label, cmd, press, extra) {
+        var reason = extra && extra.reason !== undefined ? extra.reason : cur.disabledReason;
+        /* Main's HaloButton shows the reason in place of the command; the design system's shows the command when both
+           are given, so the command goes only to an enabled one. */
+        return NS.HaloButton({ label: label, size: extra && extra.solid ? undefined : "small", solid: !!(extra && extra.solid), cmd: reason ? undefined : cmd, disabledReason: reason || undefined, onPress: press });
+      }
+      function subjectReason() { return !subject.trim() ? "Write the squash commit’s subject" : subject.indexOf("\n") >= 0 ? "The subject is one line" : undefined; }
+
+      function merge(one) {
+        Promise.resolve(act("pr merge", mergeWords(one, subject, body), one.branch + " merges once its checks pass")).then(function (ok) {
+          if (ok !== false) { merging = null; paint(); }
+        });
+      }
+
+      function form(one, index) {
+        var sid = pre + "-subject-" + index, bid = pre + "-body-" + index, slot = h("div");
+        var si = h("input", { id: sid, "class": "ls-text", placeholder: "One line, as git log will show it" });
+        var bi = h("textarea", { id: bid, "class": "ls-text", rows: "4", placeholder: "Left empty, the commit has no body" });
+        si.value = subject; bi.value = body;
+        function go() { slot.textContent = ""; slot.appendChild(btn("Squash-merge when checks pass", "$ loadout pr merge " + one.branch + " --subject …", function () { merge(one); }, { solid: true, reason: cur.disabledReason || subjectReason() })); }
+        si.addEventListener("input", function () { subject = si.value; go(); });
+        bi.addEventListener("input", function () { body = bi.value; });
+        var f = h("form", { "class": "lmerge", "aria-label": "Squash-merge " + one.branch }, [
+          h("div", { "class": "ls-field" }, [h("label", { "class": "lab", "for": sid, text: "Subject" }), si]),
+          h("div", { "class": "ls-field" }, [h("label", { "class": "lab", "for": bid, text: "Body" }), bi]),
+          slot
+        ]);
+        f.addEventListener("submit", function (e) { e.preventDefault(); if (!cur.disabledReason && !subjectReason()) { merge(one); } });
+        go();
+        return f;
+      }
+
+      function row(one, index) {
+        var now = cur.now || new Date();
+        var li = h("li", { "class": "landing" }, [
+          h("span", { "class": "lstate ls-chip", text: one.state }),
+          h("code", { "class": "lbranch", text: one.branch }),
+          one.gone ? h("span", { "class": "lgone", text: "gone from the repository" }) : null,
+          h("p", { "class": "calm small", text: one.project + ", " + from(one) + (one.task ? ", task " + one.task : "") + ", waiting " + waited(one.created, now) }),
+          one.pullRequest ? h("p", { "class": "small" }, [h("a", { href: one.pullRequest, target: "_blank", rel: "noreferrer", text: one.pullRequest })]) : null,
+          one.mergeRequested ? h("p", { "class": "calm small", text: "Merges once its required checks pass." }) : null
+        ]);
+        if (cur.act) {
+          var acts = h("div", { "class": "lacts" }), k = keyOf(one);
+          if (one.state === "pending" && !one.gone) {
+            acts.appendChild(btn("Open as a draft", "$ loadout pr open " + one.branch + " --draft", function () { act("pr open", at(one).concat(["--draft"]), one.branch + " has a draft pull request"); }));
+            acts.appendChild(btn("Open for review", "$ loadout pr open " + one.branch, function () { act("pr open", at(one), one.branch + " has a pull request"); }));
+          } else if (one.state === "draft" && one.pullRequest) {
+            acts.appendChild(btn("Mark ready", "$ loadout pr ready " + one.branch, function () { act("pr ready", at(one), one.branch + " is ready for review"); }));
+          } else if (one.state === "ready" && one.pullRequest && !one.mergeRequested) {
+            acts.appendChild(btn(merging === k ? "Not now" : "Merge…", merging === k ? undefined : "opens the squash message for " + one.branch, function () {
+              if (merging === k) { merging = null; } else { merging = k; subject = ""; body = ""; }
+              paint();
+            }));
+          }
+          li.appendChild(acts);
+          if (merging === k && one.state === "ready") { li.appendChild(form(one, index)); }
+        }
+        return li;
+      }
+
+      function paint() {
+        var all = cur.landings || [];
+        /* A refresh keeps the field being typed in focused. */
+        var focused = document.activeElement && el.contains(document.activeElement) ? document.activeElement.id : null;
+        list.textContent = "";
+        if (!all.length) { list.appendChild(h("p", { "class": "calm", text: "Nothing is waiting to land." })); return; }
+        var ul = h("ul", { "class": "landings" });
+        all.forEach(function (one, i) { ul.appendChild(row(one, i)); });
+        list.appendChild(ul);
+        if (focused) { var f = document.getElementById(focused); if (f) { f.focus(); } }
+      }
+      paint();
+      return { el: el, set: function (patch) { cur = Object.assign({}, cur, patch || {}); paint(); } };
+    }
+    Landings.mergeWords = mergeWords;
+    NS.Landings = Landings;
+  })();
+
   /* --- ListToolbar --- */
   (function () {
     /* ListToolbar: the same search, filter and sort controls over every list. The box takes the query typed; the chips
@@ -4941,6 +5062,107 @@
       };
     }
     NS.ListToolbar = ListToolbar;
+  })();
+
+  /* --- MapFilterBar --- */
+  (function () {
+    /* MapFilterBar: the filters over Home's Map and Lens: the presets, then a chip per kind and per state, then the
+       projects to hide. Every change goes straight to config through onchange; the bar keeps nothing of its own, so it
+       reads what loadout config set it to as well as what it set. As main's MapFilterBar.svelte and lib/mapFilter.ts. */
+    var KINDS = ["runs", "sessions", "ideas", "tasks"];
+    var STATES = ["waiting", "running", "failed", "ended"];
+    var NO_PROJECT = "(no project)";
+    var KIND_NAMES = { runs: "Team runs", sessions: "Sessions", ideas: "Ideas", tasks: "Tasks" };
+    var STATE_NAMES = { waiting: "Waiting on you", running: "Running", failed: "Failed", ended: "Ended" };
+    /* In flight draws what the map drew before there were filters: no ideas, and nothing settled. Runs and sessions is
+       the same with tasks off as well. Everything is every line Home has. */
+    var PRESETS = {
+      inflight: { kinds: ["runs", "sessions", "tasks"], states: ["waiting", "running", "failed"], projects: [] },
+      runs: { kinds: ["runs", "sessions"], states: ["waiting", "running", "failed"], projects: [] },
+      all: { kinds: KINDS.slice(), states: STATES.slice(), projects: [] }
+    };
+    var PRESET_NAMES = { inflight: "In flight", runs: "Runs and sessions", all: "Everything" };
+
+    function listOf(v) { return String(v === null || v === undefined ? "" : v).split(",").map(function (p) { return p.trim(); }).filter(Boolean); }
+    function same(a, b) { return a.length === b.length && a.every(function (x) { return b.indexOf(x) >= 0; }); }
+    function copy(f) { return { kinds: f.kinds.slice(), states: f.states.slice(), projects: f.projects.slice() }; }
+    /* The filters as config holds them (mapKinds, mapStates, mapProjects, and the old mapScope). A kind or state key
+       that is unset, or names nothing this page knows, reads as In flight's, so the map is never blank by accident. */
+    function filterOf(prefs) {
+      if (prefs && prefs.mapKinds === undefined && prefs.mapScope === "all") { return copy(PRESETS.all); }
+      var kinds = KINDS.filter(function (k) { return listOf(prefs && prefs.mapKinds).indexOf(k) >= 0; });
+      var states = STATES.filter(function (s) { return listOf(prefs && prefs.mapStates).indexOf(s) >= 0; });
+      return { kinds: kinds.length ? kinds : PRESETS.inflight.kinds.slice(), states: states.length ? states : PRESETS.inflight.states.slice(), projects: listOf(prefs && prefs.mapProjects) };
+    }
+    /* The preset the filters match, or null for Custom. */
+    function presetOf(f) {
+      var found = null;
+      Object.keys(PRESETS).forEach(function (n) { var p = PRESETS[n]; if (!found && same(f.kinds, p.kinds) && same(f.states, p.states) && same(f.projects, p.projects)) { found = n; } });
+      return found;
+    }
+    /* The three keys and the values that write a filter, in the order the command line would take them. */
+    function keysOf(f) { return [["studio-map-kinds", f.kinds.join(", ")], ["studio-map-states", f.states.join(", ")], ["studio-map-projects", f.projects.join(", ")]]; }
+    /* One chip turned on or off. The last kind or state on stays on: a filter showing nothing cannot be reached from the bar, as it cannot from config. */
+    function toggled(on, item, order) {
+      if (on.indexOf(item) >= 0) { return on.length > 1 ? on.filter(function (x) { return x !== item; }) : on.slice(); }
+      return order.filter(function (x) { return x === item || on.indexOf(x) >= 0; });
+    }
+    /* As main's command.setting: an empty value is "", anything else quoted where the shell needs it. */
+    function settingLine(key, value) { return "$ loadout config set " + key + " " + (value === "" ? "\"\"" : q(value)); }
+
+    function MapFilterBar(o) {
+      var cur = Object.assign({ filter: copy(PRESETS.inflight), projects: [] }, o || {});
+      var el = h("div", { "class": "ls-mapfilters" });
+      var open = false;
+      function change(next) { if (cur.onchange) { cur.onchange(next); } }
+
+      function chip(label, pressed, last, title, press) {
+        return h("button", { type: "button", "class": "chip", "aria-pressed": pressed ? "true" : "false", "aria-disabled": last ? "true" : null, title: last ? title : null, onclick: press, text: label });
+      }
+
+      function paint() {
+        var f = cur.filter, projects = cur.projects || [], preset = presetOf(f);
+        var hiddenProjects = f.projects.filter(function (p) { return projects.indexOf(p) >= 0; });
+        var focusKey = document.activeElement && el.contains(document.activeElement) ? document.activeElement.getAttribute("data-k") : null;
+        el.textContent = "";
+        var bar = h("div", { "class": "mapfilters", role: "region", "aria-label": "What Home shows" });
+        bar.appendChild(h("div", { "class": "views", role: "group", "aria-label": "Presets" }, Object.keys(PRESETS).map(function (n) {
+          return h("button", { type: "button", "data-k": "p:" + n, "aria-pressed": preset === n ? "true" : "false", onclick: function () { change(copy(PRESETS[n])); }, text: PRESET_NAMES[n] });
+        })));
+        if (!preset) { bar.appendChild(h("span", { "class": "custom", text: "Custom" })); }
+        bar.appendChild(h("div", { "class": "chips", role: "group", "aria-label": "Kind" }, KINDS.map(function (k) {
+          var on = f.kinds.indexOf(k) >= 0, b = chip(KIND_NAMES[k], on, on && f.kinds.length === 1, "One kind stays on", function () { change({ kinds: toggled(f.kinds, k, KINDS), states: f.states.slice(), projects: f.projects.slice() }); });
+          b.setAttribute("data-k", "k:" + k); return b;
+        })));
+        bar.appendChild(h("div", { "class": "chips", role: "group", "aria-label": "State" }, STATES.map(function (s) {
+          var on = f.states.indexOf(s) >= 0, b = chip(STATE_NAMES[s], on, on && f.states.length === 1, "One state stays on", function () { change({ kinds: f.kinds.slice(), states: toggled(f.states, s, STATES), projects: f.projects.slice() }); });
+          b.setAttribute("data-k", "s:" + s); return b;
+        })));
+        if (projects.length) {
+          var summary = h("summary", { "data-k": "sum", text: "Projects · " + (hiddenProjects.length ? hiddenProjects.join(", ") + " hidden" : "all shown") });
+          var det = h("details", { "class": "projects" }, [summary, h("div", { "class": "chips", role: "group", "aria-label": "Projects shown" }, projects.map(function (p) {
+            var hidden = f.projects.indexOf(p) >= 0;
+            var b = chip(p, !hidden, false, null, function () { change({ kinds: f.kinds.slice(), states: f.states.slice(), projects: hidden ? f.projects.filter(function (x) { return x !== p; }) : f.projects.concat([p]) }); });
+            b.setAttribute("data-k", "j:" + p); return b;
+          }))]);
+          det.open = open;
+          det.addEventListener("toggle", function () { open = det.open; });
+          bar.appendChild(det);
+        }
+        el.appendChild(bar);
+        /* Main's bar shows no command: Home writes the keys through loadout config set. The design system shows them
+           as a From line, which follows the commands setting. In flight is the three keys unset, as Home writes it. */
+        var inflight = preset === "inflight";
+        el.appendChild(h("p", { "class": "ls-from" }, ["The same as "].concat(keysOf(f).map(function (kv, i) {
+          return h("code", { text: settingLine(kv[0], inflight ? "" : kv[1]) + (i < 2 ? ";" : "") });
+        }).reduce(function (acc, c, i) { if (i) { acc.push(" "); } acc.push(c); return acc; }, [])).concat(["."])));
+        if (focusKey) { var back = el.querySelector("[data-k=\"" + focusKey.replace(/"/g, "\\\"") + "\"]"); if (back) { back.focus(); } }
+      }
+      paint();
+      return { el: el, set: function (patch) { cur = Object.assign({}, cur, patch || {}); paint(); } };
+    }
+    Object.assign(MapFilterBar, { KINDS: KINDS, STATES: STATES, NO_PROJECT: NO_PROJECT, KIND_NAMES: KIND_NAMES, STATE_NAMES: STATE_NAMES, PRESETS: PRESETS, PRESET_NAMES: PRESET_NAMES, filterOf: filterOf, presetOf: presetOf, keysOf: keysOf, toggled: toggled });
+    NS.MapFilterBar = MapFilterBar;
   })();
 
   /* --- MiniLine --- */

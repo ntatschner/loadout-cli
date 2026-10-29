@@ -1,0 +1,51 @@
+<!-- @dsCard group="Teams" height=1000 width=1200 subtitle="Branches waiting to land: open as a draft or for review, mark ready, squash-merge with your own message" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Landings</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 20px 32px; align-items: flex-start; }
+  .col { flex: 1 1 340px; min-width: 0; }
+  .hd { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .said { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; overflow-wrap: anywhere; }
+  @media (max-width: 480px) { body { padding: 16px; } }
+</style>
+</head>
+<body class="ls">
+<div class="row">
+  <div class="col" style="flex-basis: 560px"><p class="hd">Waiting to land</p><div id="a"></div><p class="said" id="said" role="status"></p></div>
+  <div class="col"><p class="hd">Nothing waiting</p><div id="b"></div><p class="hd" style="margin-top: 24px">Studio is only watching</p><div id="c"></div></div>
+</div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var now = new Date("2026-10-29T15:00:00Z");
+  function ago(h) { return new Date(now.getTime() - h * 3600000).toISOString(); }
+  var gh = "https://github.com/acme/webhooks/pull/";
+  var landings = [
+    { project: "webhooks", branch: "run-20261029-1102-7f3a", state: "pending", team: "dev-team", run: "20261029-1102-7f3a", node: "", task: "T-31", pullRequest: "", why: "the run's own branch", created: ago(0.4), mergeRequested: null, gone: false },
+    { project: "webhooks", branch: "run-20261028-0914-ab12/implementer-1", state: "pending", team: "dev-team", run: "20261028-0914-ab12", node: "implementer-1", task: "T-28", pullRequest: "", why: "its gate did not merge it", created: ago(30), mergeRequested: null, gone: false },
+    { project: "starstats", branch: "run-20261027-1640-c9d0", state: "draft", team: "release-crew", run: "20261027-1640-c9d0", node: "", task: "", pullRequest: "https://github.com/acme/starstats/pull/412", why: "the run's own branch", created: ago(5), mergeRequested: null, gone: false },
+    { project: "webhooks", branch: "run-20261026-2210-0e44", state: "ready", team: "dev-team", run: "20261026-2210-0e44", node: "", task: "T-24", pullRequest: gh + "88", why: "the run's own branch", created: ago(52), mergeRequested: null, gone: false },
+    { project: "webhooks", branch: "run-20261025-0801-5b7e", state: "ready", team: "dev-team", run: "20261025-0801-5b7e", node: "", task: "T-19", pullRequest: gh + "86", why: "the run's own branch", created: ago(80), mergeRequested: ago(2), gone: false },
+    { project: "home-lab", branch: "fix-dns-cache", state: "pending", team: "", run: "", node: "", task: "", pullRequest: "", why: "", created: ago(1), mergeRequested: null, gone: true }
+  ];
+  var said = document.getElementById("said");
+  function act(path, words, done) {
+    said.textContent = "✓ " + done + " · $ loadout " + path + " " + words.map(function (w) { return /\s/.test(w) ? "\"" + w + "\"" : w; }).join(" ");
+    return true;
+  }
+  var L = S.Landings({ landings: landings, act: act, now: now });
+  document.getElementById("a").appendChild(L.el);
+  /* Open the merge message on the first ready branch, as if Merge… was pressed. */
+  var merge = Array.prototype.filter.call(L.el.querySelectorAll("button"), function (b) { return /Merge…/.test(b.textContent); })[0];
+  if (merge) { merge.click(); }
+  document.getElementById("b").appendChild(S.Landings({ landings: [], act: act, now: now }).el);
+  document.getElementById("c").appendChild(S.Landings({ landings: landings.slice(0, 3), act: act, now: now, disabledReason: "Studio is only watching" }).el);
+})();
+</script>
+</body>
+</html>

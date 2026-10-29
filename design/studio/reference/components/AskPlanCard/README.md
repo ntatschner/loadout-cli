@@ -18,6 +18,7 @@ AskPlanCard is one plan from Ask Loadout: every step with why its task was picke
 
 - `plan` as `loadout ask --json` writes it (what `--json` leaves out is filled in).
 - `approve(plan, team, cap)`: carry it out and resolve to what happened, or reject with why not. Main runs `team queue run-now` as one job, or `team queue add` for each task, or opens the terminals one by one.
+- `onapproved()` (optional), called once a plan is approved. Approve is held from then on, so the CommandPalette uses it to put focus back in its box. A refusal leaves focus on Approve, which can be pressed again.
 
 ## Do and don't
 
@@ -29,4 +30,4 @@ AskPlanCard is one plan from Ask Loadout: every step with why its task was picke
 
 - A `group` named by its heading. The team list and the cap box are labelled fields.
 - Held, Approve is `aria-disabled` and the reason is written under it, never only greyed.
-- What happened is `role="status"`; a refusal is `role="alert"`. Once approved, the fields are disabled.
+- What happened is `role="status"`; a refusal is `role="alert"`. Once approved, the fields are disabled, and focus goes where `onapproved` puts it rather than staying on a held button.

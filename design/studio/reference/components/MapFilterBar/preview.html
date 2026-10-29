@@ -1,0 +1,44 @@
+<!-- @dsCard group="Map" height=760 width=1200 subtitle="Home's Map and Lens filters: presets, kind and state chips, and the projects to hide" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MapFilterBar</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .hd { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .blk { margin: 0 0 28px; min-width: 0; }
+  .note { margin: 0; font-size: 13.5px; color: var(--muted); }
+  .note a { color: var(--accent-text); }
+  @media (max-width: 480px) { body { padding: 16px; } }
+</style>
+</head>
+<body class="ls">
+<div class="blk"><p class="hd">In flight, as a fresh config has it</p><div id="a"></div><p class="note" id="an"></p></div>
+<div class="blk"><p class="hd">Custom: ideas on, two projects hidden</p><div id="b"></div></div>
+<div class="blk"><p class="hd">One state left on</p><div id="c"></div></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio, M = S.MapFilterBar;
+  var projects = ["home-lab", "loadout-cli", "starstats", "webhooks", M.NO_PROJECT];
+  function mount(id, filter, open) {
+    var bar = M({ filter: filter, projects: projects, onchange: function (next) {
+      /* As Home does: write what changed, then show what config now holds. */
+      bar.set({ filter: next });
+      var p = document.getElementById(id + "n");
+      if (p) { p.textContent = M.presetOf(next) === "all" ? "" : "Some lines are hidden by these filters."; }
+    } });
+    document.getElementById(id).appendChild(bar.el);
+    if (open) { var d = bar.el.querySelector("details"); d.open = true; d.dispatchEvent(new Event("toggle")); }
+    return bar;
+  }
+  mount("a", M.filterOf({ mapKinds: "", mapStates: "", mapProjects: "" }));
+  document.getElementById("an").textContent = "3 hidden, 1 waiting on you. ";
+  document.getElementById("an").appendChild(Object.assign(document.createElement("a"), { href: "#home", textContent: "Show everything" }));
+  mount("b", M.filterOf({ mapKinds: "runs, sessions, ideas, tasks", mapStates: "waiting, running, failed", mapProjects: "starstats, (no project)" }), true);
+  mount("c", { kinds: ["runs", "sessions", "tasks"], states: ["waiting"], projects: [] });
+})();
+</script>
+</body>
+</html>

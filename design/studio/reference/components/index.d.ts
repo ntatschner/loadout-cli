@@ -729,6 +729,8 @@ export interface OfficeAction { label: string; cmd?: string; danger?: boolean; a
 export declare function OfficePanel(o: { kind?: string; title: string; lines?: string[]; list?: string[]; teams?: { name: string; list?: string[]; open?: () => void }[]; actions?: OfficeAction[]; rename?: { run: string; current?: string; worked?: string; onSave?: (name: string) => void }; onClose?: () => void }): HTMLElement;
 
 
+
+
 /* ---------- What main's Studio built since the design (stage 14) ---------- */
 /** What 'loadout ask --json' answers (main's ask.ts AskReply). Properties --json leaves out may be missing. */
 export interface AskReply {
@@ -759,6 +761,8 @@ export declare function AskPane(o: {
   onagent: (query: string) => void;
   /** Carries a plan out; passed to each AskPlanCard. */
   approve: (plan: AskPlan, team: string | null, cap: string) => string | Promise<string>;
+  /** Called once a plan is approved; passed to each AskPlanCard. The CommandPalette puts focus back in its box. */
+  onapproved?: () => void;
   onclear: () => void;
 }): {
   el: HTMLElement;
@@ -767,6 +771,11 @@ export declare function AskPane(o: {
   /** Main's AskConversation: adds the request at once and its reply, or why there was none, when asker settles. */
   ask: (query: string, asker: (query: string) => AskReply | Promise<AskReply>) => Promise<void>;
   clear: () => void;
+  readonly turns: AskTurn[];
+  /** A request is out. */
+  readonly asking: boolean;
+  /** The agent's conversation, once it has been asked (the latest reply's agentSession), so a follow-up carries it on with --resume. Cleared by clear(). */
+  readonly agentSession: string | null;
 };
 /** One step of a plan from 'loadout ask --json' (main's ask.ts AskStep). */
 export interface AskStep { kind: "queue-task" | "start-team" | "open-terminal"; project: string | null; task: string | null; says: string; reasons: string[] }
@@ -793,6 +802,8 @@ export declare function AskPlanCard(o: {
   plan: AskPlan;
   /** Carries the plan out and says what happened, or throws (rejects) with why not. */
   approve: (plan: AskPlan, team: string | null, cap: string) => string | Promise<string>;
+  /** Called once a plan is approved, so the palette can take focus back: Approve is held from then on. Not called on a refusal. */
+  onapproved?: () => void;
 }): { el: HTMLElement; plan: AskPlan };
 export type BlockedAction = "carry-on" | "raise" | "requeue" | "edit-requeue" | "set-aside" | "drop";
 /** A run that ended short of its done-when, as `loadout team blocked list --json` reads it (main's lib/blocked.ts BlockedRead). */
@@ -942,6 +953,37 @@ export declare function Journal(o: {
   /** The list's accessible name. Default "Journal"; a node's stream: "What implementer/1 did". */
   label?: string;
 }): { el: HTMLOListElement; /** New lines replace the old; a new label renames it. */ set: (patch: { lines?: JournalEntry[]; label?: string }) => void };
+/** One branch waiting to land, as `loadout pr list --json` gives it (main's Landings.svelte LandingRead). */
+export interface LandingRead {
+  project: string;
+  branch: string;
+  state: "pending" | "draft" | "ready" | "merged" | "abandoned";
+  team: string;
+  /** The run it came from, or "". */
+  run: string;
+  /** The node in that run whose branch it is, or "" for the run's own branch. */
+  node: string;
+  task: string;
+  /** The pull request's address, or "" while it has none. */
+  pullRequest: string;
+  why: string;
+  /** When it started waiting (ISO 8601). */
+  created: string;
+  /** When a squash-merge was asked for, or null when nobody has. */
+  mergeRequested?: string | null;
+  /** True when the branch is gone from the repository. */
+  gone: boolean;
+}
+/** The branches waiting to land: each can be opened as a draft or for review, marked ready, or squash-merged with a subject and body the person writes. Every button shows its `loadout pr` command. */
+export declare function Landings(o: {
+  landings: LandingRead[];
+  /** Runs a command (path "pr open", "pr ready" or "pr merge", its words, and what to say once done) and refreshes the page; false when it did not go through. Leave it out and no buttons show. */
+  act?: (path: string, words: string[], done: string) => Promise<boolean | void> | boolean | void;
+  /** When set, nothing can be pressed, and this says why. */
+  disabledReason?: string;
+  /** The clock ages are counted against, for tests. */
+  now?: Date;
+}): { el: HTMLElement; /** A reread: the merge message being written is kept. */ set: (patch: Partial<{ landings: LandingRead[]; act: (path: string, words: string[], done: string) => Promise<boolean | void> | boolean | void; disabledReason: string; now: Date }>) => void };
 /** A field a list can be filtered or sorted on, as the daemon reports it. */
 export interface ListField { name: string; type: "text" | "choice" | "date" | "number"; description: string; choices: string[] }
 /** What the daemon made of a list's query: its pieces, the fields and the default (main's lib/lists.ts ListShape). */
@@ -964,6 +1006,43 @@ export declare function ListToolbar(o: {
   /** The new query, trimmed: on Enter, after a 350ms pause in typing, or from a chip, menu, reset or Show all. Read the list and call set. */
   onchange: (query: string) => void;
 }): { el: HTMLElement; /** What the daemon said back; a new query replaces what is in the box. */ set: (patch: Partial<{ noun: string; query: string; shape: ListShape | null; shown: number | null; recorded: number | null; problem: string | null; slash: boolean }>) => void; focus: () => void; /** Stops listening for '/'. */ destroy: () => void };
+export type MapKind = "runs" | "sessions" | "ideas" | "tasks";
+export type MapState = "waiting" | "running" | "failed" | "ended";
+export type MapPresetName = "inflight" | "runs" | "all";
+/** What Home's Map and Lens draw (main's lib/mapFilter.ts MapFilter), kept as studio-map-kinds, studio-map-states and studio-map-projects. */
+export interface MapFilter {
+  /** The kinds to show. */
+  kinds: MapKind[];
+  /** The states to show. */
+  states: MapState[];
+  /** Projects to hide, "(no project)" among them for work outside any project, so a project added later shows without anyone choosing it. */
+  projects: string[];
+}
+/** The filters over Home's Map and Lens: the presets In flight, Runs and sessions and Everything (Custom when none matches), a chip per kind and per state (the last one on stays on), and the projects to hide. It keeps nothing of its own: every change goes to onchange, and set() shows what config holds. */
+export declare function MapFilterBar(o: {
+  filter: MapFilter;
+  /** Every project the bar offers: those with work in view, then any hidden that have none, "(no project)" last. None, and there is no Projects list. */
+  projects: string[];
+  /** The filters as they should be next; write them with loadout config set and pass them back with set(). */
+  onchange: (next: MapFilter) => void;
+}): { el: HTMLElement; set: (patch: Partial<{ filter: MapFilter; projects: string[]; onchange: (next: MapFilter) => void }>) => void };
+export declare namespace MapFilterBar {
+  const KINDS: MapKind[];
+  const STATES: MapState[];
+  const NO_PROJECT: "(no project)";
+  const KIND_NAMES: Record<MapKind, string>;
+  const STATE_NAMES: Record<MapState, string>;
+  const PRESETS: Record<MapPresetName, MapFilter>;
+  const PRESET_NAMES: Record<MapPresetName, string>;
+  /** The filters from config (mapKinds, mapStates, mapProjects, and the old mapScope); unset or unknown kinds or states read as In flight's. */
+  function filterOf(prefs: { mapKinds?: string | null; mapStates?: string | null; mapProjects?: string | null; mapScope?: string | null } | null | undefined): MapFilter;
+  /** The preset the filters match, or null for Custom. */
+  function presetOf(filter: MapFilter): MapPresetName | null;
+  /** The three keys and the values that write a filter, in command-line order. */
+  function keysOf(filter: MapFilter): [string, string][];
+  /** One chip turned on or off; the last one on stays on. */
+  function toggled<T extends string>(on: readonly T[], item: T, order: readonly T[]): T[];
+}
 /** A run's rounds as a line small enough for a board row. Decoration (aria-hidden): the row beside it says the same in words. */
 export declare function MiniLine(o: {
   /** Each round's word ("done", "running", "waiting for you", "failed") and its nodes as [name, word]. */

@@ -16,8 +16,8 @@ AskPane is the palette's conversation with Loadout: type `?` and a request in pl
 
 ## What you provide
 
-- `turns` and `asking`, and `set({ turns, asking })` as they change. Or let the pane keep the conversation itself: `ask(query, asker)` adds the request at once and its reply when `asker` settles (main's `AskConversation`), and `clear()`.
-- `onrewrite(rewrite)` to ask a near miss; `onagent(query)` to ask the agent (a job, `loadout ask --use-agent --query=… --json`, carrying on its conversation with `--resume`); `approve(plan, team, cap)` for the plan cards; `onclear()`.
+- `turns` and `asking`, and `set({ turns, asking })` as they change. Or let the pane keep the conversation itself: `ask(query, asker)` adds the request at once and its reply when `asker` settles (main's `AskConversation`), and `clear()`; `asking`, `turns` and `agentSession` (the agent's conversation, carried on by a follow-up) read back how it stands. Give the same pane to `CommandPalette({ ask: { conversation } })` and the conversation lasts across the palette closing and opening.
+- `onrewrite(rewrite)` to ask a near miss; `onagent(query)` to ask the agent (a job, `loadout ask --use-agent --query=… --json`, carrying on its conversation with `--resume`); `approve(plan, team, cap)` for the plan cards; `onapproved()` (optional), called once a plan is approved, which the palette uses to put focus back in its box; `onclear()`.
 
 ## Do and don't
 

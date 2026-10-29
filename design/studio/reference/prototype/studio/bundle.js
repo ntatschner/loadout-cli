@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format": 4, "namespace": "LoadoutStudio", "components": [{"name": "HaloButton"}, {"name": "StartRail"}, {"name": "Command"}, {"name": "Switch"}, {"name": "Tabs"}, {"name": "ModePicker"}, {"name": "Signal"}, {"name": "EventMark"}, {"name": "Urgency"}, {"name": "Meter"}, {"name": "Toasts"}, {"name": "SideRail"}, {"name": "Dialog"}, {"name": "Picker"}, {"name": "CommandPalette"}, {"name": "Halo"}, {"name": "TubeMap"}, {"name": "LineStrip"}, {"name": "NetworkStatus"}, {"name": "Terminal"}, {"name": "SessionView"}, {"name": "Gate"}, {"name": "RunCard"}, {"name": "NeedsYou"}, {"name": "RunShape"}, {"name": "Crew"}, {"name": "DoneWhen"}, {"name": "RunNumbers"}, {"name": "RunDepths"}, {"name": "Patch"}, {"name": "SayToNode"}, {"name": "TeamCard"}, {"name": "TeamNodes"}, {"name": "TeamRules"}, {"name": "RoleRecord"}, {"name": "TeamSheet"}, {"name": "Schedules"}, {"name": "Remedy"}, {"name": "Bin"}, {"name": "Outbox"}, {"name": "ModeSwitcher"}, {"name": "ModeBar"}, {"name": "SessionTabs"}, {"name": "TermDeck"}, {"name": "RunBoard"}, {"name": "QuietList"}, {"name": "FocusFrame"}, {"name": "WorkDesk"}, {"name": "ActionPane"}, {"name": "CommandBar"}, {"name": "KeyHelp"}, {"name": "ActionDrawer"}, {"name": "TerminalOnly"}, {"name": "HealthList"}, {"name": "IdeaStages"}, {"name": "QuestionSet"}, {"name": "PlanLayer"}, {"name": "NoteDump"}, {"name": "ProjectTile"}, {"name": "TaskBoard"}, {"name": "LoadStack"}, {"name": "ConfigList"}, {"name": "StoreList"}, {"name": "TopicEditor"}, {"name": "TokenSplit"}, {"name": "SpendBars"}, {"name": "PageBeside"}, {"name": "QuietPage"}, {"name": "ForgetProject"}, {"name": "ProgressLine"}, {"name": "CriteriaGrid"}, {"name": "PickUpSheet"}, {"name": "RefusalsList"}, {"name": "RedAlert"}, {"name": "TaskPicker"}, {"name": "ValueReport"}, {"name": "FieldMap"}, {"name": "OfficeView"}, {"name": "OfficePanel"}, {"name": "ActionForm"}, {"name": "ItemList"}, {"name": "SettingRow"}, {"name": "Readout"}, {"name": "ActionRow"}, {"name": "AskPane"}, {"name": "AskPlanCard"}, {"name": "BlockedRuns"}, {"name": "ContextMark"}, {"name": "ConversationList"}, {"name": "Handover"}, {"name": "JobResult"}, {"name": "Journal"}, {"name": "ListToolbar"}, {"name": "MiniLine"}, {"name": "ProgressRing"}, {"name": "QueuePanel"}, {"name": "Spend"}, {"name": "SplitCross"}, {"name": "Splitter"}, {"name": "StatusBlock"}, {"name": "StatusStrip"}, {"name": "TaskDetail"}, {"name": "TriggerRules"}]} */
+/* @ds-bundle: {"format": 4, "namespace": "LoadoutStudio", "components": [{"name": "HaloButton"}, {"name": "StartRail"}, {"name": "Command"}, {"name": "Switch"}, {"name": "Tabs"}, {"name": "ModePicker"}, {"name": "Signal"}, {"name": "EventMark"}, {"name": "Urgency"}, {"name": "Meter"}, {"name": "Toasts"}, {"name": "SideRail"}, {"name": "Dialog"}, {"name": "Picker"}, {"name": "CommandPalette"}, {"name": "Halo"}, {"name": "TubeMap"}, {"name": "LineStrip"}, {"name": "NetworkStatus"}, {"name": "Terminal"}, {"name": "SessionView"}, {"name": "Gate"}, {"name": "RunCard"}, {"name": "NeedsYou"}, {"name": "RunShape"}, {"name": "Crew"}, {"name": "DoneWhen"}, {"name": "RunNumbers"}, {"name": "RunDepths"}, {"name": "Patch"}, {"name": "SayToNode"}, {"name": "TeamCard"}, {"name": "TeamNodes"}, {"name": "TeamRules"}, {"name": "RoleRecord"}, {"name": "TeamSheet"}, {"name": "Schedules"}, {"name": "Remedy"}, {"name": "Bin"}, {"name": "Outbox"}, {"name": "ModeSwitcher"}, {"name": "ModeBar"}, {"name": "SessionTabs"}, {"name": "TermDeck"}, {"name": "RunBoard"}, {"name": "QuietList"}, {"name": "FocusFrame"}, {"name": "WorkDesk"}, {"name": "ActionPane"}, {"name": "CommandBar"}, {"name": "KeyHelp"}, {"name": "ActionDrawer"}, {"name": "TerminalOnly"}, {"name": "HealthList"}, {"name": "IdeaStages"}, {"name": "QuestionSet"}, {"name": "PlanLayer"}, {"name": "NoteDump"}, {"name": "ProjectTile"}, {"name": "TaskBoard"}, {"name": "LoadStack"}, {"name": "ConfigList"}, {"name": "StoreList"}, {"name": "TopicEditor"}, {"name": "TokenSplit"}, {"name": "SpendBars"}, {"name": "PageBeside"}, {"name": "QuietPage"}, {"name": "ForgetProject"}, {"name": "ProgressLine"}, {"name": "CriteriaGrid"}, {"name": "PickUpSheet"}, {"name": "RefusalsList"}, {"name": "RedAlert"}, {"name": "TaskPicker"}, {"name": "ValueReport"}, {"name": "FieldMap"}, {"name": "OfficeView"}, {"name": "OfficePanel"}, {"name": "ActionForm"}, {"name": "ItemList"}, {"name": "SettingRow"}, {"name": "Readout"}, {"name": "ActionRow"}, {"name": "AskPane"}, {"name": "AskPlanCard"}, {"name": "BlockedRuns"}, {"name": "ContextMark"}, {"name": "ConversationList"}, {"name": "Handover"}, {"name": "JobResult"}, {"name": "Journal"}, {"name": "ListToolbar"}, {"name": "MiniLine"}, {"name": "ProgressRing"}, {"name": "QueuePanel"}, {"name": "Spend"}, {"name": "SplitCross"}, {"name": "Splitter"}, {"name": "StatusBlock"}, {"name": "StatusStrip"}, {"name": "TaskDetail"}, {"name": "TriggerRules"}, {"name": "Landings"}, {"name": "MapFilterBar"}]} */
 /* Loadout Studio — plain JavaScript, no framework, no imports, no network.
    Components are CSS classes plus small helpers, written to port line for line to Svelte. */
 (function () {
@@ -47,6 +47,8 @@
   var GLYPHS = {"play": "M7 5 L15 10 L7 15 Z", "round": "M15.5 7 A6 6 0 1 0 16 11.5 M15.5 3 V7 H11.5", "needs": "M10 4 V11.5 M10 15 V15.2", "failed": "M6 6 L14 14 M14 6 L6 14", "blocked": "M4 10a6 6 0 1 0 12 0a6 6 0 1 0-12 0 M6.5 10 H13.5", "limited": "M4 14 A6 6 0 0 1 16 14 M10 14 L6.8 10.6", "done": "M5 10.5 L8.5 14 L15 6.5", "idle": "M5 10 H15", "open": "M5 10a5 5 0 1 0 10 0a5 5 0 1 0-10 0", "held": "M7.5 5.5 V14.5 M12.5 5.5 V14.5", "stopped": "M6 6 H14 V14 H6 Z", "unknown": "M7.5 7.5 A2.5 2.5 0 1 1 10 10 V11.5 M10 14.8 V15", "dropped": "M5 15 L15 5", "shaping": "M10 3 L16 10 L10 17 L4 10 Z"};
   var STATES = {"working": ["moving", "play", "breathe"], "running": ["moving", "play", "breathe"], "doing": ["moving", "play", "breathe"], "round running": ["moving", "round", "spin"], "needs a decision": ["needs", "needs", "pulse"], "waiting for you": ["needs", "needs", "pulse"], "failed": ["bad", "failed", "hard"], "last round failed": ["bad", "failed", "hard"], "blocked": ["bad", "blocked", "hard"], "limited": ["bad", "limited", "hard"], "done": ["good", "done", "settle"], "met": ["good", "done", "settle"], "accepted": ["good", "done", "settle"], "idle": ["rest", "idle", "dim"], "open": ["rest", "open", "still"], "captured": ["rest", "open", "still"], "shaping": ["rest", "shaping", "still"], "held": ["rest", "held", "still"], "held after this round": ["rest", "held", "still"], "stopped": ["rest", "stopped", "still"], "not attempted": ["rest", "open", "dashed"], "unknown": ["rest", "unknown", "flicker"], "dropped": ["rest", "dropped", "strike"], "needs approval": ["needs", "needs", "pulse"], "connecting": ["rest", "open", "dashed"], "reconnecting": ["rest", "round", "dashed"], "ended": ["good", "done", "settle"], "exited with an error": ["bad", "failed", "hard"], "only watching": ["rest", "held", "still"], "lost": ["bad", "blocked", "hard"], "unmet": ["bad", "failed", "hard"], "no verdict": ["rest", "unknown", "still"], "quiet": ["needs", "needs", "pulse"], "projected over": ["needs", "limited", "pulse"], "trusted": ["good", "done", "settle"], "not trusted": ["rest", "open", "still"], "changed since trusted": ["needs", "needs", "pulse"], "to put right": ["needs", "needs", "pulse"], "stalled": ["needs", "held", "pulse"], "not approved": ["rest", "open", "still"], "not on this machine": ["rest", "open", "dashed"], "scheduled": ["rest", "held", "still"]};
   var SVGNS = "http://www.w3.org/2000/svg";
+  /* Teams words as main's signals.ts has them since 0.104: a lead or a node that went silent twice and was given up on, and a run abandoned. */
+  STATES.stalled = ["bad", "blocked", "hard"]; STATES.stuck = ["bad", "blocked", "hard"]; STATES.abandoned = ["rest", "stopped", "still"];
 
   function h(tag, attrs, kids) {
     var el = document.createElement(tag);
@@ -60,12 +62,13 @@
   }
   function cmd(text) { return text ? h("code", { "class": "ls-cmd", text: text }) : null; }
 
-  /* HaloButton: a word beside a ring of light. kind: "" | "needs" | "danger"; size: "" | "small" | "big". */
+  /* HaloButton: a word beside a ring of light. kind: "" | "needs" | "danger"; size: "" | "small" | "big".
+     describedBy points the button at a line that says more; key and next mark it as main's data-k and data-next do. */
   function HaloButton(o) {
     o = o || {};
     var cls = ["ls-halo", o.kind, o.size, o.solid ? "solid" : ""].filter(Boolean).join(" ");
     var ring = h("span", { "class": "ring", "aria-hidden": "true" }, o.glyph ? [h("b", { text: o.glyph })] : []);
-    var btn = h("button", { type: "button", "class": cls, "aria-disabled": o.disabledReason || o.inactive ? "true" : null, "aria-describedby": o.describedBy || null,
+    var btn = h("button", { type: "button", "class": cls, "aria-disabled": o.disabledReason || o.inactive ? "true" : null, "aria-describedby": o.describedBy || null, "data-k": o.key || null, "data-next": o.next || null,
       onclick: function (e) { if (!o.disabledReason && !o.inactive && o.onPress) { o.onPress(e); } } }, [ring, o.label || ""]);
     if (!o.cmd && !o.disabledReason) { return btn; }
     var line = cmd(o.disabledReason || o.cmd);
@@ -323,7 +326,7 @@
 (function () {
   "use strict";
   var NS = window.LoadoutStudio = window.LoadoutStudio || {};
-  var ICONS = {"home": "M3 10 L10 3 L17 10 M5 8.5 V17 H15 V8.5", "sessions": "M3 4.5 H17 V15.5 H3 Z M6 8.5 L8.5 10.5 L6 12.5 M10 12.5 H14", "ideas": "M10 2 L15 10 L10 18 L5 10 Z", "teams": "M3.5 7a2 2 0 1 0 4 0a2 2 0 1 0-4 0 M12.5 7a2 2 0 1 0 4 0a2 2 0 1 0-4 0 M8 14.5a2 2 0 1 0 4 0a2 2 0 1 0-4 0 M7 8.5 L9 12.5 M13 8.5 L11 12.5", "memory": "M4 4.5 H16 M4 8.5 H16 M4 12.5 H16 M4 16.5 H11", "context": "M10 3 L17 7 L10 11 L3 7 Z M3 10.5 L10 14.5 L17 10.5 M3 14 L10 18 L17 14", "spend": "M10 2 V18 M14 6 C13 4 7 4 7 7 C7 10 13 9.5 13 13 C13 16 7 16.5 6 14", "projects": "M3 5.5 H8 L10 7.5 H17 V16 H3 Z", "search": "M8.5 3a5.5 5.5 0 1 0 0 11a5.5 5.5 0 1 0 0-11 M12.6 12.6 L17 17", "settings": "M7 10a3 3 0 1 0 6 0a3 3 0 1 0-6 0 M10 2 V5 M10 15 V18 M2 10 H5 M15 10 H18 M4.3 4.3 L6.4 6.4 M13.6 13.6 L15.7 15.7 M15.7 4.3 L13.6 6.4 M6.4 13.6 L4.3 15.7"};
+  var ICONS = {"home": "M3 10 L10 3 L17 10 M5 8.5 V17 H15 V8.5", "sessions": "M3 4.5 H17 V15.5 H3 Z M6 8.5 L8.5 10.5 L6 12.5 M10 12.5 H14", "ideas": "M10 2 L15 10 L10 18 L5 10 Z", "teams": "M3.5 7a2 2 0 1 0 4 0a2 2 0 1 0-4 0 M12.5 7a2 2 0 1 0 4 0a2 2 0 1 0-4 0 M8 14.5a2 2 0 1 0 4 0a2 2 0 1 0-4 0 M7 8.5 L9 12.5 M13 8.5 L11 12.5", "events": "M6 12.5 V8.5 A4 4 0 0 1 14 8.5 V12.5 L15.5 14.5 H4.5 Z M8.5 16.5 A1.5 1.5 0 0 0 11.5 16.5", "memory": "M4 4.5 H16 M4 8.5 H16 M4 12.5 H16 M4 16.5 H11", "context": "M10 3 L17 7 L10 11 L3 7 Z M3 10.5 L10 14.5 L17 10.5 M3 14 L10 18 L17 14", "spend": "M10 2 V18 M14 6 C13 4 7 4 7 7 C7 10 13 9.5 13 13 C13 16 7 16.5 6 14", "projects": "M3 5.5 H8 L10 7.5 H17 V16 H3 Z", "commands": "M4 6 L9 10 L4 14 M11 14.5 H16", "search": "M8.5 3a5.5 5.5 0 1 0 0 11a5.5 5.5 0 1 0 0-11 M12.6 12.6 L17 17", "settings": "M7 10a3 3 0 1 0 6 0a3 3 0 1 0-6 0 M10 2 V5 M10 15 V18 M2 10 H5 M15 10 H18 M4.3 4.3 L6.4 6.4 M13.6 13.6 L15.7 15.7 M15.7 4.3 L13.6 6.4 M6.4 13.6 L4.3 15.7"};
   var SVGNS = "http://www.w3.org/2000/svg";
   function h(tag, attrs, kids) {
     var el = document.createElement(tag);
@@ -349,30 +352,35 @@
     });
   }
 
-  /* SideRail: icons with live counts; widens over the page with a dim on hover or focus; below 600px a Pages tab slides it in. */
+  /* SideRail: icons with live counts; widens over the page with a dim on hover or focus; below 600px a Pages tab slides it in.
+     Going somewhere from the slid-in list puts it away. foot is what sits at the foot of the rail, such as the Appearance row. */
   function SideRail(o) {
     o = o || {};
     var root = h("div", { "class": "ls-nav" + (o.narrow ? " narrow" : "") });
     function item(p, inSlide) {
       var cur = p.key === o.current;
-      return h("a", { href: p.href || "#", "class": "ls-rl" + (p.need ? " need" : ""), "aria-current": cur ? "page" : null },
+      return h("a", { href: p.href || "#" + p.key, "class": "ls-rl" + (p.need ? " need" : ""), "aria-current": cur ? "page" : null, onclick: function () { if (inSlide) { put(); } } },
         [icon(ICONS[p.key] || ICONS.home), h("span", { "class": "n", text: p.name }), h("span", { "class": "f", text: p.fact || "" }), h("span", { "class": "needdot", "aria-hidden": "true", text: "!" })]);
     }
-    function search() {
-      return h("button", { type: "button", "class": "ls-rl search", "aria-keyshortcuts": "Control+K Meta+K", onclick: function () { if (o.onSearch) { o.onSearch(); } } },
+    function search(inSlide) {
+      return h("button", { type: "button", "class": "ls-rl search", "aria-keyshortcuts": "Control+K Meta+K", onclick: function () { if (inSlide) { put(); } if (o.onSearch) { o.onSearch(); } } },
         [icon(ICONS.search), h("span", { "class": "n", text: "Search" }), h("span", { "class": "f", text: "Ctrl K · go to or do" })]);
     }
+    /* A function is called once for the rail and once for the slid-in list; a node can only sit in the rail. */
+    function foot(inSlide) { var f = typeof o.foot === "function" ? o.foot(!!inSlide) : inSlide ? null : o.foot; return f ? (f.el || f) : null; }
     var pages = o.pages || [];
-    var nav = h("nav", { "class": "ls-railnav", "aria-label": o.label || "Studio" }, [h("div", { "class": "mark" }, [h("i", { "aria-hidden": "true" }), h("b", { text: "LOADOUT" })]), search()].concat(pages.map(function (p) { return item(p); })));
+    var nav = h("nav", { "class": "ls-railnav", "aria-label": o.label || "Studio" }, [h("div", { "class": "mark" }, [h("i", { "aria-hidden": "true" }), h("b", { text: "LOADOUT" })]), search()].concat(pages.map(function (p) { return item(p); }), [foot()]));
     if (o.contained) { nav.style.position = "absolute"; }
     var tabId = "ls-pages-" + Math.random().toString(36).slice(2, 7);
     var tab = h("button", { type: "button", id: tabId, "class": "ls-pagestab", "aria-expanded": "false", text: "Pages" });
     var layer = null;
-    function close() { if (!layer) { return; } layer.forEach(function (n) { n.remove(); }); layer = null; tab.setAttribute("aria-expanded", "false"); tab.focus(); }
+    /* Put away without moving focus: what was pressed takes it (the page, or the palette). */
+    function put() { if (!layer) { return; } layer.forEach(function (n) { n.remove(); }); layer = null; tab.setAttribute("aria-expanded", "false"); }
+    function close() { if (!layer) { return; } put(); tab.focus(); }
     function open() {
       var scrim = h("div", { "class": "ls-slidescrim", onclick: close });
       var closeBtn = h("button", { type: "button", "class": "close", onclick: close }, [h("span", { "aria-hidden": "true", text: "×" }), "Close"]);
-      var slide = h("nav", { "class": "ls-slide", "aria-label": o.label || "Studio" }, [closeBtn, search()].concat(pages.map(function (p) { return item(p, true); })));
+      var slide = h("nav", { "class": "ls-slide", "aria-label": o.label || "Studio" }, [closeBtn, search(true)].concat(pages.map(function (p) { return item(p, true); }), [foot(true)]));
       slide.addEventListener("keydown", function (e) { if (e.key === "Escape") { e.stopPropagation(); close(); } });
       root.appendChild(scrim); root.appendChild(slide); layer = [scrim, slide];
       tab.setAttribute("aria-expanded", "true"); setTimeout(function () { closeBtn.focus(); }, 30);
@@ -443,11 +451,29 @@
     return field;
   }
 
-  /* CommandPalette: Ctrl or Cmd K. Go to a page, find work in flight, or do something; every action says its command. */
+  /* CommandPalette: Ctrl or Cmd K. Go to a page, find work in flight, or do something; every action says its command.
+     Given search, what is typed is also looked for everywhere once it is two characters long and typing has paused, and what that finds
+     follows the palette's own rows. Given ask, a leading '?', or the Ask Loadout row, turns it into a conversation with Loadout (an AskPane)
+     instead, which Enter asks; the conversation is kept when the palette closes, and focus comes back to the box once a plan is approved. */
   function matches(q, text) { if (!q) { return true; } var t = text.toLowerCase(); return q.toLowerCase().split(/\s+/).filter(Boolean).every(function (w) { return t.indexOf(w) >= 0; }); }
+  function isAsk(typed) { return /^\s*\?/.test(typed || ""); }
+  function askRequest(typed) { return String(typed || "").replace(/^\s+/, "").replace(/^\?+/, "").trim(); }
   function CommandPalette(o) {
     o = o || {};
-    var dlg = null, q = "", active = 0, flat = [], input, list, id = "ls-pal-" + Math.random().toString(36).slice(2, 7);
+    var dlg = null, q = "", active = 0, flat = [], input, list, askWrap, foot, id = "ls-pal-" + Math.random().toString(36).slice(2, 7);
+    var ask = o.ask || null, conv = ask ? ask.conversation || null : null, found = [], timer = null, asked = 0;
+    var placeholder = o.placeholder || (ask ? "Go to a page, find work, or do something, or ? to ask" : "Go to a page, find work, or do something");
+    function asking() { return !!ask && isAsk(q); }
+    /* The conversation: the one given, or one the palette keeps for as long as it lives. Bound to this palette's box each time it opens. */
+    function pane() {
+      if (!conv && NS.AskPane) { conv = NS.AskPane({ turns: [], asking: false }); }
+      if (conv) {
+        conv.set({ onrewrite: function (rewrite) { askNow(rewrite); }, approve: ask.approve, onclear: function () { conv.clear(); },
+          onagent: function (text) { if (ask.agent) { conv.ask(text, function (query) { return ask.agent(query, conv.agentSession || null); }); } },
+          onapproved: function () { if (input) { input.focus(); } } });
+      }
+      return conv;
+    }
     function rows() {
       var level = function (r) { return !q ? 1 : (matches(q, r.label) ? 2 : (matches(q, r.label + " " + (r.sub || "") + " " + (r.kind || "")) ? 1 : 0)); };
       var groups = (o.groups || []).map(function (g) {
@@ -455,10 +481,21 @@
         return { name: g.name, items: items, best: items.length ? items[0].lvl : 0 };
       }).filter(function (g) { return g.items.length; });
       if (q) { groups.sort(function (a, b) { return b.best - a.best; }); }
-      return groups;
+      /* Asking is offered after the palette's own rows, so Enter on a page or an action still does what it always did. */
+      if (ask && q.trim().length >= 2) { groups.push({ name: "Ask Loadout", items: [{ key: "ask-loadout", glyph: "?", label: "Ask Loadout: “" + q.trim() + "”", sub: "answered from Loadout's own records", stay: true, run: function () { askNow(q.trim()); } }] }); }
+      return groups.concat(found.filter(function (g) { return g.items && g.items.length; }));
+    }
+    function paintFoot() {
+      foot.textContent = "";
+      (asking() ? ["Enter to ask", "Esc to close, and the conversation is kept"] : ["↑ ↓ to move", "Enter to go or do"].concat(ask ? ["? to ask Loadout"] : [], ["Esc to close"])).forEach(function (t) { foot.appendChild(h("span", { text: t })); });
     }
     function paint() {
-      var groups = rows(); flat = []; list.textContent = "";
+      var now = asking();
+      input.setAttribute("aria-expanded", now ? "false" : "true");
+      askWrap.hidden = !now; list.hidden = now; paintFoot();
+      if (now) { var p = pane(); if (p && p.el.parentNode !== askWrap) { askWrap.textContent = ""; askWrap.appendChild(p.el); } }
+      var groups = now ? [] : rows(); flat = []; list.textContent = "";
+      if (now) { input.removeAttribute("aria-activedescendant"); return; }
       if (!groups.length) { list.appendChild(h("p", { "class": "ls-pempty", text: "Nothing matches “" + q + "”. Try a page name, a project, or a word from a session." })); input.removeAttribute("aria-activedescendant"); return; }
       active = Math.min(active, 0 + Math.max(0, groups.reduce(function (n, g) { return n + g.items.length; }, 0) - 1));
       groups.forEach(function (g, gi) {
@@ -466,7 +503,7 @@
         var grp = h("div", { "class": "ls-pgroup", role: "group", "aria-labelledby": gid }, [h("h3", { id: gid, text: g.name })]);
         g.items.forEach(function (r) {
           var i = flat.length; flat.push(r);
-          grp.appendChild(h("div", { role: "option", id: id + "-o" + i, "class": "ls-popt" + (r.need ? " need" : ""), "aria-selected": i === active ? "true" : "false",
+          grp.appendChild(h("div", { role: "option", id: id + "-o" + i, "class": "ls-popt" + (r.need ? " need" : ""), "aria-selected": i === active ? "true" : "false", tabindex: "-1",
             onclick: function () { run(r); }, onmousemove: function () { if (active !== i) { active = i; paint(); } } },
             [h("span", { "class": "g", "aria-hidden": "true", text: r.glyph || "→" }), h("span", { "class": "t", text: r.label }), h("span", { "class": "s" + (/^\$ loadout /.test(r.sub || "") ? " is-cmd" : ""), text: r.sub || "" }), h("span", { "class": "k", text: r.kind || "" })]));
         });
@@ -475,29 +512,46 @@
       input.setAttribute("aria-activedescendant", id + "-o" + active);
       var a = document.getElementById(id + "-o" + active); if (a && a.scrollIntoView) { a.scrollIntoView({ block: "nearest" }); }
     }
-    function run(r) { close(); if (r.run) { r.run(r); } }
-    function close() { if (dlg) { dlg.close(); dlg = null; } }
+    /* Looked for everywhere once typing pauses; an answer to an older query is dropped. */
+    function look() {
+      var typed = q.trim(), mine = ++asked;
+      clearTimeout(timer);
+      if (!o.search || typed.length < 2 || isAsk(typed)) { found = []; return; }
+      timer = setTimeout(function () { Promise.resolve(o.search(typed)).then(function (groups) { if (mine === asked && dlg) { found = groups || []; paint(); } }, function () {}); }, 250);
+    }
+    /* Asks Loadout and leaves the box ready for the next request. */
+    function askNow(typed) {
+      var wanted = askRequest(typed);
+      q = "? "; if (input) { input.value = q; input.focus(); }
+      paint();
+      var p = pane();
+      if (p && wanted) { p.ask(wanted, ask.asker); }
+    }
+    function run(r) { if (!r.stay) { close(); } if (r.run) { r.run(r); } }
+    function close() { if (dlg) { dlg.close(); dlg = null; } clearTimeout(timer); }
     function open() {
       if (dlg) { return; }
-      q = ""; active = 0;
-      input = h("input", { role: "combobox", "aria-expanded": "true", "aria-controls": id + "-list", "aria-autocomplete": "list", "aria-label": o.placeholder || "Go to a page, find work, or do something", placeholder: o.placeholder || "Go to a page, find work, or do something", autocomplete: "off" });
+      q = ""; active = 0; found = [];
+      input = h("input", { name: "palette", role: "combobox", "aria-expanded": "true", "aria-controls": id + "-list", "aria-autocomplete": "list", "aria-label": placeholder, placeholder: placeholder, autocomplete: "off" });
       list = h("div", { id: id + "-list", "class": "ls-plist", role: "listbox", "aria-label": "Results" });
-      input.addEventListener("input", function () { q = input.value; active = 0; paint(); });
+      askWrap = h("div", { "class": "ls-plist", hidden: true });
+      input.addEventListener("input", function () { q = input.value; active = 0; look(); paint(); });
       input.addEventListener("keydown", function (e) {
         var n = flat.length, d = { ArrowDown: 1, ArrowUp: -1 }[e.key];
+        if (e.key === "Enter" && asking()) { e.preventDefault(); if (!(conv && conv.asking)) { askNow(q); } return; }
         if (e.key === "Enter") { e.preventDefault(); if (flat[active]) { run(flat[active]); } return; }
         if (e.key === "Home" && e.ctrlKey) { e.preventDefault(); active = 0; paint(); return; }
         if (d && n) { e.preventDefault(); active = (active + d + n) % n; paint(); }
       });
       var field = h("div", { "class": "ls-start" }, [h("div", { "class": "field" }, [input, h("span", { "class": "ls-kbd", "aria-hidden": "true", text: "Esc" })])]);
-      var foot = h("div", { "class": "ls-pfoot", "aria-hidden": "true" }, [h("span", { text: "↑ ↓ to move" }), h("span", { text: "Enter to go or do" }), h("span", { text: "Esc to close" })]);
-      var content = h("div", {}, [field, list, foot]);
-      dlg = Dialog({ label: "Command palette", content: content, extraClass: "pal", host: o.host, contained: o.contained, behind: o.behind, onClose: function () { dlg = null; }, initialFocus: "input" });
+      foot = h("div", { "class": "ls-pfoot", "aria-hidden": "true" });
+      var content = h("div", {}, [field, askWrap, list, foot]);
+      dlg = Dialog({ label: "Command palette", content: content, extraClass: "pal", host: o.host, contained: o.contained, behind: o.behind, onClose: function () { dlg = null; clearTimeout(timer); }, initialFocus: "input" });
       dlg.open(); paint();
     }
     function onKey(e) { if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) { e.preventDefault(); if (dlg) { close(); } else { open(); } } }
     if (o.bindKeys !== false) { window.addEventListener("keydown", onKey); }
-    return { open: open, close: close, unbind: function () { window.removeEventListener("keydown", onKey); } };
+    return { open: open, close: close, unbind: function () { window.removeEventListener("keydown", onKey); }, get conversation() { return conv; } };
   }
 
   /* Halo: the Lens focus. Orbit is five stage rings with a body orbiting the one the work is on; Gyroscope is three tilted rings for stage, the hour and spend. */
@@ -725,6 +779,8 @@
     unknown: { word: "unknown", typing: true },
     waiting: { word: "waiting for you", typing: true, ask: ["needs", "It has finished and is waiting for your next message.", "Type a reply"] },
     approval: { word: "needs approval", typing: true, ask: ["needs", "It is asking for approval. The choices are in the terminal; answer them there.", "Go to the question"] },
+    /* Quiet on purpose: no ask, so no badge, sound or count. It turns into waiting for you by itself if the work goes silent past its time. */
+    background: { word: "waiting on background work", typing: true },
     ended: { word: "ended", typing: false, ask: ["good", "Ended. Its transcript is kept.", null, "resume"] },
     error: { word: "exited with an error", typing: false, ask: ["bad", "Exited with an error (exit code {code}). Its transcript is kept.", null, "resume"] },
     reconnecting: { word: "reconnecting", typing: false, ask: ["rest", "Lost touch with the daemon. Reconnecting; the output so far is kept.", "Try now"] },
@@ -732,21 +788,51 @@
     lost: { word: "lost", typing: false, ask: ["bad", "This session ended when the daemon restarted. Its transcript is kept.", null, "resume"] }
   };
 
+  /* The line that carries a session on in a terminal: the project is named, since 'loadout resume' reads the folder it is typed in; every project is searched where it is not known. */
+  function resumeCommand(agentSession, project) {
+    var where = project ? "--project " + project : "--all";
+    return agentSession ? "$ loadout resume " + agentSession + " " + where : "$ loadout resume --last " + where;
+  }
+
   /* Terminal: the agent's own screen, in Studio's palette. The real one is xterm.js themed from the term-* tokens; this is its reference look. */
   function Terminal(o) {
     o = o || {};
-    var state = o.state || "working", cols = (o.size || [80, 24])[0], rows = (o.size || [80, 24])[1], size = 13, fit = !!o.fit, typed = "";
+    var state = o.state || "working", cols = (o.size || [80, 24])[0], rows = (o.size || [80, 24])[1], size = 13, fit = !!o.fit, typed = "", refused = null;
     var screen = h("pre", { "class": "screen", tabindex: "0", role: "log", "aria-label": "Terminal: " + (o.title || "session"), "aria-roledescription": "terminal" });
     var cursorLine = h("span"), cur = h("span", { "class": "cur", text: " " });
     var sig = h("span"), sizeEl = h("span", { "class": "size", text: cols + " × " + rows });
     var fitBtn = h("button", { type: "button", "class": "tbtn", "aria-pressed": fit ? "true" : "false", text: "Fit", title: "Fit 80 columns to the width", onclick: function () { setFit(!fit); } });
     var smaller = h("button", { type: "button", "class": "tbtn", "aria-label": "Smaller text", text: "A−", onclick: function () { zoom(-1); } });
     var larger = h("button", { type: "button", "class": "tbtn", "aria-label": "Larger text", text: "A+", onclick: function () { zoom(1); } });
-    var bar = h("div", { "class": "tbar" }, [sig, h("span", { text: (o.project || "") + (o.agent ? " · " + o.agent : "") }), sizeEl, h("span", { "class": "keyhint", text: "Ctrl+] leaves the terminal" }), h("span", { "class": "grow" }), smaller, larger, fitBtn]);
-    var askText = h("p"), askBtnWrap = h("span"), askCmd = h("span");
+    var grow = h("span", { "class": "grow" });
+    var bar = h("div", { "class": "tbar" }, [sig, h("span", { text: [o.project, o.agent].filter(Boolean).join(" · ") }), sizeEl, h("span", { "class": "keyhint", text: "Ctrl+] leaves the terminal" }), h("span", { "class": "keyhint", text: "Ctrl+V paste · Alt+V image · right-click copy or paste" }), grow, smaller, larger, fitBtn]);
+    var askText = h("p"), askBtnWrap = h("span"), askCmd = h("span", { style: "display: contents" });
     var ask = h("div", { "class": "ask", role: "status" }, [askText, askBtnWrap, askCmd]);
+    var footEl = h("div", { "class": "foot" });
     var el = h("section", { "class": "ls-term" + (fit ? " fit" : ""), "aria-label": o.label || "Live terminal" }, [bar, screen, ask]);
     screen.appendChild(cursorLine); cursorLine.appendChild(cur);
+    /* foot: a row under the screen, as main's Terminal has for the session's StatusStrip. A node, or anything with .el; null takes it away. */
+    function setFoot(node) {
+      footEl.textContent = "";
+      var n = node && node.el ? node.el : node;
+      if (n) { footEl.appendChild(n); if (!footEl.parentNode) { el.appendChild(footEl); } } else if (footEl.parentNode) { footEl.remove(); }
+    }
+    /* Said on the bar when the browser will not hand over or take the clipboard, so a copy or paste that did nothing says why. */
+    function clipboard(call) {
+      return Promise.resolve().then(function () { if (!navigator.clipboard) { throw new Error("no clipboard"); } return call(navigator.clipboard); })
+        .then(function (r) { setRefused(false); return r; }, function () { setRefused(true); return undefined; });
+    }
+    function setRefused(on) {
+      if (on && !refused) { refused = h("span", { role: "alert", text: "The browser refused the clipboard" }); bar.insertBefore(refused, grow); }
+      else if (!on && refused) { refused.remove(); refused = null; }
+    }
+    function selectionHere() { var sel = window.getSelection && window.getSelection(); return sel && !sel.isCollapsed && screen.contains(sel.anchorNode) ? sel : null; }
+    /* Copies what is selected and clears it, as Windows Terminal does. */
+    function copySelection(sel) { var text = sel.toString(); sel.removeAllRanges(); clipboard(function (b) { return b.writeText(text); }); }
+    function paste() {
+      if (!STATES[state].typing) { return; }
+      clipboard(function (b) { return b.readText(); }).then(function (text) { if (text) { typed += text.split("\n")[0]; paintPrompt(); screen.scrollTop = screen.scrollHeight; } });
+    }
 
     function zoom(d) { size = Math.max(9, Math.min(22, size + d)); el.style.setProperty("--term-size", size + "px"); setFit(false); }
     function setFit(v) { fit = v; el.classList.toggle("fit", fit); fitBtn.setAttribute("aria-pressed", fit ? "true" : "false"); }
@@ -770,23 +856,38 @@
         ask.hidden = false; ask.className = "ask " + st.ask[0];
         askText.textContent = st.ask[1].replace("{code}", info.code === undefined ? "1" : info.code);
         askBtnWrap.textContent = "";
-        if (st.ask[2] && NS.HaloButton) { askBtnWrap.appendChild(NS.HaloButton({ label: st.ask[2], size: "small", kind: st.ask[0] === "needs" ? "needs" : "", onPress: function () { if (s === "reconnecting") { if (o.onRetry) { o.onRetry(); } } else { screen.focus(); screen.scrollTop = screen.scrollHeight; } } })); }
+        if (st.ask[2] && NS.HaloButton) { askBtnWrap.appendChild(NS.HaloButton({ label: st.ask[2], size: "small", kind: st.ask[0] === "needs" ? "needs" : "", cmd: s === "reconnecting" ? "reconnects · changes nothing" : "puts the keyboard in the terminal", onPress: function () { if (s === "reconnecting") { if (o.onRetry) { o.onRetry(); } } else { screen.focus(); screen.scrollTop = screen.scrollHeight; } } })); }
         askCmd.textContent = "";
-        if (st.ask[3] === "resume") { askCmd.appendChild(h("code", { "class": "ls-cmd", text: "Carry it on in a terminal: $ loadout resume " + (o.sessionId || "<session-id>") })); }
+        if (st.ask[3] === "resume") { var line = resumeCommand(o.sessionId, o.project); askCmd.appendChild(NS.Command ? NS.Command({ why: "Carry it on in a terminal:", command: line }) : h("code", { "class": "ls-cmdline", text: "Carry it on in a terminal: " + line })); }
       } else { ask.hidden = true; }
       paintPrompt();
     }
     screen.addEventListener("keydown", function (e) {
-      if (e.ctrlKey && e.key === "]") { e.preventDefault(); var list = focusables(document.body), i = list.indexOf(screen); var next = o.leaveTo || list[i + 1] || list[0]; if (next) { next.focus(); } return; }
+      if (e.ctrlKey && !e.altKey && !e.metaKey && (e.key === "]" || e.code === "BracketRight")) {
+        e.preventDefault();
+        if (o.leaveTo) { o.leaveTo.focus(); return; }
+        /* Where nothing was named, the page around says where the keyboard goes (the tab in a deck); else the next control on the page. */
+        var asked = new CustomEvent("leaveterminal", { bubbles: true, cancelable: true });
+        if (!el.dispatchEvent(asked)) { return; }
+        var list = focusables(document.body), i = list.indexOf(screen); var next = list[i + 1] || list[0]; if (next) { next.focus(); } return;
+      }
+      var plainCtrl = e.ctrlKey && !e.altKey && !e.metaKey;
+      /* Ctrl+C copies a selection; with nothing selected it is the interrupt. */
+      if (plainCtrl && !e.shiftKey && (e.key === "c" || e.code === "KeyC")) { var sel = selectionHere(); if (sel) { e.preventDefault(); copySelection(sel); return; } }
+      /* Ctrl+V and Ctrl+Shift+V paste; Alt+V is left alone for Claude Code's image paste. */
+      if (plainCtrl && (e.key === "v" || e.key === "V" || e.code === "KeyV")) { e.preventDefault(); paste(); return; }
       if (!STATES[state].typing) { return; }
       if (e.key === "Tab") { e.preventDefault(); return; }
       if (e.key === "Enter") { e.preventDefault(); var t = typed; typed = ""; write([["› ", "fg-cyan"], [t, ""]]); paintPrompt(); if (o.onInput) { o.onInput(t); } return; }
       if (e.key === "Backspace") { e.preventDefault(); typed = typed.slice(0, -1); paintPrompt(); return; }
       if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) { e.preventDefault(); typed += e.key; paintPrompt(); screen.scrollTop = screen.scrollHeight; }
     });
+    /* Right-click copies a selection, otherwise pastes, in place of the browser's own menu for a web page. */
+    screen.addEventListener("contextmenu", function (e) { e.preventDefault(); var sel = selectionHere(); if (sel) { copySelection(sel); } else { paste(); } });
     (o.lines || []).forEach(write);
     setState(state, o.info);
-    return { el: el, write: write, setState: setState, focus: function () { screen.focus(); }, get state() { return state; } };
+    if (o.foot) { setFoot(o.foot); }
+    return { el: el, write: write, setState: setState, setFoot: setFoot, focus: function () { screen.focus(); }, get state() { return state; } };
   }
 
   /* SessionView: the session page. A slim header, the terminal filling the page, and a side panel that folds away. */
@@ -800,8 +901,24 @@
     var facts = (o.facts || []).length ? h("dl", {}, [].concat.apply([], o.facts.map(function (f) { return [h("dt", { text: f[0] }), h("dd", { text: f[1] })]; }))) : null;
     var loaded = (o.loaded || []).length ? h("dl", {}, [].concat.apply([], o.loaded.map(function (f) { return [h("dt", { text: f[0] }), h("dd", { text: f[1] })]; }))) : null;
     var events = (o.events || []).length ? h("ul", {}, o.events.map(function (e) { return h("li", {}, [h("b", { text: e[0] }), e[1]]); })) : null;
-    var acts = (o.actions || []).length && NS.HaloButton ? h("div", { "class": "ls-answers", style: "margin: 0" }, o.actions.map(function (a) { return NS.HaloButton(Object.assign({ size: "small" }, a)); })) : null;
-    [block("Facts", facts), block("This session loaded", loaded), block("Last events", events), block("Actions", acts)].forEach(function (b) { if (b) { side.appendChild(b); } });
+    /* Actions: the commands that carry it on elsewhere, a note, then the buttons, as main's session page lays them. */
+    var cmds = (o.commands || []).map(function (c) { return NS.Command ? NS.Command(c) : h("code", { "class": "ls-cmdline", text: (c.why ? c.why + " " : "") + c.command }); });
+    var btns = (o.actions || []).length && NS.HaloButton ? h("div", { "class": "ls-answers", style: "margin: 0" }, o.actions.map(function (a) { return NS.HaloButton(Object.assign({ size: "small" }, a)); })) : null;
+    var actKids = cmds.concat([o.note ? h("p", { "class": "calm small", text: o.note }) : null, btns]).filter(Boolean);
+    var acts = actKids.length ? (actKids.length === 1 ? actKids[0] : h("div", { "class": "acts" }, actKids)) : null;
+    /* Extra sections: a node, anything with .el (a StatusBlock), or { title, content }; each at "facts" (after Facts, where main puts the StatusBlock; the default), "loaded", "events" or "actions" (after Actions). */
+    function extra(x) {
+      if (!x) { return null; }
+      if (x.nodeType) { return x; }
+      if (x.el && !x.title) { return x.el; }
+      var c = x.content || x.el;
+      return block(x.title, Array.isArray(c) ? h("div", { "class": "acts" }, c) : c);
+    }
+    var at = { facts: [], loaded: [], events: [], actions: [] };
+    var statusBlock = o.status && NS.StatusBlock ? NS.StatusBlock({ status: o.status, now: o.now }) : null;
+    if (statusBlock) { at.facts.push(statusBlock.el); }
+    (o.sections || []).forEach(function (x) { var n = extra(x); if (n) { (at[x && x.at] || at.facts).push(n); } });
+    [block("Facts", facts)].concat(at.facts, [block("This session loaded", loaded)], at.loaded, [block("Last events", events)], at.events, [block("Actions", acts)], at.actions).forEach(function (b) { if (b) { side.appendChild(b); } });
     var open = o.details !== false && !(window.matchMedia && window.matchMedia("(max-width: 959px)").matches);
     var toggle = h("button", { type: "button", "class": "ls-halo small", "aria-expanded": open ? "true" : "false", "aria-controls": side.id, onclick: function () { open = !open; side.hidden = !open; toggle.setAttribute("aria-expanded", open ? "true" : "false"); toggle.lastChild.textContent = open ? "Hide details" : "Details"; } },
       [h("span", { "class": "ring", "aria-hidden": "true" }), open ? "Hide details" : "Details"]);
@@ -809,11 +926,20 @@
     /* Ctrl+] leaves the terminal for the details toggle, never for the next action, which may be End the session. */
     if (!termOpts.leaveTo) { termOpts.leaveTo = toggle; }
     var head = h("div", { "class": "shead" }, [h("div", { "class": "who" }, [h("h1", { text: l.title || "" }), h("span", { "class": "facts1", text: [l.where, l.agent, l.mode, l.time].filter(Boolean).join(" · ") })]), toggle]);
+    /* A button in the header, before Details: main's "Type here instead" when another window holds the input. HaloButton options or a node; null takes it away. */
+    var headBtn = null;
+    function setButton(b) {
+      if (headBtn) { headBtn.remove(); headBtn = null; }
+      if (!b) { return; }
+      headBtn = b.nodeType ? b : (b.el && b.el.nodeType ? b.el : (NS.HaloButton ? NS.HaloButton(Object.assign({ size: "small" }, b)) : null));
+      if (headBtn) { head.insertBefore(headBtn, toggle); }
+    }
+    setButton(o.button);
     var root = h("div", { "class": "ls-session" }, [head, term.el, side]);
-    return { el: root, terminal: term };
+    return { el: root, terminal: term, side: side, head: head, statusBlock: statusBlock, setButton: setButton };
   }
 
-  Object.assign(NS, { Terminal: Terminal, SessionView: SessionView, TERMINAL_STATES: Object.keys(STATES) });
+  Object.assign(NS, { Terminal: Terminal, SessionView: SessionView, TERMINAL_STATES: Object.keys(STATES), resumeCommand: resumeCommand });
 })();
 
 (function () {
@@ -915,11 +1041,17 @@
     var bar = cap ? h("div", { "class": "bar", role: "meter", "aria-label": "Spent", "aria-valuemin": "0", "aria-valuemax": String(cap), "aria-valuenow": String(o.spent), "aria-valuetext": money(o.spent) + " of " + money(cap) + (over ? ", projected " + money(o.projected) + ", past its budget" : "") }, [h("i", { style: "width:" + pct.toFixed(1) + "%" }), over ? null : (o.projected ? h("u", { style: "left:" + Math.min(100, o.projected / cap * 100).toFixed(1) + "%" }) : null)]) : null;
     return h("div", { "class": "ls-spend" + (over ? " over" : "") }, [words, bar]);
   }
+  /* What the daemon can say of the process driving a run, as main's livenessOf words it; live, finished or unknown say nothing. */
+  function livenessOf(liveness, pid) {
+    var p = pid ? " · pid " + pid : "";
+    return { "not-responding": "not responding" + p, "possibly-not-responding": "possibly not responding", unreadable: "owner unreadable", silent: "silent for an hour or more" + p }[liveness] || null;
+  }
   function RunCard(o) {
     o = o || {}; var r = o.run || {};
     var fam = NS.signalOf(r.word || "running").family;
+    var badge = o.badge !== undefined ? o.badge : (o.liveness ? livenessOf(o.liveness, o.pid) : null);
     var el = h("article", { "class": "ls-run " + fam, "aria-label": r.goal });
-    el.appendChild(h("div", { "class": "top" }, [o.href ? h("a", { "class": "goal", href: o.href, text: r.goal }) : h("span", { "class": "goal", text: r.goal }), sig(r.word || "running")]));
+    el.appendChild(h("div", { "class": "top" }, [o.href ? h("a", { "class": "goal", href: o.href, text: r.goal }) : h("span", { "class": "goal", text: r.goal }), sig(r.word || "running"), badge ? h("span", { "class": "ls-liveness", role: "status", text: badge }) : null]));
     el.appendChild(h("span", { "class": "facts", text: [r.team, r.project, r.posture, r.round ? "round " + r.round + (r.rounds ? " of " + r.rounds : "") : null, r.elapsed, r.id].filter(Boolean).join(" \u00b7 ") }));
     if (o.progress && NS.ProgressLine) { el.appendChild(NS.ProgressLine(o.progress)); }
     if (r.spent !== undefined) { el.appendChild(Spend(r)); }
@@ -936,7 +1068,12 @@
     quiet: ["quiet", "{node} has said nothing for {for}, three times its usual turn.", "it says anything at all"],
     budget: ["projected over", "It is projected to overrun its budget: {detail}.", "it slows, finishes, or you stop it"],
     spent: ["limited", "It has spent its budget.", "you raise it, or it stops"],
-    stalled: ["stalled", "No done-when has moved for {detail}, so it is held after this round.", "you let it carry on, tell it something, or stop it"]
+    stalled: ["stalled", "No done-when has moved for {detail}, so it is held after this round.", "you let it carry on, tell it something, or stop it"],
+    /* The trigger rules' reasons, as main's NEED_REASONS has them. */
+    approval: ["needs approval", "A trigger rule wants to start a run that writes.", "you approve or reject it"],
+    paused: ["paused", "It reached one of its caps and starts nothing until you resume it.", "you resume it"],
+    stale: ["held too long", "It held events past the 24-hour window.", "you release them, or they are dropped after a week"],
+    source: ["stopped", "A trigger source has stopped.", "what stopped it is put right"]
   };
   function NeedsYou(o) {
     o = o || {};
@@ -947,7 +1084,7 @@
       var n = NEED[it.reason] || NEED.asked;
       var words = (it.text || n[1]).replace("{node}", it.node || "a node").replace("{for}", it.quiet || "a while").replace("{detail}", it.detail || "");
       return h("li", { "class": "need" }, [
-        h("div", { "class": "top" }, [h("a", { href: it.href || "#", text: it.goal }), sig(n[0])]),
+        h("div", { "class": "top" }, [h("a", { href: it.href || "#teams", text: it.goal }), sig(n[0])]),
         it.gate ? null : h("p", { text: words }),
         it.gate ? Gate(Object.assign({ compact: true, run: it.run }, it.gate)) : null,
         h("span", { "class": "clears", text: [it.team, it.run, "clears when " + (it.clears || n[2])].filter(Boolean).join(" \u00b7 ") }),
@@ -1027,13 +1164,21 @@
   function Journal(lines) {
     return h("ol", { "class": "log", tabindex: "0", "aria-label": "Journal" }, lines.map(function (l) { return h("li", { "class": (l[2] || "") + (l[4] ? " sub" : "") }, [h("span", { "class": "tm", text: l[0] }), h("span", { "class": "tx" }, [l[3] ? h("span", { "class": "k", text: l[3] }) : null, l[1], l[5] ? h("span", { "class": "x", text: "\u00d7" + l[5] }) : null])]); }));
   }
+  /* RunDepths draws its journal with main's Journal (stage 14's NS.Journal), which takes lines as objects; the
+     older [time, text, family, kind, sub, repeats] arrays are still taken. */
+  function journalOf(lines, label) {
+    var J = NS.Journal;
+    if (!J || J === Journal) { return Journal(lines); }
+    var made = J({ label: label || "Journal", lines: lines.map(function (l) { return Array.isArray(l) ? { time: l[0] || "", text: l[1] || "", family: l[2] || undefined, kind: l[3] || undefined, sub: !!l[4], repeats: l[5] || undefined } : l; }) });
+    return made.el || made;
+  }
   function Exchanges(rows) {
     var H = ["Round", "Node", "Model", "Messages", "Refused", "Cost", "Report"];
     return h("table", { "class": "ls-xch" }, [h("caption", { text: "Every exchange" }), h("thead", {}, [h("tr", {}, H.map(function (x, i) { return h("th", { scope: "col", "class": i >= 3 && i <= 5 ? "r" : null, text: x }); }))]),
       h("tbody", {}, rows.map(function (r) { return h("tr", {}, r.map(function (c, i) { return h("td", { "data-h": H[i], "class": (i >= 3 && i <= 5 ? "r" : "") + (i === 6 ? "rep" : "") || null }, [h("span", { text: i === 5 ? money(c) : String(c) })]); })); }))]);
   }
   function Papers(p) {
-    return h("div", { "class": "ls-papers" }, [p.summary ? h("p", { "class": "sum", text: p.summary }) : null].concat((p.pairs || []).map(function (x) {
+    return h("div", { "class": "ls-papers" }, [p.summary ? h("p", { "class": "sum", text: p.summary }) : null, (p.pairs || []).length ? null : h("p", { "class": "ls-note", text: "No brief has gone out yet." })].concat((p.pairs || []).map(function (x) {
       return h("section", { "class": "pair" }, [h("h4", {}, [x.node, h("span", { text: x.role || "" })]), h("div", { "class": "two" }, [
         h("div", {}, [h("h5", { text: "What it was told" }), h("p", { text: x.brief }), x.instead ? h("p", { "class": "changed", text: "You changed this brief before it went out. The lead wrote: " + x.instead }) : null]),
         h("div", {}, [h("h5", { text: "What it said it did" }), h("p", { text: x.report || "No report yet." })])])]);
@@ -1053,9 +1198,10 @@
         var s = o.said || {}, nodes = s.nodes || [];
         var picks = [h("button", { type: "button", "aria-pressed": node ? "false" : "true", text: "The run", onclick: function () { node = null; T.select(0); } })].concat(nodes.map(function (n) { return h("button", { type: "button", "aria-pressed": node === n ? "true" : "false", text: n, onclick: function () { node = n; T.select(0); } }); }));
         panel.appendChild(h("div", { "class": "who", role: "group", "aria-label": "Whose words" }, picks));
-        if (!node) { panel.appendChild(Journal(s.journal || [])); panel.appendChild(h("p", { "class": "src" }, ["One line every few seconds, repeats counted. ", cmd("$ loadout team log " + (o.run || "<run>") + " --events")])); }
+        if (!node) { panel.appendChild(journalOf(s.journal || [])); panel.appendChild(h("p", { "class": "src" }, ["One line every few seconds, repeats counted. ", cmd("$ loadout team log " + (o.run || "<run>") + " --events")])); }
         else {
-          panel.appendChild(Journal((s.streams || {})[node] || [["", "Nothing from " + node + " yet."]]));
+          var stream = (s.streams || {})[node] || [];
+          panel.appendChild(journalOf(stream.length ? stream : [{ time: "", text: "Nothing from " + node + " yet." }], "What " + node + " did"));
           panel.appendChild(h("p", { "class": "src", text: "Everything " + node + " did: every tool it called and everything it said. Sub-agents are marked." }));
           if (s.say) { var say = SayToNode(Object.assign({ run: o.run, node: node }, s.say, { state: (s.live || {})[node] ? s.say.state : "ended" })); say.style.marginTop = "12px"; panel.appendChild(say); }
         }
@@ -1067,7 +1213,8 @@
       else if (i === 3) {
         var ps = (o.changed || {}).patches || [];
         if (!ps.length) { panel.appendChild(h("p", { "class": "ls-note", text: "No node of this run produced a patch." })); }
-        ps.forEach(function (p, k) { var x = Patch(Object.assign({ run: o.run }, p)); if (k) { x.style.marginTop = "22px"; } panel.appendChild(x); });
+        /* A node whose diff could not be read says why, in its place, as main does. */
+        ps.forEach(function (p, k) { var x = p.error ? h("p", { "class": "ls-note", text: p.node + ": " + p.error }) : Patch(Object.assign({ run: o.run, goal: o.goal }, p)); if (k) { x.style.marginTop = "22px"; } panel.appendChild(x); });
       } else if (i === 4) { panel.appendChild(NS.Outbox(Object.assign({ run: o.run }, o.delivered || { repository: null, files: [] }))); }
     }
     function onKey(e) {
@@ -1113,8 +1260,14 @@
       field("Its title", t, "The run's goal unless you give one.", true), line]);
     paint();
     NS.Dialog({ title: "Open a pull request for " + o.node + "?", why: "This is the one thing on the page that reaches a remote. It pushes " + (o.branch || "the node's branch") + " to origin and opens the pull request with gh, using the GitHub login you already have.", content: content,
-      actions: [{ label: "Push and open it", kind: "needs", solid: true, cmd: "runs the command above", onPress: function () { said.textContent = "\u2713 Pushed " + (o.branch || "the branch") + " and opened a " + (draft ? "draft " : "") + "pull request."; if (o.onPr) { o.onPr({ draft: draft, title: title }); } } },
-        { label: "Say what it would do", cmd: "the same, with --dry-run · pushes nothing", onPress: function () { said.textContent = "\u2713 Dry run: it would push " + (o.branch || "the branch") + " and open the pull request. Nothing was pushed."; } }] }).open();
+      actions: [{ label: "Push and open it", kind: "needs", solid: true, cmd: "runs the command above", onPress: function () { prSay(o, said, { draft: draft, title: title, dry: false }); } },
+        { label: "Say what it would do", cmd: "the same, with --dry-run · pushes nothing", onPress: function () { prSay(o, said, { draft: draft, title: title, dry: true }); } }] }).open();
+  }
+  /* As main: onPr is asked both ways, dry or not, and what it answers (or resolves to) is what is said; with no answer, the words main falls back on. */
+  function prSay(o, said, p) {
+    var answer = o.onPr ? o.onPr(p) : null;
+    function show(a) { said.textContent = a === null || a === undefined || a === "" ? (p.dry ? "\u2713 Dry run: it would push " + (o.branch || "the branch") + " and open the pull request. Nothing was pushed." : "\u2713 Pushed " + (o.branch || "the branch") + " and opened a " + (p.draft ? "draft " : "") + "pull request.") : String(a); }
+    if (answer && typeof answer.then === "function") { answer.then(show, function (e) { said.textContent = "\u2715 " + ((e && e.message) || e); }); } else { show(answer); }
   }
 
   /* ---------- SayToNode: typing at a live node, behind a second credential ---------- */
@@ -1247,53 +1400,65 @@
     var V = { team: p.team || (kind === "make" ? "" : (runnable[0] || {}).name || ""), goal: p.goal || "", project: p.project || (projects[0] || {}).name || "", autonomy: p.autonomy || "", rounds: p.rounds || "", usd: p.usd || "", done: p.done || "", dropped: {}, after: p.after || "", timeout: "think-again-once", name: p.name || "", from: p.from || "", forProject: false, when: "every", at: "09:00", every: "24h" };
     var line = h("code", { "class": "ls-cmdline" }), foot = h("div", { "class": "foot" }), said = h("p", { "class": "ls-said", role: "status" });
     var el = h("div", { "class": "ls-sheet" });
+    function numeric(x) { x.setAttribute("inputmode", "numeric"); return x; }
     function team() { return teams.filter(function (t) { return t.name === V.team; })[0] || null; }
     function proj() { return projects.filter(function (x) { return x.name === V.project; })[0] || null; }
     function tasksHere() { return (o.tasks || []).filter(function (t) { return (t.project || V.project) === V.project && (t.state === "doing" || t.state === "open" || t.state === "blocked") && t.kind !== "idea"; }); }
-    function command() {
-      if (kind === "make") { return "$ loadout team new " + (V.name || "<name>") + (V.from ? " --from " + V.from : "") + (V.forProject ? " --for-this-project --project " + V.project : ""); }
-      if (kind === "schedule") { return "$ loadout team schedule add " + (V.name || "<name>") + " " + (V.team || "<team>") + " " + q(V.goal || "\u2026") + " --project " + V.project + (V.when === "at" ? " --at " + V.at : V.when === "on" ? " --on commit" : " --every " + (V.every || "24h")) + (V.autonomy ? " --autonomy " + V.autonomy : "") + (V.usd ? " --usd " + V.usd : ""); }
-      var c = "$ loadout team run " + (V.team || "<team>") + " " + q(V.goal || "\u2026") + " --project " + V.project + (V.task ? " --task " + V.task : "");
-      if (V.autonomy) { c += " --autonomy " + V.autonomy; }
-      if (V.rounds) { c += " --rounds " + V.rounds; }
-      if (V.usd) { c += " --usd " + V.usd; }
-      V.done.split("\n").map(function (s) { return s.trim(); }).filter(Boolean).forEach(function (d) { c += " --done-when " + q(d); });
-      var held = ((o.projectDoneWhen || {})[V.project] || []), dropped = held.filter(function (x) { return V.dropped[x]; });
-      if (held.length && dropped.length === held.length) { c += " --no-project-done-when"; } else { dropped.forEach(function (x) { c += " --drop-project-done-when " + q(x); }); }
-      if (V.after) { c += " --take-recommendation-after " + V.after; if (V.timeout !== "think-again-once") { c += " --on-timeout " + V.timeout; } }
-      return c;
+    /* The words after the command, as main's sheetWords has them; the line quotes each as a shell would need. */
+    function words() {
+      if (kind === "make") { return [V.name || "<name>"].concat(V.from ? ["--from", V.from] : [], V.forProject ? ["--for-this-project", "--project", V.project] : []); }
+      if (kind === "schedule") { return [V.name || "<name>", V.team || "<team>", V.goal.trim() || "…", "--project", V.project].concat(V.when === "at" ? ["--at", V.at] : V.when === "on" ? ["--on", "commit"] : ["--every", V.every.trim() || "24h"], V.autonomy ? ["--autonomy", V.autonomy] : [], V.usd ? ["--usd", V.usd] : []); }
+      var w = [V.team || "<team>", V.goal.trim() || "…", "--project", V.project].concat(V.task ? ["--task", V.task] : []);
+      if (V.autonomy) { w.push("--autonomy", V.autonomy); }
+      if (V.rounds) { w.push("--rounds", V.rounds); }
+      if (V.usd) { w.push("--usd", V.usd); }
+      V.done.split("\n").map(function (s) { return s.trim(); }).filter(Boolean).forEach(function (d) { w.push("--done-when", d); });
+      /* Each one left out is named, even all of them, as main's start route takes them. */
+      ((o.projectDoneWhen || {})[V.project] || []).filter(function (x) { return V.dropped[x]; }).forEach(function (x) { w.push("--drop-project-done-when", x); });
+      if (V.after) { w.push("--take-recommendation-after", V.after); if (V.timeout !== "think-again-once") { w.push("--on-timeout", V.timeout); } }
+      return w;
     }
+    function command() { return "$ " + { run: "loadout team run", make: "loadout team new", schedule: "loadout team schedule add" }[kind] + " " + words().map(q).join(" "); }
     function problem() {
       if (kind === "make") { return !V.name ? "give it a name first" : (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(V.name) ? "lowercase words joined by hyphens, as the built-in ones are" : (teams.some(function (t) { return t.name === V.name; }) ? "a team called " + V.name + " already exists" : null)); }
       if (kind === "schedule" && !V.name) { return "give the schedule a name first"; }
       var t = team();
       if (!t) { return "pick a team first"; }
       if (t.template) { return t.name + " is a shape to copy, not a team to run"; }
-      if ((t.problems || []).length) { return "it can't run here: " + t.problems[0]; }
+      if ((t.problems || []).length) { return "it can’t run here: " + t.problems[0]; }
       if (!V.goal.trim()) { return "say what the run is for first"; }
+      if (!V.project) { return "pick a project first"; }
+      if (kind === "schedule" && V.autonomy === "manual") { return "a schedule cannot be manual: nobody is there to answer when it fires"; }
       if (kind === "schedule" && V.when === "every" && !/^\d+\s*(m|h|d)$/.test(V.every.trim())) { return "say how often as 30m, 2h or 1d"; }
       if (kind === "schedule" && V.when === "every" && /^\d+\s*m$/.test(V.every.trim()) && parseInt(V.every, 10) < 5) { return "nothing may repeat faster than every five minutes"; }
       if (V.usd && !/^(none|\d+(\.\d+)?)$/i.test(V.usd.trim())) { return "a budget is a figure in US dollars, or none"; }
       if (V.usd && /^0+(\.0+)?$/.test(V.usd.trim())) { return "a budget of nothing is refused; say none for no cap"; }
+      if (V.rounds && !/^\d+$/.test(V.rounds.trim())) { return "rounds is a whole number"; }
       if (V.after && !/^(\d+\s*(m|h|d|mins?|minutes?|hours?|days?)|never|off)$/i.test(V.after.trim())) { return "write the wait as 30m, 2h or 1d"; }
       return null;
     }
+    var sending = false;
     function paintFoot() {
       line.textContent = command(); foot.textContent = "";
       var bad = problem(), go = { run: "Start the run", make: "Write it", schedule: "Schedule it" }[kind];
-      foot.appendChild(halo({ label: go, solid: true, glyph: "\u25b6", disabledReason: bad || (o.watchOnly ? "Studio is only watching: type the command in a terminal" : null), cmd: bad ? null : "runs the command above", onPress: submit }));
-      if (dlg) { foot.appendChild(halo({ label: "Cancel", size: "small", onPress: function () { dlg.close(); } })); }
+      foot.appendChild(halo({ label: go, solid: true, glyph: "▶", disabledReason: bad || (o.watchOnly ? "Studio is only watching: type the command in a terminal" : sending ? "sending…" : null), cmd: bad ? null : "runs the command above", onPress: submit }));
+      if (dlg) { foot.appendChild(halo({ label: "Close", size: "small", onPress: function () { dlg.close(); } })); }
     }
     function submit() {
       var c = command();
       if (kind === "run") {
-        NS.Dialog({ title: "Start " + V.team + " on \u201c" + V.goal.trim() + "\u201d?", why: "It spends money and edits " + V.project + ". Nothing starts until you say so.", actions: [{ label: "Start it", kind: "needs", solid: true, cmd: c, onPress: function () { finish(c); } }] }).open();
+        NS.Dialog({ title: "Start " + V.team + " on “" + V.goal.trim() + "”?", why: "It spends money and edits " + V.project + ". Nothing starts until you say so.", actions: [{ label: "Start it", kind: "needs", solid: true, cmd: c, onPress: function () { finish(c); } }] }).open();
       } else { finish(c); }
     }
+    /* As main: onSubmit says what to say (or resolves to it), or throws (or rejects) with why it was refused. The sheet stays open to say it. */
     function finish(c) {
-      said.textContent = kind === "run" ? "\u2713 Started. The run is on its page." : kind === "make" ? "\u2713 Written. $ loadout team edit " + V.name + " --path-only says where." : "\u2713 Scheduled. " + (o.daemon === false ? "It will not fire until the daemon is running." : "The daemon fires it.");
-      if (o.onSubmit) { o.onSubmit(c, Object.assign({}, V)); }
-      if (dlg) { setTimeout(function () { dlg.close(); }, 30); }
+      if (sending) { return; }
+      var plain = kind === "run" ? "Started. Its page opens as soon as the run is listed." : kind === "make" ? "Written. $ loadout team edit " + V.name + " --path-only says where." : o.daemon === false ? "Scheduled. It will not fire until the daemon is running." : "Scheduled. The daemon fires it.";
+      function ok(a) { sending = false; said.className = "ls-said"; said.textContent = "✓ " + (typeof a === "string" && a ? a : plain); paintFoot(); }
+      function no(e) { sending = false; said.className = "ls-said no"; said.textContent = "✕ " + ((e && e.message) || e); paintFoot(); }
+      var r;
+      try { r = o.onSubmit ? o.onSubmit(c, Object.assign({}, V)) : undefined; } catch (e) { no(e); return; }
+      if (r && typeof r.then === "function") { sending = true; paintFoot(); r.then(ok, no); } else { ok(r); }
     }
     function teamPicker(only) {
       var list = only ? runnable : teams;
@@ -1336,7 +1501,7 @@
       el.appendChild(pickBox);
       el.appendChild(field("What the run is for", goalBox, "With a task, the run moves it to doing, then done or blocked: --task. Its title and note are the goal.", true));
       el.appendChild(h("fieldset", {}, [h("legend", { text: "How it runs" }), NS.ModePicker({ label: "Posture", selected: postureIdx, options: POSTURES, onChange: function (n) { V.autonomy = n === ((team() || {}).posture || "supervised") ? "" : n; paintFoot(); } })]));
-      el.appendChild(h("div", { "class": "two" }, [field("Budget, in US dollars", text({ value: V.usd, placeholder: (team() || {}).budget ? "the team's " + team().budget : "a figure, or none", onInput: function (v) { V.usd = v.trim(); paintFoot(); } }), "Or none, for no cap on purpose."), field("Rounds at most", text({ value: V.rounds, type: "number", placeholder: "no limit", onInput: function (v) { V.rounds = v.trim(); paintFoot(); } }), "The budget is the cap that binds.")]));
+      el.appendChild(h("div", { "class": "two" }, [field("Budget, in US dollars", text({ value: V.usd, placeholder: (team() || {}).budget ? "the team's " + team().budget : "a figure, or none", onInput: function (v) { V.usd = v.trim(); paintFoot(); } }), "Or none, for no cap on purpose."), field("Rounds at most", numeric(text({ value: V.rounds, placeholder: "no limit", onInput: function (v) { V.rounds = v.trim(); paintFoot(); } })), "The budget is the cap that binds.")]));
       el.appendChild(field("Done when, one per line", doneBox, null, true));
       el.appendChild(held);
       el.appendChild(h("fieldset", {}, [h("legend", { text: "When nobody answers" }), h("div", { "class": "two" }, [field("Take the lead's recommendation after", text({ value: V.after, placeholder: "never", onInput: function (v) { V.after = v.trim(); paintFoot(); } }), "30m, 2h or 1d. Only the lead's own questions."), NS.Picker({ label: "What happens then", options: TIMEOUTS, onPick: function (x) { V.timeout = x.name; paintFoot(); } })])]));
@@ -1375,14 +1540,25 @@
   function Schedules(o) {
     o = o || {};
     var el = h("div", { "class": "ls-sched" });
-    var d = o.daemon || {};
+    var d = o.daemon || {}, gone = [];
     el.appendChild(h("p", { "class": "ls-note" + (d.running ? "" : " needs") }, [d.running ? (d.paused ? "The daemon is held: no schedule fires until it is resumed. " : "The daemon is running and fires these. ") : "The daemon is not running, so none of these will fire. ", d.running ? (d.paused ? cmd("$ loadout daemon resume") : null) : cmd("$ loadout daemon")]));
-    if (!(o.items || []).length) { el.appendChild(h("p", { "class": "ls-note", text: "Nothing is scheduled on this machine." })); return el; }
-    el.appendChild(h("ul", { "aria-label": "Runs on a schedule" }, o.items.map(function (s) {
-      var row = h("li", {}, [h("div", { "class": "t" }, [h("b", { text: s.name }), h("span", { text: s.team + " \u00b7 " + s.goal }), h("em", { text: [s.when, s.next ? "next " + s.next : null, s.autonomy, s.usd ? "$" + s.usd + " a run" : null].filter(Boolean).join(" \u00b7 ") })]),
-        halo({ label: "Stop it", size: "small", cmd: "$ loadout team schedule remove " + s.name, disabledReason: o.disabledReason || null, onPress: function () { if (o.onRemove) { o.onRemove(s.name); } row.remove(); } })]);
-      return row;
-    })));
+    var body = h("div", { style: "display: contents" });
+    el.appendChild(body);
+    /* As main: held says why it will not fire, after the rest; a removal answered false (or resolving false) keeps the row. */
+    function paint() {
+      body.textContent = "";
+      var shown = (o.items || []).filter(function (s) { return gone.indexOf(s.name) < 0; });
+      if (!shown.length) { body.appendChild(h("p", { "class": "ls-note", text: "Nothing is scheduled on this machine." })); return; }
+      body.appendChild(h("ul", { "aria-label": "Runs on a schedule" }, shown.map(function (s) {
+        return h("li", {}, [h("div", { "class": "t" }, [h("b", { text: s.name }), h("span", { text: s.team + " · " + s.goal }), h("em", { text: [s.when, s.next ? "next " + s.next : null, s.autonomy, s.usd ? "$" + s.usd + " a run" : null, s.held].filter(Boolean).join(" · ") })]),
+          halo({ label: "Stop it", size: "small", cmd: "$ loadout team schedule remove " + s.name, disabledReason: o.disabledReason || null, onPress: function () {
+            var r = o.onRemove ? o.onRemove(s.name) : undefined;
+            function after(v) { if (v !== false) { gone.push(s.name); paint(); } }
+            if (r && typeof r.then === "function") { r.then(after); } else { after(r); }
+          } })]);
+      })));
+    }
+    paint();
     return el;
   }
 
@@ -1412,44 +1588,56 @@
   function Bin(o) {
     o = o || {};
     var el = h("div", { "class": "ls-bin" }), entries = (o.entries || []).slice();
-    var list = h("ul", { "aria-label": "In the bin" }), said = h("p", { "class": "ls-said", role: "status" });
+    var list = h("ul", { "aria-label": "In the bin" }), said = h("p", { "class": "ls-said", role: "status" }), emptyActs = h("div", { "class": "ls-answers", style: "margin: 0" });
     function restoreCmd(e) { return e.kind === "run" ? "$ loadout team runs restore " + e.name : "$ loadout team restore " + e.name; }
+    /* As main: each callback may answer false (or resolve to false) where it was not done, and nothing changes. */
+    function then(r, done) { if (r && typeof r.then === "function") { r.then(done); } else { done(r); } }
     function paint() {
       list.textContent = "";
       if (!entries.length) { list.appendChild(h("li", {}, [h("span"), h("span", { "class": "ls-note", style: "margin: 0", text: "The bin is empty." }), h("span")])); }
       entries.forEach(function (e) {
-        list.appendChild(h("li", {}, [h("span", { "class": "kind", text: e.kind }), h("span", { "class": "t" }, [h("b", { text: e.name }), e.what ? h("span", { text: e.what }) : null, h("span", { "class": e.left <= 3 ? "soon" : null, text: "removed " + e.removed + " \u00b7 " + e.left + (e.left === 1 ? " day" : " days") + " left" + (e.size ? " \u00b7 " + e.size : "") })]),
-          halo({ label: "Put it back", size: "small", cmd: restoreCmd(e), disabledReason: o.disabledReason || null, onPress: function () { entries = entries.filter(function (x) { return x !== e; }); said.textContent = "\u2713 Put back: " + e.name + "."; if (o.onRestore) { o.onRestore(e); } paint(); } })]));
+        list.appendChild(h("li", {}, [h("span", { "class": "kind", text: e.kind }), h("span", { "class": "t" }, [h("b", { text: e.name }), e.what ? h("span", { text: e.what }) : null, h("span", { "class": e.left <= 3 ? "soon" : null, text: "removed " + e.removed + " · " + e.left + (e.left === 1 ? " day" : " days") + " left" + (e.size ? " · " + e.size : "") })]),
+          halo({ label: "Put it back", size: "small", cmd: restoreCmd(e), disabledReason: o.disabledReason || null, onPress: function () { then(o.onRestore ? o.onRestore(e) : undefined, function (v) { if (v === false) { return; } entries = entries.filter(function (x) { return x !== e; }); said.textContent = "✓ Put back: " + e.name + "."; paint(); }); } })]));
       });
+      emptyActs.textContent = "";
+      emptyActs.appendChild(halo({ label: "Empty it for good", kind: "danger", size: "small", cmd: "$ loadout team bin empty --yes", disabledReason: o.disabledReason || (entries.length ? null : "the bin is already empty"), onPress: function () {
+        NS.Dialog({ danger: true, title: "Empty the bin for good?", why: "This is the one thing here with no way back. It deletes:", content: h("ul", { "class": "binlist" }, entries.map(function (e) { return h("li", { text: e.kind + " " + e.name }); })),
+          actions: [{ label: "Empty it", kind: "danger", cmd: "$ loadout team bin empty --yes", onPress: function () { then(o.onEmpty ? o.onEmpty() : undefined, function (v) { if (v === false) { return; } entries = []; said.textContent = "✓ The bin is empty."; paint(); }); } }] }).open(); } }));
     }
     paint();
     el.appendChild(h("p", { "class": "ls-note", style: "margin: 0", text: "Removed runs and teams wait here for " + (o.keptDays || 30) + " days, then go for good. A run's branches were never touched, so they are not in here." }));
-    el.appendChild(list); el.appendChild(said);
-    el.appendChild(h("div", { "class": "ls-answers", style: "margin: 0" }, [halo({ label: "Empty it for good", kind: "danger", size: "small", cmd: "$ loadout team bin empty --yes", disabledReason: o.disabledReason || (entries.length ? null : "the bin is already empty"), onPress: function () {
-      NS.Dialog({ danger: true, title: "Empty the bin for good?", why: "This is the one thing here with no way back. It deletes:", content: h("ul", { style: "margin: 0 0 4px; padding-left: 18px; font-family: var(--font-mono); font-size: 12.5px" }, entries.map(function (e) { return h("li", { text: e.kind + " " + e.name }); })),
-        actions: [{ label: "Empty it", kind: "danger", cmd: "$ loadout team bin empty --yes", onPress: function () { entries = []; said.textContent = "\u2713 The bin is empty."; if (o.onEmpty) { o.onEmpty(); } paint(); } }] }).open(); } })]));
+    el.appendChild(list); el.appendChild(said); el.appendChild(emptyActs);
     /* Clear out runs: the same as team runs prune, said as a sentence before it goes. */
     var P = { outcome: "", older: "30d", keep: "20" };
-    var sentence = h("p", { "class": "sentence" }), pline = h("code", { "class": "ls-cmd" }), pacts = h("div", { "class": "ls-answers", style: "margin: 0" });
-    function pcmd(dry) { return "$ loadout team runs prune" + (P.outcome === "failed" ? " --failed" : P.outcome ? " --outcome " + P.outcome : "") + (P.older ? " --older-than " + P.older : "") + (P.keep ? " --keep " + P.keep : "") + (dry ? " --dry-run" : ""); }
+    var sentence = h("p", { "class": "sentence" }), pacts = h("div", { "class": "ls-answers", style: "margin: 0" });
+    function pcmd(dry) { return "$ loadout team runs prune" + (P.outcome === "failed" ? " --failed" : P.outcome ? " --outcome " + P.outcome : "") + (P.older ? " --older-than " + P.older : "") + (P.keep ? " --keep " + P.keep : "") + (dry ? " --dry-run" : " --yes"); }
+    /* As main's onprune(prune, dry): a dry run asks onPrune too, when it takes the second argument, and says what it answers (what would move);
+       the real one says what it answers, or that they are in the bin. A one-argument onPrune(line) is only called for the real one, as before. */
+    function clear(dry) {
+      var line = pcmd(dry), asks = o.onPrune && (!dry || o.onPrune.length >= 2);
+      var r = asks ? o.onPrune(line, dry, { outcome: P.outcome, olderThan: P.older, keep: P.keep }) : undefined;
+      then(r, function (a) { said.textContent = typeof a === "string" && a ? "✓ " + a : dry ? "✓ Dry run: it lists what it would take and why it keeps the rest. Nothing moved." : "✓ Cleared out. They are in the bin."; });
+    }
     function ppaint() {
       var none = !P.outcome && !P.older && !P.keep;
       sentence.textContent = none ? "Say which runs: an ending, an age or how many to keep." : "Moves " + (P.outcome ? "the " + P.outcome + " runs" : "the runs") + (P.older ? " older than " + P.older : "") + " to the bin" + (P.keep ? ", never the newest " + P.keep : "") + ", and never one still going or one that left a branch nothing merged.";
-      pline.textContent = pcmd(false); pacts.textContent = "";
-      pacts.appendChild(halo({ label: "Say which first", size: "small", cmd: pcmd(true), disabledReason: none ? "say which runs first" : null, onPress: function () { said.textContent = "\u2713 Dry run: it lists what it would take and why it keeps the rest. Nothing moved."; } }));
-      pacts.appendChild(halo({ label: "Clear them out", size: "small", cmd: pcmd(false), disabledReason: o.disabledReason || (none ? "say which runs first" : null), onPress: function () { NS.Dialog({ title: "Clear out these runs?", why: sentence.textContent + " They wait in the bin for " + (o.keptDays || 30) + " days.", actions: [{ label: "Clear them out", kind: "needs", cmd: pcmd(false), onPress: function () { said.textContent = "\u2713 Cleared out. They are in the bin."; if (o.onPrune) { o.onPrune(pcmd(false)); } } }] }).open(); } }));
+      pacts.textContent = "";
+      pacts.appendChild(halo({ label: "Say which first", size: "small", cmd: pcmd(true), disabledReason: none ? "say which runs first" : null, onPress: function () { clear(true); } }));
+      pacts.appendChild(halo({ label: "Clear them out", size: "small", cmd: pcmd(false), disabledReason: o.disabledReason || (none ? "say which runs first" : null), onPress: function () { NS.Dialog({ title: "Clear out these runs?", why: sentence.textContent + " They wait in the bin for " + (o.keptDays || 30) + " days.", actions: [{ label: "Clear them out", kind: "needs", cmd: pcmd(false), onPress: function () { clear(false); } }] }).open(); } }));
     }
-    var ENDS = ["any ending", "failed", "stopped", "limited", "blocked", "done", "needs-decision", "unrecorded"];
+    /* Main's endings since 0.104: abandoned, and stalled (a lead given up on). */
+    var ENDS = ["any ending", "failed", "stopped", "abandoned", "limited", "blocked", "done", "needs-decision", "unrecorded", "stalled"];
+    var keep = text({ value: P.keep, placeholder: "20", onInput: function (v) { P.keep = v.trim(); ppaint(); } }); keep.setAttribute("inputmode", "numeric");
     el.appendChild(h("details", {}, [h("summary", { text: "Clear out runs" }), h("div", { "class": "prune" }, [h("div", { "class": "two" }, [
       NS.Picker({ label: "Ending", options: ENDS.map(function (e) { return { name: e }; }), onPick: function (x, i) { P.outcome = i ? x.name : ""; ppaint(); } }),
       field("Older than", text({ value: P.older, placeholder: "30d", onInput: function (v) { P.older = v.trim(); ppaint(); } })),
-      field("Keep the newest", text({ value: P.keep, type: "number", placeholder: "20", onInput: function (v) { P.keep = v.trim(); ppaint(); } }))]), sentence, pacts])]));
+      field("Keep the newest", keep)]), sentence, pacts])]));
     ppaint();
     return el;
   }
 
   Object.assign(NS, { Gate: Gate, RunCard: RunCard, Spend: Spend, NeedsYou: NeedsYou, RunShape: RunShape, Crew: Crew, DoneWhen: DoneWhen, RunNumbers: RunNumbers, RunDepths: RunDepths, Journal: Journal, Exchanges: Exchanges, Papers: Papers, Patch: Patch, SayToNode: SayToNode,
-    TeamCard: TeamCard, TeamNodes: TeamNodes, TeamRules: TeamRules, RoleRecord: RoleRecord, TeamSheet: TeamSheet, Schedules: Schedules, Remedy: Remedy, Bin: Bin, shellQuote: q });
+    TeamCard: TeamCard, TeamNodes: TeamNodes, TeamRules: TeamRules, RoleRecord: RoleRecord, TeamSheet: TeamSheet, Schedules: Schedules, Remedy: Remedy, Bin: Bin, shellQuote: q, livenessOf: livenessOf });
 })();
 
 (function () {
@@ -1785,86 +1973,503 @@
     return { el: h("div", { "class": "ls-modebar", role: "region", "aria-label": "Mode" }, kids), switcher: sw };
   }
 
-  /* SessionTabs: every session as a tab, with its state and whether it has written since you looked. */
+  /* Shell words as main's commands.ts quotes them: $, ` and \ escaped too, so a line copied out of the page runs as shown. An empty value is "". */
+  function shellWord(v) { v = String(v); return v === "" || /[\s"'$`\\]/.test(v) ? "\"" + v.replace(/(["\\$`])/g, "\\$1") + "\"" : v; }
+  /* Renaming a hosted session, or giving it its launch name back (null). */
+  function renameCommand(id, name) { return "$ loadout session rename " + id + " " + (name === null ? "--reset" : shellWord(name)); }
+  /* Ending a hosted session. */
+  function endCommand(id) { return "$ loadout session end " + id + " --yes"; }
+  /* The strip's order with one tab moved along it by a step, kept at either end; the same list where it cannot move. */
+  function nudgeTab(shown, id, by) {
+    var from = shown.indexOf(id), to = Math.max(0, Math.min(shown.length - 1, from + by));
+    if (from < 0 || to === from) { return shown; }
+    var without = shown.filter(function (x) { return x !== id; });
+    return without.slice(0, to).concat([id], without.slice(to));
+  }
+  /* The strip's order with one tab put before another, or at the end where before is null. */
+  function placeTab(shown, id, before) {
+    var without = shown.filter(function (x) { return x !== id; }), at = before === null ? without.length : without.indexOf(before);
+    return at < 0 ? shown : without.slice(0, at).concat([id], without.slice(at));
+  }
+  function idOf(s) { return s.id; }
+
+  /* SessionTabs: every session as a tab, with its state, its context and whether it has written since you looked.
+     Each tab can be closed, renamed and moved, as main's SessionTabs.svelte: closing an ended tab clears it at once; closing a running one asks
+     whether to hide the tab or end the session, and ending asks again, naming what it ends. Rename and End are left out where Studio is only
+     watching. Everything is reached by keyboard too: F2 renames, Delete closes, Ctrl+Shift+arrows move, and the context-menu key or Shift+F10
+     opens the tab's menu. Each change is made here at once and told to its callback, so the strip works alone or under a page that keeps it. */
   function SessionTabs(o) {
     o = o || {};
+    var copy = function (s) { return Object.assign({}, s); };
+    var sessions = (o.sessions || []).map(copy), hidden = (o.hidden || []).map(copy), current = o.current === undefined ? null : o.current, changes = o.changes !== false;
+    var hintId = "ls-stabs-" + Math.random().toString(36).slice(2, 7);
+    var renaming = null, draft = "", menu = null, drag = null, swallow = false;
     var list = h("div", { role: "tablist", "aria-label": o.label || "Sessions" });
-    var tabs = (o.sessions || []).map(function (s, i) {
-      var f = NS.signalOf(s.word).family;
-      var t = h("button", { type: "button", role: "tab", "class": f === "needs" ? "needs" : null, "aria-selected": s.id === o.current ? "true" : "false", tabindex: s.id === o.current ? "0" : "-1", "aria-controls": o.controls || null, "aria-keyshortcuts": i < 9 ? "Control+Alt+" + (i + 1) : null, "data-id": s.id,
-        onclick: function () { if (o.onPick) { o.onPick(s.id); } }, ondblclick: function () { if (o.onMaximise) { o.onMaximise(s.id); } } },
-        [NS.Signal(s.word), h("span", { "class": "t", text: s.title }), h("span", { "class": "x", text: [s.where, s.agent].filter(Boolean).join(" · ") }), i < 9 ? h("span", { "class": "k", "aria-hidden": "true", text: "⌃⌥" + (i + 1) }) : null, s.unread ? h("span", { "class": "new", title: "New output since you looked" }, [h("span", { "class": "ls-vh", text: "new output" })]) : null]);
-      return t;
+    var addBtn = o.onNew ? h("button", { type: "button", "class": "add", "aria-label": "New session", title: "New session", onclick: function () { o.onNew(); }, text: "+" }) : null;
+    var hidBtn = null;
+    var root = h("div", { "class": "ls-stabs" }, [list, addBtn]);
+    function order() { return sessions.map(idOf); }
+    function byId(id) { return sessions.filter(function (s) { return s.id === id; })[0] || hidden.filter(function (s) { return s.id === id; })[0]; }
+    function hostOf(s) { return s.hid || s.id; }
+    function tabOf(id) { return Array.prototype.filter.call(list.querySelectorAll('[role="tab"]'), function (b) { return b.getAttribute("data-id") === id; })[0]; }
+    function focusTab(id) { setTimeout(function () { var b = tabOf(id); if (b) { b.focus(); } }, 0); }
+
+    /* ---------- the changes, made here and told to the page ---------- */
+    function doMove(next) {
+      var ids = order();
+      sessions = next.map(function (id) { return sessions[ids.indexOf(id)]; }).filter(Boolean);
+      paint(); if (o.onMove) { o.onMove(next); }
+    }
+    function move(id, by) { var next = nudgeTab(order(), id, by); if (next !== order()) { doMove(next); focusTab(id); } }
+    function doHide(id) { var s = byId(id); sessions = sessions.filter(function (x) { return x.id !== id; }); if (s && hidden.indexOf(s) < 0) { hidden.push(s); } paint(); if (o.onHide) { o.onHide(id); } }
+    function doClear(id) { sessions = sessions.filter(function (x) { return x.id !== id; }); hidden = hidden.filter(function (x) { return x.id !== id; }); paint(); if (o.onClear) { o.onClear(id); } }
+    function doUnhide(id) { var s = byId(id); hidden = hidden.filter(function (x) { return x.id !== id; }); if (s && sessions.indexOf(s) < 0) { sessions.push(s); } paint(); if (o.onUnhide) { o.onUnhide(id); } }
+    function doRename(id, name) { var s = byId(id); if (s) { s.launchTitle = s.launchTitle || s.title; s.title = name === null ? s.launchTitle : name; } paint(); if (o.onRename) { o.onRename(id, name); } }
+    function doEnd(id) { if (o.onEnd) { o.onEnd(id); } }
+    function pick(id) { setCurrent(id); if (o.onPick) { o.onPick(id); } }
+
+    /* ---------- closing ---------- */
+    function askEnd(id) {
+      var s = byId(id); if (!s || !NS.Dialog) { return; }
+      NS.Dialog({ danger: true, title: "End " + s.title + "?", why: "This stops its agent" + (s.project ? " in " + s.project : "") + ", and cannot be undone. The session stays listed, ended, so you can still see how it ended.",
+        actions: [{ label: "End session", kind: "danger", solid: true, cmd: endCommand(hostOf(s)), onPress: function () { doEnd(id); } }] }).open();
+    }
+    function close(id) {
+      var s = byId(id); if (!s) { return; }
+      /* Nothing is running to lose: cleared from this browser at once. */
+      if (s.ended) { doClear(id); return; }
+      /* Only watching: hiding is the one thing to do, and it can be undone. */
+      if (!changes || !NS.Dialog) { doHide(id); return; }
+      NS.Dialog({ title: "Close " + s.title + "?", why: "It is still running. Hide takes the tab off this browser's strip and leaves the session running, still on the Sessions page. End session stops its agent.",
+        actions: [{ label: "Hide", solid: true, cmd: "this browser only · changes nothing anywhere else", onPress: function () { doHide(id); } },
+          { label: "End session…", kind: "danger", cmd: "asks once more", onPress: function () { setTimeout(function () { askEnd(id); }, 0); } }] }).open();
+    }
+
+    /* ---------- renaming ---------- */
+    function startRename(id) {
+      closeMenu(false);
+      var s = byId(id); if (!s) { return; }
+      renaming = id; draft = s.title || "";
+      paint();
+      var f = list.querySelector("input.rename"); if (f) { f.focus(); f.select(); }
+      placeHint();
+    }
+    function finishRename(save) {
+      var id = renaming; if (id === null) { return; }
+      renaming = null;
+      var name = draft.trim(), s = byId(id);
+      /* Emptied, it goes back to the name it was launched as. */
+      if (save && s && name !== s.title) { doRename(id, name === "" ? null : name); } else { paint(); }
+      focusTab(id);
+    }
+
+    /* ---------- the menu: right-click, the context-menu key or Shift+F10 ---------- */
+    function items(forId) {
+      if (forId === null) { return hidden.map(function (s) { return { label: "Show " + s.title, run: function () { doUnhide(s.id); pick(s.id); focusTab(s.id); } }; }); }
+      var s = byId(forId); if (!s) { return []; }
+      var out = [], at = order().indexOf(s.id);
+      if (changes) {
+        out.push({ label: "Rename", hint: "F2", run: function () { startRename(s.id); } });
+        if (s.launchTitle && s.title !== s.launchTitle) { out.push({ label: "Back to “" + s.launchTitle + "”", cmd: renameCommand(hostOf(s), null), run: function () { doRename(s.id, null); focusTab(s.id); } }); }
+      }
+      if (at > 0) { out.push({ label: "Move left", hint: "Ctrl Shift ←", run: function () { move(s.id, -1); } }); }
+      if (at >= 0 && at < sessions.length - 1) { out.push({ label: "Move right", hint: "Ctrl Shift →", run: function () { move(s.id, 1); } }); }
+      if (s.ended) { out.push({ label: "Clear", hint: "Delete", run: function () { doClear(s.id); } }); }
+      else {
+        out.push({ label: "Hide", run: function () { doHide(s.id); } });
+        if (changes) { out.push({ label: "End session…", danger: true, run: function () { askEnd(s.id); } }); }
+      }
+      return out;
+    }
+    function away(e) { if (menu && !menu.el.contains(e.target)) { closeMenu(false); } }
+    function closeMenu(back) {
+      if (!menu) { return; }
+      var was = menu; menu = null; was.el.remove(); document.removeEventListener("pointerdown", away, true);
+      if (hidBtn) { hidBtn.setAttribute("aria-expanded", "false"); }
+      if (back) { if (was.for) { focusTab(was.for); } else if (hidBtn) { hidBtn.focus(); } }
+    }
+    function openMenu(forId, from, at) {
+      closeMenu(false);
+      var its = items(forId); if (!its.length) { return; }
+      var box = from && from.getBoundingClientRect(), x = at ? at.x : box ? box.left : 0, y = at ? at.y : box ? box.bottom : 0;
+      var m = h("div", { "class": "ls-tabmenu", role: "menu", tabindex: "-1", "aria-label": forId === null ? "Hidden tabs" : "Tab " + (byId(forId) || {}).title });
+      its.forEach(function (it) {
+        m.appendChild(h("button", { type: "button", role: "menuitem", tabindex: "-1", "class": it.danger ? "danger" : null, title: it.cmd || null, onclick: function () { closeMenu(false); it.run(); } },
+          [h("span", { text: it.label }), it.hint ? h("kbd", { text: it.hint }) : null]));
+      });
+      /* Kept inside the window, so a menu opened near an edge never scrolls the page sideways. */
+      m.style.left = Math.round(Math.max(8, Math.min(x, window.innerWidth - 228))) + "px";
+      m.style.top = Math.round(Math.max(8, Math.min(y, window.innerHeight - 38 * its.length - 20))) + "px";
+      m.addEventListener("keydown", function (e) {
+        var all = Array.prototype.slice.call(m.querySelectorAll('[role="menuitem"]')), i = all.indexOf(document.activeElement), d = { ArrowDown: 1, ArrowUp: -1 }[e.key];
+        if (d) { e.preventDefault(); all[(i + d + all.length) % all.length].focus(); }
+        else if (e.key === "Home" || e.key === "End") { e.preventDefault(); all[e.key === "Home" ? 0 : all.length - 1].focus(); }
+        else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeMenu(true); }
+        else if (e.key === "Tab") { closeMenu(false); }
+      });
+      document.body.appendChild(m);
+      menu = { for: forId, el: m };
+      if (forId === null && hidBtn) { hidBtn.setAttribute("aria-expanded", "true"); }
+      document.addEventListener("pointerdown", away, true);
+      setTimeout(function () { var f = m.querySelector('[role="menuitem"]'); if (f) { f.focus(); } }, 0);
+    }
+
+    /* ---------- dragging a tab along the strip ---------- */
+    function marks() {
+      Array.prototype.forEach.call(list.querySelectorAll(".tab"), function (t, i, all) {
+        var id = t.getAttribute("data-id"), moving = drag && drag.moved;
+        t.classList.toggle("dragging", !!(moving && drag.id === id));
+        t.classList.toggle("before", !!(moving && drag.before === id));
+        t.classList.toggle("after", !!(moving && drag.before === null && i === all.length - 1));
+      });
+    }
+    list.addEventListener("pointermove", function (e) {
+      if (!drag) { return; }
+      if (!drag.moved && Math.abs(e.clientX - drag.x) < 6) { return; }
+      if (!drag.moved) { drag.moved = true; try { list.setPointerCapture(e.pointerId); } catch (x) { /* already released */ } }
+      /* Before the first tab whose middle is past the pointer, or at the end. */
+      var mine = drag.id, past = order().filter(function (id) { var b = tabOf(id), r = b && b.getBoundingClientRect(); return id !== mine && r && e.clientX < r.left + r.width / 2; })[0];
+      drag.before = past === undefined ? null : past; marks();
     });
-    tabs.forEach(function (t) { list.appendChild(t); });
-    if (NS.roving) { NS.roving(tabs, function (i) { if (o.onPick) { o.onPick(o.sessions[i].id); } }); }
-    var add = o.onNew ? h("button", { type: "button", "class": "add", "aria-label": "New session", title: "New session", onclick: o.onNew, text: "+" }) : null;
-    return h("div", { "class": "ls-stabs" }, [list, add]);
+    function up() {
+      var was = drag; drag = null;
+      if (was && was.moved) {
+        swallow = true; setTimeout(function () { swallow = false; }, 0);
+        if (was.before !== undefined) { var next = placeTab(order(), was.id, was.before); if (next.join("\u0000") !== order().join("\u0000")) { doMove(next); return; } }
+      }
+      marks();
+    }
+    list.addEventListener("pointerup", up); list.addEventListener("pointercancel", up);
+
+    function keys(e, i) {
+      var s = sessions[i], n = sessions.length;
+      if (e.ctrlKey && e.shiftKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) { e.preventDefault(); move(s.id, e.key === "ArrowRight" ? 1 : -1); return; }
+      if (e.key === "F2" && changes) { e.preventDefault(); startRename(s.id); return; }
+      if (e.key === "Delete") { e.preventDefault(); close(s.id); return; }
+      if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) { e.preventDefault(); openMenu(s.id, e.currentTarget); return; }
+      var to = e.key === "ArrowRight" ? (i + 1) % n : e.key === "ArrowLeft" ? (i - 1 + n) % n : e.key === "Home" ? 0 : e.key === "End" ? n - 1 : null;
+      if (to === null) { return; }
+      e.preventDefault();
+      var b = tabOf(sessions[to].id); if (b) { b.focus(); }
+      pick(sessions[to].id);
+    }
+
+    function tab(s, i) {
+      var wrap = h("div", { "class": "tab", "data-id": s.id });
+      if (renaming === s.id) {
+        var inp = h("input", { "class": "rename", type: "text", maxlength: "80", autocomplete: "off", "aria-label": "New name for " + s.title, "aria-describedby": hintId });
+        inp.value = draft;
+        var cmd = h("code", { text: renameCommand(hostOf(s), draft.trim() === "" ? null : draft.trim()) });
+        inp.addEventListener("input", function () { draft = inp.value; cmd.textContent = renameCommand(hostOf(s), draft.trim() === "" ? null : draft.trim()); });
+        inp.addEventListener("keydown", function (e) { e.stopPropagation(); if (e.key === "Enter") { e.preventDefault(); finishRename(true); } else if (e.key === "Escape") { e.preventDefault(); finishRename(false); } });
+        inp.addEventListener("blur", function () { setTimeout(function () { if (renaming === s.id && document.activeElement !== list.querySelector("input.rename")) { finishRename(true); } }, 0); });
+        wrap.appendChild(inp);
+        wrap.appendChild(h("span", { "class": "hint", id: hintId }, [
+          "Enter saves, Escape cancels, empty goes back to “" + (s.launchTitle || s.title) + "”." + (s.kind === "launch" || s.kind === undefined ? (s.namesAgent ? " Its agent is given the name too." : " Only Loadout shows this name: its agent has not said it can take one.") : ""),
+          cmd]));
+        return wrap;
+      }
+      var fam = NS.signalOf(s.word).family, ctx = s.context !== null && s.context !== undefined && NS.ContextMark ? NS.ContextMark({ percent: s.context }).el : null;
+      var b = h("button", { type: "button", role: "tab", "class": fam === "needs" ? "needs" : null, "aria-selected": s.id === current ? "true" : "false", tabindex: s.id === current ? "0" : "-1", "aria-controls": o.controls || null, "aria-keyshortcuts": i < 9 ? "Control+Alt+" + (i + 1) : null, "aria-haspopup": "menu", "data-id": s.id },
+        [NS.Signal(s.word), h("span", { "class": "t", text: s.title }), h("span", { "class": "x", text: [s.where, s.agent].filter(Boolean).join(" · ") }), ctx,
+          i < 9 ? h("span", { "class": "k", "aria-hidden": "true", text: "⌃⌥" + (i + 1) }) : null,
+          s.unread ? h("span", { "class": "new", title: "New output since you looked" }, [h("span", { "class": "ls-vh", text: "new output" })]) : null]);
+      b.addEventListener("click", function () { if (!swallow) { pick(s.id); } });
+      b.addEventListener("dblclick", function () { if (o.onMaximise) { o.onMaximise(s.id); } });
+      b.addEventListener("keydown", function (e) { keys(e, i); });
+      b.addEventListener("pointerdown", function (e) { if (e.button === 0 && !renaming) { drag = { id: s.id, x: e.clientX, moved: false }; } });
+      b.addEventListener("contextmenu", function (e) { e.preventDefault(); openMenu(s.id, b, { x: e.clientX, y: e.clientY }); });
+      wrap.appendChild(b);
+      wrap.appendChild(h("button", { type: "button", "class": "close", tabindex: "-1", "aria-label": "Close " + s.title, title: s.ended ? "Clear this tab" : "Hide this tab, or end the session", text: "×", onclick: function () { close(s.id); } }));
+      return wrap;
+    }
+    function paint() {
+      var a = document.activeElement, keep = null, caret = null;
+      if (a && root.contains(a)) { keep = a.classList.contains("rename") ? "rename" : a.classList.contains("hid") ? "hid" : a.getAttribute("data-id"); if (keep === "rename") { caret = a.selectionStart; } }
+      list.textContent = "";
+      sessions.forEach(function (s, i) { list.appendChild(tab(s, i)); });
+      if (hidBtn) { hidBtn.remove(); hidBtn = null; }
+      if (hidden.length) {
+        hidBtn = h("button", { type: "button", "class": "hid", "aria-haspopup": "menu", "aria-expanded": menu && menu.for === null ? "true" : "false", text: hidden.length + " hidden" });
+        hidBtn.addEventListener("click", function () { if (menu && menu.for === null) { closeMenu(false); } else { openMenu(null, hidBtn); } });
+        root.insertBefore(hidBtn, addBtn);
+      }
+      if (keep) {
+        var n = keep === "rename" ? list.querySelector("input.rename") : keep === "hid" ? hidBtn : tabOf(keep);
+        if (n) { n.focus({ preventScroll: true }); if (keep === "rename" && typeof caret === "number") { try { n.setSelectionRange(caret, caret); } catch (x) { /* not text */ } } }
+      }
+      if (renaming) { setTimeout(placeHint, 0); }
+    }
+    /* The hint sits under the field. The strip scrolls sideways, which would clip it, so it is placed against the window instead (main's hint is drawn inside the strip, where it is cut off). */
+    function placeHint() {
+      var f = list.querySelector("input.rename"), hint = f && f.parentNode.querySelector(".hint");
+      if (!hint) { return; }
+      var r = f.getBoundingClientRect();
+      hint.style.position = "fixed"; hint.style.width = Math.max(r.width, 280) + "px";
+      hint.style.left = Math.round(Math.max(8, Math.min(r.left, window.innerWidth - hint.offsetWidth - 8))) + "px";
+      hint.style.top = Math.round(r.bottom) + "px";
+    }
+    function setCurrent(id) {
+      current = id;
+      Array.prototype.forEach.call(list.querySelectorAll('[role="tab"]'), function (b) { var on = b.getAttribute("data-id") === id; b.setAttribute("aria-selected", on ? "true" : "false"); b.tabIndex = on ? 0 : -1; });
+    }
+    paint();
+    /* The page's word again: new sessions, hidden ones, the current tab, or whether changes are allowed. A rename in progress is kept. */
+    root.update = function (p) {
+      p = p || {};
+      var full = false;
+      if (p.sessions) { sessions = p.sessions.map(copy); full = true; }
+      if (p.hidden) { hidden = p.hidden.map(copy); full = true; }
+      if (p.changes !== undefined && (p.changes !== false) !== changes) { changes = p.changes !== false; full = true; }
+      if (renaming && !byId(renaming)) { renaming = null; }
+      if (p.current !== undefined) { current = p.current; }
+      if (full) { paint(); } else if (p.current !== undefined) { setCurrent(current); }
+    };
+    root.rename = startRename;
+    root.closeMenu = function () { closeMenu(false); };
+    return root;
   }
 
-  /* TermDeck: Terminal Focus. Tabs over one, two or four panes; Ctrl+Alt+1-9 picks a session, Ctrl+Alt+arrows moves between panes. */
+  /* TermDeck: Terminal Focus, as main's TermDeck.svelte builds it. Sessions as tabs over one, two or four panes, each its own terminal.
+     Ctrl+Alt+1-9 picks a session by its tab and Ctrl+Alt+arrows move between the panes shown. Panes keep their places: clicking into one only
+     moves the highlight, and a session picked from its tab takes the highlighted pane. A session just started takes an empty pane instead,
+     growing the layout 1→2→4 to make one, and with four full the pane of one that has ended or been idle longest; panes grown that way are
+     given back as their sessions go, never below the layout you chose. Dividers between the panes are kept per layout. */
   var LAYOUTS = [[1, "One", "M2 2h16v12H2z"], [2, "Two side by side", "M2 2h16v12H2z M10 2v12"], [4, "Four", "M2 2h16v12H2z M10 2v12 M2 8h16"]];
+  /* How small a pane holding a terminal may go, 40 columns by 8 rows at 13px, in pixels (main's splits.ts terminalFloor). */
+  var TERM_FLOOR = { width: Math.ceil(40 * 13 * 0.6 + 24), height: Math.ceil(8 * 13 * 1.4 + 56) };
+  function floorOf(px, length) { return length > 0 ? Math.min(0.5, px / length) : 0; }
+  function clampSplit(v, min, max) { return min > max ? (min + max) / 2 : Math.min(max, Math.max(min, v)); }
+  function tracksOf(first) { return "minmax(0, " + first.toFixed(4) + "fr) minmax(0, " + (1 - first).toFixed(4) + "fr)"; }
+  /* The panes of a layout, each session in at most one, with nulls where a pane has nothing (main's lib/modes.ts, as are the three below). */
+  function padSlots(slots, n) { var out = (slots || []).slice(0, n).map(function (id, i, all) { return id && all.indexOf(id) === i ? id : null; }); while (out.length < n) { out.push(null); } return out; }
+  /* Which session each pane shows: a pick already in a pane changes nothing; one that is not takes the pane at `at`, else the first empty one. Only the first `fill` panes take spare tabs. */
+  function placeSlots(slots, p) {
+    var out = padSlots(slots, p.layout);
+    if (p.pick && out.indexOf(p.pick) < 0) { var at = p.at === undefined ? -1 : p.at, empty = out.indexOf(null); out[at >= 0 ? Math.min(at, p.layout - 1) : Math.max(0, empty)] = p.pick; }
+    var spare = p.order.filter(function (id) { return out.indexOf(id) < 0; }), fill = p.fill === undefined ? p.layout : p.fill;
+    return out.map(function (id, i) { return id || (i < fill ? spare.shift() : null) || null; });
+  }
+  /* Where a session just started goes: an empty pane (a gone one leaves its pane); else a layout grown 1→2→4; else, with four full, the pane of one ended, or else the one idle longest that is not waiting on you. */
+  function launchSlots(slots, p) {
+    var gone = p.gone || [], ended = p.ended || [], waiting = p.waiting || [], active = p.active || {};
+    var out = padSlots(slots, p.layout).map(function (id) { return id && gone.indexOf(id) >= 0 ? null : id; }), already = out.indexOf(p.pick);
+    if (already >= 0) { return { slots: out, layout: p.layout, at: already, grew: false, replaced: null, because: null }; }
+    var empty = out.indexOf(null);
+    if (empty >= 0) { out[empty] = p.pick; return { slots: out, layout: p.layout, at: empty, grew: false, replaced: null, because: null }; }
+    if (p.layout < 4) { var layout = p.layout === 1 ? 2 : 4, grown = padSlots(out, layout), g = grown.indexOf(null); grown[g] = p.pick; return { slots: grown, layout: layout, at: g, grew: true, replaced: null, because: null }; }
+    var end = -1; out.forEach(function (id, i) { if (end < 0 && id && ended.indexOf(id) >= 0) { end = i; } });
+    var at = end;
+    if (at < 0) {
+      var every = out.map(function (x, i) { return i; }), free = every.filter(function (i) { return waiting.indexOf(out[i]) < 0; }), pool = free.length ? free : every, quiet = function (i) { return active[out[i]] || 0; };
+      at = pool.reduce(function (best, i) { return quiet(i) < quiet(best) ? i : best; }, pool[0]);
+    }
+    var replaced = out[at]; out[at] = p.pick;
+    return { slots: out, layout: p.layout, at: at, grew: false, replaced: replaced, because: end >= 0 ? "ended" : "idle" };
+  }
+  /* Gives back panes a launch added once their sessions have gone: the smallest layout, never below the one chosen, that holds the sessions still listed. */
+  function shrinkSlots(slots, p) {
+    if (p.layout <= p.chosen) { return { slots: slots, layout: p.layout }; }
+    var kept = padSlots(slots, p.layout).filter(function (id) { return id && p.order.indexOf(id) >= 0; }), layout = [1, 2, 4].filter(function (n) { return n >= p.chosen && n >= kept.length; })[0] || 4;
+    return layout >= p.layout ? { slots: slots, layout: p.layout } : { slots: padSlots(kept, layout), layout: layout };
+  }
   function TermDeck(o) {
     o = o || {};
-    var layout = o.layout || 1, current = o.current || ((o.sessions || [])[0] || {}).id, terms = {}, panesEl = h("div", { "class": "panes l" + layout, id: "ls-deck-" + Math.random().toString(36).slice(2, 7) });
-    var top = h("div", { "class": "dtop" }), bar2 = h("div", { "class": "dtop" }), el = h("section", { "class": "ls-deck", "aria-label": "Terminals" }, [top, bar2, panesEl]);
-    var findIn = h("input", { "class": "ls-text", type: "search", placeholder: "Find in this terminal", "aria-label": "Find in the focused terminal", autocomplete: "off" }), findOut = h("span", { role: "status" });
-    function order() { return (o.sessions || []).map(function (s) { return s.id; }); }
-    function shown() { var ids = order(), out = [current]; ids.forEach(function (id) { if (out.length < layout && out.indexOf(id) < 0) { out.push(id); } }); return out.filter(Boolean); }
+    var copy = function (s) { return Object.assign({}, s); };
+    var all = (o.sessions || []).map(copy), hidden = (o.hidden || []).map(copy), changes = o.changes !== false, listed = o.listed !== false, launch = o.launch || null, active = o.active || {};
+    var chosen = [1, 2, 4].indexOf(o.layout) >= 0 ? o.layout : 1;
+    var panes = (o.grown === 2 || o.grown === 4) && o.grown > chosen ? o.grown : chosen;
+    var sp = o.splits || {}, split2 = (sp[2] && sp[2][0]) || 0.5, split4 = [(sp[4] && sp[4][0]) || 0.5, (sp[4] && sp[4][1]) || 0.5];
+    var terms = {}, arranged = padSlots(o.slots || [], panes), hi = 0, note = "", noteTimer = null, lastSig = "", splitters = {};
+    var panesEl = h("div", { "class": "panes l" + panes, id: "ls-deck-" + Math.random().toString(36).slice(2, 7) });
+    var lay = h("div", { "class": "lay", role: "radiogroup", "aria-label": "Panes" }, LAYOUTS.map(function (L) {
+      return h("button", { type: "button", role: "radio", "aria-checked": L[0] === panes ? "true" : "false", "aria-label": L[1], title: L[1], "data-n": String(L[0]), onclick: function () { setLayout(L[0]); } }, [icon(L[2], "0 0 20 16")]);
+    }));
+    var tabs = SessionTabs({ sessions: all, hidden: hidden, changes: changes, current: null, controls: panesEl.id, label: o.label,
+      onPick: function (id) { pick(id, false); },
+      onMaximise: function (id) { pick(id); setLayout(1); },
+      onNew: o.onNew ? function () { o.onNew(); } : null,
+      onMove: function (next) { var ids = order(); all = next.map(function (id) { return all[ids.indexOf(id)]; }).filter(Boolean); if (o.onMove) { o.onMove(next); } arrange(on()); paintBar2(); paintPanes(); },
+      onRename: function (id, name) { all.forEach(function (s) { if (s.id === id) { s.launchTitle = s.launchTitle || s.title; s.title = name === null ? s.launchTitle : name; } }); if (o.onRename) { o.onRename(id, name); } },
+      onHide: function (id) { var s = all.filter(function (x) { return x.id === id; })[0]; all = all.filter(function (x) { return x.id !== id; }); if (s) { hidden.push(s); } if (o.onHide) { o.onHide(id); } release(id); },
+      onUnhide: function (id) { var s = hidden.filter(function (x) { return x.id === id; })[0]; hidden = hidden.filter(function (x) { return x.id !== id; }); if (s) { all.push(s); } if (o.onUnhide) { o.onUnhide(id); } },
+      onClear: function (id) { all = all.filter(function (x) { return x.id !== id; }); hidden = hidden.filter(function (x) { return x.id !== id; }); if (o.onClear) { o.onClear(id); } release(id); },
+      onEnd: function (id) { if (o.onEnd) { o.onEnd(id); } } });
+    var top = h("div", { "class": "dtop" }, [tabs, lay]);
+    var waitHost = h("span", { style: "display: contents" }), noteEl = h("span", { "class": "note", role: "status" }), keysEl = h("span", { "class": "keys" });
+    var findIn = h("input", { "class": "ls-text", type: "search", placeholder: "Find in this terminal", "aria-label": "Find in the focused terminal: Enter for the next, Shift Enter for the one before", autocomplete: "off" }), findOut = h("span", { role: "status" });
+    var bar2 = h("div", { "class": "dtop" }, [waitHost, h("div", { "class": "find" }, [findIn, findOut]), noteEl, h("span", { "class": "grow", style: "flex: 1 1 auto" }), keysEl]);
+    var el = h("section", { "class": "ls-deck", "aria-label": "Terminals" }, [top, bar2, panesEl]);
+    var mq = window.matchMedia ? window.matchMedia("(max-width: 899px)") : null;
+
+    function order() { return all.map(idOf); }
+    function narrow() { return !!(mq && mq.matches); }
+    function on() { return arranged[hi] || order()[0] || null; }
+    /* Below 900px one pane, the highlighted one; the wider arrangement waits for the window to widen again. */
+    function shown() { var c = on(); return narrow() ? (c ? [c] : []) : arranged.filter(Boolean); }
+    function waiting() { return all.filter(function (s) { return NS.signalOf(s.word).family === "needs"; }); }
+    /* Dividers only where there is more than one pane to share the room. */
+    function split() { return !narrow() && panes > 1 && shown().length > 1; }
+    function titleOf(id) { var s = all.filter(function (x) { return x.id === id; })[0] || hidden.filter(function (x) { return x.id === id; })[0]; return s ? s.title : id; }
+    /* Puts a session in a pane if it is not in one, and highlights it. Spare tabs fill only the panes of the layout chosen, never with a launch still waiting for its own pane; panes a launch added are given back once their sessions have gone. */
+    function arrange(p, from, ids) {
+      ids = ids || order(); from = from || arranged;
+      var spare = launch ? ids.filter(function (x) { return x !== launch; }) : ids;
+      var placed = placeSlots(from, { order: spare, layout: panes, pick: p, at: hi, fill: chosen });
+      var fitted = listed ? shrinkSlots(placed, { layout: panes, chosen: chosen, order: ids }) : { slots: placed, layout: panes };
+      if (fitted.layout !== panes) { panes = fitted.layout; if (o.onGrown) { o.onGrown(panes); } }
+      var next = fitted.slots, at = p ? next.indexOf(p) : -1;
+      hi = at >= 0 ? at : Math.min(hi, panes - 1);
+      if (next.length !== arranged.length || next.some(function (x, i) { return x !== arranged[i]; })) { arranged = next; if (o.onSlots) { o.onSlots(next.slice()); } }
+    }
+    function say(t) { note = t; noteEl.textContent = t; if (noteTimer) { clearTimeout(noteTimer); } noteTimer = setTimeout(function () { note = ""; noteEl.textContent = ""; }, 10000); }
+    function focusSoon(id) { setTimeout(function () { if (terms[id] && terms[id].focus) { terms[id].focus(); } }, 0); }
+    /* A session just started: a pane of its own, the keyboard, and a word on where it went. */
+    function placeLaunch(id) {
+      var ids = order();
+      var p = launchSlots(arranged, { layout: panes, pick: id, ended: all.filter(function (s) { return s.ended; }).map(idOf), gone: arranged.filter(function (x) { return x && ids.indexOf(x) < 0; }), waiting: waiting().map(idOf), active: active });
+      /* The layout first, so the arrangement is never cut to the old one. */
+      if (p.layout !== panes) { panes = p.layout; if (o.onGrown) { o.onGrown(panes); } }
+      arranged = p.slots; hi = p.at; launch = null;
+      if (o.onSlots) { o.onSlots(p.slots.slice()); }
+      if (o.onLaunched) { o.onLaunched(id); }
+      if (o.onPick) { o.onPick(id); }
+      var where = "Opened in pane " + (p.at + 1);
+      say(p.grew ? where + ", added for it." : p.replaced ? where + ", in place of ‘" + titleOf(p.replaced) + "’, which " + (p.because === "ended" ? "had ended" : "had been idle longest") + ". It is still a tab." : where + ".");
+      paint(); focusSoon(id);
+    }
+    /* A tab hidden or cleared off the strip gives up its pane, which the next tab along fills. One that ends or goes stays where it was. */
+    function release(id) {
+      var freed = arranged.map(function (x) { return x === id ? null : x; });
+      arrange(freed[hi] || null, freed, order().filter(function (x) { return x !== id; }));
+      paint();
+    }
+    function pick(id, focus) {
+      arrange(id);
+      if (o.onPick) { o.onPick(id); }
+      paint();
+      if (focus !== false) { focusSoon(id); }
+    }
+    function setLayout(n) {
+      chosen = n;
+      var apply = function () { panes = n; arrange(arranged[hi] || null); paint(); };
+      if (NS.morph) { NS.morph(apply, { noVT: true, target: panesEl }); } else { apply(); }
+      if (o.onLayout) { o.onLayout(n); }
+    }
     function paintTop() {
-      top.textContent = "";
-      top.appendChild(SessionTabs({ sessions: o.sessions, current: current, controls: panesEl.id, onPick: function (id) { pick(id); }, onMaximise: function (id) { current = id; setLayout(1); }, onNew: o.onNew }));
-      var lay = h("div", { "class": "lay", role: "radiogroup", "aria-label": "Panes" }, LAYOUTS.map(function (L) { return h("button", { type: "button", role: "radio", "aria-checked": L[0] === layout ? "true" : "false", "aria-label": L[1], title: L[1], onclick: function () { setLayout(L[0]); } }, [icon(L[2], "0 0 20 16")]); }));
-      top.appendChild(lay);
+      tabs.update({ sessions: all, hidden: hidden, changes: changes, current: on() });
+      Array.prototype.forEach.call(lay.children, function (b) { b.setAttribute("aria-checked", b.getAttribute("data-n") === String(panes) ? "true" : "false"); });
     }
     function paintBar2() {
-      bar2.textContent = "";
-      var waiting = (o.sessions || []).filter(function (s) { return NS.signalOf(s.word).family === "needs"; });
-      if (waiting.length && NS.HaloButton) { bar2.appendChild(NS.HaloButton({ label: "Go to the one waiting", kind: "needs", size: "small", onPress: function () { pick(waiting[0].id, true); } })); }
-      bar2.appendChild(h("div", { "class": "find" }, [findIn, findOut]));
-      bar2.appendChild(h("span", { "class": "grow", style: "flex: 1 1 auto" }));
-      bar2.appendChild(h("span", { "class": "keys", text: "Ctrl Alt 1–9 picks · Ctrl Alt arrows move · Ctrl ] leaves a terminal" }));
+      waitHost.textContent = "";
+      var w = waiting();
+      if (w.length && NS.HaloButton) { waitHost.appendChild(NS.HaloButton({ label: "Go to the one waiting", kind: "needs", size: "small", onPress: function () { pick(w[0].id); } })); }
+      keysEl.textContent = "Ctrl Alt 1–9 picks · Ctrl Alt arrows move · Ctrl ] leaves a terminal · F2 renames a tab · Ctrl Shift arrows move it" + (split() ? " · drag a divider, or arrow it; Enter puts it back" : "");
+    }
+    function limits() { return { col: floorOf(TERM_FLOOR.width, panesEl.clientWidth - 10), row: floorOf(TERM_FLOOR.height, panesEl.clientHeight - 10) }; }
+    /* The tracks as main sets them: --deck-cols and --deck-rows on the panes, held to the floors as the window changes without moving what was kept. */
+    function tracks() {
+      var lim = limits(), col = clampSplit(panes === 4 ? split4[0] : split2, lim.col, 1 - lim.col), row = clampSplit(split4[1], lim.row, 1 - lim.row);
+      if (split()) { panesEl.style.setProperty("--deck-cols", tracksOf(col)); } else { panesEl.style.removeProperty("--deck-cols"); }
+      if (split() && panes === 4) { panesEl.style.setProperty("--deck-rows", tracksOf(row)); } else { panesEl.style.removeProperty("--deck-rows"); }
+      return { col: col, row: row, lim: lim };
+    }
+    function setColumn(v) { if (panes === 4) { split4 = [v, split4[1]]; if (splitters.cross) { splitters.cross.set({ column: v }); } if (o.onSplit) { o.onSplit(4, split4.slice()); } } else { split2 = v; if (o.onSplit) { o.onSplit(2, [v]); } } tracks(); }
+    function setRow(v) { split4 = [split4[0], v]; if (splitters.cross) { splitters.cross.set({ row: v }); } if (o.onSplit) { o.onSplit(4, split4.slice()); } tracks(); }
+    function setBoth(c, r) { split4 = [c, r]; if (splitters.cols) { splitters.cols.set({ value: c }); } if (splitters.rows) { splitters.rows.set({ value: r }); } if (o.onSplit) { o.onSplit(4, split4.slice()); } tracks(); }
+    function fitSplitters() {
+      if (!splitters.cols) { tracks(); return; }
+      var t = tracks();
+      splitters.cols.set({ value: t.col, min: t.lim.col, max: 1 - t.lim.col });
+      if (splitters.rows) { splitters.rows.set({ value: t.row, min: t.lim.row, max: 1 - t.lim.row }); }
+      if (splitters.cross) { splitters.cross.set({ column: t.col, row: t.row, colMin: t.lim.col, colMax: 1 - t.lim.col, rowMin: t.lim.row, rowMax: 1 - t.lim.row }); }
     }
     function paintPanes() {
-      var ids = shown();
-      panesEl.className = "panes l" + layout; panesEl.textContent = "";
+      var ids = shown(), cur = on(), have = order(), sig = ids.join("\u0000") + "#" + panes + "#" + narrow() + "#" + ids.map(function (id) { return listed && have.indexOf(id) < 0 ? 1 : 0; }).join("");
+      if (sig === lastSig) { Array.prototype.forEach.call(panesEl.querySelectorAll(".pane"), function (p) { p.classList.toggle("on", p.getAttribute("data-id") === cur); }); return; }
+      lastSig = sig; splitters = {};
+      panesEl.className = "panes l" + (narrow() ? 1 : panes); panesEl.textContent = "";
       ids.forEach(function (id) {
-        if (!terms[id]) { terms[id] = o.terminal(id); }
-        var pane = h("div", { "class": "pane" + (id === current ? " on" : ""), "data-id": id }, [terms[id].el]);
-        pane.addEventListener("focusin", function () { if (current !== id) { current = id; mark(); paintTop(); } });
+        var pane = h("div", { "class": "pane" + (id === cur ? " on" : ""), "data-id": id });
+        if (listed && have.indexOf(id) < 0) { pane.appendChild(h("p", { "class": "gone", role: "note", text: "This session is no longer in Studio. The pane keeps it until you pick another tab." })); }
+        if (!terms[id] && o.terminal) { terms[id] = o.terminal(id) || null; }
+        if (terms[id] && terms[id].el) { pane.appendChild(terms[id].el); }
+        pane.addEventListener("focusin", function () { if (on() !== id) { hi = arranged.indexOf(id); if (o.onPick) { o.onPick(id); } paintTop(); paintPanes(); } });
         panesEl.appendChild(pane);
       });
+      if (!ids.length) { panesEl.appendChild(h("p", { "class": "calm", text: "No sessions are running. Start one with the + beside the tabs, or N." })); }
+      /* After the panes, so a pane's place among its siblings is still its place in the grid. */
+      var t = tracks();
+      if (split() && NS.Splitter) {
+        splitters.cols = NS.Splitter({ "class": "cols", label: "Width of the panes", controls: panesEl.id, value: t.col, min: t.lim.col, max: 1 - t.lim.col, reset: 0.5, onchange: setColumn });
+        panesEl.appendChild(splitters.cols.el);
+        if (panes === 4) {
+          splitters.rows = NS.Splitter({ "class": "rows", orientation: "horizontal", label: "Height of the panes", controls: panesEl.id, value: t.row, min: t.lim.row, max: 1 - t.lim.row, reset: 0.5, onchange: setRow });
+          panesEl.appendChild(splitters.rows.el);
+          /* Where they cross, over both, so a drag there moves the two together. */
+          if (NS.SplitCross) { splitters.cross = NS.SplitCross({ column: t.col, row: t.row, colMin: t.lim.col, colMax: 1 - t.lim.col, rowMin: t.lim.row, rowMax: 1 - t.lim.row, reset: [0.5, 0.5], onchange: setBoth }); panesEl.appendChild(splitters.cross.el); }
+        }
+        /* The floors depend on the room the panes have, known once they are on the page. */
+        setTimeout(fitSplitters, 0);
+      }
       if (o.onShown) { o.onShown(ids, terms); }
     }
-    function mark() { Array.prototype.forEach.call(panesEl.children, function (p) { p.classList.toggle("on", p.getAttribute("data-id") === current); }); }
-    function pick(id, focus) {
-      var visible = shown().indexOf(id) >= 0; current = id;
-      paintTop();
-      if (!visible) { paintPanes(); } else { mark(); }
-      if (o.onPick) { o.onPick(id); }
-      if (focus !== false && terms[id]) { terms[id].focus(); }
-    }
-    function setLayout(n) { layout = n; NS.morph ? NS.morph(function () { paintTop(); paintPanes(); }, { noVT: true, target: panesEl }) : (paintTop(), paintPanes()); if (o.onLayout) { o.onLayout(n); } }
+    function paint() { paintTop(); paintBar2(); paintPanes(); }
+    /* Ctrl+Alt+1-9 picks a session by its tab; Ctrl+Alt+arrows move between the panes shown. Ctrl+Alt is AltGr on some layouts, so the digit is read from the physical key too. */
     el.addEventListener("keydown", function (e) {
       if (!(e.ctrlKey && e.altKey)) { return; }
-      var n = parseInt(e.key, 10), ids = order();
-      if (n >= 1 && n <= 9 && ids[n - 1]) { e.preventDefault(); pick(ids[n - 1]); return; }
-      var d = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
-      if (d) { e.preventDefault(); var s = shown(), i = s.indexOf(current); pick(s[(i + d + s.length) % s.length]); }
-    });
-    findIn.addEventListener("input", function () {
-      var q = findIn.value.trim().toLowerCase(), pane = panesEl.querySelector('.pane[data-id="' + current + '"]'), scr = pane && pane.querySelector(".screen");
-      if (!scr) { return; }
-      Array.prototype.forEach.call(scr.querySelectorAll("mark"), function (m) { m.replaceWith(document.createTextNode(m.textContent)); }); scr.normalize();
+      var m = /^Digit([1-9])$/.exec(e.code || ""), digit = m ? m[1] : (/^[1-9]$/.test(e.key) ? e.key : null), ids = order(), to = null;
+      if (digit) { to = ids[Number(digit) - 1] || null; }
+      else { var d = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key], s = shown(); if (d && s.length) { var i = Math.max(0, s.indexOf(on())); to = s[(i + d + s.length) % s.length]; } }
+      if (to) { e.preventDefault(); e.stopPropagation(); pick(to); }
+    }, true);
+    /* Ctrl+] in a terminal with nowhere named goes back to its tab. */
+    el.addEventListener("leaveterminal", function (e) { var b = tabs.querySelector('[role="tab"][aria-selected="true"]'); if (b) { e.preventDefault(); b.focus(); } });
+    /* Find searches the terminal that has the keyboard: Enter for the next match, Shift Enter for the one before, Escape clears. A terminal with find() of its own is asked; the reference one is searched in place. */
+    var hits = [], hit = -1;
+    function clearMarks(scr) { Array.prototype.forEach.call(scr.querySelectorAll("mark"), function (mk) { mk.replaceWith(document.createTextNode(mk.textContent)); }); scr.normalize(); }
+    function find(back) {
+      var q = findIn.value.trim(), t = terms[on()];
+      if (t && t.find) { findOut.textContent = q ? (t.find(q, back) ? "found" : "no match") : ""; if (!q && t.clearFind) { t.clearFind(); } return; }
+      var pane = Array.prototype.filter.call(panesEl.querySelectorAll(".pane"), function (p) { return p.getAttribute("data-id") === on(); })[0], scr = pane && pane.querySelector(".screen");
+      if (!scr) { findOut.textContent = q ? "no match" : ""; return; }
+      clearMarks(scr); hits = [];
       if (!q) { findOut.textContent = ""; return; }
-      var hits = 0, first = null, walker = document.createTreeWalker(scr, NodeFilter.SHOW_TEXT), nodes = [];
+      var lower = q.toLowerCase(), walker = document.createTreeWalker(scr, NodeFilter.SHOW_TEXT), nodes = [];
       while (walker.nextNode()) { nodes.push(walker.currentNode); }
-      nodes.forEach(function (t) { var i = t.nodeValue.toLowerCase().indexOf(q); if (i < 0) { return; } var r = t.splitText(i); r.splitText(q.length); var m = h("mark", { text: r.nodeValue }); r.replaceWith(m); hits++; if (!first) { first = m; } });
-      findOut.textContent = hits ? hits + (hits === 1 ? " match" : " matches") : "no match";
-      if (first && first.scrollIntoView) { first.scrollIntoView({ block: "center" }); }
-    });
-    paintTop(); paintBar2(); paintPanes();
-    return { el: el, pick: pick, setLayout: setLayout, terminal: function (id) { return terms[id]; }, update: function (sessions) { o.sessions = sessions; paintTop(); paintBar2(); }, get current() { return current; }, get layout() { return layout; } };
+      nodes.forEach(function (tn) { var i = tn.nodeValue.toLowerCase().indexOf(lower); if (i < 0) { return; } var r = tn.splitText(i); r.splitText(lower.length); var mk = h("mark", { text: r.nodeValue }); r.replaceWith(mk); hits.push(mk); });
+      hit = hits.length ? (back ? (hit - 1 + hits.length) % hits.length : (hit + 1) % hits.length) : -1;
+      findOut.textContent = hits.length ? "found" : "no match";
+      if (hit >= 0 && hits[hit].scrollIntoView) { hits[hit].scrollIntoView({ block: "nearest" }); }
+    }
+    findIn.addEventListener("input", function () { hit = -1; find(false); });
+    findIn.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); find(e.shiftKey); } else if (e.key === "Escape") { findIn.value = ""; hit = -1; find(false); } });
+    if (mq) { var redo = function () { lastSig = ""; paint(); }; if (mq.addEventListener) { mq.addEventListener("change", redo); } else if (mq.addListener) { mq.addListener(redo); } }
+    if (window.ResizeObserver) { new ResizeObserver(function () { if (split()) { fitSplitters(); } }).observe(panesEl); }
+
+    /* The first arrangement: the panes as they were, the session named, or a launch waiting for its pane. */
+    hi = Math.max(0, arranged.indexOf(o.current));
+    if (launch && order().indexOf(launch) >= 0) { arrange(null); placeLaunch(launch); }
+    else { arrange(o.current && order().indexOf(o.current) >= 0 ? o.current : (arranged[hi] || null)); paint(); }
+    return { el: el, tabs: tabs, pick: pick, setLayout: setLayout, terminal: function (id) { return terms[id]; },
+      /* The daemon's list again (an array), or a patch: sessions, hidden, changes, listed, active, current (a session the page names, which then takes the highlighted pane) and launch (one just started, placed by the launch rule once it is among the tabs). */
+      update: function (p) {
+        if (Array.isArray(p)) { p = { sessions: p }; }
+        p = p || {};
+        if (p.sessions) { all = p.sessions.map(copy); }
+        if (p.hidden) { hidden = p.hidden.map(copy); }
+        if (p.changes !== undefined) { changes = p.changes !== false; }
+        if (p.listed !== undefined) { listed = p.listed !== false; }
+        if (p.active) { active = p.active; }
+        if (p.launch !== undefined) { launch = p.launch || null; }
+        var ids = order();
+        if (launch && ids.indexOf(launch) >= 0) { placeLaunch(launch); return; }
+        arrange(p.current && ids.indexOf(p.current) >= 0 ? p.current : (arranged[hi] || null));
+        paint();
+      },
+      /* A session just started: placed now if it is among the tabs, else once an update brings it. */
+      launch: function (id) { launch = id; if (order().indexOf(id) >= 0) { placeLaunch(id); } },
+      get current() { return on(); }, get layout() { return panes; }, get chosen() { return chosen; }, get slots() { return arranged.slice(); } };
   }
 
   /* RunBoard: Team Focus. Every live run as a line, the one that needs you first, the teams along the top. */
@@ -1878,6 +2483,14 @@
     if (running) { el.appendChild(h("span", { "class": "seg dash" })); el.appendChild(h("span", { "class": "st next" }, [h("i")])); }
     else if (end) { el.appendChild(h("span", { "class": "seg" })); el.appendChild(h("span", { "class": "st end" }, [h("i")])); }
     return el;
+  }
+  /* Each row's rounds are drawn by main's MiniLine (stage 14's NS.MiniLine, which takes { rounds, end, running });
+     the positional one above stands in where that is not loaded. */
+  function boardLine(rounds, end, running) {
+    var ML = NS.MiniLine;
+    if (!ML || ML === MiniLine) { return MiniLine(rounds, end, running); }
+    var made = ML({ rounds: rounds, end: end, running: running });
+    return made.el || made;
   }
   function RunBoard(o) {
     o = o || {};
@@ -1893,8 +2506,8 @@
       var f = NS.signalOf(r.word).family, live = f === "moving" || f === "needs" || r.word === "held after this round";
       var over = r.cap && r.projected > r.cap;
       var row = h("li", { "class": "brow " + f + (o.picked === r.id ? " picked" : ""), style: "--i:" + i }, [
-        h("button", { type: "button", "class": "go", "aria-pressed": o.picked === r.id ? "true" : "false", onclick: function () { if (o.onPick) { o.onPick(r.id); } } }, [h("span", { "class": "t", text: r.goal }), h("span", { "class": "x", text: [r.team, r.project, "round " + r.round, (r.rounds || []).filter(function (x) { return x.word === "running"; }).length ? null : null].filter(Boolean).join(" · ") })]),
-        MiniLine(r.rounds || [], !live, live),
+        h("button", { type: "button", "class": "go", "aria-pressed": o.picked === r.id ? "true" : "false", onclick: function () { if (o.onPick) { o.onPick(r.id); } } }, [h("span", { "class": "t", text: r.goal }), h("span", { "class": "x", text: [r.team, r.project, r.round ? "round " + r.round : null].filter(Boolean).join(" · ") })]),
+        boardLine(r.rounds || [], !live, live),
         NS.Signal(r.word),
         h("span", { "class": "spend" }, [h("b", { text: "$" + Number(r.spent || 0).toFixed(2) }), r.cap ? " of $" + Number(r.cap).toFixed(0) : " no cap", over ? h("em", { text: "projected over" }) : null])
       ]);
@@ -2259,10 +2872,17 @@
   function TerminalOnly(o) {
     o = o || {};
     var out = h("p", { "class": "ls-said", role: "status" });
+    /* Copying waits for the clipboard: refused (no permission, no secure page), it says to select the line instead, and nothing is thrown. */
+    function copy() {
+      function no() { out.textContent = "Select the line to copy it."; }
+      var wrote;
+      try { wrote = navigator.clipboard.writeText((o.command || "").replace(/^\$ /, "")); } catch (e) { no(); return; }
+      Promise.resolve(wrote).then(function () { said(out, "Copied. Paste it in a terminal."); }, no);
+    }
     var el = h("div", { "class": "ls-tonly" }, [
       h("div", { "class": "top" }, [h("b", { text: o.title || "Done in a terminal" }), tag("terminal only", "", G.lock)]),
       o.why ? h("p", { "class": "why", text: o.why }) : null,
-      h("div", { "class": "line" }, [h("code", { text: o.command || "" }), halo({ label: "Copy", size: "small", cmd: "copies the line \u00b7 runs nothing", onPress: function () { try { navigator.clipboard.writeText((o.command || "").replace(/^\$ /, "")); said(out, "Copied. Paste it in a terminal."); } catch (e) { said(out, "Select the line to copy it."); } } })]),
+      h("div", { "class": "line" }, [h("code", { text: o.command || "" }), halo({ label: "Copy", size: "small", cmd: "copies the line \u00b7 runs nothing", onPress: copy })]),
       o.fact ? h("p", { "class": "fact", text: o.fact }) : null, out]);
     return el;
   }
@@ -2306,99 +2926,273 @@
     return h("div", { "class": "ls-istages-wrap" }, [ol, h("p", { "class": "cap", "aria-hidden": "true" }, ["Stage " + (at + 1) + " of 5: ", h("b", { text: STAGES[at] }), o.word ? " \u00b7 " + o.word : ""])]);
   }
 
-  /* QuestionSet: the questions an agent asked about an idea, answered here, then sent together, with or without another round. */
+  /* QuestionSet: the questions an agent asked about an idea, answered here: an option as a large chip, or your own words. Nothing is
+     sent until one of the buttons at the foot is pressed; then each changed answer goes, and a refine after them when asked for.
+     Answered questions fold to a line, and what you are looking at stays where it is. The rules are main's lib/ideas.ts. */
+  function ideaCollapse(t) { return String(t || "").trim().replace(/\s+/g, " "); }
+  function ideaAtWord(longer, shorter) { return longer.indexOf(shorter) === 0 && (longer.length === shorter.length || !/[A-Za-z0-9\u00c0-\uffff]/.test(longer.charAt(shorter.length))); }
+  /* A question's chips: its options, with the recommendation marked or added, and any reason left over (offeredChoices). */
+  function offeredChoices(x) {
+    var choices = (x.options || []).slice(), wanted = ideaCollapse(x.recommendation);
+    if (!wanted) { return { choices: choices, recommended: null, note: null }; }
+    var said0 = wanted.toLowerCase(), exact = -1;
+    choices.forEach(function (c, i) { if (exact < 0 && ideaCollapse(c).toLowerCase() === said0) { exact = i; } });
+    if (exact >= 0) { return { choices: choices, recommended: exact, note: null }; }
+    var best = -1, length = 0, tied = false;
+    choices.forEach(function (c, i) {
+      var op = ideaCollapse(c).toLowerCase(), shared = ideaAtWord(said0, op) ? op.length : ideaAtWord(op, said0) ? said0.length : 0;
+      if (shared > length) { best = i; length = shared; tied = false; } else if (shared > 0 && shared === length) { tied = true; }
+    });
+    if (best < 0 || tied) { return { choices: choices.concat([wanted]), recommended: choices.length, note: null }; }
+    var rest = wanted.slice(ideaCollapse(choices[best]).length).replace(/^[\s,;:.\-\u2013\u2014]+/, "");
+    return { choices: choices, recommended: best, note: rest || null };
+  }
+  /* "Relates to L2 Storage: why it is asked", the context alone, the reference alone, or null (aboutLine). */
+  function aboutLine(x) { return x.about && x.context ? "Relates to " + x.about + ": " + x.context : x.about ? "Relates to " + x.about : x.context || null; }
+  /* The understanding to show above a question: its round's, when the question is that round's first (understoodBefore). */
+  function understoodBefore(rounds, qid) { var r = (rounds || []).filter(function (one) { return (one.questions || [])[0] === qid; })[0]; return r && r.understanding ? r.understanding : null; }
+  /* Where a page holds its place across a redraw: the focused element if on screen, else the first marked one (main's holdPlace). */
+  function holdPlace(root) {
+    function onScreen(e) { var b = e.getBoundingClientRect(); return b.bottom > 0 && b.top < (window.innerHeight || Infinity); }
+    var sc = document.scrollingElement || document.documentElement;
+    for (var at = root.parentElement; at; at = at.parentElement) { var ov = getComputedStyle(at).overflowY; if ((ov === "auto" || ov === "scroll") && at.scrollHeight > at.clientHeight) { sc = at; break; } }
+    var act = document.activeElement, focused = act && act !== document.body && root.contains(act) && onScreen(act) ? act : null;
+    var marked = Array.prototype.filter.call(root.querySelectorAll("[data-anchor]"), onScreen)[0] || null;
+    var held = [focused, marked].filter(Boolean).map(function (e) { return { e: e, key: e.getAttribute("data-anchor"), top: e.getBoundingClientRect().top }; }), was = sc.scrollTop;
+    return function () {
+      for (var i = 0; i < held.length; i++) {
+        var one = held[i], e = one.e.isConnected ? one.e : one.key ? root.querySelector("[data-anchor=\"" + one.key + "\"]") : null;
+        if (!e) { continue; }
+        var moved = e.getBoundingClientRect().top - one.top + (sc.scrollTop - was);
+        if (Math.abs(moved) >= 1) { sc.scrollTop = sc.scrollTop + moved; }
+        return;
+      }
+    };
+  }
+  /* A callback's answer: true, false, or a promise of either. Nothing returned counts as done, as before. */
+  function settled(v, then) { if (v && typeof v.then === "function") { v.then(function (ok) { then(ok !== false); }, function () { then(false); }); } else { then(v !== false); } }
   function QuestionSet(o) {
     o = o || {};
-    var qs = o.questions || [], drafts = {}, editing = {}, where = o.where || [], id = o.id || "<id>";
-    var el = h("div", { "class": "ls-qset" }), list = h("div", { "class": "qs", style: "display: grid; gap: 10px" }), send = h("div", { "class": "send" }), out = h("p", { "class": "ls-said", role: "status" });
+    var qs = o.questions || [], rounds = o.rounds, drafts = {}, editing = {}, sent = {}, where = o.where || [], id = o.id || "<id>", sending = false, saidText = "";
+    var ondraft = o.onDraft || o.ondraft, onsend = o.onSend || o.onsend;
+    var name = uid("ls-q-");
+    var el = h("div", { "class": "ls-qset" }), list = h("div", { "class": "qs" }), send = h("div", { "class": "send", "data-anchor": "send-answers" }), out = h("p", { "class": "ls-said held", role: "status" });
     el.appendChild(list); el.appendChild(send);
-    function changed() { return qs.filter(function (x) { var d = (drafts[x.id] || "").trim(); return d && d !== (x.answer || ""); }); }
-    function answerLine(x) { return lineOf("idea answer", [], {}, [id, x.id, "--answer=" + drafts[x.id].trim()].concat(where)); }
+    function answerOf(x) { return Object.prototype.hasOwnProperty.call(sent, x.id) ? sent[x.id] : x.answer; }
+    function dis() { return o.disabledReason || null; }
+    function answerLine(x, text) { return lineOf("idea answer", [], {}, [id, x.id, "--answer=" + text].concat(where)); }
+    /* Only the answers that changed and say something, against what was saved or sent (changedAnswers). */
+    function changed() { return qs.filter(function (x) { var d = (drafts[x.id] || "").trim(); return d && d !== (answerOf(x) || ""); }); }
+    function answers() { return changed().map(function (x) { var a = drafts[x.id].trim(); return { question: x.id, answer: a, words: [id, x.id, "--answer=" + a].concat(where), line: answerLine(x, a) }; }); }
+    /* Drafts with every recommendation taken, for the questions still open with nothing drafted (acceptRecommendations). */
+    function taken() {
+      var next = Object.assign({}, drafts);
+      qs.forEach(function (x) { var of = offeredChoices(x); if (of.recommended !== null && !answerOf(x) && !(next[x.id] || "").trim()) { next[x.id] = of.choices[of.recommended]; } });
+      return next;
+    }
+    function tell() { if (ondraft) { ondraft(changed().map(function (x) { return x.id; }), Object.keys(sent)); } }
+    /* A redraw keeps focus on the control that had it, by its key. */
+    function keeping(fn) {
+      var a = document.activeElement, k = a && el.contains(a) ? (a.closest("[data-k]") || a).getAttribute("data-k") : null;
+      fn();
+      if (k) { var b = el.querySelector("[data-k=\"" + k + "\"]"); if (b && b !== document.activeElement) { b.focus({ preventScroll: true }); } }
+    }
     function paintSend() {
-      send.textContent = "";
-      var c = changed(), n = c.length, dis = o.disabledReason || (n ? null : "answer a question first");
-      send.appendChild(h("p", { "class": "count", text: n ? n + " answer" + (n === 1 ? "" : "s") + " ready to send." : "Answer what you can. Nothing is sent until you press a button." }));
-      var row = h("div", { "class": "ls-answers" });
-      row.appendChild(halo({ label: "Send answers and refine", kind: "needs", solid: true, glyph: "\u2713", cmd: n + " \u00d7 loadout idea answer, then " + lineOf("idea refine", [], {}, [id].concat(where)), disabledReason: dis, onPress: function () { go(true); } }));
-      row.appendChild(halo({ label: "Only save the answers", cmd: n + " \u00d7 loadout idea answer", disabledReason: dis, onPress: function () { go(false); } }));
-      send.appendChild(row);
-      if (n) { var d = h("details", {}, [h("summary", { text: "The commands, one per answer" })]); c.forEach(function (x) { d.appendChild(h("code", { text: answerLine(x) })); }); send.appendChild(d); }
-      send.appendChild(out);
+      keeping(function () {
+        send.textContent = "";
+        var c = answers(), n = c.length, reason = dis() || (n ? null : "answer a question first");
+        var t = taken(), takeable = Object.keys(t).filter(function (k) { return t[k] !== drafts[k]; }).length, takeReason = dis() || (takeable ? null : "no recommendations left to take");
+        send.appendChild(h("p", { "class": "count", text: n ? n + " answer" + (n === 1 ? "" : "s") + " ready to send." : "Answer what you can. Nothing is sent until you press a button." }));
+        var row = h("div", { "class": "ls-answers flush" });
+        row.appendChild(halo({ label: sending ? "Sending…" : "Send answers and refine", key: "qs-refine", next: "send-answers", kind: "needs", solid: !reason, glyph: "✓", cmd: n + " × loadout idea answer, then " + lineOf("idea refine", [], {}, [id].concat(where)), disabledReason: reason, onPress: function () { go(true); } }));
+        row.appendChild(halo({ label: "Only save the answers", key: "qs-save", cmd: n + " × loadout idea answer", disabledReason: reason, onPress: function () { go(false); } }));
+        row.appendChild(halo({ label: "Accept all recommendations", key: "qs-take", cmd: "fills " + takeable + " answer" + (takeable === 1 ? "" : "s") + "; sends nothing", disabledReason: takeReason, onPress: function () { drafts = taken(); paint(); } }));
+        send.appendChild(row);
+        if (n) { var d = h("details", {}, [h("summary", { text: "The commands, one per answer" })]); c.forEach(function (a) { d.appendChild(h("code", { text: a.line })); }); send.appendChild(d); }
+        out.textContent = saidText; send.appendChild(out);
+      });
+      tell();
     }
     function go(refine) {
-      var c = changed(), lines = c.map(answerLine);
-      if (o.onSend) { o.onSend(c.map(function (x) { return { question: x.id, answer: drafts[x.id].trim(), line: answerLine(x) }; }), refine, lines); }
-      c.forEach(function (x) { x.answer = drafts[x.id].trim(); delete drafts[x.id]; editing[x.id] = false; });
-      paint(); said(out, c.length + " answer" + (c.length === 1 ? "" : "s") + " saved" + (refine ? ". The next round has started: it runs on the daemon, and a toast says when it ends." : "."));
+      if (!onsend || sending) { return; }
+      var going = answers(), lines = going.map(function (a) { return a.line; });
+      sending = true; saidText = ""; paintSend();
+      settled(onsend(going, refine, lines), function (ok) {
+        sending = false;
+        if (!ok) { paintSend(); return; }
+        var held = holdPlace(el);
+        going.forEach(function (a) { sent[a.question] = a.answer; delete drafts[a.question]; editing[a.question] = false; });
+        saidText = "✓ " + going.length + " answer" + (going.length === 1 ? "" : "s") + " saved" + (refine ? ". The next round has started: it runs on the daemon, and a toast says when it ends." : ".");
+        paint(); held();
+      });
+    }
+    /* Sends the saved answer again, which says it still stands and clears its possibly outdated marker (standingAnswer). */
+    function stand(x) {
+      var a = answerOf(x);
+      if (!onsend || sending || !a) { return; }
+      var again = { question: x.id, answer: a, words: [id, x.id, "--answer=" + a].concat(where), line: answerLine(x, a) };
+      sending = true; saidText = ""; paintSend();
+      settled(onsend([again], false, [again.line]), function (ok) { sending = false; if (ok) { saidText = "✓ " + x.id + " still stands."; } paintSend(); });
+    }
+    function mark(card, who, x) {
+      var answered = answerOf(x) && !editing[x.id], typed = (drafts[x.id] || "").trim();
+      card.className = "q" + (answered ? " answered" : typed ? " drafted" : "");
+      who.textContent = [x.id, answered ? "answered" : typed ? "your answer, not sent yet" : "the agent asks"].join(" · ");
     }
     function paintQ(x, i) {
-      var answered = x.answer && !editing[x.id], dr = (drafts[x.id] || "").trim(), cls = "q" + (answered ? " answered" : dr ? " drafted" : "");
-      var qid = uid("ls-qq-"), card = h("section", { "class": cls, "aria-labelledby": qid });
-      card.appendChild(h("span", { "class": "who", text: [x.id, answered ? "answered" : dr ? "your answer, not sent yet" : "the agent asks"].join(" \u00b7 ") }));
+      var answer = answerOf(x), answered = !!answer && !editing[x.id], typed = (drafts[x.id] || "").trim(), of = offeredChoices(x), about = aboutLine(x), qid = name + "-" + x.id;
+      var card = h("section", { "class": "q", "aria-labelledby": qid, "data-next": "question:" + x.id, "data-anchor": "question:" + x.id }), who = h("span", { "class": "who" });
+      card.appendChild(who); mark(card, who, x);
       if (answered) {
         card.appendChild(h("p", { "class": "qt", id: qid, text: x.question }));
-        card.appendChild(h("p", { "class": "was" }, ["You answered: ", h("b", { text: x.answer }), h("button", { type: "button", onclick: function () { editing[x.id] = true; drafts[x.id] = x.answer; repaint(i); }, text: "Change it" })]));
+        if (about) { card.appendChild(h("p", { "class": "about", text: about })); }
+        if (x.outdated) { card.appendChild(h("p", { "class": "outdated" }, ["Possibly outdated: " + x.outdated + ". Answering again clears it.", dis() ? null : h("button", { type: "button", "data-k": "qs-stand-" + x.id, onclick: function () { stand(x); }, text: "It still stands" })])); }
+        card.appendChild(h("p", { "class": "was" }, ["You answered: ", h("b", { text: answer }), dis() ? null : h("button", { type: "button", onclick: function () { editing[x.id] = true; drafts[x.id] = answer || ""; repaint(i); }, text: "Change it" })]));
         return card;
       }
       var fs = h("fieldset", {}, [h("legend", { id: qid, text: x.question })]);
+      if (about) { fs.appendChild(h("p", { "class": "about", text: about })); }
+      if (x.outdated) { fs.appendChild(h("p", { "class": "outdated", text: "Possibly outdated: " + x.outdated + ". Answering clears it." })); }
       if (x.why) { fs.appendChild(h("p", { "class": "why", text: x.why })); }
-      var name = uid("ls-qo-"), opts = h("div", { "class": "opts" });
-      (x.options || []).forEach(function (op) {
-        var r = h("input", { type: "radio", name: name, value: op, onchange: function () { drafts[x.id] = op; own.value = ""; paintSend(); card.className = "q drafted"; } });
-        r.checked = drafts[x.id] === op;
-        opts.appendChild(h("label", { "class": "opt" }, [r, op, x.recommendation === op ? h("span", { "class": "rec", text: "recommended" }) : null]));
+      var own = h("textarea", { "class": "ls-text", id: qid + "-w", rows: 2, placeholder: "Or say it in your own words" });
+      var opts = h("div", { "class": "opts" });
+      of.choices.forEach(function (op, n) {
+        var r = h("input", { type: "radio", name: qid + "-o", value: op, onchange: function () { drafts[x.id] = op; own.value = ""; mark(card, who, x); paintSend(); } });
+        r.checked = typed === op;
+        opts.appendChild(h("label", { "class": "opt" }, [r, op, of.recommended === n ? h("span", { "class": "rec", text: "recommended" }) : null]));
       });
-      fs.appendChild(opts);
-      if (x.recommendation && (x.options || []).indexOf(x.recommendation) < 0) { fs.appendChild(h("p", { "class": "why", text: "Recommended: " + x.recommendation })); }
-      var oid = uid("ls-qw-"), own = h("textarea", { "class": "ls-text", id: oid, rows: 2, placeholder: "Or say it in your own words", oninput: function () { drafts[x.id] = own.value; Array.prototype.forEach.call(opts.querySelectorAll("input"), function (r) { r.checked = r.value === own.value; }); card.className = own.value.trim() ? "q drafted" : "q"; paintSend(); } });
-      if (drafts[x.id] && (x.options || []).indexOf(drafts[x.id]) < 0) { own.value = drafts[x.id]; }
-      fs.appendChild(h("div", { "class": "own" }, [h("label", { "for": oid, text: "Or in your own words" }), own]));
+      if (of.choices.length) { fs.appendChild(opts); }
+      if (of.note && of.recommended !== null) { fs.appendChild(h("p", { "class": "why", text: "Why it recommends " + of.choices[of.recommended] + ": " + of.note })); }
+      if (typed && of.choices.indexOf(typed) < 0) { own.value = drafts[x.id]; }
+      own.addEventListener("input", function () { drafts[x.id] = own.value; var t = own.value.trim(); Array.prototype.forEach.call(opts.querySelectorAll("input"), function (r) { r.checked = r.value === t; }); mark(card, who, x); paintSend(); });
+      fs.appendChild(h("div", { "class": "own" }, [h("label", { "for": qid + "-w", text: "Or in your own words" }), own]));
       card.appendChild(fs);
       return card;
     }
-    function repaint(i) { var old = list.children[i], nu = paintQ(qs[i], i); list.replaceChild(nu, old); paintSend(); var f = nu.querySelector("input, textarea"); if (f) { f.focus(); } }
-    function paint() { list.textContent = ""; qs.forEach(function (x, i) { list.appendChild(paintQ(x, i)); }); paintSend(); }
+    function understood(x) { var u = understoodBefore(rounds, x.id); return u ? h("p", { "class": "understood", text: "Understood as: " + u }) : null; }
+    function repaint(i) { paint(); var c = list.querySelector("[data-anchor=\"question:" + qs[i].id + "\"]"), f = c && c.querySelector("input, textarea"); if (f) { f.focus(); } }
+    function paint() {
+      keeping(function () {
+        list.textContent = "";
+        qs.forEach(function (x, i) { var u = understood(x); if (u) { list.appendChild(u); } list.appendChild(paintQ(x, i)); });
+      });
+      paintSend();
+    }
+    /* A fresh read: drafts that are now the saved answer are dropped, and so is what was sent once it reads back (settledDrafts). */
+    function set(p) {
+      p = p || {};
+      if (p.rounds !== undefined) { rounds = p.rounds; }
+      if (p.disabledReason !== undefined) { o.disabledReason = p.disabledReason; }
+      if (p.questions) {
+        qs = p.questions;
+        Object.keys(drafts).forEach(function (k) { var x = qs.filter(function (one) { return one.id === k; })[0]; if (x && (x.answer || null) === drafts[k].trim()) { delete drafts[k]; } });
+        Object.keys(sent).forEach(function (k) { var x = qs.filter(function (one) { return one.id === k; })[0]; if (x && x.answer === sent[k]) { delete sent[k]; } });
+      }
+      var held = holdPlace(el); paint(); held();
+    }
+    if (o.drafts) { Object.keys(o.drafts).forEach(function (k) { drafts[k] = o.drafts[k]; }); }
     paint();
-    return { el: el, get changed() { return changed(); } };
+    return { el: el, set: set, get changed() { return changed(); }, get answers() { return answers(); }, get drafts() { return Object.assign({}, drafts); },
+      destroy: function () { if (ondraft) { ondraft([], []); } } };
   }
 
-  /* PlanLayer: one layer of an idea's plan. Its options side by side with what is for and against each; choose one, keep or drop the layer, or ask for it to be reworked. An addition is drawn the same way, without options. */
+  /* PlanLayer: one layer of an idea's plan. Its options side by side with what is for and against each; choose one, keep or drop the layer, or ask for it to be reworked. An addition is drawn the same way, without options.
+     A choice or a verdict shows the moment it is made, and goes back to what it was if it is not recorded (a callback that returns or resolves false).
+     Nothing changes size when it does: the button and the chosen marker share one slot, and the status line keeps its height when empty. */
   function PlanLayer(o) {
     o = o || {};
     var L = o.layer || o.addition || {}, add = !!o.addition, id = o.idea || "<id>", where = o.where || [], dis = o.disabledReason || null, lock = !!o.accepted;
-    var verdict = String(L.verdict || "Undecided");
-    var el = h("section", { "class": "ls-layer" + (add ? " addition" : "") + (verdict === "Drop" ? " dropped" : ""), "aria-label": (add ? "Addition " : "Layer ") + L.id + ": " + (L.name || L.title) });
-    var out = h("p", { "class": "ls-said", role: "status" });
-    var vk = { Keep: "good", Drop: "", Improve: "needs", Undecided: "" }[verdict];
-    el.appendChild(h("div", { "class": "lh" }, [h("span", { "class": "id", text: L.id }), h("h4", { text: L.name || L.title }), tag("verdict: " + verdict.toLowerCase(), vk)]));
-    if (add) { el.appendChild(h("p", { "class": "why", text: L.why || "" })); }
-    else if (L.purpose) { el.appendChild(h("p", { "class": "purpose", text: L.purpose })); }
-    if (!add) {
-      var grid = h("div", { "class": "opts" });
-      (L.options || []).forEach(function (op) {
-        var chosen = L.chosen === op.id, card = h("article", { "class": "card" + (chosen ? " chosen" : ""), "aria-label": op.title + (chosen ? ", chosen" : "") });
-        card.appendChild(h("div", { "class": "ct" }, [h("span", { "class": "id", text: op.id }), h("b", { text: op.title }), op.recommended ? tag("recommended", "accent") : null, chosen ? tag("chosen", "good", G.ok) : null]));
-        if (op.detail) { card.appendChild(h("p", { text: op.detail })); }
-        var pc = (op.pros || []).map(function (p) { return h("li", { "class": "pro" }, [h("i", { "aria-hidden": "true", text: "+" }), h("span", {}, [h("span", { "class": "ls-vh", text: "For: " }), p])]); })
-          .concat((op.cons || []).map(function (p) { return h("li", { "class": "con" }, [h("i", { "aria-hidden": "true", text: "\u2212" }), h("span", {}, [h("span", { "class": "ls-vh", text: "Against: " }), p])]); }));
-        if (pc.length) { card.appendChild(h("ul", {}, pc)); }
-        if (!chosen && !lock) { card.appendChild(halo({ label: "Choose this", size: "small", cmd: lineOf("idea choose", [], {}, [id, L.id, op.id].concat(where)), disabledReason: dis, onPress: function () { if (o.onChoose) { o.onChoose(op.id); } } })); }
-        grid.appendChild(card);
+    var onrework = o.onRework || o.onrework;
+    /* Made here and not yet read back: shown in place of what the idea says. */
+    var choosing = null, judging = null, chosenNow = L.chosen || null, verdictNow = null;
+    var reworking = false, request = "", saidText = "", failed = false, pending = false;
+    function cap(w) { w = String(w || "Undecided"); return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(); }
+    function verdict() { return judging || verdictNow || cap(L.verdict); }
+    function chosen() { return choosing || chosenNow; }
+    function busy() { return !!choosing || !!judging; }
+    var name = L.name || L.title || "";
+    var el = h("section", { "aria-label": (add ? "Addition " : "Layer ") + L.id + ": " + name, "data-anchor": "piece:" + L.id });
+    var out = h("p", { "class": "ls-said held", role: "status" });
+    var ta = h("textarea", { "class": "ls-text", id: uid("rw-"), rows: 2, placeholder: "What should change, in a sentence", "aria-label": "What should change about " + L.id });
+    var sendBox = h("div", {});
+    function tell() { var now = reworking && !!request.trim(); if (now !== pending) { pending = now; if (onrework) { onrework(now); } } }
+    function keeping(fn) {
+      var a = document.activeElement, k = a && el.contains(a) && a !== ta ? (a.closest("[data-k]") || a).getAttribute("data-k") : null;
+      fn();
+      if (k) { var b = el.querySelector("[data-k=\"" + k + "\"]"); if (b && b !== document.activeElement) { b.focus({ preventScroll: true }); } }
+    }
+    function paintSend() {
+      sendBox.textContent = "";
+      sendBox.appendChild(halo({ label: "Send it back", key: "pl-send", next: "rework:" + L.id, size: "small", kind: "needs", cmd: lineOf("idea improve", [], {}, [id, L.id, "--request=" + (request.trim() || "<what should change>")].concat(where)), disabledReason: request.trim() ? dis : "say what should change", inactive: busy(), onPress: sendBack }));
+    }
+    function choose(op) {
+      if (choosing || !o.onChoose) { return; }
+      choosing = op.id; saidText = ""; paint();
+      settled(o.onChoose(op.id), function (ok) {
+        choosing = null; failed = !ok;
+        if (ok) { chosenNow = op.id; }
+        saidText = ok ? "✓ Chose " + op.id + " for " + L.id : "✕ " + op.id + " was not recorded for " + L.id;
+        paint();
       });
-      el.appendChild(grid);
     }
-    if (!lock) {
-      var acts = h("div", { "class": "acts" }), req = "", rw = h("div", { "class": "rework" }), ta = h("textarea", { "class": "ls-text", rows: 2, placeholder: "What should change, in a sentence", "aria-label": "What should change about " + L.id });
-      acts.appendChild(halo({ label: "Keep it", size: "small", glyph: "\u2713", cmd: lineOf("idea keep", [], {}, [id, L.id].concat(where)), disabledReason: dis || (verdict === "Keep" ? "kept already" : null), onPress: function () { if (o.onVerdict) { o.onVerdict("Keep"); } said(out, "Kept " + L.id); } }));
-      acts.appendChild(halo({ label: "Drop it", size: "small", glyph: "\u2715", cmd: lineOf("idea drop", [], {}, [id, L.id].concat(where)), disabledReason: dis || (verdict === "Drop" ? "dropped already" : null), onPress: function () { if (o.onVerdict) { o.onVerdict("Drop"); } said(out, "Dropped " + L.id); } }));
-      acts.appendChild(halo({ label: "Ask for it to be reworked", size: "small", glyph: "\u21bb", cmd: "says what should change, then sends it", disabledReason: dis, onPress: function () { rw.classList.toggle("on"); if (rw.classList.contains("on")) { ta.focus(); } } }));
-      var send = h("div", {});
-      function paintRw() { send.textContent = ""; send.appendChild(halo({ label: "Send it back", size: "small", kind: "needs", cmd: lineOf("idea improve", [], {}, [id, L.id, "--request=" + (req || "<what should change>")].concat(where)), disabledReason: req ? dis : "say what should change", onPress: function () { if (o.onImprove) { o.onImprove(req); } rw.classList.remove("on"); said(out, "Sent " + L.id + " back to be reworked"); } })); }
-      ta.addEventListener("input", function () { req = ta.value.trim(); paintRw(); });
-      paintRw(); rw.appendChild(ta); rw.appendChild(send);
-      el.appendChild(acts); el.appendChild(rw);
+    function judge(to, send, done) {
+      if (judging) { return; }
+      judging = to; saidText = ""; paint();
+      settled(send(), function (ok) {
+        judging = null; failed = !ok;
+        if (ok) { verdictNow = to; }
+        saidText = ok ? "✓ " + done : "✕ That was not recorded for " + L.id;
+        paint();
+      });
     }
-    el.appendChild(out);
+    function sendBack() {
+      var text = request.trim();
+      reworking = false; request = ""; ta.value = ""; tell();
+      judge("Improve", function () { return o.onImprove ? o.onImprove(text) : false; }, "Sent " + L.id + " back to be reworked");
+    }
+    ta.addEventListener("input", function () { request = ta.value; paintSend(); tell(); });
+    function paint() {
+      keeping(function () {
+        var v = verdict(), pick = chosen();
+        el.className = "ls-layer" + (add ? " addition" : "") + (v === "Drop" ? " dropped" : "");
+        el.textContent = "";
+        el.appendChild(h("div", { "class": "lh" }, [h("span", { "class": "id", text: L.id }), h("h4", { text: name }), tag("verdict: " + v.toLowerCase(), { Keep: "good", Improve: "needs" }[v] || "")]));
+        if (add) { el.appendChild(h("p", { "class": "why", text: L.why || "" })); }
+        else if (L.purpose) { el.appendChild(h("p", { "class": "purpose", text: L.purpose })); }
+        if (!add) {
+          var grid = h("div", { "class": "opts", "data-next": "choose:" + L.id });
+          (L.options || []).forEach(function (op) {
+            var picked = pick === op.id, card = h("article", { "class": "card" + (picked ? " chosen" : ""), "aria-label": op.title + (picked ? ", chosen" : ""), "data-anchor": "option:" + L.id + ":" + op.id });
+            card.appendChild(h("div", { "class": "ct" }, [h("span", { "class": "id", text: op.id }), h("b", { text: op.title }), op.recommended ? tag("recommended", "accent") : null]));
+            if (op.detail) { card.appendChild(h("p", { text: op.detail })); }
+            var pc = (op.pros || []).map(function (p) { return h("li", { "class": "pro" }, [h("i", { "aria-hidden": "true", text: "+" }), h("span", {}, [h("span", { "class": "ls-vh", text: "For: " }), p])]); })
+              .concat((op.cons || []).map(function (p) { return h("li", { "class": "con" }, [h("i", { "aria-hidden": "true", text: "−" }), h("span", {}, [h("span", { "class": "ls-vh", text: "Against: " }), p])]); }));
+            if (pc.length) { card.appendChild(h("ul", {}, pc)); }
+            var markP = h("p", { "class": "mark" }, [tag(choosing === op.id ? "chosen · recording" : "chosen", "good", G.ok)]);
+            if (!lock) {
+              /* Both always drawn in one cell, the other one hidden, so choosing changes nothing's size. */
+              var btn = h("div", { "class": picked ? "off" : "", "aria-hidden": picked ? "true" : null }, [halo({ label: "Choose this", key: "pl-choose-" + op.id, size: "small", cmd: lineOf("idea choose", [], {}, [id, L.id, op.id].concat(where)), disabledReason: dis, inactive: busy(), onPress: function () { choose(op); } })]);
+              if (picked) { btn.inert = true; } else { markP.classList.add("off"); markP.setAttribute("aria-hidden", "true"); }
+              card.appendChild(h("div", { "class": "slot" }, [btn, markP]));
+            } else if (picked) { card.appendChild(markP); }
+            grid.appendChild(card);
+          });
+          el.appendChild(grid);
+        }
+        if (!lock) {
+          var acts = h("div", { "class": "acts", "data-next": "verdict:" + L.id });
+          acts.appendChild(halo({ label: "Keep it", key: "pl-keep", size: "small", glyph: "✓", cmd: lineOf("idea keep", [], {}, [id, L.id].concat(where)), disabledReason: dis, inactive: busy() || v === "Keep", onPress: function () { judge("Keep", function () { return o.onVerdict ? o.onVerdict("Keep") : false; }, "Kept " + L.id); } }));
+          acts.appendChild(halo({ label: "Drop it", key: "pl-drop", size: "small", glyph: "✕", cmd: lineOf("idea drop", [], {}, [id, L.id].concat(where)), disabledReason: dis, inactive: busy() || v === "Drop", onPress: function () { judge("Drop", function () { return o.onVerdict ? o.onVerdict("Drop") : false; }, "Dropped " + L.id); } }));
+          acts.appendChild(halo({ label: "Ask for it to be reworked", key: "pl-rework", size: "small", glyph: "↻", cmd: "says what should change, then sends it", disabledReason: dis, inactive: busy(), onPress: function () { reworking = !reworking; paint(); tell(); if (reworking) { ta.focus(); } } }));
+          el.appendChild(acts);
+          paintSend();
+          el.appendChild(h("div", { "class": "rework" + (reworking ? " on" : "") }, [ta, sendBox]));
+        }
+        out.className = "ls-said held" + (failed ? " no" : ""); out.textContent = saidText;
+        el.appendChild(out);
+      });
+    }
+    paint();
     return el;
   }
 
@@ -2447,30 +3241,59 @@
       h("span", { "class": "facts" }, facts), counts.length ? h("span", { "class": "counts" }, counts) : null]);
   }
 
-  /* TaskBoard: a project's tasks by where they stand, each moved on with the command that says so. */
+  /* TaskBoard: a project's tasks as Open, Doing and Blocked, with done and dropped folded away. Each card offers only the moves its state
+     allows, each with the command that says so. Given a project and onStart, a card also starts a session on its task, at once or through the
+     launch sheet. History (or Details and history) opens the task in full. A board can hold more than one list's tasks (mixed), each card then
+     naming its list; what moved away from a list is listed apart, never as one of its tasks. As main's TaskBoard.svelte and lib/tasks.ts. */
   var NEXT = { open: ["doing", "blocked", "dropped"], doing: ["done", "blocked", "open"], blocked: ["doing", "dropped"], done: ["open"], dropped: ["open"] };
-  var MOVE = { doing: "Start it", done: "Mark it done", blocked: "It is blocked", dropped: "Drop it", open: "Reopen it" };
+  var MOVE = { doing: "Mark it doing", done: "Mark it done", blocked: "It is blocked", dropped: "Drop it", open: "Reopen it" };
+  function taskWhereOf(project) { return project ? ["--project", project] : ["--global"]; }
+  function taskWhereSaid(project) { return project || "the workspace-wide list"; }
+  function taskListHref(project) { return project ? "#projects/" + encodeURIComponent(project) : "#projects/+tasks"; }
+  /* A day as "3 Oct"; words that are not a date are shown as they are. */
+  function taskDay(at) { if (!at) { return ""; } var d = new Date(at); return isNaN(d.getTime()) ? String(at) : d.toLocaleDateString([], { day: "numeric", month: "short" }); }
+  /* 'missing' for open or blocked work without a done-when, 'proposalWaiting' when one is proposed for you to confirm. */
+  function taskMarkWord(mark) { return mark === "missing" ? "missing" : mark === "proposalWaiting" ? "proposal waiting" : null; }
   function TaskBoard(o) {
     o = o || {};
-    var tasks = o.tasks || [], where = o.where || [], el = h("div", { "class": "ls-tboard" });
+    var tasks = o.tasks || [], where = o.where || [], el = h("div", { "class": "ls-tboard" }), name = uid("ls-tb-");
+    var onstart = o.onStart || o.onstart, onread = o.onRead || o.onread, mixed = !!o.mixed;
+    /* The list a task is on, by slug, or null for the workspace-wide one; the words naming it; the project a session on it starts in. */
+    function listOf(t) { return mixed ? (t.project || null) : where[0] === "--project" ? where[1] : null; }
+    function whereFor(t) { return mixed ? taskWhereOf(t.project) : where; }
+    function startIn(t) { return mixed ? (t.project || null) : (o.project || null); }
+    function read(t) {
+      var at = Object.assign({}, t, { project: listOf(t) });
+      if (onread) { onread(at); } else if (NS.TaskDetail) { NS.TaskDetail({ task: at, read: o.read, host: o.host, contained: o.contained, behind: o.behind }); }
+    }
     function card(t) {
-      var s = h("p", { "class": "said", role: "status" }), moves = h("div", { "class": "moves" });
-      (NEXT[t.state] || []).forEach(function (n) { moves.appendChild(halo({ label: MOVE[n], size: "small", kind: n === "dropped" ? "danger" : "", cmd: lineOf("task declare", [], {}, [t.id, n].concat(where)), disabledReason: o.disabledReason, onPress: function () { var was = t.state; t.state = n; if (o.onDeclare) { o.onDeclare(t, n, was); } paint(); } })); });
+      var s = h("p", { "class": "said", role: "status" }), moves = h("div", { "class": "moves" }), into = startIn(t);
+      if (into && onstart && t.state !== "dropped") {
+        moves.appendChild(halo({ label: "Start", size: "small", solid: true, cmd: lineOf("launch", [], {}, [into, "--task-id", t.id]), disabledReason: o.disabledReason, onPress: function () { onstart(t, false); } }));
+        moves.appendChild(halo({ label: "Start with options…", size: "small", cmd: "opens the launch sheet with this task chosen", disabledReason: o.disabledReason, onPress: function () { onstart(t, true); } }));
+      }
+      (NEXT[t.state] || []).forEach(function (n) { moves.appendChild(halo({ label: MOVE[n], size: "small", kind: n === "dropped" ? "danger" : "", cmd: lineOf("task declare", [], {}, [t.id, n].concat(whereFor(t))), disabledReason: o.disabledReason, onPress: function () { var was = t.state; t.state = n; if (o.onDeclare) { o.onDeclare(t, n, was); } paint(); } })); });
+      if (onread || o.read) { moves.appendChild(halo({ label: t.hasDetail ? "Details and history" : "History", size: "small", cmd: lineOf("task show", [], {}, [t.id].concat(taskWhereOf(listOf(t)))), onPress: function () { read(t); } })); }
       var go = null;
       if ((o.onSession || o.onRun) && t.kind !== "idea" && (t.state === "open" || t.state === "doing" || t.state === "blocked")) {
         go = h("div", { "class": "go" });
-        if (o.onSession) { go.appendChild(halo({ label: "Start a session on it", size: "small", glyph: "\u25b8", cmd: "opens the launch sheet with this task \u00b7 --task-id=" + t.id, disabledReason: o.disabledReason, onPress: function () { o.onSession(t); } })); }
-        if (o.onRun) { go.appendChild(halo({ label: "Run a team on it", size: "small", glyph: "\u25b6", cmd: "opens Start a run with this task \u00b7 --task " + t.id, disabledReason: o.disabledReason || (/^team /.test(t.declaredBy || "") && t.state === "doing" ? "a team run is on it already" : null), onPress: function () { o.onRun(t); } })); }
+        if (o.onSession) { go.appendChild(halo({ label: "Start a session on it", size: "small", glyph: "▸", cmd: "opens the launch sheet with this task · --task-id=" + t.id, disabledReason: o.disabledReason, onPress: function () { o.onSession(t); } })); }
+        if (o.onRun) { go.appendChild(halo({ label: "Run a team on it", size: "small", glyph: "▶", cmd: "opens Start a run with this task · --task " + t.id, disabledReason: o.disabledReason || (/^team /.test(t.declaredBy || "") && t.state === "doing" ? "a team run is on it already" : null), onPress: function () { o.onRun(t); } })); }
       }
-      return h("article", { "class": "task " + t.state, "aria-label": t.title + ", " + t.state }, [h("span", { "class": "tt", text: t.title }), h("span", { "class": "tx", text: [t.id, t.kind, t.declaredBy, t.declared].filter(Boolean).join(" \u00b7 ") }), t.note ? h("p", { "class": "note", text: t.note }) : null, moves, go, s]);
+      var mw = taskMarkWord(t.mark);
+      return h("article", { "class": "task " + t.state, "aria-label": t.title + ", " + t.state }, [h("span", { "class": "tt", text: t.title }),
+        h("span", { "class": "tx", text: [mixed ? taskWhereSaid(t.project) : "", t.id, t.kind, t.declaredBy, taskDay(t.declared)].filter(Boolean).join(" · ") }),
+        mw ? h("span", { "class": "ls-tag needs mark", text: mw }) : null,
+        t.moved ? h("span", { "class": "came", text: "Moved here from " + taskWhereSaid(t.moved.from) + ", " + taskDay(t.moved.at) }) : null,
+        t.note ? h("p", { "class": "note", text: t.note }) : null, moves, go, s]);
     }
     function paint() {
       el.textContent = "";
       var cols = h("div", { "class": "cols" });
       [["open", "Open"], ["doing", "Doing"], ["blocked", "Blocked"]].forEach(function (c) {
-        var ts = tasks.filter(function (t) { return t.state === c[0]; }), sid = uid("ls-tc-");
+        var ts = tasks.filter(function (t) { return t.state === c[0]; }), sid = name + "-" + c[0];
         var col = h("section", { "class": "col", "aria-labelledby": sid }, [h("h4", { id: sid }, [NS.Signal ? NS.Signal(c[0]) : null, c[1], h("span", { "class": "n", text: String(ts.length) })])]);
-        if (!ts.length) { col.appendChild(h("p", { "class": "empty", text: { open: "Nothing waiting to start.", doing: "Nothing under way.", blocked: "Nothing blocked." }[c[0]] })); }
+        if (!ts.length) { col.appendChild(h("p", { "class": "empty", text: o.paged ? "None on this page." : { open: "Nothing waiting to start.", doing: "Nothing under way.", blocked: "Nothing blocked." }[c[0]] })); }
         ts.forEach(function (t) { col.appendChild(card(t)); });
         cols.appendChild(col);
       });
@@ -2480,6 +3303,12 @@
         var dn = closed.filter(function (t) { return t.state === "done"; }).length, dr = closed.length - dn, grid = h("div", { "class": "grid" });
         closed.forEach(function (t) { grid.appendChild(card(t)); });
         el.appendChild(h("details", { "class": "closed" }, [h("summary", { text: dn + " done, " + dr + " dropped" }), grid]));
+      }
+      var away = o.away || [];
+      if (away.length) {
+        el.appendChild(h("section", { "class": "away", "aria-labelledby": name + "-away" }, [h("h4", { id: name + "-away", text: "Moved away" }), h("ul", {}, away.map(function (g) {
+          return h("li", {}, [(g.title || g.id) + " moved to " + taskWhereSaid(g.to) + ", " + taskDay(g.at) + ". ", h("a", { href: taskListHref(g.to), text: "Show it" })]);
+        }))]));
       }
       if (o.from) { el.appendChild(h("p", { "class": "ls-from" }, ["The same as ", h("code", { text: o.from }), "."])); }
     }
@@ -2911,7 +3740,7 @@
       var tr = h("tr", {}, [h("th", { scope: "row" }, [c.text, h("span", { "class": "mv" + (stuck ? " stuck" : ""), text: nowV === "met" ? "met since round " + (at || 1) : (at === null ? "has not moved since round 1" : "last moved in round " + at) })])]);
       for (var k = 0; k < rounds; k++) {
         var v = c.verdicts[k], m = MARK[v] || ["·", "no verdict"], moved = k > 0 && v !== c.verdicts[k - 1] && v !== undefined;
-        tr.appendChild(h("td", { "class": cls(v) + (moved ? " moved" : "") }, [h("i", { "aria-hidden": "true", text: m[0] }), h("span", { "class": "ls-vh", text: "Round " + (k + 1) + ": " + m[1] + (moved ? ", changed" : "") })]));
+        tr.appendChild(h("td", { "class": cls(v) + (moved ? " moved" : "") + (k + 1 === now ? " now" : ""), "data-r": "R" + (k + 1) }, [h("i", { "aria-hidden": "true", text: m[0] }), h("span", { "class": "ls-vh", text: "Round " + (k + 1) + ": " + m[1] + (moved ? ", changed" : "") })]));
       }
       tb.appendChild(tr);
     });
@@ -3040,8 +3869,19 @@
   var SVGNS = "http://www.w3.org/2000/svg";
   function s(tag, attrs, kids) { var e = document.createElementNS(SVGNS, tag); Object.keys(attrs || {}).forEach(function (k) { if (attrs[k] !== null && attrs[k] !== undefined) { e.setAttribute(k, attrs[k]); } }); (kids || []).forEach(function (c) { if (c) { e.appendChild(c); } }); return e; }
   var BACKDROPS = ["plain", "map", "map-animated"];
-  /** Plain ground, the field map still (the default), or the field map with its scan. */
-  function setBackdrop(v, el) { (el || document.documentElement).setAttribute("data-backdrop", BACKDROPS.indexOf(v) >= 0 ? v : "map"); }
+  var SHOWN = ["plain", "map", "map-scan"];
+  /** The studio-backdrop setting as kept: the plain ground (the default, and what anything unknown means), the field map still, or animated. What shows is resolveBackdrop()'s. */
+  function setBackdrop(v, el) { (el || document.documentElement).setAttribute("data-backdrop", BACKDROPS.indexOf(v) >= 0 ? v : "plain"); }
+  /* What is behind the page right now. In order: high contrast, Pure Focus and Ambient keep the plain ground; then the setting; the scan runs only under full motion while nothing needs you, the tab is visible and no terminal has the keyboard. */
+  function resolveBackdrop(o) {
+    o = o || {};
+    if (o.theme === "hc-dark" || o.theme === "hc-light" || o.mode === "pure" || o.ambient) { return "plain"; }
+    if (o.setting === "map") { return "map"; }
+    if (o.setting !== "map-animated") { return "plain"; }
+    return o.motion === "full" && !(o.waiting > 0) && !o.hidden && !o.terminalFocused ? "map-scan" : "map";
+  }
+  /** Writes resolveBackdrop()'s answer as data-fieldmap on <html>, which is all the CSS keys off. Unknown values are plain. */
+  function setFieldmap(v, el) { (el || document.documentElement).setAttribute("data-fieldmap", SHOWN.indexOf(v) >= 0 ? v : "plain"); }
 
   /* A small deterministic value noise, so the map is the same on every visit. */
   function rng(seed) { var x = seed >>> 0 || 1; return function () { x ^= x << 13; x >>>= 0; x ^= x >>> 17; x ^= x << 5; x >>>= 0; return x / 4294967296; }; }
@@ -3078,16 +3918,26 @@
     return { minor: minor.join(""), index: index.join("") };
   }
 
-  /* FieldMap: the embossed survey map. Each contour is drawn three times: a light edge, a dark edge, and the line itself. */
+  /* FieldMap: the embossed survey map. Each contour is drawn three times: a light edge, a dark edge, and the line itself.
+     It draws only when first wanted, after the first paint, and again 250ms after a resize; a change of setting, theme or mode
+     never redraws it, since the CSS decides from data-fieldmap what shows. */
   var fmCount = 0;
+  /* Runs then once the browser is idle, or a frame from now where it cannot say. */
+  function later(then) {
+    if (typeof window.requestIdleCallback === "function") { var hi = window.requestIdleCallback(then, { timeout: 1000 }); return function () { window.cancelIdleCallback(hi); }; }
+    var hf = window.requestAnimationFrame(then); return function () { window.cancelAnimationFrame(hf); };
+  }
   function FieldMap(o) {
     o = o || {};
     var el = document.createElement("div"); el.className = "ls-fieldmap"; el.setAttribute("aria-hidden", "true");
-    var host = o.host || document.body, timer = null;
+    var host = o.host || document.body, timer = null, drawn = false, cancel = null, watch = null, shown = o.shown;
+    /* With no shown passed, it follows data-fieldmap on <html>, as main's App writes it. */
+    function now() { return shown !== undefined ? shown : (document.documentElement.getAttribute("data-fieldmap") || "plain"); }
     function draw() {
+      if (cancel) { cancel(); cancel = null; }
       var W = o.width || window.innerWidth, H = o.height || window.innerHeight, c = contours(W, H, o), sq = o.square || 200;
       var svg = s("svg", { viewBox: "0 0 " + W + " " + H, preserveAspectRatio: "none", focusable: "false" });
-      /* Each set of lines is drawn once, in defs, and reused four times (dark edge, light edge, line, scan), so the page holds its path data once. */
+      /* Each set of lines is drawn once, in defs, and reused (dark edge, light edge, line, scan), so the page holds its path data once. */
       var id = "ls-fm" + (++fmCount), MINOR = id + "-minor", INDEX = id + "-index";
       svg.appendChild(s("defs", {}, [s("path", { id: MINOR, d: c.minor }), s("path", { id: INDEX, d: c.index })]));
       function lines(ref, cls, w, dx, dy) { return s("use", { href: "#" + ref, "class": cls, fill: "none", "stroke-width": w, "stroke-linecap": "round", transform: dx || dy ? "translate(" + dx + " " + dy + ")" : null }); }
@@ -3101,17 +3951,28 @@
       svg.appendChild(s("g", {}, [lines(MINOR, "lo", 1.1, 0.7, 0.7), lines(MINOR, "hi", 1, -0.6, -0.6), lines(MINOR, "ln", 0.9)]));
       svg.appendChild(s("g", { "class": "ixg" }, [lines(INDEX, "lo", 1.8, 0.9, 0.9), lines(INDEX, "hi", 1.5, -0.8, -0.8), lines(INDEX, "ix", 1.3)]));
       svg.appendChild(refs);
+      /* The scan covers the page area only, from the rail's collapsed edge, so it never shows through the rail. */
       var scan = s("svg", { viewBox: "0 0 " + W + " " + H, preserveAspectRatio: "none", "class": "scan", focusable: "false" }, [lines(MINOR, "ln", 1.1), lines(INDEX, "ix", 1.6)]);
-      el.textContent = ""; el.appendChild(svg); el.appendChild(scan);
+      var zone = document.createElement("div"); zone.className = "scanzone"; zone.appendChild(scan);
+      el.textContent = ""; el.appendChild(svg); el.appendChild(zone);
+      drawn = true;
     }
-    draw();
+    function want() { if (now() !== "plain" && !drawn && !cancel) { cancel = later(function () { cancel = null; draw(); }); } }
     host.insertBefore(el, host.firstChild);
-    function onResize() { clearTimeout(timer); timer = setTimeout(draw, 250); }
+    want();
+    if (shown === undefined && typeof MutationObserver === "function") { watch = new MutationObserver(want); watch.observe(document.documentElement, { attributes: true, attributeFilter: ["data-fieldmap"] }); }
+    /* While the map is hidden, forget it, so it is drawn afresh when it next shows. */
+    function onResize() { clearTimeout(timer); timer = setTimeout(function () { if (now() === "plain") { drawn = false; el.textContent = ""; } else { draw(); } }, 250); }
     if (!o.width) { window.addEventListener("resize", onResize); }
-    return { el: el, redraw: draw, destroy: function () { window.removeEventListener("resize", onResize); el.remove(); } };
+    return {
+      el: el,
+      redraw: draw,
+      set: function (v) { shown = v; want(); },
+      destroy: function () { clearTimeout(timer); if (cancel) { cancel(); } if (watch) { watch.disconnect(); } window.removeEventListener("resize", onResize); el.remove(); }
+    };
   }
 
-  Object.assign(NS, { FieldMap: FieldMap, setBackdrop: setBackdrop, BACKDROPS: BACKDROPS });
+  Object.assign(NS, { FieldMap: FieldMap, setBackdrop: setBackdrop, BACKDROPS: BACKDROPS, resolveBackdrop: resolveBackdrop, setFieldmap: setFieldmap });
 })();
 
 (function () {
@@ -3284,6 +4145,7 @@
   Object.assign(NS, { OfficeView: OfficeView, OfficePanel: OfficePanel });
 })();
 
+
 /* ---------- Stage 14: what main's Studio built since the design ---------- */
 (function () {
   "use strict";
@@ -3357,7 +4219,7 @@
             })));
           }
           if (reply.plan) {
-            if (!cards[turn.id] || cards[turn.id].source !== turn.reply.plan) { cards[turn.id] = { source: turn.reply.plan, card: NS.AskPlanCard({ plan: reply.plan, approve: o.approve }) }; }
+            if (!cards[turn.id] || cards[turn.id].source !== turn.reply.plan) { cards[turn.id] = { source: turn.reply.plan, card: NS.AskPlanCard({ plan: reply.plan, approve: o.approve, onapproved: function () { if (o.onapproved) { o.onapproved(); } } }) }; }
             kids.push(cards[turn.id].card.el);
           }
           if (reply.nearMisses.length) {
@@ -3419,13 +4281,16 @@
         set({ turns: turns, asking: true });
         var settled;
         try { settled = Promise.resolve(asker(query)); } catch (error) { settled = Promise.reject(error); }
-        return settled.then(function (reply) { put({ reply: reply }); }, function (error) { put({ failed: error && error.message ? error.message : "Loadout could not answer that." }); });
+        return settled.then(function (reply) { if (reply && reply.agentSession) { agentSession = reply.agentSession; } put({ reply: reply }); }, function (error) { put({ failed: error && error.message ? error.message : "Loadout could not answer that." }); });
       }
-      function clear() { set({ turns: [], asking: false }); }
+      /* The agent's conversation, once it has been asked, so a follow-up carries it on. */
+      var agentSession = null;
+      function clear() { agentSession = null; set({ turns: [], asking: false }); }
 
       o = o || {};
       set({ turns: o.turns || [], asking: !!o.asking });
-      return { el: el, set: set, ask: ask, clear: clear };
+      return { el: el, set: set, ask: ask, clear: clear,
+        get turns() { return state.turns; }, get asking() { return state.asking; }, get agentSession() { return agentSession; } };
     }
     AskPane.arrived = arrived;
     NS.AskPane = AskPane;
@@ -3523,7 +4388,12 @@
         busy = true; failed = null; paint();
         var settle = function () { busy = false; paint(); };
         try {
-          Promise.resolve(o.approve ? o.approve(plan, team || null, cap) : "Approved.").then(function (said) { done = said; settle(); }, function (error) { failed = error && error.message ? error.message : String(error); settle(); });
+          Promise.resolve(o.approve ? o.approve(plan, team || null, cap) : "Approved.").then(function (said) {
+            done = said;
+            /* Approve is held from here on, so focus left on it would go nowhere. A refusal leaves it where it is: the button can be pressed again. */
+            if (o.onapproved) { o.onapproved(); }
+            settle();
+          }, function (error) { failed = error && error.message ? error.message : String(error); settle(); });
         } catch (error) { failed = error && error.message ? error.message : String(error); settle(); }
       }
 
@@ -3970,6 +4840,118 @@
     NS.Journal = Journal;
   })();
 
+  /* --- Landings --- */
+  (function () {
+    /* Landings: the branches waiting to land: a queued run's own branch with its pull request, and each node branch
+       its gate did not merge, pending. Each can be opened, marked ready, or squash-merged with a message the person
+       writes, through the same commands as the terminal. As main's Landings.svelte. */
+
+    /* The words for 'loadout pr merge', leaving out a body nobody wrote. Joined with '=' so a message that starts with
+       a dash is still read as the value. */
+    function mergeWords(one, subject, body) {
+      var words = [one.branch, "--project", one.project, "--subject=" + String(subject).trim()];
+      return String(body).trim() ? words.concat(["--body=" + String(body).trim()]) : words;
+    }
+    function keyOf(one) { return one.project + " " + one.branch; }
+    function at(one) { return [one.branch, "--project", one.project]; }
+    function waited(created, now) {
+      var hours = (now.getTime() - new Date(created).getTime()) / 3600000;
+      if (hours < 1) { return "under an hour"; }
+      var count = hours < 24 ? Math.floor(hours) : Math.floor(hours / 24), unit = hours < 24 ? "hour" : "day";
+      return count === 1 ? "1 " + unit : count + " " + unit + "s";
+    }
+    function from(one) { return one.node ? one.node + " in run " + one.run : one.run ? "run " + one.run : "no run"; }
+
+    function Landings(o) {
+      var cur = Object.assign({ landings: [] }, o || {});
+      /* Kept here rather than on the row, so a refresh of the list every few seconds does not throw away a message half written. */
+      var merging = null, subject = "", body = "", pre = uid("lm");
+      var el = h("div", { "class": "ls-landings" });
+      var list = h("div");
+      el.appendChild(list);
+      /* Main's line is a calm small p with a code.ls-cmd; the design system's From line is .ls-from, which follows the commands setting. */
+      el.appendChild(h("p", { "class": "ls-from" }, ["From ", h("code", { text: "$ loadout pr list" }), "."]));
+
+      function act(path, words, done) { return cur.act ? cur.act(path, words, done) : undefined; }
+      function btn(label, cmd, press, extra) {
+        var reason = extra && extra.reason !== undefined ? extra.reason : cur.disabledReason;
+        /* Main's HaloButton shows the reason in place of the command; the design system's shows the command when both
+           are given, so the command goes only to an enabled one. */
+        return NS.HaloButton({ label: label, size: extra && extra.solid ? undefined : "small", solid: !!(extra && extra.solid), cmd: reason ? undefined : cmd, disabledReason: reason || undefined, onPress: press });
+      }
+      function subjectReason() { return !subject.trim() ? "Write the squash commit’s subject" : subject.indexOf("\n") >= 0 ? "The subject is one line" : undefined; }
+
+      function merge(one) {
+        Promise.resolve(act("pr merge", mergeWords(one, subject, body), one.branch + " merges once its checks pass")).then(function (ok) {
+          if (ok !== false) { merging = null; paint(); }
+        });
+      }
+
+      function form(one, index) {
+        var sid = pre + "-subject-" + index, bid = pre + "-body-" + index, slot = h("div");
+        var si = h("input", { id: sid, "class": "ls-text", placeholder: "One line, as git log will show it" });
+        var bi = h("textarea", { id: bid, "class": "ls-text", rows: "4", placeholder: "Left empty, the commit has no body" });
+        si.value = subject; bi.value = body;
+        function go() { slot.textContent = ""; slot.appendChild(btn("Squash-merge when checks pass", "$ loadout pr merge " + one.branch + " --subject …", function () { merge(one); }, { solid: true, reason: cur.disabledReason || subjectReason() })); }
+        si.addEventListener("input", function () { subject = si.value; go(); });
+        bi.addEventListener("input", function () { body = bi.value; });
+        var f = h("form", { "class": "lmerge", "aria-label": "Squash-merge " + one.branch }, [
+          h("div", { "class": "ls-field" }, [h("label", { "class": "lab", "for": sid, text: "Subject" }), si]),
+          h("div", { "class": "ls-field" }, [h("label", { "class": "lab", "for": bid, text: "Body" }), bi]),
+          slot
+        ]);
+        f.addEventListener("submit", function (e) { e.preventDefault(); if (!cur.disabledReason && !subjectReason()) { merge(one); } });
+        go();
+        return f;
+      }
+
+      function row(one, index) {
+        var now = cur.now || new Date();
+        var li = h("li", { "class": "landing" }, [
+          h("span", { "class": "lstate ls-chip", text: one.state }),
+          h("code", { "class": "lbranch", text: one.branch }),
+          one.gone ? h("span", { "class": "lgone", text: "gone from the repository" }) : null,
+          h("p", { "class": "calm small", text: one.project + ", " + from(one) + (one.task ? ", task " + one.task : "") + ", waiting " + waited(one.created, now) }),
+          one.pullRequest ? h("p", { "class": "small" }, [h("a", { href: one.pullRequest, target: "_blank", rel: "noreferrer", text: one.pullRequest })]) : null,
+          one.mergeRequested ? h("p", { "class": "calm small", text: "Merges once its required checks pass." }) : null
+        ]);
+        if (cur.act) {
+          var acts = h("div", { "class": "lacts" }), k = keyOf(one);
+          if (one.state === "pending" && !one.gone) {
+            acts.appendChild(btn("Open as a draft", "$ loadout pr open " + one.branch + " --draft", function () { act("pr open", at(one).concat(["--draft"]), one.branch + " has a draft pull request"); }));
+            acts.appendChild(btn("Open for review", "$ loadout pr open " + one.branch, function () { act("pr open", at(one), one.branch + " has a pull request"); }));
+          } else if (one.state === "draft" && one.pullRequest) {
+            acts.appendChild(btn("Mark ready", "$ loadout pr ready " + one.branch, function () { act("pr ready", at(one), one.branch + " is ready for review"); }));
+          } else if (one.state === "ready" && one.pullRequest && !one.mergeRequested) {
+            acts.appendChild(btn(merging === k ? "Not now" : "Merge…", merging === k ? undefined : "opens the squash message for " + one.branch, function () {
+              if (merging === k) { merging = null; } else { merging = k; subject = ""; body = ""; }
+              paint();
+            }));
+          }
+          li.appendChild(acts);
+          if (merging === k && one.state === "ready") { li.appendChild(form(one, index)); }
+        }
+        return li;
+      }
+
+      function paint() {
+        var all = cur.landings || [];
+        /* A refresh keeps the field being typed in focused. */
+        var focused = document.activeElement && el.contains(document.activeElement) ? document.activeElement.id : null;
+        list.textContent = "";
+        if (!all.length) { list.appendChild(h("p", { "class": "calm", text: "Nothing is waiting to land." })); return; }
+        var ul = h("ul", { "class": "landings" });
+        all.forEach(function (one, i) { ul.appendChild(row(one, i)); });
+        list.appendChild(ul);
+        if (focused) { var f = document.getElementById(focused); if (f) { f.focus(); } }
+      }
+      paint();
+      return { el: el, set: function (patch) { cur = Object.assign({}, cur, patch || {}); paint(); } };
+    }
+    Landings.mergeWords = mergeWords;
+    NS.Landings = Landings;
+  })();
+
   /* --- ListToolbar --- */
   (function () {
     /* ListToolbar: the same search, filter and sort controls over every list. The box takes the query typed; the chips
@@ -4080,6 +5062,107 @@
       };
     }
     NS.ListToolbar = ListToolbar;
+  })();
+
+  /* --- MapFilterBar --- */
+  (function () {
+    /* MapFilterBar: the filters over Home's Map and Lens: the presets, then a chip per kind and per state, then the
+       projects to hide. Every change goes straight to config through onchange; the bar keeps nothing of its own, so it
+       reads what loadout config set it to as well as what it set. As main's MapFilterBar.svelte and lib/mapFilter.ts. */
+    var KINDS = ["runs", "sessions", "ideas", "tasks"];
+    var STATES = ["waiting", "running", "failed", "ended"];
+    var NO_PROJECT = "(no project)";
+    var KIND_NAMES = { runs: "Team runs", sessions: "Sessions", ideas: "Ideas", tasks: "Tasks" };
+    var STATE_NAMES = { waiting: "Waiting on you", running: "Running", failed: "Failed", ended: "Ended" };
+    /* In flight draws what the map drew before there were filters: no ideas, and nothing settled. Runs and sessions is
+       the same with tasks off as well. Everything is every line Home has. */
+    var PRESETS = {
+      inflight: { kinds: ["runs", "sessions", "tasks"], states: ["waiting", "running", "failed"], projects: [] },
+      runs: { kinds: ["runs", "sessions"], states: ["waiting", "running", "failed"], projects: [] },
+      all: { kinds: KINDS.slice(), states: STATES.slice(), projects: [] }
+    };
+    var PRESET_NAMES = { inflight: "In flight", runs: "Runs and sessions", all: "Everything" };
+
+    function listOf(v) { return String(v === null || v === undefined ? "" : v).split(",").map(function (p) { return p.trim(); }).filter(Boolean); }
+    function same(a, b) { return a.length === b.length && a.every(function (x) { return b.indexOf(x) >= 0; }); }
+    function copy(f) { return { kinds: f.kinds.slice(), states: f.states.slice(), projects: f.projects.slice() }; }
+    /* The filters as config holds them (mapKinds, mapStates, mapProjects, and the old mapScope). A kind or state key
+       that is unset, or names nothing this page knows, reads as In flight's, so the map is never blank by accident. */
+    function filterOf(prefs) {
+      if (prefs && prefs.mapKinds === undefined && prefs.mapScope === "all") { return copy(PRESETS.all); }
+      var kinds = KINDS.filter(function (k) { return listOf(prefs && prefs.mapKinds).indexOf(k) >= 0; });
+      var states = STATES.filter(function (s) { return listOf(prefs && prefs.mapStates).indexOf(s) >= 0; });
+      return { kinds: kinds.length ? kinds : PRESETS.inflight.kinds.slice(), states: states.length ? states : PRESETS.inflight.states.slice(), projects: listOf(prefs && prefs.mapProjects) };
+    }
+    /* The preset the filters match, or null for Custom. */
+    function presetOf(f) {
+      var found = null;
+      Object.keys(PRESETS).forEach(function (n) { var p = PRESETS[n]; if (!found && same(f.kinds, p.kinds) && same(f.states, p.states) && same(f.projects, p.projects)) { found = n; } });
+      return found;
+    }
+    /* The three keys and the values that write a filter, in the order the command line would take them. */
+    function keysOf(f) { return [["studio-map-kinds", f.kinds.join(", ")], ["studio-map-states", f.states.join(", ")], ["studio-map-projects", f.projects.join(", ")]]; }
+    /* One chip turned on or off. The last kind or state on stays on: a filter showing nothing cannot be reached from the bar, as it cannot from config. */
+    function toggled(on, item, order) {
+      if (on.indexOf(item) >= 0) { return on.length > 1 ? on.filter(function (x) { return x !== item; }) : on.slice(); }
+      return order.filter(function (x) { return x === item || on.indexOf(x) >= 0; });
+    }
+    /* As main's command.setting: an empty value is "", anything else quoted where the shell needs it. */
+    function settingLine(key, value) { return "$ loadout config set " + key + " " + (value === "" ? "\"\"" : q(value)); }
+
+    function MapFilterBar(o) {
+      var cur = Object.assign({ filter: copy(PRESETS.inflight), projects: [] }, o || {});
+      var el = h("div", { "class": "ls-mapfilters" });
+      var open = false;
+      function change(next) { if (cur.onchange) { cur.onchange(next); } }
+
+      function chip(label, pressed, last, title, press) {
+        return h("button", { type: "button", "class": "chip", "aria-pressed": pressed ? "true" : "false", "aria-disabled": last ? "true" : null, title: last ? title : null, onclick: press, text: label });
+      }
+
+      function paint() {
+        var f = cur.filter, projects = cur.projects || [], preset = presetOf(f);
+        var hiddenProjects = f.projects.filter(function (p) { return projects.indexOf(p) >= 0; });
+        var focusKey = document.activeElement && el.contains(document.activeElement) ? document.activeElement.getAttribute("data-k") : null;
+        el.textContent = "";
+        var bar = h("div", { "class": "mapfilters", role: "region", "aria-label": "What Home shows" });
+        bar.appendChild(h("div", { "class": "views", role: "group", "aria-label": "Presets" }, Object.keys(PRESETS).map(function (n) {
+          return h("button", { type: "button", "data-k": "p:" + n, "aria-pressed": preset === n ? "true" : "false", onclick: function () { change(copy(PRESETS[n])); }, text: PRESET_NAMES[n] });
+        })));
+        if (!preset) { bar.appendChild(h("span", { "class": "custom", text: "Custom" })); }
+        bar.appendChild(h("div", { "class": "chips", role: "group", "aria-label": "Kind" }, KINDS.map(function (k) {
+          var on = f.kinds.indexOf(k) >= 0, b = chip(KIND_NAMES[k], on, on && f.kinds.length === 1, "One kind stays on", function () { change({ kinds: toggled(f.kinds, k, KINDS), states: f.states.slice(), projects: f.projects.slice() }); });
+          b.setAttribute("data-k", "k:" + k); return b;
+        })));
+        bar.appendChild(h("div", { "class": "chips", role: "group", "aria-label": "State" }, STATES.map(function (s) {
+          var on = f.states.indexOf(s) >= 0, b = chip(STATE_NAMES[s], on, on && f.states.length === 1, "One state stays on", function () { change({ kinds: f.kinds.slice(), states: toggled(f.states, s, STATES), projects: f.projects.slice() }); });
+          b.setAttribute("data-k", "s:" + s); return b;
+        })));
+        if (projects.length) {
+          var summary = h("summary", { "data-k": "sum", text: "Projects · " + (hiddenProjects.length ? hiddenProjects.join(", ") + " hidden" : "all shown") });
+          var det = h("details", { "class": "projects" }, [summary, h("div", { "class": "chips", role: "group", "aria-label": "Projects shown" }, projects.map(function (p) {
+            var hidden = f.projects.indexOf(p) >= 0;
+            var b = chip(p, !hidden, false, null, function () { change({ kinds: f.kinds.slice(), states: f.states.slice(), projects: hidden ? f.projects.filter(function (x) { return x !== p; }) : f.projects.concat([p]) }); });
+            b.setAttribute("data-k", "j:" + p); return b;
+          }))]);
+          det.open = open;
+          det.addEventListener("toggle", function () { open = det.open; });
+          bar.appendChild(det);
+        }
+        el.appendChild(bar);
+        /* Main's bar shows no command: Home writes the keys through loadout config set. The design system shows them
+           as a From line, which follows the commands setting. In flight is the three keys unset, as Home writes it. */
+        var inflight = preset === "inflight";
+        el.appendChild(h("p", { "class": "ls-from" }, ["The same as "].concat(keysOf(f).map(function (kv, i) {
+          return h("code", { text: settingLine(kv[0], inflight ? "" : kv[1]) + (i < 2 ? ";" : "") });
+        }).reduce(function (acc, c, i) { if (i) { acc.push(" "); } acc.push(c); return acc; }, [])).concat(["."])));
+        if (focusKey) { var back = el.querySelector("[data-k=\"" + focusKey.replace(/"/g, "\\\"") + "\"]"); if (back) { back.focus(); } }
+      }
+      paint();
+      return { el: el, set: function (patch) { cur = Object.assign({}, cur, patch || {}); paint(); } };
+    }
+    Object.assign(MapFilterBar, { KINDS: KINDS, STATES: STATES, NO_PROJECT: NO_PROJECT, KIND_NAMES: KIND_NAMES, STATE_NAMES: STATE_NAMES, PRESETS: PRESETS, PRESET_NAMES: PRESET_NAMES, filterOf: filterOf, presetOf: presetOf, keysOf: keysOf, toggled: toggled });
+    NS.MapFilterBar = MapFilterBar;
   })();
 
   /* --- MiniLine --- */

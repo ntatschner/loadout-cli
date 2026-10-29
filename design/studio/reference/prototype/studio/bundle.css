@@ -287,6 +287,13 @@
 .ls-scrim { position: fixed; inset: 0; z-index: var(--z-scrim); background: var(--scrim); }
 .ls-dialog { --c: var(--accent); position: fixed; left: 50%; top: 80px; z-index: var(--z-dialog); width: min(700px, calc(100% - 32px)); max-height: calc(100% - 110px); overflow: auto; transform: translateX(-50%); padding: calc(var(--space-6) * var(--density)) calc(var(--space-6) * var(--density)) calc(var(--space-5) * var(--density)); background: var(--surface); box-shadow: inset 0 1.5px 0 var(--c), inset 0 -1.5px 0 var(--c), 0 0 0 1px var(--rule), 0 0 70px -16px var(--cgf), var(--shadow-float); }
 .ls-dialog.danger { --c: var(--bad); }
+/* A wider dialog, for one that lays a sheet out in columns (main's studio.css; Dialog's extraClass: "wide"). */
+.ls-dialog.wide { width: min(100% - 32px, 820px); }
+/* The launch sheet's Other row: a field to describe a one-off task (main's pages.css). Its display: flex would override the hidden attribute, so [hidden] is kept hidden; div only, so TaskPicker's label.other is left alone. */
+div.other { display: flex; gap: 10px; align-items: center; margin-top: 6px; }
+div.other[hidden] { display: none; }
+div.other input { flex: 1; min-width: 0; min-height: 40px; padding: 0 12px; border: 0; background: transparent; color: var(--ink-strong); font: inherit; box-shadow: inset 0 0 0 1px var(--control-edge); }
+div.other input:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
 .ls-dialog.anim { animation: lsProject .7s var(--ease-out) both; }
 .ls-dialog.anim > * { animation: lsPin .45s .4s both; }
 @keyframes lsProject { 0% { transform: translateX(-50%) scaleY(.004) scaleX(.15); filter: brightness(3); } 38% { transform: translateX(-50%) scaleY(.004) scaleX(1); filter: brightness(2); } 100% { transform: translateX(-50%) scaleY(1) scaleX(1); filter: none; } }
@@ -471,6 +478,11 @@
 .ls-term .ask.good { box-shadow: inset 3px 0 0 var(--good), inset 0 1px 0 var(--rule); }
 .ls-term .ask.rest { background: var(--surface-2); box-shadow: inset 3px 0 0 var(--rest), inset 0 1px 0 var(--rule); }
 .ls-term .ask .ls-cmd { flex-basis: 100%; }
+.ls-term .ask .ls-cmdline { flex-basis: 100%; min-width: 0; }
+/* Said on the bar when the browser will not hand over or take the clipboard. */
+.ls-term .tbar [role="alert"] { color: var(--bad-text); }
+/* A row on the terminal's foot, under the screen: the session's StatusStrip. */
+.ls-term .foot { box-shadow: inset 0 1px 0 var(--rule); }
 .ls-term.off .screen { cursor: default; }
 
 /* ---------- SessionView ---------- */
@@ -487,6 +499,8 @@
 .ls-session .sside dt { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); align-self: center; }
 .ls-session .sside dd { margin: 0; font-family: var(--font-mono); font-size: 12.5px; color: var(--ink-strong); overflow-wrap: anywhere; }
 .ls-session .sside ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 13.5px; }
+.ls-session .sside .acts > * + * { margin-top: 8px; }
+.ls-session .sside .calm.small { margin: 8px 0 0; font-size: 13.5px; color: var(--muted); }
 .ls-session .sside li b { font-family: var(--font-mono); font-weight: 400; font-size: 11.5px; color: var(--muted); margin-right: 8px; }
 @media (max-width: 959px) { .ls-session { grid-template-columns: minmax(0, 1fr); } .ls-session .sside { width: auto; } }
 
@@ -536,6 +550,8 @@ textarea.ls-text { min-height: 88px; resize: vertical; font-family: var(--font-m
 .ls-run.needs { box-shadow: inset 3px 0 0 var(--needs), inset 0 0 0 1px var(--rule); }
 .ls-run.bad { box-shadow: inset 3px 0 0 var(--bad), inset 0 0 0 1px var(--rule); }
 .ls-run .top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; }
+/* What the daemon says of the process driving it, beside its word: Bad colour and words, as main's .ls-liveness. */
+.ls-liveness { font-size: 13px; color: var(--bad-text); box-shadow: inset 2px 0 0 var(--bad); padding: 0 var(--space-2); }
 .ls-run .goal { flex: 1 1 260px; min-width: 0; font-size: 18px; line-height: 1.3; font-weight: 300; color: var(--ink-strong); text-decoration: none; overflow-wrap: anywhere; }
 .ls-run a.goal:hover { color: var(--accent-text); text-decoration: underline; text-underline-offset: 3px; }
 .ls-run a.goal:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
@@ -817,6 +833,8 @@ textarea.ls-text { min-height: 88px; resize: vertical; font-family: var(--font-m
 .ls-bin .prune .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px 18px; }
 .ls-bin .sentence { margin: 0; font-size: 14px; color: var(--ink); }
 @media (max-width: 560px) { .ls-bin > ul > li { grid-template-columns: minmax(0, 1fr); } }
+.binlist { margin: 0 0 4px; padding-left: 18px; font-family: var(--font-mono); font-size: 12.5px; }
+.ls-sched .t em { overflow-wrap: anywhere; }
 
 /* ---------- Outbox: what a run delivered ---------- */
 .ls-outbox { --c: var(--accent); container-type: inline-size; display: grid; gap: 12px; min-width: 0; }
@@ -983,6 +1001,31 @@ html[data-vt="fade"]::view-transition-group(*) { animation-duration: 0s; }
 .ls-stabs .add { flex: none; display: inline-grid; place-items: center; min-width: 48px; border: 0; background: none; color: var(--accent-text); font-size: 22px; font-weight: 200; cursor: pointer; }
 .ls-stabs .add:hover { background: var(--tint-hover-c); }
 .ls-stabs .add:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.ls-stabs .tab { position: relative; display: flex; flex: none; touch-action: pan-y; }
+.ls-stabs .tab.dragging { opacity: .55; }
+.ls-stabs .tab.before::before, .ls-stabs .tab.after::after { content: ""; position: absolute; top: 4px; bottom: 4px; z-index: 2; width: 2px; background: var(--accent); box-shadow: 0 0 8px var(--cgf); }
+.ls-stabs .tab.before::before { left: -1px; }
+.ls-stabs .tab.after::after { right: -1px; }
+.ls-stabs .tab [role="tab"] { padding-right: 30px; }
+.ls-stabs .tab [role="tab"] .new { right: 30px; }
+.ls-stabs .close { position: absolute; right: 4px; top: 50%; display: inline-grid; place-items: center; width: 24px; height: 24px; margin-top: -12px; border: 0; background: none; color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer; opacity: 0; transition: opacity var(--dur-quick), background-color var(--dur-quick); }
+.ls-stabs .tab:hover .close, .ls-stabs .tab:focus-within .close, .ls-stabs .tab:has([aria-selected="true"]) .close { opacity: 1; }
+.ls-stabs .close:hover { background: var(--tint-hover-c); color: var(--ink-strong); }
+@media (hover: none) { .ls-stabs .close { opacity: 1; } }
+.ls-stabs .rename { width: 200px; min-height: 48px; padding: 6px 10px; border: 0; background: var(--surface); color: var(--ink-strong); font: inherit; font-family: var(--font-sans); font-size: 13.5px; box-shadow: inset 0 0 0 1px var(--accent), inset 0 2px 0 var(--accent); }
+.ls-stabs .rename:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.ls-stabs .hint { position: absolute; left: 0; top: 100%; z-index: 3; width: max(100%, 280px); max-width: calc(100vw - 40px); padding: 6px 10px; background: var(--surface); color: var(--muted); font-size: 12px; box-shadow: 0 0 0 1px var(--rule), var(--shadow-float); }
+.ls-stabs .hint code { display: block; margin-top: 4px; font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-soft); overflow-wrap: anywhere; }
+.ls-stabs .hid { flex: none; padding: 0 12px; border: 0; background: none; color: var(--muted); font: inherit; font-family: var(--font-mono); font-size: 11.5px; white-space: nowrap; cursor: pointer; box-shadow: inset -1px 0 0 var(--rule); }
+.ls-stabs .hid:hover { background: var(--tint-hover-c); color: var(--ink); }
+.ls-stabs .hid:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.ls-tabmenu { --c: var(--accent); position: fixed; z-index: var(--z-menu); display: grid; min-width: 210px; max-width: min(320px, calc(100vw - 32px)); padding: 6px 0; background: var(--surface); box-shadow: inset 0 1px 0 var(--accent), 0 0 0 1px var(--rule), var(--shadow-float); }
+.ls-tabmenu [role="menuitem"] { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 36px; padding: 0 14px; border: 0; background: none; color: var(--ink); font: inherit; font-family: var(--font-sans); font-size: 13px; text-align: left; cursor: pointer; }
+.ls-tabmenu [role="menuitem"]:hover, .ls-tabmenu [role="menuitem"]:focus { background: var(--tint-hover-c); color: var(--ink-strong); outline: none; }
+.ls-tabmenu [role="menuitem"]:focus-visible { box-shadow: inset 2px 0 0 var(--focus); }
+.ls-tabmenu [role="menuitem"].danger { color: var(--bad-text); }
+.ls-tabmenu kbd { font-family: var(--font-mono); font-size: 10.5px; color: var(--subtle); }
+[data-theme="hc-dark"] .ls-tabmenu, [data-theme="hc-light"] .ls-tabmenu { box-shadow: inset 0 1px 0 var(--accent), 0 0 0 2px var(--rule); }
 
 /* ---------- TermDeck: Terminal Focus's workspace ---------- */
 .ls-deck { --c: var(--accent); display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: 10px; height: 100%; min-height: 0; }
@@ -998,17 +1041,22 @@ html[data-vt="fade"]::view-transition-group(*) { animation-duration: 0s; }
 .ls-deck .find { display: flex; align-items: center; gap: 8px; }
 .ls-deck .find input { min-height: 36px; }
 .ls-deck .find span { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+.ls-deck .note { font-size: 12.5px; color: var(--ink); }
 .ls-deck .keys { font-family: var(--font-mono); font-size: 11px; color: var(--subtle); }
-.ls-deck .panes { display: grid; gap: 10px; min-height: 0; }
+.ls-deck .panes { position: relative; display: grid; gap: 10px; min-height: 0; }
 .ls-deck .panes.l1 { grid-template-columns: minmax(0, 1fr); }
-.ls-deck .panes.l2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.ls-deck .panes.l4 { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); }
+/* --deck-cols and --deck-rows: where the dividers left the tracks, set on the panes by the deck. */
+.ls-deck .panes.l2 { grid-template-columns: var(--deck-cols, repeat(2, minmax(0, 1fr))); }
+.ls-deck .panes.l4 { grid-template-columns: var(--deck-cols, repeat(2, minmax(0, 1fr))); grid-template-rows: var(--deck-rows, repeat(2, minmax(0, 1fr))); }
+.ls-deck .panes > .ls-cross { grid-column: 2; grid-row: 2; }
 .ls-deck .pane { position: relative; display: grid; min-height: 0; min-width: 0; transition: box-shadow var(--dur-quick); animation: lsPaneIn .45s var(--ease-out) both; }
 .ls-deck .pane:nth-child(2) { animation-delay: .06s; } .ls-deck .pane:nth-child(3) { animation-delay: .12s; } .ls-deck .pane:nth-child(4) { animation-delay: .18s; }
 @keyframes lsPaneIn { from { opacity: 0; transform: scale(.97); } }
 .ls-deck .pane > * { min-width: 0; }
 .ls-deck .pane .ls-term { height: 100%; min-height: 0; }
 .ls-deck .find { flex: 1 1 220px; min-width: 0; } .ls-deck .find input { flex: 1 1 auto; width: auto; min-width: 0; max-width: 260px; }
+.ls-deck .pane:has(> .gone) { grid-template-rows: auto minmax(0, 1fr); }
+.ls-deck .pane .gone { margin: 0; padding: 6px 10px; font-size: 12.5px; color: var(--muted); background: var(--surface-2); box-shadow: inset 2px 0 0 var(--subtle); }
 .ls-deck .pane.on { box-shadow: 0 0 0 2px var(--accent), 0 0 24px -6px var(--cgf); }
 .ls-deck .pane mark { background: var(--needs); color: var(--on-signal); }
 [data-motion="reduced"] .ls-deck .pane, [data-motion="none"] .ls-deck .pane { animation: none; }
@@ -1062,6 +1110,11 @@ html[data-vt="fade"]::view-transition-group(*) { animation-duration: 0s; }
 @media (prefers-reduced-motion: reduce) { .ls-board .brow, .ls-mini .st.cur i { animation: none !important; } .ls-mini .seg.into::after { display: none; } }
 @media (max-width: 599px) { .ls-board .teams { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; } .ls-board .teams button { flex: none; } }
 @media (max-width: 899px) { .ls-board .brow { grid-template-columns: minmax(0, 1fr) auto; } .ls-board .brow .ls-mini { grid-column: 1 / -1; grid-row: 2; } .ls-board .brow .spend { grid-column: 1 / -1; text-align: left; } }
+/* In a column narrower than a row's four parts (Team Focus with a run open beside it) the row folds as it does on a narrow
+   screen, so the question under it wraps inside the column instead of running past its edge. */
+.ls-board { container-type: inline-size; }
+.ls-board .brow .ls-gate { min-width: 0; }
+@container (max-width: 780px) { .ls-board .brow { grid-template-columns: minmax(0, 1fr) auto; } .ls-board .brow .ls-mini { grid-column: 1 / -1; grid-row: 2; } .ls-board .brow .spend { grid-column: 1 / -1; text-align: left; } }
 
 /* ---------- QuietList: Minimal's one column ---------- */
 .ls-quiet { --c: var(--accent); margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; max-width: 720px; }
@@ -1315,6 +1368,12 @@ html[data-vt="fade"]::view-transition-group(*) { animation-duration: 0s; }
 .ls-qset .q legend, .ls-qset .q .qt { float: none; padding: 0; margin: 0; font-size: 17px; line-height: 1.35; color: var(--ink-strong); overflow-wrap: anywhere; }
 .ls-qset .q fieldset { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; min-width: 0; }
 .ls-qset .q .why { margin: 0; font-size: 13.5px; color: var(--muted); }
+.ls-qset .qs { display: grid; gap: 10px; }
+.ls-qset .q .about { margin: 0; font-size: 13.5px; color: var(--ink-soft); max-width: 76ch; }
+.ls-qset .q .outdated { margin: 0; font-size: 13.5px; color: var(--needs-text); max-width: 76ch; }
+.ls-qset .q .outdated button { margin-left: 10px; padding: 0; border: 0; background: none; font: inherit; font-size: 13px; color: var(--accent-text); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.ls-qset .q .outdated button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ls-qset .understood { margin: 4px 0 0; font-size: 13.5px; color: var(--muted); max-width: 76ch; }
 .ls-qset .opts { display: flex; flex-wrap: wrap; gap: 6px; }
 .ls-qset .opt { position: relative; display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 6px 14px 6px 10px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--control-edge); font-size: 14px; color: var(--ink); cursor: pointer; }
 .ls-qset .opt input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
@@ -1333,6 +1392,9 @@ html[data-vt="fade"]::view-transition-group(*) { animation-duration: 0s; }
 .ls-qset .send details { font-size: 12.5px; color: var(--muted); }
 .ls-qset .send details summary { cursor: pointer; }
 .ls-qset .send details code { display: block; margin-top: 4px; font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-soft); overflow-wrap: anywhere; }
+.ls-qset .ls-answers.flush { margin: 0; }
+/* The status line keeps its height when empty, so nothing below it moves when it speaks. */
+.ls-qset .ls-said.held:empty, .ls-layer .ls-said.held:empty { display: block; min-height: 1lh; }
 
 /* ---------- PlanLayer: one layer of the plan, its options side by side ---------- */
 .ls-layer { display: grid; gap: 10px; padding-top: 14px; box-shadow: inset 0 1px 0 var(--rule); }
@@ -1353,6 +1415,10 @@ html[data-vt="fade"]::view-transition-group(*) { animation-duration: 0s; }
 .ls-layer .card li.pro i { color: var(--good); }
 .ls-layer .card li.con i { color: var(--bad-text); }
 .ls-layer .card .ls-action { margin-top: 2px; }
+.ls-layer .card .slot { display: grid; align-items: center; margin-top: 2px; }
+.ls-layer .card .slot > * { grid-area: 1 / 1; min-width: 0; }
+.ls-layer .card .slot .off { visibility: hidden; }
+.ls-layer .card .mark { margin: 0; }
 .ls-layer .acts { display: flex; flex-wrap: wrap; gap: 6px 26px; }
 .ls-layer .rework { display: none; gap: 8px; max-width: 640px; }
 .ls-layer .rework.on { display: grid; }
@@ -1408,9 +1474,11 @@ a.ls-ptile:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px;
 .ls-tboard .task { display: grid; gap: 4px; padding: 10px 12px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule); }
 .ls-tboard .task.blocked { box-shadow: inset 3px 0 0 var(--bad), inset 0 0 0 1px var(--rule); }
 .ls-tboard .task.doing { box-shadow: inset 3px 0 0 var(--accent), inset 0 0 0 1px var(--rule); }
-.ls-tboard .task .tt { font-size: 14.5px; color: var(--ink-strong); overflow-wrap: anywhere; }
+.ls-tboard .task .tt { font-size: 14.5px; color: var(--ink-strong); overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
 .ls-tboard .task .tx { font-family: var(--font-mono); font-size: 11px; color: var(--muted); overflow-wrap: anywhere; }
-.ls-tboard .task .note { margin: 0; font-size: 13px; color: var(--ink-soft); overflow-wrap: anywhere; }
+.ls-tboard .task .mark { justify-self: start; }
+.ls-tboard .task .came { font-size: 12px; color: var(--muted); }
+.ls-tboard .task .note { margin: 0; font-size: 13px; color: var(--ink-soft); overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
 .ls-tboard .task.blocked .note { color: var(--bad-text); }
 .ls-tboard .task .moves { display: flex; flex-wrap: wrap; gap: 2px 16px; margin-top: 2px; }
 .ls-tboard .task .moves .ls-action { gap: 0; }
@@ -1425,6 +1493,10 @@ a.ls-ptile:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px;
 .ls-tboard .task .said:empty { display: none; }
 .ls-tboard details.closed { padding: 8px 10px; box-shadow: inset 0 0 0 1px var(--rule); }
 .ls-tboard details.closed summary { cursor: pointer; font-size: 13px; color: var(--ink-soft); }
+.ls-tboard .away { padding: 8px 10px; box-shadow: inset 0 0 0 1px var(--rule); }
+.ls-tboard .away h4 { margin: 0 0 4px; font-size: 11.5px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); }
+.ls-tboard .away ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.ls-tboard .away li { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
 .ls-tboard details.closed .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 6px; margin-top: 8px; }
 @container (max-width: 640px) { .ls-tboard .cols { grid-template-columns: minmax(0, 1fr); } }
 
@@ -1717,6 +1789,20 @@ a.ls-ptile:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px;
 .ls-cgrid .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0; font-size: 12px; color: var(--muted); }
 .ls-cgrid .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .ls-cgrid .legend i { font-style: normal; font-family: var(--font-mono); font-weight: 600; }
+/* Narrower than a done-when and its rounds side by side (a phone): each done-when's words above, its rounds in a row under
+   them that wraps, each mark with its round over it, so nothing scrolls sideways however many rounds there are. */
+.ls-cgrid { container-type: inline-size; }
+@container (max-width: 520px) {
+  .ls-cgrid .scroll { overflow: visible; }
+  .ls-cgrid table, .ls-cgrid tbody { display: block; min-width: 0; }
+  .ls-cgrid thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .ls-cgrid tbody tr { display: flex; flex-wrap: wrap; gap: 2px 4px; padding: 8px 0; box-shadow: inset 0 -1px 0 var(--rule); }
+  .ls-cgrid tbody th[scope="row"], .ls-cgrid tbody td { box-shadow: none; }
+  .ls-cgrid tbody th[scope="row"] { flex: 1 1 100%; min-width: 0; max-width: none; padding: 0 0 4px; overflow-wrap: anywhere; }
+  .ls-cgrid tbody td { display: grid; justify-items: center; gap: 2px; padding: 3px 4px; }
+  .ls-cgrid tbody td::before { content: attr(data-r); content: attr(data-r) / ""; font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); }
+  .ls-cgrid tbody td.now::before { color: var(--ink-strong); text-decoration: underline 2px var(--accent); text-underline-offset: 3px; }
+}
 
 /* ---------- PickUpSheet: what a finished run needs to carry on ---------- */
 .ls-pickup { display: grid; gap: 12px; }
@@ -1796,46 +1882,58 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 .ls-value .how { margin: 0; padding: 10px 12px; font-size: 13px; color: var(--ink-soft); box-shadow: inset 2px 0 0 var(--rule); max-width: 80ch; }
 
 /* ---------- FieldMap: an embossed survey map behind every page ---------- */
-.ls-fieldmap { position: fixed; inset: 0; z-index: var(--z-ground); pointer-events: none; overflow: hidden; contain: strict;
-  /* Measured: on its worst pixel (an index contour, its edge, a grid line and the scan together) every text colour stays 4.5:1 or better, in every accent. */
+/* What shows is resolveBackdrop()'s, written as data-fieldmap on <html>: plain, map or map-scan. Nothing else here decides it. */
+.ls-fieldmap { position: fixed; inset: 0; z-index: var(--z-ground); pointer-events: none; overflow: hidden; contain: strict; --fm-scan-left: 76px;
+  /* Measured: on its worst pixel (an index contour, its edges, a grid line and the scan together) every text colour stays 4.5:1 or better, in every accent. */
   --fm-hi: color-mix(in srgb, var(--ink-strong) 4%, transparent);
   --fm-lo: color-mix(in srgb, #000 30%, transparent);
   --fm-line: color-mix(in srgb, var(--accent) 4%, transparent);
   --fm-index: color-mix(in srgb, var(--accent) 7%, transparent);
   --fm-grid: color-mix(in srgb, var(--ink-soft) 4%, transparent);
   --fm-ref: color-mix(in srgb, var(--ink-soft) 14%, transparent);
-  --fm-scan: color-mix(in srgb, var(--accent) 15%, transparent); }
-[data-theme="light"] .ls-fieldmap { --fm-hi: color-mix(in srgb, #fff 85%, transparent); --fm-lo: color-mix(in srgb, var(--ink-strong) 4.5%, transparent); --fm-line: color-mix(in srgb, var(--accent) 5.5%, transparent); --fm-index: color-mix(in srgb, var(--accent) 9%, transparent); --fm-grid: color-mix(in srgb, var(--ink-soft) 4.5%, transparent); --fm-ref: color-mix(in srgb, var(--ink-soft) 12%, transparent); --fm-scan: color-mix(in srgb, #fff 92%, transparent); }
-.ls-fieldmap svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  --fm-scan: color-mix(in srgb, var(--ink-strong) 10%, transparent); }
+[data-theme="light"] .ls-fieldmap { --fm-hi: color-mix(in srgb, #fff 85%, transparent); --fm-lo: color-mix(in srgb, var(--ink-strong) 4.5%, transparent); --fm-line: color-mix(in srgb, var(--accent) 5.5%, transparent); --fm-index: color-mix(in srgb, var(--accent) 7%, transparent); --fm-grid: color-mix(in srgb, var(--ink-soft) 4.5%, transparent); --fm-ref: color-mix(in srgb, var(--ink-soft) 12%, transparent); --fm-scan: color-mix(in srgb, #fff 92%, transparent); }
+:root:not([data-fieldmap="map"]):not([data-fieldmap="map-scan"]) .ls-fieldmap { display: none; }
+.ls-fieldmap > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .ls-fieldmap .hi { stroke: var(--fm-hi); }
 .ls-fieldmap .lo { stroke: var(--fm-lo); }
 .ls-fieldmap .ln { stroke: var(--fm-line); }
 .ls-fieldmap .ix { stroke: var(--fm-index); }
 .ls-fieldmap .grid { stroke: var(--fm-grid); stroke-dasharray: 2 6; }
 .ls-fieldmap .ref { fill: var(--fm-ref); font-family: var(--font-mono); font-size: 10px; letter-spacing: .18em; }
-.ls-fieldmap .scan { display: none; }
+/* The scan covers the page area only, from the rail's collapsed edge, so it never shows through the rail or the Pages tab. Its map is shifted back by the same amount, so its lines sit on the map's. */
+.ls-fieldmap .scanzone { display: none; position: absolute; top: 0; bottom: 0; right: 0; left: var(--fm-scan-left); overflow: hidden; }
+.ls-fieldmap .scan { position: absolute; top: 0; height: 100%; left: calc(-1 * var(--fm-scan-left)); width: calc(100% + var(--fm-scan-left)); }
 .ls-fieldmap .scan .ln, .ls-fieldmap .scan .ix { stroke: var(--fm-scan); }
-/* Animated only when asked for, under full motion, and never in Pure Focus. */
-[data-backdrop="map-animated"][data-motion="full"]:not([data-mode="pure"]):not([data-theme^="hc"]) .ls-fieldmap .scan { display: block; -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 45%, #000 55%, transparent 100%); mask-image: linear-gradient(180deg, transparent 0, #000 45%, #000 55%, transparent 100%); -webkit-mask-size: 100% 34%; mask-size: 100% 34%; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; animation: lsFieldScan 16s linear infinite; }
-[data-backdrop="map-animated"][data-motion="full"]:not([data-mode="pure"]):not([data-theme^="hc"]) .ls-fieldmap .ixg { animation: lsFieldBreathe 9s ease-in-out infinite; }
+@media (max-width: 599px) { .ls-fieldmap { --fm-scan-left: 34px; } }
+:root:has(.ls-nav.narrow) .ls-fieldmap { --fm-scan-left: 34px; }
+[data-fieldmap="map-scan"] .ls-fieldmap .scanzone { display: block; }
+[data-fieldmap="map-scan"] .ls-fieldmap .scan { -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 45%, #000 55%, transparent 100%); mask-image: linear-gradient(180deg, transparent 0, #000 45%, #000 55%, transparent 100%); -webkit-mask-size: 100% 34%; mask-size: 100% 34%; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; animation: lsFieldScan 24s linear infinite; }
+[data-fieldmap="map-scan"] .ls-fieldmap .ixg { animation: lsFieldBreathe 9s ease-in-out infinite; }
 @keyframes lsFieldScan { from { -webkit-mask-position: 0 -40%; mask-position: 0 -40%; } to { -webkit-mask-position: 0 140%; mask-position: 0 140%; } }
 @keyframes lsFieldBreathe { 50% { opacity: .55; } }
-@media (prefers-reduced-motion: reduce) { .ls-fieldmap .scan { display: none !important; } .ls-fieldmap .ixg { animation: none !important; } }
-/* Plain, and both high-contrast themes, keep the plain ground. */
-[data-backdrop="plain"] .ls-fieldmap, [data-theme="hc-dark"] .ls-fieldmap, [data-theme="hc-light"] .ls-fieldmap { display: none; }
+/* A second guard: resolveBackdrop() already stills the map under reduced motion. */
+@media (prefers-reduced-motion: reduce) { .ls-fieldmap .scanzone { display: none !important; } .ls-fieldmap .scan, .ls-fieldmap .ixg { animation: none !important; } }
+@media print { .ls-fieldmap { display: none !important; } }
 
-/* ---------- The map carries on under the rail and the mode bar: only an embossed edge and grid ticks set them apart ---------- */
-[data-backdrop^="map"]:not([data-theme^="hc"]) .ls-railnav {
+/* ---------- The map carries on under the rail, the Pages tab and the mode bar: an embossed edge and grid ticks set them apart ---------- */
+/* Only where the map shows, which already leaves out Pure Focus, Ambient and both high-contrast themes. */
+:root:is([data-fieldmap="map"], [data-fieldmap="map-scan"]) .ls-railnav {
   background: color-mix(in srgb, var(--ground) 58%, transparent);
   -webkit-backdrop-filter: blur(1.5px); backdrop-filter: blur(1.5px);
   box-shadow: inset -1px 0 0 color-mix(in srgb, #000 45%, transparent), inset -2px 0 0 color-mix(in srgb, var(--ink-strong) 10%, transparent), 8px 0 30px -20px var(--cgf);
 }
-[data-backdrop^="map"]:not([data-theme^="hc"]) .ls-railnav::after { content: ""; position: absolute; top: 0; bottom: 0; right: 3px; width: 6px; pointer-events: none; background: repeating-linear-gradient(180deg, color-mix(in srgb, var(--ink-soft) 28%, transparent) 0 1px, transparent 1px 40px), repeating-linear-gradient(180deg, color-mix(in srgb, var(--ink-soft) 16%, transparent) 0 1px, transparent 1px 8px); background-size: 6px 100%, 3px 100%; background-repeat: no-repeat; background-position: right top, right top; }
+:root:is([data-fieldmap="map"], [data-fieldmap="map-scan"]) .ls-railnav::after,
+:root:is([data-fieldmap="map"], [data-fieldmap="map-scan"]) .ls-pagestab::after { content: ""; position: absolute; top: 0; bottom: 0; right: 3px; width: 6px; pointer-events: none; background: repeating-linear-gradient(180deg, color-mix(in srgb, var(--ink-soft) 28%, transparent) 0 1px, transparent 1px 40px), repeating-linear-gradient(180deg, color-mix(in srgb, var(--ink-soft) 16%, transparent) 0 1px, transparent 1px 8px); background-size: 6px 100%, 3px 100%; background-repeat: no-repeat; background-position: right top, right top; }
 /* Widened over the page, the rail is solid again, so nothing on the page shows under its labels. */
-[data-backdrop^="map"]:not([data-theme^="hc"]) .ls-railnav:hover, [data-backdrop^="map"]:not([data-theme^="hc"]) .ls-railnav:focus-within { background: var(--ground); -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: inset -1px 0 0 color-mix(in srgb, var(--accent) 55%, transparent), 30px 0 70px 16px var(--scrim), 8px 0 30px -20px var(--cgf); }
-[data-theme="light"][data-backdrop^="map"] .ls-railnav { box-shadow: inset -1px 0 0 color-mix(in srgb, var(--ink-strong) 14%, transparent), inset -2px 0 0 #fff, 8px 0 30px -20px var(--cgf); }
-[data-backdrop^="map"]:not([data-theme^="hc"]) .ls-modebar { position: relative; }
-[data-backdrop^="map"]:not([data-theme^="hc"]) .ls-modebar::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 7px; pointer-events: none; box-shadow: inset 0 -1px 0 color-mix(in srgb, #000 40%, transparent), inset 0 -2px 0 color-mix(in srgb, var(--ink-strong) 9%, transparent); background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--ink-soft) 28%, transparent) 0 1px, transparent 1px 40px) left bottom / 100% 6px no-repeat, repeating-linear-gradient(90deg, color-mix(in srgb, var(--ink-soft) 16%, transparent) 0 1px, transparent 1px 8px) left bottom / 100% 3px no-repeat; }
+:root:is([data-fieldmap="map"], [data-fieldmap="map-scan"]) .ls-railnav:hover,
+:root:is([data-fieldmap="map"], [data-fieldmap="map-scan"]) .ls-railnav:focus-within { background: var(--ground); -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: inset -1px 0 0 color-mix(in srgb, var(--accent) 55%, transparent), 30px 0 70px 16px var(--scrim), 8px 0 30px -20px var(--cgf); }
+:root:is([data-fieldmap="map"], [data-fieldmap="map-scan"]) .ls-pagestab { box-shadow: inset -1px 0 0 color-mix(in srgb, #000 45%, transparent), inset -2px 0 0 color-mix(in srgb, var(--ink-strong) 10%, transparent), inset -3px 0 0 var(--accent); }
+:root[data-theme="light"]:is([data-fieldmap="map"], [data-fieldmap="map-scan"]) .ls-railnav:not(:hover):not(:focus-within) { box-shadow: inset -1px 0 0 color-mix(in srgb, var(--ink-strong) 14%, transparent), inset -2px 0 0 #fff, 8px 0 30px -20px var(--cgf); }
+:root[data-theme="light"]:is([data-fieldmap="map"], [data-fieldmap="map-scan"]) .ls-pagestab { box-shadow: inset -1px 0 0 color-mix(in srgb, var(--ink-strong) 14%, transparent), inset -2px 0 0 #fff, inset -3px 0 0 var(--accent); }
+:root:is([data-fieldmap="map"], [data-fieldmap="map-scan"]) .ls-modebar { position: relative; }
+:root:is([data-fieldmap="map"], [data-fieldmap="map-scan"]) .ls-modebar::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 7px; pointer-events: none; box-shadow: inset 0 -1px 0 color-mix(in srgb, #000 40%, transparent), inset 0 -2px 0 color-mix(in srgb, var(--ink-strong) 9%, transparent); background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--ink-soft) 28%, transparent) 0 1px, transparent 1px 40px) left bottom / 100% 6px no-repeat, repeating-linear-gradient(90deg, color-mix(in srgb, var(--ink-soft) 16%, transparent) 0 1px, transparent 1px 8px) left bottom / 100% 3px no-repeat; }
+@media print { .ls-railnav { background: var(--ground) !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; } .ls-railnav::after, .ls-pagestab::after, .ls-modebar::after { display: none !important; } }
 
 /* ---------- OfficeView: Studio's frame round the shared office engine ---------- */
 .ls-office { container-type: inline-size; display: grid; grid-template-columns: minmax(0, 1fr); gap: calc(var(--space-3) * var(--density)); min-width: 0; }
@@ -1894,6 +1992,7 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 .ls-officepanel .said { min-height: 1.2em; margin: 8px 0 0; font: 12px var(--font-mono); color: var(--good-text); }
 .ls-officepanel .close { float: right; min-width: 36px; min-height: 36px; border: 0; background: none; color: var(--ink); box-shadow: inset 0 0 0 1px var(--control-edge); cursor: pointer; font-size: 16px; }
 .ls-officepanel .close:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
 
 /* ---------- Stage 14: what main's Studio built since the design ---------- */
 /* --- AskPane --- */
@@ -1998,6 +2097,13 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 .ls-gate.handover .readings .m { font-size: 13.5px; color: var(--muted); }
 .ls-gate.handover .ls-chip { display: inline-block; padding: 1px 7px; border-radius: var(--radius-chip); box-shadow: inset 0 0 0 1px var(--control-edge); font-family: var(--font-mono); font-size: 11px; color: var(--ink-soft); white-space: nowrap; }
 .ls-gate.handover .ls-note { margin: 6px 0 0; font-size: 13px; color: var(--muted); }
+/* A branch name can be longer than a phone is wide: the words break anywhere rather than push the page sideways. */
+.ls-gate.handover, .ls-gate.handover .readings li { min-width: 0; }
+.ls-gate.handover .readings .c, .ls-gate.handover .readings .m, .ls-gate.handover .ls-note { overflow-wrap: anywhere; }
+.ls-gate.handover .ls-halo { max-width: 100%; white-space: normal; text-align: left; }
+.ls-gate.handover .ls-halo .ring { flex: none; }
+.ls-gate.handover .ls-action { min-width: 0; }
+.ls-gate.handover .ls-cmd { overflow-wrap: anywhere; }
 
 /* --- JobResult --- */
 /* JobResult: one command run from Studio. As main's studio.css, with the shell rules it leans on scoped here. */
@@ -2028,6 +2134,27 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 .ls-depths .log li.needs .tx { color: var(--needs-text); } .ls-depths .log li.bad .tx { color: var(--bad-text); } .ls-depths .log li.good .tx { color: var(--good); }
 .ls-depths .log li.sub { padding-left: 18px; }
 
+/* --- Landings --- */
+/* Main's own <style> block, scoped to the component. */
+.ls-landings .landings { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.ls-landings .landing { min-width: 0; }
+.ls-landings .landing p { margin: 2px 0 0; }
+.ls-landings .lbranch { margin-inline-start: 6px; font-family: var(--font-mono); overflow-wrap: anywhere; }
+.ls-landings .lgone { margin-inline-start: 6px; color: var(--needs-text); }
+.ls-landings .lacts { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-1); }
+.ls-landings .lmerge { display: grid; gap: var(--space-2); margin-top: var(--space-2); max-width: 60ch; }
+/* From main's pages.css and studio.css, which the design system lacks: the calm line, its small form, and links (.ls a in components.css). */
+.ls-landings .calm { margin: 0; color: var(--muted); }
+.ls-landings .calm.small { margin-top: var(--space-2); font-size: 13.5px; }
+.ls-landings .landing p.calm.small, .ls-landings .landing p.small { margin-top: 2px; }
+.ls-landings a:not([class]) { color: var(--accent-text); overflow-wrap: anywhere; }
+.ls-landings a:not([class]):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* From main's components.css (the design system has them too): fields. */
+.ls-landings .ls-field { display: grid; gap: 6px; justify-items: start; }
+.ls-landings .ls-field > .lab { font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+/* Long labels wrap at 320 rather than run off the screen, as the design system's forms do. */
+.ls-landings .ls-halo { white-space: normal; text-align: left; max-width: 100%; }
+
 /* --- ListToolbar --- */
 /* Main's own <style> block, scoped under the toolbar. */
 .ls-ltool { display: grid; gap: 8px; margin-bottom: 14px; }
@@ -2042,6 +2169,26 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 .ls-ltool .reset, .ls-ltool .clear { border: 0; background: none; padding: 0; color: var(--accent); font: inherit; font-size: 13px; text-decoration: underline; cursor: pointer; }
 .ls-ltool .count { margin: 0; font-size: 13px; color: var(--ink-soft); }
 .ls-ltool .problem { margin: 0; font-size: 13px; color: var(--bad-text); }
+
+/* --- MapFilterBar --- */
+/* Main's own <style> block, scoped to the component. */
+.ls-mapfilters { position: relative; min-width: 0; }
+.ls-mapfilters .mapfilters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 16px; min-width: 0; }
+.ls-mapfilters .custom { font-size: 12.5px; letter-spacing: .24em; text-transform: uppercase; color: var(--ink-soft); }
+.ls-mapfilters .chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; }
+.ls-mapfilters .chip { min-height: 32px; padding: 0 10px; border: 0; border-radius: var(--radius-chip); background: none; box-shadow: inset 0 0 0 1px var(--control-edge); color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; text-decoration: line-through; }
+.ls-mapfilters .chip[aria-pressed="true"] { background: var(--tint-picked-c); color: var(--ink-strong); text-decoration: none; }
+.ls-mapfilters .chip[aria-disabled="true"] { cursor: default; }
+.ls-mapfilters .chip:focus-visible, .ls-mapfilters summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ls-mapfilters .projects summary { min-height: 32px; display: inline-flex; align-items: center; cursor: pointer; font-size: 12.5px; color: var(--ink); }
+.ls-mapfilters .projects[open] .chips { margin-top: 8px; }
+/* From main's pages.css, which the design system lacks: the segmented presets, as Home's Map / Lens switch. */
+.ls-mapfilters .views { display: inline-flex; flex-wrap: wrap; max-width: 100%; box-shadow: inset 0 0 0 1px var(--control-edge); }
+.ls-mapfilters .views button { min-height: 40px; padding: 0 18px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 12.5px; font-weight: 500; letter-spacing: .24em; text-transform: uppercase; cursor: pointer; }
+.ls-mapfilters .views button[aria-pressed="true"] { background: var(--tint-picked-c); color: var(--ink-strong); box-shadow: inset 0 -2px 0 var(--accent); }
+.ls-mapfilters .views button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ls-mapfilters .ls-from { margin-top: -8px; }
+.ls-mapfilters .ls-from code { overflow-wrap: anywhere; }
 
 /* --- MiniLine --- */
 .ls-mini { position: relative; display: flex; align-items: flex-start; min-width: 0; padding: 4px 0 2px; }
@@ -2126,19 +2273,21 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 .ls-deck .panes > .ls-cross { grid-column: 2; grid-row: 2; }
 
 /* --- Splitter --- */
-/* Splitter: the divider between two panes, laid over the gap its grid leaves; the grid places it by column or row. As main's components.css. */
-.ls-split { position: absolute; z-index: 2; display: grid; place-items: center; touch-action: none; outline: none; }
-.ls-split.vertical { top: 0; bottom: 0; left: 0; width: 12px; margin-left: calc(var(--split-gap, 0px) / -2 - 6px); cursor: col-resize; }
-.ls-split.horizontal { left: 0; right: 0; top: 0; height: 12px; margin-top: calc(var(--split-gap, 0px) / -2 - 6px); cursor: row-resize; }
-.ls-split .grip { position: relative; width: 2px; height: 100%; transition: background var(--dur-quick); }
-.ls-split.horizontal .grip { width: 100%; height: 2px; }
+/* Splitter: the divider between two panes, laid over the gap its grid leaves; the grid places it by column or row. As main's components.css,
+   but held to role="separator": TokenSplit's figures share the class name ls-split, and main lays them out as a divider too (absolute, centred).
+   :where() keeps the specificity main's rules have, so the page rules below that place or hide a divider still win. */
+.ls-split:where([role="separator"]) { position: absolute; z-index: 2; display: grid; place-items: center; touch-action: none; outline: none; }
+.ls-split:where([role="separator"]).vertical { top: 0; bottom: 0; left: 0; width: 12px; margin-left: calc(var(--split-gap, 0px) / -2 - 6px); cursor: col-resize; }
+.ls-split:where([role="separator"]).horizontal { left: 0; right: 0; top: 0; height: 12px; margin-top: calc(var(--split-gap, 0px) / -2 - 6px); cursor: row-resize; }
+.ls-split:where([role="separator"]) .grip { position: relative; width: 2px; height: 100%; transition: background var(--dur-quick); }
+.ls-split:where([role="separator"]).horizontal .grip { width: 100%; height: 2px; }
 /* A short handle at rest, so the divider can be found; the full line while it is in use. */
-.ls-split .grip::after { content: ""; position: absolute; top: 50%; left: 50%; width: 4px; height: 28px; transform: translate(-50%, -50%); background: var(--control-edge); }
-.ls-split.horizontal .grip::after { width: 28px; height: 4px; }
-.ls-split:hover .grip, .ls-split.dragging .grip { background: var(--accent); }
-.ls-split:hover .grip::after, .ls-split.dragging .grip::after { background: var(--accent); }
-.ls-split:focus-visible .grip, .ls-split:focus-visible .grip::after { background: var(--focus); }
-.ls-split:focus-visible { box-shadow: 0 0 0 2px var(--focus); }
+.ls-split:where([role="separator"]) .grip::after { content: ""; position: absolute; top: 50%; left: 50%; width: 4px; height: 28px; transform: translate(-50%, -50%); background: var(--control-edge); }
+.ls-split:where([role="separator"]).horizontal .grip::after { width: 28px; height: 4px; }
+.ls-split:where([role="separator"]):hover .grip, .ls-split:where([role="separator"]).dragging .grip { background: var(--accent); }
+.ls-split:where([role="separator"]):hover .grip::after, .ls-split:where([role="separator"]).dragging .grip::after { background: var(--accent); }
+.ls-split:where([role="separator"]):focus-visible .grip, .ls-split:where([role="separator"]):focus-visible .grip::after { background: var(--focus); }
+.ls-split:where([role="separator"]):focus-visible { box-shadow: 0 0 0 2px var(--focus); }
 /* Where main's splits place it. */
 .ls-deck .panes > .ls-split { --split-gap: 10px; }
 .ls-deck .panes > .ls-split.cols { grid-column: 2; }
