@@ -1,4 +1,4 @@
-<!-- @dsCard group="Pages" height=620 width=1100 subtitle="A project’s tasks by where they stand, each moved on with its command" -->
+<!-- @dsCard group="Pages" height=1300 width=1100 subtitle="A project’s tasks by where they stand, each moved on with its command" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -16,6 +16,8 @@
 </head>
 <body class="ls">
 <div id="b" style="max-width: 1040px"></div>
+<p class="lab" style="margin-top: 24px">Every list, one page of several, with a session to start</p>
+<div id="every" style="max-width: 1040px"></div>
 <script>
 (function () {
   var S = window.LoadoutStudio;
@@ -25,7 +27,13 @@
     { id: "flaky-tests", title: "Two flaky tests in the suite", state: "open", kind: "bug", declaredBy: "team run", declared: "17 Oct", note: "Left for later by the --since run" },
     { id: "new-bucket", title: "Move uploads to the new bucket", state: "blocked", kind: "chore", declaredBy: "you", declared: "12 Oct", note: "Waiting on access to the bucket" },
     { id: "release-065", title: "Release 0.65.0", state: "done", declaredBy: "release-crew", declared: "10 Oct" },
-    { id: "old-tui", title: "Port the old TUI colours", state: "dropped", declaredBy: "you", declared: "2 Oct" } ] }).el);
+    { id: "old-tui", title: "Port the old TUI colours", state: "dropped", declaredBy: "you", declared: "2 Oct" } ],
+    project: "loadout-cli", onStart: function () {}, onRead: function () {},
+    away: [{ id: "importer", title: "Fix the importer", to: "starstats", at: "2025-10-04T10:00:00Z" }] }).el);
+  document.getElementById("every").appendChild(S.TaskBoard({ where: [], mixed: true, paged: true, from: "$ loadout task list --every-list --all", onStart: function () {}, onRead: function () {}, tasks: [
+    { id: "t-14", project: "starstats", title: "Cache the leaderboard query", state: "open", kind: "feature", declaredBy: "you", declared: "2025-10-15T09:00:00Z", mark: "missing", hasDetail: true },
+    { id: "t-3", project: null, title: "Write the onboarding notes", state: "open", kind: "docs", declaredBy: "you", declared: "2025-10-11T09:00:00Z", mark: "proposalWaiting", moved: { from: "loadout-cli", at: "2025-10-12T09:00:00Z" } },
+    { id: "t-21", project: "starstats", title: "Retry the upload step", state: "doing", kind: "bug", declaredBy: "claude", declared: "2025-10-16T09:00:00Z" } ] }).el);
 })();
 </script>
 </body>

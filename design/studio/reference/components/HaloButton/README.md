@@ -15,6 +15,9 @@ HaloButton is Studio's button: a word in spaced capitals beside a ring of light,
 - `cmd`: the exact command the press runs (`$ loadout team gate --answer Approve`). Every button that changes something shows one. Where nothing in Loadout changes, say what does happen instead ("opens here · changes nothing", "stops the agent in this terminal"). Studio never types into a session for you: a question in a session is answered in its terminal (see Terminal).
 - `glyph` (optional): one character in the ring for answers (✓, ✕, ↻) or option numbers (1, 2).
 - `disabledReason` instead of disabling silently: the ring goes grey and the reason is written where the command would be.
+- `inactive` (optional) where the button does nothing and the page already says why beside it, such as the verdict already given: it keeps its command, and is announced as disabled.
+- `describedBy` (optional): the id of a line that says more about the button, read after its name. The line can be visually hidden (`ls-sr`): "3 left to decide on this idea".
+- `key` and `next` (optional): set as `data-k`, for keeping focus on the button across a redraw, and `data-next`, where a page's Next button finds it.
 - `onPress`.
 
 ## Do and don't

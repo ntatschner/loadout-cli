@@ -6,3 +6,4 @@ TerminalOnly is the block for what Studio never does from a page: reading or set
 - `why` completes "It …" with the reason from Studio's coverage list, word for word.
 - `fact` carries a state that can be shown safely: "Passphrase: set" or "not set", never the value.
 - Inside an ActionDrawer with `effect: "terminal"`, the drawer's body is this block.
+- **Copy** says "✓ Copied. Paste it in a terminal." once the clipboard has it. Where the browser refuses (no clipboard permission, or a page that is not secure), it says "Select the line to copy it." in the same status line instead, and nothing is thrown.

@@ -1315,6 +1315,12 @@ html[data-vt="fade"]::view-transition-group(*) { animation-duration: 0s; }
 .ls-qset .q legend, .ls-qset .q .qt { float: none; padding: 0; margin: 0; font-size: 17px; line-height: 1.35; color: var(--ink-strong); overflow-wrap: anywhere; }
 .ls-qset .q fieldset { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; min-width: 0; }
 .ls-qset .q .why { margin: 0; font-size: 13.5px; color: var(--muted); }
+.ls-qset .qs { display: grid; gap: 10px; }
+.ls-qset .q .about { margin: 0; font-size: 13.5px; color: var(--ink-soft); max-width: 76ch; }
+.ls-qset .q .outdated { margin: 0; font-size: 13.5px; color: var(--needs-text); max-width: 76ch; }
+.ls-qset .q .outdated button { margin-left: 10px; padding: 0; border: 0; background: none; font: inherit; font-size: 13px; color: var(--accent-text); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.ls-qset .q .outdated button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ls-qset .understood { margin: 4px 0 0; font-size: 13.5px; color: var(--muted); max-width: 76ch; }
 .ls-qset .opts { display: flex; flex-wrap: wrap; gap: 6px; }
 .ls-qset .opt { position: relative; display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 6px 14px 6px 10px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--control-edge); font-size: 14px; color: var(--ink); cursor: pointer; }
 .ls-qset .opt input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
@@ -1333,6 +1339,9 @@ html[data-vt="fade"]::view-transition-group(*) { animation-duration: 0s; }
 .ls-qset .send details { font-size: 12.5px; color: var(--muted); }
 .ls-qset .send details summary { cursor: pointer; }
 .ls-qset .send details code { display: block; margin-top: 4px; font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-soft); overflow-wrap: anywhere; }
+.ls-qset .ls-answers.flush { margin: 0; }
+/* The status line keeps its height when empty, so nothing below it moves when it speaks. */
+.ls-qset .ls-said.held:empty, .ls-layer .ls-said.held:empty { display: block; min-height: 1lh; }
 
 /* ---------- PlanLayer: one layer of the plan, its options side by side ---------- */
 .ls-layer { display: grid; gap: 10px; padding-top: 14px; box-shadow: inset 0 1px 0 var(--rule); }
@@ -1353,6 +1362,10 @@ html[data-vt="fade"]::view-transition-group(*) { animation-duration: 0s; }
 .ls-layer .card li.pro i { color: var(--good); }
 .ls-layer .card li.con i { color: var(--bad-text); }
 .ls-layer .card .ls-action { margin-top: 2px; }
+.ls-layer .card .slot { display: grid; align-items: center; margin-top: 2px; }
+.ls-layer .card .slot > * { grid-area: 1 / 1; min-width: 0; }
+.ls-layer .card .slot .off { visibility: hidden; }
+.ls-layer .card .mark { margin: 0; }
 .ls-layer .acts { display: flex; flex-wrap: wrap; gap: 6px 26px; }
 .ls-layer .rework { display: none; gap: 8px; max-width: 640px; }
 .ls-layer .rework.on { display: grid; }
@@ -1408,9 +1421,11 @@ a.ls-ptile:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px;
 .ls-tboard .task { display: grid; gap: 4px; padding: 10px 12px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule); }
 .ls-tboard .task.blocked { box-shadow: inset 3px 0 0 var(--bad), inset 0 0 0 1px var(--rule); }
 .ls-tboard .task.doing { box-shadow: inset 3px 0 0 var(--accent), inset 0 0 0 1px var(--rule); }
-.ls-tboard .task .tt { font-size: 14.5px; color: var(--ink-strong); overflow-wrap: anywhere; }
+.ls-tboard .task .tt { font-size: 14.5px; color: var(--ink-strong); overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
 .ls-tboard .task .tx { font-family: var(--font-mono); font-size: 11px; color: var(--muted); overflow-wrap: anywhere; }
-.ls-tboard .task .note { margin: 0; font-size: 13px; color: var(--ink-soft); overflow-wrap: anywhere; }
+.ls-tboard .task .mark { justify-self: start; }
+.ls-tboard .task .came { font-size: 12px; color: var(--muted); }
+.ls-tboard .task .note { margin: 0; font-size: 13px; color: var(--ink-soft); overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
 .ls-tboard .task.blocked .note { color: var(--bad-text); }
 .ls-tboard .task .moves { display: flex; flex-wrap: wrap; gap: 2px 16px; margin-top: 2px; }
 .ls-tboard .task .moves .ls-action { gap: 0; }
@@ -1425,6 +1440,10 @@ a.ls-ptile:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px;
 .ls-tboard .task .said:empty { display: none; }
 .ls-tboard details.closed { padding: 8px 10px; box-shadow: inset 0 0 0 1px var(--rule); }
 .ls-tboard details.closed summary { cursor: pointer; font-size: 13px; color: var(--ink-soft); }
+.ls-tboard .away { padding: 8px 10px; box-shadow: inset 0 0 0 1px var(--rule); }
+.ls-tboard .away h4 { margin: 0 0 4px; font-size: 11.5px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); }
+.ls-tboard .away ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.ls-tboard .away li { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
 .ls-tboard details.closed .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 6px; margin-top: 8px; }
 @container (max-width: 640px) { .ls-tboard .cols { grid-template-columns: minmax(0, 1fr); } }
 

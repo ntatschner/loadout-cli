@@ -1,4 +1,4 @@
-<!-- @dsCard group="Actions" height=330 subtitle="A word beside a ring of light, with the command it runs" -->
+<!-- @dsCard group="Actions" height=450 subtitle="A word beside a ring of light, with the command it runs" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -22,6 +22,9 @@
 <p class="out" role="status" id="out"></p>
 <p class="lab" style="margin-top: 18px">Kinds and sizes</p>
 <div class="row" id="kinds"></div>
+<p class="lab" style="margin-top: 18px">Inactive, and described by a line</p>
+<div class="row" id="more"></div>
+<span class="ls-sr" id="next-left">2 left to decide on this idea</span>
 <script>
 (function () {
   var S = window.LoadoutStudio;
@@ -31,6 +34,10 @@
   gate.appendChild(S.HaloButton({ label: "Think again", glyph: "\u21bb", cmd: "$ loadout team gate --think-again", onPress: function () { out.textContent = "\u2713 None was chosen. The lead decides, or asks a better question."; } }));
   [["Deploy", "", ""], ["Leave ambient", "", "small"], ["Overwrite it", "needs", "small"], ["Acknowledge", "danger", "small"]].forEach(function (k) { kinds.appendChild(S.HaloButton({ label: k[0], kind: k[1], size: k[2] })); });
   kinds.appendChild(S.HaloButton({ label: "Pause", size: "small", disabledReason: "only watching: start Studio without --watch-only to act" }));
+  var more = document.getElementById("more");
+  more.appendChild(S.HaloButton({ label: "Keep it", size: "small", glyph: "\u2713", inactive: true, cmd: "$ loadout idea keep browser-launcher L2 --project starstats" }));
+  more.appendChild(S.HaloButton({ label: "Drop it", size: "small", glyph: "\u2715", cmd: "$ loadout idea drop browser-launcher L2 --project starstats" }));
+  more.appendChild(S.HaloButton({ label: "Next: answer 2 of 3", size: "small", solid: true, glyph: "\u2193", next: "question:Q2", describedBy: "next-left", cmd: "changes nothing \u00b7 ] \u00b7 2 left to decide" }));
 })();
 </script>
 </body>

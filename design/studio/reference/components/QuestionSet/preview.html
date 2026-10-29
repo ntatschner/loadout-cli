@@ -1,4 +1,4 @@
-<!-- @dsCard group="Pages" height=820 width=900 subtitle="The questions an agent asked about an idea, answered in the page" -->
+<!-- @dsCard group="Pages" height=1200 width=900 subtitle="The questions an agent asked about an idea, answered in the page" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -15,21 +15,27 @@
 </style>
 </head>
 <body class="ls">
-<div id="q" style="max-width: 760px"></div><p class="out" id="out" role="status"></p>
+<div id="q" style="max-width: 760px"></div><p class="out" id="out"></p>
 <script>
 (function () {
   var S = window.LoadoutStudio;
   var IDEA = { id: "browser-launcher", where: ["--project", "loadout-cli"],
+    rounds: [{ round: 1, understanding: "A page in the browser that starts sessions the way the terminal launcher does.", questions: ["Q1", "Q2", "Q3"] },
+      { round: 2, understanding: "Served by the daemon, for this machine only, beside the terminal launcher.", questions: ["Q4"] }],
     questions: [
-      { id: "q1", question: "Should the browser launcher replace the terminal one, or sit beside it?", why: "It decides whether the terminal launcher keeps its own screens.", options: ["Beside it", "Replace it"], recommendation: "Beside it", answer: null },
-      { id: "q2", question: "Who opens it: only you on this machine, or anyone on the network?", why: "Anyone on the network means it needs signing in.", options: ["Only this machine", "The network, signed in"], recommendation: "Only this machine", answer: null },
-      { id: "q3", question: "What should it show first?", why: null, options: [], recommendation: "The projects, most recent first", answer: "The projects, most recent first" }
+      { id: "Q1", round: 1, question: "Should the browser launcher replace the terminal one, or sit beside it?", why: "It decides whether the terminal launcher keeps its own screens.", options: ["Beside it", "Replace it"], recommendation: "Beside it, at least until the browser one has every screen", about: "the ask", context: null, answer: null },
+      { id: "Q2", round: 1, question: "Who opens it: only you on this machine, or anyone on the network?", why: "Anyone on the network means it needs signing in.", options: ["Only this machine", "The network, signed in"], recommendation: "Only this machine", about: "L2 How it is served", context: "whether it needs a sign-in", answer: null },
+      { id: "Q3", round: 1, question: "What should it show first?", why: null, options: [], recommendation: "The projects, most recent first", answer: "The projects, most recent first", about: "L1 The first screen", outdated: "L1 was reworked after this was answered" },
+      { id: "Q4", round: 2, question: "Should it remember the last project you launched in?", why: null, options: ["Yes", "No"], recommendation: null, about: null, context: "The launch sheet could open on it.", answer: null }
     ],
     layer: { id: "L2", name: "How it is served", purpose: "Where the page comes from and who can reach it.", chosen: "o1", verdict: "Undecided", options: [
       { id: "o1", title: "From the daemon", detail: "The daemon that already hosts sessions serves the page too.", pros: ["One process to run", "Sessions are already there"], cons: ["The daemon must be running"], recommended: true },
       { id: "o2", title: "Its own server", detail: "loadout launcher serve, run when wanted.", pros: ["Nothing else needs to run"], cons: ["A second port", "Sessions live elsewhere"], recommended: false }
     ] } };
-  document.getElementById("q").appendChild(S.QuestionSet({ id: IDEA.id, where: IDEA.where, questions: IDEA.questions, onSend: function (a, refine) { document.getElementById("out").textContent = a.length + " answers" + (refine ? ", then another round" : ""); } }).el);
+  var out = document.getElementById("out");
+  document.getElementById("q").appendChild(S.QuestionSet({ id: IDEA.id, where: IDEA.where, questions: IDEA.questions, rounds: IDEA.rounds,
+    onDraft: function (drafted, sent) { out.textContent = "Typed and not sent: " + (drafted.join(", ") || "none") + " \u00b7 sent, not read back: " + (sent.join(", ") || "none"); },
+    onSend: function (a) { return new Promise(function (done) { setTimeout(function () { done(true); }, 600); }); } }).el);
 })();
 </script>
 </body>
