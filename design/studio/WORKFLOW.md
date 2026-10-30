@@ -75,7 +75,7 @@ Don't reopen these. Ask me only if one turns out to be impossible.
     - An idea: its stage, its first unanswered question with Answer, and Refine.
     - A task: its state, its note, Start and History.
   - **How it opens and closes:**
-    - A click pins it.
+    - A click pins it. A pinned peek stays until Escape, Close or the peek button; a click away closes only an unpinned one.
     - Escape closes it first, before anything else that claims Escape, and never while you're typing in a terminal.
     - Open goes to the thing's full view, in the mode you're in.
   - **In Minimal** the peek is a short expansion under the row, before the frame opens.
@@ -126,7 +126,7 @@ Don't reopen these. Ask me only if one turns out to be impossible.
 1. **`liveFirst(items)`** in `lib/`: the order in Decisions, used by `linesOf`, `rankUrgent`, the board, NeedsYou, the deck's waiting chip, the palette's In flight, Ambient's halo, the Ideas shelf, Teams' runs, a team's runs, the Pure groups and Quiet. Tests pin each group and the oldest-first rule.
 2. **`waitingOf(state)`**: the one count. The mode bar, rail, Home header, Teams header, Minimal and Pure Needs you all read it. Trigger approvals are fetched where the count is made, not only on the Teams page.
 3. **The mode bar's count opens a waiting peek list.** It lists every waiting item, oldest first, each with its main action: approve, answer, Type here. It closes when pressed again or with Escape.
-4. **The Peek component**, as `reference/components/Peek/`. It's one overlay with four bodies (session, run, idea, task). It opens on hover after a short delay, or on focus, beside the row. It pins with a click, closes with Escape or a click away, and keeps on screen at 320px, where it becomes a sheet from the foot. Its actions show their commands and follow `studio-commands`. It never opens over a terminal you're typing in.
+4. **The Peek component**, as `reference/components/Peek/`. It's one overlay with five bodies (session, run, idea, task, and a run's crew node). It opens on hover after a short delay, or on focus, beside the row. It pins with a click; a pinned one closes with Escape, Close or the peek button, and an unpinned one also with a click away. It keeps on screen at 320px, where it becomes a sheet from the foot. Its actions show their commands and follow `studio-commands`. It never opens over a terminal you're typing in.
 5. **`reveal()` targets** for `idea` (landing on `zone:questions` when it has any) and `task`. The palette's In flight rows go through `reveal()`, not `home/<id>`. "Open the idea" passes the idea.
 6. **LayoutEdit**, generalised from `lib/layout.ts`:
    - Section ids with a default order.
