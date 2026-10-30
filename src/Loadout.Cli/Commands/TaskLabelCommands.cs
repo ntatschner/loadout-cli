@@ -205,6 +205,10 @@ public class LabelEverywhereSettings : GlobalSettings
 internal static class LabelEverywhere
 {
     /// <summary>Renames <paramref name="from"/> to <paramref name="to"/> on every list, or with null takes it off.</summary>
+    /// <remarks>
+    /// The command's --dry-run comes in as <c>dryRun</c>, passed by name so
+    /// each command is seen reading it where it arrives, rather than only in here.
+    /// </remarks>
     public static async Task<int> RunAsync(
         ITaskService tasks,
         Core.Workspace.IWorkspaceManager workspace,
@@ -212,6 +216,7 @@ internal static class LabelEverywhere
         LabelEverywhereSettings settings,
         string from,
         string? to,
+        bool dryRun,
         CancellationToken ct)
     {
         var output = new CommandOutput(console, settings);
@@ -255,7 +260,7 @@ internal static class LabelEverywhere
             return output.Fail($"No task or idea has the label '{name}'. loadout task labels list shows the labels there are.", ExitCode.InvalidArguments);
         }
 
-        if (settings.DryRun)
+        if (dryRun)
         {
             if (output.IsJson)
             {
@@ -346,7 +351,7 @@ public sealed class TaskLabelsRenameCommand : AsyncCommand<TaskLabelsRenameComma
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        return LabelEverywhere.RunAsync(_tasks, _workspace, _console, settings, settings.From, settings.To, cancellationToken);
+        return LabelEverywhere.RunAsync(_tasks, _workspace, _console, settings, settings.From, settings.To, dryRun: settings.DryRun, cancellationToken);
     }
 }
 
@@ -378,6 +383,6 @@ public sealed class TaskLabelsRemoveCommand : AsyncCommand<TaskLabelsRemoveComma
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        return LabelEverywhere.RunAsync(_tasks, _workspace, _console, settings, settings.Label, null, cancellationToken);
+        return LabelEverywhere.RunAsync(_tasks, _workspace, _console, settings, settings.Label, null, dryRun: settings.DryRun, cancellationToken);
     }
 }
