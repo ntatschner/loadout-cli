@@ -42,6 +42,49 @@ public enum TaskKind
     Idea,
 }
 
+/// <summary>What the work is about, from a set Loadout reasons about.</summary>
+/// <remarks>
+/// Closed rather than a free tag, because later work keys checks on it: a
+/// release task on a project with no release workflow is worth saying something
+/// about, and that can only be said of a type every surface agrees on.
+/// </remarks>
+public enum TaskType
+{
+    /// <summary>Something that is not a project yet.</summary>
+    NewProject,
+
+    /// <summary>Something the project does not do yet.</summary>
+    Feature,
+
+    /// <summary>Something the project does wrong.</summary>
+    BugFix,
+
+    /// <summary>How the project is built, tested and checked.</summary>
+    CiCd,
+
+    /// <summary>How the project ships.</summary>
+    Release,
+
+    /// <summary>What is written about the project.</summary>
+    Docs,
+
+    /// <summary>Upkeep: dependencies, tidying, renaming, removing.</summary>
+    Maintenance,
+}
+
+/// <summary>Who gave a task its type.</summary>
+public enum TaskTypeSource
+{
+    /// <summary>Guessed from its words and where it was captured.</summary>
+    Rule,
+
+    /// <summary>Revised by the agent refining it.</summary>
+    Agent,
+
+    /// <summary>Chosen by a person, and left alone until they hand it back.</summary>
+    Person,
+}
+
 /// <summary>
 /// One piece of work, and who said what about it when.
 /// </summary>
@@ -70,6 +113,21 @@ public sealed class TaskItem
 
     /// <summary>Work, or an idea still being shaped.</summary>
     public TaskKind Kind { get; set; } = TaskKind.Task;
+
+    /// <summary>What the work is about, or null for a task recorded before there were types.</summary>
+    /// <remarks>
+    /// Every task added since has one, guessed when nobody gives it. A list
+    /// recorded earlier is typed by <c>task classify</c> when somebody asks,
+    /// never as a side effect of reading it.
+    /// </remarks>
+    public TaskType? Type { get; set; }
+
+    /// <summary>Who gave it <see cref="Type"/>, or null when it has none.</summary>
+    /// <remarks>
+    /// Kept so a guess and a choice are told apart: a rule's or the agent's
+    /// guess can be revised, and a person's choice is not touched by either.
+    /// </remarks>
+    public TaskTypeSource? TypeBy { get; set; }
 
     /// <summary>Who said so: an agent name, or whoever was at the keyboard.</summary>
     public string DeclaredBy { get; set; } = string.Empty;

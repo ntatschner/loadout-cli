@@ -791,6 +791,7 @@ public static class Program
             task.AddCommand<TaskDeclareCommand>("declare");
             task.AddCommand<TaskProposeDoneWhenCommand>("propose-done-when");
             task.AddCommand<TaskShortenCommand>("shorten");
+            task.AddCommand<TaskClassifyCommand>("classify");
             task.AddCommand<TaskMoveCommand>("move");
             task.AddCommand<TaskRemoveCommand>("remove");
             task.AddCommand<TaskApplyCommand>("apply");

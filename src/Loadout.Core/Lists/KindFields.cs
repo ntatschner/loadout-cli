@@ -18,6 +18,7 @@ public static class IdeaFields
             ListField<IdeaSummary>.Text("title", "what it asks for", idea => idea.Title),
             ListField<IdeaSummary>.Text("project", "the project it is on", idea => idea.Place.Project),
             ListField<IdeaSummary>.Choice("stage", "how far it has got", Stages, idea => idea.Stage.ToString().ToLowerInvariant()),
+            ListField<IdeaSummary>.Choice("type", "what it is about", Tasks.TaskTypes.Names, idea => idea.Type is { } type ? Tasks.TaskTypes.Name(type) : null),
             ListField<IdeaSummary>.Text("by", "who dropped it in", idea => idea.DeclaredBy),
             ListField<IdeaSummary>.Date("updated", "when it was last recorded", idea => idea.DeclaredUtc),
             ListField<IdeaSummary>.Number("unanswered", "questions waiting on you", idea => idea.Unanswered),

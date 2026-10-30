@@ -94,7 +94,8 @@ public sealed class AccessibilityContextTests : IDisposable
             string? note = null,
             CancellationToken ct = default,
             Loadout.Models.Tasks.TaskKind? kind = null,
-            string? detail = null, IReadOnlyList<string>? doneWhen = null, string? reason = null) =>
+            string? detail = null, IReadOnlyList<string>? doneWhen = null, string? reason = null,
+            Loadout.Models.Tasks.TaskType? type = null, Loadout.Models.Tasks.TaskTypeSource? typeBy = null) =>
             throw new NotSupportedException("compiling a context declares nothing");
 
         public Task<OperationResult<IReadOnlyList<Loadout.Core.Tasks.TaskShortened>>> ShortenTitlesAsync(

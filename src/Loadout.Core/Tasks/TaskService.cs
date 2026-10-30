@@ -45,6 +45,12 @@ public interface ITaskService
     /// stands does not turn it into work; a new task given none is work.
     /// </para>
     /// <para>
+    /// A type of null leaves the task's as it was, and a new task given none
+    /// has one guessed from its words by <see cref="TaskTypes.Guess"/>. A
+    /// <paramref name="typeBy"/> of null is a person's choice, which no
+    /// guess given later replaces.
+    /// </para>
+    /// <para>
     /// A title longer than <see cref="TaskTitles.Length"/> is shortened, and
     /// the whole of it is kept at the start of the detail, so nothing given is
     /// lost. <see cref="TaskTitles.Shortens"/> says beforehand whether it will be.
@@ -61,7 +67,9 @@ public interface ITaskService
         TaskKind? kind = null,
         string? detail = null,
         IReadOnlyList<string>? doneWhen = null,
-        string? reason = null);
+        string? reason = null,
+        TaskType? type = null,
+        TaskTypeSource? typeBy = null);
 
     /// <summary>
     /// Shortens every title on a list that is longer than
@@ -78,6 +86,27 @@ public interface ITaskService
         string by,
         bool apply,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Gives every task on a list that has no type the one the rules guess,
+    /// saying so in its history; or, without <paramref name="apply"/>, says
+    /// what it would give each and writes nothing.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// For lists recorded before there were types, and only when somebody asks:
+    /// changing every item on a list unasked is the surprise this exists to
+    /// avoid. Each type is recorded as a rule's guess, so the agent refining
+    /// an idea may still revise it, and running it again finds nothing to do.
+    /// </para>
+    /// <para>The default refuses, for the doubles in the tests; the real service classifies.</para>
+    /// </remarks>
+    Task<OperationResult<IReadOnlyList<TaskClassified>>> ClassifyAsync(
+        string? projectSlug,
+        string by,
+        bool apply,
+        CancellationToken ct = default) =>
+        Task.FromResult(OperationResult<IReadOnlyList<TaskClassified>>.Fail("This task list cannot be classified."));
 
     /// <summary>Forgets a task.</summary>
     Task<OperationResult> RemoveAsync(
@@ -176,7 +205,7 @@ public interface ITaskService
                     : await DeclareAsync(
                         operation.Project, id, operation.State ?? TaskState.Open, operation.By,
                         operation.Title, operation.Note, ct, operation.Kind, operation.Detail, operation.DoneWhen,
-                        operation.Reason).ConfigureAwait(false);
+                        operation.Reason, operation.Type, operation.TypeBy).ConfigureAwait(false);
             }
 
             outcomes.Add(new TaskOutcome(
@@ -198,6 +227,12 @@ public interface ITaskService
 /// <param name="Before">The title as it was.</param>
 /// <param name="After">The title as it is kept.</param>
 public sealed record TaskShortened(string Id, string Before, string After);
+
+/// <summary>A task the classifying pass typed, or would.</summary>
+/// <param name="Id">The task.</param>
+/// <param name="Title">What it is, so a person reading the list can judge the guess.</param>
+/// <param name="Type">The type the rules gave it.</param>
+public sealed record TaskClassified(string Id, string Title, TaskType Type);
 
 /// <summary>A task that was moved, and the list it is on now.</summary>
 /// <param name="Task">The task, with where it came from in <see cref="TaskItem.Moved"/>.</param>
@@ -295,9 +330,11 @@ internal sealed class TaskService : ITaskService
         TaskKind? kind = null,
         string? detail = null,
         IReadOnlyList<string>? doneWhen = null,
-        string? reason = null) =>
+        string? reason = null,
+        TaskType? type = null,
+        TaskTypeSource? typeBy = null) =>
         One(await ApplyCoreAsync(
-            [new TaskOperation(TaskOperation.Declare, projectSlug, id, state, title, note, kind, declaredBy, Detail: detail, DoneWhen: doneWhen, Reason: reason)],
+            [new TaskOperation(TaskOperation.Declare, projectSlug, id, state, title, note, kind, declaredBy, Detail: detail, DoneWhen: doneWhen, Reason: reason, Type: type, TypeBy: typeBy)],
             false,
             ct).ConfigureAwait(false));
 
@@ -977,6 +1014,33 @@ internal sealed class TaskService : ITaskService
             existing.Note = note.Trim();
         }
 
+        if (operation.Type is { } type)
+        {
+            var typeBy = operation.TypeBy ?? TaskTypeSource.Person;
+
+            // A guess never replaces a person's choice: only they can hand it back.
+            if (typeBy == TaskTypeSource.Person || existing.TypeBy != TaskTypeSource.Person)
+            {
+                if (!added && typeBy == TaskTypeSource.Person
+                    && (existing.Type != type || existing.TypeBy != TaskTypeSource.Person))
+                {
+                    reason = reason.Length > 0 ? $"{reason}; {TaskTypes.ChangedReason(type)}" : TaskTypes.ChangedReason(type);
+                }
+
+                existing.Type = type;
+                existing.TypeBy = typeBy;
+            }
+        }
+        else if (added)
+        {
+            // Guessed after the words are written, so it reads all of them. A
+            // task already on the list keeps what it has, typed or not: typing
+            // an old list is for task classify, when somebody asks.
+            existing.Type = TaskTypes.Guess(
+                string.Join('\n', existing.Title, existing.Detail, existing.Note), existing.Kind, operation.Project);
+            existing.TypeBy = TaskTypeSource.Rule;
+        }
+
         // Replaced as a whole rather than added to: the list is what somebody
         // confirmed, and a condition they took out must not linger. Blank ones
         // are dropped, since a run can never report a verdict on them.
@@ -1028,6 +1092,77 @@ internal sealed class TaskService : ITaskService
         {
             item.History.Add(new TaskEvent { State = item.State, By = item.DeclaredBy, Utc = item.DeclaredUtc });
         }
+    }
+
+    /// <inheritdoc />
+    public async Task<OperationResult<IReadOnlyList<TaskClassified>>> ClassifyAsync(
+        string? projectSlug,
+        string by,
+        bool apply,
+        CancellationToken ct = default)
+    {
+        if (!_workspace.IsAvailable())
+        {
+            return OperationResult<IReadOnlyList<TaskClassified>>.Fail(NoWorkspace, ExitCode.WorkspaceSyncFailed);
+        }
+
+        var path = PathFor(projectSlug);
+
+        // Held as a batch is, so a change made meanwhile is not written over.
+        var held = await _yaml.HoldAsync([path], ct).ConfigureAwait(false);
+
+        if (held.Failed)
+        {
+            return OperationResult<IReadOnlyList<TaskClassified>>.Fail(held.Error!, held.ExitCode);
+        }
+
+        using var hold = held.Value!;
+        var loaded = await LoadAsync(path, ct).ConfigureAwait(false);
+
+        if (loaded.Failed)
+        {
+            return OperationResult<IReadOnlyList<TaskClassified>>.Fail(loaded.Error!, loaded.ExitCode);
+        }
+
+        // A copy, so what is kept between reads is untouched until the file is.
+        var list = Copy(loaded.Value!.Value);
+        var untyped = list.Items
+            .Where(item => item.Id.Length > 0 && item.Type is null)
+            .Select(item => (Item: item, Type: TaskTypes.Guess(
+                string.Join('\n', item.Title, item.Detail, item.Note), item.Kind, projectSlug)))
+            .ToList();
+        IReadOnlyList<TaskClassified> found = [.. untyped.Select(one => new TaskClassified(one.Item.Id, one.Item.Title, one.Type))];
+
+        // Not written when nothing needs it, as with shortening titles.
+        if (!apply || found.Count == 0)
+        {
+            return OperationResult<IReadOnlyList<TaskClassified>>.Ok(found);
+        }
+
+        var now = _time.GetUtcNow();
+
+        foreach (var (item, type) in untyped)
+        {
+            Remember(item);
+
+            item.Type = type;
+            item.TypeBy = TaskTypeSource.Rule;
+
+            // The state and who last declared it are left alone: this says
+            // what the work is about, not where it stands.
+            item.History.Add(new TaskEvent { State = item.State, By = by.Trim(), Utc = now, Reason = TaskTypes.GuessedReason(type) });
+        }
+
+        var saved = await hold.WriteAsync(path, list, true, ct).ConfigureAwait(false);
+
+        if (saved.Failed)
+        {
+            return OperationResult<IReadOnlyList<TaskClassified>>.Fail(saved.Error!, saved.ExitCode);
+        }
+
+        _kept.Remember(path, list, saved.Value!);
+
+        return OperationResult<IReadOnlyList<TaskClassified>>.Ok(found);
     }
 
     /// <inheritdoc />
@@ -1114,6 +1249,8 @@ internal sealed class TaskService : ITaskService
         Title = item.Title,
         State = item.State,
         Kind = item.Kind,
+        Type = item.Type,
+        TypeBy = item.TypeBy,
         DeclaredBy = item.DeclaredBy,
         DeclaredUtc = item.DeclaredUtc,
         Note = item.Note,

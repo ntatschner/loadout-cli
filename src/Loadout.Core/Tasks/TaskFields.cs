@@ -62,6 +62,7 @@ public static class TaskFields
                 ListField<TaskItem>.Text("title", "what the task is", task => task.Title),
                 ListField<TaskItem>.Choice("state", "where it stands", States, task => task.State.ToString().ToLowerInvariant()),
                 ListField<TaskItem>.Choice("kind", "work, or an idea", ["task", "idea"], task => task.Kind.ToString().ToLowerInvariant()),
+                ListField<TaskItem>.Choice("type", "what it is about", TaskTypes.Names, task => task.Type is { } type ? TaskTypes.Name(type) : null),
                 ListField<TaskItem>.Text("project", $"the project whose list it is on, or {WorkspaceWide} for the workspace-wide one", task => project(task) ?? WorkspaceWide),
                 ListField<TaskItem>.Text("by", "who declared it last", task => task.DeclaredBy),
                 ListField<TaskItem>.Date("updated", "when it was last declared", task => task.DeclaredUtc),

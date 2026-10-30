@@ -244,6 +244,8 @@ public sealed class TaskBatchTests : IDisposable
                 var type when type == typeof(string) => "set-" + property.Name,
                 var type when type == typeof(TaskState) => TaskState.Blocked,
                 var type when type == typeof(TaskKind) => TaskKind.Idea,
+                var type when type == typeof(TaskType?) => TaskType.Docs,
+                var type when type == typeof(TaskTypeSource?) => TaskTypeSource.Agent,
                 var type when type == typeof(DateTimeOffset) => DateTimeOffset.UnixEpoch.AddDays(3),
                 var type when type == typeof(TaskMove) => new TaskMove { From = "elsewhere", Utc = DateTimeOffset.UnixEpoch },
                 var type when type == typeof(List<string>) => new List<string> { "set-" + property.Name },
@@ -267,6 +269,7 @@ public sealed class TaskBatchTests : IDisposable
     [Theory]
     [InlineData(nameof(ITaskService.ApplyAsync))]
     [InlineData(nameof(ITaskService.HoldProposalAsync))]
+    [InlineData(nameof(ITaskService.ClassifyAsync))]
     public void The_service_has_its_own_rather_than_the_default_for_the_doubles(string method)
     {
         var map = typeof(TaskService).GetInterfaceMap(typeof(ITaskService));

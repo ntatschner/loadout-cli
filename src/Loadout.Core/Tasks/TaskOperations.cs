@@ -32,6 +32,8 @@ namespace Loadout.Core.Tasks;
 /// <param name="DoneWhen">What must be true for it to be finished. Left as it was when null; an empty list clears it.</param>
 /// <param name="Reason">Why, written on the history line this declare adds; one is added even when the state is unchanged.</param>
 /// <param name="Proposal">For hold, the proposal to hold.</param>
+/// <param name="Type">What the work is about. Left as it was when null; a new task given none has one guessed.</param>
+/// <param name="TypeBy">Who gave <paramref name="Type"/>: a person when null.</param>
 public sealed record TaskOperation(
     string Op,
     string? Project = null,
@@ -46,7 +48,9 @@ public sealed record TaskOperation(
     string? Detail = null,
     IReadOnlyList<string>? DoneWhen = null,
     string? Reason = null,
-    TaskProposal? Proposal = null)
+    TaskProposal? Proposal = null,
+    TaskType? Type = null,
+    TaskTypeSource? TypeBy = null)
 {
     public const string Add = "add";
     public const string Declare = "declare";
@@ -128,7 +132,7 @@ public static class TaskOperations
 
     /// <summary>
     /// Reads a JSON array of operations, each as
-    /// <c>{"op", "project", "id", "state", "title", "note", "detail", "kind", "to", "revision"}</c>.
+    /// <c>{"op", "project", "id", "state", "title", "note", "detail", "kind", "type", "to", "revision"}</c>.
     /// </summary>
     /// <param name="json">The array.</param>
     /// <param name="project">The list an operation naming none is made on, or null for the workspace-wide one.</param>
@@ -231,6 +235,8 @@ public static class TaskOperations
             title = task.Title,
             state = task.State.ToString().ToLowerInvariant(),
             kind = task.Kind.ToString().ToLowerInvariant(),
+            type = task.Type is { } type ? TaskTypes.Name(type) : null,
+            typeBy = task.TypeBy is { } typeBy ? TaskTypes.Name(typeBy) : null,
             by = task.DeclaredBy,
             declared = task.DeclaredUtc,
             note = task.Note,
@@ -347,6 +353,20 @@ public static class TaskOperations
             kind = parsed;
         }
 
+        TaskType? type = null;
+
+        if (Text("type") is { Length: > 0 } typed)
+        {
+            if (TaskTypes.Parse(typed) is not { } parsed)
+            {
+                return OperationResult<TaskOperation>.Fail(
+                    $"Operation {index} has type '{typed}'. It should be one of {string.Join(", ", TaskTypes.Names)}.",
+                    ExitCode.InvalidArguments);
+            }
+
+            type = parsed;
+        }
+
         if (op == TaskOperation.Move && !Has("to"))
         {
             return OperationResult<TaskOperation>.Fail(
@@ -366,10 +386,11 @@ public static class TaskOperations
             List(Text("to")),
             Text("revision") is { Length: > 0 } revision ? revision : null,
             Text("detail"),
-            doneWhen));
+            doneWhen,
+            Type: type));
     }
 
-    private static readonly string[] Known = ["op", "project", "id", "state", "title", "note", "detail", "doneWhen", "kind", "by", "to", "revision"];
+    private static readonly string[] Known = ["op", "project", "id", "state", "title", "note", "detail", "doneWhen", "kind", "type", "by", "to", "revision"];
 
     private static OperationResult<IReadOnlyList<TaskOperation>> Refused(string why) =>
         OperationResult<IReadOnlyList<TaskOperation>>.Fail(why, ExitCode.InvalidArguments);

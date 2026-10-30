@@ -121,6 +121,7 @@ public static class StudioCoverage
         ["task list"] = new("projects", StudioEffect.Reads),
         ["task show"] = Terminal("prints one task for a terminal or a script; Studio's task board opens each task in full through the same command, in a dialog rather than a form"),
         ["task shorten"] = Terminal("a one-off tidy of titles written before the 72-character limit, best tried with --dry-run first, which no page needs to offer"),
+        ["task classify"] = Terminal("a one-off pass that types the tasks and ideas recorded before there were types, best tried with --dry-run first, which no page needs to offer"),
         ["task apply"] = Terminal("reads its changes from a file or standard input, which a page has neither of; Studio makes the same changes through its own batch route"),
         ["task declare"] = new("projects", StudioEffect.Changes),
         ["task propose-done-when"] = new("teams", StudioEffect.Changes),

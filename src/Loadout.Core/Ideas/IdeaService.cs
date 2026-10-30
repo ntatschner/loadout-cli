@@ -35,6 +35,7 @@ public sealed record IdeaPlace(string? Project, string Id)
 /// <param name="Moved">Where it was moved from, or null when it has stayed where it was dropped in.</param>
 /// <param name="Outdated">How many of its questions may have been overtaken by a change since they were asked.</param>
 /// <param name="Mark">Whether its plan lacks something the current contract asks for.</param>
+/// <param name="Type">Its task's type, or null when it was recorded before there were types.</param>
 public sealed record IdeaSummary(
     IdeaPlace Place,
     string Title,
@@ -47,7 +48,8 @@ public sealed record IdeaSummary(
     bool Running = false,
     TaskMove? Moved = null,
     int Outdated = 0,
-    Backfill.ContractMark Mark = Backfill.ContractMark.None);
+    Backfill.ContractMark Mark = Backfill.ContractMark.None,
+    TaskType? Type = null);
 
 /// <summary>What accepting an idea did.</summary>
 /// <param name="Task">The task it became.</param>
@@ -400,7 +402,11 @@ internal sealed partial class IdeaService : IIdeaService
             title is { Length: > 0 } ? Shorten(title) : TitleFrom(text),
             null,
             ct,
-            TaskKind.Idea).ConfigureAwait(false);
+            TaskKind.Idea,
+            // Guessed here rather than by the list, which sees only the
+            // title: what was asked says far more about what it is.
+            type: TaskTypes.Guess($"{title}\n{text}", TaskKind.Idea, project),
+            typeBy: TaskTypeSource.Rule).ConfigureAwait(false);
 
         return declared.Succeeded
             ? OperationResult<IdeaRecord>.Ok(record)
@@ -443,7 +449,8 @@ internal sealed partial class IdeaService : IIdeaService
                     _locks.Held(place),
                     item.Moved,
                     record is null ? 0 : IdeaWork.OutdatedCount(record),
-                    Backfill.ContractBackfill.MarkOf(record)));
+                    Backfill.ContractBackfill.MarkOf(record),
+                    item.Type));
             }
         }
 

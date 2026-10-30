@@ -565,6 +565,7 @@ public sealed class IdeaListCommand : AsyncCommand<IdeaListCommand.Settings>
                     project = idea.Place.Project,
                     idea.Title,
                     stage = IdeaView.Stage(idea.Stage),
+                    type = idea.Type is { } type ? Core.Tasks.TaskTypes.Name(type) : null,
                     state = idea.State.ToString().ToLowerInvariant(),
                     by = idea.DeclaredBy,
                     declared = idea.DeclaredUtc,
@@ -619,6 +620,7 @@ public sealed class IdeaListCommand : AsyncCommand<IdeaListCommand.Settings>
             {
                 output.WriteLine(
                     $"  {Markup.Escape(idea.Place.Id),-28} {IdeaView.Marked(idea),-24} "
+                    + $"[dim]{Markup.Escape(idea.Type is { } type ? Core.Tasks.TaskTypes.Name(type) : string.Empty),-11}[/] "
                     + Markup.Escape(idea.Title)
                     + (Core.Backfill.ContractBackfill.Label(idea.Mark) is { } mark ? $"  [yellow]{mark}[/]" : string.Empty)
                     + (idea.Moved is { } came ? $"  [dim]{Markup.Escape(TaskTrace.From(came))}[/]" : string.Empty));

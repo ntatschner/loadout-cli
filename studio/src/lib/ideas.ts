@@ -86,6 +86,15 @@ export function stateWord(one: { running?: boolean; failure?: unknown; unanswere
   return String(one.stage).toLowerCase() === 'accepted' ? 'accepted' : 'shaping';
 }
 
+/** A type as a sentence names it: 'bug-fix' is 'bug fix', 'ci-cd' is 'CI/CD'; nothing for an idea with none. */
+export function typeWord(type: string | null | undefined): string | null {
+  if (!type) {
+    return null;
+  }
+
+  return type === 'ci-cd' ? 'CI/CD' : type.replace(/-/g, ' ');
+}
+
 /**
  * The words for one answer. The answer goes joined to its option with '=',
  * because the parser refuses a value that starts with a dash given any

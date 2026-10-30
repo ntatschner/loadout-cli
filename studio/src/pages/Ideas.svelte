@@ -28,7 +28,7 @@
   import { runJob } from '../lib/jobs';
   import { BACKFILL_WORDS, fieldWord, backfillLine, backfillPatience, backfillSummary, markWord, type BackfillOutcome } from '../lib/backfill';
   import { router } from '../lib/router.svelte';
-  import { acceptWords, doneWhenLines, doneWhenWords, arrivalIn, gaps, keepUnchanged, needsChoice, nextStop, sendAnswers, stateWord, stopTarget, stopWords, type Arrival, type DumpItem, type Question, type Round } from '../lib/ideas';
+  import { acceptWords, doneWhenLines, doneWhenWords, arrivalIn, gaps, keepUnchanged, needsChoice, nextStop, sendAnswers, stateWord, stopTarget, stopWords, typeWord, type Arrival, type DumpItem, type Question, type Round } from '../lib/ideas';
   import { studio } from '../lib/state.svelte';
   import { ideaHref, listHref, movedSaid, whereSaid } from '../lib/tasks';
   import { toasts } from '../lib/toasts.svelte';
@@ -51,6 +51,8 @@
     moved?: { from: string | null; at: string } | null;
     /** 'missing' when its plan lacks something the current contract asks for. */
     mark?: string | null;
+    /** What it is about, such as 'bug-fix'; absent for an idea recorded before there were types. */
+    type?: string | null;
   }
 
   /** An idea that is a task on another list now, shown so it is not simply gone. */
@@ -679,6 +681,7 @@
               <span class="t">{one.title}</span>
               <Signal word={stateWord(one)} />
               {#if markWord(one.mark)}<span class="ls-tag needs">{markWord(one.mark)}</span>{/if}
+              {#if typeWord(one.type)}<span class="ls-tag type">{typeWord(one.type)}</span>{/if}
               <span class="x">{one.failure ? 'last round failed' : one.unanswered ? `${one.unanswered} question${one.unanswered === 1 ? '' : 's'} for you` : one.stage}</span>
             </a>
           </li>
