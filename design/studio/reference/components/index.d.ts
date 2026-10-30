@@ -208,7 +208,7 @@ export declare function Dialog(o: DialogOptions): { open: () => HTMLElement; /**
 /** A trigger that opens a listbox on a light tether. */
 export declare function Picker(o: { label: string; options: { name: string; sub?: string; glyph?: string }[]; selected?: number; onPick?: (option: { name: string; sub?: string }, index: number) => void }): HTMLElement;
 
-export interface PaletteRow { label: string; sub?: string; kind?: string; glyph?: string; need?: boolean; key?: string; /** Running it leaves the palette open. */ stay?: boolean; run?: (row: PaletteRow) => void }
+export interface PaletteRow { label: string; sub?: string; kind?: string; glyph?: string; need?: boolean; /** Carried on its row as data-key, so a page can find the row by it. */ key?: string; /** Running it leaves the palette open. */ stay?: boolean; run?: (row: PaletteRow) => void }
 /** Asking Loadout from the palette (main's PaletteAsk). Replies are what 'loadout ask --json' writes (AskReply, below). */
 export interface PaletteAsk {
   asker: (query: string) => unknown;
@@ -222,6 +222,8 @@ export interface PaletteAsk {
 export declare function CommandPalette(o: { groups: { name: string; items: PaletteRow[] }[]; placeholder?: string; bindKeys?: boolean; host?: HTMLElement; contained?: boolean; behind?: HTMLElement;
   /** Looks for what is typed everywhere, as more groups shown after the palette's own (two characters or more, after a 250ms pause). */
   search?: (query: string) => { name: string; items: PaletteRow[] }[] | Promise<{ name: string; items: PaletteRow[] }[]>;
+  /** The highlighted row as it moves (arrows, pointer, typing), its element and its group's name; null when nothing is highlighted or the palette closes. Called only on a change, so a page can preview it beside the palette. */
+  onHighlight?: (row: PaletteRow | null, el: HTMLElement | null, group: string | null) => void;
   ask?: PaletteAsk;
 }): { open: () => void; close: () => void; unbind: () => void; readonly conversation: PaletteAsk["conversation"] | null };
 
@@ -451,7 +453,17 @@ export declare function morph(apply: () => void, o?: { noVT?: boolean; target?: 
 /** Four modes as radios, with a light that travels to the one picked. Arrow keys move; Ctrl+Shift+M (bound by the app) cycles. */
 export declare function ModeSwitcher(o: { mode: StudioMode; onChange?: (m: StudioMode) => void; compact?: boolean; vertical?: boolean; label?: string }): { el: HTMLElement; set: (m: StudioMode) => void; readonly mode: StudioMode };
 /** The bar at the top of every mode: the switcher, search, and whatever is waiting on you. */
-export declare function ModeBar(o: { mode: StudioMode; onMode?: (m: StudioMode) => void; compact?: boolean; onSearch?: () => void; waiting?: { label: string; [k: string]: unknown }[]; onWaiting?: (w: unknown) => void }): { el: HTMLElement; switcher: ReturnType<typeof ModeSwitcher> };
+export declare function ModeBar(o: { mode: StudioMode; onMode?: (m: StudioMode) => void; compact?: boolean; onSearch?: () => void; waiting?: { label: string; [k: string]: unknown }[];
+  /** Pressing the count opens a list the page draws (the waiting list): the button gets aria-haspopup="dialog" and aria-expanded, kept by setOpen. */
+  list?: boolean;
+  /** Called with the oldest waiting item and the count's button (to anchor a list to). */
+  onWaiting?: (w: unknown, button: HTMLElement) => void }): { el: HTMLElement; switcher: ReturnType<typeof ModeSwitcher>;
+  /** The count's button (in the page only while something waits). */
+  waitingButton: HTMLElement;
+  /** Changes what waits in place: the same button stays, so a list open from it keeps its anchor. */
+  setWaiting: (waiting: { label: string; [k: string]: unknown }[]) => void;
+  /** Says whether the list is open (aria-expanded); with nothing waiting it is closed. */
+  setOpen: (open: boolean) => void };
 
 export interface DeckSession { id: string; title: string; word: string; where?: string; agent?: string; unread?: boolean;
   /** Whether it has ended: closing its tab then clears it rather than asking. */
@@ -642,7 +654,7 @@ export declare function PlanLayer(o: {
 /** Notes from elsewhere, split into ideas and tasks; tick the pieces to record. */
 export declare function NoteDump(o: { dump: { id: string; source?: string; captured?: string; split?: string | null; items: { number: number; title: string; excerpt?: string; kind: string; recorded?: boolean }[] }; disabledReason?: string; onApply?: (numbers: string[]) => void; onSplit?: () => void; onShow?: () => void }): HTMLElement;
 /** One project on the Projects wall; or, with place, a way to add one. */
-export declare function ProjectTile(o: { project?: { id: string; name: string; available?: boolean; path?: string; defaultAgent?: string; pinned?: boolean; branch?: string | null; clean?: boolean | null }; href?: string; picked?: boolean; doing?: number; blocked?: number; findings?: number; ideas?: number; place?: string; sub?: string }): HTMLElement;
+export declare function ProjectTile(o: { project?: { id: string; name: string; available?: boolean; path?: string; defaultAgent?: string; pinned?: boolean; branch?: string | null; clean?: boolean | null }; href?: string; picked?: boolean; /** How many things wait on you there (sessions, runs, approvals, ideas with questions); shown first, in the needs style. */ waiting?: number; doing?: number; blocked?: number; findings?: number; ideas?: number; place?: string; sub?: string }): HTMLElement;
 export interface Task {
   id: string; title: string; state: "open" | "doing" | "blocked" | "done" | "dropped"; kind?: string; declaredBy?: string; declared?: string; note?: string | null;
   /** Where it was moved from, when it was: a project's slug, or null for the workspace-wide list. */

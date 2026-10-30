@@ -707,15 +707,15 @@
       askWrap.hidden = !now; list.hidden = now; paintFoot();
       if (now) { var p = pane(); if (p && p.el.parentNode !== askWrap) { askWrap.textContent = ""; askWrap.appendChild(p.el); } }
       var groups = now ? [] : rows(); flat = []; list.textContent = "";
-      if (now) { input.removeAttribute("aria-activedescendant"); return; }
-      if (!groups.length) { list.appendChild(h("p", { "class": "ls-pempty", text: "Nothing matches “" + q + "”. Try a page name, a project, or a word from a session." })); input.removeAttribute("aria-activedescendant"); return; }
+      if (now) { input.removeAttribute("aria-activedescendant"); lit(null); return; }
+      if (!groups.length) { list.appendChild(h("p", { "class": "ls-pempty", text: "Nothing matches “" + q + "”. Try a page name, a project, or a word from a session." })); input.removeAttribute("aria-activedescendant"); lit(null); return; }
       active = Math.min(active, 0 + Math.max(0, groups.reduce(function (n, g) { return n + g.items.length; }, 0) - 1));
       groups.forEach(function (g, gi) {
         var gid = id + "-g" + gi;
         var grp = h("div", { "class": "ls-pgroup", role: "group", "aria-labelledby": gid }, [h("h3", { id: gid, text: g.name })]);
         g.items.forEach(function (r) {
-          var i = flat.length; flat.push(r);
-          grp.appendChild(h("div", { role: "option", id: id + "-o" + i, "class": "ls-popt" + (r.need ? " need" : ""), "aria-selected": i === active ? "true" : "false", tabindex: "-1",
+          var i = flat.length; flat.push(r); r.__group = g.name;
+          grp.appendChild(h("div", { role: "option", id: id + "-o" + i, "data-key": r.key || null, "class": "ls-popt" + (r.need ? " need" : ""), "aria-selected": i === active ? "true" : "false", tabindex: "-1",
             onclick: function () { run(r); }, onmousemove: function () { if (active !== i) { active = i; paint(); } } },
             [h("span", { "class": "g", "aria-hidden": "true", text: r.glyph || "→" }), h("span", { "class": "t", text: r.label }), h("span", { "class": "s" + (/^\$ loadout /.test(r.sub || "") ? " is-cmd" : ""), text: r.sub || "" }), h("span", { "class": "k", text: r.kind || "" })]));
         });
@@ -723,6 +723,14 @@
       });
       input.setAttribute("aria-activedescendant", id + "-o" + active);
       var a = document.getElementById(id + "-o" + active); if (a && a.scrollIntoView) { a.scrollIntoView({ block: "nearest" }); }
+      lit(flat[active] || null, a);
+    }
+    /* onHighlight(item, row, group): the highlighted row as it moves (arrows, pointer, typing), and null when nothing is, so a page can preview it beside the palette. Called only when it changes. */
+    var litNow;
+    function lit(r, row) {
+      if (r === litNow) { return; }
+      litNow = r;
+      if (o.onHighlight) { o.onHighlight(r, row || null, r ? r.__group : null); }
     }
     /* Looked for everywhere once typing pauses; an answer to an older query is dropped. */
     function look() {
@@ -740,7 +748,7 @@
       if (p && wanted) { p.ask(wanted, ask.asker); }
     }
     function run(r) { if (!r.stay) { close(); } if (r.run) { r.run(r); } }
-    function close() { if (dlg) { dlg.close(); dlg = null; } clearTimeout(timer); }
+    function close() { if (dlg) { dlg.close(); dlg = null; } clearTimeout(timer); lit(null); }
     function open() {
       if (dlg) { return; }
       q = ""; active = 0; found = [];
@@ -758,7 +766,7 @@
       var field = h("div", { "class": "ls-start" }, [h("div", { "class": "field" }, [input, h("span", { "class": "ls-kbd", "aria-hidden": "true", text: "Esc" })])]);
       foot = h("div", { "class": "ls-pfoot", "aria-hidden": "true" });
       var content = h("div", {}, [field, askWrap, list, foot]);
-      dlg = Dialog({ label: "Command palette", content: content, extraClass: "pal", host: o.host, contained: o.contained, behind: o.behind, onClose: function () { dlg = null; clearTimeout(timer); }, initialFocus: "input" });
+      dlg = Dialog({ label: "Command palette", content: content, extraClass: "pal", host: o.host, contained: o.contained, behind: o.behind, onClose: function () { dlg = null; clearTimeout(timer); lit(null); }, initialFocus: "input" });
       dlg.open(); paint();
     }
     function onKey(e) { if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) { e.preventDefault(); if (dlg) { close(); } else { open(); } } }
@@ -2194,11 +2202,30 @@
     var sw = ModeSwitcher({ mode: o.mode, onChange: o.onMode, compact: o.compact });
     var kids = [sw.el, h("span", { "class": "grow" })];
     if (o.onSearch) { kids.push(h("button", { type: "button", "class": "tool", "aria-label": "Search: go to or do", "aria-keyshortcuts": "Control+K Meta+K", title: "Ctrl K", onclick: o.onSearch }, [icon("M8.5 3.5a5 5 0 1 0 0 10a5 5 0 1 0 0-10 M12.2 12.2L16.5 16.5")])); }
-    var w = o.waiting || [];
-    if (w.length) {
-      kids.push(h("button", { type: "button", "class": "waiting", onclick: function () { if (o.onWaiting) { o.onWaiting(w[0]); } } }, [NS.Signal("waiting for you"), h("b", {}, [String(w.length), h("span", { "class": "wn", text: w.length === 1 ? " needs you" : " need you" })]), h("span", { "class": "wl", text: "· " + w[0].label })]));
-    } else { kids.push(h("span", { "class": "calmword", text: "nothing waiting on you" })); }
-    return { el: h("div", { "class": "ls-modebar", role: "region", "aria-label": "Mode" }, kids), switcher: sw };
+    /* What waits on you: the count and the oldest one's label. With list, pressing it opens a list of them all (the page draws it,
+       from onWaiting): the button says it has a popup and whether it is open (setOpen). setWaiting changes the count in place, so
+       an open list keeps its button, its place and what it said. */
+    var w = o.waiting || [], open = false, slot = h("span", { "class": "ls-mb-wait" });
+    var btn = h("button", { type: "button", "class": "waiting", "aria-haspopup": o.list ? "dialog" : null, "aria-expanded": o.list ? "false" : null, onclick: function () { if (o.onWaiting) { o.onWaiting(w[0], btn); } } });
+    var calm = h("span", { "class": "calmword", text: "nothing waiting on you" });
+    function paintWaiting() {
+      btn.textContent = "";
+      if (w.length) {
+        btn.appendChild(NS.Signal("waiting for you"));
+        btn.appendChild(h("b", {}, [String(w.length), h("span", { "class": "wn", text: " waiting on you" })]));
+        btn.appendChild(h("span", { "class": "wl", text: "· " + w[0].label }));
+        if (calm.parentNode) { calm.remove(); } if (btn.parentNode !== slot) { slot.appendChild(btn); }
+      } else {
+        if (btn.parentNode) { btn.remove(); } if (calm.parentNode !== slot) { slot.appendChild(calm); }
+        open = false;
+      }
+      if (o.list) { btn.setAttribute("aria-expanded", open ? "true" : "false"); }
+    }
+    paintWaiting();
+    kids.push(slot);
+    return { el: h("div", { "class": "ls-modebar", role: "region", "aria-label": "Mode" }, kids), switcher: sw, waitingButton: btn,
+      setWaiting: function (list) { w = list || []; paintWaiting(); },
+      setOpen: function (on) { open = !!on && w.length > 0; if (o.list) { btn.setAttribute("aria-expanded", open ? "true" : "false"); } } };
   }
 
   /* Shell words as main's commands.ts quotes them: $, ` and \ escaped too, so a line copied out of the page runs as shown. An empty value is "". */
@@ -2756,7 +2783,7 @@
     var ol = h("ol", { "class": "ls-quiet", "aria-label": o.label || "Everything live" }), i = 0;
     function zone(t) { ol.appendChild(h("li", { "class": "zone", "aria-hidden": "true", text: t })); }
     function row(x, calm) {
-      var b = h("button", { type: "button", onclick: function (e) { if (o.onOpen) { o.onOpen(x, b.getBoundingClientRect()); } } }, [h("span", { "class": "t", text: x.title }), h("span", { "class": "x", text: [x.kind, x.where].filter(Boolean).join(" · ") }), NS.Signal(x.word)]);
+      var b = h("button", { type: "button", "class": "qrow", onclick: function (e) { if (o.onOpen) { o.onOpen(x, b.getBoundingClientRect()); } } }, [h("span", { "class": "t", text: x.title }), h("span", { "class": "x", text: [x.kind, x.where].filter(Boolean).join(" · ") }), NS.Signal(x.word)]);
       ol.appendChild(h("li", { "class": calm ? "calm" : "needs", style: "--i:" + (i++) }, [b, !calm && x.ask ? h("p", { "class": "ask", text: x.ask }) : null]));
     }
     if (needs.length) { zone("Needs you"); needs.forEach(function (x) { row(x, false); }); }
@@ -3500,6 +3527,8 @@
     else if (p.branch) { facts.push(tag(p.branch + (p.clean === false ? " \u00b7 uncommitted" : " \u00b7 clean"), p.clean === false ? "needs" : "")); }
     facts.push(tag(p.defaultAgent || "claude"));
     var counts = [];
+    /* What waits on you there (sessions, runs, approvals, ideas with questions), first among its counts. */
+    if (o.waiting) { counts.push(h("span", { "class": "needs waiting" }, [h("b", { text: String(o.waiting) }), " waiting on you"])); }
     if (o.doing !== undefined) { counts.push(h("span", {}, [h("b", { text: String(o.doing) }), " doing"])); }
     if (o.blocked) { counts.push(h("span", { "class": "needs" }, [h("b", { text: String(o.blocked) }), " blocked"])); }
     if (o.findings !== undefined) { counts.push(h("span", { "class": o.findings ? "needs" : "" }, o.findings ? [h("b", { text: String(o.findings) }), " to put right"] : ["\u2713 healthy"])); }
@@ -5152,6 +5181,21 @@
       el.appendChild(h("p", { "class": "ls-from" }, ["From ", h("code", { text: "$ loadout pr list" }), "."]));
 
       function act(path, words, done) { return cur.act ? cur.act(path, words, done) : undefined; }
+      /* An act may return a promise: the pressed button says what it is doing ("opening…", "marking…", "merging…") until it
+         settles, and false, a throw or a rejection says "✕ why" in the status line under the list. */
+      var said = h("p", { "class": "ls-said", role: "status" });
+      el.appendChild(said);
+      function working(e, word, path, words, done) {
+        var b = e && e.currentTarget && e.currentTarget.closest ? e.currentTarget.closest("button") : null;
+        said.textContent = ""; said.classList.remove("bad");
+        var r;
+        try { r = act(path, words, done); } catch (x) { r = Promise.reject(x); }
+        if (!r || typeof r.then !== "function") { if (r === false) { failed(); } return r; }
+        if (b) { NS.HaloButton.setBusy(b, word); }
+        function back() { if (b && b.isConnected) { NS.HaloButton.setBusy(b, false); } }
+        function failed(x) { said.textContent = "\u2715 " + ((x && x.message) || (typeof x === "string" && x) || "It did not go through. Nothing changed."); said.classList.add("bad"); }
+        return r.then(function (ok) { back(); if (ok === false) { failed(); } return ok; }, function (x) { back(); failed(x); return false; });
+      }
       function btn(label, cmd, press, extra) {
         var reason = extra && extra.reason !== undefined ? extra.reason : cur.disabledReason;
         /* Main's HaloButton shows the reason in place of the command; the design system's shows the command when both
@@ -5160,8 +5204,8 @@
       }
       function subjectReason() { return !subject.trim() ? "Write the squash commit’s subject" : subject.indexOf("\n") >= 0 ? "The subject is one line" : undefined; }
 
-      function merge(one) {
-        Promise.resolve(act("pr merge", mergeWords(one, subject, body), one.branch + " merges once its checks pass")).then(function (ok) {
+      function merge(one, e) {
+        Promise.resolve(working(e, "merging\u2026", "pr merge", mergeWords(one, subject, body), one.branch + " merges once its checks pass")).then(function (ok) {
           if (ok !== false) { merging = null; paint(); }
         });
       }
@@ -5171,7 +5215,7 @@
         var si = h("input", { id: sid, "class": "ls-text", placeholder: "One line, as git log will show it" });
         var bi = h("textarea", { id: bid, "class": "ls-text", rows: "4", placeholder: "Left empty, the commit has no body" });
         si.value = subject; bi.value = body;
-        function go() { slot.textContent = ""; slot.appendChild(btn("Squash-merge when checks pass", "$ loadout pr merge " + one.branch + " --subject …", function () { merge(one); }, { solid: true, reason: cur.disabledReason || subjectReason() })); }
+        function go() { slot.textContent = ""; slot.appendChild(btn("Squash-merge when checks pass", "$ loadout pr merge " + one.branch + " --subject …", function (e) { merge(one, e); }, { solid: true, reason: cur.disabledReason || subjectReason() })); }
         si.addEventListener("input", function () { subject = si.value; go(); });
         bi.addEventListener("input", function () { body = bi.value; });
         var f = h("form", { "class": "lmerge", "aria-label": "Squash-merge " + one.branch }, [
@@ -5179,7 +5223,7 @@
           h("div", { "class": "ls-field" }, [h("label", { "class": "lab", "for": bid, text: "Body" }), bi]),
           slot
         ]);
-        f.addEventListener("submit", function (e) { e.preventDefault(); if (!cur.disabledReason && !subjectReason()) { merge(one); } });
+        f.addEventListener("submit", function (e) { e.preventDefault(); if (!cur.disabledReason && !subjectReason()) { merge(one, { currentTarget: slot.querySelector("button") }); } });
         go();
         return f;
       }
@@ -5197,10 +5241,10 @@
         if (cur.act) {
           var acts = h("div", { "class": "lacts" }), k = keyOf(one);
           if (one.state === "pending" && !one.gone) {
-            acts.appendChild(btn("Open as a draft", "$ loadout pr open " + one.branch + " --draft", function () { act("pr open", at(one).concat(["--draft"]), one.branch + " has a draft pull request"); }));
-            acts.appendChild(btn("Open for review", "$ loadout pr open " + one.branch, function () { act("pr open", at(one), one.branch + " has a pull request"); }));
+            acts.appendChild(btn("Open as a draft", "$ loadout pr open " + one.branch + " --draft", function (e) { working(e, "opening\u2026", "pr open", at(one).concat(["--draft"]), one.branch + " has a draft pull request"); }));
+            acts.appendChild(btn("Open for review", "$ loadout pr open " + one.branch, function (e) { working(e, "opening\u2026", "pr open", at(one), one.branch + " has a pull request"); }));
           } else if (one.state === "draft" && one.pullRequest) {
-            acts.appendChild(btn("Mark ready", "$ loadout pr ready " + one.branch, function () { act("pr ready", at(one), one.branch + " is ready for review"); }));
+            acts.appendChild(btn("Mark ready", "$ loadout pr ready " + one.branch, function (e) { working(e, "marking\u2026", "pr ready", at(one), one.branch + " is ready for review"); }));
           } else if (one.state === "ready" && one.pullRequest && !one.mergeRequested) {
             acts.appendChild(btn(merging === k ? "Not now" : "Merge…", merging === k ? undefined : "opens the squash message for " + one.branch, function () {
               if (merging === k) { merging = null; } else { merging = k; subject = ""; body = ""; }

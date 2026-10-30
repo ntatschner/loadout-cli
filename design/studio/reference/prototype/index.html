@@ -330,16 +330,6 @@ pre.output { margin: 0; max-height: 60vh; overflow: auto; white-space: pre-wrap;
 /* The shell (round 3): Minimal's zones, its Sessions page, Pure's flat run page */
 .qzones { display: grid; gap: 8px; }
 .qzones .ls-quiet > li.zone { display: none; }
-/* QuietList styles every button in a row (.ls-quiet button), the peek's own included: a row's peek button sits beside the row, and the inline peek's buttons keep their own look. (Component fix wanted: QuietList's rule scoped to the row's button.) */
-.ls-quiet > li:has(> .ls-peek-btn) { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
-.ls-quiet > li:has(> .ls-peek-btn) > * { grid-column: 1 / -1; }
-.ls-quiet > li:has(> .ls-peek-btn) > button:first-child { grid-column: 1; }
-.ls-quiet > li > button.ls-peek-btn { grid-column: 2; grid-row: 1; display: inline-grid; width: 32px; height: 32px; min-height: 32px; padding: 0; margin-right: 2px; box-shadow: none; }
-.ls-quiet li .ls-peek button { width: auto; min-height: 0; text-align: inherit; box-shadow: none; transition: none; }
-.ls-quiet .ls-peek button.ls-halo { display: inline-flex; gap: 12px; align-items: center; padding: 0 4px 0 0; min-height: var(--control); }
-.ls-quiet .ls-peek button.ls-halo.small { min-height: var(--control-sm); }
-.ls-quiet .ls-peek button.x { display: inline-flex; gap: 6px; align-items: center; padding: 4px 8px; }
-.ls-quiet .ls-peek button.back { padding: 0; min-height: 28px; }
 .qzones .panel > .calmnote { margin: 4px 0 18px; color: var(--muted); font-size: 14px; }
 .quiethead { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
 .quiethead h1 { margin: 0; font-size: 22px; font-weight: 500; }
@@ -1895,10 +1885,10 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
   /* Main's paletteGroups(): every page; each line in flight, a session going to its page and anything else to Home focused on it; and Do, from every line's own actions. */
   function palGroups() {
     var goTo = PAGES.map(function (p) { return { key: "go-" + p[0], glyph: "→", label: p[1], sub: "page", kind: "page", run: function () { go(p[0]); } }; });
-    /* In flight, live work first; each row goes through reveal(), so it opens the mode's own way, and the highlighted one peeks (shPalWatch). */
+    /* In flight, live work first; each row goes through reveal(), so it opens the mode's own way, and the highlighted one peeks (shPalHighlight). */
     PAL_PEEK = {};
     var flight = shFlight().map(function (f) {
-      if (f.peek) { PAL_PEEK[f.label + "\n" + f.sub] = f.peek; }
+      if (f.peek) { PAL_PEEK["in-" + f.key] = f.peek; }
       return { key: "in-" + f.key, glyph: f.waiting ? "!" : "▶", label: f.label, sub: f.sub, need: !!f.waiting, kind: f.kind, run: function () { if (f.target) { reveal(f.target); } else if (f.line) { ST.focus = f.line.id; ST.picked = f.line.id; ST.view = "lens"; go("home"); } } };
     });
     var doing = [];
@@ -1978,12 +1968,11 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
   function openPalette() {
     if (!PAL) {
       PAL_ASK = S.AskPane({ turns: [], asking: false });
-      PAL_O = { groups: [], bindKeys: false, search: shFind, ask: { asker: shAsker, agent: shAgent, approve: shApprove, conversation: PAL_ASK } };
+      PAL_O = { groups: [], bindKeys: false, search: shFind, onHighlight: shPalHighlight, ask: { asker: shAsker, agent: shAgent, approve: shApprove, conversation: PAL_ASK } };
       PAL = S.CommandPalette(PAL_O);
     }
     PAL_O.groups = palGroups();
     PAL.open();
-    shPalWatch();
   }
   /* A line in flight as a jump and a peek: where reveal() takes it, and the peek of the same thing every other page shows. */
   function shLineTarget(l) {
@@ -2009,25 +1998,15 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     });
     return S.liveFirst(out, { state: function (x) { return x.word; } });
   }
-  /* The highlighted In flight row peeks beside the palette, from the palette's own highlight (its aria-activedescendant). Not below 600px,
-     where the peek would be a sheet over the very list being moved through. */
+  /* The highlighted In flight row peeks beside the palette (the palette's onHighlight). Not below 600px, where the peek would be a
+     sheet over the very list being moved through. */
   var PAL_PEEK = {};
-  function shPalWatch() {
-    var input = document.querySelector(".ls-dialog.pal input[role=combobox]"); if (!input || input.__shWatch) { return; }
-    input.__shWatch = true;
-    function look() {
-      if (!input.isConnected) { return; }
-      var id = input.getAttribute("aria-activedescendant"), opt = id ? document.getElementById(id) : null, grp = opt && opt.closest(".ls-pgroup"), h3 = grp && grp.querySelector("h3");
-      var get = opt && h3 && h3.textContent === "In flight" && window.innerWidth > 600 ? PAL_PEEK[(opt.querySelector(".t") || {}).textContent + "\n" + (opt.querySelector(".s") || {}).textContent] : null;
-      var it = get ? get() : null;
-      /* Beside the palette itself, over its dim: to its right where there is room, else under it. */
-      var box = input.closest(".ls-dialog") || opt;
-      if (it) { var pk = shShellPeek(); SHW.from = "palette"; SHW.anchor = box; SHW.hover = false; pk.el.style.zIndex = "calc(var(--z-dialog) + 1)"; pk.show(it, box); }
-      else if (shShellOpen("palette")) { SHW.peek.close(); }
-    }
-    var mo = new MutationObserver(look); mo.observe(input, { attributes: true, attributeFilter: ["aria-activedescendant"] });
-    var iv = setInterval(function () { if (!input.isConnected) { clearInterval(iv); mo.disconnect(); if (shShellOpen("palette")) { SHW.peek.close(); } if (SHW) { SHW.peek.el.style.zIndex = ""; } } }, 200);
-    look();
+  function shPalHighlight(row, opt, group) {
+    var get = row && group === "In flight" && window.innerWidth > 600 ? PAL_PEEK[row.key] : null, it = get ? get() : null;
+    /* Beside the palette itself, over its dim: to its right where there is room, else under it. */
+    var box = opt && opt.closest ? opt.closest(".ls-dialog") || opt : null;
+    if (it && box) { var pk = shShellPeek(); SHW.from = "palette"; SHW.anchor = box; SHW.hover = false; pk.el.style.zIndex = "calc(var(--z-dialog) + 1)"; pk.show(it, box); }
+    else { if (shShellOpen("palette")) { SHW.peek.close(); } if (SHW && !row) { SHW.peek.el.style.zIndex = ""; } }
   }
 
   /* Toasts are the design system's own (S.Toasts). One about something waiting on you carries Go to it, through reveal(), and peeks on hover. */
@@ -2530,9 +2509,6 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     { project: "starstats", branch: "team/20261015-1105-9e21/implementer-2", state: "pending", team: "bug-hunt", run: "20261015-1105-9e21", node: "implementer-2", task: "", pullRequest: "", why: "its gate did not merge it", created: "2026-10-15T12:20:00Z", mergeRequested: null, gone: true }];
   /* Runs 'loadout pr …' as a job, then reads the list again: opened, marked ready, or a squash-merge asked for. */
   function teamLandAct(path, words, done) {
-    /* Landings has no working state of its own (a gap to report): the pressed button says what it is doing until the job settles. */
-    var b = document.activeElement && document.activeElement.closest ? document.activeElement.closest(".ls-landings button, .ls-landing button") : null;
-    if (b) { S.HaloButton.setBusy(b, path === "pr merge" ? "merging…" : path === "pr ready" ? "marking…" : "opening…"); }
     var line = "$ loadout " + path + " " + words.map(function (w) { return /\s/.test(w) ? S.shellQuote(w) : w; }).join(" ");
     return teamJob(function () {
       var one = TEAMQ_LANDINGS.filter(function (x) { return x.branch === words[0] && x.project === words[2]; })[0];
@@ -2542,12 +2518,8 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
       said(done, line);
       if (TEAMQ_LAND) { TEAMQ_LAND.set({ landings: TEAMQ_LANDINGS }); }
       return true;
-    }, 500).catch(function (e) {
-      /* Refused: the form keeps what was typed, the button is back, and the reason is said. */
-      if (b && b.isConnected) { S.HaloButton.setBusy(b, false); }
-      said("✕ " + (e && e.message ? e.message : String(e)), line, "problem");
-      return false;
-    });
+    }, 500);
+    /* Landings shows the pressed button working until this settles, and a refusal's reason under the list; the form keeps what was typed. */
   }
   /* Studio only watching: what main's Teams page says in place of each command it will not run. */
   function teamWatch() { return P.watchOnly ? "Studio is only watching: type the command in a terminal" : undefined; }
@@ -3213,22 +3185,25 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     SHW.from = from; SHW.only = only || null; SHW.anchor = anchor; SHW.hover = !!hover;
     pk.list(shWaitItems(only), anchor);
   }
-  /* The count's words, as WORKFLOW.md's Words have them: "waiting on you" (the ModeBar still says "need you"). */
-  function shModebarWords(b) { var wn = b && b.querySelector(".wn"); if (wn) { wn.textContent = " waiting on you"; } }
+  var MBCOMPACT = null;
   function renderModebar() {
     var w = waitingNow(), compact = window.innerWidth < 600, sig = w.map(function (x) { return x.label; }).join("|") + "|" + compact;
     if (MB && sig === MBSIG) { if (MB.switcher.mode !== (P.mode || "default")) { MB.switcher.set(P.mode); } return; }
     MBSIG = sig; shFieldmap();
-    var host = document.getElementById("modebar"), old = host.querySelector(".ls-modebar .waiting"), keep = !!(old && shShellOpen("modebar"));
-    host.textContent = "";
+    /* Open while the count changes: the ModeBar changes it in place, so the list keeps its button, its place and what it said. */
+    if (MB && MBCOMPACT === compact) {
+      if (MB.switcher.mode !== (P.mode || "default")) { MB.switcher.set(P.mode); }
+      MB.setWaiting(w);
+      if (shShellOpen("modebar")) { if (w.length) { SHW.peek.setList(shWaitItems()); } else { SHW.peek.close(); } }
+      MB.setOpen(shShellOpen("modebar"));
+      return;
+    }
+    var host = document.getElementById("modebar");
+    if (shShellOpen("modebar")) { SHW.peek.close(); }
+    host.textContent = ""; MBCOMPACT = compact;
     /* The count opens the waiting list beside it, every item oldest first with its main action; pressed again, or Escape, it closes. */
-    MB = S.ModeBar({ mode: P.mode || "default", compact: compact, onMode: function (m) { setMode(m, true); }, onSearch: openPalette, waiting: w,
-      onWaiting: function () { var b = document.querySelector("#modebar .ls-modebar .waiting"); if (b) { shWaitList(b, "modebar"); } } });
-    var nb = MB.el.querySelector(".waiting");
-    if (nb) { nb.setAttribute("aria-haspopup", "dialog"); nb.setAttribute("aria-expanded", keep ? "true" : "false"); shModebarWords(nb); }
-    /* Open while the count changes: the same button stays, with the new words, so the list keeps its place and what it said. */
-    if (keep && nb) { old.textContent = ""; while (nb.firstChild) { old.appendChild(nb.firstChild); } nb.parentNode.replaceChild(old, nb); SHW.peek.setList(shWaitItems()); }
-    else if (keep) { SHW.peek.close(); }
+    MB = S.ModeBar({ mode: P.mode || "default", compact: compact, onMode: function (m) { setMode(m, true); }, onSearch: openPalette, waiting: w, list: true,
+      onWaiting: function (first, b) { shWaitList(b, "modebar"); } });
     host.appendChild(MB.el);
   }
 
@@ -4674,12 +4649,10 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
       else {
         shown.items.forEach(function (p) {
           var ts = TASKS[p.id] || [], f = (HEALTH[p.id] || []).filter(function (x) { return x.fixable; }).length, ideas = IDEAS.filter(function (x) { return x.list === p.id && !x.accepted; }).length;
-          var tile = key(S.ProjectTile({ project: p, href: "#projects/" + p.id, picked: sel === p.id, doing: ts.filter(function (t) { return t.state === "doing"; }).length, blocked: ts.filter(function (t) { return t.state === "blocked"; }).length, findings: p.available ? f : undefined, ideas: ideas }), "pt-" + p.id);
-          /* What waits on you there, from the one count (shWaiting), first among its counts; the tile peeks the oldest of it. */
           var waits = plcWaitingIn(p.id);
+          var tile = key(S.ProjectTile({ project: p, href: "#projects/" + p.id, picked: sel === p.id, waiting: waits.length, doing: ts.filter(function (t) { return t.state === "doing"; }).length, blocked: ts.filter(function (t) { return t.state === "blocked"; }).length, findings: p.available ? f : undefined, ideas: ideas }), "pt-" + p.id);
+          /* What waits on you there, from the one count (shWaiting), is the tile's first count; the tile peeks the oldest of it. */
           if (waits.length) {
-            var cs = tile.querySelector(".counts"); if (!cs) { cs = el("span", { "class": "counts" }); tile.appendChild(cs); }
-            cs.insertBefore(el("span", { "class": "needs waiting" }, [el("b", { text: String(waits.length) }), " waiting on you"]), cs.firstChild);
             var wrap = el("div", { "class": "plctile" }, [tile]);
             peekAttach(wrap, (function (pid) { return function () { var w = plcWaitingIn(pid)[0]; return w ? peekOf(w) : null; }; })(p.id));
             wall.appendChild(wrap);

@@ -8,6 +8,7 @@ CommandPalette opens on Ctrl K (Cmd K on a Mac) from anywhere: go to a page, fin
 - Actions that need more input say "opens …" and open their Dialog; actions that cannot be undone say "asks first". A row with `stay: true` keeps the palette open when run.
 - `search(query)` (optional): looks for what is typed everywhere, once it is two characters long and typing has paused for 250ms, and resolves to more groups ("Found in tasks"), shown after the palette's own rows. An answer to an older query is dropped.
 - `ask` (optional): `{ asker, approve, agent, conversation }` for asking Loadout. `asker(query)` is `loadout ask --query=… --json`; `agent(query, resume)` asks the agent instead (a job that spends a turn), carrying on its conversation; `approve(plan, team, cap)` carries out a plan. `conversation` is an AskPane to keep the conversation in; without one the palette keeps its own for as long as it lives.
+- `onHighlight(row, el, group)` (optional): the highlighted row as it moves, by arrow, pointer or typing, with its element and group name; `null` when nothing is highlighted or the palette closes. It is called only on a change, so a page can preview the row beside the palette (In flight peeks there). A row's `key` is on its element as `data-key`.
 
 ## Asking Loadout
 

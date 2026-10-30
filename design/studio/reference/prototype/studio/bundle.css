@@ -1007,7 +1007,8 @@ html[data-vt="fade"]::view-transition-group(*) { animation-duration: 0s; }
 .ls-modebar .tool:hover { color: var(--ink-strong); background: var(--tint-hover-c); }
 .ls-modebar .tool:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .ls-modebar .tool svg { width: 18px; height: 18px; }
-.ls-modebar > .ls-modes, .ls-modebar > .waiting, .ls-modebar > .tool { flex: none; }
+.ls-modebar > .ls-modes, .ls-modebar > .tool { flex: none; }
+.ls-modebar > .ls-mb-wait { display: inline-flex; flex: none; }
 @media (max-width: 599px) { .ls-modebar { gap: 8px; } .ls-modebar .ls-modes button { padding: 0 8px; } .ls-modebar .ls-modes button .n { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } .ls-modebar .waiting { padding: 0 10px 0 6px; } .ls-modebar .waiting .wl, .ls-modebar .waiting .wn, .ls-modebar .calmword { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } }
 @media (max-width: 419px) { .ls-modebar .tool { display: none; } }
 
@@ -1151,20 +1152,25 @@ html[data-vt="fade"]::view-transition-group(*) { animation-duration: 0s; }
 @keyframes lsQuietIn { from { opacity: 0; transform: translateX(-10px); } }
 .ls-quiet li::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: linear-gradient(90deg, var(--line-c), transparent); transform-origin: 0 0; animation: lsQuietLine .9s var(--ease-out) both; animation-delay: calc(var(--i, 0) * 60ms + .1s); }
 @keyframes lsQuietLine { from { transform: scaleX(0); } }
-.ls-quiet button { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 16px; align-items: center; width: 100%; min-height: 54px; padding: 10px 6px; border: 0; background: none; color: inherit; font: inherit; font-family: var(--font-sans); text-align: left; cursor: pointer; transition: padding var(--dur-base) var(--ease-out); }
-.ls-quiet button:hover { padding-left: 14px; }
-.ls-quiet button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ls-quiet > li > button.qrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 16px; align-items: center; width: 100%; min-height: 54px; padding: 10px 6px; border: 0; background: none; color: inherit; font: inherit; font-family: var(--font-sans); text-align: left; cursor: pointer; transition: padding var(--dur-base) var(--ease-out); }
+.ls-quiet > li > button.qrow:hover { padding-left: 14px; }
+.ls-quiet > li > button.qrow:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .ls-quiet .t { font-size: 18px; font-weight: 200; color: var(--ink-strong); overflow-wrap: anywhere; }
 .ls-quiet .x { grid-column: 1; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
 .ls-quiet .ls-sig { grid-row: 1 / span 2; grid-column: 2; }
 .ls-quiet li.calm { opacity: var(--recede-now); transition: opacity var(--dur-base); }
 .ls-quiet li.calm:hover, .ls-quiet li.calm:focus-within { opacity: 1; }
 .ls-quiet li.needs .t { font-weight: 300; }
-.ls-quiet li.needs button { box-shadow: inset 3px 0 0 var(--needs); padding-left: 16px; }
+.ls-quiet > li.needs > button.qrow { box-shadow: inset 3px 0 0 var(--needs); padding-left: 16px; }
 .ls-quiet li.needs .ask { margin: -2px 0 10px 16px; font-size: 14.5px; color: var(--needs-text); }
 .ls-quiet .zone { margin: 22px 0 6px; font-size: 11.5px; font-weight: 500; letter-spacing: .24em; text-transform: uppercase; color: var(--ink-soft); animation: none; }
 .ls-quiet .zone::before { display: none; }
-@media (max-width: 599px) { .ls-quiet button { grid-template-columns: minmax(0, 1fr); } .ls-quiet .ls-sig { grid-row: auto; grid-column: 1; margin-top: 4px; } }
+@media (max-width: 599px) { .ls-quiet > li > button.qrow { grid-template-columns: minmax(0, 1fr); } .ls-quiet .ls-sig { grid-row: auto; grid-column: 1; margin-top: 4px; } }
+/* A row can carry a peek button (Peek's attach): it sits at the row's end, the row's own button keeping the rest. */
+.ls-quiet > li:has(> .ls-peek-btn) { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+.ls-quiet > li:has(> .ls-peek-btn) > * { grid-column: 1 / -1; }
+.ls-quiet > li:has(> .ls-peek-btn) > button.qrow { grid-column: 1; }
+.ls-quiet > li > .ls-peek-btn { grid-column: 2; grid-row: 1; margin-right: 2px; }
 [data-motion="reduced"] .ls-quiet li, [data-motion="none"] .ls-quiet li, [data-motion="reduced"] .ls-quiet li::before, [data-motion="none"] .ls-quiet li::before { animation: none; }
 @media (prefers-reduced-motion: reduce) { .ls-quiet li, .ls-quiet li::before { animation: none !important; } }
 

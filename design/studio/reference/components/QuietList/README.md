@@ -5,3 +5,4 @@ QuietList is Minimal: one column of everything live, sessions and team runs toge
 - Lines draw in, one after another, under full motion.
 - Pressing a line opens it with FocusFrame: a session as just its terminal, a team run as just its question, its shape and its done-when.
 - No counts, no meters, no side rail: the ModeBar is the only chrome.
+- Its rules style only the row's own button (`button.qrow`), so a peek button added to a row (Peek's `attach`) sits at the row's end and an inline peek inside it keeps its own look.

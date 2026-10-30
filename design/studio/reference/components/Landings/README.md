@@ -16,7 +16,7 @@ Landings is the Teams page's **Waiting to land** list: the branches waiting to l
 ## What you provide
 
 - `landings`: what `loadout pr list --json` gives.
-- `act(path, words, done)`: runs `loadout <path> <words…>` and refreshes; return `false` when it did not go through, and the merge message stays open. Leave it out and the list is read-only.
+- `act(path, words, done)`: runs `loadout <path> <words…>` and refreshes; return `false` when it did not go through, and the merge message stays open. It may return a promise: the pressed button says what it is doing ("opening…", "marking…", "merging…") until it settles, and `false`, a throw or a rejection says "✕ why" in the status line under the list. Leave it out and the list is read-only.
 - `disabledReason`: when Studio is only watching, every button shows this instead of its command.
 - `now`, for a fixed clock; `set(patch)` for a reread, which keeps a merge message half written.
 - `Landings.mergeWords(one, subject, body)` gives the words for `loadout pr merge`, joined with `=` so a message that starts with a dash is still read as the value, and leaving out a body nobody wrote.
