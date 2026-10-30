@@ -25,6 +25,7 @@ Halo is the centre of the Lens: the piece of work in focus, drawn as light aroun
 ## Do and don't
 
 - Do put the answers in the core when the work needs you; the halo is where you answer it.
+- Do redraw it as often as the work changes: every spin is timed from one clock, so a new halo carries on where the last one was, and a gyroscope redrawn under the pointer keeps its tilt.
 - Don't show the halo without its words. The rings repeat the Signal; they never replace it.
 
 ## Accessibility

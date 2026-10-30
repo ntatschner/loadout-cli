@@ -776,6 +776,7 @@
     return "stroke: " + color + "; stroke-width: " + width + "; stroke-dasharray: " + (c * lenDeg / 360).toFixed(1) + " " + c.toFixed(1) + "; transform: rotate(" + (fromDeg - 90).toFixed(1) + "deg); transform-origin: " + o + "px " + o + "px" + (extra || "");
   }
   function polar(c, r, deg) { var t = deg * Math.PI / 180; return { x: c + r * Math.sin(t), y: c - r * Math.cos(t) }; }
+  var lastTilt = "";
   function Halo(o) {
     o = o || {};
     var wrap = h("div", { "class": "ls-halo-wrap" });
@@ -786,6 +787,16 @@
       wrap.appendChild(h("p", { "class": "ls-sr", text: "Stage " + (stg + 1) + " of 5: " + state.names[stg] + "." }));
       if (state.style === "gyroscope") { gyro(stg); } else { orbit(stg, ink); }
       if (state.orbiters && state.orbiters.length) { orbiters(); }
+      keepPhase();
+    }
+    /* A page redraws the halo whenever its work changes. Each spin is timed from one clock, not from when it was drawn, so a
+       redrawn halo carries on where the last one was instead of jumping back to the start. */
+    function keepPhase() {
+      var now = Date.now();
+      Array.prototype.forEach.call(wrap.querySelectorAll(".spin, .gspin, .orbiters"), function (n) {
+        var d = parseFloat(n.style.animationDuration) || (n.classList.contains("spin") ? 40 : n.classList.contains("orbiters") ? 150 : 60);
+        n.style.animationDelay = "-" + ((now % (d * 1000)) / 1000).toFixed(3) + "s";
+      });
     }
     function orbit(stg, ink) {
       var svg = s("svg", { viewBox: "0 0 540 540", "aria-hidden": "true" });
@@ -829,8 +840,10 @@
       inner.appendChild(h("div", { "class": "core" }, [state.core || null]));
       g.appendChild(inner); wrap.appendChild(g);
       if (!flat && state.tilt !== false) {
-        wrap.onmousemove = function (e) { if (!full()) { return; } var b = wrap.getBoundingClientRect(), px = (e.clientX - b.left) / b.width - 0.5, py = (e.clientY - b.top) / b.height - 0.5; inner.style.transform = "rotateX(" + (-py * 18).toFixed(1) + "deg) rotateY(" + (px * 26).toFixed(1) + "deg)"; };
-        wrap.onmouseleave = function () { inner.style.transform = ""; };
+        wrap.onmousemove = function (e) { if (!full()) { return; } var b = wrap.getBoundingClientRect(), px = (e.clientX - b.left) / b.width - 0.5, py = (e.clientY - b.top) / b.height - 0.5; inner.style.transform = lastTilt = "rotateX(" + (-py * 18).toFixed(1) + "deg) rotateY(" + (px * 26).toFixed(1) + "deg)"; };
+        wrap.onmouseleave = function () { inner.style.transform = lastTilt = ""; };
+        /* Redrawn under the pointer, it keeps the tilt it had rather than snapping flat. */
+        if (lastTilt) { inner.style.transition = "none"; inner.style.transform = lastTilt; requestAnimationFrame(function () { inner.style.transition = ""; }); }
       }
     }
     function orbiters() {
