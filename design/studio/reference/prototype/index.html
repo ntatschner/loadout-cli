@@ -260,6 +260,29 @@ pre.output { margin: 0; max-height: 60vh; overflow: auto; white-space: pre-wrap;
 .deskwrap { height: calc(100vh - 92px); min-height: 480px; }
 [data-mode="pure"] .ls-toasts { top: auto; bottom: 64px; }
 .pview { display: grid; gap: 18px; align-content: start; }
+/* The shell (round 3): Minimal's zones, its Sessions page, Pure's flat run page */
+.qzones { display: grid; gap: 8px; }
+.qzones .ls-quiet > li.zone { display: none; }
+/* QuietList styles every button in a row (.ls-quiet button), the peek's own included: a row's peek button sits beside the row, and the inline peek's buttons keep their own look. (Component fix wanted: QuietList's rule scoped to the row's button.) */
+.ls-quiet > li:has(> .ls-peek-btn) { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+.ls-quiet > li:has(> .ls-peek-btn) > * { grid-column: 1 / -1; }
+.ls-quiet > li:has(> .ls-peek-btn) > button:first-child { grid-column: 1; }
+.ls-quiet > li > button.ls-peek-btn { grid-column: 2; grid-row: 1; display: inline-grid; width: 32px; height: 32px; min-height: 32px; padding: 0; margin-right: 2px; box-shadow: none; }
+.ls-quiet li .ls-peek button { width: auto; min-height: 0; text-align: inherit; box-shadow: none; transition: none; }
+.ls-quiet .ls-peek button.ls-halo { display: inline-flex; gap: 12px; align-items: center; padding: 0 4px 0 0; min-height: var(--control); }
+.ls-quiet .ls-peek button.ls-halo.small { min-height: var(--control-sm); }
+.ls-quiet .ls-peek button.x { display: inline-flex; gap: 6px; align-items: center; padding: 4px 8px; }
+.ls-quiet .ls-peek button.back { padding: 0; min-height: 28px; }
+.qzones .panel > .calmnote { margin: 4px 0 18px; color: var(--muted); font-size: 14px; }
+.quiethead { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+.quiethead h1 { margin: 0; font-size: 22px; font-weight: 500; }
+.quiethead .fact { color: var(--muted); font-size: 13px; }
+.quiethead .grow { flex: 1; }
+.qsess .more { margin-top: 14px; }
+.qfull { max-width: 1100px; margin: 0 auto; }
+.qlost { display: grid; gap: 14px; max-width: 640px; }
+.pureflat { max-width: 1180px; margin: 0 auto; padding-bottom: 24px; }
+.pureflat > .pfback { margin: 0 0 12px; }
 /* ---------- the six pages ---------- */
 .pblock { margin-bottom: calc(var(--space-7) * var(--density)); min-width: 0; }
 .pblock .lead, .ctx .lead { margin: 0 0 10px; font-size: 14.5px; color: var(--ink-soft); max-width: 72ch; }
@@ -533,24 +556,6 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
 .shstates { margin-top: 18px; }
 .shstates .ls-answers { margin-top: 10px; }
 /* Pure Focus: the desk's list and actions widths, dragged and kept (main's WorkDesk split) */
-@media (min-width: 1024px) { .ls-desk.sh-split { grid-template-columns: var(--desk-cols); } }
-/* Notifications, as main's components.css: Earlier, the history, and chips that give way near the pointer */
-.ls-toasts [data-gives-way] { transition: opacity var(--dur-quick); }
-.ls-toasts.near [data-gives-way] { opacity: .18; pointer-events: none; }
-.ls-toasts.calm [data-gives-way] { transition: none; }
-.ls-toast .n, .ls-toast-chip .n, .ls-toast-history .n { font-style: normal; font-variant-numeric: tabular-nums; color: var(--muted); }
-.ls-toast-past { min-height: var(--control-sm); padding: 0 12px; border: 0; border-radius: var(--radius-pill); background: var(--surface); color: var(--muted); font: inherit; font-family: var(--font-sans); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; cursor: pointer; box-shadow: 0 0 0 1px var(--rule), var(--shadow-float); }
-.ls-toast-past b { font-weight: 600; color: var(--ink-strong); letter-spacing: 0; }
-.ls-toast-past:hover, .ls-toast-past:focus-visible { color: var(--ink-strong); outline: 2px solid var(--focus); outline-offset: 2px; }
-.ls-toast-history { width: 100%; max-height: min(360px, 50vh); overflow: auto; padding: 10px 14px; background: var(--surface); box-shadow: 0 0 0 1px var(--rule), var(--shadow-float); }
-.ls-toast-history ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
-.ls-toast-history li { --c: var(--moving); display: grid; grid-template-columns: 20px 1fr; gap: 2px 10px; align-items: start; font-size: 13px; color: var(--ink); }
-.ls-toast-history li.done { --c: var(--good); } .ls-toast-history li.needs { --c: var(--needs); } .ls-toast-history li.problem { --c: var(--bad); }
-.ls-toast-history .gl { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; font-size: 11px; font-weight: 600; color: var(--on-signal); background: var(--c); }
-.ls-toast-history b { font-weight: 500; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--c); }
-.ls-toast-history .ls-cmd { grid-column: 2; font-size: 11px; }
-.ls-toast-history .clear { margin-top: 8px; padding: 0; border: 0; background: none; color: var(--muted); font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; }
-.ls-toast-history .clear:hover, .ls-toast-history .clear:focus-visible { color: var(--ink-strong); outline: 2px solid var(--focus); outline-offset: 2px; }
 </style>
 
 <a class="skip" href="#main">Skip to the page</a>
@@ -639,7 +644,7 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     function () { var t = line("t1"); t.note = "round 3 · writer/1 reported back"; t.workers = [["lead", "reading the notes"], ["writer/1", "reported back"], ["checker/1", "checking the notes"]]; addEvent(t, "report", "writer/1 reported back to the lead"); return ["info", "release-crew: writer/1 reported back to the lead", ""]; },
     function () { var i = line("i1"); i.stage = 2; i.note = "round 3 running · Codex"; addEvent(i, "round", "The browser launcher idea went another round"); return ["info", "Run the launcher in a browser: round 3 started", ""]; },
     function () { var t = line("t1"); t.stage = 3; t.waiting = true; t.askedAt = ST.clock; t.ask = "Push the tag v0.66.0 to origin?"; t.note = "round 3 · asks to push"; t.checks[1][1] = "met"; addEvent(t, "asked", "release-crew asks to push the tag");
-      return ["needs", "release-crew asks: push the tag v0.66.0 to origin?", "", gateActs()]; },
+      return ["needs", "release-crew asks: push the tag v0.66.0 to origin?", "", gateActs(), { kind: "run", id: "20261017-1314-9c0d" }]; },
     function () { var i = line("i1"); i.stage = 1; i.failed = "round 3 failed · Codex"; i.note = "round 3 failed · Codex"; addEvent(i, "failed", "The idea's round 3 failed");
       return ["problem", "Run the launcher in a browser: round 3 failed", "Codex · loadout-cli", [{ label: "Try the round again", cmd: "$ loadout idea refine browser-launcher", onPress: function () { refine(); return "You asked for round 3 again"; } }, { label: "Acknowledge", kind: "danger", cmd: "changes nothing in Loadout", onPress: function () { return "Acknowledged: round 3 failed"; } }]]; }
   ];
@@ -718,15 +723,51 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
   function route() { var h = (location.hash || "#home").slice(1); return h || "home"; }
   function go(r) { if (location.hash.slice(1) === r) { render(); } else { location.hash = r; } }
   /* Main's addresses (#session/<id>, #home/<line>, #teams/<run>, ?beside=) are read into the prototype's own first. */
-  window.addEventListener("hashchange", function () { shCanon(); if (FOCUS) { FOCUS.close(); FOCUS = null; } render(); var m = document.getElementById("main"); if (m) { m.focus({ preventScroll: true }); } window.scrollTo(0, 0); });
+  window.addEventListener("hashchange", function () { shCanon(); if (FOCUS2) { FOCUS2.close(); } if (FOCUS) { FOCUS.close(); FOCUS = null; } if (SH.pureFull && route() !== "run-" + SH.pureFull) { SH.pureFull = null; } render(); var m = document.getElementById("main"); if (m) { m.focus({ preventScroll: true }); } window.scrollTo(0, 0); });
 
   /* ---------- the rail ---------- */
+  /* The rail's order is a layout like any page's (WORKFLOW.md, The rail): studio-layouts key "rail", in each mode, edited in Settings › Layouts
+     with shLayout("rail", null, shRailSections(), { locked: shRailLocked }). A page with something waiting on you, Home and the page you are on
+     stay in the rail even if hidden there. */
+  function shRailSections() { return PAGES.map(function (p) { return { id: p[0], name: p[1] }; }); }
+  function shRailLocked(id) { var f = shRailFacts()[id]; return id === "home" || !!(f && f[1]); }
+  function shRailPages(cur, facts) {
+    var ids = PAGES.map(function (p) { return p[0]; }), lay = null;
+    try { lay = S.LayoutEdit.read(shLayouts(), "rail", P.mode || "default", ids); } catch (e) { lay = null; }
+    var order = lay && lay.order && lay.order.length ? lay.order : ids, hidden = lay && lay.hidden ? lay.hidden : [];
+    return order.filter(function (k) { return ids.indexOf(k) >= 0 && (hidden.indexOf(k) < 0 || k === cur || k === "home" || facts[k][1]); })
+      .map(function (k) { var p = PAGES[ids.indexOf(k)]; return { key: p[0], name: p[1], fact: facts[p[0]][0], need: facts[p[0]][1] }; });
+  }
+  /* What each rail item with the need dot peeks: its waiting items (Home: all of them). */
+  var SH_RAIL_WAIT = { home: null, sessions: ["session"], ideas: ["idea"], teams: ["team run", "approval"] };
+  function shRailPeek(a, k) {
+    var t = null, from = "rail:" + k, pointing = false;
+    function open() { if (!shShellOpen(from)) { shWaitList(a, from, SH_RAIL_WAIT[k], true); } }
+    a.addEventListener("pointerdown", function () { pointing = true; setTimeout(function () { pointing = false; }, 400); });
+    a.addEventListener("pointerenter", function () { clearTimeout(t); t = setTimeout(function () { if (a.matches(":hover")) { open(); } }, 350); });
+    a.addEventListener("pointerleave", function () { clearTimeout(t); shShellLeave(); });
+    a.addEventListener("focus", function () { if (!pointing && Date.now() - SH_QUIETFOCUS > 150) { open(); } });
+    a.addEventListener("blur", function () { shShellLeave(); });
+    /* Tab from the item goes into its list; Shift+Tab off the list's first control comes back (Peek's own). */
+    a.addEventListener("keydown", function (e) {
+      if (e.key !== "Tab" || e.shiftKey || !shShellOpen(from)) { return; }
+      var f = SHW.peek.el.querySelector("button:not([disabled]), [href], input, textarea, select");
+      if (f) { e.preventDefault(); f.focus(); }
+    });
+  }
+  var NAVSIG = "";
   function renderNav() {
     var r = route(), cur = r.indexOf("session") === 0 ? "sessions" : (teamsRoute(r) ? "teams" : r.split(/[/?]/)[0]);
     var facts = shRailFacts();
-    var nav = document.getElementById("nav"); nav.textContent = "";
-    var rail = S.SideRail({ current: cur, onSearch: openPalette, pages: PAGES.map(function (p) { return { key: p[0], name: p[1], fact: facts[p[0]][0], need: facts[p[0]][1] }; }), foot: function () { return shRailFoot(); } });
+    var nav = document.getElementById("nav"), sig = JSON.stringify([cur, facts, P.theme, P.accent, P.mode, shLayouts()]);
+    /* Drawn again only when something in it changed, so a list opened from it keeps its place. */
+    if (sig === NAVSIG && nav.childNodes.length) { renderModebar(); return; }
+    NAVSIG = sig;
+    if (SHW && SHW.from && SHW.from.indexOf("rail:") === 0) { shShellClose(); }
+    nav.textContent = "";
+    var rail = S.SideRail({ current: cur, onSearch: openPalette, pages: shRailPages(cur, facts), foot: function () { return shRailFoot(); } });
     nav.appendChild(rail);
+    Array.prototype.forEach.call(rail.querySelectorAll(".ls-railnav a.ls-rl.need"), function (a) { var k = (a.getAttribute("href") || "").slice(1); if (Object.prototype.hasOwnProperty.call(SH_RAIL_WAIT, k)) { shRailPeek(a, k); } });
     renderModebar();
   }
   function svgIcon(d) { var ns = "http://www.w3.org/2000/svg", v = document.createElementNS(ns, "svg"), p = document.createElementNS(ns, "path"); v.setAttribute("viewBox", "0 0 20 20"); v.setAttribute("aria-hidden", "true"); p.setAttribute("d", d); p.setAttribute("fill", "none"); p.setAttribute("stroke", "currentColor"); p.setAttribute("stroke-width", "1.6"); v.appendChild(p); return v; }
@@ -961,13 +1002,13 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     var oldest = w.length ? Math.max(1, ST.clock - Math.min.apply(null, w.map(function (l) { return l.askedAt || ST.clock; }))) + " min" : "none";
     a.setAttribute("role", "region"); a.setAttribute("aria-label", "Ambient");
     a.appendChild(el("div", { "class": "bar" }, [
-      el("div", { "class": "kpis", role: "group", "aria-label": "Key numbers" }, [["Running", String(running), ""], ["Waiting for you", String(w.length), w.length ? "warm" : ""], ["Oldest question", oldest, w.length ? "warm" : ""], ["In view", String(ST.lines.length), ""]].map(function (k) { return el("div", { "class": k[2] }, [el("b", { text: k[1] }), el("span", { text: k[0] })]); })),
+      el("div", { "class": "kpis", role: "group", "aria-label": "Key numbers" }, [["Running", String(running), ""], ["Waiting on you", String(shWaiting().count), shWaiting().count ? "warm" : ""], ["Oldest question", oldest, w.length ? "warm" : ""], ["In view", String(ST.lines.length), ""]].map(function (k) { return el("div", { "class": k[2] }, [el("b", { text: k[1] }), el("span", { text: k[0] })]); })),
       el("div", { "class": "ls-answers", style: "margin: 0" }, [halo({ label: "New session", size: "small", disabledReason: P.watchOnly ? SH_WATCH : undefined, onPress: function () { setAmbient(false); openLaunch(); } }, "amb-new"), halo({ label: "Leave ambient", size: "small", onPress: function () { setAmbient(false); } }, "amb-leave")])]));
     a.appendChild(el("div", { "class": "ambswitch" }, [key(S.Switch({ label: "Fullscreen", sub: "kept in this browser", checked: !!P.ambFull, onChange: function (v) { ambFullscreen(v); } }), "amb-full")]));
     if (!f) { a.appendChild(el("p", { "class": "calm", text: "Nothing is in flight." })); }
     else {
       var big = window.innerWidth >= 900;
-      var others = big ? ST.lines.filter(function (l) { return l.id !== f.id; }).slice(0, 8).map(function (l) { return { title: l.title, word: sessWord(l), onPick: function () { SH.ambFocus = l.id; renderAmbient(); } }; }) : null;
+      var others = big ? S.liveFirst(ST.lines.filter(function (l) { return l.id !== f.id; }), { state: function (l) { return sessWord(l); }, since: function (l) { return l.waiting && l.askedAt ? shSince(shAt(l.askedAt)) : null; } }).slice(0, 8).map(function (l) { return { title: l.title, word: sessWord(l), onPick: function () { SH.ambFocus = l.id; renderAmbient(); } }; }) : null;
       var H = S.Halo({ style: P.halo, stage: f.waiting ? 3 : f.stage, core: coreFor(f, true), hour: ((f.mins || 0) % 60) / 60, spend: f.cap ? f.cost / f.cap : null, orbiters: others, orbitRadius: 330 });
       a.appendChild(el("div", { "class": "stage" + (big ? " roomy" : "") }, [H.el]));
       var acts = actionsFor(f);
@@ -1411,15 +1452,6 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
   S.HaloButton = function (o) { var why = P.watchOnly && o ? shRefused(o) : null; return shHalo0(why ? Object.assign({}, o, { disabledReason: why }) : o); };
   /* Its statics stay (setBusy, which Dialog uses to show a confirmation working). */
   Object.keys(shHalo0).forEach(function (k) { S.HaloButton[k] = shHalo0[k]; });
-  /* A SettingRow has no disabled state of its own: watching only, its control is held and its line says why. */
-  var shSetRow0 = S.SettingRow;
-  S.SettingRow = function (o) {
-    var n = shSetRow0(o);
-    if (!P.watchOnly) { return n; }
-    Array.prototype.forEach.call(n.querySelectorAll("input, select, textarea, button"), function (x) { x.disabled = true; x.setAttribute("aria-disabled", "true"); });
-    var c = n.querySelector(":scope > .ls-cmd"); if (c) { c.textContent = "Studio is only watching · " + c.textContent; }
-    return n;
-  };
   /* An ItemList's row buttons are its own: watching only, each that would change something is held with its command, and its add form too. */
   var shItems0 = S.ItemList;
   S.ItemList = function (o) {
@@ -1434,13 +1466,14 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     return list;
   };
 
-  /* The rail's facts, as main's App.svelte words them; Events, Commands, Spend and Settings come from their own pages' reads. */
+  /* The rail's facts, as main's App.svelte words them; every fact that counts what waits on you reads the one count (shWaiting). Events, Commands,
+     Spend and Settings come from their own pages' reads. */
   function shRailFacts() {
-    var w = ST.lines.filter(function (l) { return l.waiting; });
+    var wl = shWaiting().list, of = function (kinds) { return wl.filter(function (w) { return kinds.indexOf(w.kind) >= 0; }).length; };
+    var sw = of(["session"]), iw = of(["idea"]), tw = of(["team run", "approval"]);
     var running = ST.lines.filter(function (l) { return l.kind === "session" && l.stage === 2; }).length;
-    var live = IDEAS.filter(function (x) { return !x.accepted; }), iw = live.filter(function (x) { return ideaWord(x) === "waiting for you"; }).length;
-    var tw = teamsWaiting(), tr = TR.filter(function (r) { return teamRunning(r); }).length;
-    var facts = { home: [w.length ? w.length + " waiting on you" : "all calm", !!w.length], sessions: [running + " running", false],
+    var live = IDEAS.filter(function (x) { return !x.accepted; }), tr = TR.filter(function (r) { return teamRunning(r); }).length;
+    var facts = { home: [wl.length ? wl.length + " waiting on you" : "all calm", !!wl.length], sessions: [sw ? sw + " waiting" : running + " running", !!sw],
       ideas: [iw ? iw + " waiting on you" : live.length + " being shaped", !!iw], teams: [tw ? tw + " waiting on you" : tr + " running", !!tw],
       memory: ["by topic", false], context: ["what a session reads", false], spend: ["tokens and cost", false], projects: ["", false], settings: ["", false] };
     plcRailFacts(facts);
@@ -1480,10 +1513,13 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     }
   }
   /* Draws everything again, the desk and the deck included, for a change of state the whole shell follows. */
-  function shRedraw() { if (PURE) { PURE.desk.destroy(); PURE = null; LIVE = null; } shPeekDrop(); DECK = null; lastTeams = ""; MBSIG = ""; PV++; TV++; render(); }
+  function shRedraw() { if (PURE) { PURE.desk.destroy(); PURE = null; LIVE = null; } shPeekDrop(); shShellPeekDrop(); DECK = null; lastTeams = ""; MBSIG = ""; NAVSIG = ""; PV++; TV++; render(); }
 
   /* Signed out: a browser the daemon does not know sees how to open Studio signed in, and nothing else (main's SignedOut.svelte). */
-  function shSignOut() { said("Every browser is signed out, this one included", "$ loadout dashboard sign-out", "done"); P.signedOut = true; savePrefs(); setTimeout(render, 400); }
+  /* Resolves once it is done, so the confirmation that asks for it waits and then closes (Dialog's rule): return shSignOut() from it, busy "signing out…". */
+  function shSignOut() {
+    return new Promise(function (ok) { setTimeout(function () { said("Every browser is signed out, this one included", "$ loadout dashboard sign-out", "done"); P.signedOut = true; savePrefs(); ok("Signed out"); setTimeout(render, 300); }, 700); });
+  }
   function renderSignedOut() {
     if (ST.ambient) { setAmbient(false); }
     if (FOCUS) { FOCUS.close(); FOCUS = null; }
@@ -1528,107 +1564,7 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
   /* Whether the route is one Pure Focus draws as a desk, where its own single keys are the only ones. */
   function shPureHere() { var r = route(); return P.mode === "pure" && (r === "home" || r === "sessions" || r === "teams" || r.indexOf("session-") === 0 || r.indexOf("run-") === 0 || (pagesRoute(r) && r.indexOf("+") < 0)); }
 
-  /* Notifications, as main's Toasts: Done and notices fold to a chip after 4 seconds and leave after 10, into Earlier; the same one again counts; in Pure Focus, a page desk or a session's page everything arrives as a chip, and Done and notice chips go see-through near the pointer; Ctrl+Shift+X folds what is open and, pressed again, clears what is not waiting on you. */
-  function shToasts(region) {
-    var LV = { done: ["✓", "Done"], info: ["↻", "For your information"], needs: ["!", "Needs you"], problem: ["✕", "Problem"] };
-    var OPEN_FOR = 4, GONE_AFTER = 10, list = [], past = [], seq = 0, tucked = false, place = null, near = false, pointed = null, focused = null, showPast = false;
-    var polite = el("p", { role: "status", "class": "ls-sr" }), alert = el("p", { role: "alert", "class": "ls-sr" });
-    region.classList.add("ls-toasts"); region.setAttribute("role", "region"); region.setAttribute("aria-label", "Notifications"); region.setAttribute("aria-keyshortcuts", "Control+Shift+X");
-    region.parentNode.insertBefore(polite, region.nextSibling); region.parentNode.insertBefore(alert, polite.nextSibling);
-    function shown(t) { return t.settled ? "done" : t.level; }
-    function timed(t) { return t.level === "done" || t.level === "info" || t.settled; }
-    function givesWay(t) { return place !== null && shown(t) !== "needs" && shown(t) !== "problem"; }
-    function full() { return !S.motion || S.motion() === "full"; }
-    function remember(gone) {
-      if (!gone.length) { return; }
-      gone.forEach(function (t) { if (pointed === t.id) { pointed = null; } if (focused === t.id) { focused = null; } });
-      past = gone.map(function (t) { return { id: t.id, level: shown(t), text: t.text, cmd: t.cmd, count: t.count }; }).concat(past).slice(0, 50);
-    }
-    function leave(gone) { var ids = gone.map(function (t) { return t.id; }); list = list.filter(function (t) { return ids.indexOf(t.id) < 0; }); remember(gone); paint(); }
-    function watch(n, t) {
-      n.addEventListener("mouseenter", function () { pointed = t.id; }); n.addEventListener("mouseleave", function () { if (pointed === t.id) { pointed = null; } });
-      n.addEventListener("focusin", function () { focused = t.id; }); n.addEventListener("focusout", function () { if (focused === t.id) { focused = null; } });
-    }
-    function paint() {
-      var a = document.activeElement, keep = a && region.contains(a) ? a.getAttribute("data-tk") : null;
-      region.textContent = ""; region.classList.toggle("near", near); region.classList.toggle("calm", !full());
-      list.forEach(function (t) {
-        var lv = shown(t), L = LV[lv], anim = t.fresh && full() ? " anim" : "";
-        if (t.folded) {
-          var chip = el("button", { type: "button", "class": "ls-toast-chip " + lv + anim, "data-gives-way": givesWay(t) ? "" : null, "data-tk": "c" + t.id, "aria-label": L[1] + ": " + t.text + (t.count > 1 ? ", " + t.count + " times" : "") + ". Open it",
-            onclick: function () { t.folded = false; t.aged = 0; if (focused === t.id) { focused = null; } paint(); var x = region.querySelector('[data-tk="x' + t.id + '"]'); if (x) { x.focus({ preventScroll: true }); } } },
-            [el("span", { "class": "gl", "aria-hidden": "true", text: L[0] }), el("b", { text: L[1] }), el("span", { text: t.text }), t.count > 1 ? el("i", { "class": "n", "aria-hidden": "true", text: "×" + t.count }) : null]);
-          watch(chip, t); region.appendChild(chip); return;
-        }
-        var card = el("div", { "class": "ls-toast " + lv + anim, role: "group", "aria-label": L[1] }, [
-          el("div", { "class": "th" }, [el("span", { "class": "gl", "aria-hidden": "true", text: L[0] }), el("span", { "class": "lv" }, [L[1], t.count > 1 ? el("i", { "class": "n", text: " ×" + t.count }) : null]),
-            el("button", { type: "button", "class": "x", "data-tk": "x" + t.id, "aria-label": "Dismiss: " + t.text, text: "✕", onclick: function () { leave([t]); } })]),
-          el("p", { text: t.text }), t.cmd ? el("code", { "class": "ls-cmd", text: t.cmd }) : null,
-          t.actions.length ? el("div", { "class": "acts" }, t.actions.map(function (ac, i) { return key(S.HaloButton({ label: ac.label, kind: ac.kind || "", size: "small", cmd: ac.cmd, onPress: function () { var w = ac.onPress ? ac.onPress() : null; settle(t.id, typeof w === "string" && w ? w : ac.label); } }), "t" + t.id + "a" + i); })) : null]);
-        watch(card, t); region.appendChild(card);
-      });
-      if (past.length) {
-        region.appendChild(el("button", { type: "button", "class": "ls-toast-past", "aria-expanded": showPast ? "true" : "false", "data-tk": "past", onclick: function () { showPast = !showPast; paint(); } }, ["Earlier ", el("b", { text: String(past.length) })]));
-        if (showPast) {
-          region.appendChild(el("div", { "class": "ls-toast-history", role: "group", "aria-label": "Earlier notifications, this session" }, [
-            el("ul", {}, past.map(function (g) { return el("li", { "class": g.level }, [el("span", { "class": "gl", "aria-hidden": "true", text: LV[g.level][0] }), el("span", { "class": "t" }, [el("b", { text: LV[g.level][1] }), " " + g.text, g.count > 1 ? el("i", { "class": "n", text: " ×" + g.count }) : null]), g.cmd ? el("code", { "class": "ls-cmd", text: g.cmd }) : null]); })),
-            el("button", { type: "button", "class": "clear", "data-tk": "clear", text: "Clear", onclick: function () { past = []; showPast = false; paint(); } })]));
-        }
-      }
-      if (keep) { var k = region.querySelector('[data-tk="' + keep + '"]'); if (k) { k.focus({ preventScroll: true }); } }
-    }
-    function add(t) {
-      var cmd = t.cmd || "", level = t.level || "info";
-      if (level === "done" || level === "info") {
-        var same = list.filter(function (x) { return x.level === level && !x.settled && x.text === t.text && x.cmd === cmd; })[0];
-        if (same) { same.count += 1; same.aged = 0; polite.textContent = LV[level][1] + ": " + t.text + ", " + same.count + " times"; paint(); return same.id; }
-      }
-      list.forEach(function (x) { x.fresh = false; });
-      var n = { id: ++seq, level: level, text: t.text || "", cmd: cmd, actions: t.actions || [], aged: 0, folded: tucked, settled: false, fresh: true, count: 1 };
-      list.unshift(n);
-      if (level === "problem") { alert.textContent = "Problem: " + n.text; } else { polite.textContent = LV[level][1] + ": " + n.text; }
-      paint(); return n.id;
-    }
-    function settle(id, words) {
-      list.forEach(function (x) { if (x.id === id) { x.settled = true; x.aged = 0; x.text = words || x.text; x.actions = []; x.fresh = false; } });
-      polite.textContent = words || ""; if (focused === id) { focused = null; } paint();
-    }
-    function tuck(on) {
-      if (on === tucked) { return; }
-      tucked = on;
-      list.forEach(function (x) { if (on) { x.folded = true; x.fresh = false; } else if (!timed(x)) { x.folded = false; x.fresh = false; } });
-      paint();
-    }
-    function sweep() {
-      if (list.some(function (x) { return !x.folded; })) { list.forEach(function (x) { x.folded = true; x.fresh = false; }); paint(); return; }
-      leave(list.filter(timed));
-    }
-    function tick() {
-      var gone = [], changed = false;
-      list = list.filter(function (t) {
-        if (!timed(t) || t.id === pointed || t.id === focused) { return true; }
-        t.aged += 1;
-        if (t.aged >= GONE_AFTER) { gone.push(t); changed = true; return false; }
-        if (t.aged >= OPEN_FOR && !t.folded) { t.folded = true; t.fresh = false; changed = true; }
-        return true;
-      });
-      remember(gone);
-      if (changed) { paint(); }
-    }
-    var timer = setInterval(tick, 1000);
-    /* A chip that lets clicks through never sees the pointer, so the page is watched instead, and only in a named place. */
-    window.addEventListener("pointermove", function (e) {
-      if (place === null) { if (near) { near = false; region.classList.remove("near"); } return; }
-      var now = Array.prototype.some.call(region.querySelectorAll("[data-gives-way]"), function (c) { var b = c.getBoundingClientRect(), dx = Math.max(b.left - e.clientX, 0, e.clientX - b.right), dy = Math.max(b.top - e.clientY, 0, e.clientY - b.bottom); return Math.sqrt(dx * dx + dy * dy) <= 48; });
-      if (now !== near) { near = now; region.classList.toggle("near", near); }
-    }, { passive: true });
-    /* Ctrl+Shift+X, caught before a terminal takes it. */
-    window.addEventListener("keydown", function (e) {
-      if (e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey && e.code === "KeyX" && list.length) { e.preventDefault(); e.stopPropagation(); sweep(); }
-    }, true);
-    return { add: add, settle: settle, sweep: sweep, stop: function () { clearInterval(timer); },
-      place: function (p) { p = p || null; if (p === place) { return; } place = p; if (p === null && near) { near = false; } tuck(p !== null); paint(); } };
-  }
+  /* Notifications are the design system's Toasts (main's Toasts), placed by shToastPlace: in Pure Focus, a page desk or a session's page everything arrives as a chip. */
   function shToastPlace(r) { return shPureHere() ? (pagesRoute(r) ? "desk" : "pure") : (r.indexOf("session-") === 0 ? "session" : null); }
 
   function launch(o) {
@@ -1645,7 +1581,12 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
   /* Main's paletteGroups(): every page; each line in flight, a session going to its page and anything else to Home focused on it; and Do, from every line's own actions. */
   function palGroups() {
     var goTo = PAGES.map(function (p) { return { key: "go-" + p[0], glyph: "→", label: p[1], sub: "page", kind: "page", run: function () { go(p[0]); } }; });
-    var flight = ST.lines.map(function (l) { return { key: "in-" + l.id, glyph: l.waiting ? "!" : "▶", label: l.title, sub: l.where + " · " + sessWord(l), need: !!l.waiting, kind: l.kind, run: function () { if (l.kind === "session") { go("session-" + l.id); } else { ST.focus = l.id; ST.picked = l.id; ST.view = "lens"; go("home"); } } }; });
+    /* In flight, live work first; each row goes through reveal(), so it opens the mode's own way, and the highlighted one peeks (shPalWatch). */
+    PAL_PEEK = {};
+    var flight = shFlight().map(function (f) {
+      if (f.peek) { PAL_PEEK[f.label + "\n" + f.sub] = f.peek; }
+      return { key: "in-" + f.key, glyph: f.waiting ? "!" : "▶", label: f.label, sub: f.sub, need: !!f.waiting, kind: f.kind, run: function () { if (f.target) { reveal(f.target); } else if (f.line) { ST.focus = f.line.id; ST.picked = f.line.id; ST.view = "lens"; go("home"); } } };
+    });
     var doing = [];
     if (!P.watchOnly) {
       doing.push({ key: "do-start", glyph: "+", label: "Start a session…", sub: "opens New session · $ loadout launch <project>", kind: "action", run: function () { if (ST.ambient) { setAmbient(false); } openLaunch(); } });
@@ -1728,6 +1669,87 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     }
     PAL_O.groups = palGroups();
     PAL.open();
+    shPalWatch();
+  }
+  /* A line in flight as a jump and a peek: where reveal() takes it, and the peek of the same thing every other page shows. */
+  function shLineTarget(l) {
+    if (l.kind === "session") { return { target: { kind: "session", id: l.id }, peek: function () { return peekSession(line(l.id)); } }; }
+    if (l.kind === "team run") { var r = TR.filter(function (x) { return x.line === l.id; })[0]; if (r) { return { target: { kind: "run", id: r.id }, peek: function () { return peekRun(r); } }; } }
+    if (l.kind === "idea") { var x = IDEAS.filter(function (i) { return i.id === l.ref; })[0]; if (x) { return { target: { kind: "idea", id: x.id, list: x.list }, peek: function () { return peekIdea(x); } }; } }
+    if (l.kind === "task") { var tk = (TASKS[l.where] || []).filter(function (t) { return t.id === l.ref; })[0]; return { target: { kind: "task", id: l.ref, project: l.where }, peek: tk ? function () { return peekTask(tk, l.where); } : null }; }
+    return { target: null, peek: null };
+  }
+  /* The palette's In flight: every line, and whatever else waits on you (a trigger approval, an idea with questions open), live work first. */
+  function shFlight() {
+    var open = shIdeasOpen().map(function (x) { return x.id; }), out = ST.lines.map(function (l) {
+      var t = shLineTarget(l), asks = l.kind === "idea" && open.indexOf(l.ref) >= 0, w = l.kind === "idea" && asks && !l.failed ? "waiting for you" : sessWord(l);
+      return { key: l.id, label: l.title, sub: l.where + " · " + w, kind: l.kind, word: w, waiting: !!l.waiting || (asks && !l.failed), failed: !!l.failed, blocked: !!l.blocked, ended: l.stage === 4,
+        since: l.waiting && l.askedAt ? shSince(shAt(l.askedAt)) : null, target: t.target, peek: t.peek, line: l };
+    });
+    shWaiting().list.forEach(function (w) {
+      var it = w.item || {};
+      if (w.kind === "session" || (w.kind === "team run" && it.run && it.run.line) || (w.kind === "idea" && ST.lines.some(function (l) { return l.kind === "idea" && l.ref === w.id; }))) { return; }
+      var where = w.kind === "approval" ? it.approval.rule : w.kind === "idea" ? (it.idea.list === "~" ? "workspace-wide" : it.idea.list) : (it.run ? it.run.team : "");
+      out.push({ key: w.kind + "-" + w.id, label: w.title || w.id, sub: where + " · " + (w.kind === "approval" ? "needs approval" : "waiting on you"), kind: w.kind, word: w.kind === "approval" ? "needs approval" : "waiting for you", waiting: true, since: w.since,
+        target: { kind: w.kind === "team run" ? "run" : w.kind, id: w.id, list: w.kind === "idea" ? it.idea.list : undefined, zone: w.kind === "idea" ? "questions" : undefined }, peek: function () { return peekOf(w); } });
+    });
+    return S.liveFirst(out, { state: function (x) { return x.word; } });
+  }
+  /* The highlighted In flight row peeks beside the palette, from the palette's own highlight (its aria-activedescendant). Not below 600px,
+     where the peek would be a sheet over the very list being moved through. */
+  var PAL_PEEK = {};
+  function shPalWatch() {
+    var input = document.querySelector(".ls-dialog.pal input[role=combobox]"); if (!input || input.__shWatch) { return; }
+    input.__shWatch = true;
+    function look() {
+      if (!input.isConnected) { return; }
+      var id = input.getAttribute("aria-activedescendant"), opt = id ? document.getElementById(id) : null, grp = opt && opt.closest(".ls-pgroup"), h3 = grp && grp.querySelector("h3");
+      var get = opt && h3 && h3.textContent === "In flight" && window.innerWidth > 600 ? PAL_PEEK[(opt.querySelector(".t") || {}).textContent + "\n" + (opt.querySelector(".s") || {}).textContent] : null;
+      var it = get ? get() : null;
+      /* Beside the palette itself, over its dim: to its right where there is room, else under it. */
+      var box = input.closest(".ls-dialog") || opt;
+      if (it) { var pk = shShellPeek(); SHW.from = "palette"; SHW.anchor = box; SHW.hover = false; pk.el.style.zIndex = "calc(var(--z-dialog) + 1)"; pk.show(it, box); }
+      else if (shShellOpen("palette")) { SHW.peek.close(); }
+    }
+    var mo = new MutationObserver(look); mo.observe(input, { attributes: true, attributeFilter: ["aria-activedescendant"] });
+    var iv = setInterval(function () { if (!input.isConnected) { clearInterval(iv); mo.disconnect(); if (shShellOpen("palette")) { SHW.peek.close(); } if (SHW) { SHW.peek.el.style.zIndex = ""; } } }, 200);
+    look();
+  }
+
+  /* Toasts are the design system's own (S.Toasts). One about something waiting on you carries Go to it, through reveal(), and peeks on hover. */
+  var SH_TOAST_AT = {}, SH_TOAST_MO = null;
+  function shToastPeekOf(t) {
+    if (!t) { return null; }
+    if (t.kind === "session") { return peekSession(line(t.id)); }
+    if (t.kind === "run") { return peekRun(TR.filter(function (r) { return r.id === t.id; })[0]); }
+    if (t.kind === "idea") { return peekIdea(IDEAS.filter(function (x) { return x.id === t.id && (!t.list || x.list === t.list); })[0]); }
+    if (t.kind === "approval") { return peekApproval(TRIG.approvals.filter(function (a) { return a.id === t.id; })[0]); }
+    return null;
+  }
+  function shToastAdd(t, target) {
+    var acts = (t.actions || []).slice();
+    if (target) { acts.push({ label: "Go to it", cmd: "opens it where you are · changes nothing", onPress: function () { if (target.kind === "session") { shTypeHere(line(target.id)); } else { reveal(target); } var p = shToastPeekOf(target); return "Opened " + (p ? p.title || p.goal || target.id : target.id); } }); }
+    var id = toasts.add(Object.assign({}, t, { actions: acts }));
+    if (target) { SH_TOAST_AT[id] = target; shToastWire(); }
+    return id;
+  }
+  /* The stack is drawn again whenever it changes, so each card or chip of a waiting toast is wired as it appears. */
+  function shToastWire() {
+    var region = document.getElementById("toasts"); if (!region) { return; }
+    if (!SH_TOAST_MO) { SH_TOAST_MO = new MutationObserver(shToastWire); SH_TOAST_MO.observe(region, { childList: true }); }
+    Array.prototype.forEach.call(region.querySelectorAll(":scope > .ls-toast, :scope > .ls-toast-chip"), function (n) {
+      var tk = n.classList.contains("ls-toast-chip") ? n.getAttribute("data-tk") : ((n.querySelector(".x") || {}).getAttribute ? n.querySelector(".x").getAttribute("data-tk") : null);
+      var id = tk ? Number(tk.slice(1)) : NaN, target = SH_TOAST_AT[id];
+      if (!target || n.__shPeek === SHW) { return; }
+      var get = function () { return shToastPeekOf(target); };
+      if (!get()) { return; }
+      shShellPeek(); n.__shPeek = SHW;
+      if (n.classList.contains("ls-toast")) { SHW.peek.attach(n, get); return; }
+      /* A chip is a button already: it peeks on pointing, without a button of its own. */
+      var tm = null;
+      n.addEventListener("pointerenter", function () { clearTimeout(tm); tm = setTimeout(function () { if (n.matches(":hover")) { var it = get(); if (it) { shShellPeek(); SHW.from = "toast"; SHW.anchor = n; SHW.hover = true; SHW.peek.show(it, n); } } }, 350); });
+      n.addEventListener("pointerleave", function () { clearTimeout(tm); shShellLeave(); });
+    });
   }
 
   /* ---------- appearance: kept in Loadout's config (main's Appearance.svelte) ---------- */
@@ -2378,7 +2400,8 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     if (m === P.mode) { return; }
     if (FOCUS) { FOCUS.close(); FOCUS = null; }
     if (!fromSwitch && MB) { MB.switcher.set(m); }
-    S.morph(function () { P.mode = m; savePrefs(); applyMode(); shFieldmap(); DECK = null; shPeekDrop(); if (PURE) { PURE.desk.destroy(); PURE = null; LIVE = null; } lastTeams = ""; render(); });
+    if (FOCUS2) { FOCUS2.close(); }
+    S.morph(function () { P.mode = m; savePrefs(); applyMode(); shFieldmap(); DECK = null; shPeekDrop(); shShellPeekDrop(); if (PURE) { PURE.desk.destroy(); PURE = null; LIVE = null; } lastTeams = ""; render(); });
     toasts.add({ level: "info", text: "Mode: " + S.MODES.filter(function (x) { return x.key === m; })[0].name, cmd: "kept in this browser · Ctrl Shift M cycles" });
   }
   function cycleMode() { var ks = S.MODES.map(function (x) { return x.key; }); setMode(ks[(ks.indexOf(P.mode) + 1) % ks.length]); }
@@ -2443,6 +2466,8 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
       var rid = String(t.run || t.id), at = rid.indexOf("/");
       if (kind === "node" || at > 0) { TS.node = t.node || rid.slice(at + 1); TS.depth = 0; if (at > 0) { rid = rid.slice(0, at); } }
       if (m === "minimal") { openQuiet({ id: rid, kind: "team run" }); return; }
+      /* As an idea: land once the run's page is drawn, after the route change has put focus on main. */
+      if (zone && location.hash.slice(1) !== "run-" + rid) { window.addEventListener("hashchange", function landed() { window.removeEventListener("hashchange", landed); shLand(zone); }); go("run-" + rid); return; }
       go("run-" + rid); shLand(zone); return;
     }
     if (kind === "team") { go("team-" + t.id); return; }
@@ -2539,6 +2564,7 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
   /* Type here: the session, the mode's own way, with the keyboard in its terminal. */
   function shTypeHere(l) {
     if (!l) { return; }
+    if (P.mode === "pure" && PURE && !PURE.page && PURE.desk) { PURE.desk.select(l.id, true); pureShowFull(); PURE.desk.openView(); return; }
     reveal({ kind: "session", id: l.id });
     if (P.mode !== "minimal") { setTimeout(function () { var sc = document.querySelector(".ls-term .screen"); if (sc) { sc.focus(); } }, 120); }
   }
@@ -2641,12 +2667,64 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
         if (opts.onchange) { opts.onchange(key, value, command); }
       } }));
   }
+  /* The shell's own peek (round 3): the mode bar's waiting list, the rail's waiting items, the palette's highlighted row and a waiting toast.
+     It always floats beside what opened it (a sheet below 600px), whatever the mode, so it never takes Minimal's rows or Pure's view pane
+     from the pages' own peek (shPeek). One at a time: opening it puts a page's floating peek away. SHW.from says what opened it. */
+  var SHW = null;
+  function shShellPeek() {
+    if (SHW && SHW.pmode !== P.mode) { shShellPeekDrop(); }
+    if (!SHW) {
+      SHW = { pmode: P.mode, from: null, anchor: null, peek: S.Peek(Object.assign({ mode: "float" }, shPeekCalls())) };
+      /* One opened by pointing (the rail, a toast's chip) goes when the pointer and the keyboard have both left it and what it came from. */
+      var pk = SHW.peek;
+      pk.el.addEventListener("pointerleave", function () { shShellLeave(); });
+      pk.el.addEventListener("focusout", function () { shShellLeave(); });
+    }
+    return SHW.peek;
+  }
+  function shShellPeekDrop() { if (SHW) { SHW.peek.destroy(); SHW = null; } }
+  function shShellOpen(from) { return !!(SHW && SHW.peek.open && SHW.from === from); }
+  function shShellLeave() {
+    if (!SHW || !SHW.hover) { return; }
+    var w = SHW;
+    setTimeout(function () {
+      if (SHW !== w || !w.peek.open || !w.hover) { return; }
+      var a = w.anchor, pn = w.peek.el, act = document.activeElement;
+      if ((a && a.isConnected && (a.matches(":hover") || a === act || a.contains(act))) || pn.matches(":hover") || pn.contains(act)) { return; }
+      /* Pointed away from, it leaves the keyboard where it was: Peek would hand focus to what opened it. */
+      var was = document.activeElement; shShellClose();
+      if ((!was || was === document.body) && a && document.activeElement === a) { a.blur(); }
+    }, 260);
+  }
+  /* Closing gives focus back to what opened it; that focus is not a new visit, so it does not open the list again. */
+  var SH_QUIETFOCUS = 0;
+  function shShellClose() { if (SHW && SHW.peek.open) { SH_QUIETFOCUS = Date.now(); SHW.peek.close(); } }
+  window.addEventListener("keydown", function (e) { if (e.key === "Escape" && SHW && SHW.peek.open) { SH_QUIETFOCUS = Date.now(); } }, true);
+  /* What waits on you as the peek's items, oldest first; only some kinds for a rail item ("session", "team run", "approval", "idea"). */
+  function shWaitItems(only) { return shWaiting().list.filter(function (w) { return !only || only.indexOf(w.kind) >= 0; }).map(peekOf).filter(Boolean); }
+  /* The waiting list beside anchor. Pressed again from the same anchor, it closes (Peek's list). */
+  function shWaitList(anchor, from, only, hover) {
+    var pk = shShellPeek();
+    if (SHP && SHP.mode === "float" && SHP.peek.open) { SHP.peek.close(); }
+    SHW.from = from; SHW.only = only || null; SHW.anchor = anchor; SHW.hover = !!hover;
+    pk.list(shWaitItems(only), anchor);
+  }
+  /* The count's words, as WORKFLOW.md's Words have them: "waiting on you" (the ModeBar still says "need you"). */
+  function shModebarWords(b) { var wn = b && b.querySelector(".wn"); if (wn) { wn.textContent = " waiting on you"; } }
   function renderModebar() {
     var w = waitingNow(), compact = window.innerWidth < 600, sig = w.map(function (x) { return x.label; }).join("|") + "|" + compact;
     if (MB && sig === MBSIG) { if (MB.switcher.mode !== (P.mode || "default")) { MB.switcher.set(P.mode); } return; }
     MBSIG = sig; shFieldmap();
-    var host = document.getElementById("modebar"); host.textContent = "";
-    MB = S.ModeBar({ mode: P.mode || "default", compact: compact, onMode: function (m) { setMode(m, true); }, onSearch: openPalette, waiting: w, onWaiting: goWaiting });
+    var host = document.getElementById("modebar"), old = host.querySelector(".ls-modebar .waiting"), keep = !!(old && shShellOpen("modebar"));
+    host.textContent = "";
+    /* The count opens the waiting list beside it, every item oldest first with its main action; pressed again, or Escape, it closes. */
+    MB = S.ModeBar({ mode: P.mode || "default", compact: compact, onMode: function (m) { setMode(m, true); }, onSearch: openPalette, waiting: w,
+      onWaiting: function () { var b = document.querySelector("#modebar .ls-modebar .waiting"); if (b) { shWaitList(b, "modebar"); } } });
+    var nb = MB.el.querySelector(".waiting");
+    if (nb) { nb.setAttribute("aria-haspopup", "dialog"); nb.setAttribute("aria-expanded", keep ? "true" : "false"); shModebarWords(nb); }
+    /* Open while the count changes: the same button stays, with the new words, so the list keeps its place and what it said. */
+    if (keep && nb) { old.textContent = ""; while (nb.firstChild) { old.appendChild(nb.firstChild); } nb.parentNode.replaceChild(old, nb); SHW.peek.setList(shWaitItems()); }
+    else if (keep) { SHW.peek.close(); }
     host.appendChild(MB.el);
   }
 
@@ -2752,66 +2830,201 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
   }
 
   /* Minimal */
-  function quietItems() {
-    var out = [];
-    /* As main's Quiet.svelte: a waiting session's line says which kind of wait; a run's, its gate's brief or question. */
-    ST.lines.filter(function (l) { return l.kind === "session" && l.stage !== 4; }).forEach(function (l) { out.push({ id: l.id, kind: "session", title: l.title, word: wordOf(l), where: l.where, ask: l.waiting ? (l.approval ? "Asks for approval. Answer it in the terminal." : "Waiting for you. Answer it in the terminal.") : "" }); });
-    TR.filter(function (r) { var w = runWord(r); return w !== "done" && w !== "stopped" && w !== "failed" && w !== "limited"; }).forEach(function (r) { var g = runGate(r); out.push({ id: r.id, kind: "team run", title: r.goal, word: runWord(r), where: r.team, ask: g ? (g.brief || g.question || "") : "" }); });
-    return out;
+  /* Minimal's zones (WORKFLOW.md): Needs you, every kind that waits on you oldest first (sessions, gates and questions, trigger approvals and
+     ideas with questions open); Running; and Might pick up (a run that failed, stopped short or stalled, an idea whose round failed, a blocked
+     task, a session that ended when the daemon stopped). Each item is QuietList's {id, kind, title, word, where, ask}. */
+  var QUIET_ZONES = [["needs", "Needs you"], ["running", "Running"], ["pickup", "Might pick up"]];
+  var QUIET_CALM_ZONE = { needs: "Nothing waits on you.", running: "Nothing is running.", pickup: "Nothing to pick up.", recent: "No session has ended here yet." };
+  function quietOfWaiting(w) {
+    var it = w.item || {};
+    if (w.kind === "session") { var l = it.line; return { id: l.id, kind: "session", title: l.title, word: wordOf(l), where: l.where, ask: l.approval ? "Asks for approval. Answer it in the terminal." : "Waiting for you. Answer it in the terminal." }; }
+    if (w.kind === "team run") { var r = it.run, g = runGate(r); return { id: r.id, kind: "team run", title: r.goal, word: runWord(r), where: r.team, ask: g ? (g.brief || g.question || "") : "" }; }
+    if (w.kind === "approval") { var a = it.approval; return { id: a.id, kind: "approval", title: shApprovalAbout(a), word: "needs approval", where: a.rule, ask: a.rule + " asks to start a run · would set aside " + money(a.budgetUsd) }; }
+    if (w.kind === "idea") { var x = it.idea, u = x.questions.filter(function (q) { return !q.answer; }); return { id: x.id, kind: "idea", list: x.list, title: x.title, word: ideaWord(x), where: x.list === "~" ? "workspace-wide" : x.list, ask: u.length ? u[0].question + (u.length > 1 ? " (and " + (u.length - 1) + " more)" : "") : "" }; }
+    return null;
+  }
+  function quietZones(only) {
+    var z = { needs: [], running: [], pickup: [] };
+    shWaiting().list.forEach(function (w) { if (only !== "sessions" || w.kind === "session") { var q = quietOfWaiting(w); if (q) { z.needs.push(q); } } });
+    ST.lines.filter(function (l) { return l.kind === "session" && l.stage !== 4 && !l.waiting; }).forEach(function (l) { z.running.push({ id: l.id, kind: "session", title: l.title, word: sessWord(l), where: l.where, ask: "" }); });
+    SESS_LOST.filter(function (x) { return x.conversation; }).forEach(function (x) { z.pickup.push({ id: x.id, kind: "lost session", title: x.conversation.title, word: "ended when the daemon stopped", where: (x.conversation.project || x.conversation.directory) + " · " + x.conversation.agent, ask: "Nothing restarts by itself: open it to resume it." }); });
+    if (only !== "sessions") {
+      TR.filter(function (r) { return teamRunning(r) && runWord(r) !== "waiting for you" && runWord(r) !== "stalled"; }).forEach(function (r) { z.running.push({ id: r.id, kind: "team run", title: r.goal, word: runWord(r), where: r.team, ask: "" }); });
+      TR.filter(function (r) { var w = runWord(r); return w === "failed" || w === "limited" || w === "stalled" || w === "blocked"; }).forEach(function (r) { z.pickup.push({ id: r.id, kind: "team run", title: r.goal, word: runWord(r), where: r.team, ask: r.end ? r.end.text || "" : "" }); });
+      IDEAS.filter(function (x) { return !x.accepted && ideaFailure(x); }).forEach(function (x) { z.pickup.push({ id: x.id, kind: "idea", list: x.list, title: x.title, word: ideaWord(x), where: x.list === "~" ? "workspace-wide" : x.list, ask: "Its last round failed: " + ideaFailure(x).error }); });
+      Object.keys(TASKS).forEach(function (pid) { (TASKS[pid] || []).filter(function (t) { return t.state === "blocked"; }).forEach(function (t) { z.pickup.push({ id: t.id, kind: "task", project: pid === "~" ? null : pid, title: t.title, word: "blocked", where: pid === "~" ? "no project yet" : pid, ask: t.note || "" }); }); });
+    }
+    return z;
+  }
+  /* The peek of a quiet row: the short block under it, before the frame opens (shPeek is inline in Minimal). */
+  function quietPeek(x) {
+    if (x.kind === "session") { return peekSession(line(x.id)); }
+    if (x.kind === "team run") { return peekRun(TR.filter(function (r) { return r.id === x.id; })[0]); }
+    if (x.kind === "approval") { return peekApproval(TRIG.approvals.filter(function (a) { return a.id === x.id; })[0]); }
+    if (x.kind === "idea") { return peekIdea(IDEAS.filter(function (i) { return i.id === x.id && (!x.list || i.list === x.list); })[0]); }
+    if (x.kind === "task") { return peekTask((TASKS[x.project || "~"] || []).filter(function (t) { return t.id === x.id; })[0], x.project || null); }
+    return null;
+  }
+  function quietList(items, name) {
+    var ol = S.QuietList({ items: items, label: name, onOpen: function (x, from) { openQuiet(x, from); } });
+    var rows = Array.prototype.filter.call(ol.children, function (li) { return !li.classList.contains("zone"); });
+    if (rows.length === items.length) { rows.forEach(function (li, i) { var x = items[i]; if (quietPeek(x)) { peekAttach(li, function () { return quietPeek(x); }); } }); }
+    return ol;
+  }
+  var QUIET = null;
+  function quietSig(r) { var z = quietZones(r === "sessions" ? "sessions" : null); return r + "|" + JSON.stringify(z) + "|" + shLayouts() + "|" + P.watchOnly; }
+  /* One quiet column of zones, edited hide-only (shLayout in Minimal): Home's, and the Sessions page's. */
+  function quietZoned(main, o) {
+    var z = quietZones(o.only), lists = {};
+    QUIET_ZONES.concat(o.more || []).forEach(function (zz) { lists[zz[0]] = zz[0] === "recent" ? o.recent : z[zz[0]]; });
+    var head = el("div", { "class": "quiethead" }, [el("h1", { "class": o.title ? null : "ls-vh", text: o.title || "What is live" }), o.fact ? el("span", { "class": "fact", text: o.fact }) : null, el("span", { "class": "grow" })]);
+    main.appendChild(head);
+    var le = shLayout(o.page, "quiet", QUIET_ZONES.concat(o.more || []).map(function (zz) { return { id: zz[0], name: zz[1] }; }), { "class": "qzones", label: o.label,
+      count: function (id) { return lists[id].length || undefined; },
+      locked: function (id) { return (id === "needs" || id === "running") && lists[id].length > 0; },
+      editing: !!(QUIET && QUIET.editing === o.page), onedit: function (on) { QUIET = QUIET || {}; QUIET.editing = on ? o.page : null; QUIET.sig = ""; render(); },
+      render: function (id) { var xs = lists[id]; return xs.length ? quietList(xs, QUIET_ZONES.concat(o.more || []).filter(function (zz) { return zz[0] === id; })[0][1]) : el("p", { "class": "calmnote", text: "✓ " + QUIET_CALM_ZONE[id] }); } });
+    head.appendChild(le.button);
+    main.appendChild(le.bar);
+    main.appendChild(el("div", { "class": "quietwrap" + (o.wrapClass ? " " + o.wrapClass : "") }, [le.el].concat(o.after ? [o.after] : [])));
+    return { zones: z, le: le };
   }
   function renderQuiet(main) {
-    var items = quietItems();
-    main.appendChild(el("h1", { "class": "ls-vh", text: "What is live" }));
-    main.appendChild(el("div", { "class": "quietwrap" }, [S.QuietList({ items: items, onOpen: function (x, from) { openQuiet(x, from); } })]));
+    var q = quietZoned(main, { page: "home", label: "Minimal" }), items = q.zones.needs.concat(q.zones.running, q.zones.pickup);
+    QUIET = Object.assign(QUIET || {}, { route: "home", sig: quietSig("home") });
     /* A jump from elsewhere, the ModeBar's count or a launch, waits until what it names is listed. */
     var want = SH.focusing, it = want ? items.filter(function (x) { return x.id === want.id && x.kind === want.kind; })[0] : null;
     if (it) { SH.focusing = null; setTimeout(function () { openQuiet(it, null); }, 0); }
   }
+  /* Sessions in Minimal: what waits on you, what runs, what ended when the daemon stopped, and the ones that ended; the page in full under Show everything. */
+  function renderQuietSessions(main) {
+    var all = ST.lines.filter(function (l) { return l.kind === "session"; }), w = all.filter(function (l) { return l.waiting && l.stage !== 4; }).length, run = all.filter(function (l) { return l.stage !== 4 && !l.waiting; }).length;
+    var recent = all.filter(function (l) { return l.stage === 4; }).map(function (l) { return { id: l.id, kind: "session", title: l.title, word: "ended", where: l.where + " · " + (l.note || ""), ask: "" }; });
+    var box = el("div", { "class": "all", hidden: true, id: "qs-all" }), filled = false;
+    var more = el("button", { type: "button", "class": "more", "aria-expanded": "false", "aria-controls": "qs-all", "data-k": "qs-more", text: "Show everything", onclick: function () {
+      var open = more.getAttribute("aria-expanded") !== "true";
+      if (open && !filled) { renderSessions(box); filled = true; }
+      box.hidden = !open; more.setAttribute("aria-expanded", open ? "true" : "false"); more.textContent = open ? "Show less" : "Show everything";
+      if (QUIET) { QUIET.all = open; }
+    } });
+    quietZoned(main, { page: "sessions", only: "sessions", title: "Sessions", fact: w + " waiting · " + run + " running", label: "Sessions in Minimal", more: [["recent", "Recent"]], recent: recent, wrapClass: "qsess", after: el("div", {}, [more, box]) });
+    var keepAll = QUIET && QUIET.route === "sessions" && QUIET.all;
+    QUIET = Object.assign(QUIET || {}, { route: "sessions", sig: quietSig("sessions"), all: false });
+    if (keepAll) { more.click(); }
+  }
+  /* Open it in full: a second frame over the first, never another mode. Escape and Back close this one first. */
+  var FOCUS2 = null;
+  function shQuietFull(o) {
+    if (FOCUS2) { FOCUS2.close(); }
+    var box = el("div", { "class": "qfull" }); o.build(box);
+    function esc(e) { if (e.key === "Escape" && FOCUS2 && !(e.target && e.target.closest && e.target.closest(".ls-dialog"))) { e.preventDefault(); e.stopImmediatePropagation(); FOCUS2.close(); } }
+    window.addEventListener("keydown", esc, true);
+    FOCUS2 = S.FocusFrame({ title: o.title, sub: o.sub, word: o.word, content: box, onClose: function () { window.removeEventListener("keydown", esc, true); FOCUS2 = null; } });
+    return FOCUS2;
+  }
   function openQuiet(x, from) {
+    if (FOCUS2) { FOCUS2.close(); }
     if (FOCUS) { FOCUS.close(); FOCUS = null; }
     if (x.kind === "session") {
       var l = line(x.id), t = makeTerm(x.id);
+      if (!l || !t) { return; }
       LIVE = { id: x.id, t: t };
       FOCUS = S.FocusFrame({ title: l.title, sub: l.where + " · " + (l.agent === "codex" ? "Codex" : "Claude Code"), word: wordOf(l), content: t.el, from: from, onClose: function () { LIVE = null; FOCUS = null; } });
       setTimeout(function () { t.focus(); }, 560);
       return;
     }
+    if (x.kind === "idea" || x.kind === "task") { reveal({ kind: x.kind, id: x.id, list: x.list, project: x.kind === "task" ? x.project || null : undefined }); return; }
+    if (x.kind === "approval") {
+      var a = TRIG.approvals.filter(function (y) { return y.id === x.id; })[0];
+      if (!a) { return; }
+      var abox = el("div", { "class": "qrun" }, [el("dl", { "class": "ls-rules" }, [el("dt", { text: "Rule" }), el("dd", { text: a.rule }), el("dt", { text: "About" }), el("dd", { text: shApprovalAbout(a) }), el("dt", { text: "Would set aside" }), el("dd", { text: money(a.budgetUsd) })]),
+        el("div", { "class": "ls-answers" }, [halo({ label: "Approve", kind: "needs", solid: true, size: "small", cmd: "$ loadout trigger approve " + a.id, onPress: function () { trigAnswer("approve", a.id, "Approved: " + shApprovalAbout(a))(); setTimeout(function () { if (FOCUS) { FOCUS.close(); } }, 900); return "Approved"; } }, "qa-approve"),
+          halo({ label: "Reject", kind: "danger", size: "small", cmd: "$ loadout trigger reject " + a.id, onPress: function () { trigAnswer("reject", a.id, "Rejected: " + shApprovalAbout(a))(); setTimeout(function () { if (FOCUS) { FOCUS.close(); } }, 900); return "Rejected"; } }, "qa-reject")])]);
+      FOCUS = S.FocusFrame({ title: shApprovalAbout(a), sub: a.rule + " · " + (a.project || ""), word: "needs approval", content: abox, from: from, onClose: function () { FOCUS = null; } });
+      return;
+    }
+    if (x.kind === "lost session") {
+      var one = SESS_LOST.filter(function (y) { return y.id === x.id; })[0], c = one && one.conversation;
+      if (!c) { return; }
+      var lbox = el("div", { "class": "qlost" }, [el("p", { "class": "calm", text: "This was running here when the daemon last stopped. Nothing restarts by itself: resuming starts its agent again, carrying its conversation on." }),
+        S.Command({ why: "In a terminal, the same:", command: sessResumeCmd(one.agentSession, c.project) }),
+        el("div", { "class": "ls-answers" }, [halo({ label: "Resume", solid: true, size: "small", cmd: "carries it on in a new terminal", disabledReason: sessUnable(), onPress: function () { return sessResume(c, {}, one.id).then(function (id) { if (!id) { return false; } if (FOCUS) { FOCUS.close(); } setTimeout(function () { openQuiet({ id: id, kind: "session" }, null); }, 60); return "Resumed"; }); } }, "ql-resume")])]);
+      FOCUS = S.FocusFrame({ title: c.title, sub: x.where, word: "ended when the daemon stopped", content: lbox, from: from, onClose: function () { FOCUS = null; } });
+      return;
+    }
     var r = TR.filter(function (y) { return y.id === x.id; })[0];
-    /* A run opened after it ended: its page says how. */
+    /* A run opened after it ended: its page, in a second frame, says how. */
     if (!r || r.ended) {
-      FOCUS = S.FocusFrame({ title: x.title || (r ? r.goal : x.id), word: "ended", content: el("p", { "class": "calm" }, ["That run has ended. ", el("a", { href: "#run-" + x.id, text: "Its page" }), " says how."]), from: from, onClose: function () { FOCUS = null; } });
+      FOCUS = S.FocusFrame({ title: x.title || (r ? r.goal : x.id), word: r ? runWord(r) : "ended", content: el("div", { "class": "qrun" }, [el("p", { "class": "calm" }, ["That run has ended. ", r ? el("button", { type: "button", "class": "linkish", "data-k": "qr-full", text: "Its page", onclick: function () { shQuietFull({ title: r.goal, sub: r.team + " · " + r.project, word: runWord(r), build: function (b) { renderRun(b, r.id); } }); } }) : null, r ? " says how." : ""])]), from: from, onClose: function () { FOCUS = null; } });
       return;
     }
     var g = runGate(r), box = el("div", { "class": "qrun" });
     if (g) { box.appendChild(S.Gate(Object.assign({ run: r.id }, g, { disabledReason: P.watchOnly ? SH_WATCH : null, onAnswer: function (a, ex) { g.onAnswer(a, ex); setTimeout(function () { if (FOCUS) { FOCUS.close(); } }, 1200); } }))); }
     box.appendChild(S.RunShape({ rounds: r.shape, next: r.ended ? null : "the next round", end: r.end || null }));
     box.appendChild(S.DoneWhen(r.done));
-    /* Opening it in full is Default's page, so it leaves Minimal for Default. */
-    box.appendChild(el("p", { "class": "calm small" }, ["Everything else about it is on its page: ", el("a", { href: "#run-" + r.id, text: "open it in full", onclick: function () { setMode("default"); } }), "."]));
+    /* Opening it in full is its page in a second frame over this one, so Minimal stays Minimal. */
+    box.appendChild(el("p", { "class": "calm small" }, ["Everything else about it is on its page: ", el("button", { type: "button", "class": "linkish", "data-k": "qr-full", text: "open it in full", onclick: function () { shQuietFull({ title: r.goal, sub: r.team + " · " + r.project + " · round " + r.round, word: runWord(r), build: function (b) { renderRun(b, r.id); } }); } }), "."]));
     FOCUS = S.FocusFrame({ title: r.goal, sub: r.team + " · " + r.project + " · round " + r.round, word: runWord(r), content: box, from: from, onClose: function () { FOCUS = null; } });
   }
 
   /* Pure Focus: list, view and actions, a command bar, every key shown */
-  var PURE = null;
+  var PURE = null, PURE_SHOWN = null, PURE_FULL = null;
   var SCOPES = { h: "all", s: "sessions", t: "runs", i: "ideas", k: "tasks", n: "needs" };
+  /* The kinds each list scope keeps (G then a letter): Team runs keeps the trigger approvals that would start one. */
+  var PURE_KINDS = { sessions: ["session", "lost session"], runs: ["team run", "approval"], ideas: ["idea"], tasks: ["task"] };
+  /* The groups, live work first (WORKFLOW.md, Pure Focus): Needs you (oldest first, the one count's list), Running, Pick up (with the sessions that
+     ended when the daemon stopped), Ideas, Tasks and Ended. */
   function pureGroups(scope) {
-    var needs = [], sessions = [], runs = [], ideas = [], tasks = [];
-    ST.lines.filter(function (l) { return l.kind === "session"; }).forEach(function (l) {
-      var it = { id: l.id, kind: "session", title: l.title, meta: l.where + " · " + (l.agent === "codex" ? "codex" : "claude") + " · " + l.mode, word: l.stage === 4 ? "ended" : wordOf(l) };
-      (l.waiting ? needs : sessions).push(it);
+    var needs = [], running = [], pickup = [], ideas = [], tasks = [], ended = [];
+    function sessItem(l) { return { id: l.id, kind: "session", title: l.title, meta: l.where + " · " + (l.skind === "command" ? "loadout" : l.agent === "codex" ? "codex" : "claude") + (l.mode ? " · " + l.mode : ""), word: l.stage === 4 ? "ended" : wordOf(l) }; }
+    function runItem(r) { return { id: r.id, kind: "team run", title: r.goal, meta: r.team + " · " + r.project + " · round " + r.round, word: runWord(r) }; }
+    function ideaItem(x) { return { id: "idea:" + x.list + "/" + x.id, kind: "idea", title: x.title, meta: (x.list === "~" ? "workspace-wide" : x.list) + " · " + String(x.stage || "").toLowerCase(), word: ideaWord(x) }; }
+    shWaiting().list.forEach(function (w) {
+      var it = w.item || {};
+      if (w.kind === "session") { needs.push(sessItem(it.line)); }
+      else if (w.kind === "team run") { needs.push(runItem(it.run)); }
+      else if (w.kind === "approval") { needs.push({ id: "approval:" + w.id, kind: "approval", title: shApprovalAbout(it.approval), meta: it.approval.rule + " · trigger approval", word: "needs approval" }); }
+      else if (w.kind === "idea") { needs.push(ideaItem(it.idea)); }
     });
-    TR.forEach(function (r) {
-      var w = runWord(r), it = { id: r.id, kind: "team run", title: r.goal, meta: r.team + " · " + r.project + " · round " + r.round, word: w };
-      (w === "waiting for you" ? needs : runs).push(it);
+    var inNeeds = needs.map(function (x) { return x.id; });
+    ST.lines.filter(function (l) { return l.kind === "session" && inNeeds.indexOf(l.id) < 0; }).forEach(function (l) { (l.stage === 4 ? ended : running).push(sessItem(l)); });
+    SESS_LOST.filter(function (x) { return x.conversation; }).forEach(function (x) { pickup.push({ id: "lost:" + x.id, kind: "lost session", title: x.conversation.title, meta: (x.conversation.project || x.conversation.directory) + " · " + x.conversation.agent, word: "ended when the daemon stopped" }); });
+    TR.filter(function (r) { return inNeeds.indexOf(r.id) < 0; }).forEach(function (r) {
+      var w = runWord(r), g = S.liveGroup({ state: w });
+      (teamRunning(r) && w !== "stalled" ? running : g === "pickup" || w === "stalled" ? pickup : ended).push(runItem(r));
     });
-    ST.lines.filter(function (l) { return l.kind === "idea"; }).forEach(function (l) { ideas.push({ id: l.id, kind: "idea", title: l.title, meta: l.where + " · " + l.note, word: wordOf(l) }); });
-    ST.lines.filter(function (l) { return l.kind === "task"; }).forEach(function (l) { tasks.push({ id: l.id, kind: "task", title: l.title, meta: l.where + " · " + (l.blocked || l.note), word: wordOf(l) }); });
-    var all = [{ key: "needs", name: "Needs you", items: needs }, { key: "sessions", name: "Sessions", items: sessions }, { key: "runs", name: "Team runs", items: runs }, { key: "ideas", name: "Ideas", items: ideas }, { key: "tasks", name: "Tasks", items: tasks }];
-    return scope && scope !== "all" ? all.filter(function (g) { return g.key === scope || (g.key === "needs" && scope !== "needs" && false); }) : all;
+    IDEAS.filter(function (x) { return !x.accepted && x.state !== "dropped" && inNeeds.indexOf("idea:" + x.list + "/" + x.id) < 0; }).forEach(function (x) { (ideaFailure(x) ? pickup : ideas).push(ideaItem(x)); });
+    ST.lines.filter(function (l) { return l.kind === "task"; }).forEach(function (l) { (l.blocked ? pickup : l.stage === 4 ? ended : tasks).push({ id: l.id, kind: "task", title: l.title, meta: l.where + " · " + (l.blocked || l.note), word: wordOf(l) }); });
+    var all = [{ key: "needs", name: "Needs you", items: needs }, { key: "running", name: "Running", items: running }, { key: "pickup", name: "Pick up", items: pickup },
+      { key: "ideas", name: "Ideas", items: ideas }, { key: "tasks", name: "Tasks", items: tasks }, { key: "ended", name: "Ended", items: ended }];
+    if (!scope || scope === "all") { return all; }
+    if (scope === "needs") { return all.filter(function (g) { return g.key === "needs"; }); }
+    var ks = PURE_KINDS[scope] || [];
+    return all.map(function (g) { return { key: g.key, name: g.name, items: g.items.filter(function (x) { return ks.indexOf(x.kind) >= 0; }) }; });
   }
   function pureItemRun(id) { return TR.filter(function (r) { return r.id === id; })[0]; }
+  function pureIdea(x) { var m = /^idea:(.*)\/([^/]+)$/.exec(x.id || ""); return m ? IDEAS.filter(function (i) { return i.list === m[1] && i.id === m[2]; })[0] || null : null; }
+  function pureApproval(x) { var id = String(x.id || "").replace(/^approval:/, ""); return TRIG.approvals.filter(function (a) { return a.id === id; })[0] || null; }
+  function pureLost(x) { var id = String(x.id || "").replace(/^lost:/, ""); return SESS_LOST.filter(function (y) { return y.id === id; })[0] || null; }
+  /* What the view pane previews as J and K move: the same peek as everywhere else, drawn into the pane (shPeek with a container). */
+  function purePeekItem(x) {
+    if (x.kind === "session") { return peekSession(line(x.id)); }
+    if (x.kind === "team run") { return peekRun(pureItemRun(x.id)); }
+    if (x.kind === "approval") { return peekApproval(pureApproval(x)); }
+    if (x.kind === "idea") { return peekIdea(pureIdea(x)); }
+    if (x.kind === "task") { var l = line(x.id); return l ? peekTask((TASKS[l.where] || []).filter(function (t) { return t.id === l.ref; })[0], l.where) : null; }
+    return null;
+  }
   function pureView(x) {
-    if (x.kind === "session") { var t = makeTerm(x.id); LIVE = { id: x.id, t: t }; return { el: t.el, term: t }; }
+    var it = purePeekItem(x);
+    if (!it) { return pureFull(x); }
+    var box = el("div", { "class": "pview ppeek" });
+    shPeek({ container: box }).show(it);
+    return { el: box };
+  }
+  /* The whole thing, once Enter (or a double click, or F6) opens the view: a session's terminal, a run's gate, shape and crew. */
+  function pureFull(x) {
+    if (x.kind === "session") { var t = makeTerm(x.id); if (t) { LIVE = { id: x.id, t: t }; return { el: t.el, term: t }; } }
     var box = el("div", { "class": "pview" });
     if (x.kind === "team run") {
       var r = pureItemRun(x.id);
@@ -2825,10 +3038,40 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
       box.appendChild(el("p", { "class": "calm small" }, ["Its five depths are on its full page: press the number beside Open its full page, or type ", el("kbd", { "class": "ls-kbd", text: ":" }), " open."]));
       return { el: box };
     }
+    if (x.kind === "approval") {
+      var a = pureApproval(x);
+      if (!a) { box.appendChild(el("p", { "class": "calm", text: "That approval is no longer waiting." })); return { el: box }; }
+      box.appendChild(el("dl", { "class": "ls-rules" }, [el("dt", { text: "Rule" }), el("dd", { text: a.rule }), el("dt", { text: "About" }), el("dd", { text: shApprovalAbout(a) }), el("dt", { text: "Project" }), el("dd", { text: a.project || "" }), el("dt", { text: "Would set aside" }), el("dd", { text: money(a.budgetUsd) })]));
+      return { el: box };
+    }
+    if (x.kind === "idea") { var xi = pureIdea(x); box.appendChild(xi ? ideaWorkFor(xi) : el("p", { "class": "calm", text: "That idea is no longer here." })); return { el: box }; }
+    if (x.kind === "lost session") {
+      var one = pureLost(x), c = one && one.conversation;
+      if (!c) { box.appendChild(el("p", { "class": "calm", text: "Nothing to resume here any more." })); return { el: box }; }
+      box.appendChild(el("p", { "class": "calm", text: "This was running here when the daemon last stopped. Nothing restarts by itself: Resume starts its agent again, carrying its conversation on." }));
+      box.appendChild(el("dl", { "class": "ls-rules" }, [el("dt", { text: "Agent" }), el("dd", { text: c.agent }), el("dt", { text: "Where" }), el("dd", { text: c.project || c.directory }), el("dt", { text: "Branch" }), el("dd", { text: c.branch || "none" })]));
+      box.appendChild(S.Command({ why: "In a terminal, the same:", command: sessResumeCmd(one.agentSession, c.project) }));
+      return { el: box };
+    }
     var l = line(x.id);
+    if (!l) { return { el: box }; }
     box.appendChild(el("dl", { "class": "ls-rules" }, [el("dt", { text: "What" }), el("dd", { text: l.kind }), el("dt", { text: "Where" }), el("dd", { text: l.where }), el("dt", { text: "Now" }), el("dd", { text: l.blocked || l.note })]));
-    (l.events || []).slice(0, 4).forEach(function (e) { box.appendChild(el("p", { "class": "calm", style: "margin: 6px 0 0; font-size: 13px" }, [el("span", { "class": "mono", style: "margin-right: 10px", text: e.t }), e.text])); });
+    (l.events || []).slice(0, 4).forEach(function (e) { box.appendChild(el("p", { "class": "calm", style: "margin: 0; font-size: 13px" }, [el("span", { "class": "mono", style: "margin-right: 10px", text: e.t }), e.text])); });
     return { el: box };
+  }
+  /* The view pane swaps the preview for the whole thing. */
+  function pureShowFull() {
+    if (!PURE || !PURE_SHOWN || PURE_FULL === PURE_SHOWN.id) { return; }
+    var vb = PURE.desk.el.querySelector(".view .vbody"); if (!vb) { return; }
+    var v = pureFull(PURE_SHOWN);
+    vb.textContent = ""; vb.className = "vbody" + (v.el.classList && v.el.classList.contains("ls-term") ? " term" : ""); vb.appendChild(v.el);
+    PURE_FULL = PURE_SHOWN.id;
+  }
+  function pureShown(x) { PURE_SHOWN = x; LIVE = null; PURE_FULL = x && !purePeekItem(x) ? x.id : null; }
+  /* Enter, a double click or F6 from the list opens the view: the whole thing comes in first, so the desk's own key lands in it. */
+  function pureOpenKeys(wrap) {
+    wrap.addEventListener("keydown", function (e) { var t = e.target; if (t && t.matches && t.matches("ul.items") && (e.key === "Enter" || (e.key === "F6" && !e.shiftKey))) { pureShowFull(); } }, true);
+    wrap.addEventListener("dblclick", function (e) { if (e.target && e.target.closest && e.target.closest("ul.items [role=option]")) { setTimeout(function () { pureShowFull(); if (PURE) { PURE.desk.openView(); } }, 0); } });
   }
   /* The actions for the picked thing: the same, with the same commands, as anywhere else (main's PureFocus.svelte). */
   function pureActions(x) {
@@ -2836,26 +3079,53 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     function from(list) { return list.map(function (a) { var why = a.disabledReason || (P.watchOnly ? shRefused(a) : null); return { label: a.label, cmd: a.cmd, kind: a.kind === "danger" ? "danger" : (a.kind || ""), disabledReason: why, run: function () { var r = a.onPress ? a.onPress() : null; setTimeout(function () { render(); }, 30); return typeof r === "string" ? r : a.label; } }; }); }
     if (x.kind === "session") {
       var l = line(x.id);
-      if (!l || l.stage === 4) { return [{ label: "Carry it on in a terminal", cmd: "$ loadout resume " + (l && l.id === "s2" ? "3f9c2a1e" : "7b21d0c4") + " --project " + (l ? l.where : "starstats") }]; }
-      return [{ label: l.waiting ? "Go to the question" : "Type into it", kind: l.waiting ? "needs" : "", cmd: "puts the keyboard in its terminal · answered there", run: function () { if (LIVE && LIVE.t) { LIVE.t.focus(); } return "The keyboard is in its terminal. Ctrl+] leaves it."; } },
-        { label: "End the session", kind: "danger", cmd: "stops the agent in this terminal", disabledReason: P.watchOnly ? "Studio is only watching: end it from where it runs" : null, run: function () { l.stage = 4; l.waiting = false; l.note = "ended by you"; addEvent(l, "ended", "You ended " + l.title); setTimeout(render, 30); return "Ended " + l.title; } }];
+      if (!l || l.stage === 4) { return [{ label: "Carry it on in a terminal", cmd: sessResumeCmd(l ? l.agentSession : null, l ? l.where : null) }]; }
+      return [{ label: l.waiting ? "Go to the question" : "Type into it", kind: l.waiting ? "needs" : "", cmd: "puts the keyboard in its terminal · answered there", run: function () { pureShowFull(); if (PURE) { PURE.desk.openView(); } return "The keyboard is in its terminal. Ctrl+] leaves it."; } },
+        /* End asks first, as everywhere else: its own confirmation, which waits and then closes. */
+        { label: "End session…", cmd: "asks first · stops the agent in this terminal", disabledReason: P.watchOnly ? "Studio is only watching: end it from where it runs" : null, run: function () { sessEndAsk(l); return "Asked first: End this session?"; } }];
+    }
+    if (x.kind === "lost session") {
+      var one = pureLost(x), lost = SESS_LOST.filter(function (y) { return y.conversation; }), held = sessUnable();
+      if (!one) { return []; }
+      var out0 = [{ label: "Resume", kind: "needs", cmd: "carries it on in a new terminal · " + sessResumeCmd(one.agentSession, one.conversation.project), disabledReason: held || null,
+        run: function () { sessResume(one.conversation, {}, one.id).then(function (id) { if (id) { go("session-" + id); } else { render(); } }); return "Resuming " + one.conversation.title; } }];
+      if (lost.length > 1) { out0.push({ label: "Resume all " + lost.length, cmd: "asks first, naming each agent", disabledReason: held || null, run: function () { sessResumeAll(lost); return "Asked first: Resume all " + lost.length; } }); }
+      out0.push({ label: "Not this one", cmd: "no longer offered · starts nothing", disabledReason: sessWatching() ? SESS_WATCH : null, run: function () { SESS_LOST = SESS_LOST.filter(function (y) { return y !== one; }); setTimeout(render, 30); return "No longer offered"; } });
+      return out0;
+    }
+    if (x.kind === "approval") {
+      var a = pureApproval(x);
+      if (!a) { return []; }
+      return [{ label: "Approve", kind: "needs", cmd: "$ loadout trigger approve " + a.id, disabledReason: watch, run: function () { trigAnswer("approve", a.id, "Approved: " + shApprovalAbout(a))(); setTimeout(render, 30); return "Approved"; } },
+        { label: "Reject", kind: "danger", cmd: "$ loadout trigger reject " + a.id, disabledReason: watch, run: function () { trigAnswer("reject", a.id, "Rejected: " + shApprovalAbout(a))(); setTimeout(render, 30); return "Rejected"; } },
+        { label: "Open it on Teams", cmd: "opens Teams' Needs you · changes nothing", run: function () { reveal({ kind: "approval", id: a.id }); return "Opened Teams"; } }];
+    }
+    if (x.kind === "idea") {
+      var xi = pureIdea(x);
+      if (!xi) { return []; }
+      var w = ideaWhere(xi), outI = [];
+      if (ideaUnanswered(xi)) { outI.push({ label: "Answer its questions", kind: "needs", cmd: "opens the idea at its questions · changes nothing", run: function () { reveal({ kind: "idea", id: xi.id, list: xi.list, zone: "questions" }); return "Opened its questions"; } }); }
+      outI.push({ label: "Refine", cmd: ideaLine("idea refine", [xi.id].concat(w)), disabledReason: ideaRefused() || null, run: function () { said("Round started", ideaLine("idea refine", [xi.id].concat(w))); ideaRefine(xi); bump(); return "A round is running on the daemon"; } });
+      outI.push({ label: "Open the idea", cmd: "its desk · changes nothing", run: function () { reveal({ kind: "idea", id: xi.id, list: xi.list }); return "Opened " + xi.title; } });
+      return outI;
     }
     if (x.kind === "team run") {
       var r = pureItemRun(x.id), out = [];
       if (!r) { return []; }
-      var g = runGate(r), tl = tline(r), w = runWord(r);
+      var g = runGate(r), tl = tline(r), rw = runWord(r);
       if (g) {
         var opts = g.kind === "confirm" ? ["yes", "no"] : (g.kind === "brief" ? ["yes", "no"] : g.options || []);
         opts.forEach(function (op) { out.push({ label: g.kind === "brief" ? (op === "yes" ? "Send the brief" : "Don't send it") : (op === "yes" ? "Yes" : op === "no" ? "No" : op), kind: "needs", cmd: "$ loadout team gate " + r.id + " --gate " + g.gate + " --answer " + S.shellQuote(op) + " --by dashboard", disabledReason: watch, run: function () { g.onAnswer(op, {}); return "Answered: " + op; } }); });
         if (g.kind === "question" || g.kind === "readings") { out.push({ label: "Think again", cmd: "$ loadout team gate " + r.id + " --gate " + g.gate + " --think-again --by dashboard", disabledReason: watch, run: function () { g.onAnswer("Think again", {}); return "Sent back to the lead"; } }); }
       }
       /* A running run offers all three together, as main does. */
-      if (!r.ended && ["done", "stopped", "failed", "limited"].indexOf(w) < 0) {
+      if (!r.ended && ["done", "stopped", "failed", "limited"].indexOf(rw) < 0) {
         out.push({ label: "Hold after this round", cmd: "$ loadout team halt " + r.id + " --pause", disabledReason: watch, run: function () { if (tl) { tl.held = true; } r.held = true; TV++; setTimeout(render, 30); return "It holds after this round"; } },
           { label: "Let it carry on", cmd: "$ loadout team halt " + r.id + " --resume", disabledReason: watch, run: function () { if (tl) { tl.held = false; } r.held = false; TV++; setTimeout(render, 30); return "It carries on"; } },
           { label: "Stop after this round", kind: "danger", cmd: "$ loadout team halt " + r.id, disabledReason: watch, run: function () { r.ended = "stopped"; r.end = { word: "stopped", text: "Stopped by you after round " + r.round }; TV++; setTimeout(render, 30); return "It stops after this round"; } });
       }
-      out.push({ label: "Open its full page", cmd: "the five depths, in Default · changes nothing", run: function () { setMode("default"); setTimeout(function () { go("run-" + r.id); }, 60); return "Opened its full page"; } });
+      /* Its full page is a flat page in Pure Focus, not another mode; Escape or Back gives the desk back. */
+      out.push({ label: "Open its full page", cmd: "the five depths, here · changes nothing", run: function () { SH.pureFull = r.id; pureRedraw(); if (route() === "run-" + r.id) { render(); } else { go("run-" + r.id); } return "Opened its full page"; } });
       return out;
     }
     var ln = line(x.id);
@@ -2882,48 +3152,47 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     return rows.filter(function (r) { return !q || (r.label + " " + (r.cmd || "") + " " + r.kind).toLowerCase().indexOf(q) >= 0; });
   }
   function pureScope(s) { P.pureScope = s; savePrefs(); if (PURE) { PURE.desk.refresh(pureGroups(s)); PURE.sig = ""; renderModebar(); } }
-  /* The desk's list and actions widths, dragged with the dividers between them and kept in this browser; every desk shares them (main's WorkDesk split). */
-  function pureSplit(deskEl) {
-    var sp = P.deskSplit && P.deskSplit.length === 2 ? P.deskSplit.slice() : null, wide = 0;
-    var floor = Math.ceil(40 * 13 * 0.6 + 24);
-    function fl(px) { return wide > 0 ? Math.min(0.5, px / wide) : 0; }
-    function at() {
-      wide = deskEl.getBoundingClientRect().width;
-      var list = deskEl.querySelector(":scope > section.list"), acts = deskEl.querySelector(":scope > section.acts");
-      return sp || [wide && list ? list.getBoundingClientRect().width / wide : 0.25, wide && acts ? acts.getBoundingClientRect().width / wide : 0.2];
-    }
-    function cols() { if (sp) { deskEl.classList.add("sh-split"); deskEl.style.setProperty("--desk-cols", "minmax(250px, " + sp[0].toFixed(4) + "fr) minmax(0, " + (1 - sp[0] - sp[1]).toFixed(4) + "fr) minmax(230px, " + sp[1].toFixed(4) + "fr)"); } }
-    function sync() {
-      var v = at(), cl = function (x, a, b) { return S.Splitter.clamp(x, a, b); };
-      one.set({ value: cl(v[0], fl(250), 1 - v[1] - fl(floor)), min: fl(250), max: 1 - v[1] - fl(floor), reset: fl(320) });
-      two.set({ value: cl(1 - v[1], v[0] + fl(floor), 1 - fl(230)), min: v[0] + fl(floor), max: 1 - fl(230), reset: 1 - fl(280) });
-    }
-    function keep() { P.deskSplit = sp; savePrefs(); cols(); sync(); }
-    var one = S.Splitter({ "class": "first", label: "Width of the list", value: 0.25, reset: 0.25, onchange: function (to) { var v = at(); sp = [to, v[1]]; keep(); } });
-    var two = S.Splitter({ "class": "second", label: "Width of the actions", value: 0.8, reset: 0.8, onchange: function (b) { var v = at(); sp = [v[0], 1 - b]; keep(); } });
-    deskEl.appendChild(one.el); deskEl.appendChild(two.el); cols();
-    setTimeout(sync, 0);
+  /* The desk's list and actions widths are the WorkDesk's own dividers, kept in this browser; every desk shares them (main's WorkDesk split). */
+  function pureSplitOpts() { return { split: P.deskSplit && P.deskSplit.length === 2 ? P.deskSplit.slice() : null, onSplit: function (fr) { P.deskSplit = fr; savePrefs(); } }; }
+  /* A run's full page in Pure Focus: flat, under a way back to the desk, as the six pages' desks are flat. */
+  /* The desk or the flat page is drawn anew, not kept as it was. */
+  function pureRedraw() { if (PURE) { PURE.desk.destroy(); PURE = null; LIVE = null; } lastTeams = ""; }
+  function renderPureFlat(main, id) {
+    var wrap = el("div", { "class": "pureflat" });
+    wrap.appendChild(el("p", { "class": "pfback" }, [halo({ label: "Back to the desk", size: "small", glyph: "←", cmd: "Esc · changes nothing", onPress: function () { SH.pureFull = null; pureRedraw(); render(); } }, "pf-back")]));
+    renderRun(wrap, id);
+    main.appendChild(wrap);
   }
+  window.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape" || !SH.pureFull || P.mode !== "pure" || route() !== "run-" + SH.pureFull || e.defaultPrevented) { return; }
+    var t = e.target; if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || (t.closest && t.closest(".ls-dialog, .ls-term")))) { return; }
+    e.preventDefault(); SH.pureFull = null; pureRedraw(); render();
+  });
   function renderPure(main, r) {
     var sel = r.indexOf("session-") === 0 ? r.slice(8) : (r.indexOf("run-") === 0 ? r.slice(4) : null);
+    if (sel && SH.pureFull === sel && r.indexOf("run-") === 0) { renderPureFlat(main, sel); return; }
+    SH.pureFull = null;
     var scope = r === "sessions" ? "sessions" : (r === "teams" ? "runs" : (P.pureScope || "all"));
     var wrap = el("div", { "class": "deskwrap" });
-    var d = S.WorkDesk({ groups: pureGroups(scope), selected: sel || P.pureSelected, view: pureView, actions: pureActions, commands: pureCommands, keys: P.keys,
-      goKeys: GOKEYS, onGo: pureGo, onSelect: function (id) { P.pureSelected = id; savePrefs(); } });
-    wrap.appendChild(d.el); main.appendChild(wrap); pureSplit(d.el);
+    var d = S.WorkDesk(Object.assign({ groups: pureGroups(scope), selected: sel || P.pureSelected, view: pureView, actions: pureActions, commands: pureCommands, keys: P.keys,
+      goKeys: GOKEYS, onGo: pureGo, onSelect: function (id) { P.pureSelected = id; savePrefs(); }, onShown: function (x) { pureShown(x); } }, pureSplitOpts()));
+    pureOpenKeys(wrap);
+    wrap.appendChild(d.el); main.appendChild(wrap);
     PURE = { route: r, desk: d, sig: pureSig() };
   }
 
   function pureSig() { return JSON.stringify(pureGroups(P.pureScope || "all").map(function (g) { return g.items.map(function (x) { return x.id + x.word; }); })) + TV; }
   function refreshPure() {
     var s = pureSig(); if (s === PURE.sig) { return; }
-    var before = PURE.desk.selected, word = null;
+    var before = PURE.desk.selected, word = null, full = PURE_FULL === before;
     pureGroups("all").forEach(function (g) { g.items.forEach(function (x) { if (x.id === before) { word = x.word; } }); });
     PURE.desk.refresh(pureGroups(PURE.route === "sessions" ? "sessions" : PURE.route === "teams" ? "runs" : (P.pureScope || "all")));
     if (PURE.lastWord !== word) {
       PURE.lastWord = word;
-      /* A session's terminal stays as it is, so nothing typed is lost: only its state and the actions change. */
-      if (LIVE && LIVE.id === before) { var l = line(before); if (l) { LIVE.t.setState(termState(l)); } PURE.desk.repaintActions(); } else { PURE.desk.repaintView(); }
+      /* A session's terminal stays as it is, so nothing typed is lost: only its state and the actions change. A preview is read again in place. */
+      if (LIVE && LIVE.id === before) { var l = line(before); if (l) { LIVE.t.setState(termState(l)); } PURE.desk.repaintActions(); }
+      else if (!full && SHP && SHP.mode === "preview" && SHP.peek.el.isConnected && PURE_SHOWN && PURE_SHOWN.id === before) { var it = purePeekItem(PURE_SHOWN); if (it) { SHP.peek.set(it); } PURE.desk.repaintActions(); }
+      else { PURE.desk.repaintView(); if (full) { pureShowFull(); } }
     }
     PURE.sig = s;
   }
@@ -4475,8 +4744,8 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     var sel = want && all.some(function (x) { return x.id === want; }) ? want : (P.pureSel[b] && all.some(function (x) { return x.id === P.pureSel[b]; }) ? P.pureSel[b] : (all[0] || {}).id);
     var wrap = el("div", { "class": "deskwrap" });
     var d = S.WorkDesk({ groups: cfg.groups, selected: sel, label: PAGE_NAMES[b], view: cfg.view, actions: function (x) { return cfg.actions(x).map(function (a) { var run = a.run; return Object.assign({}, a, { run: function () { var s = run ? run() : a.label; setTimeout(function () { if (PURE && PURE.page) { PURE.desk.repaintActions(); } }, 40); return s; } }); }); }, commands: pureCommands, keys: P.keys, goKeys: GOKEYS, onGo: pureGo,
-      onSelect: function (id) { P.pureSel[b] = id; savePrefs(); } });
-    wrap.appendChild(d.el); main.appendChild(wrap); pureSplit(d.el);
+      onSelect: function (id) { P.pureSel[b] = id; savePrefs(); }, split: pureSplitOpts().split, onSplit: pureSplitOpts().onSplit });
+    wrap.appendChild(d.el); main.appendChild(wrap);
     PURE = { route: r, desk: d, page: b, pv: PV, sub: sub };
   }
 
@@ -5013,8 +5282,8 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     kids.push(S.ActionRow({ actions: [{ disabledReason: plcRefused(), label: "Skip onboarding", cmd: "$ loadout project onboard " + p.id + " --skip", said: "Recorded that it is not being onboarded" }] }));
     kids.push(el("h4", { "class": "ctl-h", text: "Change how it is set up" }));
     kids.push(el("p", { "class": "calm", style: "margin: 0; font-size: 14px", text: "Change what every session also gets" }));
-    kids.push(S.SettingRow({ label: "Its recorded tasks", sub: "Open, doing and blocked tasks go in front of every session.", kind: "switch", value: "on", setCmd: function (v) { return "$ loadout project context tasks " + v + " --project " + p.id; } }));
-    kids.push(S.SettingRow({ label: "A map of the code", sub: "A short outline of where things are.", kind: "switch", value: "off", setCmd: function (v) { return "$ loadout project context code-map " + v + " --project " + p.id; } }));
+    kids.push(S.SettingRow({ disabledReason: P.watchOnly ? SH_WATCH : null, label: "Its recorded tasks", sub: "Open, doing and blocked tasks go in front of every session.", kind: "switch", value: "on", setCmd: function (v) { return "$ loadout project context tasks " + v + " --project " + p.id; } }));
+    kids.push(S.SettingRow({ disabledReason: P.watchOnly ? SH_WATCH : null, label: "A map of the code", sub: "A short outline of where things are.", kind: "switch", value: "off", setCmd: function (v) { return "$ loadout project context code-map " + v + " --project " + p.id; } }));
     kids.push(S.Readout({ path: "project proposal", extra: [p.id], title: "A proposed change to its settings", view: "list", data: [{ name: "+ agent: codex", sub: "proposed by an onboarding session, 2 days ago" }, { name: "- agent: claude", sub: "" }] }).el);
     kids.push(S.ActionRow({ actions: [{ disabledReason: plcRefused(), label: "Apply it", cmd: "$ loadout project proposal " + p.id + " --apply", ask: "Write the proposal over project.yaml?", yes: "Apply it", said: "Applied" }, { disabledReason: plcRefused(), label: "Discard it", danger: true, cmd: "$ loadout project proposal " + p.id + " --discard", ask: "Discard the proposal?", yes: "Discard it", said: "Discarded" }] }));
     kids.push(S.ActionForm({ disabledReason: plcDis(), path: "project relocate", title: "It has moved on this machine", label: "Point at it", dryRun: true, fields: [{ name: "project", label: "Project", value: p.id, fixed: true }, { name: "path", label: "Where it is now", required: true, placeholder: "~/code/" + p.id }], onRun: did("Pointed it at the new place") }).el);
@@ -5046,7 +5315,7 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
   C.ctxRules = function (slug, cands) {
     cands = cands || [];
     return el("div", { "class": "cstack" }, [
-      S.SettingRow({ label: "The style this project uses", sub: "How sessions here are told to write code.", value: "plain-csharp", kind: "choice", options: [["plain-csharp", "plain-csharp"], ["dense-csharp", "dense-csharp"], ["none", "none: only your own and the codebase's"]], setLabel: "Use it", setCmd: function (v) { return "$ loadout style use " + v + " --project " + slug; }, onSet: function (v) { said("This project uses " + v + " now", "$ loadout style use " + v + " --project " + slug); } }),
+      S.SettingRow({ disabledReason: P.watchOnly ? SH_WATCH : null, label: "The style this project uses", sub: "How sessions here are told to write code.", value: "plain-csharp", kind: "choice", options: [["plain-csharp", "plain-csharp"], ["dense-csharp", "dense-csharp"], ["none", "none: only your own and the codebase's"]], setLabel: "Use it", setCmd: function (v) { return "$ loadout style use " + v + " --project " + slug; }, onSet: function (v) { said("This project uses " + v + " now", "$ loadout style use " + v + " --project " + slug); } }),
       S.Readout({ path: "style show", extra: ["plain-csharp", "--project", slug], title: "The style, as sessions get it", view: "document", data: "## plain-csharp\n\n- Name things for what they mean.\n- One idea per method.\n- Comments say why, never what.\n\nLoads its language file for `*.cs`." }).el,
       S.ActionForm({ path: "rules split", title: "Split the oversized instruction file into scoped rules", why: "Moves sections into rules that load only for the paths they are about. Nothing is lost; a backup is taken first.", label: "Split it", applyWith: ["--apply"], ask: "Move 4 section groups out of AGENTS.md into scoped rules?", yes: "Split it",
         fields: [{ name: "project", label: "Project", value: slug, fixed: true }, { name: "--from", label: "The file", placeholder: "the largest always-loaded one" }, { name: "--map", label: "The routing map", placeholder: "split-map.yaml beside it", more: true }],
@@ -5084,7 +5353,7 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
       var lf = layer === "codebase" ? " --layer codebase" : "";
       rowsBox.appendChild(el("label", { "class": "ctl-pick" }, ["Whose ", el("select", { "class": "ls-text", onchange: function (e) { layer = e.target.value; timeRows(); } }, [["personal", "yours (personal)"], ["codebase", "this codebase's"]].map(function (o) { return el("option", { value: o[0], text: o[1], selected: layer === o[0] ? true : null }); }))]));
       surfaces.forEach(function (s) {
-        rowsBox.appendChild(S.SettingRow({ label: s[1], value: layer === "codebase" ? null : s[2], unset: "not set: the default applies", kind: "choice", options: s[0] === "estimates" ? [["range-with-owner", "a range, with who owns it"], ["never", "never"]] : presets.map(function (p) { return [p[0], p[1] + "  (" + p[0] + ")"]; }), show: function (v) { var p = presets.filter(function (x) { return x[0] === v; })[0]; return p ? p[1] : v; },
+        rowsBox.appendChild(S.SettingRow({ disabledReason: P.watchOnly ? SH_WATCH : null, label: s[1], value: layer === "codebase" ? null : s[2], unset: "not set: the default applies", kind: "choice", options: s[0] === "estimates" ? [["range-with-owner", "a range, with who owns it"], ["never", "never"]] : presets.map(function (p) { return [p[0], p[1] + "  (" + p[0] + ")"]; }), show: function (v) { var p = presets.filter(function (x) { return x[0] === v; })[0]; return p ? p[1] : v; },
           setCmd: function (v) { return "$ loadout voice time set " + s[0] + " " + v + lf + " --project " + slug; }, clearCmd: "$ loadout voice time unset " + s[0] + lf + " --project " + slug }));
       });
       return rowsBox;
@@ -5710,6 +5979,7 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     if (rr === "teams-office" && (P.mode === "minimal" || P.mode === "pure")) { go("teams"); return; }
     if (rr !== "teams-office" && OFFICEVIEW) { OFFICEVIEW.destroy(); OFFICEVIEW = null; }
     if (rr === "teams-office" && P.mode !== "terminals" && OFFICEVIEW && OFFICEVIEW.mode === P.mode && OFFICEVIEW.el.isConnected) { OFFICEVIEW.refresh(); renderNav(); renderAmbient(); return; }
+    if (P.mode === "minimal" && (rr === "home" || rr === "sessions") && QUIET && QUIET.route === rr && !SH.focusing && document.querySelector("#main .qzones") && (FOCUS || QUIET.sig === quietSig(rr))) { renderNav(); renderAmbient(); return; }
     var deckRoute = P.mode === "terminals" && (rr === "home" || rr === "sessions" || rr.indexOf("session-") === 0 || pagesRoute(rr) || rr === "teams-office" || tfBesideRoute(rr));
     if (deckRoute && DECK && DECK.route === rr && document.getElementById("main").childNodes.length) { refreshDeck(); if (pagesRoute(rr) || tfBesideRoute(rr)) { tfBesideStale(); refreshBeside(); } renderNav(); renderAmbient(); return; }
     if (!deckRoute) { DECK = null; }
@@ -5739,6 +6009,7 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     else if (P.mode === "terminals" && (r === "home" || r === "sessions" || r.indexOf("session-") === 0)) { renderDeck(main, r.indexOf("session-") === 0 ? r.slice(8) : null); }
     else if (P.mode === "teams" && (r === "home" || r === "teams" || r.indexOf("run-") === 0 || r.indexOf("team-") === 0)) { renderBoard(main, r); }
     else if (P.mode === "minimal" && r === "home") { renderQuiet(main); }
+    else if (P.mode === "minimal" && r === "sessions") { renderQuietSessions(main); }
     else if (r === "home") { homeHead(main); if (ST.view === "map") { renderMap(main); } else { renderLens(main); } }
     else if (r === "sessions") { renderSessions(main); }
     else if (r.indexOf("session-") === 0) { renderSession(main, r.slice(8)); }
@@ -5767,12 +6038,12 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
   }
 
   /* ---------- time: the script, and the agents typing ---------- */
-  var toasts = shToasts(document.getElementById("toasts"));
+  var toasts = S.Toasts(document.getElementById("toasts"));
   function step() {
     if (ST.paused || ST.step >= SCRIPT.length) { return; }
     var r = SCRIPT[ST.step++](); ST.clock += 2; ST.tokens += 1800;
     ST.lines.forEach(function (l) { if (l.stage === 2 && !l.waiting) { l.mins = (l.mins || 0) + 2; } });
-    if (r) { toasts.add({ level: r[0], text: r[1], cmd: r[2], actions: r[3] || [] }); }
+    if (r) { shToastAdd({ level: r[0], text: r[1], cmd: r[2], actions: r[3] || [] }, r[4] || null); }
     render();
   }
   function typeTick() {
@@ -5786,7 +6057,7 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
       var nx = q.shift(); if (!nx) { return; }
       if (nx[0] === "bg") { l.background = true; l.bgTicks = 5; render(); return; }
       if (nx[0] === "wait") { l.waiting = true; l.approval = true; l.askedAt = ST.clock; l.ask = "Asks for approval to overwrite docs/images/dashboard-office.png. Answer it in the terminal."; l.note = "needs approval"; addEvent(l, "asked", l.title + " asks for approval");
-        sessionToast[id] = toasts.add({ level: "needs", text: l.title + " needs approval", cmd: "Claude Code · " + l.where + " · answer it in the terminal", actions: sessionAnswers(l) }); render(); return; }
+        sessionToast[id] = shToastAdd({ level: "needs", text: l.title + " needs approval", cmd: "Claude Code · " + l.where + " · answer it in the terminal" }, { kind: "session", id: id }); render(); return; }
       if (nx[0] === "end") { l.stage = 4; l.note = "ended · " + (l.mins || 0) + " min"; addEvent(l, "ended", l.title + " ended"); toasts.add({ level: "done", text: l.title + " ended", cmd: "" }); render(); return; }
       term(id, nx[0], nx[1]);
     });
