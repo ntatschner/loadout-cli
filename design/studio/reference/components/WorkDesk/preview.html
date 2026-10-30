@@ -1,4 +1,4 @@
-<!-- @dsCard group="Modes" height=780 width=1300 subtitle="Pure Focus: list, view and actions, a command bar, and every key shown" -->
+<!-- @dsCard group="Modes" height=780 width=1300 subtitle="Pure Focus: list, view and actions, a command bar, and every key shown; drag the dividers" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -48,7 +48,9 @@
     q = q.toLowerCase();
     return rows.filter(function (r) { return !q || (r.label + " " + (r.cmd || "")).toLowerCase().indexOf(q) >= 0; });
   }
-  var D = S.WorkDesk({ groups: GROUPS, selected: "r2", view: view, actions: actions, commands: commands, goKeys: { h: "home", s: "sessions", t: "teams", i: "ideas", k: "tasks", n: "needs" } });
+  var D = S.WorkDesk({ groups: GROUPS, selected: "r2", view: view, actions: actions, commands: commands, goKeys: { h: "home", s: "sessions", t: "teams", i: "ideas", k: "tasks", n: "needs" },
+    /* The widths the page keeps (main keeps them as studio-split-desk); drag a divider, or focus one and use the arrows. */
+    split: [0.24, 0.22], onSplit: function (fr) { try { localStorage.setItem("ls-preview-desk-split", JSON.stringify(fr)); } catch (e) { /* no storage */ } } });
   document.getElementById("d").appendChild(D.el);
 })();
 </script>

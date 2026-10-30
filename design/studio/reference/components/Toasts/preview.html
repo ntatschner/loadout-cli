@@ -1,4 +1,4 @@
-<!-- @dsCard group="Signals" height=460 width=1100 subtitle="Top right, four levels; folds after six seconds unless it still needs you" -->
+<!-- @dsCard group="Signals" height=520 width=1100 subtitle="Top right, four levels; folds after 4 seconds, leaves after 10 into Earlier; chips in a named place" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -8,15 +8,18 @@
   body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
   .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
   .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
-  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
-  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
-  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
   .ls-toasts { width: 360px; }
+  .wrap { padding-right: 400px; }
+  .places { margin-top: 18px; }
+  .places .ls-switch { margin-top: 6px; }
+  .note { margin: 14px 0 0; max-width: 440px; font-size: 13.5px; color: var(--muted); }
+  @media (max-width: 799px) { .wrap { padding-right: 0; padding-bottom: 300px; } .ls-toasts { width: calc(100% - 36px); } }
 </style>
 </head>
 <body class="ls">
-<div style="padding-right: 400px"><div class="row" id="b"></div>
-<p style="margin: 14px 0 0; max-width: 440px; font-size: 13.5px; color: var(--muted)">Done and For your information fold into a chip after six seconds. Needs you and Problem stay open until answered or acknowledged. While the pointer or the keyboard is on the stack, nothing folds.</p></div>
+<div class="wrap"><div class="row" id="b"></div>
+<div class="places"><p class="lab" id="pl">Place</p><div id="place"></div></div>
+<p class="note">Done and For your information fold into a chip after 4 seconds and leave after 10, into Earlier. The same one again counts up. Needs you and Problem stay open until answered or acknowledged. In a named place everything arrives as a chip, and Done chips go see-through near the pointer. Ctrl+Shift+X folds what is open, then clears what is not waiting on you.</p></div>
 <div id="stack" style="position: absolute; top: 14px; right: 18px"></div>
 <script>
 (function () {
@@ -29,10 +32,23 @@
   btn("A question arrives", "needs", function () { T.add({ level: "needs", text: "release-crew asks: push the tag v0.66.0 to origin?", actions: [
     { label: "Approve", kind: "needs", cmd: "$ loadout team gate --answer Approve", onPress: function () { return "You approved: push the tag v0.66.0"; } },
     { label: "Refuse", cmd: "$ loadout team gate --answer Refuse", onPress: function () { return "You refused: push the tag v0.66.0"; } }] }); });
-  btn("A round fails", "danger", function () { T.add({ level: "problem", text: "The idea's round 3 failed", cmd: "Run the launcher in a browser \u00b7 Codex", actions: [
+  btn("A round fails", "danger", function () { T.add({ level: "problem", text: "The idea's round 3 failed", cmd: "Run the launcher in a browser · Codex", actions: [
     { label: "Try the round again", cmd: "$ loadout idea refine browser-launcher", onPress: function () { return "You asked for round 3 again"; } },
     { label: "Acknowledge", kind: "danger", cmd: "changes nothing in Loadout", onPress: function () { return "Acknowledged: round 3 failed"; } }] }); });
+  var places = [["", "Anywhere"], ["session", "A session"], ["pure", "Pure Focus"], ["desk", "A page desk"]];
+  var pbox = document.getElementById("place"); pbox.setAttribute("role", "group"); pbox.setAttribute("aria-labelledby", "pl"); pbox.className = "row";
+  places.forEach(function (p) {
+    var n = S.HaloButton({ label: p[1], size: "small", onPress: function () { T.place(p[0] || null); Array.prototype.forEach.call(pbox.querySelectorAll("button"), function (x) { x.setAttribute("aria-pressed", x === n ? "true" : "false"); }); } });
+    n.setAttribute("aria-pressed", p[0] ? "false" : "true"); pbox.appendChild(n);
+  });
   T.add({ level: "info", text: "release-crew started round 3" });
+  T.add({ level: "info", text: "release-crew started round 3" });
+  T.add({ level: "done", text: "Saved the plan", cmd: "$ loadout idea save browser-launcher" });
+  for (var i = 0; i < 10; i++) { T.tick(); }
+  T.add({ level: "needs", text: "release-crew asks: push the tag v0.66.0 to origin?", actions: [
+    { label: "Approve", kind: "needs", cmd: "$ loadout team gate --answer Approve", onPress: function () { return "You approved: push the tag v0.66.0"; } },
+    { label: "Refuse", cmd: "$ loadout team gate --answer Refuse", onPress: function () { return "You refused: push the tag v0.66.0"; } }] });
+  T.add({ level: "done", text: "Deployed in starstats", cmd: "$ loadout starstats --mode investigate" });
 })();
 </script>
 </body>

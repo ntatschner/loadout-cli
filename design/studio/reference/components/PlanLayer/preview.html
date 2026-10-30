@@ -1,4 +1,4 @@
-<!-- @dsCard group="Pages" height=1250 width=1000 subtitle="One layer of an idea’s plan, its options side by side" -->
+<!-- @dsCard group="Pages" height=1480 width=1000 subtitle="One layer of an idea’s plan, its options side by side" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -39,6 +39,10 @@
       { id: "o1", title: "In the project's .loadout folder", pros: ["Travels with the repository"], cons: ["Noise in git status"], recommended: true },
       { id: "o2", title: "In the user's data folder", pros: ["Out of the repository"], cons: ["Lost when moving machine"] }] } }));
   p.appendChild(S.PlanLayer({ idea: IDEA.id, where: IDEA.where, addition: { id: "A1", title: "A link from the terminal launcher", why: "So people find the browser one from where they already are.", verdict: "Keep" }, onVerdict: later(true), onImprove: later(true) }));
+  /* Drawn again by its page: what was typed and not sent comes back as request, with the box open; onRequest keeps it. */
+  var kept = "Say how it looks on a phone, too";
+  p.appendChild(S.PlanLayer({ idea: IDEA.id, where: IDEA.where, addition: { id: "A2", title: "A shortcut on the desktop", why: "One click from the desktop to the launcher.", verdict: "Undecided" }, request: kept,
+    onRequest: function (t) { kept = t; }, onVerdict: later(true), onImprove: later(true) }));
 })();
 </script>
 </body>
