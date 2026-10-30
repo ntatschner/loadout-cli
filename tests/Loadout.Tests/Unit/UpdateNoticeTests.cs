@@ -176,7 +176,7 @@ public sealed class UpdateNoticeTests : IDisposable
 
         public InstallChannel Channel => InstallChannel.Archive;
 
-        public Task<OperationResult<string>> StageAsync(UpdateCheck check, InstallChannel channel, CancellationToken ct = default) =>
+        public Task<OperationResult<string>> StageAsync(UpdateCheck check, InstallChannel channel, IProgress<UpdateProgress>? progress = null, CancellationToken ct = default) =>
             Task.FromResult(OperationResult<string>.Fail("not staged here"));
 
         private OperationResult<UpdateCheck> _next =
@@ -208,7 +208,7 @@ public sealed class UpdateNoticeTests : IDisposable
             return Task.FromResult(_next);
         }
 
-        public Task<OperationResult<string>> ApplyAsync(UpdateCheck check, CancellationToken ct = default) =>
+        public Task<OperationResult<string>> ApplyAsync(UpdateCheck check, IProgress<UpdateProgress>? progress = null, CancellationToken ct = default) =>
             throw new NotSupportedException();
     }
 

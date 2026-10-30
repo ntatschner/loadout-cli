@@ -110,14 +110,14 @@ public sealed class UpdateDaemonNoteTests : IDisposable
         public Task<OperationResult<UpdateCheck>> CheckAsync(CancellationToken ct = default) =>
             Task.FromResult(OperationResult<UpdateCheck>.Ok(new UpdateCheck("0.66.1", "0.67.0", true, null, null)));
 
-        public Task<OperationResult<string>> ApplyAsync(UpdateCheck check, CancellationToken ct = default) =>
+        public Task<OperationResult<string>> ApplyAsync(UpdateCheck check, IProgress<UpdateProgress>? progress = null, CancellationToken ct = default) =>
             Task.FromResult(OperationResult<string>.Ok("loadout.old"));
 
         public string Executable => string.Empty;
 
         public InstallChannel Channel => InstallChannel.Archive;
 
-        public Task<OperationResult<string>> StageAsync(UpdateCheck check, InstallChannel channel, CancellationToken ct = default) =>
+        public Task<OperationResult<string>> StageAsync(UpdateCheck check, InstallChannel channel, IProgress<UpdateProgress>? progress = null, CancellationToken ct = default) =>
             Task.FromResult(OperationResult<string>.Fail("not staged here"));
     }
 }

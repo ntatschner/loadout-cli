@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Text.Json;
 using Loadout.Cli.Infrastructure;
 using Loadout.Core.Teams.Daemon;
 using Loadout.Core.Updates;
@@ -73,6 +74,13 @@ public sealed class UpdateCommand : AsyncCommand<UpdateCommand.Settings>
             + "For a copy unpacked from a release archive; the MSI keeps no previous version.")]
         public bool RollBack { get; init; }
 
+        /// <summary>
+        /// Writes each step of the update as one JSON line instead of the usual
+        /// text, for the launcher's About window to follow from a child process.
+        /// </summary>
+        [CommandOption("--progress", IsHidden = true)]
+        public bool Progress { get; init; }
+
         /// <summary>The plan the update helper carries out, given by the daemon handing over.</summary>
         [CommandOption("--finish <PLAN>", IsHidden = true)]
         public string? Finish { get; init; }
@@ -102,6 +110,11 @@ public sealed class UpdateCommand : AsyncCommand<UpdateCommand.Settings>
         {
             return output.Fail(
                 "Cannot check for updates while --offline is set.", ExitCode.InvalidArguments);
+        }
+
+        if (settings.Progress && !settings.RestartDaemon)
+        {
+            return await ProgressAsync(output, settings, cancellationToken).ConfigureAwait(false);
         }
 
         var checkResult = await _updates.CheckAsync().ConfigureAwait(false);
@@ -273,7 +286,7 @@ public sealed class UpdateCommand : AsyncCommand<UpdateCommand.Settings>
             output.WriteLine("[dim]Downloading and verifying...[/]");
         }
 
-        var staged = await _updates.StageAsync(check, channel, ct).ConfigureAwait(false);
+        var staged = await _updates.StageAsync(check, channel, ct: ct).ConfigureAwait(false);
 
         if (staged.Failed)
         {
@@ -320,6 +333,77 @@ public sealed class UpdateCommand : AsyncCommand<UpdateCommand.Settings>
 
         return CommandOutput.Success();
     }
+
+    /// <summary>
+    /// The same update as the plain command, told as JSON lines shaped like
+    /// <see cref="UpdateProgress"/>, one per step, so a screen that started it
+    /// can show where it has got to. Failures still go to stderr with the exit
+    /// code the plain command would give.
+    /// </summary>
+    private async Task<int> ProgressAsync(CommandOutput output, Settings settings, CancellationToken ct)
+    {
+        var lines = new JsonLines();
+
+        lines.Report(new UpdateProgress(UpdateStage.Checking, null, null, "Checking the release source"));
+
+        var checkResult = await _updates.CheckAsync(ct).ConfigureAwait(false);
+        if (checkResult.Failed)
+        {
+            return output.Fail(checkResult);
+        }
+
+        var check = checkResult.Value!;
+
+        if (check.AvailableVersion is null)
+        {
+            lines.Report(new UpdateProgress(UpdateStage.Done, null, null, "The release source has no build for this platform."));
+            return CommandOutput.Success();
+        }
+
+        if (!check.IsNewer)
+        {
+            lines.Report(new UpdateProgress(UpdateStage.Done, null, null, $"Already up to date at {check.CurrentVersion}."));
+            return CommandOutput.Success();
+        }
+
+        if (!settings.Yes)
+        {
+            return output.Fail(
+                "Updating replaces the executable, so it needs confirmation. Pass --yes.",
+                ExitCode.InvalidArguments);
+        }
+
+        if (settings.DryRun)
+        {
+            lines.Report(new UpdateProgress(UpdateStage.Done, null, null,
+                $"Would download and install {check.AvailableVersion}. Nothing was downloaded and nothing was changed."));
+            return CommandOutput.Success();
+        }
+
+        var applyResult = await _updates.ApplyAsync(check, lines, ct).ConfigureAwait(false);
+
+        return applyResult.Failed ? output.Fail(applyResult) : CommandOutput.Success();
+    }
+
+    /// <summary>
+    /// Writes each report at once, on the caller's thread. Not
+    /// <see cref="Progress{T}"/>, which posts to the thread pool and can write
+    /// the lines out of order.
+    /// </summary>
+    private sealed class JsonLines : IProgress<UpdateProgress>
+    {
+        public void Report(UpdateProgress value)
+        {
+            Console.Out.WriteLine(JsonSerializer.Serialize(value, ProgressJson));
+            Console.Out.Flush();
+        }
+    }
+
+    private static readonly JsonSerializerOptions ProgressJson = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+    };
 
     /// <summary>Puts back the binary the last update kept.</summary>
     private async Task<int> RollBackAsync(CommandOutput output, Settings settings, CancellationToken ct)

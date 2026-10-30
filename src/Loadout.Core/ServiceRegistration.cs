@@ -281,6 +281,18 @@ public static class ServiceRegistration
             provider.GetRequiredService<Platform.Abstractions.IPlatformPaths>(),
             provider.GetRequiredService<TimeProvider>()));
 
+        // The About page: the release list beside the notice's cache, and the
+        // model every surface shows.
+        services.AddSingleton<About.IReleaseTimeline>(provider => new About.ReleaseTimeline(
+            provider.GetRequiredService<IConfigurationService>(),
+            provider.GetRequiredService<Platform.Abstractions.IPlatformPaths>(),
+            provider.GetRequiredService<HttpClient>(),
+            provider.GetRequiredService<TimeProvider>()));
+
+        services.AddSingleton<About.IAboutService>(provider => new About.AboutService(
+            provider.GetRequiredService<IUpdateNotice>(),
+            provider.GetRequiredService<About.IReleaseTimeline>()));
+
         // The helper that replaces the daemon after an update asked from Studio.
         services.AddSingleton(provider => new UpdateFinisher(
             provider.GetRequiredService<Platform.Abstractions.IProcessLauncher>(),

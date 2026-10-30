@@ -29,6 +29,7 @@ public sealed partial class StudioCoverageTests
     /// </summary>
     private static readonly string[] NotYetOnAPage =
     [
+        "about",
     ];
 
     /// <summary>The pages a command can be placed on: Studio's router's, and the Commands page.</summary>

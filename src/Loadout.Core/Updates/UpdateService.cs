@@ -113,6 +113,7 @@ internal sealed class UpdateService : IUpdateService
     public async Task<OperationResult<string>> StageAsync(
         UpdateCheck check,
         InstallChannel channel,
+        IProgress<UpdateProgress>? progress = null,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(check);
@@ -164,11 +165,13 @@ internal sealed class UpdateService : IUpdateService
                 ? $"loadout-{check.AvailableVersion}-{_paths.Host.RuntimeIdentifier}.msi"
                 : "download");
 
-            var downloadResult = await DownloadAsync(artifact.Url, download, ct).ConfigureAwait(false);
+            var downloadResult = await DownloadAsync(artifact.Url, download, artifact.Size, progress, ct).ConfigureAwait(false);
             if (downloadResult.Failed)
             {
                 return OperationResult<string>.Fail(downloadResult.Error!, downloadResult.ExitCode);
             }
+
+            progress?.Report(new UpdateProgress(UpdateStage.Verifying, null, null, "Verifying the download"));
 
             var verifyResult = await VerifyAsync(download, artifact, ct).ConfigureAwait(false);
             if (verifyResult.Failed)
@@ -176,9 +179,21 @@ internal sealed class UpdateService : IUpdateService
                 return OperationResult<string>.Fail(verifyResult.Error!, verifyResult.ExitCode);
             }
 
-            return channel == InstallChannel.Installer
+            if (channel != InstallChannel.Installer)
+            {
+                progress?.Report(new UpdateProgress(UpdateStage.Extracting, null, null, "Unpacking the release"));
+            }
+
+            var staged = channel == InstallChannel.Installer
                 ? OperationResult<string>.Ok(download)
                 : ExtractBinary(download, staging, Path.GetFileName(executable));
+
+            if (staged.Succeeded)
+            {
+                progress?.Report(new UpdateProgress(UpdateStage.Done, null, null, $"Verified {check.AvailableVersion}"));
+            }
+
+            return staged;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -193,6 +208,7 @@ internal sealed class UpdateService : IUpdateService
     /// <inheritdoc />
     public async Task<OperationResult<string>> ApplyAsync(
         UpdateCheck check,
+        IProgress<UpdateProgress>? progress = null,
         CancellationToken ct = default)
     {
         if (check.Artifact is null)
@@ -229,7 +245,7 @@ internal sealed class UpdateService : IUpdateService
 
             var archive = Path.Combine(staging, "download");
 
-            var downloadResult = await DownloadAsync(check.Artifact.Url, archive, ct)
+            var downloadResult = await DownloadAsync(check.Artifact.Url, archive, check.Artifact.Size, progress, ct)
                 .ConfigureAwait(false);
 
             if (downloadResult.Failed)
@@ -237,11 +253,15 @@ internal sealed class UpdateService : IUpdateService
                 return OperationResult<string>.Fail(downloadResult.Error!, downloadResult.ExitCode);
             }
 
+            progress?.Report(new UpdateProgress(UpdateStage.Verifying, null, null, "Verifying the download"));
+
             var verifyResult = await VerifyAsync(archive, check.Artifact, ct).ConfigureAwait(false);
             if (verifyResult.Failed)
             {
                 return OperationResult<string>.Fail(verifyResult.Error!, verifyResult.ExitCode);
             }
+
+            progress?.Report(new UpdateProgress(UpdateStage.Extracting, null, null, "Unpacking the release"));
 
             var extracted = ExtractBinary(archive, staging, Path.GetFileName(executable));
             if (extracted.Failed)
@@ -249,7 +269,16 @@ internal sealed class UpdateService : IUpdateService
                 return OperationResult<string>.Fail(extracted.Error!, extracted.ExitCode);
             }
 
-            return UpdateFiles.Swap(executable, extracted.Value!, _permissions);
+            progress?.Report(new UpdateProgress(UpdateStage.Installing, null, null, "Putting the new version in place"));
+
+            var swapped = UpdateFiles.Swap(executable, extracted.Value!, _permissions);
+
+            if (swapped.Succeeded)
+            {
+                progress?.Report(new UpdateProgress(UpdateStage.Done, null, null, $"Updated to {check.AvailableVersion}"));
+            }
+
+            return swapped;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -322,7 +351,15 @@ internal sealed class UpdateService : IUpdateService
         }
     }
 
-    private async Task<OperationResult> DownloadAsync(string url, string destination, CancellationToken ct)
+    /// <summary>How much has to arrive between two download reports, so a fast link does not flood the screen.</summary>
+    private const long ReportEvery = 1024 * 1024;
+
+    private async Task<OperationResult> DownloadAsync(
+        string url,
+        string destination,
+        long? expected,
+        IProgress<UpdateProgress>? progress,
+        CancellationToken ct)
     {
         if (IsLocal(url, out var localPath))
         {
@@ -331,7 +368,12 @@ internal sealed class UpdateService : IUpdateService
                 return OperationResult.Fail($"No release archive at '{localPath}'.");
             }
 
+            var length = new FileInfo(localPath).Length;
+            progress?.Report(new UpdateProgress(UpdateStage.Downloading, 0, expected ?? length, "Downloading"));
+
             File.Copy(localPath, destination, overwrite: true);
+
+            progress?.Report(new UpdateProgress(UpdateStage.Downloading, length, expected ?? length, "Downloading"));
 
             return OperationResult.Ok();
         }
@@ -353,10 +395,34 @@ internal sealed class UpdateService : IUpdateService
                 + "which is not plausible for this tool. Refusing to download.");
         }
 
+        var total = response.Content.Headers.ContentLength ?? expected;
+
         await using var source = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
         await using var target = File.Create(destination);
 
-        await source.CopyToAsync(target, ct).ConfigureAwait(false);
+        progress?.Report(new UpdateProgress(UpdateStage.Downloading, 0, total, "Downloading"));
+
+        var buffer = new byte[81920];
+        long received = 0;
+        long reported = 0;
+        int read;
+
+        while ((read = await source.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
+        {
+            await target.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
+            received += read;
+
+            if (received - reported >= ReportEvery)
+            {
+                reported = received;
+                progress?.Report(new UpdateProgress(UpdateStage.Downloading, received, total, "Downloading"));
+            }
+        }
+
+        if (reported != received)
+        {
+            progress?.Report(new UpdateProgress(UpdateStage.Downloading, received, total, "Downloading"));
+        }
 
         return OperationResult.Ok();
     }

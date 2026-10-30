@@ -397,10 +397,10 @@ public sealed class UpdateFromStudioTests : IDisposable
             Task.FromResult(OperationResult<UpdateCheck>.Ok(new UpdateCheck(
                 "0.69.0", "0.70.0", true, new ReleaseArtifact { Url = "file:///x", Sha256 = "00" }, "What changed.")));
 
-        public Task<OperationResult<string>> ApplyAsync(UpdateCheck check, CancellationToken ct = default) =>
+        public Task<OperationResult<string>> ApplyAsync(UpdateCheck check, IProgress<UpdateProgress>? progress = null, CancellationToken ct = default) =>
             throw new InvalidOperationException("Studio's update never replaces the binary from the command");
 
-        public Task<OperationResult<string>> StageAsync(UpdateCheck check, InstallChannel channel, CancellationToken ct = default)
+        public Task<OperationResult<string>> StageAsync(UpdateCheck check, InstallChannel channel, IProgress<UpdateProgress>? progress = null, CancellationToken ct = default)
         {
             Staged = channel;
 
