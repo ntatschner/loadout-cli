@@ -123,6 +123,7 @@ internal sealed class IdeasWindow : Window
             ("i", "improve"),
             ("y", "accept"),
             ("x", "dismiss failure"),
+            ("p", "type"),
             ("m", "move"),
             ("Del", "remove"),
             ("Esc", "close"),
@@ -153,6 +154,7 @@ internal sealed class IdeasWindow : Window
             list.OnKey(Key.I, Command.Paste, () => Take(Improve()));
             list.OnKey(Key.Y, Command.SaveAs, () => Take(Accept()));
             list.OnKey(Key.X, Command.Undo, () => Take(Dismiss()));
+            list.OnKey(Key.P, Command.CutToEndOfLine, () => Take(Retype()));
             list.OnKey(Key.M, Command.Redo, () => Take(Move()));
             list.OnKey(Key.Delete, Command.DeleteCharRight, () => Take(Remove()));
         }
@@ -248,6 +250,13 @@ internal sealed class IdeasWindow : Window
             : null;
 
     /// <remarks>Only when there is a failed round to clear, and none running.</remarks>
+    /// <remarks>Not once it is accepted: its type is then its task's, which task declare changes.</remarks>
+    private IdeaStep? Retype() =>
+        Selected is { Record.Accepted: null, Summary: var summary }
+            && _prompts.Type(summary.Place, summary.Type, summary.TypeBy) is { } chosen
+            ? IdeaSteps.Retype(summary.Place, chosen)
+            : null;
+
     private IdeaStep? Dismiss() =>
         Selected is { Summary: { Running: false, Failure: not null } summary }
             ? IdeaSteps.Dismiss(summary.Place)

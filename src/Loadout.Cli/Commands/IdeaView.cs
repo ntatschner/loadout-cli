@@ -85,7 +85,7 @@ internal static class IdeaView
             : $"[yellow]The latest attempt{Markup.Escape(tried)} went wrong:[/] {Shown.Safely(failed.Error)}");
     }
 
-    public static object Of(IdeaPlace place, IdeaRecord record) => IdeaJson.Of(place, record);
+    public static object Of(IdeaPlace place, IdeaRecord record, Models.Tasks.TaskItem? task = null) => IdeaJson.Of(place, record, task);
 
     /// <param name="output">Where it is written.</param>
     /// <param name="place">Which idea, on which list.</param>
@@ -95,12 +95,14 @@ internal static class IdeaView
     /// detail only: what Studio shows, at the length a terminal can make
     /// hard to read.
     /// </param>
-    public static void Write(CommandOutput output, IdeaPlace place, IdeaRecord record, bool full = false)
+    /// <param name="task">Its task, for its type, or null to leave the type out.</param>
+    public static void Write(CommandOutput output, IdeaPlace place, IdeaRecord record, bool full = false, Models.Tasks.TaskItem? task = null)
     {
         var stage = IdeaWork.StageOf(record);
 
         output.WriteLine(
-            $"[bold]{Markup.Escape(place.Id)}[/] on {Markup.Escape(place.Where)}  {Marked(stage, IdeaWork.Unanswered(record).Count)}{Outdated(IdeaWork.OutdatedCount(record))}");
+            $"[bold]{Markup.Escape(place.Id)}[/] on {Markup.Escape(place.Where)}  {Marked(stage, IdeaWork.Unanswered(record).Count)}{Outdated(IdeaWork.OutdatedCount(record))}"
+            + (task?.Type is { } type ? $"  {Markup.Escape(TaskTypeLine.Said(type, task.TypeBy))}" : string.Empty));
         output.WriteLine($"[dim]{Markup.Escape(record.Ask)}[/]");
 
         if (IdeaWork.FailureOf(record) is { } failed)

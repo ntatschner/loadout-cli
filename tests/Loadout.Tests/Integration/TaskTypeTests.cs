@@ -222,6 +222,135 @@ public sealed class TaskTypeTests : IDisposable
         refused.Error.Should().Contain("type 'chore'").And.Contain("bug-fix");
     }
 
+    [Fact]
+    public async Task A_rounds_type_revises_a_guess_and_says_so()
+    {
+        await _space.ProjectAsync("website");
+        await _space.Ideas.CaptureAsync("website", "Status page for the hosts", "nigel", "status");
+        var place = new Core.Ideas.IdeaPlace("website", "status");
+
+        (await _space.Ideas.RecordReplyAsync(place, Reply("bug-fix"))).Succeeded.Should().BeTrue();
+
+        var idea = await OneAsync("status");
+        idea.Type.Should().Be(TaskType.BugFix);
+        idea.TypeBy.Should().Be(TaskTypeSource.Agent);
+        idea.DeclaredBy.Should().Be("nigel", "revising a type is not a claim about where the work stands");
+        idea.History[^1].Reason.Should().Be(TaskTypes.Reason(TaskType.BugFix, TaskTypeSource.Agent));
+    }
+
+    [Fact]
+    public async Task A_rounds_type_leaves_a_persons_choice_alone()
+    {
+        await _space.ProjectAsync("website");
+        await _space.Ideas.CaptureAsync("website", "Status page for the hosts", "nigel", "status");
+        var place = new Core.Ideas.IdeaPlace("website", "status");
+        await _space.Ideas.RetypeAsync(place, TaskType.Docs, "nigel");
+
+        (await _space.Ideas.RecordReplyAsync(place, Reply("bug-fix"))).Succeeded.Should().BeTrue("the round is kept all the same");
+
+        var idea = await OneAsync("status");
+        idea.Type.Should().Be(TaskType.Docs);
+        idea.TypeBy.Should().Be(TaskTypeSource.Person);
+    }
+
+    [Fact]
+    public async Task A_round_with_no_type_or_one_that_is_not_changes_nothing()
+    {
+        await _space.ProjectAsync("website");
+        await _space.Ideas.CaptureAsync("website", "Status page for the hosts", "nigel", "status");
+        var place = new Core.Ideas.IdeaPlace("website", "status");
+        var before = await OneAsync("status");
+
+        await _space.Ideas.RecordReplyAsync(place, Reply(string.Empty));
+        await _space.Ideas.RecordReplyAsync(place, Reply("chore"));
+
+        var idea = await OneAsync("status");
+        idea.Type.Should().Be(before.Type);
+        idea.TypeBy.Should().Be(TaskTypeSource.Rule);
+    }
+
+    [Fact]
+    public async Task Handing_the_type_back_puts_the_rules_guess_in_its_place()
+    {
+        await _space.ProjectAsync("website");
+        await _space.Ideas.CaptureAsync("website", "The login is broken on Safari", "nigel", "login");
+        var place = new Core.Ideas.IdeaPlace("website", "login");
+        await _space.Ideas.RetypeAsync(place, TaskType.Docs, "nigel");
+
+        var handed = await _space.Ideas.RetypeAsync(place, null, "nigel");
+
+        handed.Succeeded.Should().BeTrue(handed.Error);
+        handed.Value!.Type.Should().Be(TaskType.BugFix, "the guess reads what was asked");
+        handed.Value.TypeBy.Should().Be(TaskTypeSource.Rule, "a guess the next round may revise");
+        handed.Value.History.Select(one => one.Reason).Should().EndWith(
+            [TaskTypes.ChangedReason(TaskType.Docs), TaskTypes.Reason(TaskType.BugFix, TaskTypeSource.Rule)]);
+
+        await _space.Ideas.RecordReplyAsync(place, Reply("feature"));
+
+        (await OneAsync("login")).Type.Should().Be(TaskType.Feature, "the next round decides it");
+    }
+
+    [Fact]
+    public async Task Choosing_the_type_already_chosen_records_nothing_more()
+    {
+        await _space.ProjectAsync("website");
+        await _space.Ideas.CaptureAsync("website", "Status page for the hosts", "nigel", "status");
+        var place = new Core.Ideas.IdeaPlace("website", "status");
+
+        await _space.Ideas.RetypeAsync(place, TaskType.Docs, "nigel");
+        var path = TaskPaths.List(_space.Workspace.LocalPath, "website");
+        var once = await File.ReadAllTextAsync(path);
+
+        await _space.Ideas.RetypeAsync(place, TaskType.Docs, "nigel");
+
+        (await File.ReadAllTextAsync(path)).Should().Be(once);
+    }
+
+    [Fact]
+    public async Task A_batch_cannot_retype_around_the_lock()
+    {
+        await _space.ProjectAsync("website");
+
+        var done = await _space.Tasks.ApplyAsync(
+            [new TaskOperation(TaskOperation.Retype, "website", "login", Type: TaskType.Docs, TypeBy: TaskTypeSource.Agent)]);
+
+        done.Value!.Outcomes.Single().Applied.Should().BeFalse();
+    }
+
+    [Fact]
+    public void The_prompt_asks_for_a_type_unless_the_person_chose_one()
+    {
+        var record = new Models.Ideas.IdeaRecord { Id = "status", Ask = "A status page" };
+
+        var guessed = Core.Ideas.IdeaWork.Prompt(
+            record, [], null, new TaskItem { Type = TaskType.Feature, TypeBy = TaskTypeSource.Rule });
+        var chosen = Core.Ideas.IdeaWork.Prompt(
+            record, [], null, new TaskItem { Type = TaskType.Docs, TypeBy = TaskTypeSource.Person });
+
+        guessed.Should().Contain("typed feature for now").And.Contain("Set type to whichever of new-project");
+        chosen.Should().Contain("They chose docs as its type themselves, so leave type out");
+        chosen.Should().NotContain("Set type to");
+    }
+
+    [Fact]
+    public void The_schema_offers_exactly_the_seven_types_and_does_not_require_one()
+    {
+        using var schema = System.Text.Json.JsonDocument.Parse(Models.Ideas.IdeaSchema.Version3);
+        var root = schema.RootElement;
+
+        root.GetProperty("properties").GetProperty("type").GetProperty("enum").EnumerateArray()
+            .Select(one => one.GetString()).Should().Equal(TaskTypes.Names);
+        root.GetProperty("required").EnumerateArray().Select(one => one.GetString()).Should().NotContain("type");
+    }
+
+    private static Core.Ideas.IdeaReply Reply(string type) => new()
+    {
+        Contract = Models.Ideas.IdeaSchema.Version,
+        Understanding = "A page.",
+        Type = type,
+        Questions = [new Core.Ideas.IdeaReply.ReplyQuestion { Question = "Public?", Why = "Size." }],
+    };
+
     /// <summary>A list as a launcher from before types wrote it, beside one task typed since.</summary>
     private async Task<string> LegacyAsync()
     {

@@ -270,6 +270,7 @@ public sealed class TaskBatchTests : IDisposable
     [InlineData(nameof(ITaskService.ApplyAsync))]
     [InlineData(nameof(ITaskService.HoldProposalAsync))]
     [InlineData(nameof(ITaskService.ClassifyAsync))]
+    [InlineData(nameof(ITaskService.RetypeAsync))]
     public void The_service_has_its_own_rather_than_the_default_for_the_doubles(string method)
     {
         var map = typeof(TaskService).GetInterfaceMap(typeof(ITaskService));

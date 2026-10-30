@@ -64,6 +64,13 @@ public sealed record TaskOperation(
     /// </summary>
     internal const string Hold = "hold";
 
+    /// <summary>
+    /// Sets a task's type and who gave it, and nothing else. Not one of
+    /// <see cref="Ops"/>: only <see cref="ITaskService.RetypeAsync"/> makes it,
+    /// and a batch from outside naming it is refused.
+    /// </summary>
+    internal const string Retype = "retype";
+
     /// <summary>Every op a batch takes, in the order they are documented.</summary>
     public static IReadOnlyList<string> Ops => [Add, Declare, Remove, Move];
 }

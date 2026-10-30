@@ -20,6 +20,11 @@ public sealed class IdeaReply
     [JsonPropertyName("plan")]
     public ReplyPlan? Plan { get; set; }
 
+    /// <summary>What the agent takes the idea to be about, by its name, or empty when it did not say.</summary>
+    /// <remarks>Optional in the schema, so a round from before there were types is still read.</remarks>
+    [JsonPropertyName("type")]
+    public string Type { get; set; } = string.Empty;
+
     public sealed class ReplyQuestion
     {
         [JsonPropertyName("question")]

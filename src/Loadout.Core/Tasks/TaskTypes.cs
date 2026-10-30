@@ -26,11 +26,22 @@ public static partial class TaskTypes
     /// <summary>Every type, in the order a person is offered them.</summary>
     public static readonly IReadOnlyList<TaskType> All = Enum.GetValues<TaskType>();
 
+    /// <summary>What <c>idea type</c> takes, in place of a type, to hand the choice back to the agent.</summary>
+    public const string HandBack = "agent";
+
     /// <summary>Every type as the command line and JSON name it.</summary>
     public static readonly IReadOnlyList<string> Names = [.. All.Select(Name)];
 
     /// <summary>What the history says when a person changes a task's type.</summary>
     public static string ChangedReason(TaskType type) => $"type set to {Words(type)}";
+
+    /// <summary>What the history says when a type is set after the task was first given one.</summary>
+    public static string Reason(TaskType type, TaskTypeSource by) => by switch
+    {
+        TaskTypeSource.Agent => $"type revised to {Words(type)} by the agent",
+        TaskTypeSource.Rule => $"type handed back to the agent, guessed as {Words(type)} until its next round",
+        _ => ChangedReason(type),
+    };
 
     /// <summary>What the history says when <c>task classify</c> gives a task the rules' type.</summary>
     public static string GuessedReason(TaskType type) => $"type guessed as {Words(type)} by task classify";

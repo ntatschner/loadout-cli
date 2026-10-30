@@ -93,6 +93,9 @@ internal static class IdeaSteps
         Pause: true,
         Select: null);
 
+    internal static IdeaStep Retype(IdeaPlace place, string type) => new(
+        LauncherCommands.IdeaType, [place.Id, type, .. List(place.Project)], Pause: false, place.Id);
+
     internal static IdeaStep Dismiss(IdeaPlace place) => new(
         LauncherCommands.IdeaDismiss, [place.Id, .. List(place.Project)], Pause: false, place.Id);
 

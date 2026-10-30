@@ -1,4 +1,5 @@
 using Loadout.Models.Ideas;
+using Loadout.Models.Tasks;
 
 namespace Loadout.Core.Ideas;
 
@@ -28,7 +29,10 @@ public static class IdeaJson
         error = failure.Error,
     };
 
-    public static object Of(IdeaPlace place, IdeaRecord record)
+    /// <param name="place">Which idea, on which list.</param>
+    /// <param name="record">The idea.</param>
+    /// <param name="task">Its task, for its type, or null to leave the type out.</param>
+    public static object Of(IdeaPlace place, IdeaRecord record, TaskItem? task = null)
     {
         var stage = IdeaWork.StageOf(record);
         var failure = IdeaWork.FailureOf(record);
@@ -38,6 +42,8 @@ public static class IdeaJson
             id = place.Id,
             project = place.Project,
             stage = Stage(stage),
+            type = task?.Type is { } type ? Tasks.TaskTypes.Name(type) : null,
+            typeBy = task?.TypeBy is { } typeBy ? Tasks.TaskTypes.Name(typeBy) : null,
             ask = record.Ask,
             captured = record.CapturedUtc,
             error = failure?.Error,

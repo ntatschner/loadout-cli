@@ -1,8 +1,10 @@
 using System.Globalization;
 using System.Text;
+using Loadout.Core.Tasks;
 using Loadout.Models;
 using Loadout.Models.Ideas;
 using Loadout.Models.Results;
+using Loadout.Models.Tasks;
 
 namespace Loadout.Core.Ideas;
 
@@ -559,10 +561,15 @@ public static partial class IdeaWork
     /// Everything the agent is told for one round. The whole state goes every
     /// time, because every round is a fresh agent.
     /// </summary>
+    /// <param name="record">The idea.</param>
+    /// <param name="projects">The projects the person has, for placing it.</param>
+    /// <param name="targetDescription">Where the agent was started, and what it may read there.</param>
+    /// <param name="task">The idea's task, for its type, or null when it could not be read.</param>
     public static string Prompt(
         IdeaRecord record,
         IReadOnlyList<IdeaProjectHint> projects,
-        string? targetDescription)
+        string? targetDescription,
+        TaskItem? task = null)
     {
         ArgumentNullException.ThrowIfNull(record);
         ArgumentNullException.ThrowIfNull(projects);
@@ -608,6 +615,7 @@ public static partial class IdeaWork
             + "reason.");
         text.AppendLine();
 
+        AppendType(text, task);
         AppendHistory(text, record);
 
         text.AppendLine("## This round");
@@ -638,6 +646,38 @@ public static partial class IdeaWork
             + "rest of this conversation.");
 
         return text.ToString();
+    }
+
+    /// <summary>
+    /// What the idea is typed as and who said so, and whether the agent may
+    /// change it: a guess is its to revise, a person's choice is not.
+    /// </summary>
+    private static void AppendType(StringBuilder text, TaskItem? task)
+    {
+        var names = string.Join(", ", TaskTypes.Names);
+
+        text.AppendLine("## Its type");
+        text.AppendLine();
+
+        if (task is { Type: { } chosen, TypeBy: TaskTypeSource.Person })
+        {
+            text.AppendLine(
+                $"They chose {TaskTypes.Name(chosen)} as its type themselves, so leave type out of your "
+                + "answer. If you think it is wrong, say so and why in understanding; only they change it.");
+        }
+        else
+        {
+            var now = task?.Type is { } guessed
+                ? $"It is typed {TaskTypes.Name(guessed)} for now, a guess from its words. "
+                : "It has no type yet. ";
+
+            text.AppendLine(
+                now + $"Set type to whichever of {names} best says what the work is about, "
+                + "judged from everything above. new-project is for something that would be a project of "
+                + "its own; feature for something an existing project does not do yet.");
+        }
+
+        text.AppendLine();
     }
 
     private static string Instruction(IdeaRecord record)

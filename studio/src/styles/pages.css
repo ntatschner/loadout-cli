@@ -171,6 +171,9 @@ body { margin: 0; background: var(--ground); color: var(--ink); }
 .shelf a.place .t { color: var(--accent-text); font-size: 13.5px; }
 .work { display: grid; gap: 16px; min-width: 0; }
 .work > .ls-istages-wrap { margin: 2px 0 6px; }
+.itype { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin: 8px 0 12px; font-size: 13px; }
+.itype select { width: auto; }
+.itype .x { color: var(--muted); }
 .work .understand { margin: 0; font-size: 17px; line-height: 1.45; font-weight: 300; color: var(--ink-strong); max-width: 68ch; }
 .work details.asked { font-size: 14px; color: var(--ink-soft); }
 .work details.asked summary { cursor: pointer; color: var(--muted); }

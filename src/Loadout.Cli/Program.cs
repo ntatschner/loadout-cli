@@ -814,6 +814,7 @@ public static class Program
             idea.AddCommand<IdeaImproveCommand>("improve");
             idea.AddCommand<IdeaAcceptCommand>("accept");
             idea.AddCommand<IdeaDismissCommand>("dismiss");
+            idea.AddCommand<IdeaTypeCommand>("type");
             idea.AddCommand<IdeaMoveCommand>("move");
             idea.AddCommand<IdeaRemoveCommand>("remove");
             idea.AddCommand<IdeaApplyCommand>("apply");

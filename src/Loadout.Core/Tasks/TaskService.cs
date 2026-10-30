@@ -147,6 +147,34 @@ public interface ITaskService
         CancellationToken ct = default) =>
         Task.FromResult(OperationResult<TaskItem>.Fail("This task list cannot hold a proposal."));
 
+    /// <summary>
+    /// Sets a task's type and who gave it, saying so in its history, without
+    /// claiming anything about where the work stands.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// For the three changes a type goes through after it is first given: a
+    /// person choosing one, the agent refining an idea revising a guess, and a
+    /// person handing the type back, which records the rules' guess for the
+    /// agent to revise at its next round.
+    /// </para>
+    /// <para>
+    /// The agent's guess for a task whose type a person chose changes nothing
+    /// and is not a failure: the agent may disagree only in what it writes. The
+    /// task comes back as it stands either way, so a caller can tell. A rule's
+    /// type given here is the person handing it back, so it does replace theirs.
+    /// </para>
+    /// <para>The default refuses, for the doubles in the tests; the real service sets it.</para>
+    /// </remarks>
+    Task<OperationResult<TaskItem>> RetypeAsync(
+        string? projectSlug,
+        string id,
+        TaskType type,
+        TaskTypeSource typeBy,
+        string by,
+        CancellationToken ct = default) =>
+        Task.FromResult(OperationResult<TaskItem>.Fail("This task list cannot change a type."));
+
     /// <summary>A list, with the revision a change made from it should name.</summary>
     /// <remarks>
     /// The default has no revision to give, which a caller reads as nothing to
@@ -373,6 +401,17 @@ internal sealed class TaskService : ITaskService
     }
 
     /// <inheritdoc />
+    public async Task<OperationResult<TaskItem>> RetypeAsync(
+        string? projectSlug,
+        string id,
+        TaskType type,
+        TaskTypeSource typeBy,
+        string by,
+        CancellationToken ct = default) =>
+        One(await ApplyCoreAsync(
+            [new TaskOperation(TaskOperation.Retype, projectSlug, id, By: by, Type: type, TypeBy: typeBy)], false, ct).ConfigureAwait(false));
+
+    /// <inheritdoc />
     public Task<OperationResult<TaskBatch>> ApplyAsync(IReadOnlyList<TaskOperation> operations, CancellationToken ct = default) =>
         ApplyCoreAsync(operations, true, ct);
 
@@ -521,10 +560,12 @@ internal sealed class TaskService : ITaskService
                     outcomes[index] = Failed(
                         index, operation, $"'{missing}' is not a project this workspace has.", ExitCode.ProjectNotFound);
                 }
-                else if (operation.Op == TaskOperation.Hold)
+                else if (operation.Op is TaskOperation.Hold or TaskOperation.Retype)
                 {
                     // Only a backfill pass holds a proposal. One sent from a
                     // page or an agent would be a done-when nobody asked for.
+                    // A type is changed through RetypeAsync, which keeps a
+                    // person's choice from being overwritten by a guess.
                     outcomes[index] = Failed(
                         index,
                         operation,
@@ -761,7 +802,7 @@ internal sealed class TaskService : ITaskService
     /// <summary>What can be refused about an operation from the operation alone.</summary>
     private static (string Error, ExitCode Code)? Precheck(TaskOperation operation)
     {
-        if (!TaskOperation.Ops.Contains(operation.Op) && operation.Op != TaskOperation.Hold)
+        if (!TaskOperation.Ops.Contains(operation.Op) && operation.Op is not (TaskOperation.Hold or TaskOperation.Retype))
         {
             return ($"There is nothing called '{operation.Op}' to do to a task. It is one of {string.Join(", ", TaskOperation.Ops)}.",
                 ExitCode.InvalidArguments);
@@ -896,6 +937,44 @@ internal sealed class TaskService : ITaskService
                 groups[0].Changed = true;
 
                 return OperationResult<TaskItem>.Ok(holding);
+            }
+
+            case TaskOperation.Retype:
+            {
+                var id = operation.Id!.Trim();
+
+                if (list.Items.FirstOrDefault(item => Same(item.Id, id)) is not { } retyping)
+                {
+                    return OperationResult<TaskItem>.Fail(
+                        $"'{id}' is not a task of {TaskPaths.Describe(operation.Project)}.", ExitCode.InvalidArguments);
+                }
+
+                var type = operation.Type!.Value;
+                var typeBy = operation.TypeBy ?? TaskTypeSource.Person;
+
+                // The agent's guess never replaces a person's choice; only the
+                // person hands it back, which is what a rule's type means here.
+                // The same type from the same source is nothing to record.
+                if ((typeBy == TaskTypeSource.Agent && retyping.TypeBy == TaskTypeSource.Person)
+                    || (retyping.Type == type && retyping.TypeBy == typeBy))
+                {
+                    return OperationResult<TaskItem>.Ok(retyping);
+                }
+
+                Remember(retyping);
+
+                retyping.Type = type;
+                retyping.TypeBy = typeBy;
+                retyping.History.Add(new TaskEvent
+                {
+                    State = retyping.State,
+                    By = operation.By.Trim(),
+                    Utc = now,
+                    Reason = TaskTypes.Reason(type, typeBy),
+                });
+                groups[0].Changed = true;
+
+                return OperationResult<TaskItem>.Ok(retyping);
             }
 
             case TaskOperation.Remove:

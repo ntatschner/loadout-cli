@@ -165,7 +165,7 @@ internal sealed class IdeaRefiner : IIdeaRefiner
             Allowed,
             IdeaSchema.Version3,
             IdeaSchema.Version,
-            IdeaWork.Prompt(record, hints, target),
+            IdeaWork.Prompt(record, hints, target, await _ideas.TaskOfAsync(request.Place, ct).ConfigureAwait(false)),
             IdeaReply.Read,
             request.Watching,
             ct).ConfigureAwait(false);

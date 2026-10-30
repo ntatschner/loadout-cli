@@ -86,6 +86,25 @@ export function stateWord(one: { running?: boolean; failure?: unknown; unanswere
   return String(one.stage).toLowerCase() === 'accepted' ? 'accepted' : 'shaping';
 }
 
+/** The seven types, as the command line names them, in the order a person is offered them. */
+export const TYPES = ['new-project', 'feature', 'bug-fix', 'ci-cd', 'release', 'docs', 'maintenance'] as const;
+
+/** What 'idea type' takes to hand the type back to the agent. */
+export const TYPE_AGENT = 'agent';
+
+/** Whose the type is now, in a line: a person's choice stays; a guess is the agent's to revise. */
+export function typeSaid(type: string | null | undefined, by: string | null | undefined): string {
+  if (by === 'person' && type) {
+    return 'your choice; no round changes it';
+  }
+
+  if (!type) {
+    return 'the agent decides at its next round';
+  }
+
+  return `guessed as ${typeWord(type)}${by === 'agent' ? ' by the agent' : ''}; the agent may revise it each round`;
+}
+
 /** A type as a sentence names it: 'bug-fix' is 'bug fix', 'ci-cd' is 'CI/CD'; nothing for an idea with none. */
 export function typeWord(type: string | null | undefined): string | null {
   if (!type) {
