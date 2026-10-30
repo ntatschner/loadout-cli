@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Text;
 using Loadout.Core.Diagnostics;
@@ -54,6 +55,8 @@ internal sealed class AppendOnlyFile<T>
 
     private static readonly byte[] Bom = [0xEF, 0xBB, 0xBF];
 
+    private static readonly ConcurrentDictionary<string, AppendOnlyFile<T>> Shared = new(StringComparer.Ordinal);
+
     private readonly string _path;
     private readonly Func<string, T?> _parse;
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -68,6 +71,21 @@ internal sealed class AppendOnlyFile<T>
     }
 
     /// <summary>
+    /// The one reader of <paramref name="path"/> in this process, or a new one
+    /// each time with <see cref="SharedReaders"/> off, which reads the whole
+    /// file on every call.
+    /// </summary>
+    /// <param name="path">The file.</param>
+    /// <param name="parse">
+    /// Turns one line into an item, or null to skip it. Used by the reader made
+    /// first for the path, so every caller of one file must parse it alike.
+    /// </param>
+    public static AppendOnlyFile<T> For(string path, Func<string, T?> parse) =>
+        SharedReaders.Enabled
+            ? Shared.GetOrAdd(path, one => new AppendOnlyFile<T>(one, parse))
+            : new AppendOnlyFile<T>(path, parse);
+
+    /// <summary>
     /// Every item in the file, in the order written, or null when there is no
     /// file. Throws what reading the file throws.
     /// </summary>
@@ -80,56 +98,7 @@ internal sealed class AppendOnlyFile<T>
 
         try
         {
-            // Looked at before it is read, as TranscriptCache does: a file that
-            // grows during the read is kept under its older length and read
-            // from where this read stopped next time.
-            var file = new FileInfo(_path);
-
-            if (!file.Exists)
-            {
-                _kept = null;
-                return null;
-            }
-
-            var length = file.Length;
-            var ticks = file.LastWriteTimeUtc.Ticks;
-            var kept = _kept;
-
-            if (kept is not null && kept.Length == length && kept.Ticks == ticks)
-            {
-                return kept.Result;
-            }
-
-            _kept = null;
-
-            using var trace = ReadLedger.Begin(_path, site, member);
-            await using var stream = File.OpenRead(_path);
-
-            var appended = kept is not null && length > kept.Length && await ContinuesAsync(stream, kept, ct).ConfigureAwait(false);
-            var from = appended ? kept!.Offset : 0;
-
-            stream.Position = from;
-
-            using var buffer = new MemoryStream();
-            await stream.CopyToAsync(buffer, ct).ConfigureAwait(false);
-
-            var bytes = buffer.GetBuffer().AsSpan(0, (int)buffer.Length);
-            var complete = bytes.LastIndexOf((byte)'\n') + 1;
-
-            var items = appended ? new List<T>(kept!.Items) : [];
-            Parse(bytes[..complete], from == 0, items);
-
-            var tail = new List<T>(1);
-            Parse(bytes[complete..], from == 0 && complete == 0, tail);
-
-            trace?.Read(bytes.Length + (appended ? kept!.Guard.Length : 0));
-
-            var guard = Guard(appended ? kept!.Guard : [], bytes[..complete]);
-            var result = tail.Count == 0 ? items.ToArray() : [.. items, .. tail];
-
-            _kept = new Kept(length, ticks, from + complete, guard, items.ToArray(), result);
-
-            return result;
+            return ReadHeld(site, member);
         }
         finally
         {
@@ -137,7 +106,92 @@ internal sealed class AppendOnlyFile<T>
         }
     }
 
-    private static async Task<bool> ContinuesAsync(FileStream stream, Kept kept, CancellationToken ct)
+    /// <summary>
+    /// <see cref="ReadAsync"/> for a caller that is not asynchronous, such as
+    /// a journal read under a lock. Waits for any read of the same file to end.
+    /// </summary>
+    public IReadOnlyList<T>? Read(
+        CancellationToken ct = default,
+        [CallerFilePath] string site = "",
+        [CallerMemberName] string member = "")
+    {
+        _gate.Wait(ct);
+
+        try
+        {
+            return ReadHeld(site, member);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>The read itself, with the gate held.</summary>
+    /// <remarks>
+    /// Synchronous, so the two entry points share one body: the reads are of
+    /// what was appended since last time, usually a few lines, and a file
+    /// nothing has touched is not opened at all.
+    /// </remarks>
+    private IReadOnlyList<T>? ReadHeld(string site, string member)
+    {
+        // Looked at before it is read, as TranscriptCache does: a file that
+        // grows during the read is kept under its older length and read
+        // from where this read stopped next time.
+        var file = new FileInfo(_path);
+
+        if (!file.Exists)
+        {
+            _kept = null;
+            return null;
+        }
+
+        var length = file.Length;
+        var ticks = file.LastWriteTimeUtc.Ticks;
+        var kept = _kept;
+
+        if (kept is not null && kept.Length == length && kept.Ticks == ticks)
+        {
+            return kept.Result;
+        }
+
+        _kept = null;
+
+        using var trace = ReadLedger.Begin(_path, site, member);
+
+        // Others may write and delete while it is open, as the journals'
+        // own readers always allowed: a writer holds a run's journal open,
+        // and a day of the trigger journal can be pruned at any time.
+        using var stream = new FileStream(_path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+
+        var appended = kept is not null && length > kept.Length && Continues(stream, kept);
+        var from = appended ? kept!.Offset : 0;
+
+        stream.Position = from;
+
+        using var buffer = new MemoryStream();
+        stream.CopyTo(buffer);
+
+        var bytes = buffer.GetBuffer().AsSpan(0, (int)buffer.Length);
+        var complete = bytes.LastIndexOf((byte)'\n') + 1;
+
+        var items = appended ? new List<T>(kept!.Items) : [];
+        Parse(bytes[..complete], from == 0, items);
+
+        var tail = new List<T>(1);
+        Parse(bytes[complete..], from == 0 && complete == 0, tail);
+
+        trace?.Read(bytes.Length + (appended ? kept!.Guard.Length : 0));
+
+        var guard = Guard(appended ? kept!.Guard : [], bytes[..complete]);
+        var result = tail.Count == 0 ? items.ToArray() : [.. items, .. tail];
+
+        _kept = new Kept(length, ticks, from + complete, guard, items.ToArray(), result);
+
+        return result;
+    }
+
+    private static bool Continues(FileStream stream, Kept kept)
     {
         if (kept.Guard.Length == 0)
         {
@@ -147,7 +201,7 @@ internal sealed class AppendOnlyFile<T>
         var seen = new byte[kept.Guard.Length];
 
         stream.Position = kept.Offset - seen.Length;
-        await stream.ReadExactlyAsync(seen, ct).ConfigureAwait(false);
+        stream.ReadExactly(seen);
 
         return seen.AsSpan().SequenceEqual(kept.Guard);
     }

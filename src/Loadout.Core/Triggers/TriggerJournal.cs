@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Loadout.Core.Diagnostics;
+using Loadout.Core.Reading;
 using Loadout.Platform.Abstractions;
 
 namespace Loadout.Core.Triggers;
@@ -429,31 +430,22 @@ public sealed class TriggerJournal
         return entries;
     }
 
+    /// <remarks>
+    /// Read through one reader per day for the process, which parses only what
+    /// was appended since its last read: the daemon's dispatch loop asked for
+    /// the last month of days every few seconds, and only today's ever grows.
+    /// </remarks>
     private static IEnumerable<TriggerEntry> ReadFile(string file)
     {
-        var entries = new List<TriggerEntry>();
-
         try
         {
-            using var trace = ReadLedger.Begin(file);
-            using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-            using var reader = new StreamReader(stream, Encoding.UTF8);
-
-            while (reader.ReadLine() is { } line)
-            {
-                if (Parse(line) is { } one)
-                {
-                    entries.Add(one);
-                }
-            }
+            return AppendOnlyFile<TriggerEntry>.For(file, Parse).Read() ?? [];
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // What was read is still true; one unreadable day is not a reason
-            // to forget the rest.
+            // One unreadable day is not a reason to forget the rest.
+            return [];
         }
-
-        return entries;
     }
 
     private static TriggerEntry? Parse(string line)

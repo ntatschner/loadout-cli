@@ -341,9 +341,10 @@ internal sealed class SessionRegistry : ISessionRegistry
 
             try
             {
-                using var trace = ReadLedger.Begin(file);
+                // Kept for the process while unchanged: each history request
+                // read every entry again, and an entry is written once.
                 entry = JsonSerializer.Deserialize<Entry>(
-                    await File.ReadAllTextAsync(file, ct).ConfigureAwait(false));
+                    await Reading.WholeFile.For(file).ReadTextAsync(ct).ConfigureAwait(false));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
             {

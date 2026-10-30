@@ -1,5 +1,7 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using Loadout.Core.Diagnostics;
+using Loadout.Core.Reading;
 using Loadout.Models.Results;
 using Loadout.Platform.Abstractions;
 
@@ -22,6 +24,21 @@ namespace Loadout.Core.Sessions;
 /// </summary>
 internal sealed class CodexSessionHistory : ISessionHistory
 {
+    /// <summary>
+    /// What each rollout's first line said, by path, with the longest the file
+    /// has been seen, for the process.
+    /// </summary>
+    /// <remarks>
+    /// The first line of a rollout never changes once written, and every
+    /// history request opened up to five hundred of them to read it again. A
+    /// rollout only grows, so one found shorter than it was seen is taken to
+    /// have been replaced and is read afresh. Creation time would say so more
+    /// directly, but on Linux it often falls back to the last change, which
+    /// every append moves. Only a line that parsed is kept: one still being
+    /// written is read again next time.
+    /// </remarks>
+    private static readonly ConcurrentDictionary<string, (long Length, Meta? Meta)> Metas = new(StringComparer.Ordinal);
+
     private readonly IEnvironmentProvider _environment;
 
     public CodexSessionHistory(IEnvironmentProvider environment) => _environment = environment;
@@ -87,50 +104,20 @@ internal sealed class CodexSessionHistory : ISessionHistory
     /// Session names, keyed by identifier. Absent or unreadable simply means
     /// sessions are shown by their directory instead.
     /// </summary>
+    /// <remarks>
+    /// Read through one reader for the process, which parses only the lines
+    /// appended since its last read; the map is built afresh each call, so a
+    /// later name for a session still wins.
+    /// </remarks>
     private async Task<Dictionary<string, string>> ReadIndexAsync(CancellationToken ct)
     {
         var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        if (!File.Exists(IndexPath))
-        {
-            return names;
-        }
-
         try
         {
-            using var trace = ReadLedger.Begin(IndexPath);
-            using var reader = new StreamReader(IndexPath);
-
-            while (await reader.ReadLineAsync(ct).ConfigureAwait(false) is { } line)
+            foreach (var line in await AppendOnlyFile<IndexName>.For(IndexPath, ParseIndexLine).ReadAsync(ct).ConfigureAwait(false) ?? [])
             {
-                if (string.IsNullOrWhiteSpace(line))
-                {
-                    continue;
-                }
-
-                try
-                {
-                    using var document = JsonDocument.Parse(line);
-                    var root = document.RootElement;
-
-                    if (root.ValueKind != JsonValueKind.Object
-                        || !root.TryGetProperty("id", out var id)
-                        || id.ValueKind != JsonValueKind.String)
-                    {
-                        continue;
-                    }
-
-                    if (root.TryGetProperty("thread_name", out var name)
-                        && name.ValueKind == JsonValueKind.String
-                        && name.GetString() is { Length: > 0 } text)
-                    {
-                        names[id.GetString()!] = text;
-                    }
-                }
-                catch (JsonException)
-                {
-                    // One bad line costs one name, not the index.
-                }
+                names[line.Id] = line.Name;
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -141,62 +128,134 @@ internal sealed class CodexSessionHistory : ISessionHistory
         return names;
     }
 
+    /// <summary>One index line's name for a session, or null when it gives none.</summary>
+    private static IndexName? ParseIndexLine(string line)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(line);
+            var root = document.RootElement;
+
+            if (root.ValueKind != JsonValueKind.Object
+                || !root.TryGetProperty("id", out var id)
+                || id.ValueKind != JsonValueKind.String)
+            {
+                return null;
+            }
+
+            return root.TryGetProperty("thread_name", out var name)
+                && name.ValueKind == JsonValueKind.String
+                && name.GetString() is { Length: > 0 } text
+                    ? new IndexName(id.GetString()!, text)
+                    : null;
+        }
+        catch (JsonException)
+        {
+            // One bad line costs one name, not the index.
+            return null;
+        }
+    }
+
     /// <summary>Reads the metadata entry that opens a rollout file.</summary>
+    /// <remarks>
+    /// The name and the time are taken afresh on every call: the index can
+    /// rename a session and every turn moves its time, while what the first
+    /// line says does not change.
+    /// </remarks>
     private static async Task<AgentSession?> ReadAsync(
         FileInfo file,
         Dictionary<string, string> names,
         CancellationToken ct)
     {
-        try
+        var length = file.Length;
+        Meta? meta;
+
+        if (SharedReaders.Enabled && Metas.TryGetValue(file.FullName, out var kept) && length >= kept.Length)
         {
-            using var trace = ReadLedger.Begin(file.FullName);
-            using var reader = new StreamReader(file.OpenRead());
-
-            // The metadata is the first entry. Reading further would mean
-            // parsing the conversation to build a menu.
-            var line = await reader.ReadLineAsync(ct).ConfigureAwait(false);
-
-            if (string.IsNullOrWhiteSpace(line))
+            meta = kept.Meta;
+            Metas[file.FullName] = (length, meta);
+        }
+        else
+        {
+            try
+            {
+                meta = await ReadMetaAsync(file, ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
             {
                 return null;
             }
 
-            using var document = JsonDocument.Parse(line);
-            var root = document.RootElement;
-
-            if (root.ValueKind != JsonValueKind.Object
-                || !root.TryGetProperty("payload", out var payload)
-                || payload.ValueKind != JsonValueKind.Object)
+            if (SharedReaders.Enabled)
             {
-                return null;
+                Metas[file.FullName] = (length, meta);
             }
+        }
 
-            if (!payload.TryGetProperty("session_id", out var id)
-                || id.ValueKind != JsonValueKind.String
-                || id.GetString() is not { Length: > 0 } sessionId)
-            {
-                return null;
-            }
-
-            if (!payload.TryGetProperty("cwd", out var cwd)
-                || cwd.ValueKind != JsonValueKind.String
-                || cwd.GetString() is not { Length: > 0 } directory)
-            {
-                return null;
-            }
-
-            return new AgentSession(
+        return meta is null
+            ? null
+            : new AgentSession(
                 "codex",
-                sessionId,
-                names.GetValueOrDefault(sessionId),
-                directory,
+                meta.SessionId,
+                names.GetValueOrDefault(meta.SessionId),
+                meta.Directory,
                 Branch: null,
                 new DateTimeOffset(file.LastWriteTimeUtc, TimeSpan.Zero),
                 file.FullName);
+    }
+
+    /// <summary>
+    /// What a rollout's first line says, or null when it is not a session's
+    /// metadata. Throws when the line cannot be read or parsed, so a line still
+    /// being written is not taken for an answer.
+    /// </summary>
+    private static async Task<Meta?> ReadMetaAsync(FileInfo file, CancellationToken ct)
+    {
+        using var trace = ReadLedger.Begin(file.FullName);
+        using var stream = file.OpenRead();
+        using var reader = new StreamReader(stream);
+
+        // The metadata is the first entry. Reading further would mean
+        // parsing the conversation to build a menu.
+        var line = await reader.ReadLineAsync(ct).ConfigureAwait(false);
+
+        trace?.Read(stream.Position);
+
+        if (string.IsNullOrWhiteSpace(line))
+        {
+            throw new JsonException("The first line is empty.");
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+
+        using var document = JsonDocument.Parse(line);
+        var root = document.RootElement;
+
+        if (root.ValueKind != JsonValueKind.Object
+            || !root.TryGetProperty("payload", out var payload)
+            || payload.ValueKind != JsonValueKind.Object)
         {
             return null;
         }
+
+        if (!payload.TryGetProperty("session_id", out var id)
+            || id.ValueKind != JsonValueKind.String
+            || id.GetString() is not { Length: > 0 } sessionId)
+        {
+            return null;
+        }
+
+        if (!payload.TryGetProperty("cwd", out var cwd)
+            || cwd.ValueKind != JsonValueKind.String
+            || cwd.GetString() is not { Length: > 0 } directory)
+        {
+            return null;
+        }
+
+        return new Meta(sessionId, directory);
     }
+
+    /// <summary>What a rollout's first line says about its session.</summary>
+    private sealed record Meta(string SessionId, string Directory);
+
+    /// <summary>A name the index gives a session.</summary>
+    private sealed record IndexName(string Id, string Name);
 }

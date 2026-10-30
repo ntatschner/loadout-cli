@@ -757,7 +757,8 @@ public sealed partial class TeamRunnerTests
             git is null ? null : new FakeProjects("demo", Path.Combine(_root, "repo")),
             git is null ? null : RecordingGit.Over(git, _gitCalls),
             null,
-            _replayTasks).RunAsync(
+            _replayTasks,
+            timers: new SteppingClock()).RunAsync(
             new TeamRunRequest("demo", team ?? await IteratingProjectAsync(), await SpecialistsAsync(),
                 "Add --since to loadout usage.", autonomy, MaxRounds: rounds, Offline: true,
                 Criteria: criteria, Resuming: resuming, ResumeMessage: message, Standing: standing),
