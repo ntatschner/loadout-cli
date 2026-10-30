@@ -343,6 +343,108 @@ public sealed class TaskTypeTests : IDisposable
         root.GetProperty("required").EnumerateArray().Select(one => one.GetString()).Should().NotContain("type");
     }
 
+    [Fact]
+    public async Task Labels_are_added_once_whatever_their_case_and_taken_off_whatever_their_case()
+    {
+        await _space.ProjectAsync("website");
+        await _space.Tasks.DeclareAsync("website", "login", TaskState.Open, "nigel", "Fix the login");
+
+        await _space.Tasks.LabelAsync("website", "login", ["Homelab", "urgent"], []);
+        await _space.Tasks.LabelAsync("website", "login", ["homelab", "someday"], []);
+        var taken = await _space.Tasks.LabelAsync("website", "login", [], ["URGENT"]);
+
+        taken.Value!.Labels.Should().Equal("Homelab", "someday");
+        (await OneAsync("login")).Labels.Should().Equal("Homelab", "someday");
+    }
+
+    [Fact]
+    public async Task Labelling_leaves_the_claim_and_the_history_alone()
+    {
+        await _space.ProjectAsync("website");
+        await _space.Tasks.DeclareAsync("website", "login", TaskState.Open, "nigel", "Fix the login");
+
+        await _space.Tasks.LabelAsync("website", "login", ["homelab"], []);
+
+        var task = await OneAsync("login");
+        task.History.Should().ContainSingle("a label is not a claim about the work");
+        task.DeclaredBy.Should().Be("nigel");
+    }
+
+    [Theory]
+    [InlineData("", "needs a word")]
+    [InlineData("a label far too long to be a word or two", "at most 32")]
+    [InlineData("one, two", "comma")]
+    [InlineData("bug fix", "is a type")]
+    public async Task A_label_that_is_not_one_is_refused_with_the_reason(string label, string reason)
+    {
+        await _space.ProjectAsync("website");
+        await _space.Tasks.DeclareAsync("website", "login", TaskState.Open, "nigel", "Fix the login");
+
+        var refused = await _space.Tasks.LabelAsync("website", "login", [label], []);
+
+        refused.Failed.Should().BeTrue();
+        refused.Error.Should().Contain(reason);
+        (await OneAsync("login")).Labels.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_batch_cannot_label()
+    {
+        await _space.ProjectAsync("website");
+
+        var done = await _space.Tasks.ApplyAsync(
+            [new TaskOperation(TaskOperation.Label, "website", "login", Labels: ["homelab"])]);
+
+        done.Value!.Outcomes.Single().Applied.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Renaming_a_label_keeps_its_place_and_does_not_double_one_already_there()
+    {
+        await _space.ProjectAsync("website");
+        await _space.Tasks.DeclareAsync("website", "a", TaskState.Open, "nigel", "One");
+        await _space.Tasks.DeclareAsync("website", "b", TaskState.Open, "nigel", "Two");
+        await _space.Tasks.DeclareAsync("website", "c", TaskState.Open, "nigel", "Three");
+        await _space.Tasks.LabelAsync("website", "a", ["first", "homelab", "last"], []);
+        await _space.Tasks.LabelAsync("website", "b", ["Homelab", "home-lab"], []);
+
+        var preview = await _space.Tasks.RelabelAsync("website", "HOMELAB", "home-lab", apply: false);
+        preview.Value!.Should().Equal("a", "b");
+        (await OneAsync("a")).Labels.Should().Equal("first", "homelab", "last");
+
+        await _space.Tasks.RelabelAsync("website", "HOMELAB", "home-lab", apply: true);
+
+        (await OneAsync("a")).Labels.Should().Equal("first", "home-lab", "last");
+        (await OneAsync("b")).Labels.Should().Equal("home-lab");
+        (await OneAsync("c")).Labels.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Removing_a_label_takes_it_off_every_task_on_the_list()
+    {
+        await _space.ProjectAsync("website");
+        await _space.Tasks.DeclareAsync("website", "a", TaskState.Open, "nigel", "One");
+        await _space.Tasks.DeclareAsync("website", "b", TaskState.Open, "nigel", "Two");
+        await _space.Tasks.LabelAsync("website", "a", ["someday", "homelab"], []);
+        await _space.Tasks.LabelAsync("website", "b", ["someday"], []);
+
+        var removed = await _space.Tasks.RelabelAsync("website", "someday", null, apply: true);
+
+        removed.Value!.Should().Equal("a", "b");
+        (await OneAsync("a")).Labels.Should().Equal("homelab");
+        (await OneAsync("b")).Labels.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void A_list_filters_on_a_label()
+    {
+        var labelled = new TaskItem { Id = "a", Labels = ["homelab"] };
+        var not = new TaskItem { Id = "b" };
+        var query = Core.Lists.ListQuery.Parse("label:homelab").Value!;
+
+        TaskFields.All.Apply(query, [labelled, not], DateTimeOffset.UnixEpoch).Value!.Select(one => one.Id).Should().Equal("a");
+    }
+
     private static Core.Ideas.IdeaReply Reply(string type) => new()
     {
         Contract = Models.Ideas.IdeaSchema.Version,

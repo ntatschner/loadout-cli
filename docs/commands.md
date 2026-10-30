@@ -97,6 +97,8 @@
 | `loadout task show <id>` | One task in full: its detail, note, and every change of state with who said so and when, and the idea it was accepted from, if it was, with the revision of its list. Lists leave the detail out |
 | `loadout task declare <id> <state> --type <type>` | What the work is about: `new-project`, `feature`, `bug-fix`, `ci-cd`, `release`, `docs` or `maintenance`. Your choice stays until you change it, and no guess replaces it. Leave it out and a new task's type is guessed from its words and where you captured it: an idea on the workspace-wide list with nothing telling in it is taken for a new project. `task list` and `task show` say which types were guessed |
 | `loadout task shorten` | Shorten titles written before the 72-character limit, keeping each one whole in its detail and noting it in the history. `--every-list` covers every project and the workspace-wide list; `--dry-run` names what it would change |
+| `loadout task label <id> <label>...` | Put your own labels on a task or idea, beside its type, or take them off with `--remove`. Labels are the workspace's, so the same one can sort work on every project, and nothing acts on them: they're for you and for `--filter label:<word>` |
+| `loadout task labels list\|rename\|remove` | Every label in the workspace with how many carry it; rename one, or take it off, everywhere at once. Both say how many tasks and ideas that is and ask first, unless `--yes`; `--dry-run` only counts |
 | `loadout task classify` | Give a type to every task and idea recorded before there were types, guessed from its words and noted in its history. Each is kept as a guess, so refining an idea can still change it. `--every-list` covers every project and the workspace-wide list; `--dry-run` lists what each would get and writes nothing |
 | `loadout task list --filter <query> --sort <fields>` | Keep and order the list with the same query syntax Studio uses, described under [Filtering and sorting a list](#filtering-and-sorting-a-list) |
 | `loadout task list --every-list` | Every project's tasks and the workspace-wide list's, as one list, each row naming its project. Narrow it with `--filter project:<slug>`, or `project:global` for the workspace-wide list |
@@ -305,7 +307,7 @@ older than that, and a bare `updated:7d` means within the week. `h`, `d` and
 `w` count hours, days and weeks. `updated:>=2026-10-01` is that day or after,
 and a bare day is that day only, in UTC.
 
-A task can be filtered on `id`, `title`, `state`, `kind`, `type`, `project`, `by`,
+A task can be filtered on `id`, `title`, `state`, `kind`, `type`, `label`, `project`, `by`,
 `updated`, `note`, `detail`, `runs` and `launches`. A word with no field is
 looked for in the detail too, so a task is found by its full description and
 not only its title. `runs` counts the team runs started for it and

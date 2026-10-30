@@ -129,6 +129,15 @@ public sealed class TaskItem
     /// </remarks>
     public TaskTypeSource? TypeBy { get; set; }
 
+    /// <summary>Free labels of the person's own, beside the type. Empty is normal.</summary>
+    /// <remarks>
+    /// The workspace's rather than a project's: the same person's labels tend to
+    /// repeat across projects, and since nothing reads a label but a person or a
+    /// filter, sharing them risks nothing. Renaming or removing one changes it
+    /// on every list at once.
+    /// </remarks>
+    public List<string> Labels { get; set; } = [];
+
     /// <summary>Who said so: an agent name, or whoever was at the keyboard.</summary>
     public string DeclaredBy { get; set; } = string.Empty;
 

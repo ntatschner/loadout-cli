@@ -175,6 +175,45 @@ public interface ITaskService
         CancellationToken ct = default) =>
         Task.FromResult(OperationResult<TaskItem>.Fail("This task list cannot change a type."));
 
+    /// <summary>
+    /// Adds labels to a task and takes others off, without claiming anything
+    /// about where the work stands.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Nothing reads a label but a person and a filter, so a change is not
+    /// written into the task's history. Each label added is refused as
+    /// <see cref="TaskLabels.Rejection"/> says.
+    /// </para>
+    /// <para>The default refuses, for the doubles in the tests; the real service labels.</para>
+    /// </remarks>
+    Task<OperationResult<TaskItem>> LabelAsync(
+        string? projectSlug,
+        string id,
+        IReadOnlyList<string> add,
+        IReadOnlyList<string> remove,
+        CancellationToken ct = default) =>
+        Task.FromResult(OperationResult<TaskItem>.Fail("This task list cannot label a task."));
+
+    /// <summary>
+    /// Renames a label on every task on one list that carries it, or with a
+    /// <paramref name="to"/> of null takes it off them; or, without
+    /// <paramref name="apply"/>, says which tasks it would change and writes nothing.
+    /// </summary>
+    /// <remarks>
+    /// One list at a time, as task classify goes, so a command covering the
+    /// whole workspace holds one file at a time. A task that already has the
+    /// new label keeps one copy of it.
+    /// <para>The default refuses, for the doubles in the tests; the real service relabels.</para>
+    /// </remarks>
+    Task<OperationResult<IReadOnlyList<string>>> RelabelAsync(
+        string? projectSlug,
+        string from,
+        string? to,
+        bool apply,
+        CancellationToken ct = default) =>
+        Task.FromResult(OperationResult<IReadOnlyList<string>>.Fail("This task list cannot rename a label."));
+
     /// <summary>A list, with the revision a change made from it should name.</summary>
     /// <remarks>
     /// The default has no revision to give, which a caller reads as nothing to
@@ -412,6 +451,102 @@ internal sealed class TaskService : ITaskService
             [new TaskOperation(TaskOperation.Retype, projectSlug, id, By: by, Type: type, TypeBy: typeBy)], false, ct).ConfigureAwait(false));
 
     /// <inheritdoc />
+    public async Task<OperationResult<TaskItem>> LabelAsync(
+        string? projectSlug,
+        string id,
+        IReadOnlyList<string> add,
+        IReadOnlyList<string> remove,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(add);
+        ArgumentNullException.ThrowIfNull(remove);
+
+        return One(await ApplyCoreAsync(
+            [new TaskOperation(TaskOperation.Label, projectSlug, id, Labels: add, Unlabels: remove)], false, ct).ConfigureAwait(false));
+    }
+
+    /// <inheritdoc />
+    public async Task<OperationResult<IReadOnlyList<string>>> RelabelAsync(
+        string? projectSlug,
+        string from,
+        string? to,
+        bool apply,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(from);
+
+        if (to is not null && TaskLabels.Rejection(to) is { } refused)
+        {
+            return OperationResult<IReadOnlyList<string>>.Fail(refused, ExitCode.InvalidArguments);
+        }
+
+        if (to is not null && SecretScanner.Match(to).Count > 0)
+        {
+            return OperationResult<IReadOnlyList<string>>.Fail(
+                "That label looks like it contains a credential, so nothing was changed. Choose another word.",
+                ExitCode.PolicyViolation);
+        }
+
+        if (!_workspace.IsAvailable())
+        {
+            return OperationResult<IReadOnlyList<string>>.Fail(NoWorkspace, ExitCode.WorkspaceSyncFailed);
+        }
+
+        var path = PathFor(projectSlug);
+
+        // Held as a batch is, so a change made meanwhile is not written over.
+        var held = await _yaml.HoldAsync([path], ct).ConfigureAwait(false);
+
+        if (held.Failed)
+        {
+            return OperationResult<IReadOnlyList<string>>.Fail(held.Error!, held.ExitCode);
+        }
+
+        using var hold = held.Value!;
+        var loaded = await LoadAsync(path, ct).ConfigureAwait(false);
+
+        if (loaded.Failed)
+        {
+            return OperationResult<IReadOnlyList<string>>.Fail(loaded.Error!, loaded.ExitCode);
+        }
+
+        // A copy, so what is kept between reads is untouched until the file is.
+        var list = Copy(loaded.Value!.Value);
+        var old = from.Trim();
+        var carrying = list.Items.Where(item => item.Id.Length > 0 && item.Labels.Contains(old, TaskLabels.Same)).ToList();
+        IReadOnlyList<string> found = [.. carrying.Select(item => item.Id)];
+
+        if (!apply || found.Count == 0)
+        {
+            return OperationResult<IReadOnlyList<string>>.Ok(found);
+        }
+
+        foreach (var item in carrying)
+        {
+            // Renamed where it stood, so the order somebody gave them is kept.
+            var at = item.Labels.FindIndex(one => TaskLabels.Same.Equals(one, old));
+
+            item.Labels.RemoveAt(at);
+
+            if (to is { } renamed && !item.Labels.Contains(renamed.Trim(), TaskLabels.Same))
+            {
+                item.Labels.Insert(at, renamed.Trim());
+            }
+        }
+
+        var saved = await hold.WriteAsync(path, list, true, ct).ConfigureAwait(false);
+
+        if (saved.Failed)
+        {
+            return OperationResult<IReadOnlyList<string>>.Fail(saved.Error!, saved.ExitCode);
+        }
+
+        _kept.Remember(path, list, saved.Value!);
+
+        return OperationResult<IReadOnlyList<string>>.Ok(found);
+    }
+
+    /// <inheritdoc />
     public Task<OperationResult<TaskBatch>> ApplyAsync(IReadOnlyList<TaskOperation> operations, CancellationToken ct = default) =>
         ApplyCoreAsync(operations, true, ct);
 
@@ -560,7 +695,7 @@ internal sealed class TaskService : ITaskService
                     outcomes[index] = Failed(
                         index, operation, $"'{missing}' is not a project this workspace has.", ExitCode.ProjectNotFound);
                 }
-                else if (operation.Op is TaskOperation.Hold or TaskOperation.Retype)
+                else if (operation.Op is TaskOperation.Hold or TaskOperation.Retype or TaskOperation.Label)
                 {
                     // Only a backfill pass holds a proposal. One sent from a
                     // page or an agent would be a done-when nobody asked for.
@@ -802,7 +937,7 @@ internal sealed class TaskService : ITaskService
     /// <summary>What can be refused about an operation from the operation alone.</summary>
     private static (string Error, ExitCode Code)? Precheck(TaskOperation operation)
     {
-        if (!TaskOperation.Ops.Contains(operation.Op) && operation.Op is not (TaskOperation.Hold or TaskOperation.Retype))
+        if (!TaskOperation.Ops.Contains(operation.Op) && operation.Op is not (TaskOperation.Hold or TaskOperation.Retype or TaskOperation.Label))
         {
             return ($"There is nothing called '{operation.Op}' to do to a task. It is one of {string.Join(", ", TaskOperation.Ops)}.",
                 ExitCode.InvalidArguments);
@@ -846,7 +981,7 @@ internal sealed class TaskService : ITaskService
     /// </remarks>
     private static string? Screened(TaskOperation operation)
     {
-        if (operation.Op is not (TaskOperation.Add or TaskOperation.Declare or TaskOperation.Hold))
+        if (operation.Op is not (TaskOperation.Add or TaskOperation.Declare or TaskOperation.Hold or TaskOperation.Label))
         {
             return null;
         }
@@ -863,6 +998,7 @@ internal sealed class TaskService : ITaskService
                     .. operation.Proposal?.DoneWhen ?? [],
                     operation.Proposal?.Why ?? string.Empty,
                     operation.Proposal?.Error ?? string.Empty,
+                    .. operation.Labels ?? [],
                 ]));
 
         return patterns.Count > 0
@@ -975,6 +1111,33 @@ internal sealed class TaskService : ITaskService
                 groups[0].Changed = true;
 
                 return OperationResult<TaskItem>.Ok(retyping);
+            }
+
+            case TaskOperation.Label:
+            {
+                var id = operation.Id!.Trim();
+
+                if (list.Items.FirstOrDefault(item => Same(item.Id, id)) is not { } labelling)
+                {
+                    return OperationResult<TaskItem>.Fail(
+                        $"'{id}' is not a task of {TaskPaths.Describe(operation.Project)}.", ExitCode.InvalidArguments);
+                }
+
+                if ((operation.Labels ?? []).Select(TaskLabels.Rejection).FirstOrDefault(why => why is not null) is { } refused)
+                {
+                    return OperationResult<TaskItem>.Fail(refused, ExitCode.InvalidArguments);
+                }
+
+                var labels = TaskLabels.Apply(labelling.Labels, operation.Labels, operation.Unlabels);
+
+                // Nothing written when nothing changed, the same as everywhere else.
+                if (!labels.SequenceEqual(labelling.Labels, StringComparer.Ordinal))
+                {
+                    labelling.Labels = labels;
+                    groups[0].Changed = true;
+                }
+
+                return OperationResult<TaskItem>.Ok(labelling);
             }
 
             case TaskOperation.Remove:
@@ -1330,6 +1493,7 @@ internal sealed class TaskService : ITaskService
         Kind = item.Kind,
         Type = item.Type,
         TypeBy = item.TypeBy,
+        Labels = [.. item.Labels],
         DeclaredBy = item.DeclaredBy,
         DeclaredUtc = item.DeclaredUtc,
         Note = item.Note,

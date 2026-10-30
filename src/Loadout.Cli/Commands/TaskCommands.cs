@@ -288,6 +288,9 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
                     item.Title,
                     state = item.State.ToString().ToLowerInvariant(),
                     kind = item.Kind.ToString().ToLowerInvariant(),
+                    type = item.Type is { } type ? TaskTypes.Name(type) : null,
+                    typeBy = item.TypeBy is { } typeBy ? TaskTypes.Name(typeBy) : null,
+                    labels = item.Labels,
                     project = where[item],
                     item.DeclaredBy,
                     declared = item.DeclaredUtc,
@@ -540,11 +543,19 @@ internal sealed class TaskRows
         line.Append("[dim]").Append(Markup.Escape(type.PadRight(TypeWidth))).Append("[/] ");
         used += TypeWidth + 1;
 
+        // After the title, and taken from its room, so a row with labels
+        // still fits rather than wrapping its labels onto a line of their own.
+        var labels = item.Labels.Count > 0 ? " " + string.Join(' ', item.Labels.Select(label => $"#{label}")) : string.Empty;
+
         // Less room than this and the title is left to wrap rather than cut
         // to a word or two, which would say nothing.
-        var title = _width is { } width && width - used >= 20 ? Fit(item.Title, width - used) : item.Title;
+        var title = _width is { } width && width - used - labels.Length >= 20
+            ? Fit(item.Title, width - used - labels.Length)
+            : item.Title;
 
-        return line.Append(Markup.Escape(title)).ToString();
+        line.Append(Markup.Escape(title));
+
+        return (labels.Length > 0 ? line.Append("[dim]").Append(Markup.Escape(labels)).Append("[/]") : line).ToString();
     }
 
     private static string Fit(string text, int room) =>
@@ -1185,6 +1196,7 @@ public sealed class TaskShowCommand : AsyncCommand<TaskShowCommand.Settings>
                 + $"loadout idea show {Markup.Escape(task.Id)} {(slug is null ? "--global" : $"--project {Markup.Escape(slug)}")} --full shows it.[/]");
         }
 
+        Section(output, "Labels", string.Join(", ", task.Labels));
         Section(output, "Note", task.Note);
         Section(output, "Detail", task.Detail);
         Section(output, "Done when", string.Join('\n', task.DoneWhen.Select(one => $"- {one}")));

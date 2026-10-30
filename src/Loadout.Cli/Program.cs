@@ -792,6 +792,14 @@ public static class Program
             task.AddCommand<TaskProposeDoneWhenCommand>("propose-done-when");
             task.AddCommand<TaskShortenCommand>("shorten");
             task.AddCommand<TaskClassifyCommand>("classify");
+            task.AddCommand<TaskLabelCommand>("label");
+            task.AddBranch("labels", labels =>
+            {
+                labels.SetDescription("Your own labels on tasks and ideas, kept for the whole workspace.");
+                labels.AddCommand<TaskLabelsListCommand>("list");
+                labels.AddCommand<TaskLabelsRenameCommand>("rename");
+                labels.AddCommand<TaskLabelsRemoveCommand>("remove");
+            });
             task.AddCommand<TaskMoveCommand>("move");
             task.AddCommand<TaskRemoveCommand>("remove");
             task.AddCommand<TaskApplyCommand>("apply");

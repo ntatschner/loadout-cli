@@ -34,6 +34,8 @@ namespace Loadout.Core.Tasks;
 /// <param name="Proposal">For hold, the proposal to hold.</param>
 /// <param name="Type">What the work is about. Left as it was when null; a new task given none has one guessed.</param>
 /// <param name="TypeBy">Who gave <paramref name="Type"/>: a person when null.</param>
+/// <param name="Labels">For label, the labels to add.</param>
+/// <param name="Unlabels">For label, the labels to take off.</param>
 public sealed record TaskOperation(
     string Op,
     string? Project = null,
@@ -50,7 +52,9 @@ public sealed record TaskOperation(
     string? Reason = null,
     TaskProposal? Proposal = null,
     TaskType? Type = null,
-    TaskTypeSource? TypeBy = null)
+    TaskTypeSource? TypeBy = null,
+    IReadOnlyList<string>? Labels = null,
+    IReadOnlyList<string>? Unlabels = null)
 {
     public const string Add = "add";
     public const string Declare = "declare";
@@ -70,6 +74,12 @@ public sealed record TaskOperation(
     /// and a batch from outside naming it is refused.
     /// </summary>
     internal const string Retype = "retype";
+
+    /// <summary>
+    /// Adds and takes off labels, and nothing else. Not one of <see cref="Ops"/>:
+    /// only <see cref="ITaskService.LabelAsync"/> makes it.
+    /// </summary>
+    internal const string Label = "label";
 
     /// <summary>Every op a batch takes, in the order they are documented.</summary>
     public static IReadOnlyList<string> Ops => [Add, Declare, Remove, Move];
@@ -244,6 +254,7 @@ public static class TaskOperations
             kind = task.Kind.ToString().ToLowerInvariant(),
             type = task.Type is { } type ? TaskTypes.Name(type) : null,
             typeBy = task.TypeBy is { } typeBy ? TaskTypes.Name(typeBy) : null,
+            labels = task.Labels,
             by = task.DeclaredBy,
             declared = task.DeclaredUtc,
             note = task.Note,
