@@ -4425,11 +4425,6 @@
 
 
 
-
-
-
-
-
 /* ---------- Stage 14: what main's Studio built since the design ---------- */
 (function () {
   "use strict";
@@ -6131,7 +6126,8 @@
         opt = opt || {};
         var btn = opt.button || row.querySelector("[data-peek]");
         if (!btn) {
-          btn = h("button", { type: "button", "class": "ls-peek-btn", "data-peek": "" }, [h("span", { "class": "ring", "aria-hidden": "true" }), h("span", { "class": "ls-vh", text: "Peek" })]);
+          /* word: the button says it, for a place where a bare ring would read as an empty button (a toast's actions). */
+          btn = h("button", { type: "button", "class": "ls-peek-btn" + (opt.word ? " worded" : ""), "data-peek": "" }, [h("span", { "class": "ring", "aria-hidden": "true" }), h("span", { "class": opt.word ? "w" : "ls-vh", text: opt.word || "Peek" })]);
           (opt.into || row).appendChild(btn);
         }
         var target = opt.target || (row.hasAttribute("tabindex") ? row : row.querySelector("a[href], button:not([data-peek]), [tabindex]")) || row;

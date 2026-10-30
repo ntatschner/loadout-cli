@@ -814,17 +814,6 @@ export declare function OfficePanel(o: { kind?: string; title: string; lines?: s
 
 
 
-
-
-
-
-
-
-
-
-
-
-
 /* ---------- What main's Studio built since the design (stage 14) ---------- */
 /** What 'loadout ask --json' answers (main's ask.ts AskReply). Properties --json leaves out may be missing. */
 export interface AskReply {
@@ -1336,7 +1325,7 @@ export declare function Peek(o?: {
   /** The panel. */
   el: HTMLElement;
   /** Wires a row: hover, focus, and its peek button (one marked [data-peek] inside it, `button`, or one added at its end). Returns detach. */
-  attach: (row: HTMLElement, item: () => PeekItem | null, opt?: { button?: HTMLElement; into?: HTMLElement; target?: HTMLElement; after?: HTMLElement }) => () => void;
+  attach: (row: HTMLElement, item: () => PeekItem | null, opt?: { button?: HTMLElement; into?: HTMLElement; target?: HTMLElement; after?: HTMLElement; /** Shows this word beside the ring, where a bare ring would read as an empty button. */ word?: string }) => () => void;
   /** Opens it for an item, beside a row if given; pin: true to pin. False when it would have covered the terminal you are typing in. */
   show: (item: PeekItem, row?: HTMLElement | null, how?: { pin?: boolean }) => boolean;
   /** The waiting list beside `anchor` (the mode bar's count), every item oldest first; called again with the same anchor, it closes. */

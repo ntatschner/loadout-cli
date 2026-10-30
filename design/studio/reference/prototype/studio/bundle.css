@@ -2024,10 +2024,6 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 
 
 
-
-
-
-
 /* ---------- Stage 14: what main's Studio built since the design ---------- */
 /* --- AskPane --- */
 .ls-ask { padding: 0 18px; }
@@ -2397,6 +2393,7 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 .ls-peek-btn .ring::after { content: ""; position: absolute; inset: 5px; border-radius: var(--radius-round); background: var(--accent); }
 .ls-peek-btn:hover .ring, .ls-peek-btn[aria-expanded="true"] .ring { box-shadow: inset 0 0 0 1.5px var(--accent), 0 0 var(--glow-sm) var(--glow); }
 .ls-peek-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ls-peek-btn.worded { display: inline-flex; gap: var(--space-2); width: auto; height: auto; min-height: 32px; padding: 0 var(--space-2); font-family: var(--font-mono); font-size: 11.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink); }
 .ls-peek.framed.sheet { position: absolute; left: 0; right: 0; bottom: 0; top: auto; width: auto; max-width: none; max-height: 78%; overflow: auto; }
 .ls-peek.framed.sheet:not(.pinned) { box-shadow: inset 0 3px 0 var(--c), inset 0 0 0 1px var(--rule), 0 -18px 44px -14px rgb(0 0 0 / .55); }
 .ls-peek.framed.sheet.pinned { box-shadow: inset 0 3px 0 var(--c), inset 0 5px 0 var(--accent), inset 0 0 0 1px var(--rule), 0 -18px 44px -14px rgb(0 0 0 / .55); }
