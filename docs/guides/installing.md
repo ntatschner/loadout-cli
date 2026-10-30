@@ -60,14 +60,14 @@ On **Debian, Ubuntu, Fedora or similar**, download the package from the
 [latest release](https://github.com/ntatschner/loadout-cli/releases/latest):
 
 ```sh
-sudo dpkg -i loadout_0.109.4_amd64.deb
+sudo dpkg -i loadout_0.109.5_amd64.deb
 ```
 
 On **Windows**, the MSI from the release page installs the same way the script
 does:
 
 ```powershell
-msiexec /i loadout-0.109.4-win-x64.msi
+msiexec /i loadout-0.109.5-win-x64.msi
 ```
 
 On an ARM machine, take the `arm64` build of any of these.
