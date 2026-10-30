@@ -121,6 +121,21 @@ Loadout Studio is the design system for Studio: the app Loadout serves on this m
 - **Showing commands.** `data-commands` on `<html>` (set with `setCommands`, kept as `studio-commands`) is `hover` by default, or `always` or `never`. On hover nothing keeps space for a command: a button's command floats in under that button only, a form's line just above its buttons while one is in use, and a line that stands on its own ("From", "the same, in a terminal") while the thing before it is pointed at; a box that would run off the screen is moved back in. Under Always, rows keep their one reserved line. TerminalOnly blocks and anything inside `[data-commands="always"]` (the Commands page) always show theirs; a disabled reason (`.ls-cmd.reason`) is never hidden. A palette option whose sub-line is a command marks it `.is-cmd`.
 - **The Commands page is the expert catalogue.** It keeps every command's full form for people who think in commands. No page links to it as its way of doing something: if a page needs a command, the page gets a control for it.
 
+### Workflow
+
+- What you came for comes first, in every mode; each mode keeps its purpose (WORKFLOW.md).
+- **Live work first.** Wherever work is listed it comes in one order, decided by one helper, `liveFirst`:
+  1. **Waiting on you**: a gate or question, a trigger approval, a session waiting for you or asking for approval, an idea with questions open;
+  2. **Running**;
+  3. **You might pick it up**: failed, blocked or ended short of its done-when, ended when the daemon stopped, a round that failed, a branch waiting to land;
+  4. **History**: ended, done, past conversations.
+
+  Within each live group the oldest wait comes first. What waits on you comes before a problem, on Home, in Ambient, on the board and in Red Alert alike (`rankUrgent`, RunBoard, NeedsYou and RedAlert use it).
+- **One waiting count.** The mode bar, the rail, Home, Teams, Minimal and Pure count the same things (gates and questions, trigger approvals, waiting or approving sessions, ideas with questions), from one helper, `waitingOf`, and say it the same way: "N waiting on you".
+- **The peek.** Pointing at or focusing any session, run, idea or task opens a peek over it: its live state and its main actions, each with its command. A click pins it; Escape closes it first, and never while you are typing in a terminal; Open goes to the full view in the mode you are in. At 320px it is a sheet from the foot; in Minimal a short expansion under the row; in Pure the view pane's preview as J and K move.
+- **Edit layout.** Every page and mode surface with sections has Edit layout in its head (LayoutEdit), the way Home's Lens and Map have it: drag a section by its name or use its arrows, Hide it, Add it back, Reset to the default. A section that holds live work can be moved but not hidden while it has something in it. Minimal is hide-only, so it stays one column. Every layout is kept in one setting, `studio-layouts` (`$ loadout config set studio-layouts '<json>'`), keyed `<page>` or `<page>/<surface>` and then the mode; `""` is the default, so a reset unsets it. Sizes (splits, the deck's slots, the desk's widths) stay in the browser.
+- **Confirmations wait, then close.** Pressing a confirmation's button shows it working ("ending…", "starting…": HaloButton's `busy`), and it and its neighbours can't be pressed again. The dialog stays until the act finishes. On success it closes and the result shows where you asked, on the page and in a toast, ✓ with the command; on failure it stays open, says ✕ and why inside, and keeps everything you typed. Dialog decides: an action that resolves to `false`, throws or rejects has failed; anything else has succeeded. Nothing claims a success it didn't get. The same goes for every sheet.
+
 ### Red Alert
 
 - Off by default (`studio-red-alert`). When on and something needs you, the page's edge lights (Needs, or Bad for a problem) and one line says what, with Go to it. It clears itself. It breathes under full motion, is steady under reduced, and is a still border under none and in Pure Focus.

@@ -1,4 +1,4 @@
-<!-- @dsCard group="Overlays" height=600 width=1100 subtitle="A projected panel: a line of light opens to full height over a dim" -->
+<!-- @dsCard group="Overlays" height=600 width=1100 subtitle="A projected panel over a dim; a confirmation shows it is working, stays saying why on failure, and closes on success" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -33,8 +33,25 @@
       actions: [{ label: "Sign out every browser", kind: "danger", solid: true, glyph: "\u23fb", cmd: "$ loadout dashboard sign-out", onPress: function () { out.textContent = "\u2713 Every browser is signed out."; } }] });
     d.open();
   }
+  /* Confirmations wait, then close: End shows "ending…" while it works; the first try fails and the dialog stays, saying why, with the note as typed; the next one closes. */
+  var tries = 0;
+  function endSession(press) {
+    var note = document.createElement("div"); note.className = "ls-field";
+    var lab = document.createElement("label"); lab.className = "lab"; lab.htmlFor = "end-note"; lab.textContent = "A note for its history (optional)";
+    var inp = document.createElement("input"); inp.className = "ls-text"; inp.id = "end-note"; inp.type = "text"; inp.value = "superseded by the retry branch";
+    note.appendChild(lab); note.appendChild(inp);
+    var d = S.Dialog({ title: "End Tidy the webhook retries?", why: "This stops its agent in webhooks, and cannot be undone. The session stays listed, ended, so you can still see how it ended.", danger: true, role: "alertdialog", host: stage, contained: true, behind: page, content: note,
+      actions: [{ label: "End session", kind: "danger", solid: true, busy: "ending\u2026", cmd: "$ loadout session end s-4f2a", onPress: function () {
+        tries++;
+        return new Promise(function (resolve, reject) { setTimeout(function () { if (tries === 1) { reject(new Error("The daemon did not answer in 10 seconds. Nothing was ended; try again.")); } else { out.textContent = "\u2713 Ended Tidy the webhook retries \u00b7 $ loadout session end s-4f2a"; resolve(); } }, tries === 1 ? 250 : 1200); });
+      } }] });
+    d.open();
+    if (press) { setTimeout(function () { var btn = d.panel && d.panel.querySelector("button.ls-halo"); if (btn) { btn.click(); } }, 80); }
+  }
   b.appendChild(S.HaloButton({ label: "Start a session\u2026", onPress: newSession }));
+  b.appendChild(S.HaloButton({ label: "End a session\u2026", kind: "danger", onPress: function () { endSession(false); } }));
   b.appendChild(S.HaloButton({ label: "Sign out every browser\u2026", kind: "danger", onPress: signOut }));
+  endSession(true);
 })();
 </script>
 </body>

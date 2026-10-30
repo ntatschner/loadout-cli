@@ -22,7 +22,7 @@
 <p class="out" role="status" id="out"></p>
 <p class="lab" style="margin-top: 18px">Kinds and sizes</p>
 <div class="row" id="kinds"></div>
-<p class="lab" style="margin-top: 18px">Inactive, and described by a line</p>
+<p class="lab" style="margin-top: 18px">Inactive, busy, and described by a line</p>
 <div class="row" id="more"></div>
 <span class="ls-sr" id="next-left">2 left to decide on this idea</span>
 <script>
@@ -37,6 +37,8 @@
   var more = document.getElementById("more");
   more.appendChild(S.HaloButton({ label: "Keep it", size: "small", glyph: "\u2713", inactive: true, cmd: "$ loadout idea keep browser-launcher L2 --project starstats" }));
   more.appendChild(S.HaloButton({ label: "Drop it", size: "small", glyph: "\u2715", cmd: "$ loadout idea drop browser-launcher L2 --project starstats" }));
+  more.appendChild(S.HaloButton({ label: "End session", kind: "danger", size: "small", busy: "ending\u2026", cmd: "$ loadout session end s-4f2a" }));
+  more.appendChild(S.HaloButton({ label: "Launch", solid: true, size: "small", busy: "starting\u2026", cmd: "$ loadout launch webhooks" }));
   more.appendChild(S.HaloButton({ label: "Next: answer 2 of 3", size: "small", solid: true, glyph: "\u2193", next: "question:Q2", describedBy: "next-left", cmd: "changes nothing \u00b7 ] \u00b7 2 left to decide" }));
 })();
 </script>

@@ -46,10 +46,18 @@ export interface HaloButtonOptions {
   key?: string;
   /** Where a page's Next button finds this one: set as data-next ("send-answers", "rework:L2"). */
   next?: string;
+  /** While what it started is working: the label gives way to this word ("ending…", "starting…"; true is "working…"), the button is inactive and aria-busy. */
+  busy?: string | boolean;
   onPress?: (e: MouseEvent) => void;
 }
 /** A word beside a ring of light. Returns the button, or a wrapper holding the button and its command. */
 export declare function HaloButton(o: HaloButtonOptions): HTMLElement;
+export declare namespace HaloButton {
+  /** Puts a button HaloButton made (or its wrapper) into its busy state with that word (true is "working…"), or back as it was with false. */
+  function setBusy(node: HTMLElement, busy: string | boolean): void;
+  /** "working…". */
+  const BUSY: string;
+}
 
 /** A command as a block, with an optional line saying why it is run in a terminal. */
 export declare function Command(o: { command: string; why?: string }): HTMLElement;
@@ -87,7 +95,30 @@ export declare function EventMark(o: { family?: SignalFamily; text: string; age?
 /** One expanding ring at x, y in a positioned container. Skipped under reduced or no motion. */
 export declare function ping(container: HTMLElement, x: number, y: number, family?: SignalFamily): void;
 
-/** Waiting items, most urgent first: a problem before a question, an older question before a newer one. */
+/** The four groups of live work first, in their order. */
+export type LiveGroup = "waiting" | "running" | "pickup" | "history";
+/** Their names: "Waiting on you", "Running", "Pick up", "History". */
+export declare const LIVE_GROUPS: Record<LiveGroup, string>;
+export interface LiveOptions<T> {
+  /** The state word, where it is not `state` (or `word`): "waiting for you", "running", "failed", "ended"… */
+  state?: (item: T) => string | undefined;
+  /** When its wait began, where it is not `since`, `at` or `askedAt`: a number, a Date or a date in words. */
+  since?: (item: T) => number | string | Date | null | undefined;
+  /** Decides the group outright; undefined falls back to the rest. */
+  group?: (item: T) => LiveGroup | undefined;
+  /** Keeps only these groups. */
+  only?: LiveGroup[];
+}
+/** Which group an item is in: opts.group; then waiting or a gate; then its state word (a gate, question, approval, waiting session or idea with questions open is waiting; working, idle, shaping or held is running; failed, blocked, stalled, lost, unmet or waiting to land is pick up; ended, done, stopped or dropped is history); then open questions and its flags (failed, blocked, problem, ended, running); then the word's signal family. */
+export declare function liveGroup<T extends object>(item: T, opts?: LiveOptions<T>): LiveGroup;
+/** Live work first, as WORKFLOW.md decides it for every list: waiting on you, running, you might pick it up, history. The oldest wait first within each live group (one with no time after those with one); history keeps the order given. Returns a new array. */
+export declare function liveFirst<T extends object>(items: T[], opts?: LiveOptions<T>): T[];
+/** One thing waiting on you, as waitingOf lists it. */
+export interface Waiting<T = unknown> { kind: string; id: string | null; title: string; since: number | null; item: T }
+/** The one count of what is waiting on you, for the mode bar, the rail, Home, Teams, Minimal and Pure alike: lines and runs that wait on you (a gate or question, a session waiting or asking for approval), every trigger approval, and ideas with a question open (`open: N`, or a question with no answer). One id counts once. The list is oldest first. */
+export declare function waitingOf(state: { lines?: object[]; runs?: object[]; approvals?: object[]; ideas?: object[] }): { count: number; list: Waiting[] };
+
+/** Waiting items, most urgent first, in liveFirst's order: a question before a problem, an older one before a newer one. */
 export declare function rankUrgent<T extends { waiting?: boolean; problem?: boolean; askedAt?: number }>(items: T[]): T[];
 /** Raises one row (ls-rise) and recedes the rest (ls-recede). Pass -1 to clear. */
 export declare function applyUrgency(rows: HTMLElement[], risingIndex: number, level?: "needs" | "problem"): void;
@@ -152,16 +183,27 @@ export declare function SideRail(o: {
 }): HTMLElement;
 export declare const NAV_ICONS: Record<string, string>;
 
+/** One of a Dialog's actions: a HaloButton whose press the dialog waits for. */
+export interface DialogAction extends Omit<HaloButtonOptions, "onPress" | "busy"> {
+  /** What the press does. Resolving to false, throwing or rejecting has failed: the dialog stays open with "✕ " and the error's message (or `failed`) inside, every field as typed. Anything else has succeeded and closes it. */
+  onPress?: () => unknown;
+  /** The word the button shows while its promise is pending: "ending…", "starting…". Default "working…". */
+  busy?: string;
+  /** What the failure line says when onPress gives false. Default "It did not go through." */
+  failed?: string;
+  /** Stays open after it succeeds too, for the rare view that must. */
+  stay?: boolean;
+}
 export interface DialogOptions {
   title?: string; label?: string; why?: string; content?: Node; danger?: boolean;
-  /** HaloButtons; each closes the dialog unless its onPress returns true. A Cancel is added after them. */
-  actions?: HaloButtonOptions[];
+  /** Pressing one makes it busy and the other buttons (Cancel too) inactive, and waits for its onPress: success closes the dialog, failure keeps it open saying why. Escape and the dim do nothing meanwhile. A Cancel is added after them. Returning true no longer keeps it open: use stay. */
+  actions?: DialogAction[];
   cancelLabel?: string; role?: "dialog" | "alertdialog";
   /** The page behind, which steps back while the dialog is open (blurred and dimmed in Dark only). */
   behind?: HTMLElement; host?: HTMLElement; contained?: boolean; initialFocus?: string; onClose?: () => void;
 }
 /** A projected panel over a dim. Holds focus, closes on Escape or the dim, returns focus to what opened it. */
-export declare function Dialog(o: DialogOptions): { open: () => HTMLElement; close: () => void; readonly panel: HTMLElement | null };
+export declare function Dialog(o: DialogOptions): { open: () => HTMLElement; /** Closes it, even while an action works. */ close: () => void; readonly panel: HTMLElement | null; /** True while an action's promise is pending. */ readonly working: boolean };
 
 /** A trigger that opens a listbox on a light tether. */
 export declare function Picker(o: { label: string; options: { name: string; sub?: string; glyph?: string }[]; selected?: number; onPick?: (option: { name: string; sub?: string }, index: number) => void }): HTMLElement;
@@ -305,7 +347,7 @@ export declare function livenessOf(liveness: string | null | undefined, pid?: nu
 /** A run's reasons, and a trigger rule's (approval, paused, stale, source) as main's NEED_REASONS has them. */
 export type NeedReason = "asked" | "silent" | "quiet" | "budget" | "spent" | "stalled" | "approval" | "paused" | "stale" | "source";
 /** Every reason a run wants you. Each clears itself; nothing is dismissed by hand. */
-export declare function NeedsYou(o: { items: { reason: NeedReason; run: string; goal: string; team?: string; href?: string; node?: string; quiet?: string; detail?: string; text?: string; clears?: string; gate?: GateOptions; actions?: HaloButtonOptions[] }[] }): HTMLElement;
+export declare function NeedsYou(o: { items: { reason: NeedReason; run: string; goal: string; team?: string; href?: string; node?: string; quiet?: string; detail?: string; text?: string; clears?: string; gate?: GateOptions; actions?: HaloButtonOptions[]; /** When it began waiting, for the oldest-first order within its group. */ since?: number | string; at?: number | string }[] }): HTMLElement;
 
 /** Rounds along the lead's line, each round's nodes hanging from it. Turns vertical below 620px of its own width. */
 export declare function RunShape(o: { rounds: { word: string; lead?: string; nodes?: [string, string][] }[]; next?: string; end?: { word: string; text?: string }; picked?: string; onPick?: (node: string) => void; label?: string }): HTMLElement;
@@ -468,7 +510,7 @@ export declare function TermDeck(o: { sessions: DeckSession[]; current?: string;
   launch: (id: string) => void;
   readonly current: string; readonly layout: number; readonly chosen: number; readonly slots: (string | null)[] };
 
-export interface BoardRun { id: string; goal: string; team: string; project?: string; word: string; round: number; rounds: { word: string; nodes?: [string, string][] }[]; spent?: number; cap?: number | null; projected?: number; gate?: GateOptions;
+export interface BoardRun { id: string; goal: string; team: string; project?: string; word: string; round: number; rounds: { word: string; nodes?: [string, string][] }[]; spent?: number; cap?: number | null; projected?: number; gate?: GateOptions; /** When its wait began, for live-first order (oldest first). */ since?: number | string; at?: number | string;
   /** Whether it is getting closer: a compact ProgressLine under the row. */
   progress?: { total: number; byRound?: number[]; lastMoved?: number | null; stalled?: boolean } }
 /** A run's rounds as a small line, for a board row. Decoration: the row's words say the same. */
