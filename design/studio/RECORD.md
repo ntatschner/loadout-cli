@@ -84,6 +84,54 @@ loadout task declare studio-workflow open --title "Studio: what you came for, fi
 
 If it's there already, treat it like the items in step 2.
 
+## 3e. Make each one ready to build
+
+So each task can be started from Loadout when someone asks, give it its build instructions (`--detail`, which `task show` prints) and its finish line (`--done-when`, which a team run is held to). This changes neither its state, title nor note: re-declare it with its **current state** and only these two options. `--done-when` replaces the task's conditions, so if a task already has some, show them to me and ask before replacing them.
+
+- Skip an id that isn't there and tell me.
+- Never queue these for a team or start them: this only writes the records.
+
+**`studio-workflow`**:
+
+```
+loadout task declare studio-workflow <its current state> --detail "To build, only when someone asks: check out claude/determined-meitner-6wqi6z, branch off it as the brief says, and merge origin/main into your branch. Then build design/studio/WORKFLOW.md, all of it, as one piece of work. Read it to the end first, then the files its Source of truth lists. Where the brief and the reference disagree, the brief wins; where something can't be built as written, stop and ask. Follow its Before you finish, commit in the steps it lists with no AI or co-author attribution lines, do its Record it in Loadout last, and don't push or open a pull request until asked." --done-when "Everything in design/studio/WORKFLOW.md is built as it says: the shared pieces, the server's read-only tail and attach, and every page and mode in its Page by page." --done-when "The checks in WORKFLOW.md's Before you finish pass." --project loadout-cli --by "studio design"
+```
+
+**`studio-controls`**:
+
+```
+loadout task declare studio-controls <its current state> --detail "To build, only when someone asks: check out claude/determined-meitner-6wqi6z, branch off it as the brief says, and merge origin/main into your branch. Then build design/studio/CONTROLS.md, all of it, as one piece of work. Read it to the end first, then the files its Source of truth lists. Where the brief and the reference disagree, the brief wins; where something can't be built as written, stop and ask. Follow its Before you finish, commit in the steps it lists with no AI or co-author attribution lines, do its Record it in Loadout last, and don't push or open a pull request until asked." --done-when "Everything in design/studio/CONTROLS.md is built as it says: its five components, every page's drawers replaced page by page, the task board fix and studio-commands." --done-when "The checks in CONTROLS.md's Before you finish pass." --project loadout-cli --by "studio design"
+```
+
+**`studio-office`**:
+
+```
+loadout task declare studio-office <its current state> --detail "To build, only when someone asks: check out claude/determined-meitner-6wqi6z, branch off it as the brief says, and merge origin/main into your branch. Then build design/studio/OFFICE.md, all of it, as one piece of work. Read it to the end first, then the files its Source of truth lists. Where the brief and the reference disagree, the brief wins; where something can't be built as written, stop and ask. Follow its Before you finish, commit in the steps it lists with no AI or co-author attribution lines, do its Record it in Loadout last, and don't push or open a pull request until asked." --done-when "Everything in design/studio/OFFICE.md is built as it says: the shared engine, keyboard use in it, and Studio's Office view and panels." --done-when "The checks in OFFICE.md's Before you finish pass." --project loadout-cli --by "studio design"
+```
+
+**`team-run-visibility-and-reliability`** (ROUND4.md, Part 1):
+
+```
+loadout task declare team-run-visibility-and-reliability <its current state> --detail "To build, only when someone asks: check out claude/determined-meitner-6wqi6z, branch off it as the brief says, and merge origin/main into your branch. Then build Part 1 of design/studio/ROUND4.md, which is built with its other parts, all of it, as one piece of work. Read it to the end first, then the files its Source of truth lists. Where the brief and the reference disagree, the brief wins; where something can't be built as written, stop and ask. Follow its Before you finish, commit in the steps it lists with no AI or co-author attribution lines, do its Record it in Loadout last, and don't push or open a pull request until asked." --done-when "Everything in Part 1 of design/studio/ROUND4.md is built as it says, server and Studio." --done-when "The checks in ROUND4.md's Before you finish pass." --project loadout-cli --by "studio design"
+```
+
+**`visual-full-page-red-alert`** (ROUND4.md, Part 2):
+
+```
+loadout task declare visual-full-page-red-alert <its current state> --detail "To build, only when someone asks: check out claude/determined-meitner-6wqi6z, branch off it as the brief says, and merge origin/main into your branch. Then build Part 2 of design/studio/ROUND4.md, which is built with its other parts, all of it, as one piece of work. Read it to the end first, then the files its Source of truth lists. Where the brief and the reference disagree, the brief wins; where something can't be built as written, stop and ask. Follow its Before you finish, commit in the steps it lists with no AI or co-author attribution lines, do its Record it in Loadout last, and don't push or open a pull request until asked." --done-when "Everything in Part 2 of design/studio/ROUND4.md is built as it says." --done-when "The checks in ROUND4.md's Before you finish pass." --project loadout-cli --by "studio design"
+```
+
+**`add-task-drop-down-in`** (ROUND4.md, Part 3):
+
+```
+loadout task declare add-task-drop-down-in <its current state> --detail "To build, only when someone asks: check out claude/determined-meitner-6wqi6z, branch off it as the brief says, and merge origin/main into your branch. Then build Part 3 of design/studio/ROUND4.md, which is built with its other parts, all of it, as one piece of work. Read it to the end first, then the files its Source of truth lists. Where the brief and the reference disagree, the brief wins; where something can't be built as written, stop and ask. Follow its Before you finish, commit in the steps it lists with no AI or co-author attribution lines, do its Record it in Loadout last, and don't push or open a pull request until asked." --done-when "Everything in Part 3 of design/studio/ROUND4.md is built as it says." --done-when "The checks in ROUND4.md's Before you finish pass." --project loadout-cli --by "studio design"
+```
+
+**`measure-loadout-s-value-to`** (ROUND4.md, Part 4):
+
+```
+loadout task declare measure-loadout-s-value-to <its current state> --detail "To build, only when someone asks: check out claude/determined-meitner-6wqi6z, branch off it as the brief says, and merge origin/main into your branch. Then build Part 4 of design/studio/ROUND4.md, which is built with its other parts, all of it, as one piece of work. Read it to the end first, then the files its Source of truth lists. Where the brief and the reference disagree, the brief wins; where something can't be built as written, stop and ask. Follow its Before you finish, commit in the steps it lists with no AI or co-author attribution lines, do its Record it in Loadout last, and don't push or open a pull request until asked." --done-when "Everything in Part 4 of design/studio/ROUND4.md is built as it says, with the event log and loadout value." --done-when "The checks in ROUND4.md's Before you finish pass." --project loadout-cli --by "studio design"
+```
 ## 4. The background is built
 
 `BACKGROUND.md` shipped in 0.104.0, and its own last step, **Record it in Loadout**, updated the idea `studio-embossed-background` when it was built. Don't add that idea or change it here. If it is on the list still carrying "Designed, not built", re-declare it with its current state and note, taking that sentence out and adding "Built and shipped in 0.104.0.", and tell me.
