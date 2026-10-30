@@ -3910,18 +3910,27 @@
       plan.textContent = ""; steps().forEach(function (s) { plan.appendChild(h("li", { text: s })); });
       acts.textContent = "";
       var dis = o.disabledReason || null;
-      acts.appendChild(NS.HaloButton({ label: "Preview", size: "small", cmd: dis ? null : "adds --dry-run to each \u00b7 changes nothing", disabledReason: dis, onPress: function () { run(true); } }));
-      acts.appendChild(NS.HaloButton({ label: armed ? "Press again to forget it everywhere" : (scope === "everywhere" ? "Forget it on every machine" : "Forget it here"), kind: "danger", size: "small", solid: armed && !dis, cmd: dis ? null : steps().length + " command" + (steps().length === 1 ? "" : "s") + ", in order; stops at the first that fails", disabledReason: dis, onPress: function () {
+      acts.appendChild(NS.HaloButton({ label: "Preview", size: "small", cmd: dis ? null : "adds --dry-run to each \u00b7 changes nothing", disabledReason: dis, onPress: function (e) { run(true, e && e.currentTarget); } }));
+      acts.appendChild(NS.HaloButton({ label: armed ? "Press again to forget it everywhere" : (scope === "everywhere" ? "Forget it on every machine" : "Forget it here"), kind: "danger", size: "small", solid: armed && !dis, cmd: dis ? null : steps().length + " command" + (steps().length === 1 ? "" : "s") + ", in order; stops at the first that fails", disabledReason: dis, onPress: function (e) {
         if (scope === "everywhere" && !armed) { armed = true; armedEl.textContent = "Every machine that uses the workspace forgets " + slug + ". Press the button again within five seconds to go ahead."; clearTimeout(armT); armT = setTimeout(function () { disarm(); paint(); }, 5000); paint(); var b = acts.querySelectorAll("button")[1]; if (b) { b.focus(); } return; }
-        disarm(); run(false);
+        disarm(); run(false, e && e.currentTarget);
       } }));
     }
     function disarm() { armed = false; clearTimeout(armT); armedEl.textContent = ""; }
-    function run(preview) {
+    /* onRun may return a promise: the pressed button is busy until it settles. false, a throw or a rejection says "✕ why" and forgets nothing on screen. */
+    function run(preview, btn) {
       var lines = steps().map(function (s) { return preview ? s + " --dry-run" : s; });
       var r = o.onRun ? o.onRun({ scope: scope, lines: lines, preview: preview, picked: Object.assign({}, picked) }) : null;
-      said.textContent = "\u2713 " + (typeof r === "string" ? r : preview ? "Previewed. Nothing changed." : "Forgotten.");
-      paint();
+      function ok(v) { said.textContent = "\u2713 " + (typeof v === "string" ? v : preview ? "Previewed. Nothing changed." : "Forgotten."); paint(); }
+      function bad(e) { said.textContent = "\u2715 " + ((e && e.message) || (typeof e === "string" && e) || o.failed || "It did not go through. Nothing was forgotten."); }
+      if (r && typeof r.then === "function") {
+        if (btn) { NS.HaloButton.setBusy(btn, preview ? "checking\u2026" : "forgetting\u2026"); }
+        said.textContent = "";
+        return r.then(function (v) { if (v === false) { throw new Error(o.failed || "It did not go through. Nothing was forgotten."); } if (btn) { NS.HaloButton.setBusy(btn, false); } ok(v); return v; })
+          .catch(function (e) { if (btn) { NS.HaloButton.setBusy(btn, false); } bad(e); });
+      }
+      if (r === false) { bad(); return r; }
+      ok(r); return r;
     }
     paint();
     return { el: el, get scope() { return scope; }, steps: steps };
@@ -7443,9 +7452,28 @@
     return h("div", { "class": "ls-cfield" + (f.wide || f.kind === "lines" ? " wide" : "") }, [h("label", { "class": "cl", "for": id }, [f.label, f.required ? null : h("span", { "class": "opt-word", text: " (optional)" }), " ", flag]), inp, f.hint ? h("span", { "class": "hint", text: f.hint }) : null]);
   }
 
-  function confirmThen(a, go) {
-    if (!a.ask) { go(); return; }
-    NS.Dialog({ title: a.askTitle || a.label, why: a.ask, danger: !!a.danger, role: "alertdialog", actions: [{ label: a.yes || a.label, kind: a.danger ? "danger" : "", solid: true, cmd: a.cmd, onPress: function () { go(); } }] }).open();
+  /* Confirmations wait, then close. An act may return a promise: the button (or the dialog's) is busy until it settles. It goes through
+     on anything but false, a throw or a rejection; then the line under it says "✕ reason" and an asking dialog stays open with the same. */
+  function failWord(a, e) { return (e && e.message) || (typeof e === "string" && e) || a.failed || "It did not go through. Nothing changed."; }
+  function settle(a, r, ok, out) {
+    function bad(e) { said(out, "\u2715 " + failWord(a, e), true); }
+    if (r && typeof r.then === "function") {
+      return r.then(function (v) { if (v === false) { throw new Error(failWord(a)); } ok(v); return v; }).catch(function (e) { bad(e); throw e; });
+    }
+    if (r === false) { bad(); return false; }
+    ok(r); return r;
+  }
+  function confirmThen(a, go, btn) {
+    if (!a.ask) {
+      var r = go();
+      if (r && typeof r.then === "function") {
+        var done = function () { if (btn) { NS.HaloButton.setBusy(btn, false); } };
+        if (btn) { NS.HaloButton.setBusy(btn, a.busy || true); }
+        r.then(done, done); /* its line already says why it failed */
+      }
+      return r;
+    }
+    NS.Dialog({ title: a.askTitle || a.label, why: a.ask, danger: !!a.danger, role: "alertdialog", failed: a.failed, actions: [{ label: a.yes || a.label, kind: a.danger ? "danger" : "", solid: true, cmd: a.cmd, busy: a.busy || true, onPress: function () { return go(); } }] }).open();
   }
 
   /* ActionForm: one thing a command does, in place. The fields people use, in plain words; every other option under More options; the exact line it will run; Preview when it can try it first; then the action. */
@@ -7471,9 +7499,11 @@
     function run(preview) {
       var l = lineFor(o.path, fields, values, acting(preview));
       var r = o.onRun ? o.onRun(Object.assign({}, values), { preview: !!preview, line: l }) : null;
-      result.textContent = "";
-      if (r && r.nodeType) { result.appendChild(r); said(out, preview ? "Previewed: nothing changed" : (o.said || "Done")); return; }
-      said(out, typeof r === "string" ? r : (preview ? "Previewed: nothing changed" : (o.said || "Done")));
+      return settle(o, r, function (v) {
+        result.textContent = "";
+        if (v && v.nodeType) { result.appendChild(v); said(out, preview ? "Previewed: nothing changed" : (o.said || "Done")); return; }
+        said(out, typeof v === "string" ? v : (preview ? "Previewed: nothing changed" : (o.said || "Done")));
+      }, out);
     }
     function paint() {
       line.textContent = lineFor(o.path, fields, values, acting(false));
@@ -7481,11 +7511,11 @@
       moreCount.textContent = more.length ? "\u00b7 " + more.length + (set ? ", " + set + " set" : "") : "";
       acts.textContent = "";
       var dis = o.disabledReason || missing();
-      if (effect === "session") { acts.appendChild(NS.HaloButton({ label: o.label || "Open it in a terminal", size: "small", glyph: "\u25b8", solid: true, cmd: o.disabledReason || missing() ? null : EFFECT.session, disabledReason: dis, onPress: function () { run(false); } })); return; }
+      if (effect === "session") { acts.appendChild(NS.HaloButton({ label: o.label || "Open it in a terminal", size: "small", glyph: "\u25b8", solid: true, cmd: o.disabledReason || missing() ? null : EFFECT.session, disabledReason: dis, onPress: function (e) { confirmThen({ busy: o.busy }, function () { return run(false); }, e && e.currentTarget); } })); return; }
       var r = reads();
-      if (!r && (o.dryRun || o.applyWith)) { acts.appendChild(NS.HaloButton({ label: o.previewLabel || "Preview", size: "small", cmd: o.previewWith ? "adds " + o.previewWith.join(" ") + " \u00b7 changes nothing" : o.applyWith ? "runs it without " + o.applyWith.join(" ") + " \u00b7 changes nothing" : "adds --dry-run \u00b7 changes nothing", disabledReason: missing(), onPress: function () { run(true); } })); }
+      if (!r && (o.dryRun || o.applyWith)) { acts.appendChild(NS.HaloButton({ label: o.previewLabel || "Preview", size: "small", cmd: o.previewWith ? "adds " + o.previewWith.join(" ") + " \u00b7 changes nothing" : o.applyWith ? "runs it without " + o.applyWith.join(" ") + " \u00b7 changes nothing" : "adds --dry-run \u00b7 changes nothing", disabledReason: missing(), onPress: function (e) { confirmThen({ busy: "checking\u2026" }, function () { return run(true); }, e && e.currentTarget); } })); }
       var a = { label: o.label || (r ? "Show it" : "Do it"), size: "small", solid: !r, kind: o.danger ? "danger" : "", cmd: r ? EFFECT.reads : EFFECT.changes, disabledReason: (r ? missing() : dis), ask: o.ask, yes: o.yes };
-      a.onPress = function () { confirmThen({ label: a.label, ask: o.ask, yes: o.yes, danger: o.danger, cmd: lineFor(o.path, fields, values, acting(false)) }, function () { run(false); }); };
+      a.onPress = function (e) { confirmThen({ label: a.label, ask: o.ask, yes: o.yes, danger: o.danger, busy: o.busy, failed: o.failed, cmd: lineFor(o.path, fields, values, acting(false)) }, function () { return run(false); }, e && e.currentTarget); };
       acts.appendChild(NS.HaloButton(a));
     }
     paint();
@@ -7498,7 +7528,7 @@
     var out = h("p", { "class": "ls-said", role: "status" });
     var row = h("div", { "class": "ls-answers" });
     (o.actions || []).forEach(function (a) {
-      row.appendChild(NS.HaloButton({ label: a.label, size: "small", kind: a.danger ? "danger" : "", glyph: a.glyph, cmd: a.cmd, disabledReason: a.disabledReason, onPress: function () { confirmThen(a, function () { var r = a.onPress && a.onPress(); said(out, typeof r === "string" ? r : (a.said || "Done")); }); } }));
+      row.appendChild(NS.HaloButton({ label: a.label, size: "small", kind: a.danger ? "danger" : "", glyph: a.glyph, cmd: a.cmd, disabledReason: a.disabledReason, onPress: function (e) { confirmThen(a, function () { return settle(a, a.onPress && a.onPress(), function (r) { said(out, typeof r === "string" ? r : (a.said || "Done")); }, out); }, e && e.currentTarget); } }));
     });
     return h("div", { "class": "ls-arow" }, [o.title ? h("h4", { "class": "t", text: o.title }) : null, o.why ? h("p", { "class": "why", text: o.why }) : null, row, out]);
   }
@@ -7559,11 +7589,11 @@
           if (a.form && det) { var open = det.dataset.form === a.label && !det.hidden; det.textContent = ""; det.hidden = open; det.dataset.form = open ? "" : a.label;
             if (!open) { det.appendChild(ActionForm(Object.assign({ compact: true }, a.form, { onRun: function (v, info) { var r = a.form.onRun ? a.form.onRun(v, info, it) : null; if (!info.preview && a.removes) { items = items.filter(function (x) { return x !== it; }); paint(); } if (!info.preview) { said(out, a.said ? (typeof a.said === "function" ? a.said(it) : a.said) : a.label + ": done"); } return r; } })).el); }
             return; }
-          confirmThen({ label: a.label + (a.ask ? "" : ""), askTitle: a.askTitle, ask: a.ask, yes: a.yes, danger: a.danger, cmd: a.cmd }, function () {
-          var r = a.onPress && a.onPress(it);
+          confirmThen({ label: a.label, askTitle: a.askTitle, ask: a.ask, yes: a.yes, danger: a.danger, cmd: a.cmd, busy: a.busy, failed: a.failed }, function () {
+          return settle(a, a.onPress && a.onPress(it), function (r) {
           if (a.removes) { items = items.filter(function (x) { return x !== it; }); paint(); }
           if (r && r.nodeType && det) { det.textContent = ""; det.appendChild(r); det.hidden = false; }
-          said(out, typeof r === "string" ? r : (a.said ? (typeof a.said === "function" ? a.said(it) : a.said) : a.label + ": done")); }); });
+          said(out, typeof r === "string" ? r : (a.said ? (typeof a.said === "function" ? a.said(it) : a.said) : a.label + ": done")); }, out); }); });
         acts.appendChild(b); if (!first) { first = a; }
       });
       function reset() { peek.textContent = first && !first.disabledReason ? first.cmd || "" : ""; }

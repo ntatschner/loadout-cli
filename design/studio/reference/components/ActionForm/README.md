@@ -11,7 +11,7 @@ One thing a command does, in place on its page. It replaces the generic command 
 - **Preview**, when the command can try it first. With `--dry-run`, Preview adds it. For a command that only acts with an option (`--apply`, `--fix`, `--yes`), that option is never a checkbox: Preview runs without it, and the action adds it (`applyWith`). Preview changes nothing.
 - **The action**, named for what it does ("Clone it", "Compress", "Forget it"). It is solid when it changes something and red when it can't be undone, and anything that can't be undone asks first, by name.
 - A **session** command (one that asks as it goes or starts an agent) opens a terminal Studio hosts, labelled so.
-- What it said, under it, and anything it returns drawn under that.
+- What it said, under it, and anything it returns drawn under that. `onRun` may return a promise: the button, or the asking Dialog, is busy (its `busy` word) until it settles, then says what happened; `false`, a throw or a rejection says "✕ why" (`failed` when there's no reason) and an asking Dialog stays open.
 
 ## Fields
 

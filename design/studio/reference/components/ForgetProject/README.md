@@ -32,3 +32,4 @@ A cleanup that is not offered stays in its place, unticked, with why: "Only when
 - **Preview** runs every line with `--dry-run` and changes nothing.
 - **Forget it here** runs them. **Forget it on every machine** must be pressed twice within five seconds: the first press arms it and says what will happen, in Bad. The CLI asks this question itself in a terminal; Studio runs commands without prompts, where the flag counts as the confirmation, so the page asks instead.
 - Runs stop at the first command that fails.
+- `onRun` may return a promise. The pressed button says "forgetting…" (or "checking…" for Preview) until it settles; `false`, a throw or a rejection says "✕ why" (`failed` when there is no reason) and the page forgets nothing.

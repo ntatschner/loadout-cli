@@ -11,7 +11,7 @@ The things a command keeps, as a list, each with what can be done to it, and a w
   - its facts, in mono;
   - its **buttons**: Update, Approve, Restore, Remove and so on. **Details** opens what a reading command says about that one thing, under the row.
 - **The command under the row:** for whichever button is pointed at or focused, the exact line it runs. With nothing pointed at, it shows the first button's.
-- Anything that can't be undone asks first, by name, in a Dialog that shows the line.
+- Anything that can't be undone asks first, by name, in a Dialog that shows the line. Its `onPress` may return a promise: the asking Dialog is busy until it settles, closes when it went through, and stays saying "✕ why" when it gives `false`, throws or rejects. A removed row leaves only once it went through.
 - **Where the list is from:** the reading command with `--json`, and when it was read.
 
 ## Do and don't
