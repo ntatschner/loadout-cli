@@ -980,7 +980,7 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     var card = el("div", { "class": "waitcard pkrow" + (w.kind === "lost" ? " lost" : "") }, [el("div", { "class": "wh" }, [el("span", { "class": "w", text: what + homeAgo(w.since) })]),
       el("p", { "class": "q", text: words }),
       el("div", { "class": "ls-answers", style: "margin: 0" }, acts.map(function (a) { return halo(Object.assign({ size: "small" }, a), key0 + a.label); }))]);
-    if (w.kind !== "lost") { peekAttach(card, function () { return peekOf(w); }, { into: card.firstChild }); }
+    peekAttach(card, function () { return w.kind === "lost" ? peekLost(w.item.lost) : peekOf(w); }, { into: card.firstChild });
     return card;
   }
   /* Running and Pick up: the lines in that group, live first, each a row that focuses it on the Lens, its peek beside it, and its actions under it for Pick up. */
@@ -1396,9 +1396,12 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
       out.push(el("p", { "class": "calm small", text: "Ended when the daemon stopped: these were running here when the daemon last stopped. Nothing restarts by itself: each one starts an agent." }));
       out.push(el("ul", { "class": "slist", "aria-label": "Ended when the daemon stopped" }, g.lost.map(function (one) {
         var c = one.conversation;
-        return el("li", { "class": "lostrow" }, [el("span", { "class": "t", text: c.title }), el("span", { "class": "x", text: (c.project || c.directory) + " · " + c.agent + " · ended when the daemon stopped" }),
+        var li = el("li", { "class": "lostrow" }, [el("span", { "class": "t", text: c.title }), el("span", { "class": "x", text: (c.project || c.directory) + " · " + c.agent + " · ended when the daemon stopped" }),
           el("span", { "class": "acts" }, [halo({ label: "Resume", size: "small", cmd: "carries it on in a new terminal", disabledReason: held, onPress: function () { SESSH.busy = true; render(); sessResume(c, {}, one.id).then(function (id) { SESSH.busy = false; if (id && SESS_LOST.length < 1 && !o.beside) { sessReveal(id, true); } else { render(); if (o.then) { o.then(); } } }); } }, "lost-" + one.id),
             el("button", { type: "button", "class": "linkish", disabled: sessWatching(), "data-k": "lost-not-" + one.id, text: "Not this one", onclick: function () { SESS_LOST = SESS_LOST.filter(function (x) { return x !== one; }); said("No longer offered", sessResumeCmd(one.agentSession, c.project)); render(); if (o.then) { o.then(); } } })])]);
+        /* No terminal to read: its peek says what it was, what it was doing, and Resume. */
+        peekAttach(li, function () { return peekLost(one); }, { into: li.querySelector(".acts") || li });
+        return li;
       })));
       if (g.lost.length > 1) { out.push(halo({ label: "Resume all " + g.lost.length, cmd: "asks first, naming each agent", disabledReason: held, onPress: function () { sessResumeAll(g.lost, o.then); } }, "lost-all")); }
     }
@@ -3016,6 +3019,9 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
       onOpen: function (it) { reveal({ kind: it.kind, id: it.id, list: it.list, project: it.kind === "task" ? it.project || null : undefined }); },
       onTypeHere: function (it) { shTypeHere(line(it.id)); },
       onEnd: function (it) { var l = line(it.id); if (l) { sessEndAsk(l); } },
+      /* A lost session: Resume carries it on in a new terminal (asking first where Resume asks); Not this one stops offering it. */
+      onResume: function (it) { var one = SESS_LOST.filter(function (x) { return x.id === it.id; })[0]; if (!one) { return false; } return sessResume(one.conversation, {}, one.id).then(function (id) { if (!id) { return false; } bump(); return "Resumed in a new terminal"; }); },
+      onDismiss: function (it) { var one = SESS_LOST.filter(function (x) { return x.id === it.id; })[0]; if (!one) { return false; } SESS_LOST = SESS_LOST.filter(function (x) { return x !== one; }); said("No longer offered", sessResumeCmd(one.agentSession, one.conversation.project)); bump(); return true; },
       onAnswer: function (it, answer, extra) { var r = runOf(it.id), g = r ? runGate(r) : null; if (!g) { return false; } g.onAnswer(answer, extra || {}); },
       onHold: function (it) { var r = runOf(it.id); if (!r) { return false; } return teamHold(r, true); },
       onCarryOn: function (it) { var r = runOf(it.id); if (!r) { return false; } return teamHold(r, false); },
@@ -3055,6 +3061,13 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     var rows = (ST.term[l.id] || []).map(function (t) { return Array.isArray(t) ? String(t[1] === undefined ? "" : t[1]) : String(t); });
     if (!rows.length && l.cmdLine) { rows = ["› " + l.cmdLine]; }
     return { lines: rows.slice(-12), cols: 120, rows: 32, at: "read at " + hhmm(ST.clock), running: l.stage !== 4 };
+  }
+  /* A session that ended when the daemon stopped (SESS_LOST): no terminal to read, so the peek says what it was and offers Resume. */
+  function peekLost(one) {
+    if (!one || !one.conversation) { return null; }
+    var c = one.conversation, lf = c.launchedFor || {};
+    return { kind: "session", id: one.id, title: c.title, project: c.project || c.directory, agent: c.agent === "codex" ? "Codex" : "Claude Code", branch: c.branch, mode: lf.mode || undefined,
+      lost: { endedAt: one.endedAt, task: lf.task || lf.taskId || null, agentSession: one.agentSession, resumeCmd: sessResumeCmd(one.agentSession, c.project) }, disabledReason: sessWatching() ? SH_WATCH : undefined };
   }
   function peekSession(l) {
     if (!l) { return null; }
@@ -3237,8 +3250,11 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
   }
   function tfWithOrder(t, shown) { return { order: shown.concat(t.order.filter(function (id) { return shown.indexOf(id) < 0; })), hidden: t.hidden, cleared: t.cleared }; }
   /* Beside the terminals: one of the six pages, or a run or a team's page (main's lib/reveal.ts), so a launch from it leaves it open. */
-  function tfBesideRoute(r) { return P.mode === "terminals" && (r.indexOf("run-") === 0 || r.indexOf("team-") === 0); }
-  function tfBesideName(r) { return r.indexOf("run-") === 0 ? "The run" : r.indexOf("team-") === 0 ? "A team" : ""; }
+  /* Beside the deck in Terminal Focus: a run, a team, and Teams itself with its places (Remedies, Blocked, the bin, Tools, Help, Triggers), so
+     a terminal you are watching stays in view while you deal with them. The office has its own branch. */
+  var TF_TEAM_PLACES = { teams: "Teams", "teams-remedies": "Remedies", "teams-blocked": "Blocked", "teams-bin": "The bin", "teams-tools": "Tools", "teams-help": "Help", "teams-triggers": "Triggers" };
+  function tfBesideRoute(r) { return P.mode === "terminals" && (r.indexOf("run-") === 0 || r.indexOf("team-") === 0 || TF_TEAM_PLACES.hasOwnProperty(r)); }
+  function tfBesideName(r) { return r.indexOf("run-") === 0 ? "The run" : r.indexOf("team-") === 0 ? "A team" : TF_TEAM_PLACES[r] || ""; }
   function tfBesideStale() { if (BESIDE && BESIDE.r && tfBesideRoute(BESIDE.r) && BESIDE.tv !== TV) { BESIDE.tv = TV; BESIDE.pv = -1; } }
   /* The deck (WORKFLOW.md, The deck): the tabs in the order you gave them; ended tabs fold into "Ended (N)" unless one is in a pane or you brought it
      back; a "Waiting (N)" chip goes to each waiting session in turn, hidden tabs included; the "+" opens a menu with New session, "Ended when the
@@ -3537,6 +3553,7 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
   /* The peek of a quiet row: the short block under it, before the frame opens (shPeek is inline in Minimal). */
   function quietPeek(x) {
     if (x.kind === "session") { return peekSession(line(x.id)); }
+    if (x.kind === "lost session") { return peekLost(SESS_LOST.filter(function (y) { return y.id === x.id; })[0]); }
     if (x.kind === "team run") { return peekRun(TR.filter(function (r) { return r.id === x.id; })[0]); }
     if (x.kind === "approval") { return peekApproval(TRIG.approvals.filter(function (a) { return a.id === x.id; })[0]); }
     if (x.kind === "idea") { return peekIdea(IDEAS.filter(function (i) { return i.id === x.id && (!x.list || i.list === x.list); })[0]); }
@@ -3687,6 +3704,7 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
   /* What the view pane previews as J and K move: the same peek as everywhere else, drawn into the pane (shPeek with a container). */
   function purePeekItem(x) {
     if (x.kind === "session") { return peekSession(line(x.id)); }
+    if (x.kind === "lost session") { return peekLost(pureLost(x)); }
     if (x.kind === "team run") { return peekRun(pureItemRun(x.id)); }
     if (x.kind === "approval") { return peekApproval(pureApproval(x)); }
     if (x.kind === "idea") { return peekIdea(pureIdea(x)); }
@@ -5315,6 +5333,9 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     if (b === "teams-office") { renderOffice(box, r, true); } else if (b === "ideas") { renderIdeas(box, r); } else if (b === "projects") { renderProjects(box, r); } else if (b === "context") { renderContext(box, r); }
     else if (b === "settings") { renderSettings(box, r); } else if (b === "memory") { renderMemory(box, r); } else if (b === "spend") { renderSpend(box, r); } else if (b === "events") { renderEvents(box, r); }
     else if (b.indexOf("run-") === 0) { renderRun(box, b.slice(4)); } else if (b.indexOf("team-") === 0) { renderTeam(box, b.slice(5)); }
+    else if (b === "teams") { renderTeams(box); } else if (b === "teams-remedies") { renderRemedies(box); } else if (b === "teams-blocked") { renderBlocked(box); }
+    else if (b === "teams-bin") { renderBin(box); } else if (b === "teams-tools") { renderTools(box); } else if (b === "teams-help") { renderHelp(box); } else if (b === "teams-triggers") { renderTriggers(box); }
+    else if (b === "sessions") { renderSessions(box); }
     return box;
   }
   function pagePart(r, sel) { var d = pageRender(el("div", {}), r), n = d.querySelector(sel); return n || d; }
@@ -5331,7 +5352,7 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     if (kind === "terminals") { renderDeck(focus, null); DECK.route = r; } else { renderBoard(focus, "teams"); }
     if (BESIDE) { BESIDE.destroy(); }
     var sess = r.indexOf("session-") === 0;
-    BESIDE = S.PageBeside({ page: sess ? "Session" : PAGE_NAMES[pageBase(r)] || tfBesideName(r), beside: kind === "terminals" ? "your terminals" : "the runs board", onClose: sess ? function () { go("teams"); } : closeBeside });
+    BESIDE = S.PageBeside({ page: sess ? "Session" : r === "sessions" ? "Sessions" : PAGE_NAMES[pageBase(r)] || tfBesideName(r), beside: kind === "terminals" ? "your terminals" : "the runs board", onClose: sess ? function () { go("teams"); } : closeBeside });
     if (sess) { var sbox = el("div", {}); renderSession(sbox, r.slice(8)); BESIDE.set(sbox); } else { BESIDE.set(pageRender(el("div", {}), r)); } BESIDE.r = r; BESIDE.pv = PV;
     main.appendChild(S.BesideGrid(focus, BESIDE));
   }
@@ -7029,12 +7050,12 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     var main = document.getElementById("main"), r = route(); main.textContent = "";
     if (PURE) { PURE.desk.destroy(); PURE = null; }
     if (BESIDE) { BESIDE.destroy(); BESIDE = null; }
-    if (!pagesRoute(r) && r !== "teams-office" && !tfBesideRoute(r)) { P.lastFocus = r; }
+    if (!pagesRoute(r) && r !== "teams-office" && !tfBesideRoute(r) && !(P.mode === "teams" && r === "sessions")) { P.lastFocus = r; }
     shBanners(main);
     if (SH.loading) { main.appendChild(el("p", { "class": "calm", role: "status", text: "Reading what the daemon knows…" })); }
     else if (P.mode === "pure" && pagesRoute(r) && r.indexOf("+") < 0) { renderPurePage(main, r); }
     else if ((P.mode === "terminals" || P.mode === "teams") && pagesRoute(r)) { renderBeside(main, r, P.mode); }
-    else if (P.mode === "teams" && r.indexOf("session-") === 0) { renderBeside(main, r, "teams"); }
+    else if (P.mode === "teams" && (r.indexOf("session-") === 0 || r === "sessions")) { renderBeside(main, r, "teams"); }
     else if (P.mode === "terminals" && r === "teams-office") { renderBeside(main, r, "terminals"); }
     else if (tfBesideRoute(r)) { renderBeside(main, r, "terminals"); BESIDE.tv = TV; }
     else if (r === "teams-office") { renderOffice(main, r); }

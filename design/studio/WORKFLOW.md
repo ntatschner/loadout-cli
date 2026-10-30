@@ -126,7 +126,7 @@ Don't reopen these. Ask me only if one turns out to be impossible.
 1. **`liveFirst(items)`** in `lib/`: the order in Decisions, used by `linesOf`, `rankUrgent`, the board, NeedsYou, the deck's waiting chip, the palette's In flight, Ambient's halo, the Ideas shelf, Teams' runs, a team's runs, the Pure groups and Quiet. Tests pin each group and the oldest-first rule.
 2. **`waitingOf(state)`**: the one count. The mode bar, rail, Home header, Teams header, Minimal and Pure Needs you all read it. Trigger approvals are fetched where the count is made, not only on the Teams page.
 3. **The mode bar's count opens a waiting peek list.** It lists every waiting item, oldest first, each with its main action: approve, answer, Type here. It closes when pressed again or with Escape.
-4. **The Peek component**, as `reference/components/Peek/`. It's one overlay with five bodies (session, run, idea, task, and a run's crew node). It opens on hover after a short delay, or on focus, beside the row. It pins with a click; a pinned one closes with Escape, Close or the peek button, and an unpinned one also with a click away. It keeps on screen at 320px, where it becomes a sheet from the foot. Its actions show their commands and follow `studio-commands`. It never opens over a terminal you're typing in.
+4. **The Peek component**, as `reference/components/Peek/`. It's one overlay with five bodies (session, run, idea, task, and a run's crew node). It opens on hover after a short delay, or on focus, beside the row. It pins with a click; a pinned one closes with Escape, Close or the peek button, and an unpinned one also with a click away. A session that ended when the daemon stopped has no terminal left to read, so its peek says so, with what it was, what it was working on, Resume and Not this one. It keeps on screen at 320px, where it becomes a sheet from the foot. Its actions show their commands and follow `studio-commands`. It never opens over a terminal you're typing in.
 5. **`reveal()` targets** for `idea` (landing on `zone:questions` when it has any) and `task`. The palette's In flight rows go through `reveal()`, not `home/<id>`. "Open the idea" passes the idea.
 6. **LayoutEdit**, generalised from `lib/layout.ts`:
    - Section ids with a default order.
@@ -172,6 +172,7 @@ These are the default orders. Each page's sections are editable unless it says o
   - A waiting tab is marked, and a "Waiting (N)" chip cycles through every one, hidden tabs included.
   - Ended tabs fold into an "Ended (N)" menu item.
   - The "+" menu gains "Ended when the daemon stopped (N)" and "History…", opened beside.
+  - Teams and its places (Remedies, Blocked, the bin, Tools, Help, Triggers) open beside the deck, as a run and a team do, so the terminals stay in view.
   - A tab that's not in a pane peeks its last lines.
   - The top bar's parts can be hidden.
 - **Ideas:**
@@ -194,6 +195,7 @@ These are the default orders. Each page's sections are editable unless it says o
   - The teams strip, the ended rows and the spend column can be hidden.
   - Board rows peek the round and the node working now.
   - A team opens in its own panel rather than competing with a run.
+  - Sessions opens beside the board, as a session does.
 - **A team.** Actions; Its runs here (live first); Its nodes; What a run of it follows; How its roles have done.
 - **A run:**
   - The order: the gate or Pick up it where it stopped (whichever applies), Handover, attention, then shape, done-when and crew, then the side column, then the depths.

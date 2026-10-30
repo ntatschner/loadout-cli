@@ -5780,14 +5780,15 @@
     function where(it) { return it.where || (it.project ? ["--project", it.project] : ["--global"]); }
     function line(words) { return "$ loadout " + words.map(function (w) { return /^--[\w-]+=/.test(w) ? w.split("=")[0] + "=" + q(w.slice(w.indexOf("=") + 1)) : /^--[\w-]+$/.test(w) ? w : q(w); }).join(" "); }
     function ago(ms, now) {
-      if (!ms) { return ""; }
+      if (typeof ms === "string") { ms = Date.parse(ms); }
+      if (!ms || isNaN(ms)) { return ""; }
       var s = Math.max(0, Math.round((now - ms) / 1000));
       return s < 45 ? "just now" : s < 3600 ? Math.round(s / 60) + " min" : s < 86400 ? Math.round(s / 3600) + " h" : Math.round(s / 86400) + " d";
     }
     function openQuestions(it, local) { return (it.questions || []).filter(function (x) { return !x.answer && !local[it.id + "/" + x.id]; }); }
     function wordOf(it, local) {
       if (it.word) { return it.word; }
-      if (it.kind === "session") { return it.ended ? "ended" : it.waitingFor ? "waiting for you" : "working"; }
+      if (it.kind === "session") { return it.lost ? "ended when the daemon stopped" : it.ended ? "ended" : it.waitingFor ? "waiting for you" : "working"; }
       if (it.kind === "run") { return it.gate ? "needs a decision" : it.held ? "held after this round" : "running"; }
       if (it.kind === "idea") { return openQuestions(it, local || {}).length ? "waiting for you" : "shaping"; }
       if (it.kind === "task") { return it.state || "open"; }
@@ -5856,7 +5857,7 @@
         tailEl.cap.textContent = ["Its last lines", "read-only", t && t.running === false ? "it has stopped" : null, t && t.at ? t.at : null].filter(Boolean).join(" · ");
       }
       /* A session's tail and a node's journal are read the same way: on opening, then every `every` ms while open. */
-      function reader(it) { return it ? (it.kind === "session" ? call("tail") : it.kind === "node" ? call("journal") : null) : null; }
+      function reader(it) { return it ? (it.kind === "session" && !it.lost ? call("tail") : it.kind === "node" ? call("journal") : null) : null; }
       function readTail() {
         var it = cur.item, f = reader(it);
         if (!f) { return; }
@@ -5896,6 +5897,7 @@
         }
       }
       function session(it, kids, acts) {
+        if (it.lost) { lostSession(it, kids, acts); return; }
         var ended = !!it.ended || wordOf(it) === "ended";
         kids.push(facts([it.project, it.agent, it.mode, it.since ? "for " + ago(it.since, now()) : null]));
         var pre = h("pre", { "class": "tail", "aria-label": "Its last lines, read-only" }), cap = h("p", { "class": "cap" });
@@ -5907,6 +5909,17 @@
         if (call("onTypeHere")) { acts.push(button("type", { label: "Type here", kind: it.waitingFor ? "needs" : "", solid: !!it.waitingFor, glyph: "›", cmd: "opens its terminal with the keyboard in it · changes nothing", disabledReason: ended ? "it has ended" : it.disabledReason, onPress: go(o.onTypeHere) })); }
         if (call("onOpenBeside")) { acts.push(button("beside", { label: "Open beside", cmd: "opens it beside this page · changes nothing", onPress: go(o.onOpenBeside) })); }
         if (call("onEnd") && !ended) { acts.push(button("end", { label: "End session…", kind: "danger", cmd: line(["session", "end", it.hid || it.id, "--yes"]) + " · asks first", disabledReason: it.disabledReason, onPress: function () { act("end", "ending…", null, line(["session", "end", it.hid || it.id, "--yes"]), function () { return o.onEnd(it); }); } })); }
+      }
+      /* A session that ended when the daemon stopped: its terminal went with the daemon, so there are no lines to show. What it was,
+         what it was doing, and Resume, which carries the same conversation on in a new terminal (and starts an agent). */
+      function lostSession(it, kids, acts) {
+        var L = it.lost || {};
+        kids.push(facts([it.project, it.agent, it.branch ? "on " + it.branch : null, it.mode]));
+        var said1 = "It ended when the daemon stopped" + (ago(L.endedAt, now()) ? (ago(L.endedAt, now()) === "just now" ? ", just now" : ", " + ago(L.endedAt, now()) + " ago") : "") + ". Its terminal went with the daemon, so there are no lines to show.";
+        kids.push(h("div", { "class": "lostwell" }, [h("p", { text: said1 }), L.task ? h("p", {}, [h("b", { text: "It was working on: " }), L.task]) : null,
+          h("p", { "class": "cap", text: "Resume carries the same conversation on in a new terminal. Nothing restarts by itself: it starts an agent." })]));
+        if (call("onResume")) { acts.push(button("resume", { label: "Resume", kind: "needs", solid: true, glyph: "▸", cmd: L.resumeCmd || line(["resume", L.agentSession || "--last"]), disabledReason: it.disabledReason, onPress: function () { act("resume", "resuming…", "Resumed in a new terminal", L.resumeCmd, function () { return o.onResume(it); }); } })); }
+        if (call("onDismiss")) { acts.push(button("dismiss", { label: "Not this one", cmd: "stops offering it here · changes nothing else", disabledReason: it.disabledReason, onPress: function () { act("dismiss", "…", "No longer offered", null, function () { return o.onDismiss(it); }); } })); }
       }
       function run(it, kids, acts) {
         var w = wordOf(it), over = /done|failed|stopped|abandoned|ended|accepted/.test(w);

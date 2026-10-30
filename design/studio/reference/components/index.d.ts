@@ -1256,7 +1256,10 @@ interface PeekCommon {
 export interface PeekSession extends PeekCommon { kind: "session"; title: string; project?: string; agent?: string; mode?: string;
   /** The daemon's host id, when it differs from id: what `session end` takes. */ hid?: string;
   /** What it is waiting for, in words from its hooks ("approval to run npm test"); null when it is not waiting. */ waitingFor?: string | null;
-  ended?: boolean; tail?: PeekTail | null; status?: SessionStatus | null }
+  ended?: boolean; tail?: PeekTail | null; status?: SessionStatus | null;
+  branch?: string | null;
+  /** Ended when the daemon stopped: no terminal to read, so the peek says what it was and offers Resume (onResume) and Not this one (onDismiss). */
+  lost?: { /** When it ended: ms or an ISO time. */ endedAt?: number | string; task?: string | null; agentSession?: string | null; /** The exact resume line, e.g. "$ loadout resume <id> --project p". */ resumeCmd?: string } | null }
 export interface PeekRun extends PeekCommon { kind: "run"; goal: string; title?: string; team?: string; project?: string; round?: number; rounds?: number; elapsed?: string;
   /** Its rounds, for a MiniLine. */ line?: { rounds: { word: string; nodes?: [string, string][] }[]; running?: boolean; end?: boolean };
   /** The node working now. */ working?: { node: string; role?: string; word?: string; doing?: string } | null;
@@ -1295,6 +1298,10 @@ export declare function Peek(o?: {
   delay?: number;
   /** A session's last lines, read-only: the page's call to the daemon's tail. Read on opening and every `tailEvery` ms while open. */
   tail?: (item: PeekSession) => PeekTail | Promise<PeekTail>;
+  /** A lost session's Resume: carries the conversation on in a new terminal. */
+  onResume?: (item: PeekSession) => PeekResult;
+  /** A lost session's Not this one: stops offering it. */
+  onDismiss?: (item: PeekSession) => PeekResult;
   /** A crew node's last journal lines: the page's read of the run's journal for that node. Read like tail. */
   journal?: (item: PeekNode) => (JournalLine | { at?: string; text: string; family?: string })[] | Promise<(JournalLine | { at?: string; text: string; family?: string })[]>;
   /** ms between tail (or journal) reads while open; 0 reads once. Default 2000. */

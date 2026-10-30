@@ -2403,6 +2403,10 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 .ls-peek.framed.sheet { position: absolute; left: 0; right: 0; bottom: 0; top: auto; width: auto; max-width: none; max-height: 78%; overflow: auto; }
 .ls-peek.framed.sheet:not(.pinned) { box-shadow: inset 0 3px 0 var(--c), inset 0 0 0 1px var(--rule), 0 -18px 44px -14px rgb(0 0 0 / .55); }
 .ls-peek.framed.sheet.pinned { box-shadow: inset 0 3px 0 var(--c), inset 0 5px 0 var(--accent), inset 0 0 0 1px var(--rule), 0 -18px 44px -14px rgb(0 0 0 / .55); }
+/* A session lost when the daemon stopped: no terminal to read, so its words in a plain well. */
+.ls-peek .lostwell { display: grid; gap: 6px; padding: 10px 12px; background: var(--surface); box-shadow: inset 3px 0 0 var(--rest), inset 0 0 0 1px var(--rule); font-size: 14px; }
+.ls-peek .lostwell p { margin: 0; overflow-wrap: anywhere; }
+.ls-peek .lostwell .cap { font-size: 12.5px; color: var(--ink-soft); }
 
 /* --- ProgressRing --- */
 .ls-progress { position: relative; width: 120px; height: 120px; }
