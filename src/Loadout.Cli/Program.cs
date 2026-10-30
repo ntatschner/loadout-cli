@@ -1303,6 +1303,7 @@ public static class Program
             project.AddCommand<ProjectCloneCommand>("clone");
             project.AddCommand<ProjectRelocateCommand>("relocate");
             project.AddCommand<ProjectShowCommand>("show");
+            project.AddCommand<ProjectCapabilitiesCommand>("capabilities");
             project.AddCommand<ProjectSurveyCommand>("survey");
             project.AddCommand<ProjectLinkCommand>("link");
             project.AddCommand<ProjectContextCommand>("context");

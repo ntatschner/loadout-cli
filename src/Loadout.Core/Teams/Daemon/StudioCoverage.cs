@@ -125,6 +125,7 @@ public static class StudioCoverage
         ["task labels list"] = Terminal("a count of labels across the workspace, which no page shows yet"),
         ["task labels rename"] = Terminal("changes a label on every list at once after asking, which no page offers yet"),
         ["task labels remove"] = Terminal("takes a label off every list at once after asking, which no page offers yet"),
+        ["project capabilities"] = Terminal("read-only for now; Studio shows gaps once it can act on them, when offers arrive"),
         ["task classify"] = Terminal("a one-off pass that types the tasks and ideas recorded before there were types, best tried with --dry-run first, which no page needs to offer"),
         ["task apply"] = Terminal("reads its changes from a file or standard input, which a page has neither of; Studio makes the same changes through its own batch route"),
         ["task declare"] = new("projects", StudioEffect.Changes),
