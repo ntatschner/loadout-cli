@@ -2,6 +2,8 @@
 
 NeedsYou is the top of the Teams page: every run that wants you, and why. Four reasons put a run here (the budget one in two forms: spent, or projected to overrun), and **each one clears itself**. Nothing is remembered and nothing is dismissed by hand: each reason is worked out again on every read, so one that has gone is gone.
 
+The reasons come live work first (`liveFirst`): a question or an approval that waits on you, then what is on a run still going (the lead's quiet round, a quiet node, a projected overrun), then what is for you to pick up (a spent budget, a stall, a paused rule, held events, a stopped source); the oldest first within each, by `since` or `at`.
+
 | Reason | Word | What it says | Clears when |
 |---|---|---|---|
 | `asked` | waiting for you | the question itself, as a Gate | you answer it |

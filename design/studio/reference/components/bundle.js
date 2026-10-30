@@ -64,17 +64,38 @@
 
   /* HaloButton: a word beside a ring of light. kind: "" | "needs" | "danger"; size: "" | "small" | "big".
      describedBy points the button at a line that says more; key and next mark it as main's data-k and data-next do. */
+  /* busy: while what it started is working, the label gives way to the busy word ("ending…"; true is "working…"), it is inactive and aria-busy. */
   function HaloButton(o) {
     o = o || {};
     var cls = ["ls-halo", o.kind, o.size, o.solid ? "solid" : ""].filter(Boolean).join(" ");
     var ring = h("span", { "class": "ring", "aria-hidden": "true" }, o.glyph ? [h("b", { text: o.glyph })] : []);
-    var btn = h("button", { type: "button", "class": cls, "aria-disabled": o.disabledReason || o.inactive ? "true" : null, "aria-describedby": o.describedBy || null, "data-k": o.key || null, "data-next": o.next || null,
-      onclick: function (e) { if (!o.disabledReason && !o.inactive && o.onPress) { o.onPress(e); } } }, [ring, o.label || ""]);
+    var word = o.busy === true ? BUSY_WORD : o.busy || "";
+    var btn = h("button", { type: "button", "class": cls, "aria-disabled": o.disabledReason || o.inactive || word ? "true" : null, "aria-busy": word ? "true" : null, "aria-describedby": o.describedBy || null, "data-k": o.key || null, "data-next": o.next || null,
+      onclick: function (e) { if (!o.disabledReason && !o.inactive && btn.getAttribute("aria-busy") !== "true" && o.onPress) { o.onPress(e); } } }, [ring, word || o.label || ""]);
+    btn.__lsLabel = o.label || ""; btn.__lsWas = o.disabledReason || o.inactive ? "true" : null;
     if (!o.cmd && !o.disabledReason) { return btn; }
     var line = cmd(o.disabledReason || o.cmd);
     if (o.disabledReason && line) { line.classList.add("reason"); }
     return h("div", { "class": "ls-action" }, [btn, line]);
   }
+  var BUSY_WORD = "working\u2026";
+  /* The button itself, given it or the wrapper HaloButton returned. */
+  function haloOf(node) { if (!node) { return null; } if (node.classList && node.classList.contains("ls-halo")) { return node; } return node.querySelector ? node.querySelector("button.ls-halo") : null; }
+  /* HaloButton.setBusy(node, "ending…" | true | false): puts a button made by HaloButton into its busy state, or back as it was. */
+  function setBusy(node, busy) {
+    var btn = haloOf(node); if (!btn) { return; }
+    var word = busy === true ? BUSY_WORD : busy || "";
+    var text = btn.lastChild && btn.lastChild.nodeType === 3 ? btn.lastChild : btn.appendChild(document.createTextNode(""));
+    if (word) {
+      if (btn.getAttribute("aria-busy") !== "true") { btn.__lsWas = btn.getAttribute("aria-disabled"); }
+      text.data = word; btn.setAttribute("aria-busy", "true"); btn.setAttribute("aria-disabled", "true");
+    } else if (btn.getAttribute("aria-busy") === "true") {
+      text.data = btn.__lsLabel || ""; btn.removeAttribute("aria-busy");
+      if (btn.__lsWas) { btn.setAttribute("aria-disabled", btn.__lsWas); } else { btn.removeAttribute("aria-disabled"); }
+    }
+  }
+  HaloButton.setBusy = setBusy;
+  HaloButton.BUSY = BUSY_WORD;
 
   /* Command: the block form of a command, with an optional line saying why it must be run in a terminal. */
   function Command(o) {
@@ -207,11 +228,81 @@
     container.appendChild(r); setTimeout(function () { r.remove(); }, 1500);
   }
 
-  /* Urgency: rank waiting items (a problem first, then the oldest question) and raise the first; the rest recede. */
-  function rankUrgent(items) {
-    return items.filter(function (i) { return i.waiting || i.problem; }).sort(function (a, b) {
-      if (!!a.problem !== !!b.problem) { return a.problem ? -1 : 1; } return (a.askedAt || 0) - (b.askedAt || 0);
+  /* liveFirst: live work first, as WORKFLOW.md's Decisions put it. Four groups, in this order: waiting on you (a gate or question,
+     a trigger approval, a session waiting or asking for approval, an idea with questions open); running; you might pick it up (failed,
+     blocked or ended short of its done-when, ended when the daemon stopped, a round that failed, a branch waiting to land); and history
+     (ended, done, past conversations). Within each live group the oldest wait comes first; history keeps the order it was given.
+     Returns a new array; the items are not changed. */
+  var LIVE_ORDER = ["waiting", "running", "pickup", "history"];
+  var LIVE_NAMES = { waiting: "Waiting on you", running: "Running", pickup: "Pick up", history: "History" };
+  var LIVE_WORDS = {};
+  [["waiting", ["waiting", "waiting on you", "waiting for you", "needs a decision", "needs approval", "approval", "approving", "asking", "asked", "gate", "question", "questions", "questions open"]],
+   ["running", ["running", "working", "doing", "round running", "starting", "shaping", "refining", "idle", "connecting", "reconnecting", "waiting on background work", "background", "held", "held after this round", "live"]],
+   ["pickup", ["failed", "last round failed", "round failed", "blocked", "stalled", "limited", "unmet", "short", "ended short", "lost", "ended when the daemon stopped", "exited with an error", "error", "waiting to land", "to land", "landing"]],
+   ["history", ["ended", "done", "met", "accepted", "stopped", "dropped", "moved", "abandoned", "merged", "history", "past"]]
+  ].forEach(function (g) { g[1].forEach(function (w) { LIVE_WORDS[w] = g[0]; }); });
+  function liveState(it, opts) { var s = opts && opts.state ? opts.state(it) : (it.state !== undefined && it.state !== null ? it.state : it.word); return s === undefined || s === null ? "" : String(s).toLowerCase(); }
+  function openQuestions(it) { return !!(it.questions && it.questions.length && it.questions.some(function (x) { return x && !x.answer; })); }
+  /* Which of the four groups an item is in: what opts.group says, then waiting or a gate, then its state word, then its other flags,
+     then the word's signal family. */
+  function liveGroup(it, opts) {
+    it = it || {};
+    var given = opts && opts.group ? opts.group(it) : undefined;
+    if (given && LIVE_NAMES[given]) { return given; }
+    if (it.waiting || it.gate) { return "waiting"; }
+    var s = liveState(it, opts);
+    if (LIVE_WORDS[s]) { return LIVE_WORDS[s]; }
+    if (openQuestions(it)) { return "waiting"; }
+    if (it.failed || it.blocked || it.problem || it.lost || it.short) { return "pickup"; }
+    if (it.ended || it.done) { return "history"; }
+    if (it.running || it.stage === 2) { return "running"; }
+    if (s && STATES[s]) { var f = STATES[s][0]; return f === "needs" ? "waiting" : f === "moving" ? "running" : f === "bad" ? "pickup" : "history"; }
+    return "history";
+  }
+  /* When an item's wait began: since, at or askedAt (a number, a Date or a date in words); null when it has none. */
+  function liveSince(it, opts) {
+    var v = opts && opts.since ? opts.since(it) : [it.since, it.at, it.askedAt].filter(function (x) { return x !== undefined && x !== null && x !== ""; })[0];
+    if (v === undefined || v === null || v === "") { return null; }
+    if (typeof v === "number") { return v; }
+    if (v instanceof Date) { return v.getTime(); }
+    var t = Date.parse(v); return isNaN(t) ? null : t;
+  }
+  function liveFirst(items, opts) {
+    opts = opts || {};
+    var rows = (items || []).map(function (it, i) { return { it: it, i: i, g: LIVE_ORDER.indexOf(liveGroup(it, opts)), t: liveSince(it, opts) }; });
+    if (opts.only) { rows = rows.filter(function (r) { return opts.only.indexOf(LIVE_ORDER[r.g]) >= 0; }); }
+    rows.sort(function (a, b) {
+      if (a.g !== b.g) { return a.g - b.g; }
+      if (a.g < 3 && a.t !== b.t) { if (a.t === null) { return 1; } if (b.t === null) { return -1; } return a.t - b.t; }
+      return a.i - b.i;
     });
+    return rows.map(function (r) { return r.it; });
+  }
+  /* waitingOf: the one count of what is waiting on you, and the list, oldest first. A line or a run counts while it waits on you
+     (a gate, a question, a session waiting or asking for approval); every trigger approval counts; an idea counts while a question
+     is open (open: N, or a question with no answer). Something given twice under one id (a run that is also a line) counts once. */
+  function waitingOf(state) {
+    state = state || {};
+    var seen = {}, list = [];
+    function add(kind, it, counts) {
+      if (!it || !counts) { return; }
+      var key = it.id !== undefined && it.id !== null ? String(it.id) : null;
+      if (key !== null) { if (seen[key]) { return; } seen[key] = true; }
+      list.push({ kind: kind, id: key, title: it.title || it.goal || it.name || it.rule || key || "", since: liveSince(it), item: it });
+    }
+    (state.lines || []).forEach(function (l) { add(l.kind || "line", l, liveGroup(l) === "waiting"); });
+    (state.runs || []).forEach(function (r) { add("team run", r, liveGroup(r) === "waiting"); });
+    (state.approvals || []).forEach(function (a) { add("approval", a, true); });
+    (state.ideas || []).forEach(function (x) { add("idea", x, typeof x.open === "number" ? x.open > 0 : x.questions ? openQuestions(x) : liveGroup(x) === "waiting"); });
+    list = liveFirst(list, { group: function () { return "waiting"; } });
+    return { count: list.length, list: list };
+  }
+
+  /* Urgency: rank waiting items and raise the first; the rest recede. The order is liveFirst's: what waits on you before a problem,
+     the oldest first within each. */
+  function rankUrgent(items) {
+    return liveFirst(items.filter(function (i) { return i.waiting || i.problem; }), {
+      group: function (i) { return i.waiting ? "waiting" : "pickup"; }, since: function (i) { return i.askedAt || 0; } });
   }
   function applyUrgency(rows, risingIndex, level) {
     rows.forEach(function (r, i) {
@@ -403,6 +494,7 @@
     HaloButton: HaloButton, Command: Command, StartRail: StartRail, Switch: Switch, Tabs: Tabs, ModePicker: ModePicker,
     Signal: Signal, signalOf: signalOf, wordFor: wordFor, SIGNAL_STATES: STATES, SIGNAL_GLYPHS: GLYPHS,
     EventMark: EventMark, ping: ping, rankUrgent: rankUrgent, applyUrgency: applyUrgency,
+    liveFirst: liveFirst, liveGroup: liveGroup, LIVE_GROUPS: LIVE_NAMES, waitingOf: waitingOf,
     Meter: Meter, ProgressRing: ProgressRing, Toasts: Toasts, roving: roving
   });
 })();
@@ -474,30 +566,66 @@
     return root;
   }
 
-  /* Dialog: a projected panel over a dim. Focus is held inside; Escape and the scrim close it; focus returns to what opened it. */
+  /* Dialog: a projected panel over a dim. Focus is held inside; Escape and the scrim close it; focus returns to what opened it.
+     Confirmations wait, then close: pressing an action makes it busy (its busy word, "working…" by default) and the other buttons
+     inactive, and waits for what its onPress returns. false, a throw or a rejection keeps the dialog open with "✕ <why>" in an alert
+     line inside, every field as typed; anything else closes it, unless the action says stay: true. Nothing closes it while it works. */
   function Dialog(o) {
     o = o || {};
-    var id = "ls-dlg-" + Math.random().toString(36).slice(2, 7), back = null, scrim, panel, host = o.host || document.body;
+    var id = "ls-dlg-" + Math.random().toString(36).slice(2, 7), back = null, scrim, panel, fail = null, btns = [], working = false, host = o.host || document.body;
     function close() {
-      if (!panel) { return; } scrim.remove(); panel.remove(); panel = null;
+      if (!panel) { return; } scrim.remove(); panel.remove(); panel = null; working = false;
       if (o.behind) { o.behind.classList.remove("is-back"); }
       if (back && back.focus) { back.focus(); } if (o.onClose) { o.onClose(); }
     }
+    /* Escape, the dim and Cancel: not while an action is working. */
+    function leave() { if (!working) { close(); } }
+    function why(e) { var m = e && e.message !== undefined ? e.message : e; m = m === undefined || m === null || m === "" ? "It did not go through." : String(m); return m.replace(/^✕\s*/, ""); }
+    function buttonOf(b) { return b.matches && b.matches("button") ? b : b.querySelector("button"); }
+    function press(a, i) {
+      if (working || !panel) { return; }
+      fail.textContent = "";
+      var r;
+      try { r = a.onPress ? a.onPress() : undefined; } catch (e) { settle(a, false, e); return; }
+      if (!r || typeof r.then !== "function") { settle(a, r !== false, a.failed); return; }
+      working = true;
+      btns.forEach(function (b, j) {
+        var btn = buttonOf(b);
+        if (j === i) { NS.HaloButton.setBusy(b, a.busy || true); }
+        else if (btn) { btn.__lsDlgWas = btn.getAttribute("aria-disabled"); btn.setAttribute("aria-disabled", "true"); }
+      });
+      r.then(function (v) { settle(a, v !== false, a.failed, true); }, function (e) { settle(a, false, e, true); });
+    }
+    function settle(a, ok, e, waited) {
+      if (!panel) { return; }
+      working = false;
+      if (waited) {
+        btns.forEach(function (b) {
+          var btn = buttonOf(b);
+          NS.HaloButton.setBusy(b, false);
+          if (btn && "__lsDlgWas" in btn) { if (btn.__lsDlgWas) { btn.setAttribute("aria-disabled", btn.__lsDlgWas); } else { btn.removeAttribute("aria-disabled"); } delete btn.__lsDlgWas; }
+        });
+      }
+      if (!ok) { fail.textContent = "✕ " + why(e); return; }
+      if (!a.stay) { close(); }
+    }
     function open() {
       back = document.activeElement;
-      scrim = h("div", { "class": "ls-scrim", onclick: close });
-      var acts = (o.actions || []).map(function (a) { return NS.HaloButton(Object.assign({}, a, { onPress: function () { var keep = a.onPress && a.onPress(); if (keep !== true) { close(); } } })); });
+      scrim = h("div", { "class": "ls-scrim", onclick: leave });
+      btns = (o.actions || []).map(function (a, i) { return NS.HaloButton(Object.assign({}, a, { busy: false, onPress: function () { press(a, i); } })); });
+      if (btns.length) { btns.push(NS.HaloButton({ label: o.cancelLabel || "Cancel", size: "small", onPress: leave })); }
+      fail = h("p", { "class": "fail", role: "alert" });
       panel = h("div", { "class": "ls-dialog" + (o.danger ? " danger" : "") + (full() ? " anim" : " fade") + (o.extraClass ? " " + o.extraClass : ""), role: o.role || "dialog", "aria-modal": "true", "aria-labelledby": o.title ? id : null, "aria-label": o.title ? null : (o.label || null) },
-        [o.title ? h("h2", { id: id, text: o.title }) : null, o.why ? h("p", { "class": "why", text: o.why }) : null, o.content || null,
-         acts.length ? h("div", { "class": "acts" }, acts.concat([NS.HaloButton({ label: o.cancelLabel || "Cancel", size: "small", onPress: close })])) : null]);
+        [o.title ? h("h2", { id: id, text: o.title }) : null, o.why ? h("p", { "class": "why", text: o.why }) : null, o.content || null, fail,
+         btns.length ? h("div", { "class": "acts" }, btns) : null]);
       if (o.contained) { scrim.style.position = "absolute"; panel.style.position = "absolute"; }
       host.appendChild(scrim); host.appendChild(panel);
       if (o.behind) { o.behind.classList.add("ls-behind", "is-back"); }
-      trap(panel, close);
+      trap(panel, leave);
       setTimeout(function () { if (!panel) { return; } var list = focusables(panel), f = o.initialFocus ? panel.querySelector(o.initialFocus) : (o.danger ? list[list.length - 1] : list[0]); if (f) { f.focus(); } }, 60);
       return panel;
     }
-    return { open: open, close: close, get panel() { return panel; } };
+    return { open: open, close: close, get panel() { return panel; }, get working() { return working; } };
   }
 
   /* Picker: a trigger that opens a listbox on a light tether. Arrow keys, Home, End, Enter and Escape. */
@@ -1159,9 +1287,12 @@
     stale: ["held too long", "It held events past the 24-hour window.", "you release them, or they are dropped after a week"],
     source: ["stopped", "A trigger source has stopped.", "what stopped it is put right"]
   };
+  /* Live work first: a question or an approval waits on you; the lead's quiet rounds, a quiet node and a projected overrun are on a
+     run still going; a spent budget, a stall, a paused rule, held events and a stopped source are for you to pick up. Oldest first in each. */
+  var NEED_GROUP = { asked: "waiting", approval: "waiting", silent: "running", quiet: "running", budget: "running", spent: "pickup", stalled: "pickup", paused: "pickup", stale: "pickup", source: "pickup" };
   function NeedsYou(o) {
     o = o || {};
-    var items = o.items || [], hid = uid("ls-nh-");
+    var items = NS.liveFirst(o.items || [], { group: function (it) { return it.gate ? "waiting" : NEED_GROUP[it.reason] || "waiting"; } }), hid = uid("ls-nh-");
     var el = h("section", { "class": "ls-needs", "aria-labelledby": hid }, [h("h2", { "class": "ls-zone", id: hid }, [h("span", { "class": "no", text: String(items.length) }), "Needs you"])]);
     if (!items.length) { el.appendChild(h("p", { "class": "calm", text: "Nothing needs you. Each reason clears itself, so this only ever holds what is still true." })); return el; }
     el.appendChild(h("ul", {}, items.map(function (it) {
@@ -2584,7 +2715,8 @@
         return h("button", { type: "button", "aria-pressed": o.team === t.name ? "true" : "false", onclick: function () { if (o.onTeam) { o.onTeam(t.name); } } }, [NS.Signal(t.word || "idle"), t.name, h("em", { text: t.fact || "" })]);
       })));
     }
-    var runs = (o.runs || []).slice().sort(function (a, b) { var r = function (x) { var f = NS.signalOf(x.word).family; return f === "needs" ? 0 : f === "bad" ? 1 : f === "moving" ? 2 : 3; }; return r(a) - r(b); });
+    /* Live work first (liveFirst): what waits on you, then running, then what you might pick up, then the ended; oldest wait first. */
+    var runs = NS.liveFirst(o.runs || [], { state: function (r) { return r.word; } });
     var ol = h("ol", { "aria-label": "Runs, the one that needs you first" });
     runs.forEach(function (r, i) {
       var f = NS.signalOf(r.word).family, live = f === "moving" || f === "needs" || r.word === "held after this round";
@@ -3946,7 +4078,7 @@
       count.textContent = items.length === 1 ? (problem ? "Something went wrong" : "Needs you") : items.length + " need you";
       reason.textContent = items[0].text + (items.length > 1 ? " (and " + (items.length - 1) + " more)" : "");
     }
-    return { el: el, set: function (xs) { var before = sig(); items = (xs || []).slice().sort(function (a, b) { return (b.level === "problem") - (a.level === "problem"); }); if (sig() !== before && quietSig && sig().indexOf(quietSig) < 0) { quietSig = null; } if (!items.length) { quietSig = null; } paint(); }, enable: function (v) { o.enabled = !!v; paint(); }, get showing() { return !el.hidden; }, destroy: function () { el.remove(); } };
+    return { el: el, set: function (xs) { var before = sig(); items = NS.liveFirst(xs || [], { group: function (x) { return x.level === "problem" ? "pickup" : "waiting"; } }); if (sig() !== before && quietSig && sig().indexOf(quietSig) < 0) { quietSig = null; } if (!items.length) { quietSig = null; } paint(); }, enable: function (v) { o.enabled = !!v; paint(); }, get showing() { return !el.hidden; }, destroy: function () { el.remove(); } };
   }
 
   /* TaskPicker: which recorded task this is for, doing first, then open and blocked, newest first; or something else. */

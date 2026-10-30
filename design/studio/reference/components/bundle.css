@@ -96,6 +96,13 @@
 .ls-halo[aria-disabled="true"] { cursor: default; color: var(--muted); }
 .ls-halo[aria-disabled="true"] .ring { box-shadow: 0 0 0 1.5px var(--control-edge); transform: none; }
 .ls-halo[aria-disabled="true"] .ring::after { background: var(--control-edge); transform: scale(.35); }
+/* Busy: the act it started is working. The word says what it is doing, in the button's own colour; the ring breathes under full motion. */
+.ls-halo[aria-busy="true"] { cursor: progress; color: var(--ink); }
+.ls-halo.needs[aria-busy="true"] { color: var(--needs-text); } .ls-halo.danger[aria-busy="true"] { color: var(--bad-text); }
+.ls-halo[aria-busy="true"] .ring { box-shadow: 0 0 0 1.5px var(--c); animation: lsBreathe 1.4s ease-in-out infinite; }
+.ls-halo[aria-busy="true"] .ring::after { background: var(--c); transform: scale(.35); }
+.ls-halo.solid[aria-busy="true"] .ring { background: var(--c); }
+[data-theme="hc-dark"] .ls-halo[aria-busy="true"] .ring, [data-theme="hc-light"] .ls-halo[aria-busy="true"] .ring { box-shadow: 0 0 0 2px var(--c); animation: none; }
 [data-theme="hc-dark"] .ls-halo .ring, [data-theme="hc-light"] .ls-halo .ring { box-shadow: 0 0 0 2px var(--c); }
 .ls-action { display: inline-grid; gap: 2px; justify-items: start; }
 .ls-answers { display: flex; flex-wrap: wrap; gap: 10px 26px; margin-top: 10px; }
@@ -320,6 +327,9 @@ div.other input:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
 .ls-dialog h2 { margin: 0 0 4px; font-size: 21px; line-height: 26px; font-weight: 300; color: var(--ink-strong); }
 .ls-dialog .why { margin: 0 0 12px; font-size: 13.5px; color: var(--muted); }
 .ls-dialog .acts { display: flex; flex-wrap: wrap; gap: 10px 26px; margin-top: 18px; }
+/* What went wrong when an action did not go through: inside the dialog, beside what was typed. */
+.ls-dialog .fail { margin: 14px 0 0; font-size: 14px; color: var(--bad-text); }
+.ls-dialog .fail:empty { display: none; }
 .ls-behind { transition: transform var(--dur-slow) var(--ease-out), filter var(--dur-slow); }
 [data-theme="dark"] .ls-behind.is-back, :root:not([data-theme]) .ls-behind.is-back { transform: scale(.975); filter: blur(2px) brightness(.5); }
 [data-theme="hc-dark"] .ls-dialog, [data-theme="hc-light"] .ls-dialog { box-shadow: 0 0 0 2px var(--c); }

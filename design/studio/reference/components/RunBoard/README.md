@@ -5,7 +5,7 @@ RunBoard is Team Focus: a departures board of every team run. Each run is one ro
 ## Behaviour
 
 - Rows come in like a departures board, flapping down one after another; a running round has a light travelling into it, and its station breathes. Under reduced or no motion they are simply there.
-- Order: needs you, then bad, then moving, then the rest.
+- Order: live work first (`liveFirst` on each row's `word`): what waits on you, then running, then what you might pick up (failed, blocked, stalled), then the ended; the oldest wait first in each (`since` or `at`).
 - Picking a run opens its page **beside** the board (the run page's own parts: Gate, RunShape, DoneWhen, Crew, the five depths), and the board stays where it was. Picking a team opens that team's page the same way. Escape or Close gives the board its width back.
 - Projected spend past a budget says "projected over" in words.
 - Each row's rounds are drawn by main's MiniLine (stage 14's `MiniLine`), the same line main's board row uses.
