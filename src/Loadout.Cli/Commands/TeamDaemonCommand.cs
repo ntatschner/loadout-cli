@@ -119,6 +119,9 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     /// <summary>What works through the teams' queues, or null for a daemon built without one.</summary>
     private readonly TeamQueueDriver? _queues;
 
+    /// <summary>The About Loadout model, for Studio's About page; null in a build without one.</summary>
+    private readonly Loadout.Core.About.IAboutService? _about;
+
     public TeamDaemonCommand(
         ISecretProvider secrets,
         HttpClient client,
@@ -156,8 +159,10 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         IFilePermissions? permissions = null,
         IExecutableResolver? resolver = null,
         CommandHost? host = null,
-        Loadout.Core.Teams.IRunOwnership? ownership = null)
+        Loadout.Core.Teams.IRunOwnership? ownership = null,
+        Loadout.Core.About.IAboutService? about = null)
     {
+        _about = about;
         _host = host;
         _home = environment?.HomeDirectory ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         _resolver = resolver;
@@ -407,6 +412,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             server.Triggers = _triggering;
             server.DaemonPaused = () => DaemonControl.Paused(_paths);
             server.Update = UpdateAsync;
+            server.AboutLoadout = _about;
             server.BinDays = TeamBin.Days(teams?.BinDays);
             server.Events = events;
             server.EventsDays = Loadout.Core.Events.EventStore.Days(teams?.EventsDays);

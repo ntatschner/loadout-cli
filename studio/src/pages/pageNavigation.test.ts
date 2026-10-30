@@ -18,7 +18,7 @@ vi.mock('../lib/api', async (original) => {
   };
 });
 
-const { router } = await import('../lib/router.svelte');
+const { router, parse } = await import('../lib/router.svelte');
 const { default: Context } = await import('./Context.svelte');
 const { default: Memory } = await import('./Memory.svelte');
 
@@ -65,5 +65,11 @@ describe('choosing the first project', () => {
     await Promise.resolve();
 
     expect(go).toHaveBeenCalledWith('context', 'starstats');
+  });
+});
+
+describe('the pages an address can name', () => {
+  it('opens About Loadout at #about', () => {
+    expect(parse('#about').page).toBe('about');
   });
 });

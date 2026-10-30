@@ -1,7 +1,7 @@
 // Which page is showing, from the address's hash, so a reload and the back
 // button keep the place and a link can be shared on this machine.
 
-export type PageKey = 'home' | 'sessions' | 'ideas' | 'teams' | 'events' | 'memory' | 'context' | 'spend' | 'projects' | 'commands' | 'settings';
+export type PageKey = 'home' | 'sessions' | 'ideas' | 'teams' | 'events' | 'memory' | 'context' | 'spend' | 'projects' | 'commands' | 'settings' | 'about';
 
 export interface Route {
   page: PageKey | 'session' | 'unknown';
@@ -22,7 +22,7 @@ export interface Route {
   beside?: string[];
 }
 
-const PAGES: PageKey[] = ['home', 'sessions', 'ideas', 'teams', 'events', 'memory', 'context', 'spend', 'projects', 'commands', 'settings'];
+const PAGES: PageKey[] = ['home', 'sessions', 'ideas', 'teams', 'events', 'memory', 'context', 'spend', 'projects', 'commands', 'settings', 'about'];
 
 const pathOf = (text: string) => text.split('/').filter(Boolean).map(decodeURIComponent);
 

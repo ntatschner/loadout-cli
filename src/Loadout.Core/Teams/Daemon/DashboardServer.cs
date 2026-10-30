@@ -296,6 +296,13 @@ public sealed class DashboardServer : IDisposable
     /// </summary>
     public Func<bool, CancellationToken, Task<object>>? Update { get; set; }
 
+    /// <summary>
+    /// The About Loadout model, for Studio's About page: the version, the
+    /// feature matrix, the guides and the release timeline. Null where
+    /// nothing gave this server one.
+    /// </summary>
+    public Loadout.Core.About.IAboutService? AboutLoadout { get; set; }
+
     /// <summary>The bin, for the garbage room to show; null where nothing gave this server one.</summary>
     public TeamBin? Bin { get; set; }
 
@@ -1491,6 +1498,36 @@ public sealed class DashboardServer : IDisposable
 
             await WriteAsync(context, 200, "application/json; charset=utf-8",
                 JsonSerializer.Serialize(await Update(fresh, ct).ConfigureAwait(false), Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        // The About page's model: what 'loadout about --json' prints, with
+        // what is available taken from the daemon's own look at the feed, so
+        // the page and Settings cannot disagree about whether there is an
+        // update. A read; Update now on the page is the same job as Settings'.
+        if (path == "/api/v1/about/loadout" && request.HttpMethod == "GET")
+        {
+            if (AboutLoadout is null)
+            {
+                await WriteAsync(context, 404, "text/plain; charset=utf-8",
+                    "This dashboard cannot describe the installed Loadout. The daemon's does: loadout daemon").ConfigureAwait(false);
+
+                return;
+            }
+
+            var refresh = string.Equals(request.QueryString["refresh"], "now", StringComparison.Ordinal);
+            var read = await AboutLoadout.GetAsync(refresh, ct).ConfigureAwait(false);
+
+            if (!read.Succeeded)
+            {
+                await WriteAsync(context, 500, "text/plain; charset=utf-8", read.Error ?? "The About model could not be read.").ConfigureAwait(false);
+
+                return;
+            }
+
+            await WriteAsync(context, 200, "application/json; charset=utf-8",
+                (await AboutJsonAsync(read.Value!, ct).ConfigureAwait(false)).ToJsonString()).ConfigureAwait(false);
 
             return;
         }
@@ -4774,6 +4811,35 @@ public sealed class DashboardServer : IDisposable
         TasksApi.Tag(context, revision);
 
         return WriteAsync(context, 200, "application/json; charset=utf-8", json);
+    }
+
+    /// <summary>
+    /// The About model as the page reads it: the model's own JSON, what is
+    /// available overlaid from <see cref="Update"/> where the daemon has one,
+    /// and the sentence an empty timeline is shown with, so the page words it
+    /// exactly as the terminal does rather than keeping a copy.
+    /// </summary>
+    private async Task<JsonNode> AboutJsonAsync(Loadout.Core.About.AboutModel model, CancellationToken ct)
+    {
+        if (Update is not null)
+        {
+            var update = JsonSerializer.SerializeToElement(await Update(false, ct).ConfigureAwait(false), Json);
+            var available = update.TryGetProperty("available", out var offered) && offered.ValueKind == JsonValueKind.String
+                ? offered.GetString()
+                : null;
+            var newer = update.TryGetProperty("isNewer", out var isNewer) && isNewer.ValueKind == JsonValueKind.True;
+
+            model = model with { Available = available, UpdateAvailable = newer };
+        }
+
+        var node = JsonSerializer.SerializeToNode(model, Json)!;
+
+        if (model.Timeline.Empty is { } empty)
+        {
+            node["timeline"]!["emptyText"] = Loadout.Core.About.TimelineEmptyText.Describe(empty);
+        }
+
+        return node;
     }
 
     internal static async Task WriteAsync(HttpListenerContext context, int status, string type, string body)

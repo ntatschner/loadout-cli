@@ -4,6 +4,7 @@
 // in memory only and taken out of the address bar at once.
 import type { ListShape } from './lists';
 import type { SessionStatus } from './status';
+import type { AboutLoadout } from './types';
 
 const printed = new URLSearchParams(location.search).get('token') ?? '';
 
@@ -104,6 +105,12 @@ export interface About {
 }
 
 export const about = () => call<About>('GET', '/api/v1/about');
+
+export type { AboutLoadout };
+
+/** The About page's model: version, features, guides and release timeline. */
+export const aboutLoadout = (refresh = false) =>
+  call<AboutLoadout>('GET', `/api/v1/about/loadout${refresh ? '?refresh=now' : ''}`);
 
 /** What the daemon knows about updates, from its daily look at the release feed. */
 export interface UpdateState {
