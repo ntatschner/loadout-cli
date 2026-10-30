@@ -96,8 +96,6 @@ body { background: var(--ground); color: var(--ink); }
 .undercore { display: grid; justify-items: center; margin-top: var(--space-2); }
 .corecmds { justify-content: center; margin: var(--space-2) auto 0; max-width: 520px; }
 .calm.small { margin-top: var(--space-2); font-size: 13.5px; }
-.mapscope { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 16px; }
-.mapscope .calm.small { margin-top: 0; }
 /* Sessions */
 .slist { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .srow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 14px; align-items: center; width: 100%; min-height: 52px; padding: 8px 12px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; text-decoration: none; }
@@ -129,7 +127,6 @@ body { background: var(--ground); color: var(--ink); }
 .lostcard p { margin: 0; color: var(--ink); }
 .sheet .fixed { margin: 0; display: grid; gap: 6px; font-size: 14.5px; color: var(--ink-strong); }
 .sheet .stack { display: grid; gap: 16px; }
-.sheet .other[hidden] { display: none; }
 .sheet .sheetlab { display: block; margin-bottom: 6px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
 .sheet .offline, .loads .offline { margin: 0; color: var(--bad-text); }
 /* One session */
@@ -245,35 +242,6 @@ pre.output { margin: 0; max-height: 60vh; overflow: auto; white-space: pre-wrap;
 @media (max-width: 599px) { [data-mode="terminals"] .page { padding-left: 12px; padding-right: 12px; } }
 [data-mode="terminals"] .page > .sample { display: none; }
 .deckwrap { height: calc(100vh - 92px); min-height: 460px; }
-/* Terminal Focus's tabs and panes as main's components.css draws them: a close button, rename in place, drag to reorder, a tab menu, dividers. */
-.ls-stabs .tab { position: relative; display: flex; flex: none; touch-action: pan-y; }
-.ls-stabs .tab.dragging { opacity: .55; }
-.ls-stabs .tab.before::before, .ls-stabs .tab.after::after { content: ""; position: absolute; top: 4px; bottom: 4px; z-index: 2; width: 2px; background: var(--accent); box-shadow: 0 0 8px var(--cgf); }
-.ls-stabs .tab.before::before { left: -1px; }
-.ls-stabs .tab.after::after { right: -1px; }
-.ls-stabs .tab [role="tab"] { padding-right: 30px; }
-.ls-stabs .tab [role="tab"] .new { right: 30px; }
-.ls-stabs .close { position: absolute; right: 4px; top: 50%; display: inline-grid; place-items: center; width: 24px; height: 24px; margin-top: -12px; border: 0; background: none; color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer; opacity: 0; transition: opacity var(--dur-quick), background-color var(--dur-quick); }
-.ls-stabs .tab:hover .close, .ls-stabs .tab:focus-within .close, .ls-stabs .tab:has([aria-selected="true"]) .close { opacity: 1; }
-.ls-stabs .close:hover { background: var(--tint-hover-c); color: var(--ink-strong); }
-@media (hover: none) { .ls-stabs .close { opacity: 1; } }
-.ls-stabs .rename { width: 200px; min-height: 48px; padding: 6px 10px; border: 0; background: var(--surface); color: var(--ink-strong); font: inherit; font-family: var(--font-sans); font-size: 13.5px; box-shadow: inset 0 0 0 1px var(--accent), inset 0 2px 0 var(--accent); }
-.ls-stabs .rename:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
-.ls-stabs .hint { position: absolute; left: 0; top: 100%; z-index: 3; width: max(100%, 280px); max-width: calc(100vw - 40px); padding: 6px 10px; background: var(--surface); color: var(--muted); font-size: 12px; box-shadow: 0 0 0 1px var(--rule), var(--shadow-float); }
-.ls-stabs .hid { flex: none; padding: 0 12px; border: 0; background: none; color: var(--muted); font: inherit; font-family: var(--font-mono); font-size: 11.5px; white-space: nowrap; cursor: pointer; box-shadow: inset -1px 0 0 var(--rule); }
-.ls-stabs .hid:hover { background: var(--tint-hover-c); color: var(--ink); }
-.ls-stabs .hid:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
-.ls-tabmenu { --c: var(--accent); position: fixed; z-index: var(--z-menu); display: grid; min-width: 210px; max-width: min(320px, calc(100vw - 32px)); padding: 6px 0; background: var(--surface); box-shadow: inset 0 1px 0 var(--accent), 0 0 0 1px var(--rule), var(--shadow-float); }
-.ls-tabmenu [role="menuitem"] { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 36px; padding: 0 14px; border: 0; background: none; color: var(--ink); font: inherit; font-family: var(--font-sans); font-size: 13px; text-align: left; cursor: pointer; }
-.ls-tabmenu [role="menuitem"]:hover, .ls-tabmenu [role="menuitem"]:focus { background: var(--tint-hover-c); color: var(--ink-strong); outline: none; }
-.ls-tabmenu [role="menuitem"]:focus-visible { box-shadow: inset 2px 0 0 var(--focus); }
-.ls-tabmenu [role="menuitem"].danger { color: var(--bad-text); }
-.ls-tabmenu kbd { font-family: var(--font-mono); font-size: 10.5px; color: var(--subtle); }
-.ls-deck .note { font-size: 12.5px; color: var(--ink); }
-.ls-deck .panes { position: relative; }
-.ls-deck .pane:has(> .gone) { grid-template-rows: auto minmax(0, 1fr); }
-.ls-deck .pane .gone { margin: 0; padding: 6px 10px; font-size: 12.5px; color: var(--muted); background: var(--surface-2); box-shadow: inset 2px 0 0 var(--subtle); }
-.ls-term .tbar [role="alert"] { color: var(--bad-text); }
 .tfocus { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-items: start; }
 .tfocus.open { grid-template-columns: minmax(0, 1fr) minmax(420px, 48%); }
 .tfocus .bcol { min-width: 0; }
@@ -600,7 +568,7 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
   var MODE_COST = { "": 276, advise: 180, investigate: 240, implement: 276, review: 210 };
 
   var ST = {
-    clock: 842, paused: false, step: 0, view: "lens", focus: "t1", picked: "t1", ambient: false, tokens: 41200, feed: [], startTask: "",
+    clock: 842, paused: false, step: 0, view: "lens", focus: null, picked: "t1", ambient: false, tokens: 41200, feed: [], startTask: "",
     lines: [
       { id: "t1", code: "4", kind: "team run", title: "Release 0.66.0", stage: 2, where: "release-crew", project: "loadout-cli", note: "round 3 · lead is coordinating", quiet: 1, cost: 3.10, cap: 10, mins: 48,
         checks: [["Release notes match the changes", "met"], ["Every test passes on main", "met"], ["The tag is pushed", "not attempted"]],
@@ -811,11 +779,16 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
   }
   function renderLens(main) {
     if (homeEmpty(main)) { return; }
-    var L = homeLayout("lens"), f = line(ST.focus) || ST.lines[0], idx = ST.lines.indexOf(f), n = ST.lines.length, wl = waitingLines(), editing = !!ST.editing;
+    homeFilterBar(main);
+    /* The filters narrow the Lens as they do the Map; a line asked for by name is shown even when they hide it, with the note. */
+    var F = homeFiltered(), drawn = F.drawn, wl = homeRanked(drawn), f = line(ST.focus) || (wl[0] ? line(wl[0].id) : null) || drawn[0], idx = f ? drawn.indexOf(f) : -1, n = drawn.length;
+    var L = homeLayout("lens"), editing = !!ST.editing, step = function (by) { if (n) { ST.focus = drawn[(idx + by + n) % n].id; render(); } };
     var lens = el("div", { "class": "lens" + (editing ? " editing" : "") });
     var body = {
       focus: function () {
+        if (!f) { return []; }
         var narrow = window.innerWidth < 600, style = narrow ? "orbit" : P.halo, col = el("div", { "class": "halo-col" });
+        if (idx < 0) { col.appendChild(el("p", { "class": "calm small" }, ["The filters hide this one; it is shown because it was asked for. " + F.note + ". ", homeEverything("show-all-focus")])); }
         if (editing) {
           var pick = function (v) { P.halo = v; savePrefs(); said("Halo: " + (v === "orbit" ? "Orbit" : "Gyroscope"), "$ loadout config set studio-halo " + v); render(); };
           var hb = [["orbit", "Orbit"], ["gyroscope", "Gyroscope"]].map(function (s) { return el("button", { type: "button", role: "radio", "aria-checked": style === s[0] ? "true" : "false", tabindex: style === s[0] ? "0" : "-1", "data-k": "halo-" + s[0], text: s[1], onclick: function () { pick(s[0]); } }); });
@@ -828,24 +801,25 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
         var acts = actionsFor(f);
         if (narrow) { col.appendChild(el("div", { "class": "undercore" }, [coreFor(f)])); }
         else if (acts.length) { col.appendChild(el("div", { "class": "ls-answers corecmds" }, acts.map(function (a) { return halo(Object.assign({ size: "small" }, a), "core-" + a.label); }))); }
-        col.appendChild(el("div", { "class": "stepper" }, [halo({ label: "Prev", size: "small", onPress: function () { ST.focus = ST.lines[(idx - 1 + n) % n].id; render(); } }, "prev"), (idx + 1) + " of " + n, halo({ label: "Next", size: "small", onPress: function () { ST.focus = ST.lines[(idx + 1) % n].id; render(); } }, "next")]));
+        col.appendChild(el("div", { "class": "stepper" }, [halo({ label: "Prev", size: "small", onPress: function () { step(-1); } }, "prev"), (idx < 0 ? "–" : idx + 1) + " of " + n, halo({ label: "Next", size: "small", onPress: function () { step(1); } }, "next")]));
         return [col];
       },
       needs: function () {
-        if (!wl.length) { return [el("p", { "class": "calm", text: "Nothing needs you." })]; }
-        return wl.map(function (l) {
+        var said1 = F.note ? homeHiddenLink(F.note, "show-all-needs") : null;
+        if (!wl.length) { return [said1, el("p", { "class": "calm", text: "Nothing needs you." })]; }
+        return [said1].concat(wl.map(function (l) {
           return el("div", { "class": "waitcard" + (l.problem && !l.waiting ? " problem" : "") }, [el("span", { "class": "w", text: l.kind + " · " + l.where + (l.askedAt ? " · " + Math.max(1, ST.clock - l.askedAt) + " min" : "") }),
             el("p", { "class": "q", text: l.waiting ? (l.ask || l.title) : l.title + " · " + l.failed }),
             el("div", { "class": "ls-answers", style: "margin: 0" }, actionsFor(l).map(function (a) { return halo(Object.assign({ size: "small" }, a), "need-" + l.id + a.label); }).concat([halo({ label: "Focus it", size: "small", onPress: function () { ST.focus = l.id; render(); } }, "focus-" + l.id)]))]);
-        });
+        }));
       },
       all: function () {
         var ul = el("ul", { "class": "rows", "aria-label": "Everything" });
-        var rows = ST.lines.map(function (l) {
-          var b = el("button", { type: "button", "class": "row", "aria-current": l.id === f.id ? "true" : "false", "data-k": "row-" + l.id, onclick: function () { ST.focus = l.id; render(); } }, [el("span", { "class": "t", text: l.title }), S.Signal(sessWord(l)), el("span", { "class": "x", text: l.kind + " · " + l.where + " · " + factsOf(l) })]);
+        var rows = drawn.map(function (l) {
+          var b = el("button", { type: "button", "class": "row", "aria-current": f && l.id === f.id ? "true" : "false", "data-k": "row-" + l.id, onclick: function () { ST.focus = l.id; render(); } }, [el("span", { "class": "t", text: l.title }), S.Signal(sessWord(l)), el("span", { "class": "x", text: l.kind + " · " + l.where + " · " + factsOf(l) })]);
           ul.appendChild(el("li", {}, [b])); return b;
         });
-        var top = wl[0]; S.applyUrgency(rows, top && !editing ? ST.lines.indexOf(line(top.id)) : -1, top && top.problem && !top.waiting ? "problem" : "needs");
+        var top = wl[0]; S.applyUrgency(rows, top && !editing ? drawn.indexOf(line(top.id)) : -1, top && top.problem && !top.waiting ? "problem" : "needs");
         return [ul];
       },
       start: function () {
@@ -879,15 +853,56 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     var m = S.Meter({ label: "Tokens used today", value: ST.tokens, max: 100000, threshold: 60000, unit: "tokens", thresholdLabel: "daily threshold", format: function (v) { return v.toLocaleString("en-GB"); }, of: function () { return "today, of a 60,000 daily threshold"; }, source: "worked out by $ loadout spend refresh · says where you stand, stops nothing" });
     return el("div", {}, [m.el]);
   }
-  /* What the map draws when it draws only work in flight (main's lib/lines.ts inFlight): live sessions and ones that failed, runs going, tasks; never an idea, which is shaped on Ideas. */
-  function homeGoing(l) { if (l.kind === "team run") { return l.stage !== 4 || !!l.failed; } if (l.kind === "session") { return l.stage !== 4 || !!l.exitCode; } return l.kind === "task"; }
+  /* What Home's Map and Lens draw (main's lib/mapFilter.ts, the bar S.MapFilterBar): kind, state and the projects to hide, kept as studio-map-kinds, studio-map-states and studio-map-projects.
+     The header's count, the network status and the spend keep the lot. An older daemon's studio-map-scope all still reads as Everything. */
+  var HOME_KINDS = { "team run": "runs", session: "sessions", idea: "ideas", task: "tasks" }, HOME_PREFS = { "studio-map-kinds": "mapKinds", "studio-map-states": "mapStates", "studio-map-projects": "mapProjects" };
+  function homeFilter() { return S.MapFilterBar.filterOf({ mapKinds: P.mapKinds, mapStates: P.mapStates, mapProjects: P.mapProjects, mapScope: P.mapScope }); }
+  /* Which of the four states a line is in: waiting on you is its own flag; a failure counts as failed for a day (every one here is within it), then as ended. */
+  function homeStateOf(l) {
+    if (l.waiting) { return "waiting"; }
+    if (l.kind === "team run") { return l.stage !== 4 ? "running" : l.failed ? "failed" : "ended"; }
+    if (l.kind === "session") { return l.stage !== 4 ? "running" : l.exitCode ? "failed" : "ended"; }
+    if (l.kind === "idea") { return l.accepted || l.stage === 4 ? "ended" : "running"; }
+    return l.stage === 4 ? "ended" : "running";
+  }
+  function homeProjectOf(l) { return l.project || (PROJECTS[l.where] ? l.where : null) || S.MapFilterBar.NO_PROJECT; }
+  function homeFiltered() {
+    var f = homeFilter(), drawn = [], hidden = [];
+    ST.lines.forEach(function (l) { (f.kinds.indexOf(HOME_KINDS[l.kind]) >= 0 && f.states.indexOf(homeStateOf(l)) >= 0 && f.projects.indexOf(homeProjectOf(l)) < 0 ? drawn : hidden).push(l); });
+    var waiting = hidden.filter(function (l) { return l.waiting; }).length;
+    return { filter: f, drawn: drawn, hidden: hidden, waiting: waiting, note: hidden.length ? hidden.length + " hidden" + (waiting ? ", " + waiting + " waiting on you" : "") : "" };
+  }
+  function homeRanked(drawn) { return S.rankUrgent(drawn.map(function (l) { return Object.assign({ problem: !!l.failed }, l); })); }
+  /* Every project the bar offers: those with work in view, then any hidden that have none, (no project) last. */
+  function homeProjectsIn(hiddenOnes) {
+    var none = S.MapFilterBar.NO_PROJECT, named = [];
+    ST.lines.map(homeProjectOf).concat(hiddenOnes).forEach(function (p) { if (named.indexOf(p) < 0) { named.push(p); } });
+    var list = named.filter(function (p) { return p !== none; }).sort(function (a, b) { return a.localeCompare(b); });
+    return named.indexOf(none) >= 0 ? list.concat([none]) : list;
+  }
+  /* Writes what changed, as main's Home does, without a toast: the bar's own From line says the commands. In flight is the three keys unset, as a fresh config has them. */
+  function homeFilterTo(next) {
+    var M = S.MapFilterBar, was = M.keysOf(homeFilter()), inflight = M.presetOf(next) === "inflight";
+    M.keysOf(next).forEach(function (kv, i) { if (inflight || kv[1] !== was[i][1]) { P[HOME_PREFS[kv[0]]] = inflight ? "" : kv[1]; } });
+    delete P.mapScope; savePrefs();
+    render();
+  }
+  function homeFilterBar(main) {
+    var F = homeFiltered(), bar = S.MapFilterBar({ filter: F.filter, projects: homeProjectsIn(F.filter.projects), onchange: homeFilterTo });
+    var det = bar.el.querySelector("details");
+    if (det) { det.open = !!ST.homeProjects; det.addEventListener("toggle", function () { ST.homeProjects = det.open; }); }
+    main.appendChild(bar.el);
+  }
+  /* A palette row or a link that names a line (#home/<id>) focuses it on the Lens, as main's Home does, even where the filters hide it; the address then reads #home. */
+  function homeNamed() { var m = /^home\/(.+)$/.exec(route()); if (!m) { return; } ST.focus = decodeURIComponent(m[1]); ST.view = "lens"; try { history.replaceState(null, "", "#home"); } catch (x) { location.hash = "home"; } }
+  function homeEverything(k) { return el("a", { href: "#home", "data-k": k, text: "Show everything", onclick: function (e) { e.preventDefault(); homeFilterTo(S.MapFilterBar.PRESETS.all); } }); }
+  function homeHiddenLink(note, k) { return el("p", { "class": "calm small" }, [note + ". ", homeEverything(k)]); }
   function homeHiddenOf(all, drawn) {
     var counts = {}, order = [];
     all.forEach(function (l) { if (drawn.indexOf(l) < 0) { if (!counts[l.kind]) { counts[l.kind] = 0; order.push(l.kind); } counts[l.kind] += 1; } });
     var parts = order.map(function (k) { return counts[k] + " " + k + (counts[k] === 1 ? "" : "s"); });
     return parts.length > 1 ? parts.slice(0, -1).join(", ") + " and " + parts[parts.length - 1] : (parts[0] || "");
   }
-  function homeScope(s) { P.mapScope = s; savePrefs(); said(s === "all" ? "The map draws everything" : "The map draws what is in flight", "$ loadout config set studio-map-scope " + s); render(); }
   function homeFacts(l) {
     var facts = [{ k: "Kind", v: l.kind + " · " + l.where }];
     if (l.kind === "session" && l.agent) { facts.push({ k: "Agent", v: l.agent + (l.mode ? " · " + l.mode : "") }); }
@@ -898,20 +913,21 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
   }
   function renderMap(main) {
     if (homeEmpty(main)) { return; }
-    var L = homeLayout("map"), scope = P.mapScope === "all" ? "all" : "inflight";
-    var drawn = scope === "all" ? ST.lines.slice() : ST.lines.filter(homeGoing), off = ST.lines.length - drawn.length, hidden = homeHiddenOf(ST.lines, drawn);
+    homeFilterBar(main);
+    var L = homeLayout("map"), F = homeFiltered(), drawn = F.drawn, off = F.hidden.length, hidden = homeHiddenOf(ST.lines, drawn);
     var w = ST.lines.filter(function (l) { return l.waiting && l.askedAt; }), o = w.length ? w.reduce(function (a, b) { return (a.askedAt || 0) < (b.askedAt || 0) ? a : b; }) : null;
     var picked = drawn.filter(function (l) { return l.id === ST.picked; })[0] || drawn[0];
     var wrap = el("div", { "class": "mapview" + (ST.editing ? " editing" : "") });
     var body = {
       status: function () { return [S.NetworkStatus({ lines: ST.lines, clock: hhmm(ST.clock), oldest: o ? Math.max(1, ST.clock - o.askedAt) + " min · " + o.where : "none" })]; },
       map: function () {
-        var seg = el("div", { "class": "views", role: "group", "aria-label": "What the map draws" }, [["inflight", "In flight"], ["all", "Everything"]].map(function (s) { return el("button", { type: "button", "aria-pressed": scope === s[0] ? "true" : "false", "data-k": "scope-" + s[0], text: s[1], onclick: function () { homeScope(s[0]); } }); }));
-        var out = [el("div", { "class": "mapscope" }, [seg, scope === "inflight" && hidden ? el("span", { "class": "calm small", text: off + " hidden" }) : null])];
+        var out = [];
         if (drawn.length) {
-          out.push(S.TubeMap({ lines: drawn.map(function (l) { return Object.assign({}, l, { facts: factsOf(l) }); }), picked: picked.id, onPick: function (id) { ST.picked = id; render(); setTimeout(function () { var s = document.querySelector(".ls-strip"); if (s && s.scrollIntoView) { s.scrollIntoView({ block: "nearest", behavior: S.motion() === "full" ? "smooth" : "auto" }); } }, 30); } }).el);
+          if (F.note) { out.push(homeHiddenLink(F.note, "show-all-map")); }
+          /* Coded again in drawing order, as main's filterLines codes them, so the lines in view keep eight apart. */
+          out.push(S.TubeMap({ lines: drawn.map(function (l, i) { return Object.assign({}, l, { facts: factsOf(l), code: String((i % 8) + 1) }); }), picked: picked.id, onPick: function (id) { ST.picked = id; render(); setTimeout(function () { var s = document.querySelector(".ls-strip"); if (s && s.scrollIntoView) { s.scrollIntoView({ block: "nearest", behavior: S.motion() === "full" ? "smooth" : "auto" }); } }, 30); } }).el);
         } else {
-          out.push(el("p", { "class": "calm" }, ["Nothing in flight. " + hidden + " " + (off === 1 ? "is" : "are") + " off the map. ", el("a", { href: "#home", "data-k": "show-all", text: "Show everything", onclick: function (e) { e.preventDefault(); homeScope("all"); } })]));
+          out.push(el("p", { "class": "calm" }, ["Nothing to draw. " + hidden + " " + (off === 1 ? "is" : "are") + " hidden by the filters" + (F.waiting ? ", " + F.waiting + " waiting on you" : "") + ". ", homeEverything("show-all")]));
         }
         return out;
       },
@@ -1181,33 +1197,16 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     ST.active = ST.active || {}; ST.active[id] = Date.now();
     if (LIVE && LIVE.id === id) { LIVE.t.write(runsOf([cls, text])); }
     var dt = DECK && DECK.deck.terminal(id); if (dt) { dt.write(runsOf([cls, text])); }
-    if (DECK && DECK.deck.current !== id) { ST.unread = ST.unread || {}; if (!ST.unread[id]) { ST.unread[id] = true; DECK.deck.update(deckSessions()); } }
+    if (DECK && DECK.deck.current !== id) { ST.unread = ST.unread || {}; if (!ST.unread[id]) { ST.unread[id] = true; tfUpdate(); } }
   }
-  function termState(l) { if (l.stage === 4) { return l.exitCode ? "error" : "ended"; } if (l.waiting) { return l.approval ? "approval" : "waiting"; } if (l.background) { return "background"; } return (l.quiet || 0) >= 10 ? "idle" : "working"; }
-  /* What main's Terminal has that the design system's does not yet: the paste keys, the clipboard refusal, the quiet background state, and the status strip on its foot. */
+  /* As main's lib/terminal.ts: an ending outranks everything, then watching only, then what the agent's hooks said. */
+  function termState(l) { if (l.stage === 4) { return l.exitCode ? "error" : "ended"; } if (sessWatching()) { return "watch"; } if (l.waiting) { return l.approval ? "approval" : "waiting"; } if (l.background) { return "background"; } return (l.quiet || 0) >= 10 ? "idle" : "working"; }
+  /* The session's status strip, for the terminal's foot (main's SessionPane), kept fresh as the status line is redrawn. */
   var SESS_LIVE = [];
-  function sessTermDress(t, l) {
-    var bar = t.el.querySelector(".tbar"), hint = bar && bar.querySelector(".keyhint"), refused = el("span", { role: "alert" });
-    if (hint) { var paste = el("span", { "class": "keyhint", text: "Ctrl+V paste · Alt+V image · right-click copy or paste" }); hint.parentNode.insertBefore(paste, hint.nextSibling); hint.parentNode.insertBefore(refused, paste.nextSibling); }
-    var screen = t.el.querySelector(".screen");
-    if (screen) {
-      screen.addEventListener("keydown", function (e) {
-        if (!((e.ctrlKey || e.metaKey) && (e.key === "v" || e.key === "V")) || l.stage === 4) { return; }
-        e.preventDefault();
-        var fail = function () { refused.textContent = "The browser refused the clipboard"; };
-        var cb = navigator.clipboard;
-        if (!cb || !cb.readText) { fail(); return; }
-        cb.readText().then(function (txt) { refused.textContent = ""; txt = (txt || "").split("\n")[0]; if (txt) { t.write([["› ", "fg-cyan"], [txt, ""]]); sessionInput(l, txt); } }, fail);
-      });
-    }
-    var raw = t.setState;
-    t.setState = function (s, info) {
-      raw(s === "background" ? "working" : s, info || (s === "error" ? { code: l.exitCode } : undefined));
-      if (s === "background" && bar && bar.firstChild) { bar.firstChild.textContent = ""; bar.firstChild.appendChild(S.Signal("waiting on background work")); }
-    };
-    var now = termState(l); if (now === "background" || now === "error") { t.setState(now); }
-    if (l.status && l.stage !== 4) { var strip = S.StatusStrip({ status: l.status, now: Date.now() }); t.el.appendChild(el("div", { "class": "foot" }, [strip.el])); SESS_LIVE.push({ line: l, part: strip, el: strip.el }); }
-    return t;
+  function sessFoot(l) {
+    if (!l.status || l.stage === 4) { return null; }
+    var strip = S.StatusStrip({ status: l.status, now: Date.now() }); SESS_LIVE.push({ line: l, part: strip, el: strip.el });
+    return strip;
   }
   /* Claude redraws its status line every half minute; one session's context fills as it reads. */
   setInterval(function () {
@@ -1218,7 +1217,7 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     });
     SESS_LIVE = SESS_LIVE.filter(function (x) { return x.el.isConnected; });
     SESS_LIVE.forEach(function (x) { x.part.set({ status: x.line.status, now: Date.now() }); });
-    if (DECK && DECK.deck.el && DECK.deck.el.isConnected) { DECK.deck.update(); }
+    if (DECK && DECK.deck.el && DECK.deck.el.isConnected) { tfUpdate(); }
   }, 15000);
   function sessEndAsk(l) {
     S.Dialog({ title: "End this session?", danger: true, why: "This stops the agent in this terminal, and everything it started. No loadout command does this. Its conversation is kept, so it can be carried on with " + sessResumeCmd(l.agentSession, l.where).slice(2) + ".",
@@ -1240,19 +1239,17 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     var command = l.skind === "command", ended = l.stage === 4, st = termState(l), mins = (l.mins || 0) + " min";
     var facts = (command ? [] : [["Project", l.where || "not known"], ["Agent", l.agent || "the project’s default"], ["Mode", l.mode || "chosen by the task"], ["Task", l.taskId || l.task || "none"]])
       .concat([["Running", mins], ["Quiet", (l.quiet || 0) + " min"], ["Memory", l.memory ? l.memory + " MB" : "not known"], ["Windows", String(l.viewers || 0)], ["Drawn with", l.renderer || "…"]]);
+    /* SessionView draws the status, the Actions (commands, note, End) and "Type here instead" (another window holds the input) where main puts them; the terminal carries the status strip on its foot. */
     var V = S.SessionView({ line: command ? { title: l.title, time: "a command that asks as it goes · " + mins } : { title: l.title, where: l.where, agent: l.agent || "agent", mode: l.mode || "mode by the task", time: mins },
-      terminal: { project: l.where, agent: command ? "loadout" : l.agent, sessionId: l.agentSession, state: st === "background" ? "working" : st, info: { code: l.exitCode }, fit: window.innerWidth < 600, lines: (ST.term[l.id] || []).map(runsOf),
-        onInput: function (v) { sessionInput(l, v); } },
-      facts: facts, loaded: [], events: (l.events || []).slice(0, 5).map(function (e) { return [e.t, e.text]; }), actions: [] });
-    sessTermDress(V.terminal, l);
-    var side = V.el.querySelector(".sside"), head = V.el.querySelector(".shead");
-    if (l.status && !ended) { var sb = S.StatusBlock({ status: l.status, now: Date.now() }), first = side.querySelector("section"); side.insertBefore(sb.el, first ? first.nextSibling : null); SESS_LIVE.push({ line: l, part: sb, el: sb.el }); }
-    side.appendChild(el("section", {}, [el("h2", { text: "Actions" }), l.cmdLine ? S.Command({ why: "Started with:", command: "$ " + l.cmdLine }) : null,
-      command ? null : S.Command({ why: "Carry this conversation on in a terminal instead:", command: sessResumeCmd(l.agentSession, l.where) }),
-      el("p", { "class": "calm small", text: "Sessions survive a reload of this page, not a restart of the daemon." }),
-      ended ? null : halo({ label: "End the session", kind: "danger", size: "small", cmd: "stops the agent in this terminal", disabledReason: sessWatching() ? "Studio is only watching: end it from where it runs" : undefined, onPress: function () { sessEndAsk(l); } }, "end-session")]));
-    /* Another window holds the input: this one can take it over. */
-    if (l.holds === false && !sessWatching() && !ended && head) { head.insertBefore(halo({ label: "Type here instead", size: "small", cmd: "another window holds the input · takes it over", onPress: function () { l.holds = true; said("This window types into it now", "another window held the input · takes it over"); render(); } }, "takeover"), head.lastChild); }
+      terminal: { project: l.where, agent: command ? "loadout" : l.agent, sessionId: l.agentSession, state: st, info: { code: l.exitCode }, fit: window.innerWidth < 600, lines: (ST.term[l.id] || []).map(runsOf),
+        onInput: function (v) { sessionInput(l, v); }, foot: sessFoot(l) },
+      facts: facts, loaded: [], events: (l.events || []).slice(0, 5).map(function (e) { return [e.t, e.text]; }),
+      status: l.status && !ended ? l.status : null, now: Date.now(),
+      commands: [l.cmdLine ? { why: "Started with:", command: "$ " + l.cmdLine } : null, command ? null : { why: "Carry this conversation on in a terminal instead:", command: sessResumeCmd(l.agentSession, l.where) }].filter(Boolean),
+      note: "Sessions survive a reload of this page, not a restart of the daemon.",
+      actions: ended ? [] : [{ label: "End the session", kind: "danger", key: "end-session", cmd: "stops the agent in this terminal", disabledReason: sessWatching() ? "Studio is only watching: end it from where it runs" : undefined, onPress: function () { sessEndAsk(l); } }],
+      button: l.holds === false && !sessWatching() && !ended ? halo({ label: "Type here instead", size: "small", cmd: "another window holds the input · takes it over", onPress: function () { l.holds = true; said("This window types into it now", "another window held the input · takes it over"); render(); } }, "takeover") : null });
+    if (V.statusBlock) { SESS_LIVE.push({ line: l, part: V.statusBlock, el: V.statusBlock.el }); }
     var sc = V.el.querySelector(".screen"); if (sc) { sc.setAttribute("data-k", "term-screen"); }
     V.el.style.height = "calc(100vh - 150px)"; V.el.style.minHeight = "520px";
     main.appendChild(V.el);
@@ -2415,8 +2412,8 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     term(l.id, "dim", "  sent to the session");
   }
   function makeTerm(id) {
-    var l = line(id), st = termState(l);
-    return sessTermDress(S.Terminal({ title: l.title, project: l.where, agent: l.skind === "command" ? "loadout" : l.agent, sessionId: l.agentSession, state: st === "background" ? "working" : st, info: { code: l.exitCode }, fit: window.innerWidth < 600, lines: (ST.term[l.id] || []).map(runsOf), onInput: function (v) { sessionInput(l, v); } }), l);
+    var l = line(id); if (!l) { return null; }
+    return S.Terminal({ title: l.title, project: l.where, agent: l.skind === "command" ? "loadout" : l.agent, sessionId: l.agentSession, state: termState(l), info: { code: l.exitCode }, fit: window.innerWidth < 600, lines: (ST.term[l.id] || []).map(runsOf), onInput: function (v) { sessionInput(l, v); }, foot: sessFoot(l) });
   }
   function deckSessions() {
     return ST.lines.filter(function (l) { return l.kind === "session"; }).map(function (l) {
@@ -2434,306 +2431,7 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     var gone = function (s) { return s.ended && t.cleared.indexOf(s.id) >= 0; };
     return { shown: ordered.filter(function (s) { return t.hidden.indexOf(s.id) < 0 && !gone(s); }), hidden: ordered.filter(function (s) { return t.hidden.indexOf(s.id) >= 0 && !gone(s); }) };
   }
-  function tfNudge(order, id, by) { var from = order.indexOf(id), to = Math.max(0, Math.min(order.length - 1, from + by)); if (from < 0 || to === from) { return order; } var w = order.filter(function (x) { return x !== id; }); return w.slice(0, to).concat([id], w.slice(to)); }
-  function tfPlaceTab(order, id, before) { var w = order.filter(function (x) { return x !== id; }), at = before === null ? w.length : w.indexOf(before); return at < 0 ? order : w.slice(0, at).concat([id], w.slice(at)); }
   function tfWithOrder(t, shown) { return { order: shown.concat(t.order.filter(function (id) { return shown.indexOf(id) < 0; })), hidden: t.hidden, cleared: t.cleared }; }
-  /* Which session each pane shows (main's lib/modes.ts placeSlots, launchSlots and shrinkSlots). */
-  function tfPad(slots, n) { var out = (slots || []).slice(0, n).map(function (id, i, all) { return id && all.indexOf(id) === i ? id : null; }); while (out.length < n) { out.push(null); } return out; }
-  function tfPlace(slots, o) {
-    var out = tfPad(slots, o.layout);
-    if (o.pick && out.indexOf(o.pick) < 0) { var at = o.at === undefined ? -1 : o.at, empty = out.indexOf(null); out[at >= 0 ? Math.min(at, o.layout - 1) : Math.max(0, empty)] = o.pick; }
-    var spare = o.order.filter(function (id) { return out.indexOf(id) < 0; }), fill = o.fill === undefined ? o.layout : o.fill;
-    return out.map(function (id, i) { return id || (i < fill ? spare.shift() : null) || null; });
-  }
-  function tfLaunchSlots(slots, o) {
-    var out = tfPad(slots, o.layout).map(function (id) { return id && o.gone.indexOf(id) >= 0 ? null : id; }), already = out.indexOf(o.pick);
-    if (already >= 0) { return { slots: out, layout: o.layout, at: already, grew: false, replaced: null }; }
-    var empty = out.indexOf(null);
-    if (empty >= 0) { out[empty] = o.pick; return { slots: out, layout: o.layout, at: empty, grew: false, replaced: null }; }
-    if (o.layout < 4) { var layout = o.layout === 1 ? 2 : 4, grown = tfPad(out, layout), g = grown.indexOf(null); grown[g] = o.pick; return { slots: grown, layout: layout, at: g, grew: true, replaced: null }; }
-    var ended = -1; out.forEach(function (id, i) { if (ended < 0 && id && o.ended.indexOf(id) >= 0) { ended = i; } });
-    var at = ended;
-    if (at < 0) { var every = out.map(function (x, i) { return i; }), free = every.filter(function (i) { return o.waiting.indexOf(out[i]) < 0; }), pool = free.length ? free : every, quiet = function (i) { return o.active[out[i]] || 0; }; at = pool.reduce(function (best, i) { return quiet(i) < quiet(best) ? i : best; }, pool[0]); }
-    var replaced = out[at]; out[at] = o.pick;
-    return { slots: out, layout: o.layout, at: at, grew: false, replaced: replaced, because: ended >= 0 ? "ended" : "idle" };
-  }
-  function tfShrink(slots, o) {
-    if (o.layout <= o.chosen) { return { slots: slots, layout: o.layout }; }
-    var kept = tfPad(slots, o.layout).filter(function (id) { return id && o.order.indexOf(id) >= 0; }), layout = [1, 2, 4].filter(function (n) { return n >= o.chosen && n >= kept.length; })[0] || 4;
-    return layout >= o.layout ? { slots: slots, layout: o.layout } : { slots: tfPad(kept, layout), layout: layout };
-  }
-  var TF_LAYOUTS = [[1, "One", "M2 2h16v12H2z"], [2, "Two side by side", "M2 2h16v12H2z M10 2v12"], [4, "Four", "M2 2h16v12H2z M10 2v12 M2 8h16"]];
-  /* Terminal Focus as main's TermDeck and SessionTabs build it: tabs that close, rename, move and hide; one, two or four panes with dividers between them;
-     and a launch that takes a pane of its own, growing 1→2→4. The design system's TermDeck has none of this yet, so the prototype draws it here with the same classes. */
-  function tfDeck(o) {
-    var panesId = "ls-deck-" + Math.random().toString(36).slice(2, 7), hintId = panesId + "-hint";
-    var chosen = [1, 2, 4].indexOf(P.deckLayout) >= 0 ? P.deckLayout : 2, panes = (P.deckGrown === 2 || P.deckGrown === 4) && P.deckGrown > chosen ? P.deckGrown : chosen;
-    var terms = {}, sessions = [], hidden = [], order = [], arranged = [], hi = 0, note = "", noteTimer = null, menu = null, renaming = null, draft = "", drag = null, swallow = false, lastSig = "";
-    var split2 = typeof P.deckSplit2 === "number" ? P.deckSplit2 : 0.5, split4 = Array.isArray(P.deckSplit4) ? P.deckSplit4.slice(0, 2) : [0.5, 0.5], splitters = {};
-    var top = el("div", { "class": "dtop" }), panesEl = el("div", { "class": "panes l" + panes, id: panesId });
-    var waitHost = el("span", { style: "display: contents" }), noteEl = el("span", { "class": "note", role: "status" }), keysEl = el("span", { "class": "keys" });
-    var findIn = el("input", { "class": "ls-text", type: "search", placeholder: "Find in this terminal", "aria-label": "Find in the focused terminal: Enter for the next, Shift Enter for the one before", autocomplete: "off" }), findOut = el("span", { role: "status" });
-    var bar2 = el("div", { "class": "dtop" }, [waitHost, el("div", { "class": "find" }, [findIn, findOut]), noteEl, el("span", { "class": "grow", style: "flex: 1 1 auto" }), keysEl]);
-    var root = el("section", { "class": "ls-deck", "aria-label": "Terminals" }, [top, bar2, panesEl]);
-    function changes() { return !sessWatching(); }
-    function narrow() { return !!(window.matchMedia && window.matchMedia("(max-width: 899px)").matches); }
-    function read() { var a = tfArrange(deckSessions(), tfTabs()); sessions = a.shown; hidden = a.hidden; order = sessions.map(function (s) { return s.id; }); }
-    function byId(id) { return sessions.filter(function (s) { return s.id === id; })[0] || hidden.filter(function (s) { return s.id === id; })[0]; }
-    function titleOf(id) { var s = byId(id); return s ? s.title : id; }
-    function on() { return arranged[hi] || order[0] || null; }
-    function shown() { var c = on(); return narrow() ? (c ? [c] : []) : arranged.filter(Boolean); }
-    function split() { return !narrow() && panes > 1 && shown().length > 1; }
-    function keep() { P.deckSlots = arranged; P.deckGrown = panes > chosen ? panes : 0; savePrefs(); }
-    /* Puts a session in a pane if it is not in one, and highlights it; spare tabs fill only the panes of the layout chosen, and panes a launch added are given back as their sessions go. */
-    function arrange(pick, from, tabs) {
-      tabs = tabs || order;
-      var placed = tfPlace(from || arranged, { order: tabs, layout: panes, pick: pick, at: hi, fill: chosen }), fitted = tfShrink(placed, { layout: panes, chosen: chosen, order: tabs });
-      panes = fitted.layout; arranged = fitted.slots;
-      var at = pick ? arranged.indexOf(pick) : -1; hi = at >= 0 ? at : Math.min(hi, panes - 1);
-      keep();
-    }
-    function say(t) { note = t; noteEl.textContent = t; if (noteTimer) { clearTimeout(noteTimer); } noteTimer = setTimeout(function () { note = ""; noteEl.textContent = ""; }, 10000); }
-    function focusSoon(id) { setTimeout(function () { if (terms[id]) { terms[id].focus(); } }, 30); }
-    function focusTab(id) { setTimeout(function () { var b = top.querySelector('[role="tab"][data-id="' + id + '"]'); if (b) { b.focus(); } }, 0); }
-    /* A session just started: a pane of its own, the keyboard, and a word on where it went. */
-    function placeLaunch(id) {
-      var p = tfLaunchSlots(arranged, { layout: panes, pick: id, ended: sessions.filter(function (s) { return s.ended; }).map(function (s) { return s.id; }), gone: arranged.filter(function (x) { return x && order.indexOf(x) < 0; }),
-        waiting: sessions.filter(function (s) { return S.signalOf(s.word).family === "needs"; }).map(function (s) { return s.id; }), active: ST.active || {} });
-      panes = p.layout; arranged = p.slots; hi = p.at; P.deckCurrent = id; keep();
-      var where = "Opened in pane " + (p.at + 1);
-      say(p.grew ? where + ", added for it." : p.replaced ? where + ", in place of ‘" + titleOf(p.replaced) + "’, which " + (p.because === "ended" ? "had ended" : "had been idle longest") + ". It is still a tab." : where + ".");
-      focusSoon(id);
-    }
-    function pick(id, focus) {
-      arrange(id); P.deckCurrent = id; savePrefs();
-      if (ST.unread && ST.unread[id]) { ST.unread[id] = false; read(); }
-      paint();
-      if (focus !== false) { focusSoon(id); }
-    }
-    function setLayout(n) {
-      chosen = n; P.deckLayout = n;
-      var apply = function () { panes = n; arrange(on()); paint(); };
-      if (S.morph) { S.morph(apply, { noVT: true, target: panesEl }); } else { apply(); }
-    }
-    function move(id, by) { var next = tfNudge(order, id, by); if (next !== order) { tfKeepTabs(tfWithOrder(tfTabs(), next)); read(); paintTop(); focusTab(id); } }
-    /* A tab hidden or cleared gives up its pane, which the next tab along fills; one that ends stays where it was. */
-    function release(id, how) {
-      var t = tfTabs();
-      if (how === "hide") { if (t.hidden.indexOf(id) < 0) { t.hidden.push(id); } said("Hidden from this browser's strip: " + titleOf(id), "this browser only · it still runs, on the Sessions page"); }
-      else { if (t.cleared.indexOf(id) < 0) { t.cleared.push(id); } t.hidden = t.hidden.filter(function (x) { return x !== id; }); }
-      tfKeepTabs(t);
-      var freed = arranged.map(function (x) { return x === id ? null : x; });
-      read(); arrange(freed[hi] || null, freed, order.filter(function (x) { return x !== id; })); paint();
-    }
-    function rename(id, name) {
-      var l = line(id); if (!l) { return; }
-      l.launchTitle = l.launchTitle || l.title; l.title = name === null ? l.launchTitle : name;
-      said(name === null ? "Back to “" + l.launchTitle + "”" : "Renamed to “" + name + "”", "$ loadout session rename " + l.hid + " " + (name === null ? "--reset" : sessQuoted(name)));
-      PV++; render();
-    }
-    function askEnd(id) {
-      var s = byId(id); if (!s) { return; }
-      S.Dialog({ danger: true, title: "End " + s.title + "?", why: "This stops its agent" + (s.project ? " in " + s.project : "") + ", and cannot be undone. The session stays listed, ended, so you can still see how it ended.",
-        actions: [{ label: "End session", kind: "danger", solid: true, cmd: "$ loadout session end " + s.hid + " --yes", onPress: function () { var l = line(id); if (l) { sessEnd(l); } said("Ended " + s.title, "$ loadout session end " + s.hid + " --yes"); render(); } }] }).open();
-    }
-    function closeTab(id) {
-      var s = byId(id); if (!s) { return; }
-      if (s.ended) { release(id, "clear"); return; }
-      if (!changes()) { release(id, "hide"); return; }
-      S.Dialog({ title: "Close " + s.title + "?", why: "It is still running. Hide takes the tab off this browser's strip and leaves the session running, still on the Sessions page. End session stops its agent.",
-        actions: [{ label: "Hide", solid: true, cmd: "this browser only · changes nothing anywhere else", onPress: function () { release(id, "hide"); } }, { label: "End session…", kind: "danger", cmd: "asks once more", onPress: function () { setTimeout(function () { askEnd(id); }, 0); } }] }).open();
-    }
-    function startRename(id) { closeMenu(false); renaming = id; draft = titleOf(id); paintTop(); var f = top.querySelector("input.rename"); if (f) { f.focus(); f.select(); } }
-    function finishRename(save) { var id = renaming; if (id === null) { return; } renaming = null; var s = byId(id), name = draft.trim(); if (save && s && name !== s.title) { rename(id, name === "" ? null : name); } else { paintTop(); } focusTab(id); }
-    /* ---- the tab menu: right-click, the context-menu key or Shift+F10 ---- */
-    function items(forId) {
-      if (forId === null) { return hidden.map(function (s) { return { label: "Show " + s.title, run: function () { var t = tfTabs(); t.hidden = t.hidden.filter(function (x) { return x !== s.id; }); tfKeepTabs(t); read(); pick(s.id, false); focusTab(s.id); } }; }); }
-      var s = byId(forId); if (!s) { return []; }
-      var list = [], at = order.indexOf(s.id);
-      if (changes()) { list.push({ label: "Rename", hint: "F2", run: function () { startRename(s.id); } }); if (s.launchTitle && s.title !== s.launchTitle) { list.push({ label: "Back to “" + s.launchTitle + "”", run: function () { rename(s.id, null); focusTab(s.id); } }); } }
-      if (at > 0) { list.push({ label: "Move left", hint: "Ctrl Shift ←", run: function () { move(s.id, -1); } }); }
-      if (at < order.length - 1) { list.push({ label: "Move right", hint: "Ctrl Shift →", run: function () { move(s.id, 1); } }); }
-      if (s.ended) { list.push({ label: "Clear", hint: "Delete", run: function () { release(s.id, "clear"); } }); }
-      else { list.push({ label: "Hide", run: function () { release(s.id, "hide"); } }); if (changes()) { list.push({ label: "End session…", danger: true, run: function () { askEnd(s.id); } }); } }
-      return list;
-    }
-    function away(e) { if (menu && !menu.el.contains(e.target)) { closeMenu(false); } }
-    function closeMenu(back) {
-      if (!menu) { return; }
-      var was = menu; menu = null; was.el.remove(); document.removeEventListener("pointerdown", away, true);
-      if (back) { if (was.for) { focusTab(was.for); } else { var hb = top.querySelector(".hid"); if (hb) { hb.focus(); } } }
-    }
-    function openMenu(forId, from, at) {
-      closeMenu(false);
-      var its = items(forId); if (!its.length) { return; }
-      var box = from && from.getBoundingClientRect(), x = at ? at.x : box ? box.left : 0, y = at ? at.y : box ? box.bottom : 0;
-      var m = el("div", { "class": "ls-tabmenu", role: "menu", tabindex: "-1", "aria-label": forId === null ? "Hidden tabs" : "Tab " + titleOf(forId) });
-      its.forEach(function (it) { m.appendChild(el("button", { type: "button", role: "menuitem", tabindex: "-1", "class": it.danger ? "danger" : null, onclick: function () { closeMenu(false); it.run(); } }, [el("span", { text: it.label }), it.hint ? el("kbd", { text: it.hint }) : null])); });
-      m.style.left = Math.round(Math.max(8, Math.min(x, window.innerWidth - 228))) + "px"; m.style.top = Math.round(Math.min(y, window.innerHeight - 40 * its.length - 20)) + "px";
-      m.addEventListener("keydown", function (e) {
-        var all = Array.prototype.slice.call(m.querySelectorAll('[role="menuitem"]')), i = all.indexOf(document.activeElement), d = { ArrowDown: 1, ArrowUp: -1 }[e.key];
-        if (d) { e.preventDefault(); all[(i + d + all.length) % all.length].focus(); }
-        else if (e.key === "Home" || e.key === "End") { e.preventDefault(); all[e.key === "Home" ? 0 : all.length - 1].focus(); }
-        else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeMenu(true); }
-        else if (e.key === "Tab") { closeMenu(false); }
-      });
-      document.body.appendChild(m);
-      menu = { for: forId, el: m };
-      document.addEventListener("pointerdown", away, true);
-      setTimeout(function () { var f = m.querySelector('[role="menuitem"]'); if (f) { f.focus(); } }, 0);
-    }
-    /* ---- dragging a tab along the strip ---- */
-    function marks() {
-      Array.prototype.forEach.call(top.querySelectorAll(".tab"), function (t, i, all) {
-        var id = t.getAttribute("data-id"), moving = drag && drag.moved;
-        t.classList.toggle("dragging", !!(moving && drag.id === id));
-        t.classList.toggle("before", !!(moving && drag.before === id));
-        t.classList.toggle("after", !!(moving && drag.before === null && i === all.length - 1));
-      });
-    }
-    function over(e) {
-      if (!drag) { return; }
-      if (!drag.moved && Math.abs(e.clientX - drag.x) < 6) { return; }
-      if (!drag.moved) { drag.moved = true; if (e.currentTarget.setPointerCapture) { try { e.currentTarget.setPointerCapture(e.pointerId); } catch (x) { /* already released */ } } }
-      var mine = drag.id, past = order.filter(function (id) { var b = top.querySelector('.tab[data-id="' + id + '"]'), r = b && b.getBoundingClientRect(); return id !== mine && r && e.clientX < r.left + r.width / 2; })[0];
-      drag.before = past === undefined ? null : past; marks();
-    }
-    function up() {
-      var was = drag; drag = null;
-      if (was && was.moved) { swallow = true; setTimeout(function () { swallow = false; }, 0); if (was.before !== undefined) { var next = tfPlaceTab(order, was.id, was.before); if (next.join() !== order.join()) { tfKeepTabs(tfWithOrder(tfTabs(), next)); read(); paintTop(); return; } } }
-      marks();
-    }
-    function tabKeys(e, i) {
-      var s = sessions[i], n = sessions.length;
-      if (e.ctrlKey && e.shiftKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) { e.preventDefault(); move(s.id, e.key === "ArrowRight" ? 1 : -1); return; }
-      if (e.key === "F2" && changes()) { e.preventDefault(); startRename(s.id); return; }
-      if (e.key === "Delete") { e.preventDefault(); closeTab(s.id); return; }
-      if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) { e.preventDefault(); openMenu(s.id, e.currentTarget); return; }
-      if (e.ctrlKey || e.altKey || e.metaKey) { return; }
-      var to = e.key === "ArrowRight" ? (i + 1) % n : e.key === "ArrowLeft" ? (i - 1 + n) % n : e.key === "Home" ? 0 : e.key === "End" ? n - 1 : null;
-      if (to === null) { return; }
-      e.preventDefault(); pick(sessions[to].id, false); focusTab(sessions[to].id);
-    }
-    function paintTop() {
-      var a = document.activeElement, k = a && top.contains(a) ? (a.getAttribute("data-k") || (a.classList.contains("rename") ? "rename" : null)) : null, caret = a && a.selectionStart;
-      top.textContent = "";
-      var list = el("div", { role: "tablist", "aria-label": "Sessions" }), cur = on();
-      list.addEventListener("pointermove", over); list.addEventListener("pointerup", up); list.addEventListener("pointercancel", up);
-      sessions.forEach(function (s, i) {
-        var tab = el("div", { "class": "tab", "data-id": s.id });
-        if (renaming === s.id) {
-          var inp = el("input", { "class": "rename", type: "text", maxlength: "80", value: draft, "aria-label": "New name for " + s.title, "aria-describedby": hintId });
-          inp.addEventListener("input", function () { draft = inp.value; });
-          inp.addEventListener("keydown", function (e) { e.stopPropagation(); if (e.key === "Enter") { e.preventDefault(); finishRename(true); } else if (e.key === "Escape") { e.preventDefault(); finishRename(false); } });
-          inp.addEventListener("blur", function () { setTimeout(function () { if (renaming === s.id && document.activeElement !== top.querySelector("input.rename")) { finishRename(true); } }, 0); });
-          tab.appendChild(inp);
-          tab.appendChild(el("span", { "class": "hint", id: hintId, text: "Enter saves, Escape cancels, empty goes back to “" + (s.launchTitle || s.title) + "”." + (s.kind === "launch" ? (s.namesAgent ? " Its agent is given the name too." : " Only Loadout shows this name: its agent has not said it can take one.") : "") }));
-        } else {
-          var fam = S.signalOf(s.word).family, ctx = s.context !== null && s.context !== undefined ? S.ContextMark({ percent: s.context }).el : null;
-          var b = el("button", { type: "button", role: "tab", "class": fam === "needs" ? "needs" : null, "aria-selected": s.id === cur ? "true" : "false", tabindex: s.id === cur ? "0" : "-1", "aria-controls": panesId, "aria-keyshortcuts": i < 9 ? "Control+Alt+" + (i + 1) : null, "aria-haspopup": "menu", "data-id": s.id, "data-k": "tab-" + s.id },
-            [S.Signal(s.word), el("span", { "class": "t", text: s.title }), el("span", { "class": "x", text: [s.where, s.agent].filter(Boolean).join(" · ") }), ctx, i < 9 ? el("span", { "class": "k", "aria-hidden": "true", text: "⌃⌥" + (i + 1) }) : null,
-              s.unread ? el("span", { "class": "new", title: "New output since you looked" }, [el("span", { "class": "ls-vh", text: "new output" })]) : null]);
-          b.addEventListener("click", function () { if (!swallow) { pick(s.id, false); } });
-          b.addEventListener("dblclick", function () { pick(s.id); setLayout(1); });
-          b.addEventListener("keydown", function (e) { tabKeys(e, i); });
-          b.addEventListener("pointerdown", function (e) { if (e.button === 0 && !renaming) { drag = { id: s.id, x: e.clientX, moved: false }; } });
-          b.addEventListener("contextmenu", function (e) { e.preventDefault(); openMenu(s.id, b, { x: e.clientX, y: e.clientY }); });
-          tab.appendChild(b);
-          tab.appendChild(el("button", { type: "button", "class": "close", tabindex: "-1", "aria-label": "Close " + s.title, title: s.ended ? "Clear this tab" : "Hide this tab, or end the session", text: "×", onclick: function () { closeTab(s.id); } }));
-        }
-        list.appendChild(tab);
-      });
-      var strip = el("div", { "class": "ls-stabs" }, [list]);
-      if (hidden.length) { var hb = el("button", { type: "button", "class": "hid", "aria-haspopup": "menu", "aria-expanded": menu && menu.for === null ? "true" : "false", "data-k": "tabs-hidden", text: hidden.length + " hidden" }); hb.addEventListener("click", function () { openMenu(null, hb); }); strip.appendChild(hb); }
-      if (o.onNew) { strip.appendChild(el("button", { type: "button", "class": "add", "aria-label": "New session", title: "New session", "data-k": "tabs-new", text: "+", onclick: o.onNew })); }
-      top.appendChild(strip);
-      top.appendChild(el("div", { "class": "lay", role: "radiogroup", "aria-label": "Panes" }, TF_LAYOUTS.map(function (L) { return el("button", { type: "button", role: "radio", "aria-checked": L[0] === panes ? "true" : "false", "aria-label": L[1], title: L[1], "data-k": "lay-" + L[0], onclick: function () { setLayout(L[0]); } }, [svgIcon(L[2])]); })));
-      if (k) { var n = k === "rename" ? top.querySelector("input.rename") : top.querySelector('[data-k="' + k + '"]'); if (n) { n.focus({ preventScroll: true }); if (k === "rename" && typeof caret === "number") { try { n.setSelectionRange(caret, caret); } catch (x) { /* not text */ } } } }
-    }
-    function paintBar2() {
-      waitHost.textContent = "";
-      var waiting = sessions.filter(function (s) { return S.signalOf(s.word).family === "needs"; });
-      if (waiting.length) { waitHost.appendChild(halo({ label: "Go to the one waiting", kind: "needs", size: "small", onPress: function () { pick(waiting[0].id); } }, "deck-waiting")); }
-      keysEl.textContent = "Ctrl Alt 1–9 picks · Ctrl Alt arrows move · Ctrl ] leaves a terminal · F2 renames a tab · Ctrl Shift arrows move it" + (split() ? " · drag a divider, or arrow it; Enter puts it back" : "");
-    }
-    function limits() { var w = panesEl.clientWidth || 1000, h = panesEl.clientHeight || 600; return { col: Math.min(0.5, 336 / Math.max(1, w - 10)), row: Math.min(0.5, 202 / Math.max(1, h - 10)) }; }
-    function tracks() {
-      var four = panes === 4, lim = limits(), col = S.Splitter.clamp(four ? split4[0] : split2, lim.col, 1 - lim.col), row = S.Splitter.clamp(split4[1], lim.row, 1 - lim.row);
-      panesEl.style.gridTemplateColumns = split() ? S.Splitter.tracks(col) : "";
-      panesEl.style.gridTemplateRows = split() && four ? S.Splitter.tracks(row) : "";
-      return { col: col, row: row, lim: lim };
-    }
-    function setColumn(v) { if (panes === 4) { split4 = [v, split4[1]]; P.deckSplit4 = split4; if (splitters.cross) { splitters.cross.set({ column: v }); } } else { split2 = v; P.deckSplit2 = v; } savePrefs(); tracks(); }
-    function setRow(v) { split4 = [split4[0], v]; P.deckSplit4 = split4; savePrefs(); if (splitters.cross) { splitters.cross.set({ row: v }); } tracks(); }
-    function setBoth(c, r) { split4 = [c, r]; P.deckSplit4 = split4; savePrefs(); if (splitters.cols) { splitters.cols.set({ value: c }); } if (splitters.rows) { splitters.rows.set({ value: r }); } tracks(); }
-    function paintPanes() {
-      var ids = shown(), cur = on(), sig = ids.join("|") + "#" + panes + "#" + narrow();
-      if (sig === lastSig) { Array.prototype.forEach.call(panesEl.querySelectorAll(".pane"), function (p) { p.classList.toggle("on", p.getAttribute("data-id") === cur); }); return; }
-      lastSig = sig; splitters = {};
-      panesEl.className = "panes l" + (narrow() ? 1 : panes); panesEl.textContent = "";
-      ids.forEach(function (id) {
-        var pane = el("div", { "class": "pane" + (id === cur ? " on" : ""), "data-id": id });
-        if (order.indexOf(id) < 0) { pane.appendChild(el("p", { "class": "gone", role: "note", text: "This session is no longer in Studio. The pane keeps it until you pick another tab." })); }
-        if (!terms[id] && line(id)) { terms[id] = o.terminal(id); }
-        if (terms[id]) { pane.appendChild(terms[id].el); }
-        pane.addEventListener("focusin", function () { if (on() !== id) { hi = arranged.indexOf(id); P.deckCurrent = id; keep(); paintTop(); paintPanes(); } });
-        panesEl.appendChild(pane);
-      });
-      if (!ids.length) { panesEl.appendChild(el("p", { "class": "calm", text: "No sessions are running. Start one with the + beside the tabs, or N." })); }
-      var t = tracks();
-      if (split()) {
-        splitters.cols = S.Splitter({ value: t.col, min: t.lim.col, max: 1 - t.lim.col, reset: 0.5, label: "Width of the panes", controls: panesId, "class": "cols", onchange: setColumn });
-        panesEl.appendChild(splitters.cols.el);
-        if (panes === 4) {
-          splitters.rows = S.Splitter({ value: t.row, min: t.lim.row, max: 1 - t.lim.row, reset: 0.5, orientation: "horizontal", label: "Height of the panes", controls: panesId, "class": "rows", onchange: setRow });
-          splitters.cross = S.SplitCross({ column: t.col, row: t.row, colMin: t.lim.col, colMax: 1 - t.lim.col, rowMin: t.lim.row, rowMax: 1 - t.lim.row, reset: [0.5, 0.5], onchange: setBoth });
-          panesEl.appendChild(splitters.rows.el); panesEl.appendChild(splitters.cross.el);
-        }
-        /* The floors depend on the room the panes have, known once they are on the page. */
-        setTimeout(function () { if (!splitters.cols) { return; } var lim = limits(); splitters.cols.set({ min: lim.col, max: 1 - lim.col }); if (splitters.rows) { splitters.rows.set({ min: lim.row, max: 1 - lim.row }); } if (splitters.cross) { splitters.cross.set({ colMin: lim.col, colMax: 1 - lim.col, rowMin: lim.row, rowMax: 1 - lim.row }); } tracks(); }, 0);
-      }
-    }
-    function paint() { paintTop(); paintBar2(); paintPanes(); }
-    /* Ctrl+Alt+1–9 picks a session by its tab; Ctrl+Alt+arrows move between the panes shown (main's deckKey). */
-    root.addEventListener("keydown", function (e) {
-      if (!(e.ctrlKey && e.altKey)) { return; }
-      var m = /^Digit([1-9])$/.exec(e.code || ""), n = m ? +m[1] : parseInt(e.key, 10);
-      if (n >= 1 && n <= 9 && order[n - 1]) { e.preventDefault(); e.stopPropagation(); pick(order[n - 1]); return; }
-      var d = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
-      if (d) { var s = shown(), i = s.indexOf(on()); if (s.length) { e.preventDefault(); e.stopPropagation(); pick(s[(i + d + s.length) % s.length]); } }
-    }, true);
-    /* Find searches the terminal that has the keyboard: Enter for the next match, Shift Enter for the one before. */
-    var hits = [], at = -1;
-    function clearMarks(scr) { Array.prototype.forEach.call(scr.querySelectorAll("mark"), function (mk) { mk.replaceWith(document.createTextNode(mk.textContent)); }); scr.normalize(); }
-    function find(back) {
-      var q = findIn.value.trim().toLowerCase(), pane = panesEl.querySelector('.pane[data-id="' + on() + '"]'), scr = pane && pane.querySelector(".screen");
-      if (!scr) { return; }
-      clearMarks(scr); hits = [];
-      if (!q) { findOut.textContent = ""; return; }
-      var walker = document.createTreeWalker(scr, NodeFilter.SHOW_TEXT), nodes = [];
-      while (walker.nextNode()) { nodes.push(walker.currentNode); }
-      nodes.forEach(function (t) { var i = t.nodeValue.toLowerCase().indexOf(q); if (i < 0) { return; } var r = t.splitText(i); r.splitText(q.length); var mk = el("mark", { text: r.nodeValue }); r.replaceWith(mk); hits.push(mk); });
-      at = hits.length ? (back ? (at - 1 + hits.length) % hits.length : (at + 1) % hits.length) : -1;
-      findOut.textContent = hits.length ? "found" : "no match";
-      if (at >= 0 && hits[at].scrollIntoView) { hits[at].scrollIntoView({ block: "center" }); }
-    }
-    findIn.addEventListener("input", function () { at = -1; find(false); });
-    findIn.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); find(e.shiftKey); } else if (e.key === "Escape") { findIn.value = ""; find(false); } });
-    read();
-    arranged = tfPad((P.deckSlots || []).filter(function (id) { return id && order.indexOf(id) >= 0; }), panes);
-    hi = Math.max(0, arranged.indexOf(o.current));
-    if (ST.deckLaunch && order.indexOf(ST.deckLaunch) >= 0) { var first = ST.deckLaunch; ST.deckLaunch = null; arrange(null); placeLaunch(first); } else { arrange(o.current && order.indexOf(o.current) >= 0 ? o.current : null); }
-    paint();
-    return { el: root, pick: pick, setLayout: setLayout, terminal: function (id) { return terms[id]; },
-      /* The daemon's list again: new tabs, words and marks; a session just started takes a pane of its own. */
-      update: function () {
-        if (!root.isConnected && menu) { closeMenu(false); }
-        read();
-        if (ST.deckLaunch && order.indexOf(ST.deckLaunch) >= 0) { var id = ST.deckLaunch; ST.deckLaunch = null; placeLaunch(id); } else { arrange(on()); }
-        paint();
-      },
-      get current() { return on(); }, get layout() { return panes; } };
-  }
   /* Beside the terminals: one of the six pages, or a run or a team's page (main's lib/reveal.ts), so a launch from it leaves it open. */
   function tfBesideRoute(r) { return P.mode === "terminals" && (r.indexOf("run-") === 0 || r.indexOf("team-") === 0); }
   function tfBesideName(r) { return r.indexOf("run-") === 0 ? "The run" : r.indexOf("team-") === 0 ? "A team" : ""; }
@@ -2742,13 +2440,36 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     ST.unread = ST.unread || {};
     if (focusId) { var t = tfTabs(); if (t.hidden.indexOf(focusId) >= 0) { t.hidden = t.hidden.filter(function (x) { return x !== focusId; }); tfKeepTabs(t); } }
     var wrap = el("div", { "class": "deckwrap" }, [el("h1", { "class": "ls-vh", text: "Terminals" })]);
-    var d = tfDeck({ current: focusId || P.deckCurrent || null, terminal: makeTerm, onNew: sessWatching() ? null : function () { openLaunch(); } });
+    /* The design system's TermDeck, as main's TerminalFocus drives it: the page keeps the layout, the panes a launch grew, which session each pane shows, the dividers, and the tabs' order and what is hidden or cleared here. */
+    var a = tfArrange(deckSessions(), tfTabs()), layout = [1, 2, 4].indexOf(P.deckLayout) >= 0 ? P.deckLayout : 2, ids = a.shown.map(function (s) { return s.id; });
+    var d = S.TermDeck({ sessions: a.shown, hidden: a.hidden, changes: !sessWatching(), current: focusId || P.deckCurrent || null, layout: layout, grown: P.deckGrown === 2 || P.deckGrown === 4 ? P.deckGrown : null,
+      slots: (P.deckSlots || []).map(function (id) { return id && ids.indexOf(id) >= 0 ? id : null; }), splits: { 2: typeof P.deckSplit2 === "number" ? [P.deckSplit2] : null, 4: Array.isArray(P.deckSplit4) ? P.deckSplit4 : null },
+      launch: ST.deckLaunch || null, active: ST.active || {}, terminal: makeTerm, onNew: sessWatching() ? null : function () { openLaunch(); },
+      onPick: function (id) { P.deckCurrent = id; savePrefs(); if (ST.unread && ST.unread[id]) { ST.unread[id] = false; setTimeout(function () { if (DECK) { tfUpdate(); } }, 0); } },
+      onLayout: function (n) { P.deckLayout = n; P.deckGrown = 0; savePrefs(); },
+      onGrown: function (n) { P.deckGrown = n; savePrefs(); },
+      onSlots: function (slots) { P.deckSlots = slots; savePrefs(); },
+      onSplit: function (n, f) { if (n === 2) { P.deckSplit2 = f[0]; } else { P.deckSplit4 = f; } savePrefs(); },
+      onLaunched: function () { ST.deckLaunch = null; },
+      onMove: function (order) { tfKeepTabs(tfWithOrder(tfTabs(), order)); },
+      onRename: function (id, name) {
+        var l = line(id); if (!l) { return; }
+        l.launchTitle = l.launchTitle || l.title; l.title = name === null ? l.launchTitle : name;
+        said(name === null ? "Back to “" + l.launchTitle + "”" : "Renamed to “" + name + "”", "$ loadout session rename " + l.hid + " " + (name === null ? "--reset" : sessQuoted(name)));
+        PV++; render();
+      },
+      onHide: function (id) { var t = tfTabs(), l = line(id); if (t.hidden.indexOf(id) < 0) { t.hidden.push(id); } tfKeepTabs(t); said("Hidden from this browser's strip: " + (l ? l.title : id), "this browser only · it still runs, on the Sessions page"); },
+      onUnhide: function (id) { var t = tfTabs(); t.hidden = t.hidden.filter(function (x) { return x !== id; }); tfKeepTabs(t); },
+      onClear: function (id) { var t = tfTabs(); if (t.cleared.indexOf(id) < 0) { t.cleared.push(id); } t.hidden = t.hidden.filter(function (x) { return x !== id; }); tfKeepTabs(t); },
+      onEnd: function (id) { var l = line(id); if (!l) { return; } sessEnd(l); said("Ended " + l.title, "$ loadout session end " + l.hid + " --yes"); render(); } });
     wrap.appendChild(d.el); main.appendChild(wrap);
     DECK = { route: route(), deck: d, states: {} };
     ST.lines.filter(function (l) { return l.kind === "session"; }).forEach(function (l) { DECK.states[l.id] = termState(l); });
   }
+  /* The daemon's list again: new tabs, words and marks; a session just started takes a pane of its own. */
+  function tfUpdate() { var a = tfArrange(deckSessions(), tfTabs()); DECK.deck.update({ sessions: a.shown, hidden: a.hidden, changes: !sessWatching(), active: ST.active || {}, launch: ST.deckLaunch || null }); }
   function refreshDeck() {
-    DECK.deck.update();
+    tfUpdate();
     ST.lines.filter(function (l) { return l.kind === "session"; }).forEach(function (l) { var st = termState(l), t = DECK.deck.terminal(l.id); if (t && DECK.states[l.id] !== st) { t.setState(st, { code: l.exitCode }); } DECK.states[l.id] = st; });
   }
 
@@ -5615,6 +5336,7 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
   function render() {
     /* Signed out, the browser sees only how to sign in; it is drawn once, so the scripted agents' ticks leave it be. */
     if (P.signedOut) { if (!document.body.classList.contains("sh-out") || !document.getElementById("main").childNodes.length) { renderSignedOut(); } return; }
+    homeNamed();
     if (typeof refreshAlert === "function") { refreshAlert(); }
     toasts.place(shToastPlace(route()));
     var rr = route(), t1 = line("t1"), i1 = line("i1"), sig = rr + "|" + TV + "|" + PV + "|" + (t1 ? [t1.waiting, t1.stage, t1.held].join(",") : "") + "|" + (i1 && rr.indexOf("ideas") === 0 ? [i1.stage, i1.failed].join(",") : "");
