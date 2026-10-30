@@ -540,7 +540,7 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
   var PREF_KEY = "studio-prototype-appearance";
   function loadPrefs() { try { return JSON.parse(localStorage.getItem(PREF_KEY) || "null") || {}; } catch (e) { return {}; } }
   function savePrefs() { try { localStorage.setItem(PREF_KEY, JSON.stringify(P)); } catch (e) { /* storage blocked: the choice lasts this visit */ } }
-  var P = Object.assign({ theme: null, accent: "cyan", density: "comfortable", motion: "full", halo: "orbit", commands: "hover", keys: true, mode: "default", deckLayout: 2 }, loadPrefs());
+  var P = Object.assign({ theme: null, accent: "cyan", density: "comfortable", motion: "full", halo: "orbit", commands: "hover", keys: true, mode: "default", deckLayout: 2, layouts: {} }, loadPrefs());
   var hostTheme = root.getAttribute("data-theme");
   function applyPrefs() {
     var t = P.theme || (hostTheme === "light" || hostTheme === "dark" ? hostTheme : S.preferredTheme());
@@ -702,62 +702,31 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
   function svgIcon(d) { var ns = "http://www.w3.org/2000/svg", v = document.createElementNS(ns, "svg"), p = document.createElementNS(ns, "path"); v.setAttribute("viewBox", "0 0 20 20"); v.setAttribute("aria-hidden", "true"); p.setAttribute("d", d); p.setAttribute("fill", "none"); p.setAttribute("stroke", "currentColor"); p.setAttribute("stroke-width", "1.6"); v.appendChild(p); return v; }
 
   /* ---------- Home ---------- */
-  /* Home's two views are panels in an order, some hidden, edited in place and kept in Loadout's config as studio-layout-lens and studio-layout-map (main's lib/layout.ts and pages/Panel.svelte). */
+  /* Home's two views are sections in an order, some hidden, edited in place with shLayout (S.LayoutEdit) and kept in studio-layouts as home/lens
+     and home/map. The default orders are WORKFLOW.md's for Home; the older studio-layout-lens and studio-layout-map (P.homeLayout here) are read
+     until studio-layouts is written. */
   var HOME_PANELS = { lens: ["needs", "focus", "all", "start", "signal"], map: ["status", "map", "strip"] };
   var HOME_NAMES = { needs: "Needs you", focus: "Focus", all: "Everything", start: "Start a session", signal: "Signal", status: "Network status", map: "The map", strip: "The picked line" };
-  function homeKey(view) { return view === "lens" ? "studio-layout-lens" : "studio-layout-map"; }
-  /* The layout kept for a view, mended: unknown panels dropped, missing ones added at the end. */
-  function homeLayout(view) {
-    var kept = (P.homeLayout || {})[view] || {}, panels = HOME_PANELS[view];
-    function known(list) { return (Array.isArray(list) ? list : []).filter(function (one, i, all) { return panels.indexOf(one) >= 0 && all.indexOf(one) === i; }); }
-    var order = known(kept.order); panels.forEach(function (one) { if (order.indexOf(one) < 0) { order.push(one); } });
-    return { order: order, hidden: known(kept.hidden) };
+  function homeLegacy(view) { var kept = (P.homeLayout || {})[view]; return kept ? JSON.stringify(kept) : ""; }
+  /* The view's Edit layout: its button where the head keeps a place for it, its bar right under the head. */
+  function homeLayoutEdit(main, view, o) {
+    var le = shLayout("home", view, HOME_PANELS[view].map(function (id) { return { id: id, name: HOME_NAMES[id] }; }), Object.assign({ legacy: homeLegacy(view), label: view === "lens" ? "Lens" : "Map", editing: !!ST.editing,
+      onedit: function (on) { ST.editing = on; render(); } }, o));
+    var head = main.querySelector(".head"), slot = head ? head.querySelector(".homeedit") : null;
+    if (slot) { slot.appendChild(le.button); }
+    if (head) { head.parentNode.insertBefore(le.bar, head.nextSibling); }
+    return le;
   }
-  /* What Loadout keeps: nothing for the default layout, so a reset unsets the key. */
-  function homeSaved(view, L) { var plain = !L.hidden.length && L.order.every(function (one, i) { return one === HOME_PANELS[view][i]; }); return plain ? "" : JSON.stringify({ order: L.order, hidden: L.hidden }); }
-  function homeSetting(view, L) { var v = homeSaved(view, L); return "$ loadout config set " + homeKey(view) + " " + (v ? "'" + v + "'" : "\"\""); }
-  function homeKeep(view, L, words) { P.homeLayout = Object.assign({}, P.homeLayout || {}); P.homeLayout[view] = { order: L.order, hidden: L.hidden }; savePrefs(); if (words) { said(words, homeSetting(view, L)); } render(); }
-  function homeMove(L, panel, by) { var order = L.order.slice(), from = order.indexOf(panel), to = Math.max(0, Math.min(order.length - 1, from + by)); if (from < 0 || from === to) { return L; } order.splice(from, 1); order.splice(to, 0, panel); return { order: order, hidden: L.hidden }; }
-  function homePlace(L, panel, before) { if (panel === before) { return L; } var order = L.order.filter(function (one) { return one !== panel; }); order.splice(Math.max(0, order.indexOf(before)), 0, panel); return { order: order, hidden: L.hidden }; }
   function homeHead(main) {
-    var w = ST.lines.filter(function (l) { return l.waiting; }).length, view = ST.view, key = homeKey(view);
+    var w = ST.lines.filter(function (l) { return l.waiting; }).length;
     var views = el("div", { "class": "views", role: "group", "aria-label": "Home view" }, [["lens", "Lens"], ["map", "Map"]].map(function (v) {
       return el("button", { type: "button", "aria-pressed": ST.view === v[0] ? "true" : "false", "data-k": "view-" + v[0], text: v[1], onclick: function () { ST.view = v[0]; render(); } }); }));
     main.appendChild(el("div", { "class": "head" }, [el("div", {}, [el("h1", { text: "Home" }), el("span", { "class": "fact" + (w ? " need" : ""), text: w ? w + " waiting on you" : "all calm" })]), views, el("span", { "class": "grow" }),
       el("span", { "class": "clock", text: hhmm(ST.clock) }),
       halo({ label: "Ambient", size: "small", onPress: function () { setAmbient(true); } }, "ambient"),
-      halo({ label: ST.editing ? "Done" : "Edit layout", size: "small", disabledReason: sessWatching() ? "Studio is only watching · $ loadout config set " + key + " …" : undefined, onPress: function () { ST.editing = !ST.editing; render(); } }, "edit-layout"),
+      el("span", { "class": "homeedit" }),
       /* The prototype's own: it pauses the scripted agents. */
       halo({ label: ST.paused ? "Play" : "Pause", size: "small", onPress: function () { ST.paused = !ST.paused; render(); } }, "pause")]));
-    if (ST.editing) {
-      var L = homeLayout(view), name = view === "lens" ? "Lens" : "Map";
-      main.appendChild(el("div", { "class": "editbar", role: "region", "aria-label": "Editing the layout" }, [el("p", { text: "Editing the " + name + " layout. Drag a panel by its name, or use its arrows." })]
-        .concat(L.hidden.map(function (p) { return halo({ label: "Add back " + HOME_NAMES[p], size: "small", onPress: function () { homeKeep(view, { order: L.order, hidden: L.hidden.filter(function (x) { return x !== p; }) }, "Added back " + HOME_NAMES[p]); } }, "addback-" + p); }))
-        .concat([halo({ label: "Reset", size: "small", cmd: "$ loadout config set " + key + " \"\"", onPress: function () { P.homeLayout = Object.assign({}, P.homeLayout || {}); delete P.homeLayout[view]; savePrefs(); said("The " + name + " layout is as it started", "$ loadout config set " + key + " \"\""); render(); } }, "layout-reset"),
-          halo({ label: "Done", size: "small", solid: true, onPress: function () { ST.editing = false; render(); } }, "layout-done"),
-          el("code", { "class": "ls-cmd", text: "Kept in Loadout's config: " + homeSetting(view, L) })])));
-    }
-  }
-  /* One panel with its numbered heading; while the layout is edited, a grip to drag it by its name, arrows to nudge it, and Hide. */
-  function homePanel(view, id, L, kids, o) {
-    o = o || {};
-    var editing = !!ST.editing, pos = L.order.indexOf(id), first = pos === 0, last = pos === L.order.length - 1, name = HOME_NAMES[id];
-    var sec = el("section", { "class": "panel p-" + id + (o.wide ? " wide" : "") + (editing ? " editing" : ""), "aria-labelledby": "z-" + id });
-    if (editing) {
-      sec.addEventListener("dragover", function (e) { e.preventDefault(); sec.classList.add("over"); });
-      sec.addEventListener("dragleave", function () { sec.classList.remove("over"); });
-      sec.addEventListener("drop", function (e) { e.preventDefault(); sec.classList.remove("over"); var from = ST.dragging; ST.dragging = null; if (from) { homeKeep(view, homePlace(L, from, id)); } });
-      var grip = el("span", { "class": "grip", role: "button", tabindex: "-1", draggable: "true", "aria-label": "Drag " + name }, [el("span", { "aria-hidden": "true", text: "⠿" }), name]);
-      grip.addEventListener("dragstart", function (e) { if (e.dataTransfer) { e.dataTransfer.setData("text/plain", id); } ST.dragging = id; sec.classList.add("dragging"); });
-      grip.addEventListener("dragend", function () { ST.dragging = null; sec.classList.remove("dragging"); });
-      var nudge = function (label, glyph, by, off, k) { return el("button", { type: "button", "aria-label": "Move " + name + " " + label, disabled: off, "data-k": "hp-" + id + "-" + k, text: glyph, onclick: function () { homeKeep(view, homeMove(L, id, by)); } }); };
-      sec.appendChild(el("div", { "class": "chrome" }, [grip, el("span", { "class": "nudge", role: "group", "aria-label": "Move " + name }, [nudge("earlier", "←", -1, first, "l"), nudge("up", "↑", -1, first, "u"), nudge("down", "↓", 1, last, "d"), nudge("later", "→", 1, last, "r")]),
-        el("button", { type: "button", "class": "hidebtn", "data-k": "hp-" + id + "-hide", text: "Hide", onclick: function () { homeKeep(view, { order: L.order, hidden: L.hidden.concat([id]) }, "Hid " + name); } })]));
-    }
-    /* The Map's panels say what they are themselves, so their headings are for screen readers until the layout is edited. */
-    sec.appendChild(el("h2", { "class": o.quiet && !editing ? "ls-sr" : "ls-zone", id: "z-" + id }, [o.number ? el("span", { "class": "no", text: o.number }) : null, name + (o.count === undefined ? "" : " · " + o.count)]));
-    kids.forEach(function (k) { if (k) { sec.appendChild(k); } });
-    return sec;
   }
   function homeEmpty(main) {
     if (ST.lines.length) { return false; }
@@ -782,8 +751,7 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     homeFilterBar(main);
     /* The filters narrow the Lens as they do the Map; a line asked for by name is shown even when they hide it, with the note. */
     var F = homeFiltered(), drawn = F.drawn, wl = homeRanked(drawn), f = line(ST.focus) || (wl[0] ? line(wl[0].id) : null) || drawn[0], idx = f ? drawn.indexOf(f) : -1, n = drawn.length;
-    var L = homeLayout("lens"), editing = !!ST.editing, step = function (by) { if (n) { ST.focus = drawn[(idx + by + n) % n].id; render(); } };
-    var lens = el("div", { "class": "lens" + (editing ? " editing" : "") });
+    var editing = !!ST.editing, step = function (by) { if (n) { ST.focus = drawn[(idx + by + n) % n].id; render(); } };
     var body = {
       focus: function () {
         if (!f) { return []; }
@@ -830,11 +798,10 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
       },
       signal: function () { return [el("div", { "class": "two" }, [feedList(), el("div", { "class": "cstack" }, [homeSpendMeter(), tokenMeter()])])]; }
     };
-    L.order.forEach(function (id) {
-      if (L.hidden.indexOf(id) >= 0) { return; }
-      lens.appendChild(homePanel("lens", id, L, body[id](), { wide: id === "start" || id === "signal", number: "0" + (HOME_PANELS.lens.indexOf(id) + 1), count: id === "needs" ? wl.length : id === "all" ? n : undefined }));
-    });
-    main.appendChild(lens);
+    /* Needs you holds live work: it moves, but stays shown while something is in it. */
+    var le = homeLayoutEdit(main, "lens", { "class": "lens", numbered: true, wide: ["start", "signal"], render: function (id) { return body[id](); },
+      count: function (id) { return id === "needs" ? wl.length : id === "all" ? n : undefined; }, locked: function (id) { return id === "needs" && wl.length > 0; } });
+    main.appendChild(le.el);
   }
   function feedList() {
     var ul = el("ul", { "class": "feed", "aria-label": "What happened" });
@@ -914,10 +881,9 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
   function renderMap(main) {
     if (homeEmpty(main)) { return; }
     homeFilterBar(main);
-    var L = homeLayout("map"), F = homeFiltered(), drawn = F.drawn, off = F.hidden.length, hidden = homeHiddenOf(ST.lines, drawn);
+    var F = homeFiltered(), drawn = F.drawn, off = F.hidden.length, hidden = homeHiddenOf(ST.lines, drawn);
     var w = ST.lines.filter(function (l) { return l.waiting && l.askedAt; }), o = w.length ? w.reduce(function (a, b) { return (a.askedAt || 0) < (b.askedAt || 0) ? a : b; }) : null;
     var picked = drawn.filter(function (l) { return l.id === ST.picked; })[0] || drawn[0];
-    var wrap = el("div", { "class": "mapview" + (ST.editing ? " editing" : "") });
     var body = {
       status: function () { return [S.NetworkStatus({ lines: ST.lines, clock: hhmm(ST.clock), oldest: o ? Math.max(1, ST.clock - o.askedAt) + " min · " + o.where : "none" })]; },
       map: function () {
@@ -933,8 +899,10 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
       },
       strip: function () { return picked ? [S.LineStrip({ line: Object.assign({}, picked, { note: factsOf(picked) }), facts: homeFacts(picked), checks: picked.checks, events: picked.events, actions: actionsFor(picked) })] : []; }
     };
-    L.order.forEach(function (id) { if (L.hidden.indexOf(id) < 0) { wrap.appendChild(homePanel("map", id, L, body[id](), { wide: true, quiet: true })); } });
-    main.appendChild(wrap);
+    /* The map draws the lines in view, so it holds live work while one of them runs or waits. */
+    var le = homeLayoutEdit(main, "map", { "class": "mapview", wide: HOME_PANELS.map, quiet: true, render: function (id) { return body[id](); },
+      locked: function (id) { return id === "map" && drawn.some(function (l) { return l.stage !== 4; }); } });
+    main.appendChild(le.el);
   }
 
   /* ---------- Ambient ---------- */
@@ -1480,7 +1448,7 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     }
   }
   /* Draws everything again, the desk and the deck included, for a change of state the whole shell follows. */
-  function shRedraw() { if (PURE) { PURE.desk.destroy(); PURE = null; LIVE = null; } DECK = null; lastTeams = ""; MBSIG = ""; PV++; TV++; render(); }
+  function shRedraw() { if (PURE) { PURE.desk.destroy(); PURE = null; LIVE = null; } shPeekDrop(); DECK = null; lastTeams = ""; MBSIG = ""; PV++; TV++; render(); }
 
   /* Signed out: a browser the daemon does not know sees how to open Studio signed in, and nothing else (main's SignedOut.svelte). */
   function shSignOut() { said("Every browser is signed out, this one included", "$ loadout dashboard sign-out", "done"); P.signedOut = true; savePrefs(); setTimeout(render, 400); }
@@ -2378,21 +2346,265 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     if (m === P.mode) { return; }
     if (FOCUS) { FOCUS.close(); FOCUS = null; }
     if (!fromSwitch && MB) { MB.switcher.set(m); }
-    S.morph(function () { P.mode = m; savePrefs(); applyMode(); shFieldmap(); DECK = null; if (PURE) { PURE.desk.destroy(); PURE = null; LIVE = null; } lastTeams = ""; render(); });
+    S.morph(function () { P.mode = m; savePrefs(); applyMode(); shFieldmap(); DECK = null; shPeekDrop(); if (PURE) { PURE.desk.destroy(); PURE = null; LIVE = null; } lastTeams = ""; render(); });
     toasts.add({ level: "info", text: "Mode: " + S.MODES.filter(function (x) { return x.key === m; })[0].name, cmd: "kept in this browser · Ctrl Shift M cycles" });
   }
   function cycleMode() { var ks = S.MODES.map(function (x) { return x.key; }); setMode(ks[(ks.indexOf(P.mode) + 1) % ks.length]); }
-  function waitingNow() {
-    var out = [];
-    /* As main's App.svelte: a session says which kind of wait it is; a run, what it asks. A stalled run is on Teams, not here. */
-    ST.lines.filter(function (l) { return l.kind === "session" && l.waiting; }).forEach(function (l) { out.push({ kind: "session", id: l.id, at: l.askedAt || 0, label: l.title + (l.approval ? " needs approval" : " is waiting for you") }); });
-    TR.filter(function (r) { return runWord(r) === "waiting for you"; }).forEach(function (r) { var g = runGate(r); out.push({ kind: "run", id: r.id, at: r.line ? (tline(r).askedAt || 0) : -1, label: g ? (g.brief || g.question) : r.goal }); });
-    return out.sort(function (a, b) { return a.at - b.at; });
+  /* ---------- Shared for every page (round 3): the one count, reveal(), the peek and Edit layout ---------- */
+  /* The example world's clock: ST.clock counts minutes from midnight on 17 Oct 2026 (842 is 14:02), the day the example data's dates are on.
+     shSince(ms) puts a time in that world against Date.now(), so ages ("waiting 21 min") read right wherever Date.now() is used, as the peek does.
+     Page code: shSince(shAt(l.askedAt)) for a clock minute, shSince(Date.parse(iso)) for a date in the data. */
+  var SH_DAY0 = Date.parse("2026-10-17T00:00:00Z");
+  function shAt(clockMinute) { return SH_DAY0 + clockMinute * 60000; }
+  function shSince(worldMs) { return worldMs === null || worldMs === undefined || isNaN(worldMs) ? null : Date.now() - (shAt(ST.clock) - worldMs); }
+  /* When a run started waiting on you: its line's question, or the minutes its gate says it was asked; null when nothing says. */
+  function shRunSince(r) {
+    var l = tline(r), g = runGate(r), m = g && /(\d+) min/.exec(g.asked || "");
+    return l ? (l.askedAt ? shSince(shAt(l.askedAt)) : null) : m ? shSince(shAt(842 - Number(m[1]))) : null;
   }
-  function goWaiting(w) {
-    if (P.mode === "minimal") { openQuiet(w.kind === "session" ? { id: w.id, kind: "session" } : { id: w.id, kind: "team run" }); return; }
-    if (w.kind === "session") { if (P.mode === "terminals") { if (route() !== "home" && route() !== "sessions") { go("home"); } setTimeout(function () { if (DECK) { DECK.deck.pick(w.id); } }, 80); } else { go("session-" + w.id); } return; }
-    go("run-" + w.id);
+  /* Stand-in data for the count. Trigger approvals are the Teams page's TRIG.approvals (main's 'trigger approvals --json', lib/triggers.ts
+     TriggerApproval); one already approved waits on the rule's headroom, not on you. Ideas are the Ideas page's IDEAS. Page code reads these
+     rather than TRIG or IDEAS when it counts or lists what waits. */
+  function shApprovals() { return TRIG.approvals.filter(function (a) { return !a.approved; }); }
+  function shApprovalAbout(a) { return a.title ? a.title + " (" + a.subject + ")" : a.subject; }
+  function shIdeasOpen() { return IDEAS.filter(function (x) { return !x.accepted && x.state !== "dropped" && ideaWord(x) === "waiting for you"; }); }
+  /* The one count of what waits on you (S.waitingOf), for the mode bar, the rail, Home, Teams, Minimal and Pure alike: {count, list}, oldest first.
+     Each list item is {kind: "session" | "team run" | "approval" | "idea", id, title, since, item}; item.line, item.run, item.approval or
+     item.idea is the prototype's own record. Page code: shWaiting().count for a count, .list for the rows (peekOf(w) gives each one's peek). */
+  function shWaiting() {
+    var lines = ST.lines.filter(function (l) { return l.kind === "session" && l.waiting && l.stage !== 4; }).map(function (l) {
+      return { id: l.id, kind: "session", title: l.title, state: l.approval ? "needs approval" : "waiting for you", waiting: true, since: l.askedAt ? shSince(shAt(l.askedAt)) : null, line: l };
+    });
+    var runs = TR.filter(function (r) { return runWord(r) === "waiting for you"; }).map(function (r) { return { id: r.id, goal: r.goal, waiting: true, since: shRunSince(r), run: r }; });
+    var approvals = shApprovals().map(function (a) { return { id: a.id, title: shApprovalAbout(a), rule: a.rule, since: shSince(Date.parse(a.asked)), approval: a }; });
+    var ideas = shIdeasOpen().map(function (x) { return { id: x.id, title: x.title, open: ideaUnanswered(x), idea: x }; });
+    return S.waitingOf({ lines: lines, runs: runs, approvals: approvals, ideas: ideas });
+  }
+  /* What the mode bar, Red Alert and the backdrop read: shWaiting()'s list as {kind: "session" | "run" | "approval" | "idea", id, at, label},
+     with at its since (Infinity when nothing says) and label the words the mode bar shows after the count, as main's App.svelte words them. */
+  function waitingNow() {
+    return shWaiting().list.map(function (w) {
+      var it = w.item, kind = w.kind === "team run" ? "run" : w.kind, label = w.title;
+      if (kind === "session") { label = it.line.title + (it.line.approval ? " needs approval" : " is waiting for you"); }
+      else if (kind === "run") { var g = runGate(it.run); label = g ? (g.brief || g.question) : it.run.goal; }
+      else if (kind === "approval") { label = it.rule + " asks to start a run on " + (it.approval.title || it.approval.subject); }
+      else if (kind === "idea") { label = it.idea.title + ": " + it.open + " question" + (it.open === 1 ? "" : "s") + " for you"; }
+      return { kind: kind, id: w.id, at: w.since === null ? Infinity : w.since, label: label, item: it };
+    });
+  }
+  /* The mode bar's count and Red Alert go to the oldest waiting thing, the mode's own way: an approval to Teams' Needs you, an idea to its questions. */
+  function goWaiting(w) { reveal({ kind: w.kind === "team run" ? "run" : w.kind, id: w.id, zone: w.kind === "idea" ? "questions" : undefined }); }
+
+  /* reveal(target): one way to open a piece of work, in the mode you are in (main's lib/reveal.ts, with idea and task). Page code calls it for every
+     jump and every peek's Open. target is {kind: "session" | "run" | "node" | "team" | "idea" | "task" | "approval", id, zone?, list?, project?}:
+     a session goes through sessReveal (a deck pane in Terminal Focus, its frame in Minimal, its page otherwise); a run beside the deck or board,
+     in a frame in Minimal, selected on the desk in Pure, on its page in Default ("node" is "<run>/<node>": the run, at that node); a team on its
+     page; an idea on its page (beside the deck or board, the flat desk in Pure, a frame in Minimal), landing on zone "questions" when it has any
+     open; a task over its project's board (list is an idea's list, project a task's); an approval on Teams' Needs you. zone names a section to land
+     on: "questions", or any id the page gives a heading as "z-<zone>". Nothing here changes the mode. */
+  var SH_ZONES = { questions: "#z-iq" };
+  function reveal(t) {
+    if (!t || !t.kind) { return; }
+    var kind = t.kind === "team run" ? "run" : t.kind, m = P.mode || "default", zone = t.zone ? SH_ZONES[t.zone] || "#z-" + t.zone : null;
+    if (kind === "session") { sessReveal(t.id); return; }
+    if (kind === "run" || kind === "node") {
+      var rid = String(t.run || t.id), at = rid.indexOf("/");
+      if (kind === "node" || at > 0) { TS.node = t.node || rid.slice(at + 1); TS.depth = 0; if (at > 0) { rid = rid.slice(0, at); } }
+      if (m === "minimal") { openQuiet({ id: rid, kind: "team run" }); return; }
+      go("run-" + rid); shLand(zone); return;
+    }
+    if (kind === "team") { go("team-" + t.id); return; }
+    if (kind === "idea") {
+      var x = IDEAS.filter(function (i) { return i.id === t.id && (!t.list || i.list === t.list); })[0];
+      if (!x) { go("ideas"); return; }
+      var to = t.zone ? zone : ideaUnanswered(x) && !x.accepted ? SH_ZONES.questions : null;
+      if (m === "minimal") {
+        if (FOCUS) { FOCUS.close(); FOCUS = null; }
+        FOCUS = S.FocusFrame({ title: x.title, sub: x.id + " · " + ideaWhereSaid(x.list), word: ideaWord(x), content: el("div", { "class": "qfocus" }, [ideaWorkFor(x)]), onClose: function () { FOCUS = null; } });
+        shLand(to); return;
+      }
+      go("ideas/" + x.list + "/" + x.id); shLand(to); return;
+    }
+    if (kind === "task") {
+      var pid = t.project === undefined ? null : t.project, task = null;
+      Object.keys(TASKS).forEach(function (k) { (TASKS[k] || []).forEach(function (one) { if (one.id === t.id && (pid === null ? !task : (pid || "~") === k)) { task = one; if (pid === null) { pid = k; } } }); });
+      if (pid === "~") { pid = null; }
+      if (m === "minimal" && task) {
+        if (FOCUS) { FOCUS.close(); FOCUS = null; }
+        var wh = pid ? ["--project", pid] : ["--global"];
+        FOCUS = S.FocusFrame({ title: task.title, sub: "task · " + (pid || "no project yet"), word: task.state, content: S.TaskBoard({ tasks: [task], where: wh, onDeclare: function (tt, n) { said(tt.title + ": " + S.TASK_MOVE[n].toLowerCase(), "$ loadout task declare " + tt.id + " " + n + " " + wh.join(" ")); PV++; } }).el, onClose: function () { FOCUS = null; } });
+        return;
+      }
+      go("projects/" + (pid || "+tasks") + "/task/" + t.id); return;
+    }
+    if (kind === "approval") {
+      go("teams");
+      shLand(function () { return Array.prototype.filter.call(document.querySelectorAll(".ls-needs li"), function (li) { return li.textContent.indexOf(t.id) >= 0; })[0] || document.querySelector(".ls-needs"); });
+    }
+  }
+  /* After a jump, brings a section into view and puts focus on it once the page has drawn it (a selector, or a function that finds it). */
+  function shLand(what) {
+    if (!what) { return; }
+    var tries = 0;
+    (function look() {
+      var n = typeof what === "function" ? what() : document.querySelector(what);
+      if (!n) { if (++tries < 25) { setTimeout(look, 100); } return; }
+      if (!n.hasAttribute("tabindex") && !/^(A|BUTTON|INPUT|TEXTAREA|SELECT)$/.test(n.tagName)) { n.setAttribute("tabindex", "-1"); }
+      if (n.scrollIntoView) { n.scrollIntoView({ block: "start", behavior: P.motion === "full" ? "smooth" : "auto" }); }
+      n.focus({ preventScroll: true });
+    })();
+  }
+
+  /* shPeek(): the page's one S.Peek, made when first asked for. Minimal gets mode "inline" (a short block under the row), Pure gets mode
+     "preview" drawn into the container you pass (the desk's view pane), every other mode floats beside the row. It is made again when the mode
+     changes (setMode and shRedraw drop it) or a preview's pane is drawn anew. Page code: peekAttach(row, function () { return peekSession(l); })
+     for each row; shPeek().show(item, row, {pin}) or .list(items, anchor) to open it from code; shPeek({container: pane}).show(item) in Pure. */
+  var SHP = null;
+  function shPeek(o) {
+    o = o || {};
+    var m = P.mode === "minimal" ? "inline" : P.mode === "pure" && o.container ? "preview" : "float";
+    if (SHP && (SHP.pmode !== P.mode || (m === "preview" && o.container !== SHP.container) || (SHP.mode === "preview" && !SHP.peek.el.isConnected))) { shPeekDrop(); }
+    if (!SHP) { SHP = { mode: m, pmode: P.mode, container: m === "preview" ? o.container : null, peek: S.Peek(Object.assign({ mode: m, container: m === "preview" ? o.container : undefined }, shPeekCalls())) }; }
+    return SHP.peek;
+  }
+  function shPeekDrop() { if (SHP) { SHP.peek.destroy(); SHP = null; } }
+  /* Wires one row to the shared peek: hover or focus opens it, the row's peek button pins it. getItem returns peekSession(…), peekRun(…) and so on. */
+  function peekAttach(row, getItem, opt) { return shPeek().attach(row, getItem, opt); }
+  /* What the peek's buttons do: the same commands, toasts and helpers as the pages' own buttons. */
+  function shPeekCalls() {
+    function runOf(id) { return TR.filter(function (r) { return r.id === id; })[0] || null; }
+    function ideaOf(it) { return IDEAS.filter(function (x) { return x.id === it.id && (!it.list || x.list === it.list); })[0] || null; }
+    var calls = {
+      tail: function (it) { var l = line(it.id); return l ? shTail(l) : it.tail || { lines: [] }; },
+      journal: function (it) { var r = runOf(it.run); return r ? shJournal(r, it.node) : it.journal || []; },
+      onOpen: function (it) { reveal({ kind: it.kind, id: it.id, list: it.list, project: it.kind === "task" ? it.project || null : undefined }); },
+      onTypeHere: function (it) { shTypeHere(line(it.id)); },
+      onEnd: function (it) { var l = line(it.id); if (l) { sessEndAsk(l); } },
+      onAnswer: function (it, answer, extra) { var r = runOf(it.id), g = r ? runGate(r) : null; if (!g) { return false; } g.onAnswer(answer, extra || {}); },
+      onHold: function (it) { var r = runOf(it.id); if (!r) { return false; } teamHold(r, true); },
+      onCarryOn: function (it) { var r = runOf(it.id); if (!r) { return false; } teamHold(r, false); },
+      onStop: function (it) { var r = runOf(it.id); if (!r) { return false; } teamStop(r); },
+      onAnswerIdea: function (it, q, answer, cmd) {
+        var x = ideaOf(it); if (!x) { return false; }
+        if (ideaRefused()) { ideaOnlyWatching(cmd); return false; }
+        x.questions.forEach(function (one) { if (one.id === q.id) { one.outdated = null; one.answer = answer; } });
+        said("1 answer saved", cmd); bump(); return true;
+      },
+      onRefine: function (it) { var x = ideaOf(it); if (!x) { return false; } var rl = ideaLine("idea refine", [x.id].concat(ideaWhere(x))); said("Round started", rl); ideaRefine(x); bump(); },
+      onStart: function (it) { var t = { id: it.id, title: it.title, note: it.note || null }; sessionOnTask(it.project || null, t); return "Opened the launch sheet with this task chosen"; },
+      onHistory: function (it) { reveal({ kind: "task", id: it.id, project: it.project || null }); },
+      onSay: function (it, message) { said("Sent to " + it.node, "$ loadout team say " + it.run + " --node " + it.node + " --message " + S.shellQuote(message)); return true; },
+      onUnlock: function (it, pass) { return pass === "loadout"; },
+      onApprove: function (it) { var a = TRIG.approvals.filter(function (x) { return x.id === it.id; })[0]; if (!a) { return false; } trigAnswer("approve", a.id, "Approved: " + shApprovalAbout(a))(); }
+    };
+    /* Open beside is Default's own (a session beside the page). */
+    if ((P.mode || "default") === "default") { calls.onOpenBeside = function (it) { shOpenBeside(line(it.id)); }; }
+    return calls;
+  }
+  /* Type here: the session, the mode's own way, with the keyboard in its terminal. */
+  function shTypeHere(l) {
+    if (!l) { return; }
+    reveal({ kind: "session", id: l.id });
+    if (P.mode !== "minimal") { setTimeout(function () { var sc = document.querySelector(".ls-term .screen"); if (sc) { sc.focus(); } }, 120); }
+  }
+  /* STUB: a session opened beside the page in Default is the Sessions page's to build (WORKFLOW.md, Sessions). Until then it says what it would do. */
+  function shOpenBeside(l) { if (l) { said("Open beside: " + l.title + " would open beside this page (not built in the prototype yet)", "opens it beside this page · changes nothing"); } }
+
+  /* The peek's items, so every page's peek of the same thing looks the same (the shapes in components/index.d.ts, PeekSession and on).
+     Each takes the prototype's own record and returns null for none. Page code: peekSession(line(id)), peekRun(TR row), peekIdea(IDEAS row),
+     peekTask(TASKS row, project), peekNode(TR row, "writer/1"), peekApproval(TRIG.approvals row); peekOf(w) for a shWaiting() list item. */
+  /* A session's last lines, read-only, as the daemon's tail serves them: the scripted terminal's text, no escapes. */
+  function shTail(l) {
+    var rows = (ST.term[l.id] || []).map(function (t) { return Array.isArray(t) ? String(t[1] === undefined ? "" : t[1]) : String(t); });
+    if (!rows.length && l.cmdLine) { rows = ["› " + l.cmdLine]; }
+    return { lines: rows.slice(-12), cols: 120, rows: 32, at: "read at " + hhmm(ST.clock), running: l.stage !== 4 };
+  }
+  function peekSession(l) {
+    if (!l) { return null; }
+    var ended = l.stage === 4, m = /approval to (.+?)\.(\s|$)/i.exec(l.ask || "");
+    return { kind: "session", id: l.id, hid: l.hid, title: l.title, project: l.where, agent: l.skind === "command" ? "loadout" : l.agent === "codex" ? "Codex" : "Claude Code", mode: l.mode || undefined,
+      word: ended ? "ended" : sessWord(l), ended: ended, waitingFor: l.waiting ? (m ? "approval to " + m[1] : l.approval ? "approval" : "your answer") : null,
+      since: l.waiting && l.askedAt ? shSince(shAt(l.askedAt)) : null, tail: shTail(l), status: ended ? null : l.status || null, disabledReason: sessWatching() ? SESS_WATCH : undefined };
+  }
+  function peekRun(r) {
+    if (!r) { return null; }
+    var w = runWord(r), live = teamRunning(r), g = runGate(r), l = tline(r), crew = r.crew || [];
+    var now = crew.filter(function (c) { return c.node !== "lead" && /running|working/.test(c.word || ""); })[0] || (live ? crew.filter(function (c) { return c.node === "lead"; })[0] : null);
+    return { kind: "run", id: r.id, goal: r.goal, team: r.team, project: r.project, round: r.round, rounds: r.roundLimit || undefined, elapsed: r.elapsed, word: w,
+      since: w === "waiting for you" ? shRunSince(r) : undefined,
+      line: { rounds: (r.shape || []).map(function (s) { return { word: s.word, nodes: s.nodes || [] }; }), running: live, end: !live },
+      working: live && now ? { node: now.node, role: now.role, word: now.word, doing: now.doing } : null, gate: g || null,
+      spend: { spent: r.spent || 0, cap: r.uncapped ? null : (r.cap === undefined ? null : r.cap), uncapped: !!r.uncapped, projected: live ? r.projected || null : null, rate: live ? r.rate || null : null },
+      held: !!(l ? l.held : r.held), disabledReason: P.watchOnly ? SH_WATCH : undefined };
+  }
+  function peekIdea(x) {
+    if (!x) { return null; }
+    var last = (x.rounds || [])[x.rounds.length - 1];
+    return { kind: "idea", id: x.id, list: x.list, title: x.title, project: x.list === "~" ? undefined : x.list, where: ideaWhere(x), stage: x.stage, round: last ? last.round : undefined,
+      questions: x.questions, word: ideaWord(x), disabledReason: ideaRefused() || undefined };
+  }
+  function peekTask(t, project) {
+    if (!t) { return null; }
+    var p = project !== undefined ? project : t.project; if (p === "~") { p = null; }
+    return { kind: "task", id: t.id, title: t.title, state: t.state, note: t.note || null, project: p || undefined, where: plcWhereOf(p || null), taskKind: t.kind, declaredBy: t.declaredBy, declaredAt: t.declared,
+      hasDetail: !!PLC_DETAIL[t.id], disabledReason: P.watchOnly ? SH_WATCH : undefined };
+  }
+  /* A node's last journal lines: the run's own streams where the example has them (the --since run), or its rounds and what it does now. */
+  function shJournal(r, node) {
+    var c = (r.crew || []).filter(function (x) { return x.node === node; })[0] || { node: node };
+    if (r.rich) {
+      var d = sinceDepths(r).said, own = (d.streams || {})[node];
+      var rows = own && own.length ? own : (d.journal || []).filter(function (e) { return String(e[1]).indexOf(node) >= 0; });
+      if (rows.length) { return rows.map(function (e) { return [e[0], e[1], e[2] || undefined]; }); }
+    }
+    var hm = /^\d{8}-(\d\d)(\d\d)/.exec(r.id), base = hm ? Number(hm[1]) * 60 + Number(hm[2]) : ST.clock - 30, out = [];
+    (r.shape || []).forEach(function (s, i) {
+      if (node === "lead") { out.push([hhmm(base + i * 7), "round " + (i + 1) + ": " + s.lead]); return; }
+      (s.nodes || []).forEach(function (n) { if (n[0] === node) { out.push([hhmm(base + i * 7 + 1), "briefed in round " + (i + 1) + ": the lead " + s.lead]); } });
+    });
+    if (c.doing) { out.push([hhmm(base + (r.shape || []).length * 7), c.doing, /done/.test(c.word || "") ? "good" : /quiet|waiting/.test(c.word || "") ? "needs" : undefined]); }
+    return out;
+  }
+  function peekNode(r, node) {
+    if (!r) { return null; }
+    var c = (r.crew || []).filter(function (x) { return x.node === node; })[0] || { node: node }, ended = !teamRunning(r) || /done|stopped|failed/.test(c.word || "");
+    return { kind: "node", id: r.id + "/" + node, run: r.id, node: node, role: c.role, model: c.model, goal: r.goal, turns: c.turns, word: c.word,
+      branch: node === "lead" ? null : "team/" + r.id + "/" + node.replace(/\//g, "-"), quiet: c.quiet ? String(c.quiet).split(",")[0] : null,
+      journal: shJournal(r, node), say: { state: ended ? "ended" : TEAMQ.wiring.attach.set ? "locked" : "unset" }, disabledReason: P.watchOnly ? SH_WATCH : undefined };
+  }
+  function peekApproval(a) {
+    if (!a) { return null; }
+    return { kind: "approval", id: a.id, title: shApprovalAbout(a), rule: a.rule, project: a.project, word: "needs approval", since: shSince(Date.parse(a.asked)),
+      detail: a.kind + (a.trust === "outside" ? " · from outside the collaborators" : "") + " · would set aside " + money(a.budgetUsd), disabledReason: P.watchOnly ? SH_WATCH : undefined };
+  }
+  /* One shWaiting() (or waitingNow()) item as its peek, for the waiting list. */
+  function peekOf(w) {
+    var it = w.item || {}, k = w.kind === "team run" ? "run" : w.kind, p = k === "session" ? peekSession(it.line) : k === "run" ? peekRun(it.run) : k === "approval" ? peekApproval(it.approval) : k === "idea" ? peekIdea(it.idea) : null;
+    if (p && (w.since || w.at) && p.since === undefined) { p.since = w.since !== undefined ? w.since : w.at; }
+    return p;
+  }
+
+  /* shLayout(page, surface, sections, opts): S.LayoutEdit kept in the prototype's preferences as studio-layouts (P.layouts, saved with savePrefs),
+     in this mode's own layout (hide-only in Minimal), held while Studio is only watching, and toasting the line that keeps it. sections are
+     [{id, name}] in the page's default order (WORKFLOW.md, Page by page); opts are LayoutEdit's own (render, locked, count, numbered, wide, quiet,
+     class, label, legacy, editing, onedit, onchange). It follows studio-commands through the page's data-commands, as every HaloButton does.
+     Returns what LayoutEdit returns: put .button in the page head and .bar right under it, and .el where the sections go. */
+  /* The prototype's own: the shared pieces from the console and test scripts (window.studioShared.reveal({kind: "idea", id: "…"})). */
+  window.studioShared = { shWaiting: function () { return shWaiting(); }, waitingNow: function () { return waitingNow(); }, reveal: function (t) { return reveal(t); }, shPeek: function (o) { return shPeek(o); },
+    peekAttach: function (r, g, o) { return peekAttach(r, g, o); }, peekSession: function (id) { return peekSession(line(id)); }, peekRun: function (id) { return peekRun(TR.filter(function (r) { return r.id === id; })[0]); },
+    peekIdea: function (id) { return peekIdea(IDEAS.filter(function (x) { return x.id === id; })[0]); }, peekTask: function (project, id) { return peekTask((TASKS[project || "~"] || []).filter(function (t) { return t.id === id; })[0], project || null); },
+    peekNode: function (run, node) { return peekNode(TR.filter(function (r) { return r.id === run; })[0], node); }, peekApproval: function (id) { return peekApproval(TRIG.approvals.filter(function (a) { return a.id === id; })[0]); },
+    setMode: function (m) { setMode(m); }, mode: function () { return P.mode; }, route: function () { return route(); } };
+  function shLayouts() { return P.layouts && typeof P.layouts === "object" && Object.keys(P.layouts).length ? JSON.stringify(P.layouts) : ""; }
+  function shLayout(page, surface, sections, opts) {
+    opts = opts || {};
+    var watching = sessWatching() ? "Studio is only watching · $ loadout config set studio-layouts …" : undefined;
+    return S.LayoutEdit(Object.assign({}, opts, { page: page, surface: surface || undefined, sections: sections, mode: P.mode || "default", hideOnly: P.mode === "minimal", value: shLayouts(), disabledReason: opts.disabledReason || watching,
+      onchange: function (key, value, command) {
+        try { P.layouts = value ? JSON.parse(value) : {}; } catch (e) { P.layouts = {}; }
+        savePrefs(); said(value ? "Layout kept in Loadout's config" : "Every layout is back as it came", command, "done");
+        if (opts.onchange) { opts.onchange(key, value, command); }
+      } }));
   }
   function renderModebar() {
     var w = waitingNow(), compact = window.innerWidth < 600, sig = w.map(function (x) { return x.label; }).join("|") + "|" + compact;
@@ -2761,7 +2973,11 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
           { id: "o1", title: "Say so, and keep the page", detail: "A banner says the daemon is restarting; nothing on the page is cleared.", pros: ["Nothing typed is lost"], cons: [], recommended: true }] }],
         additions: [], placement: { slug: "loadout-cli", isNew: false, name: "Loadout CLI", reason: "Studio is built there" } },
       notes: [], accepted: null },
-    { id: "follow-system-theme", list: "~", title: "Every tool follows the system theme", stage: "Captured", state: "open", ask: "Everything I use should follow the system light and dark setting.", rounds: [], questions: [], plan: null, notes: [], accepted: null },
+    /* Stand-in for the one count (round 3): a question that stays open while the script runs browser-launcher's rounds. */
+    { id: "follow-system-theme", list: "~", title: "Every tool follows the system theme", stage: "Answering", state: "open", ask: "Everything I use should follow the system light and dark setting.",
+      rounds: [{ round: 1, understanding: "The tools Loadout launches pick up the system's light or dark setting when they start, and again when it changes.", questions: ["q1"] }],
+      questions: [{ id: "q1", round: 1, question: "Which tools: only the ones Loadout launches, or every tool on this machine?", why: "Every tool means changing settings Loadout doesn't own.", about: "the ask", context: null, outdated: null, options: ["Only what Loadout launches", "Every tool on this machine"], recommendation: "Only what Loadout launches", answer: null }],
+      plan: null, notes: [], accepted: null },
     { id: "old-charts-png", list: "starstats", title: "Export the old charts as images", stage: "Captured", state: "dropped", ask: "Let me save the old charts as PNG files before they go.", rounds: [], questions: [], plan: null, notes: [], accepted: null },
     { id: "company-sign-in", list: "starstats", title: "Sign in with the company account", stage: "Accepted", state: "open", ask: "Use the company account to sign in to StarStats.", rounds: [], questions: [],
       plan: { revision: 3, title: "Company sign-in", understanding: "Single sign-on through the company's identity provider.", doneWhen: ["Signing in with a company account reaches the dashboard"], layers: [], additions: [], placement: null },
@@ -5358,6 +5574,8 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     if (!teamsRoute(rr) && DEPTHS) { DEPTHS.unbind(); DEPTHS = null; }
     var a = document.activeElement, k = a && a.getAttribute && a.getAttribute("data-k"), caret = a && a.selectionStart;
     if (!k && a && a.id === "home-task") { k = "home-task"; }
+    /* Edit layout's arrows and Hide carry no key: they are found again by their name. */
+    var lay = !k && a && a.closest && a.closest(".ls-layout, .ls-layout-bar") ? a.getAttribute("aria-label") || a.textContent : null;
     renderNav();
     var main = document.getElementById("main"), r = route(); main.textContent = "";
     if (PURE) { PURE.desk.destroy(); PURE = null; }
@@ -5398,6 +5616,7 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     else if (r === "commands" || r.indexOf("commands/") === 0) { renderCommands(main, r); }
     else { renderElsewhere(main, r); }
     main.appendChild(el("p", { "class": "sample", text: "Example data and scripted agents: this prototype doesn't talk to Loadout. Every command shown is the real one." }));
+    if (lay) { var ln = Array.prototype.filter.call(document.querySelectorAll(".ls-layout button, .ls-layout-bar button"), function (b) { return (b.getAttribute("aria-label") || b.textContent) === lay && !b.disabled; })[0]; if (ln) { ln.focus({ preventScroll: true }); } }
     if (k) { var n = k === "home-task" ? document.getElementById("home-task") : document.querySelector('[data-k="' + CSS.escape(k) + '"]'); if (n) { n.focus({ preventScroll: true }); if (caret !== undefined && n.setSelectionRange && caret !== null) { try { n.setSelectionRange(caret, caret); } catch (e) { /* not a text field */ } } } }
     renderAmbient();
   }
