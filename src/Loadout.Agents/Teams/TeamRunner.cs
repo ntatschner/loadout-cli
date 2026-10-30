@@ -609,7 +609,8 @@ public sealed partial class TeamRunner : ITeamRunner
         IChildLifetime? lifetime = null,
         Core.Tasks.ITaskService? tasks = null,
         Core.Tools.IToolRegistry? tools = null,
-        Core.Teams.IRunOwnership? ownership = null)
+        Core.Teams.IRunOwnership? ownership = null,
+        TimeProvider? timers = null)
     {
         _paths = paths;
         _time = time;
@@ -620,7 +621,7 @@ public sealed partial class TeamRunner : ITeamRunner
         // close both say where the run is on the project's task list.
         var declare = new DeclareStep(tasks);
         var fold = new FoldStep(paths);
-        var sessions = new NodeSessions(launcher, paths, time, tools);
+        var sessions = new NodeSessions(launcher, paths, time, tools, timers);
 
         _watchAsks = new WatchAsksStep(time);
         _workers = new StartWorkersStep(sessions, new ReviewTreeStep(projects, git), fold, git);

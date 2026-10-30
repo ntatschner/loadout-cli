@@ -18,13 +18,25 @@ internal sealed class NodeSessions
     private readonly IAgentLauncher _launcher;
     private readonly IPlatformPaths _paths;
     private readonly TimeProvider _time;
+    private readonly TimeProvider _timers;
     private readonly Core.Tools.IToolRegistry? _tools;
 
-    public NodeSessions(IAgentLauncher launcher, IPlatformPaths paths, TimeProvider time, Core.Tools.IToolRegistry? tools)
+    /// <param name="launcher">Starts each node's agent.</param>
+    /// <param name="paths">Where runs are kept.</param>
+    /// <param name="time">The run's clock.</param>
+    /// <param name="tools">The tool registry, when there is one.</param>
+    /// <param name="timers">
+    /// The clock a node's silence timer reads, or none for the run's own. Only
+    /// a replay sets one: there the run's clock moves on every reading, and a
+    /// timer that reads it only when a line has not yet arrived would move the
+    /// journal's times by however the threads happened to fall.
+    /// </param>
+    public NodeSessions(IAgentLauncher launcher, IPlatformPaths paths, TimeProvider time, Core.Tools.IToolRegistry? tools, TimeProvider? timers = null)
     {
         _launcher = launcher;
         _paths = paths;
         _time = time;
+        _timers = timers ?? time;
         _tools = tools;
     }
 
@@ -303,7 +315,7 @@ internal sealed class NodeSessions
     {
         var directory = RunDirectory(brief.Run);
 
-        return new QuietLimit(span, _time)
+        return new QuietLimit(span, _timers)
         {
             Held = () => NodePermissions.Pending(directory)
                 .Any(ask => string.Equals(ask.Node, brief.Node, StringComparison.Ordinal)),
