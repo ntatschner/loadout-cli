@@ -6050,6 +6050,9 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
   function pagesRoute(r) { var b = pageBase(r); return ["ideas", "projects", "context", "settings", "memory", "spend", "events"].indexOf(b) >= 0; }
   function teamsRoute(r) { return r === "teams" || r.indexOf("teams-") === 0 || r.indexOf("run-") === 0 || r.indexOf("team-") === 0; }
   function render() {
+    /* While a section is being dragged in Edit layout, the scripted agents' ticks wait: a redraw would drop it mid-drag. The drag's end draws again. */
+    var held = document.querySelector(".ls-layout[data-dragging]");
+    if (held) { if (!held.__lsWaits) { held.__lsWaits = true; document.addEventListener("pointerup", function again() { document.removeEventListener("pointerup", again, true); setTimeout(render, 0); }, true); } return; }
     /* Signed out, the browser sees only how to sign in; it is drawn once, so the scripted agents' ticks leave it be. */
     if (P.signedOut) { if (!document.body.classList.contains("sh-out") || !document.getElementById("main").childNodes.length) { renderSignedOut(); } return; }
     homeNamed();

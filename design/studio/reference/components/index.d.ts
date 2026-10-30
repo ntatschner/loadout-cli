@@ -823,6 +823,8 @@ export declare function OfficePanel(o: { kind?: string; title: string; lines?: s
 
 
 
+
+
 /* ---------- What main's Studio built since the design (stage 14) ---------- */
 /** What 'loadout ask --json' answers (main's ask.ts AskReply). Properties --json leaves out may be missing. */
 export interface AskReply {
@@ -1078,7 +1080,7 @@ export declare function Landings(o: {
 }): { el: HTMLElement; /** A reread: the merge message being written is kept. */ set: (patch: Partial<{ landings: LandingRead[]; act: (path: string, words: string[], done: string) => Promise<boolean | void> | boolean | void; disabledReason: string; now: Date }>) => void };
 /** A layout: the order of a page's sections (hidden ones included) and which are hidden. As main's lib/layout.ts. */
 export interface Layout { order: string[]; hidden: string[] }
-/** Edit layout for any page or mode surface, as main's Home has it: the sections in their saved order, an "Edit layout" button for the page head, and the edit bar (drag by name, arrows, Hide, Add back, Reset, Done). Kept in one setting, studio-layouts: {"<page>" | "<page>/<surface>": {"<mode>": {order, hidden}}}; "" is the default. */
+/** Edit layout for any page or mode surface, as main's Home has it: the sections in their saved order, an "Edit layout" button for the page head, and the edit bar (drag by a section's bar, with a line where it will land; arrows, Hide, Add back, Reset, Done). Kept in one setting, studio-layouts: {"<page>" | "<page>/<surface>": {"<mode>": {order, hidden}}}; "" is the default. */
 export declare function LayoutEdit(o: {
   /** The page: "home", "sessions", "teams", "board"… */
   page: string;
@@ -1122,6 +1124,8 @@ export declare function LayoutEdit(o: {
   onchange?: (key: string, value: string, command: string) => void;
   /** Called when editing starts or stops. */
   onedit?: (editing: boolean) => void;
+  /** Called when a drag ends, moved or not; a page that held its own redraws while `data-dragging` was on the container can catch up here. */
+  ondragend?: () => void;
 }): {
   /** The sections, in order. */
   el: HTMLElement;
@@ -1133,6 +1137,8 @@ export declare function LayoutEdit(o: {
   readonly key: string;
   readonly layout: Layout;
   readonly editing: boolean;
+  /** The id of the section being dragged, or null. While it is set, the container carries data-dragging and the component doesn't redraw. */
+  readonly dragging: string | null;
   /** studio-layouts as it now stands here. */
   readonly value: string;
   edit: (on: boolean) => void;
@@ -1148,6 +1154,8 @@ export declare namespace LayoutEdit {
   function move(layout: Layout, panel: string, by: number): Layout;
   /** Puts `panel` where `before` is, for a drop. */
   function place(layout: Layout, panel: string, before: string): Layout;
+  /** Puts `panel` just before or just after `target`: what a drag does, by which half of the target it lands on. */
+  function drop(layout: Layout, panel: string, target: string, after: boolean): Layout;
   function hide(layout: Layout, panel: string): Layout;
   function show(layout: Layout, panel: string): Layout;
   /** What Loadout keeps for one layout: "" for the default, so a reset unsets it. */

@@ -6,8 +6,9 @@ LayoutEdit is Edit layout for any page and any mode: the page's sections in the 
 
 - **The sections**, each a `section.panel` with its heading (`ls-zone`, numbered `01` `02` when asked, with a count when given), in the saved order, hidden ones left out.
 - **Edit layout**, a small HaloButton for the page head; it reads Done while editing.
-- **The edit bar**, for under the head while editing: "Editing the Lens layout. Drag a section by its name, or use its arrows.", an Add back button for each hidden section, Reset (back to the default), Done, and the line that keeps it: `Kept in Loadout's config: $ loadout config set studio-layouts '…'`.
-- **While editing**, each section gains its chrome: a grip to drag it by its name, the arrows ← ↑ ↓ → to move it earlier or later, and Hide. A section that holds live work keeps its arrows, but Hide is unavailable and says why: "holds live work, so it stays while it has something in it".
+- **The edit bar**, for under the head while editing: "Editing the Lens layout. Drag a section by its bar, or use its arrows. A line shows where it will go.", an Add back button for each hidden section, Reset (back to the default), Done, and the line that keeps it: `Kept in Loadout's config: $ loadout config set studio-layouts '…'`.
+- **While editing**, each section gains its chrome: a bar to drag it by (its name with a grip, and the space around its buttons), the arrows ← ↑ ↓ → to move it earlier or later, and Hide. A section that holds live work keeps its arrows, but Hide is unavailable and says why: "holds live work, so it stays while it has something in it".
+- **Dragging** works with a mouse, a pen or a finger. Past a few pixels the section dims with a dashed edge, and a bar shows where it will land: in the gap before or after the section nearest the pointer, by which half of it the pointer is over (left or right when sections sit side by side). Letting go puts it there; Escape puts it back. Near the top or foot of the window the page scrolls. What will happen is said to screen readers as it changes ("Focus goes after Signal.").
 
 ## What you provide
 
@@ -21,7 +22,7 @@ LayoutEdit is Edit layout for any page and any mode: the page's sections in the 
 - `hideOnly` for Minimal, which stays one column: Hide and Add back, no moving.
 - `onchange(key, value, command)`: called with `"studio-layouts"`, the whole new value, and the exact line, shell-quoted: `$ loadout config set studio-layouts '{"home/lens":{"default":{"order":[…],"hidden":["signal"]}}}'`.
 - `disabledReason` where nothing can be kept (only watching): Edit layout shows it in place of a command.
-- The pure helpers, as main's `lib/layout.ts` has them: `LayoutEdit.readLayout`, `move`, `place`, `hide`, `show` and `saved`; and `keyOf`, `read`, `write` and `command` for the whole setting.
+- The pure helpers, as main's `lib/layout.ts` has them: `LayoutEdit.readLayout`, `move`, `place`, `hide`, `show` and `saved`, plus `drop(layout, panel, target, after)`, which can put a section after the last one or past the next one (main's `place` can only put it before a section, so dropping on the section below changed nothing; main's Home should take `drop` too); and `keyOf`, `read`, `write` and `command` for the whole setting.
 
 ## Do and don't
 
@@ -29,6 +30,7 @@ LayoutEdit is Edit layout for any page and any mode: the page's sections in the 
 - Do pass `locked` for every section that lists live work. Live work is never hidden.
 - Don't keep sizes here: the splits, the deck's slots and the desk's widths fit the screen they were made on, and stay in the browser.
 - Don't write a layout that is the default: `saved` gives `""` for it.
+- Don't redraw the sections while one is dragged: the component holds its own redraws, and a page that redraws on a timer checks `layout.dragging` (or `[data-dragging]` on the container) and catches up in `ondragend`.
 
 ## Accessibility
 

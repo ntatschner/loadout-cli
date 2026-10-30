@@ -4415,6 +4415,7 @@
 
 
 
+
 /* ---------- Stage 14: what main's Studio built since the design ---------- */
 (function () {
   "use strict";
@@ -5258,6 +5259,15 @@
       order.splice(Math.max(0, order.indexOf(before)), 0, panel);
       return { order: order, hidden: layout.hidden.slice() };
     }
+    /* Puts `panel` just before or just after `target`, for a drop that knows which half of the target it landed on. place()
+       alone can't move a section past the next one, or to the end: dropping on the section below put it back where it was. */
+    function drop(layout, panel, target, after) {
+      if (panel === target) { return layout; }
+      var order = layout.order.filter(function (one) { return one !== panel; }), at = order.indexOf(target);
+      if (at < 0) { return layout; }
+      order.splice(at + (after ? 1 : 0), 0, panel);
+      return { order: order, hidden: layout.hidden.slice() };
+    }
     function hide(layout, panel) { return { order: layout.order.slice(), hidden: uniq(layout.hidden.concat([panel])) }; }
     function show(layout, panel) { return { order: layout.order.slice(), hidden: layout.hidden.filter(function (one) { return one !== panel; }) }; }
     /* What Loadout keeps for one layout; the default keeps nothing, so a reset unsets it. */
@@ -5296,10 +5306,11 @@
       var names = {}; sections.forEach(function (s) { names[s.id] = s.name || (cur.names || {})[s.id] || s.id; });
       var panels = (cur.order || sections.map(function (s) { return s.id; })).filter(function (id) { return names[id] !== undefined; });
       sections.forEach(function (s) { if (panels.indexOf(s.id) < 0) { panels.push(s.id); } });
-      var key = keyOf(cur.page || "page", cur.surface), value = cur.value || "", dragging = null, bodies = {};
+      var key = keyOf(cur.page || "page", cur.surface), value = cur.value || "", dragging = null, bodies = {}, pending = false;
       var el = h("div", { "class": "ls-layout" + (cur.class ? " " + cur.class : "") });
       var bar = h("div", { "class": "editbar ls-layout-bar", role: "region", "aria-label": "Editing the layout", hidden: true });
       var slot = h("span", { "class": "ls-layout-btn" });
+      var told = h("p", { "class": "ls-sr", role: "status" });
 
       function layout() {
         /* Until studio-layouts is written at all, an older key (Home's studio-layout-lens and -map) is read in its place. */
@@ -5326,17 +5337,10 @@
         var wide = typeof cur.wide === "function" ? cur.wide(id) : Array.isArray(cur.wide) ? cur.wide.indexOf(id) >= 0 : false;
         var sec = h("section", { "class": "panel p-" + id + (wide ? " wide" : "") + (editing ? " editing" : "") + (dragging === id ? " dragging" : ""), "aria-labelledby": "z-" + key.replace(/\W/g, "-") + "-" + id, "data-section": id });
         if (editing) {
-          if (!cur.hideOnly) {
-            sec.addEventListener("dragover", function (e) { e.preventDefault(); sec.classList.add("over"); });
-            sec.addEventListener("dragleave", function () { sec.classList.remove("over"); });
-            sec.addEventListener("drop", function (e) { e.preventDefault(); sec.classList.remove("over"); var from = dragging; dragging = null; if (from) { keep(place(L, from, id)); } });
-          }
           var kids = [];
           if (cur.hideOnly) { kids.push(h("span", { "class": "grip still" }, [name])); }
           else {
-            var grip = h("span", { "class": "grip", role: "button", tabindex: "-1", draggable: "true", "aria-label": "Drag " + name }, [h("span", { "aria-hidden": "true", text: "⠿" }), name]);
-            grip.addEventListener("dragstart", function (e) { if (e.dataTransfer) { e.dataTransfer.setData("text/plain", id); } dragging = id; sec.classList.add("dragging"); });
-            grip.addEventListener("dragend", function () { dragging = null; sec.classList.remove("dragging"); });
+            var grip = h("span", { "class": "grip", "aria-hidden": "true" }, [h("span", { text: "⠿" }), name]);
             var nudge = function (word, glyph, by, off) { return h("button", { type: "button", "aria-label": "Move " + name + " " + word, disabled: off, text: glyph, onclick: function () { keep(move(L, id, by)); } }); };
             kids.push(grip, h("span", { "class": "nudge", role: "group", "aria-label": "Move " + name }, [nudge("earlier", "←", -1, first), nudge("up", "↑", -1, first), nudge("down", "↓", 1, last), nudge("later", "→", 1, last)]));
           }
@@ -5346,7 +5350,9 @@
           } else {
             kids.push(h("button", { type: "button", "class": "hidebtn", text: "Hide", onclick: function () { keep(hide(L, id)); } }));
           }
-          sec.appendChild(h("div", { "class": "chrome" }, kids));
+          var chrome = h("div", { "class": "chrome" + (cur.hideOnly ? "" : " drags") }, kids);
+          if (!cur.hideOnly) { chrome.addEventListener("pointerdown", function (e) { startDrag(e, L, id, sec, chrome); }); }
+          sec.appendChild(chrome);
         }
         var count = cur.count ? cur.count(id) : undefined;
         var number = cur.numbered ? (panels.indexOf(id) + 1 < 10 ? "0" : "") + (panels.indexOf(id) + 1) : "";
@@ -5354,6 +5360,55 @@
         var body = bodyOf(id);
         (Array.isArray(body) ? body : [body]).forEach(function (b) { if (b) { sec.appendChild(b); } });
         return sec;
+      }
+
+      /* Dragging is by pointer, so a mouse, a pen and a finger all work: press anywhere on a section's bar but its buttons, and move.
+         A line shows where it will land: before or after the section nearest the pointer, by which half of it the pointer is over
+         (left or right when sections sit side by side). Letting go puts it there; Escape puts it back. The page doesn't redraw
+         the sections meanwhile (paint waits), and data-dragging on the container tells a page that redraws by itself to wait too. */
+      function startDrag(e, L, id, sec, handle) {
+        if ((e.button && e.button > 0) || (e.target.closest && e.target.closest("button"))) { return; }
+        var x0 = e.clientX, y0 = e.clientY, on = false, target = null, after = false;
+        function clear() { Array.prototype.forEach.call(el.querySelectorAll(".panel.over"), function (s) { s.classList.remove("over", "before", "after", "across"); }); }
+        function nearest(x, y) {
+          var best = null, bd = Infinity;
+          Array.prototype.forEach.call(el.children, function (s) {
+            if (!s.getAttribute || !s.getAttribute("data-section")) { return; }
+            var r = s.getBoundingClientRect(), dx = x < r.left ? r.left - x : x > r.right ? x - r.right : 0, dy = y < r.top ? r.top - y : y > r.bottom ? y - r.bottom : 0, d = dx * dx + dy * dy;
+            if (d < bd) { bd = d; best = s; }
+          });
+          return best;
+        }
+        function onMove(ev) {
+          if (!on) {
+            if (Math.abs(ev.clientX - x0) + Math.abs(ev.clientY - y0) < 6) { return; }
+            on = true; dragging = id; sec.classList.add("dragging"); el.setAttribute("data-dragging", id);
+          }
+          ev.preventDefault();
+          var s = nearest(ev.clientX, ev.clientY); clear(); target = null;
+          if (s) {
+            var r = s.getBoundingClientRect(), across = r.width < el.getBoundingClientRect().width * 0.75;
+            after = across ? ev.clientX > r.left + r.width / 2 : ev.clientY > r.top + r.height / 2;
+            target = s.getAttribute("data-section");
+            if (target !== id) { s.classList.add("over", after ? "after" : "before"); if (across) { s.classList.add("across"); } told.textContent = names[id] + " goes " + (after ? "after " : "before ") + names[target] + "."; }
+            else { told.textContent = ""; }
+          }
+          if (ev.clientY < 48) { window.scrollBy(0, -14); } else if (ev.clientY > window.innerHeight - 48) { window.scrollBy(0, 14); }
+        }
+        function end(ok) {
+          handle.removeEventListener("pointermove", onMove); handle.removeEventListener("pointerup", up); handle.removeEventListener("pointercancel", back);
+          document.removeEventListener("keydown", key, true);
+          var was = on; clear(); sec.classList.remove("dragging"); el.removeAttribute("data-dragging"); dragging = null;
+          if (was && ok && target && target !== id) { told.textContent = names[id] + " moved."; keep(drop(L, id, target, after)); }
+          else if (pending) { pending = false; paint(); }
+          if (was && cur.ondragend) { cur.ondragend(); }
+        }
+        function up() { end(true); }
+        function back() { end(false); }
+        function key(k) { if (k.key === "Escape") { k.preventDefault(); k.stopPropagation(); told.textContent = names[id] + " stays where it was."; end(false); } }
+        try { handle.setPointerCapture(e.pointerId); } catch (x) { /* an old browser: moves still reach the bar while the pointer is over it */ }
+        handle.addEventListener("pointermove", onMove); handle.addEventListener("pointerup", up); handle.addEventListener("pointercancel", back);
+        document.addEventListener("keydown", key, true);
       }
 
       function paintButton() {
@@ -5364,7 +5419,7 @@
         bar.hidden = !cur.editing; bar.textContent = "";
         if (!cur.editing) { return; }
         var what = cur.label ? "the " + cur.label + " layout" : "this layout";
-        bar.appendChild(h("p", { text: cur.hideOnly ? "Editing " + what + ". Hide a section, or add it back; the order stays as it is here." : "Editing " + what + ". Drag a section by its name, or use its arrows." }));
+        bar.appendChild(h("p", { text: cur.hideOnly ? "Editing " + what + ". Hide a section, or add it back; the order stays as it is here." : "Editing " + what + ". Drag a section by its bar, or use its arrows. A line shows where it will go." }));
         L.hidden.filter(function (id) { return !locked(id); }).forEach(function (id) {
           var next = show(L, id);
           bar.appendChild(NS.HaloButton({ label: "Add back " + names[id], size: "small", cmd: command(writeTo(value, key, cur.mode, next, panels)), onPress: function () { keep(next); } }));
@@ -5373,8 +5428,10 @@
         bar.appendChild(NS.HaloButton({ label: "Reset", size: "small", cmd: plain ? undefined : command(reset), disabledReason: plain ? "it is already the default" : undefined, onPress: function () { keep(readLayout("", panels)); } }));
         bar.appendChild(NS.HaloButton({ label: "Done", size: "small", solid: true, onPress: function () { edit(false); } }));
         bar.appendChild(h("code", { "class": "ls-cmd", text: "Kept in Loadout's config: " + command(value) }));
+        bar.appendChild(told);
       }
       function paint() {
+        if (dragging) { pending = true; return; }
         var L = layout(), focused = document.activeElement, hadFocus = focused && (el.contains(focused) || bar.contains(focused)), label = hadFocus ? focused.getAttribute("aria-label") || focused.textContent : null;
         el.classList.toggle("editing", !!cur.editing);
         Array.prototype.slice.call(el.children).forEach(function (c) { c.remove(); });
@@ -5391,7 +5448,7 @@
       paint();
       return {
         el: el, bar: bar, button: slot, key: key,
-        get layout() { return layout(); }, get editing() { return !!cur.editing; }, get value() { return value; },
+        get layout() { return layout(); }, get editing() { return !!cur.editing; }, get dragging() { return dragging; }, get value() { return value; },
         edit: edit,
         /* New props from the page: the saved value, editing, locked, the mode. */
         set: function (p) { p = p || {}; if ("value" in p) { value = p.value || ""; } ["editing", "locked", "mode", "legacy", "disabledReason", "count", "label"].forEach(function (k) { if (k in p) { cur[k] = p[k]; } }); paint(); },
@@ -5399,7 +5456,7 @@
         refresh: function (id) { if (id) { delete bodies[id]; } else { bodies = {}; } paint(); }
       };
     }
-    LayoutEdit.readLayout = readLayout; LayoutEdit.move = move; LayoutEdit.place = place; LayoutEdit.hide = hide; LayoutEdit.show = show; LayoutEdit.saved = saved;
+    LayoutEdit.readLayout = readLayout; LayoutEdit.move = move; LayoutEdit.place = place; LayoutEdit.drop = drop; LayoutEdit.hide = hide; LayoutEdit.show = show; LayoutEdit.saved = saved;
     LayoutEdit.keyOf = keyOf; LayoutEdit.read = readFrom; LayoutEdit.write = writeTo; LayoutEdit.command = command; LayoutEdit.KEY = KEY; LayoutEdit.MODES = MODES;
     NS.LayoutEdit = LayoutEdit;
   })();

@@ -2027,6 +2027,7 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 
 
 
+
 /* ---------- Stage 14: what main's Studio built since the design ---------- */
 /* --- AskPane --- */
 .ls-ask { padding: 0 18px; }
@@ -2194,8 +2195,17 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 .ls-layout { display: grid; gap: var(--space-6); min-width: 0; }
 .ls-layout > .panel { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-3); align-content: start; }
 .ls-layout > .panel.editing { padding: var(--space-3); border-radius: var(--radius-chip); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
-.ls-layout > .panel.editing.over { box-shadow: inset 0 0 0 2px var(--accent); }
-.ls-layout > .panel.dragging { opacity: .5; }
+.ls-layout > .panel.editing { position: relative; }
+/* Where a dragged section will land: a bar in the gap before or after the section under the pointer (beside it when sections sit side by side). */
+.ls-layout > .panel.editing.over::after { content: ""; position: absolute; left: 0; right: 0; height: 4px; border-radius: 2px; background: var(--accent); pointer-events: none; }
+.ls-layout > .panel.editing.over.before::after { top: calc(var(--space-6) / -2 - 2px); }
+.ls-layout > .panel.editing.over.after::after { bottom: calc(var(--space-6) / -2 - 2px); }
+.ls-layout > .panel.editing.over.across::after { top: 0; bottom: 0; width: 4px; height: auto; }
+.ls-layout > .panel.editing.over.across.before::after { left: calc(var(--space-6) / -2 - 2px); right: auto; }
+.ls-layout > .panel.editing.over.across.after::after { right: calc(var(--space-6) / -2 - 2px); left: auto; }
+.ls-layout .chrome.drags { cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; min-height: 36px; }
+.ls-layout[data-dragging] .chrome.drags, .ls-layout[data-dragging] { cursor: grabbing; }
+.ls-layout > .panel.dragging { opacity: .5; outline: 2px dashed var(--accent); outline-offset: 2px; }
 [data-theme="hc-dark"] .ls-layout > .panel.editing, [data-theme="hc-light"] .ls-layout > .panel.editing { box-shadow: inset 0 0 0 2px var(--accent); }
 .ls-layout .chrome { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); }
 .ls-layout .chrome .grip { display: inline-flex; gap: var(--space-2); align-items: center; cursor: grab; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--accent-text); }
