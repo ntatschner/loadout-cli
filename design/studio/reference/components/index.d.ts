@@ -101,11 +101,40 @@ export declare function Meter(o: MeterOptions): { el: HTMLElement; set: (v: numb
 /** A ring that fills for stages (0 to 1). */
 export declare function ProgressRing(o: { value: number }): { el: HTMLElement; set: (f: number) => void };
 
-export interface ToastAction { label: string; cmd: string; kind?: "" | "needs" | "danger"; onPress?: () => string | void }
-/** Turns an empty element into the notification stack, top right. */
-export declare function Toasts(region: HTMLElement): {
+export interface ToastAction {
+  label: string; cmd: string; kind?: "" | "needs" | "danger";
+  /** Does the thing; returns (or resolves to) the words to settle the toast with, or nothing to use the label. `onpress` is accepted too, as main spells it. */
+  onPress?: () => string | void | Promise<string | void>;
+}
+/** The places a toast is in the way of something (main's ToastPlace): in one, everything arrives as a chip and Done and notice chips give way near the pointer. */
+export type ToastPlace = "session" | "pure" | "desk" | null;
+export interface ToastGone { id: number; level: "done" | "info" | "needs" | "problem"; text: string; cmd: string; count: number }
+/**
+ * Turns an empty element into the notification stack, top right, as main's Toasts: Done and notices fold after 4s and
+ * leave after 10s into Earlier; the same one again counts up; Ctrl+Shift+X folds what is open, then clears what is not waiting.
+ */
+export declare function Toasts(region: HTMLElement, o?: {
+  /** The named place to start in; change it with place(). */
+  place?: ToastPlace;
+  /** false: no clock of its own; call tick() once a second. Default true. */
+  clock?: boolean;
+}): {
+  /** Adds one at the top, or counts one more of the same Done or notice (returning its id). */
   add: (t: { level: "done" | "info" | "needs" | "problem"; text: string; cmd?: string; actions?: ToastAction[] }) => number;
   settle: (id: number, words?: string) => void;
+  /** Opens a folded one again. */
+  open: (id: number) => void;
+  dismiss: (id: number) => void;
+  /** What Ctrl+Shift+X does. */
+  sweep: () => void;
+  /** One second passes. */
+  tick: () => void;
+  /** Entering a named place folds everything; leaving opens again whatever still needs someone. */
+  place: (p: ToastPlace) => void;
+  clearHistory: () => void;
+  list: () => object[];
+  history: () => ToastGone[];
+  /** Stops the clock and the window listeners. */
   stop: () => void;
 };
 /** Arrow keys, Home and End move between items and pick as they go. */
@@ -474,7 +503,14 @@ export declare function WorkDesk(o: {
   /** false when Studio's single-letter shortcuts are off. */
   keys?: boolean;
   onSelect?: (id: string) => void; onShown?: (item: DeskItem, view: unknown) => void;
-}): { el: HTMLElement; select: (id: string, quiet?: boolean) => void; focusList: () => void; openView: () => void; closeView: () => void; refresh: (groups: unknown[]) => void; repaintView: () => void; repaintActions: () => void; readonly selected: string | null; destroy: () => void };
+  /** How much of the width the list and the actions were left with ([list, actions], fractions), kept by the page; null for the stylesheet's widths (main's split). */
+  split?: [number, number] | null;
+  /** A divider moved (dragged, arrows, Home, End, or Enter / double click to put it back): the new [list, actions] to keep (main's onsplit; onsplit is accepted too). */
+  onSplit?: (fractions: [number, number]) => void;
+}): { el: HTMLElement; select: (id: string, quiet?: boolean) => void; focusList: () => void; openView: () => void; closeView: () => void; refresh: (groups: unknown[]) => void; repaintView: () => void; repaintActions: () => void; readonly selected: string | null;
+  /** Sets the kept widths (null for the stylesheet's) without calling onSplit. */
+  setSplit: (split: [number, number] | null) => void; readonly split: [number, number] | null;
+  destroy: () => void };
 
 /* ---------- The pages (stage 8) ---------- */
 
@@ -556,6 +592,10 @@ export declare function PlanLayer(o: {
   onChoose?: (option: string) => void | boolean | Promise<boolean>; onVerdict?: (verdict: "Keep" | "Drop") => void | boolean | Promise<boolean>; onImprove?: (request: string) => void | boolean | Promise<boolean>;
   /** Told whether a rework request is written in the open box and not sent: a page's Next button goes to Send it back. Also accepted as onrework. */
   onRework?: (pending: boolean) => void;
+  /** The starting text of an unsent rework request: when it has words, the box starts open with them (and onRework is told it is pending), so a page that draws the layer again gives back what was typed. */
+  request?: string;
+  /** Told the request's text as it is typed, and "" once it is sent, for a page to keep and pass back as request. Also accepted as onrequest. */
+  onRequest?: (text: string) => void;
 }): HTMLElement;
 /** Notes from elsewhere, split into ideas and tasks; tick the pieces to record. */
 export declare function NoteDump(o: { dump: { id: string; source?: string; captured?: string; split?: string | null; items: { number: number; title: string; excerpt?: string; kind: string; recorded?: boolean }[] }; disabledReason?: string; onApply?: (numbers: string[]) => void; onSplit?: () => void; onShow?: () => void }): HTMLElement;

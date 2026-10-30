@@ -11,6 +11,14 @@ WorkDesk is **Pure Focus**, the fifth mode: a flat, sharp work view for acting f
 | **Actions** | Its actions, numbered 1 to 9, each with the command it runs (ActionPane). |
 | **Command bar** | Along the bottom: actions, places and any loadout command (CommandBar). |
 
+## The dividers
+
+Two dividers (Splitter) sit between the list and the view and between the view and the actions. Drag one, or focus it and use the arrows (Shift for further), Home and End; Enter or a double click puts it back where the stylesheet would draw it. The list keeps its 250px floor, the actions 230px, and the view a terminal's (40 columns by 8 rows at 13px, 336px).
+
+- `split: [list, actions]`, fractions of the width, is what the page kept; `null` (the default) draws the stylesheet's widths, and the dividers say where those are.
+- `onSplit(fractions)` is called whenever a divider moves; keep it in the browser (main keeps it as `studio-split-desk`, shared by every desk) and pass it back as `split` next time. `setSplit()` changes it without a call back.
+- The widths are written as `--desk-cols` on the desk. Below 1024px the panes stack and the dividers go.
+
 ## Keys
 
 | Key | Does |
