@@ -4416,6 +4416,7 @@
 
 
 
+
 /* ---------- Stage 14: what main's Studio built since the design ---------- */
 (function () {
   "use strict";
@@ -7297,7 +7298,8 @@
       function closeSheet() { if (sheetDlg) { var d = sheetDlg; sheetDlg = null; d.close(); } }
 
       function openSheet() {
-        closeSheet();
+        /* Closing a sheet that's already open clears editing (its onClose); keep the rule just picked. */
+        var next = editing; closeSheet(); editing = next;
         sheet = h("div", { "class": "ls-sheet" });
         paintSheet();
         var v = editing.values;
