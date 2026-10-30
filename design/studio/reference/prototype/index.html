@@ -116,13 +116,60 @@ body { background: var(--ground); color: var(--ink); }
 .lostrow .acts { grid-row: 1 / span 2; grid-column: 2; display: grid; justify-items: end; gap: 4px; }
 .sesshist { margin-top: 22px; }
 .sesshist .ls-ltool { margin: 10px 0 12px; }
-.liverow { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0 10px; }
-.liverow .linkish { justify-self: end; padding-right: 12px; }
+.liverow { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; box-shadow: inset 0 -1px 0 var(--rule); }
+.liverow.ended { box-shadow: none; }
+.srhead { display: flex; align-items: center; gap: 4px; min-width: 0; padding-right: 6px; }
+.srhead > .srow { flex: 1 1 auto; min-width: 0; }
+.srow .tl { grid-column: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-family: var(--font-mono); font-size: 12px; color: var(--ink-soft); }
+.srow .tl.ask { color: var(--needs-text); }
+.srow .x .ls-ctx, .srow .x > :last-child:not(:first-child) { vertical-align: middle; }
+.sracts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 18px; padding: 0 12px 10px; }
+.sracts:empty { display: none; }
+.sessedit:empty { display: none; }
+/* A session beside the page, in Default */
+.sb { display: grid; gap: 12px; min-width: 0; }
+.sb-head { display: grid; gap: 2px; min-width: 0; }
+.sb-head .who { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.sb-head h2 { margin: 0; font-size: 19px; line-height: 24px; font-weight: 300; color: var(--ink-strong); overflow-wrap: anywhere; }
+.sb-head .x { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); overflow-wrap: anywhere; }
+.sb-term { height: calc(100vh - 300px); min-height: 300px; }
+.sb-acts { margin: 0; }
+@media (min-width: 1100px) { .ls-besidegrid.sb-grid { grid-template-columns: minmax(0, 1fr) minmax(440px, 46%); } }
+/* A session's page: Next waiting and End session in the head, the Details in the order you gave them */
+.nextw { display: inline-flex; align-items: center; gap: 2px; }
+.sdedit { display: flex; justify-content: flex-end; }
+.sessdetails dl { margin: 0; }
+.sessdetails .p-status .ls-sblock > h2 { display: none; }
+/* Home: rows that peek, and the Map's peek buttons beside its boards */
+.rows .pkrow { display: flex; flex-wrap: wrap; align-items: center; min-width: 0; }
+.rows .pkrow > .row { flex: 1 1 0; min-width: 0; width: auto; }
+.rows .pkrow > .rowacts { flex: 1 1 100%; margin: 0 0 8px 12px; }
+.waitcard .wh { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.waitcard.lost { background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule), inset 3px 0 0 var(--accent); }
+.waitcard.lost .w, .waitcard.lost .q { color: var(--ink-strong); }
+.waitcard.lost .w { color: var(--ink-soft); }
+.ls-tube .mappk { position: absolute; left: 294px; }
+/* The deck: the Waiting chip, the Ended menu and Edit layout above it; the top bar's parts that are hidden */
+.deckwrap { display: flex; flex-direction: column; gap: 6px; }
+.deckwrap > .ls-deck { flex: 1 1 auto; min-height: 0; }
+.deckwrap > .tftop { flex: none; max-height: 40vh; overflow: auto; }
+.tfbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; min-height: 32px; }
+.tfbar .grow { flex: 1 1 auto; }
+.tfmenu-btn { min-height: 32px; padding: 0 12px; border: 0; background: none; color: var(--ink-soft); font: inherit; font-size: 12.5px; box-shadow: inset 0 0 0 1px var(--control-edge); cursor: pointer; }
+.tfmenu-btn:hover, .tfmenu-btn[aria-expanded="true"] { color: var(--ink-strong); background: var(--tint-hover-c); }
+.tfmenu-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.deckwrap .ls-deck > .dtop + .dtop > span:first-child { display: none !important; }
+.deckwrap.tf-no-find .ls-deck .find, .deckwrap.tf-no-keys .ls-deck .keys, .deckwrap.tf-no-layout .ls-deck .lay, .deckwrap.tf-no-waiting .tf-waiting, .deckwrap.tf-no-ended .tf-ended { display: none !important; }
+.ls-stabs .tab .tfpk { position: absolute; right: 28px; top: 50%; width: 24px; height: 24px; margin-top: -12px; }
+.ls-stabs .tab:has(.tfpk) [role="tab"] { padding-right: 54px; }
+.ls-stabs .tab:has(.tfpk) [role="tab"] .new { right: 54px; }
+.tfside { display: grid; gap: 12px; }
+.tfside .ls-zone { margin: 0; }
 .linkish { border: 0; background: none; padding: 0; min-height: 24px; color: var(--accent-text); font: inherit; font-size: 12.5px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .linkish:disabled { color: var(--muted); cursor: default; text-decoration: none; }
 .linkish:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .sessfoot { display: grid; gap: 10px; margin-top: 12px; }
-@media (max-width: 600px) { .lostrow { grid-template-columns: minmax(0, 1fr); } .lostrow .acts { grid-row: auto; grid-column: 1; justify-items: start; } .liverow { grid-template-columns: minmax(0, 1fr); } .liverow .linkish { justify-self: start; padding: 0 12px 6px; } }
+@media (max-width: 600px) { .lostrow { grid-template-columns: minmax(0, 1fr); } .lostrow .acts { grid-row: auto; grid-column: 1; justify-items: start; } }
 .lostcard { display: grid; gap: 12px; max-width: 640px; padding: 14px 16px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule), inset 3px 0 0 var(--bad); }
 .lostcard p { margin: 0; color: var(--ink); }
 .sheet .fixed { margin: 0; display: grid; gap: 6px; font-size: 14.5px; color: var(--ink-strong); }
@@ -710,7 +757,7 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     if (l.waiting && l.kind === "team run") { return gateActs(); }
     if (l.waiting && l.kind === "session") { return sessionAnswers(l); }
     if (l.failed) { return [{ label: "Try the round again", cmd: "$ loadout idea refine " + l.ref, onPress: refine }]; }
-    if (l.kind === "idea") { return l.stage === 0 ? [{ label: "Refine it", cmd: "$ loadout idea refine " + l.ref, onPress: refine }] : [{ label: "Open the idea", cmd: "opens Ideas · changes nothing", onPress: function () { go("ideas"); } }]; }
+    if (l.kind === "idea") { return l.stage === 0 ? [{ label: "Refine it", cmd: "$ loadout idea refine " + l.ref, onPress: refine }] : [{ label: "Open the idea", cmd: "opens the idea · changes nothing", onPress: function () { var x = IDEAS.filter(function (i) { return i.id === l.ref; })[0]; reveal({ kind: "idea", id: l.ref, list: x ? x.list : undefined, zone: x && ideaUnanswered(x) && !x.accepted ? "questions" : undefined }); } }]; }
     if (l.kind === "task" && !l.blocked && l.stage === 2) { return [{ label: "Mark it done", cmd: "$ loadout task declare " + l.ref + " done --project " + l.where, onPress: function () { l.stage = 4; l.note = "done"; addEvent(l, "ended", "You marked " + l.title + " done"); render(); } }]; }
     if (l.kind === "task" && (l.blocked || l.stage === 0)) { var tk = (TASKS[l.where] || []).filter(function (t) { return t.id === l.ref; })[0] || { id: l.ref, title: l.title, note: null }; var goTask = [{ label: "Start a session on it", cmd: "opens the launch sheet with this task \u00b7 --task-id=" + l.ref, onPress: function () { sessionOnTask(l.where, tk); } }, { label: "Run a team on it", cmd: "opens Start a run with this task \u00b7 --task " + l.ref, onPress: function () { runOnTask(l.where, tk); } }]; }
     if (l.kind === "task" && l.blocked) { return [{ label: "Mark it doing", cmd: "$ loadout task declare " + l.ref + " doing --project " + l.where, onPress: function () { l.blocked = ""; l.note = "doing"; addEvent(l, "started", "You unblocked the task"); render(); } }].concat(goTask); }
@@ -794,8 +841,24 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
   /* Home's two views are sections in an order, some hidden, edited in place with shLayout (S.LayoutEdit) and kept in studio-layouts as home/lens
      and home/map. The default orders are WORKFLOW.md's for Home; the older studio-layout-lens and studio-layout-map (P.homeLayout here) are read
      until studio-layouts is written. */
-  var HOME_PANELS = { lens: ["needs", "focus", "all", "start", "signal"], map: ["status", "map", "strip"] };
-  var HOME_NAMES = { needs: "Needs you", focus: "Focus", all: "Everything", start: "Start a session", signal: "Signal", status: "Network status", map: "The map", strip: "The picked line" };
+  var HOME_PANELS = { lens: ["needs", "running", "pickup", "focus", "all", "start", "signal"], map: ["status", "map", "strip"] };
+  var HOME_NAMES = { needs: "Needs you", running: "Running", pickup: "Pick up", focus: "Focus", all: "Everything", start: "Start a session", signal: "Signal", status: "Network status", map: "The map", strip: "The picked line" };
+  /* Live work first (S.liveFirst) for Home's lines: a session that exited with an error is one to pick up, a failed idea round or a blocked task too. */
+  function homeWord(l) { return l.kind === "session" && l.stage === 4 ? (l.exitCode ? "exited with an error" : "ended") : l.failed ? "failed" : l.blocked ? "blocked" : sessWord(l); }
+  function homeLiveOpts() { return { state: homeWord, since: function (l) { return l.waiting && l.askedAt ? shAt(l.askedAt) : null; } }; }
+  function homeLive(lines) { return S.liveFirst(lines, homeLiveOpts()); }
+  function homeGroup(l) { return S.liveGroup(l, homeLiveOpts()); }
+  /* The peek for one of Home's lines: its session, its team run, its idea or its task, from the same records the pages read. */
+  function homePeekOf(l) {
+    if (!l) { return null; }
+    if (l.kind === "session") { return peekSession(l); }
+    if (l.kind === "team run") { return peekRun(TR.filter(function (r) { return r.line === l.id; })[0]); }
+    if (l.kind === "idea") { return peekIdea(IDEAS.filter(function (x) { return x.id === l.ref; })[0]); }
+    if (l.kind === "task") { return peekTask((TASKS[l.where] || []).filter(function (t) { return t.id === l.ref; })[0], l.where); }
+    return null;
+  }
+  /* The head's count: the one count of what waits on you (shWaiting) and what is running, as "N waiting · N running". */
+  function homeCounts() { return { waiting: shWaiting().count, running: ST.lines.filter(function (l) { return homeGroup(l) === "running"; }).length }; }
   function homeLegacy(view) { var kept = (P.homeLayout || {})[view]; return kept ? JSON.stringify(kept) : ""; }
   /* The view's Edit layout: its button where the head keeps a place for it, its bar right under the head. */
   function homeLayoutEdit(main, view, o) {
@@ -807,10 +870,10 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     return le;
   }
   function homeHead(main) {
-    var w = ST.lines.filter(function (l) { return l.waiting; }).length;
-    var views = el("div", { "class": "views", role: "group", "aria-label": "Home view" }, [["lens", "Lens"], ["map", "Map"]].map(function (v) {
+    var c = homeCounts(), w = c.waiting;
+    var views =el("div", { "class": "views", role: "group", "aria-label": "Home view" }, [["lens", "Lens"], ["map", "Map"]].map(function (v) {
       return el("button", { type: "button", "aria-pressed": ST.view === v[0] ? "true" : "false", "data-k": "view-" + v[0], text: v[1], onclick: function () { ST.view = v[0]; render(); } }); }));
-    main.appendChild(el("div", { "class": "head" }, [el("div", {}, [el("h1", { text: "Home" }), el("span", { "class": "fact" + (w ? " need" : ""), text: w ? w + " waiting on you" : "all calm" })]), views, el("span", { "class": "grow" }),
+    main.appendChild(el("div", { "class": "head" }, [el("div", {}, [el("h1", { text: "Home" }), el("span", { "class": "fact" + (w ? " need" : ""), text: w ? w + " waiting · " + c.running + " running" : "all calm" })]), views, el("span", { "class": "grow" }),
       el("span", { "class": "clock", text: hhmm(ST.clock) }),
       halo({ label: "Ambient", size: "small", onPress: function () { setAmbient(true); } }, "ambient"),
       el("span", { "class": "homeedit" }),
@@ -839,7 +902,7 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     if (homeEmpty(main)) { return; }
     homeFilterBar(main);
     /* The filters narrow the Lens as they do the Map; a line asked for by name is shown even when they hide it, with the note. */
-    var F = homeFiltered(), drawn = F.drawn, wl = homeRanked(drawn), f = line(ST.focus) || (wl[0] ? line(wl[0].id) : null) || drawn[0], idx = f ? drawn.indexOf(f) : -1, n = drawn.length;
+    var F = homeFiltered(), drawn = homeLive(F.drawn), wl = homeRanked(drawn), need = homeNeeds(F), f = line(ST.focus) || (wl[0] ? line(wl[0].id) : null) || drawn[0], idx = f ? drawn.indexOf(f) : -1, n = drawn.length;
     var editing = !!ST.editing, step = function (by) { if (n) { ST.focus = drawn[(idx + by + n) % n].id; render(); } };
     var body = {
       focus: function () {
@@ -862,19 +925,17 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
         return [col];
       },
       needs: function () {
-        var said1 = F.note ? homeHiddenLink(F.note, "show-all-needs") : null;
-        if (!wl.length) { return [said1, el("p", { "class": "calm", text: "Nothing needs you." })]; }
-        return [said1].concat(wl.map(function (l) {
-          return el("div", { "class": "waitcard" + (l.problem && !l.waiting ? " problem" : "") }, [el("span", { "class": "w", text: l.kind + " · " + l.where + (l.askedAt ? " · " + Math.max(1, ST.clock - l.askedAt) + " min" : "") }),
-            el("p", { "class": "q", text: l.waiting ? (l.ask || l.title) : l.title + " · " + l.failed }),
-            el("div", { "class": "ls-answers", style: "margin: 0" }, actionsFor(l).map(function (a) { return halo(Object.assign({ size: "small" }, a), "need-" + l.id + a.label); }).concat([halo({ label: "Focus it", size: "small", onPress: function () { ST.focus = l.id; render(); } }, "focus-" + l.id)]))]);
-        }));
+        var said1 = need.note ? homeHiddenLink(need.note, "show-all-needs") : null;
+        if (!need.items.length) { return [said1, el("p", { "class": "calm", text: "Nothing is waiting on you." })]; }
+        return [said1].concat(need.items.map(homeNeedCard));
       },
+      running: function () { return homeRows(drawn.filter(function (l) { return homeGroup(l) === "running"; }), "Running", "Nothing is running.", f); },
+      pickup: function () { return homeRows(drawn.filter(function (l) { return homeGroup(l) === "pickup"; }), "Pick up", "Nothing to pick up: nothing failed, nothing is blocked.", f, true); },
       all: function () {
         var ul = el("ul", { "class": "rows", "aria-label": "Everything" });
         var rows = drawn.map(function (l) {
           var b = el("button", { type: "button", "class": "row", "aria-current": f && l.id === f.id ? "true" : "false", "data-k": "row-" + l.id, onclick: function () { ST.focus = l.id; render(); } }, [el("span", { "class": "t", text: l.title }), S.Signal(sessWord(l)), el("span", { "class": "x", text: l.kind + " · " + l.where + " · " + factsOf(l) })]);
-          ul.appendChild(el("li", {}, [b])); return b;
+          var li = el("li", { "class": "pkrow" }, [b]); ul.appendChild(li); homePeek(li, l, b); return b;
         });
         var top = wl[0]; S.applyUrgency(rows, top && !editing ? drawn.indexOf(line(top.id)) : -1, top && top.problem && !top.waiting ? "problem" : "needs");
         return [ul];
@@ -887,10 +948,69 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
       },
       signal: function () { return [el("div", { "class": "two" }, [feedList(), el("div", { "class": "cstack" }, [homeSpendMeter(), tokenMeter()])])]; }
     };
-    /* Needs you holds live work: it moves, but stays shown while something is in it. */
+    /* Needs you and Running hold live work: they move, but stay shown while something is in them. */
+    var counted = { needs: need.items.length, running: drawn.filter(function (l) { return homeGroup(l) === "running"; }).length, pickup: drawn.filter(function (l) { return homeGroup(l) === "pickup"; }).length, all: n };
     var le = homeLayoutEdit(main, "lens", { "class": "lens", numbered: true, wide: ["start", "signal"], render: function (id) { return body[id](); },
-      count: function (id) { return id === "needs" ? wl.length : id === "all" ? n : undefined; }, locked: function (id) { return id === "needs" && wl.length > 0; } });
+      count: function (id) { return counted[id]; }, locked: function (id) { return (id === "needs" || id === "running") && counted[id] > 0; } });
     main.appendChild(le.el);
+  }
+  /* Needs you: the one count's list (shWaiting, oldest first: sessions, team runs, trigger approvals, ideas with questions), then what the
+     daemon's last stop ended, which waits on you to say whether it comes back. A line the filters hide is left out and counted in the note. */
+  function homeNeeds(F) {
+    var hid = F.hidden.map(function (l) { return l.id; }), left = 0;
+    var items = shWaiting().list.filter(function (w) {
+      var l = w.kind === "session" ? w.item.line : w.kind === "team run" ? tline(w.item.run) : null;
+      if (l && hid.indexOf(l.id) >= 0) { left += 1; return false; } return true;
+    });
+    SESS_LOST.filter(function (x) { return x.conversation; }).forEach(function (x) { items.push({ kind: "lost", id: x.id, title: x.conversation.title, since: Date.parse(x.endedAt), item: { lost: x } }); });
+    return { items: items, note: left ? left + " hidden by the filters, waiting on you" : "" };
+  }
+  function homeAgo(since) { return since === null || since === undefined || isNaN(since) ? "" : " · " + Math.max(1, Math.round((Date.now() - since) / 60000)) + " min"; }
+  function homeNeedCard(w) {
+    var it = w.item || {}, acts = [], words = "", what = "", key0 = "need-" + w.id + "-";
+    if (w.kind === "session") {
+      var l = it.line; what = "session · " + l.where; words = l.ask || l.title + (l.approval ? " needs approval" : " is waiting for you");
+      acts.push({ label: "Type here", kind: "needs", solid: true, cmd: "opens its terminal · answered there", disabledReason: sessWatching() ? SESS_WATCH : undefined, onPress: function () { shTypeHere(l); } });
+      acts.push({ label: "Open beside", cmd: "opens it beside this page · changes nothing", onPress: function () { shOpenBeside(l); } });
+    } else if (w.kind === "team run") {
+      var r = it.run, tl = tline(r), g = runGate(r); what = "team run · " + r.team + " · " + r.project; words = tl && tl.ask ? tl.ask : g ? (g.brief || g.question) : r.goal;
+      acts = tl && tl.waiting ? actionsFor(tl) : [{ label: "Answer", kind: "needs", solid: true, cmd: "opens the run at its question · changes nothing", onPress: function () { reveal({ kind: "run", id: r.id }); } }];
+    } else if (w.kind === "approval") {
+      var a = it.approval; what = "trigger approval · " + a.rule + " · " + a.project; words = a.rule + " asks to start a run on " + shApprovalAbout(a) + ", setting aside " + money(a.budgetUsd);
+      acts.push({ label: "Approve", kind: "needs", solid: true, cmd: "$ loadout trigger approve " + a.id, disabledReason: P.watchOnly ? SH_WATCH : undefined, onPress: function () { trigAnswer("approve", a.id, "Approved: " + shApprovalAbout(a))(); } });
+      acts.push({ label: "See it on Teams", cmd: "opens Teams' Needs you · changes nothing", onPress: function () { reveal({ kind: "approval", id: a.id }); } });
+    } else if (w.kind === "idea") {
+      var x = it.idea; what = "idea · " + ideaWhereSaid(x.list); words = x.title + ": " + it.open + " question" + (it.open === 1 ? "" : "s") + " for you";
+      acts.push({ label: "Answer", kind: "needs", solid: true, cmd: "opens the idea at its questions · changes nothing", onPress: function () { reveal({ kind: "idea", id: x.id, list: x.list, zone: "questions" }); } });
+    } else if (w.kind === "lost") {
+      var lost = it.lost, c = lost.conversation; what = "ended when the daemon stopped · " + (c.project || c.directory) + " · " + c.agent; words = c.title;
+      acts.push({ label: "Resume", cmd: "carries it on in a new terminal", disabledReason: sessUnable() || (SESSH.busy ? "one at a time" : undefined), onPress: function () { SESSH.busy = true; return sessResume(c, {}, lost.id).then(function (id) { SESSH.busy = false; if (id) { sessReveal(id, true); } else { render(); } }); } });
+      acts.push({ label: "See them on Sessions", cmd: "opens Sessions' Pick up · changes nothing", onPress: function () { go("sessions"); shLand("#z-sessions-pickup"); } });
+    }
+    var card = el("div", { "class": "waitcard pkrow" + (w.kind === "lost" ? " lost" : "") }, [el("div", { "class": "wh" }, [el("span", { "class": "w", text: what + homeAgo(w.since) })]),
+      el("p", { "class": "q", text: words }),
+      el("div", { "class": "ls-answers", style: "margin: 0" }, acts.map(function (a) { return halo(Object.assign({ size: "small" }, a), key0 + a.label); }))]);
+    if (w.kind !== "lost") { peekAttach(card, function () { return peekOf(w); }, { into: card.firstChild }); }
+    return card;
+  }
+  /* Running and Pick up: the lines in that group, live first, each a row that focuses it on the Lens, its peek beside it, and its actions under it for Pick up. */
+  function homeRows(lines, label, calm, f, withActs) {
+    if (!lines.length) { return [el("p", { "class": "calm", text: calm })]; }
+    var ul = el("ul", { "class": "rows", "aria-label": label });
+    lines.forEach(function (l) {
+      var b = el("button", { type: "button", "class": "row", "aria-current": f && l.id === f.id ? "true" : "false", "data-k": "row-" + label + "-" + l.id, onclick: function () { ST.focus = l.id; render(); } },
+        [el("span", { "class": "t", text: l.title }), S.Signal(homeWord(l)), el("span", { "class": "x", text: l.kind + " · " + l.where + " · " + factsOf(l) })]);
+      var li = el("li", { "class": "pkrow" }, [b]);
+      if (withActs) { var acts = actionsFor(l); if (acts.length) { li.appendChild(el("div", { "class": "ls-answers rowacts" }, acts.map(function (a) { return halo(Object.assign({ size: "small" }, a), "pk-" + l.id + a.label); }))); } }
+      ul.appendChild(li); homePeek(li, l, b);
+    });
+    return [ul];
+  }
+  /* A row's peek, on hover, focus or its peek button; a row drawn again keeps a peek open over it. */
+  function homePeek(row, l, target) {
+    var get = function () { return homePeekOf(line(l.id)); };
+    if (!get()) { return; }
+    sessPeekKeep(row, get, { target: target });
   }
   function feedList() {
     var ul = el("ul", { "class": "feed", "aria-label": "What happened" });
@@ -928,7 +1048,8 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     var waiting = hidden.filter(function (l) { return l.waiting; }).length;
     return { filter: f, drawn: drawn, hidden: hidden, waiting: waiting, note: hidden.length ? hidden.length + " hidden" + (waiting ? ", " + waiting + " waiting on you" : "") : "" };
   }
-  function homeRanked(drawn) { return S.rankUrgent(drawn.map(function (l) { return Object.assign({ problem: !!l.failed }, l); })); }
+  /* What the Focus starts on and Everything raises: waiting on you, then what to pick up, live first. */
+  function homeRanked(drawn) { return homeLive(drawn).filter(function (l) { var g = homeGroup(l); return g === "waiting" || g === "pickup"; }).map(function (l) { return Object.assign({ problem: homeGroup(l) === "pickup" }, l); }); }
   /* Every project the bar offers: those with work in view, then any hidden that have none, (no project) last. */
   function homeProjectsIn(hiddenOnes) {
     var none = S.MapFilterBar.NO_PROJECT, named = [];
@@ -980,7 +1101,9 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
         if (drawn.length) {
           if (F.note) { out.push(homeHiddenLink(F.note, "show-all-map")); }
           /* Coded again in drawing order, as main's filterLines codes them, so the lines in view keep eight apart. */
-          out.push(S.TubeMap({ lines: drawn.map(function (l, i) { return Object.assign({}, l, { facts: factsOf(l), code: String((i % 8) + 1) }); }), picked: picked.id, onPick: function (id) { ST.picked = id; render(); setTimeout(function () { var s = document.querySelector(".ls-strip"); if (s && s.scrollIntoView) { s.scrollIntoView({ block: "nearest", behavior: S.motion() === "full" ? "smooth" : "auto" }); } }, 30); } }).el);
+          var tm = S.TubeMap({ lines: drawn.map(function (l, i) { return Object.assign({}, l, { facts: factsOf(l), code: String((i % 8) + 1) }); }), picked: picked.id, onPick: function (id) { ST.picked = id; render(); setTimeout(function () { var s = document.querySelector(".ls-strip"); if (s && s.scrollIntoView) { s.scrollIntoView({ block: "nearest", behavior: S.motion() === "full" ? "smooth" : "auto" }); } }, 30); } });
+          homeMapPeeks(tm.el, drawn);
+          out.push(tm.el);
         } else {
           out.push(el("p", { "class": "calm" }, ["Nothing to draw. " + hidden + " " + (off === 1 ? "is" : "are") + " hidden by the filters" + (F.waiting ? ", " + F.waiting + " waiting on you" : "") + ". ", homeEverything("show-all")]));
         }
@@ -992,6 +1115,16 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     var le = homeLayoutEdit(main, "map", { "class": "mapview", wide: HOME_PANELS.map, quiet: true, render: function (id) { return body[id](); },
       locked: function (id) { return id === "map" && drawn.some(function (l) { return l.stage !== 4; }); } });
     main.appendChild(le.el);
+  }
+
+  /* The Map's lines peek (WORKFLOW.md, Home): each line's board, in drawing order, gets its peek button beside it, at the board's own height. */
+  function homeMapPeeks(tube, drawn) {
+    Array.prototype.forEach.call(tube.querySelectorAll(".board"), function (b, i) {
+      var l = drawn[i]; if (!l || !homePeekOf(l)) { return; }
+      var btn = el("button", { type: "button", "class": "ls-peek-btn mappk", "data-peek": "", style: "top: calc(" + (b.style.top || "0px") + " + 8px)" }, [el("span", { "class": "ring", "aria-hidden": "true" }), el("span", { "class": "ls-vh", text: "Peek" })]);
+      b.parentNode.insertBefore(btn, b.nextSibling);
+      sessPeekKeep(b, function () { return homePeekOf(line(l.id)); }, { button: btn, target: b });
+    });
   }
 
   /* ---------- Ambient ---------- */
@@ -1170,52 +1303,133 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
   }
   function sessEnd(l) { l.stage = 4; l.waiting = false; l.approval = false; l.background = false; l.exitCode = 0; l.note = "ended by you"; addEvent(l, "ended", "You ended " + l.title); }
   /* Shows one in Terminal Focus, bringing its tab back if it was hidden here (main's Sessions.svelte openInTerminals). */
+  /* Shows one in Terminal Focus, bringing its tab back if it was hidden here (main's Sessions.svelte openInTerminals). It changes the mode, so its button says so. */
   function sessOpenInTerminals(l) {
     var t = tfTabs(); t.hidden = t.hidden.filter(function (x) { return x !== l.id; }); tfKeepTabs(t);
     P.deckCurrent = l.id; savePrefs();
     if (P.mode === "terminals") { render(); } else { setMode("terminals"); }
   }
+  /* The prototype's own stand-in for the daemon's answer: an act takes a moment, so a confirmation shows its working word, then closes; it fails
+     with the reason when Studio is only watching, or when a test asks: window.studioSessions.failNext("the daemon did not answer") makes the next one fail. */
+  var SESS_FAIL = { next: null };
+  window.studioSessions = { failNext: function (why) { SESS_FAIL.next = why || "The daemon did not answer"; } };
+  function sessAct(ms, fn) {
+    return new Promise(function (resolve, reject) {
+      setTimeout(function () {
+        if (SESS_FAIL.next) { var why = SESS_FAIL.next; SESS_FAIL.next = null; reject(new Error(why)); return; }
+        try { resolve(fn()); } catch (e) { reject(e); }
+      }, ms);
+    });
+  }
+  /* peekAttach, and a row drawn again (the page redraws as the agents write) takes over the peek that was open over the row before it, pinned or not. */
+  function sessPeekKeep(row, get, opt) {
+    var detach = peekAttach(row, get, opt), pk = shPeek(), was = pk.open ? pk.item : null, mine = was ? get() : null;
+    if (was && mine && was.kind === mine.kind && was.id === mine.id && P.mode !== "minimal" && P.mode !== "pure") {
+      var pinned = pk.pinned;
+      setTimeout(function () {
+        var shown = document.querySelector("[data-peek][aria-expanded=\"true\"]");
+        if (!shown && row.isConnected && pk.open && pk.item && pk.item.id === mine.id) { pk.show(get(), row, { pin: pinned }); }
+      }, 0);
+    }
+    return detach;
+  }
+
+  /* Sessions in Default, live work first (WORKFLOW.md, Sessions): Waiting on you, Running, Pick up (what the daemon's stop ended, with Resume and
+     Resume all, and any that exited with an error), Recent and History. Each is a section of S.LayoutEdit, kept as "sessions" in studio-layouts;
+     Waiting on you and Running hold live work, so they stay while they have something in them. */
+  var SESS_PANELS = [["waiting", "Waiting on you"], ["running", "Running"], ["pickup", "Pick up"], ["recent", "Recent"], ["history", "History"]].map(function (s) { return { id: s[0], name: s[1] }; });
+  var SESS_EDIT = { editing: false };
+  function sessLiveWord(l) { return l.stage === 4 ? (l.exitCode && !l.resumedAs ? "exited with an error" : "ended") : sessWord(l); }
+  function sessLive(list) { return S.liveFirst(list, { state: sessLiveWord, since: function (l) { return l.waiting && l.askedAt ? shAt(l.askedAt) : null; } }); }
+  function sessGroups() {
+    var all = sessLive(ST.lines.filter(function (l) { return l.kind === "session"; }));
+    return { all: all, waiting: all.filter(function (l) { return l.stage !== 4 && l.waiting; }), running: all.filter(function (l) { return l.stage !== 4 && !l.waiting; }),
+      failed: all.filter(function (l) { return l.stage === 4 && l.exitCode && !l.resumedAs; }), recent: all.filter(function (l) { return l.stage === 4 && (!l.exitCode || l.resumedAs); }),
+      lost: SESS_LOST.filter(function (x) { return x.conversation; }) };
+  }
   function renderSessions(main) {
     if (SESS_TB) { SESS_TB.destroy(); SESS_TB = null; }
-    var all = ST.lines.filter(function (l) { return l.kind === "session"; }), live = all.filter(function (l) { return l.stage !== 4; }), ended = all.filter(function (l) { return l.stage === 4; });
-    var unable = sessUnable(), hiddenHere = tfTabs().hidden;
-    main.appendChild(el("div", { "class": "head" }, [el("div", {}, [el("h1", { text: "Sessions" }), el("span", { "class": "fact", text: live.length + " running" })]), el("span", { "class": "grow" }),
-      halo({ label: "New session…", cmd: "opens the launch sheet · changes nothing yet", disabledReason: unable, onPress: function () { openLaunch(); } }, "new-session")]));
-    var lost = SESS_LOST.filter(function (x) { return x.conversation; });
-    if (lost.length) {
-      var held = unable || (SESSH.busy ? "one at a time" : undefined);
-      main.appendChild(el("section", { "class": "lostbanner", "aria-labelledby": "z-lost" }, [zone("", "Ended when the daemon stopped", "z-lost"),
-        el("p", { "class": "calm small", text: "These were running here when the daemon last stopped. Nothing restarts by itself: each one starts an agent." }),
-        el("ul", { "class": "slist", "aria-label": "Ended when the daemon stopped" }, lost.map(function (one) {
-          var c = one.conversation;
-          return el("li", { "class": "lostrow" }, [el("span", { "class": "t", text: c.title }), el("span", { "class": "x", text: (c.project || c.directory) + " · " + c.agent }),
-            el("span", { "class": "acts" }, [halo({ label: "Resume", size: "small", cmd: "carries it on in a new terminal", disabledReason: held, onPress: function () { SESSH.busy = true; sessResume(c, {}, one.id).then(function (id) { SESSH.busy = false; if (id && SESS_LOST.length < 1) { sessReveal(id, true); } else { render(); } }); } }, "lost-" + one.id),
-              el("button", { type: "button", "class": "linkish", disabled: sessWatching(), "data-k": "lost-not-" + one.id, text: "Not this one", onclick: function () { SESS_LOST = SESS_LOST.filter(function (x) { return x !== one; }); said("No longer offered", sessResumeCmd(one.agentSession, c.project)); render(); } })])]);
-        })),
-        lost.length > 1 ? halo({ label: "Resume all " + lost.length, cmd: "asks first, naming each agent", disabledReason: held, onPress: function () { sessResumeAll(lost); } }, "lost-all") : null]));
-    }
-    var two = el("div", { "class": "two" });
-    var liveBox = live.length ? el("ul", { "class": "slist", "aria-label": "Running and waiting" }, live.map(function (l) {
-      return el("li", { "class": "liverow" }, [el("a", { "class": "srow", href: "#session-" + l.id, "data-k": "s-" + l.id }, [el("span", { "class": "t", text: l.title }), S.Signal(sessWord(l)), el("span", { "class": "x", text: l.where + " · " + (l.agent || "agent") + " · " + (l.mode || "mode by the task") + " · " + (l.mins || 0) + " min" })]),
-        el("button", { type: "button", "class": "linkish", "aria-label": "Open " + l.title + " in Terminals", "data-k": "s-term-" + l.id, text: hiddenHere.indexOf(l.id) >= 0 ? "Hidden from Terminals here · show it" : "Open in Terminals", onclick: function () { sessOpenInTerminals(l); } })]);
-    })) : el("p", { "class": "calm", text: "No session is running here." });
-    two.appendChild(el("section", { "aria-labelledby": "z-live" }, [zone("", "Running and waiting", "z-live"), liveBox,
-      el("div", { "class": "sessfoot" }, [el("p", { "class": "calm small", text: "These run in the daemon, not in this tab: closing it ends nothing. Restarting the daemon ends every one of them." }),
-        S.Command({ why: "The same sessions with their ids, to rename or end one from a terminal:", command: "$ loadout session list" })])]));
-    var recBox = ended.length ? el("ul", { "class": "slist", "aria-label": "Recent sessions" }, ended.map(function (l) {
-      return el("li", {}, [el("a", { "class": "srow", href: "#session-" + l.id, "data-k": "s-" + l.id }, [el("span", { "class": "t", text: l.title }), S.Signal(sessWord(l)), el("span", { "class": "x", text: l.where + " · " + (l.agent || "agent") + " · ended" + (l.exitCode === null || l.exitCode === undefined ? "" : " · exit " + l.exitCode) })])]);
-    })) : el("p", { "class": "calm", text: "Nothing has ended since the daemon started." });
-    two.appendChild(el("section", { "aria-labelledby": "z-rec" }, [zone("", "Recent", "z-rec"), recBox, el("div", { "class": "sessfoot" }, [S.Command({ why: "Reopen the last conversation in a terminal:", command: "$ loadout resume --last" })])]));
-    main.appendChild(two);
-    main.appendChild(sessHistory());
+    var g = sessGroups(), unable = sessUnable(), slot = el("span", { "class": "sessedit" });
+    main.appendChild(el("div", { "class": "head" }, [el("div", {}, [el("h1", { text: "Sessions" }), el("span", { "class": "fact" + (g.waiting.length ? " need" : ""), text: g.waiting.length + " waiting · " + g.running.length + " running" })]), el("span", { "class": "grow" }),
+      slot, halo({ label: "New session…", cmd: "opens the launch sheet · changes nothing yet", disabledReason: unable, onPress: function () { openLaunch(); } }, "new-session")]));
+    var body = {
+      waiting: function () { return g.waiting.length ? [sessList(g.waiting, "Waiting on you")] : [el("p", { "class": "calm", text: "No session is waiting on you." })]; },
+      running: function () {
+        return [g.running.length ? sessList(g.running, "Running") : el("p", { "class": "calm", text: "No session is running here." }),
+          el("div", { "class": "sessfoot" }, [el("p", { "class": "calm small", text: "These run in the daemon, not in this tab: closing it ends nothing. Restarting the daemon ends every one of them." }),
+            S.Command({ why: "The same sessions with their ids, to rename or end one from a terminal:", command: "$ loadout session list" })])];
+      },
+      pickup: function () { return sessPickup(g); },
+      recent: function () {
+        return [g.recent.length ? sessList(g.recent, "Recent sessions") : el("p", { "class": "calm", text: "Nothing has ended since the daemon started." }),
+          el("div", { "class": "sessfoot" }, [S.Command({ why: "Reopen the last conversation in a terminal:", command: "$ loadout resume --last" })])];
+      },
+      history: function () { return [sessHistory({ onRead: function () { if (route() === "sessions") { render(); } } })]; }
+    };
+    var le = shLayout("sessions", "", SESS_PANELS, { "class": "sesslayout", label: "Sessions", editing: SESS_EDIT.editing, onedit: function (on) { SESS_EDIT.editing = on; render(); },
+      render: function (id) { return body[id](); },
+      count: function (id) { return id === "waiting" ? g.waiting.length : id === "running" ? g.running.length : id === "pickup" ? g.lost.length + g.failed.length : id === "recent" ? g.recent.length : undefined; },
+      locked: function (id) { return (id === "waiting" && g.waiting.length > 0) || (id === "running" && g.running.length > 0); } });
+    slot.appendChild(le.button); main.appendChild(le.bar); main.appendChild(le.el);
   }
-  /* History: every conversation from both agents, through the same query every list takes (main's Sessions.svelte with HistoryList). */
-  function sessHistory() {
-    var box = el("section", { "class": "sesshist", "aria-labelledby": "z-hist" }, [zone("", "History", "z-hist"),
-      el("p", { "class": "calm small", text: "Every conversation from both agents, newest first. What it was launched for carries over only where its launch is on record; older ones carry nothing." })]);
+  function sessList(list, label) { return el("ul", { "class": "slist", "aria-label": label }, list.map(sessRow)); }
+  /* One session: its link to its page, its last line from the daemon's read-only tail, its peek, and Type here, Open beside and End session…
+     beside it; Open in Terminals is the second action, and says it changes the mode. */
+  function sessRow(l) {
+    var ended = l.stage === 4, tail = shTail(l).lines, last = l.waiting && l.ask ? "? " + l.ask : String(tail.length ? tail[tail.length - 1] : "").trim();
+    var ctx = !ended && l.status && l.status.context && l.status.context.usedPercent !== null && S.ContextMark ? S.ContextMark({ percent: Math.round(l.status.context.usedPercent) }).el : null;
+    var a = el("a", { "class": "srow", href: "#session-" + l.id, "data-k": "s-" + l.id }, [el("span", { "class": "t", text: l.title }), S.Signal(sessLiveWord(l)),
+      el("span", { "class": "x" }, [[l.where, l.skind === "command" ? "a command" : (l.agent || "agent"), l.skind === "command" ? null : (l.mode || "mode by the task"), (l.mins || 0) + " min", ended ? "ended" + (l.exitCode === null || l.exitCode === undefined ? "" : " · exit " + l.exitCode) : null, l.waiting && l.askedAt ? "waiting " + Math.max(1, ST.clock - l.askedAt) + " min" : null].filter(Boolean).join(" · "), ctx ? " " : null, ctx]),
+      !ended && last ? el("span", { "class": "tl" + (l.waiting ? " ask" : ""), text: last }) : null]);
+    var head = el("div", { "class": "srhead" }, [a]), acts = el("div", { "class": "sracts" });
+    if (!ended) {
+      acts.appendChild(halo({ label: "Type here", size: "small", kind: l.waiting ? "needs" : "", solid: !!l.waiting, cmd: l.waiting ? "opens its terminal · answered there" : "opens its terminal · changes nothing", disabledReason: sessWatching() ? SESS_WATCH : undefined, onPress: function () { shTypeHere(l); } }, "s-type-" + l.id));
+      if ((P.mode || "default") === "default") { acts.appendChild(halo({ label: "Open beside", size: "small", cmd: "opens it beside this page · changes nothing", onPress: function () { shOpenBeside(l); } }, "s-beside-" + l.id)); }
+      acts.appendChild(halo({ label: "End session…", size: "small", kind: "danger", cmd: "asks first · stops the agent in this terminal", disabledReason: sessWatching() ? "Studio is only watching: end it from where it runs" : undefined, onPress: function () { sessEndAsk(l); } }, "s-end-" + l.id));
+      var hid = tfTabs().hidden.indexOf(l.id) >= 0;
+      acts.appendChild(el("button", { type: "button", "class": "linkish", "aria-label": "Open " + l.title + " in Terminals, which switches to Terminal Focus", "data-k": "s-term-" + l.id, text: (hid ? "Hidden from Terminals here · show it there" : "Open in Terminals") + " (switches to Terminal Focus)", onclick: function () { sessOpenInTerminals(l); } }));
+    }
+    var li = el("li", { "class": "liverow" + (ended ? " ended" : "") }, [head, acts]);
+    if (!ended) { sessPeekKeep(head, function () { return peekSession(line(l.id)); }, { into: head, target: a }); }
+    return li;
+  }
+  /* A session that exited with an error, as the conversation it was: Resume carries that on in a new terminal. */
+  function sessConvOf(l) {
+    return SESS_CONVS.filter(function (c) { return c.id === l.agentSession; })[0] || { agent: l.agent || "claude", id: l.agentSession, title: l.title, project: l.where, registered: true, directory: (PROJECTS[l.where] || {}).path || "~/code/" + l.where,
+      branch: null, lastActive: new Date().toISOString(), launchedFor: { launch: null, task: l.task || null, taskId: l.taskId || null, mode: l.mode || null, profile: null, worktree: null }, running: "none" };
+  }
+  /* Pick up: what the daemon's last stop ended, offered back one at a time or all at once, never restarted by itself; then any that exited with an error. */
+  function sessPickup(g, o) {
+    o = o || {};
+    var out = [], held = sessUnable() || (SESSH.busy ? "one at a time" : undefined);
+    if (g.lost.length) {
+      out.push(el("p", { "class": "calm small", text: "Ended when the daemon stopped: these were running here when the daemon last stopped. Nothing restarts by itself: each one starts an agent." }));
+      out.push(el("ul", { "class": "slist", "aria-label": "Ended when the daemon stopped" }, g.lost.map(function (one) {
+        var c = one.conversation;
+        return el("li", { "class": "lostrow" }, [el("span", { "class": "t", text: c.title }), el("span", { "class": "x", text: (c.project || c.directory) + " · " + c.agent + " · ended when the daemon stopped" }),
+          el("span", { "class": "acts" }, [halo({ label: "Resume", size: "small", cmd: "carries it on in a new terminal", disabledReason: held, onPress: function () { SESSH.busy = true; render(); sessResume(c, {}, one.id).then(function (id) { SESSH.busy = false; if (id && SESS_LOST.length < 1 && !o.beside) { sessReveal(id, true); } else { render(); if (o.then) { o.then(); } } }); } }, "lost-" + one.id),
+            el("button", { type: "button", "class": "linkish", disabled: sessWatching(), "data-k": "lost-not-" + one.id, text: "Not this one", onclick: function () { SESS_LOST = SESS_LOST.filter(function (x) { return x !== one; }); said("No longer offered", sessResumeCmd(one.agentSession, c.project)); render(); if (o.then) { o.then(); } } })])]);
+      })));
+      if (g.lost.length > 1) { out.push(halo({ label: "Resume all " + g.lost.length, cmd: "asks first, naming each agent", disabledReason: held, onPress: function () { sessResumeAll(g.lost, o.then); } }, "lost-all")); }
+    }
+    if (g.failed.length && !o.lostOnly) {
+      out.push(el("ul", { "class": "slist", "aria-label": "Exited with an error" }, g.failed.map(function (l) {
+        var li = sessRow(l), c = sessConvOf(l);
+        li.querySelector(".sracts").appendChild(halo({ label: "Resume", size: "small", cmd: sessResumeCmd(l.agentSession, l.where), disabledReason: held, onPress: function () { SESSH.busy = true; render(); sessResume(c, {}).then(function (id) { SESSH.busy = false; if (id) { l.resumedAs = id; sessReveal(id, true); } else { render(); } }); } }, "s-resume-" + l.id));
+        return li;
+      })));
+    }
+    if (!out.length) { out.push(el("p", { "class": "calm", text: o.lostOnly ? "Nothing ended when the daemon last stopped." : "Nothing to pick up: nothing ended when the daemon stopped, and nothing exited with an error." })); }
+    return out;
+  }
+  /* History: every conversation from both agents, through the same query every list takes (main's Sessions.svelte with HistoryList). o.onRead redraws it once read. */
+  function sessHistory(o) {
+    o = o || {};
+    var box = el("div", { "class": "sesshist" }, [el("p", { "class": "calm small", text: "Every conversation from both agents, newest first. What it was launched for carries over only where its launch is on record; older ones carry nothing." })]);
     var f = sessFilter(SESS_CONVS, SESSH.q);
+    if (SESS_TB) { SESS_TB.destroy(); }
     SESS_TB = S.ListToolbar({ noun: "conversations", query: SESSH.q, shape: { text: SESSH.q, parts: f.parts, fields: SESS_FIELDS, defaultQuery: "" }, shown: SESSH.read ? f.items.length : null, recorded: SESSH.read ? SESS_CONVS.length : null, problem: f.problem,
-      onchange: function (q) { SESSH.q = q; SESSH.draft = null; render(); } });
+      onchange: function (q) { SESSH.q = q; SESSH.draft = null; if (o.onRead) { o.onRead(); } else { render(); } } });
     var q = SESS_TB.el.querySelector("input");
     if (q) {
       q.setAttribute("data-k", "hist-q");
@@ -1225,7 +1439,7 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     box.appendChild(SESS_TB.el);
     if (!SESSH.read) {
       box.appendChild(el("p", { "class": "calm", role: "status", text: "Reading…" }));
-      setTimeout(function () { SESSH.read = true; if (route() === "sessions") { render(); } }, 400);
+      setTimeout(function () { SESSH.read = true; if (o.onRead) { o.onRead(); } }, 400);
     } else if (!f.items.length && SESS_CONVS.length) {
       box.appendChild(el("p", { "class": "calm", text: "Nothing matches the filter." }));
     } else {
@@ -1236,16 +1450,63 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     }
     return box;
   }
-  /* What 'Resume all' says before it starts anything (main's lib/resume.ts resumeAllWords): each one starts an agent, which costs money. */
-  function sessResumeAll(lost) {
+  /* What 'Resume all' says before it starts anything (main's lib/resume.ts resumeAllWords): each one starts an agent, which costs money. It waits for
+     every resume, one after another, saying "resuming…", then closes; one that fails keeps it open with why. */
+  function sessResumeAll(lost, then) {
     var by = {}, names = [];
     lost.forEach(function (one) { var a = one.conversation.agent; if (!by[a]) { by[a] = 0; names.push(a); } by[a] += 1; });
     var n = lost.length;
     S.Dialog({ title: "Resume all " + n + "?", why: "This starts " + n + " " + (n === 1 ? "agent" : "agents") + ": " + names.map(function (a) { return by[a] + " with " + a; }).join(", ") + ". Each one carries on its conversation and costs what a session costs.",
-      actions: [{ label: "Resume " + n, solid: true, cmd: "one terminal each", onPress: function () {
-        SESSH.busy = true; var queue = lost.slice();
-        (function next() { var one = queue.shift(); if (!one) { SESSH.busy = false; render(); return; } sessResume(one.conversation, {}, one.id).then(next); })();
+      actions: [{ label: "Resume " + n, solid: true, busy: "resuming…", failed: "None of them was resumed.", cmd: "one terminal each", onPress: function () {
+        if (sessUnable()) { throw new Error(sessUnable()); }
+        SESSH.busy = true; var queue = lost.slice(), started = 0;
+        var done = function () { SESSH.busy = false; render(); if (then) { then(); } };
+        return sessAct(400, function () { return null; }).then(function next() {
+          var one = queue.shift();
+          if (!one) { done(); return started ? "Resumed " + started : false; }
+          return sessResume(one.conversation, {}, one.id).then(function (id) { if (id) { started += 1; } return next(); });
+        }, function (e) { done(); throw e; });
       } }] }).open();
+  }
+  /* A session beside the page, in Default (WORKFLOW.md: "in Default, a session can open beside the page"): S.PageBeside next to whatever page is open,
+     its terminal live as the deck's are, for this visit. Close (or Escape, outside the terminal), its own page or another mode closes it. render()
+     hands the drawn page to sessSideWrap, which puts the two side by side; below 1100px the session takes the width, as every beside panel does. */
+  var SESS_SIDE = null;
+  function sessSideOpen(l) {
+    if (!l) { return; }
+    if ((P.mode || "default") !== "default") { reveal({ kind: "session", id: l.id }); return; }
+    if (SESS_SIDE && SESS_SIDE.id === l.id) { sessSideFocus(); return; }
+    sessSideDrop();
+    var beside = S.PageBeside({ page: "Session", beside: "this page", onClose: function () { sessSideDrop(); PV++; render(); } });
+    var t = makeTerm(l.id), head = el("div", { "class": "sb-head" }), acts = el("div", { "class": "ls-answers sb-acts" });
+    t.el.classList.add("sb-term"); var sc = t.el.querySelector(".screen"); if (sc) { sc.setAttribute("data-k", "side-screen"); }
+    beside.set(el("div", { "class": "sb" }, [head, t.el, acts]));
+    SESS_SIDE = { id: l.id, beside: beside, t: t, head: head, acts: acts, state: termState(l), sig: "" };
+    said("Beside this page: " + l.title, "opens it beside this page · changes nothing");
+    PV++; render(); setTimeout(sessSideFocus, 60);
+  }
+  function sessSideFocus() { var s = SESS_SIDE && SESS_SIDE.t.el.querySelector(".screen"); if (s) { s.focus(); } }
+  function sessSideDrop() { if (SESS_SIDE) { SESS_SIDE.beside.destroy(); SESS_SIDE = null; } }
+  /* Its head and actions, drawn again only when something it shows has changed, so a press or the typing is never lost to a redraw. */
+  function sessSidePaint(l) {
+    var S0 = SESS_SIDE, st = termState(l), sig = [st, l.title, l.waiting, l.mins, sessWatching()].join("|");
+    if (S0.state !== st) { S0.t.setState(st, { code: l.exitCode }); S0.state = st; }
+    if (S0.sig === sig) { return; }
+    S0.sig = sig; S0.head.textContent = ""; S0.acts.textContent = "";
+    S0.head.appendChild(el("div", { "class": "who" }, [el("h2", { text: l.title }), S.Signal(sessLiveWord(l))]));
+    S0.head.appendChild(el("span", { "class": "x", text: [l.where, l.skind === "command" ? "a command" : l.agent, l.mode, (l.mins || 0) + " min"].filter(Boolean).join(" · ") }));
+    if (l.stage !== 4) { S0.acts.appendChild(halo({ label: "Type here", size: "small", kind: l.waiting ? "needs" : "", solid: !!l.waiting, cmd: "puts the keyboard in its terminal", disabledReason: sessWatching() ? SESS_WATCH : undefined, onPress: sessSideFocus }, "sb-type")); }
+    S0.acts.appendChild(halo({ label: "Open", size: "small", cmd: "opens its page · changes nothing", onPress: function () { go("session-" + l.id); } }, "sb-open"));
+    if (l.stage !== 4) { S0.acts.appendChild(halo({ label: "End session…", size: "small", kind: "danger", cmd: "asks first · stops the agent in this terminal", disabledReason: sessWatching() ? "Studio is only watching: end it from where it runs" : undefined, onPress: function () { sessEndAsk(l); } }, "sb-end")); }
+  }
+  /* Called by render() once the page is drawn (Default only): the page and the session beside it. */
+  function sessSideWrap(main) {
+    if (!SESS_SIDE) { return; }
+    var l = line(SESS_SIDE.id);
+    if ((P.mode || "default") !== "default" || !l || route() === "session-" + l.id || P.signedOut) { sessSideDrop(); return; }
+    sessSidePaint(l);
+    var focus = el("div", {}); while (main.firstChild) { focus.appendChild(main.firstChild); }
+    var grid = S.BesideGrid(focus, SESS_SIDE.beside); grid.classList.add("sb-grid"); main.appendChild(grid);
   }
   var LIVE = null, RUNCLS = { me: "fg-cyan", dim: "fg-bright-black", ask: "fg-yellow bold", ok: "fg-green", bad: "fg-red", "": "" };
   function runsOf(t) { var m = /^(● )(\w+)( .*)?$/.exec(t[1]); return m && t[0] === "" ? [[m[1], "fg-green"], [m[2], "bold"], [m[3] || "", "fg-blue"]] : [[t[1], RUNCLS[t[0]] || ""]]; }
@@ -1253,6 +1514,7 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     (ST.term[id] = ST.term[id] || []).push([cls, text]);
     ST.active = ST.active || {}; ST.active[id] = Date.now();
     if (LIVE && LIVE.id === id) { LIVE.t.write(runsOf([cls, text])); }
+    if (SESS_SIDE && SESS_SIDE.id === id) { SESS_SIDE.t.write(runsOf([cls, text])); if (line(id)) { sessSidePaint(line(id)); } }
     var dt = DECK && DECK.deck.terminal(id); if (dt) { dt.write(runsOf([cls, text])); }
     if (DECK && DECK.deck.current !== id) { ST.unread = ST.unread || {}; if (!ST.unread[id]) { ST.unread[id] = true; tfUpdate(); } }
   }
@@ -1276,13 +1538,30 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     SESS_LIVE.forEach(function (x) { x.part.set({ status: x.line.status, now: Date.now() }); });
     if (DECK && DECK.deck.el && DECK.deck.el.isConnected) { tfUpdate(); }
   }, 15000);
+  /* End session asks first (main's SessionView and SessionTabs), then waits for the daemon saying "ending…", and closes once it has ended; a failure
+     keeps it open with why. From the session's own page it goes back to Sessions; from anywhere else (a peek, a row, the beside panel) it stays put. */
   function sessEndAsk(l) {
     S.Dialog({ title: "End this session?", danger: true, why: "This stops the agent in this terminal, and everything it started. No loadout command does this. Its conversation is kept, so it can be carried on with " + sessResumeCmd(l.agentSession, l.where).slice(2) + ".",
-      actions: [{ label: "End it", kind: "danger", cmd: "stops the agent in this terminal", onPress: function () { sessEnd(l); said("Ended " + l.title, "stops the agent in this terminal"); go("sessions"); } }] }).open();
+      actions: [{ label: "End session", kind: "danger", busy: "ending…", cmd: "stops the agent in this terminal", onPress: function () { return sessEndNow(l, "stops the agent in this terminal"); } }] }).open();
   }
+  function sessEndNow(l, cmd) {
+    if (sessWatching()) { return Promise.reject(new Error("Studio is only watching: end it from where it runs")); }
+    return sessAct(700, function () {
+      if (!l || l.stage === 4) { throw new Error((l ? l.title : "That session") + " has already ended"); }
+      sessEnd(l); said("Ended " + l.title, cmd, "done");
+      if (route() === "session-" + l.id && P.mode !== "terminals") { go("sessions"); } else { PV++; render(); }
+    });
+  }
+  /* The next session waiting on you after this one, oldest first, for the head's "Next waiting →". */
+  function sessNextWaiting(id) { var w = sessGroups().waiting.filter(function (x) { return x.id !== id; }); return w[0] || null; }
+  /* A session's Details (Facts, Status, Last events, Actions) are sections of S.LayoutEdit, kept as session/details in studio-layouts. */
+  var SESS_DETAILS = [["facts", "Facts"], ["status", "Status"], ["events", "Last events"], ["actions", "Actions"]].map(function (s) { return { id: s[0], name: s[1] }; });
+  var SESS_DEDIT = { editing: false };
   function renderSession(main, id) {
     var l = line(id); LIVE = null;
-    main.appendChild(key(el("a", { "class": "back", href: "#sessions" }, [el("span", { "aria-hidden": "true", text: "←" }), "Sessions"]), "back"));
+    /* Beside the runs board (Team Focus) the back link closes the panel and leaves the board where it was. */
+    var beside = P.mode === "teams";
+    main.appendChild(key(el("a", { "class": "back", href: beside ? "#teams" : "#sessions", onclick: beside ? function (e) { e.preventDefault(); go("teams"); } : null }, [el("span", { "aria-hidden": "true", text: "←" }), beside ? "Close, back to the board" : "Sessions"]), "back"));
     if (!l || l.kind !== "session") {
       var lost = SESS_LOST.filter(function (x) { return x.id === id; })[0];
       if (lost) {
@@ -1296,23 +1575,38 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     var command = l.skind === "command", ended = l.stage === 4, st = termState(l), mins = (l.mins || 0) + " min";
     var facts = (command ? [] : [["Project", l.where || "not known"], ["Agent", l.agent || "the project’s default"], ["Mode", l.mode || "chosen by the task"], ["Task", l.taskId || l.task || "none"]])
       .concat([["Running", mins], ["Quiet", (l.quiet || 0) + " min"], ["Memory", l.memory ? l.memory + " MB" : "not known"], ["Windows", String(l.viewers || 0)], ["Drawn with", l.renderer || "…"]]);
-    /* SessionView draws the status, the Actions (commands, note, End) and "Type here instead" (another window holds the input) where main puts them; the terminal carries the status strip on its foot. */
+    /* SessionView draws the head, the terminal (the status strip on its foot) and the Details panel; the Details' sections are drawn here, by LayoutEdit, in the order you gave them. */
     var V = S.SessionView({ line: command ? { title: l.title, time: "a command that asks as it goes · " + mins } : { title: l.title, where: l.where, agent: l.agent || "agent", mode: l.mode || "mode by the task", time: mins },
       terminal: { project: l.where, agent: command ? "loadout" : l.agent, sessionId: l.agentSession, state: st, info: { code: l.exitCode }, fit: window.innerWidth < 600, lines: (ST.term[l.id] || []).map(runsOf),
         onInput: function (v) { sessionInput(l, v); }, foot: sessFoot(l) },
-      facts: facts, loaded: [], events: (l.events || []).slice(0, 5).map(function (e) { return [e.t, e.text]; }),
-      status: l.status && !ended ? l.status : null, now: Date.now(),
-      commands: [l.cmdLine ? { why: "Started with:", command: "$ " + l.cmdLine } : null, command ? null : { why: "Carry this conversation on in a terminal instead:", command: sessResumeCmd(l.agentSession, l.where) }].filter(Boolean),
-      note: "Sessions survive a reload of this page, not a restart of the daemon.",
-      actions: ended ? [] : [{ label: "End the session", kind: "danger", key: "end-session", cmd: "stops the agent in this terminal", disabledReason: sessWatching() ? "Studio is only watching: end it from where it runs" : undefined, onPress: function () { sessEndAsk(l); } }],
+      facts: [], loaded: [], events: [],
       button: l.holds === false && !sessWatching() && !ended ? halo({ label: "Type here instead", size: "small", cmd: "another window holds the input · takes it over", onPress: function () { l.holds = true; said("This window types into it now", "another window held the input · takes it over"); render(); } }, "takeover") : null });
-    if (V.statusBlock) { SESS_LIVE.push({ line: l, part: V.statusBlock, el: V.statusBlock.el }); }
+    var dl = function (rows) { return el("dl", {}, [].concat.apply([], rows.map(function (f) { return [el("dt", { text: f[0] }), el("dd", { text: f[1] })]; }))); };
+    var cmds = [l.cmdLine ? { why: "Started with:", command: "$ " + l.cmdLine } : null, command ? null : { why: "Carry this conversation on in a terminal instead:", command: sessResumeCmd(l.agentSession, l.where) }].filter(Boolean);
+    var body = {
+      facts: function () { return [dl(facts)]; },
+      status: function () {
+        if (!l.status || ended) { return [el("p", { "class": "calm small", text: ended ? "It has ended: its status line says nothing more." : "Its agent has not handed over a status line." })]; }
+        var sb = S.StatusBlock({ status: l.status, now: Date.now() }); SESS_LIVE.push({ line: l, part: sb, el: sb.el }); return [sb.el];
+      },
+      events: function () { var ev = (l.events || []).slice(0, 5); return ev.length ? [el("ul", {}, ev.map(function (e) { return el("li", {}, [el("b", { text: e.t }), e.text]); }))] : [el("p", { "class": "calm small", text: "Nothing has happened yet." })]; },
+      actions: function () { return [el("div", { "class": "acts" }, cmds.map(function (c) { return S.Command(c); }).concat([el("p", { "class": "calm small", text: "Sessions survive a reload of this page, not a restart of the daemon." })]))]; }
+    };
+    var le = shLayout("session", "details", SESS_DETAILS, { "class": "sessdetails", label: "Details", editing: SESS_DEDIT.editing, onedit: function (on) { SESS_DEDIT.editing = on; render(); }, render: function (k) { return body[k](); } });
+    V.side.appendChild(el("div", { "class": "sdedit" }, [le.button])); V.side.appendChild(le.bar); V.side.appendChild(le.el);
+    /* The head: "Next waiting →" (its peek shows the next one before you switch) and End session, out of the Details' way. */
+    var toggle = V.head.querySelector("button[aria-controls]"), nx = sessNextWaiting(l.id), nxAll = sessGroups().waiting.filter(function (x) { return x.id !== l.id; }).length;
+    if (nx) {
+      var wrap = el("span", { "class": "nextw" }, [halo({ label: "Next waiting" + (nxAll > 1 ? " (" + nxAll + ")" : "") + " →", size: "small", kind: "needs", cmd: "opens ‘" + nx.title + "’ · changes nothing", onPress: function () { shPeekDrop(); reveal({ kind: "session", id: nx.id }); } }, "next-waiting")]);
+      V.head.insertBefore(wrap, toggle);
+      sessPeekKeep(wrap, function () { return peekSession(line(nx.id)); }, { into: wrap, target: wrap.querySelector("button") });
+    }
+    if (!ended) { V.head.insertBefore(halo({ label: "End session…", size: "small", kind: "danger", cmd: "asks first · stops the agent in this terminal", disabledReason: sessWatching() ? "Studio is only watching: end it from where it runs" : undefined, onPress: function () { sessEndAsk(l); } }, "end-session"), toggle); }
     var sc = V.el.querySelector(".screen"); if (sc) { sc.setAttribute("data-k", "term-screen"); }
     V.el.style.height = "calc(100vh - 150px)"; V.el.style.minHeight = "520px";
     main.appendChild(V.el);
     LIVE = { id: l.id, t: V.terminal };
   }
-
   /* ---------- the launch sheet ---------- */
   /* What the daemon's sheet read and preview give for each project (main's api.ts Sheet and Preview): its budget and warn-at, and the specialists the resolver picks, as --dry-run would. */
   var SESS_SHEET = {
@@ -1334,7 +1628,7 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     var known = function (slug) { return projects.some(function (p) { return p.slug === slug; }); };
     var startAt = resuming ? resuming.project : pre.project;
     var L = { project: startAt && known(startAt) ? startAt : "loadout-cli", task: null, other: "", agent: "claude", mode: "", profile: null, worktree: null, offline: false, nosync: false, handoff: false, preview: null };
-    var chosen = null;
+    var chosen = null, starting = null;
     if (pre.task) { var tt = ((typeof TASKS !== "undefined" && TASKS[L.project]) || []).filter(function (t) { return t.id === pre.task; })[0]; chosen = tt ? { id: tt.id, title: tt.title, state: tt.state, project: L.project } : { id: pre.task, title: pre.task, state: "", project: L.project }; }
     var proj = function () { return PROJECTS[L.project] || { path: null, agent: (proj2() || {}).defaultAgent || "claude", worktrees: [], tasks: [] }; };
     var proj2 = function () { return typeof PROJ !== "undefined" ? PROJ.filter(function (p) { return p.id === L.project; })[0] : null; };
@@ -1440,9 +1734,11 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     D = S.Dialog({ title: resuming ? "Resume with changes" : "New session", extraClass: "wide", content: body,
       why: resuming ? "Carries on ‘" + resuming.title + "’ with " + resuming.agent + ", starting from what it was launched for. What is here when you press Resume is what it reopens with; nothing else carries over."
         : "Everything a launch asks is here, filled in with the defaults. The command below is the launch; Studio runs it for you, and the session keeps running if you close this tab.",
-      actions: resuming ? [{ label: "Resume", solid: true, glyph: "▶", cmd: "runs the command above", onPress: function () { if (unable() || !L.preview) { throw new Error(unable() || "Still reading the projects"); } var f = launchFields(); sessResume(resuming, f, undefined, true).then(function (id) { if (id) { sessReveal(id, true); } }); } }]
-        : [{ label: "Launch", solid: true, glyph: "▶", cmd: "runs the command above", onPress: function () { if (unable() || !L.preview) { throw new Error(unable() || "Still reading the projects"); } var f = launchFields(); launch({ project: L.project, task: taskTitle() || "No task", taskId: f.taskId, mode: L.mode, agent: L.agent, cmd: words(), specialists: L.preview.specialists.map(function (s) { return s.id; }) }); } },
-          { label: "Quick session", cmd: "$ loadout launch " + L.project + " · no task, the defaults", onPress: function () { if (sessWatching()) { throw new Error(SESS_WATCH); } if (!PROJECTS[L.project]) { throw new Error(L.project + " is not on this machine, so a session cannot start there."); } launch({ project: L.project, task: "Quick session", mode: "", agent: proj().agent, cmd: "$ loadout launch " + L.project }); } }] });
+      /* Each waits for the daemon ("starting…", the sheet's buttons inactive meanwhile) and closes once the session is up; a failure keeps the sheet,
+         and everything on it, with why. A second press while one is starting does nothing: one launch, never two. */
+      actions: resuming ? [{ label: "Resume", solid: true, glyph: "▶", busy: "resuming…", failed: "It was not resumed.", cmd: "runs the command above", onPress: function () { if (unable() || !L.preview) { throw new Error(unable() || "Still reading the projects"); } if (starting) { return starting; } var f = launchFields(); starting = sessAct(500, function () { return null; }).then(function () { return sessResume(resuming, f, undefined, true); }).then(function (id) { starting = null; if (!id) { return false; } sessReveal(id, true); }, function (e) { starting = null; throw e; }); return starting; } }]
+        : [{ label: "Launch", solid: true, glyph: "▶", busy: "starting…", cmd: "runs the command above", onPress: function () { if (unable() || !L.preview) { throw new Error(unable() || "Still reading the projects"); } if (starting) { return starting; } var f = launchFields(), o = { project: L.project, task: taskTitle() || "No task", taskId: f.taskId, mode: L.mode, agent: L.agent, cmd: words(), specialists: L.preview.specialists.map(function (s) { return s.id; }) }; starting = sessAct(900, function () { launch(o); }).then(function () { starting = null; }, function (e) { starting = null; throw e; }); return starting; } },
+          { label: "Quick session", busy: "starting…", cmd: "$ loadout launch " + L.project + " · no task, the defaults", onPress: function () { if (sessWatching()) { throw new Error(SESS_WATCH); } if (!PROJECTS[L.project]) { throw new Error(L.project + " is not on this machine, so a session cannot start there."); } if (starting) { return starting; } var o = { project: L.project, task: "Quick session", mode: "", agent: proj().agent, cmd: "$ loadout launch " + L.project }; starting = sessAct(900, function () { launch(o); }).then(function () { starting = null; }, function (e) { starting = null; throw e; }); return starting; } }] });
     D.open(); paintActs();
     setTimeout(function () { build(); paintActs(); }, 200);
   }
@@ -2776,8 +3072,8 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     reveal({ kind: "session", id: l.id });
     if (P.mode !== "minimal") { setTimeout(function () { var sc = document.querySelector(".ls-term .screen"); if (sc) { sc.focus(); } }, 120); }
   }
-  /* STUB: a session opened beside the page in Default is the Sessions page's to build (WORKFLOW.md, Sessions). Until then it says what it would do. */
-  function shOpenBeside(l) { if (l) { said("Open beside: " + l.title + " would open beside this page (not built in the prototype yet)", "opens it beside this page · changes nothing"); } }
+  /* Open beside: in Default, the session opens beside the page you are on (sessSideOpen, with the Sessions page); in any other mode it opens the mode's own way. */
+  function shOpenBeside(l) { if (l) { sessSideOpen(l); } }
 
   /* The peek's items, so every page's peek of the same thing looks the same (the shapes in components/index.d.ts, PeekSession and on).
      Each takes the prototype's own record and returns null for none. Page code: peekSession(line(id)), peekRun(TR row), peekIdea(IDEAS row),
@@ -2868,7 +3164,7 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
   function shLayout(page, surface, sections, opts) {
     opts = opts || {};
     var watching = sessWatching() ? "Studio is only watching · $ loadout config set studio-layouts …" : undefined;
-    return S.LayoutEdit(Object.assign({}, opts, { page: page, surface: surface || undefined, sections: sections, mode: P.mode || "default", hideOnly: P.mode === "minimal", value: shLayouts(), disabledReason: opts.disabledReason || watching,
+    return S.LayoutEdit(Object.assign({}, opts, { page: page, surface: surface || undefined, sections: sections, mode: P.mode || "default", hideOnly: P.mode === "minimal" || !!opts.hideOnly, value: shLayouts(), disabledReason: opts.disabledReason || watching,
       onchange: function (key, value, command) {
         try { P.layouts = value ? JSON.parse(value) : {}; } catch (e) { P.layouts = {}; }
         savePrefs(); said(value ? "Layout kept in Loadout's config" : "Every layout is back as it came", command, "done");
@@ -2969,19 +3265,32 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
   function tfBesideRoute(r) { return P.mode === "terminals" && (r.indexOf("run-") === 0 || r.indexOf("team-") === 0); }
   function tfBesideName(r) { return r.indexOf("run-") === 0 ? "The run" : r.indexOf("team-") === 0 ? "A team" : ""; }
   function tfBesideStale() { if (BESIDE && BESIDE.r && tfBesideRoute(BESIDE.r) && BESIDE.tv !== TV) { BESIDE.tv = TV; BESIDE.pv = -1; } }
+  /* The deck (WORKFLOW.md, The deck): the tabs in the order you gave them; ended tabs fold into "Ended (N)" unless one is in a pane or you brought it
+     back; a "Waiting (N)" chip goes to each waiting session in turn, hidden tabs included; the "+" opens a menu with New session, "Ended when the
+     daemon stopped (N)" and History, both beside the deck; a tab not in a pane peeks its last lines; the top bar's parts can be hidden (deck/top). */
+  var TF_TOP = [["waiting", "Waiting chip"], ["ended", "Ended menu"], ["find", "Find in this terminal"], ["keys", "Key hints"], ["layout", "Panes (the layout picker)"]].map(function (s) { return { id: s[0], name: s[1] }; });
+  var TF_TOP_SAID = { waiting: "Waiting (N): goes to each session waiting on you in turn, hidden tabs included.", ended: "Ended (N): the tabs of sessions that ended, folded away; bring one back or clear them.",
+    find: "Find in the focused terminal.", keys: "Ctrl+Alt+1 to 9, Ctrl+Alt+arrows and Ctrl+] as a reminder.", layout: "One, two or four panes." };
+  var TF_EDIT = { editing: false }, TF_SIDE = null;
+  function tfFold(a) {
+    var slots = P.deckSlots || [], back = ST.tfEndedBack || [];
+    var keep = function (s) { return !s.ended || slots.indexOf(s.id) >= 0 || back.indexOf(s.id) >= 0; };
+    return { shown: a.shown.filter(keep), hidden: a.hidden, ended: a.shown.filter(function (s) { return !keep(s); }) };
+  }
+  function tfWaitingIds() { return sessGroups().waiting.map(function (l) { return l.id; }); }
   function renderDeck(main, focusId) {
     ST.unread = ST.unread || {};
-    if (focusId) { var t = tfTabs(); if (t.hidden.indexOf(focusId) >= 0) { t.hidden = t.hidden.filter(function (x) { return x !== focusId; }); tfKeepTabs(t); } }
+    if (focusId) { var t = tfTabs(); if (t.hidden.indexOf(focusId) >= 0) { t.hidden = t.hidden.filter(function (x) { return x !== focusId; }); tfKeepTabs(t); } ST.tfEndedBack = (ST.tfEndedBack || []).concat([focusId]); }
     var wrap = el("div", { "class": "deckwrap" }, [el("h1", { "class": "ls-vh", text: "Terminals" })]);
     /* The design system's TermDeck, as main's TerminalFocus drives it: the page keeps the layout, the panes a launch grew, which session each pane shows, the dividers, and the tabs' order and what is hidden or cleared here. */
-    var a = tfArrange(deckSessions(), tfTabs()), layout = [1, 2, 4].indexOf(P.deckLayout) >= 0 ? P.deckLayout : 2, ids = a.shown.map(function (s) { return s.id; });
+    var a = tfFold(tfArrange(deckSessions(), tfTabs())), layout = [1, 2, 4].indexOf(P.deckLayout) >= 0 ? P.deckLayout : 2, ids = a.shown.map(function (s) { return s.id; });
     var d = S.TermDeck({ sessions: a.shown, hidden: a.hidden, changes: !sessWatching(), current: focusId || P.deckCurrent || null, layout: layout, grown: P.deckGrown === 2 || P.deckGrown === 4 ? P.deckGrown : null,
       slots: (P.deckSlots || []).map(function (id) { return id && ids.indexOf(id) >= 0 ? id : null; }), splits: { 2: typeof P.deckSplit2 === "number" ? [P.deckSplit2] : null, 4: Array.isArray(P.deckSplit4) ? P.deckSplit4 : null },
-      launch: ST.deckLaunch || null, active: ST.active || {}, terminal: makeTerm, onNew: sessWatching() ? null : function () { openLaunch(); },
-      onPick: function (id) { P.deckCurrent = id; savePrefs(); if (ST.unread && ST.unread[id]) { ST.unread[id] = false; setTimeout(function () { if (DECK) { tfUpdate(); } }, 0); } },
-      onLayout: function (n) { P.deckLayout = n; P.deckGrown = 0; savePrefs(); },
+      launch: ST.deckLaunch || null, active: ST.active || {}, terminal: makeTerm, onNew: function () { tfPlusMenu(); },
+      onPick: function (id) { P.deckCurrent = id; savePrefs(); if (ST.unread && ST.unread[id]) { ST.unread[id] = false; setTimeout(function () { if (DECK) { tfUpdate(); } }, 0); } setTimeout(tfPeekTabs, 0); },
+      onLayout: function (n) { P.deckLayout = n; P.deckGrown = 0; savePrefs(); setTimeout(tfPeekTabs, 0); },
       onGrown: function (n) { P.deckGrown = n; savePrefs(); },
-      onSlots: function (slots) { P.deckSlots = slots; savePrefs(); },
+      onSlots: function (slots) { P.deckSlots = slots; savePrefs(); setTimeout(tfPeekTabs, 0); },
       onSplit: function (n, f) { if (n === 2) { P.deckSplit2 = f[0]; } else { P.deckSplit4 = f; } savePrefs(); },
       onLaunched: function () { ST.deckLaunch = null; },
       onMove: function (order) { tfKeepTabs(tfWithOrder(tfTabs(), order)); },
@@ -2994,18 +3303,145 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
       onHide: function (id) { var t = tfTabs(), l = line(id); if (t.hidden.indexOf(id) < 0) { t.hidden.push(id); } tfKeepTabs(t); said("Hidden from this browser's strip: " + (l ? l.title : id), "this browser only · it still runs, on the Sessions page"); },
       onUnhide: function (id) { var t = tfTabs(); t.hidden = t.hidden.filter(function (x) { return x !== id; }); tfKeepTabs(t); },
       onClear: function (id) { var t = tfTabs(); if (t.cleared.indexOf(id) < 0) { t.cleared.push(id); } t.hidden = t.hidden.filter(function (x) { return x !== id; }); tfKeepTabs(t); },
-      onEnd: function (id) { var l = line(id); if (!l) { return; } sessEnd(l); said("Ended " + l.title, "$ loadout session end " + l.hid + " --yes"); render(); } });
-    wrap.appendChild(d.el); main.appendChild(wrap);
-    DECK = { route: route(), deck: d, states: {} };
+      /* SessionTabs' End session waits for this ("ending…", then it closes; a failure keeps it open with why) once TermDeck hands the promise on:
+         today TermDeck drops onEnd's return, so the dialog closes at once, and a failure is said here instead. */
+      onEnd: function (id) { var l = line(id); if (!l) { return false; } var pr = sessEndNow(l, "$ loadout session end " + l.hid + " --yes"); pr.catch(function (e) { said("✕ " + l.title + " did not end: " + (e && e.message || "it did not go through"), "$ loadout session end " + l.hid + " --yes", "problem"); }); return pr; } });
+    var bar = el("div", { "class": "tfbar" }), le = shLayout("deck", "top", TF_TOP, { "class": "tftop", label: "the deck's top bar", hideOnly: true, editing: TF_EDIT.editing,
+      onedit: function (on) { TF_EDIT.editing = on; DECK = null; render(); },
+      onchange: function () { DECK = null; render(); },
+      render: function (id) { return [el("p", { "class": "calm small", text: TF_TOP_SAID[id] })]; },
+      locked: function (id) { return id === "waiting" && tfWaitingIds().length > 0; } });
+    var hiddenParts = le.layout.hidden.filter(function (id) { return !(id === "waiting" && tfWaitingIds().length > 0); });
+    hiddenParts.forEach(function (id) { wrap.classList.add("tf-no-" + id); });
+    wrap.appendChild(bar); wrap.appendChild(le.bar); if (TF_EDIT.editing) { wrap.appendChild(le.el); }
+    wrap.appendChild(d.el);
+    var r = route(), side = TF_SIDE_OK(r) ? ST.tfSide : null;
+    if (TF_SIDE) { TF_SIDE.beside.destroy(); TF_SIDE = null; }
+    if (side) {
+      TF_SIDE = { kind: side, beside: S.PageBeside({ page: side === "lost" ? "Ended when the daemon stopped" : "History", beside: "your terminals", onClose: function () { tfSideClose(); } }), sig: "" };
+      tfSidePaint(true);
+      main.appendChild(S.BesideGrid(wrap, TF_SIDE.beside));
+    } else { if (!TF_SIDE_OK(r)) { ST.tfSide = null; } main.appendChild(wrap); }
+    DECK = { route: route(), deck: d, states: {}, bar: bar, ended: a.ended, le: le, peeks: [] };
     ST.lines.filter(function (l) { return l.kind === "session"; }).forEach(function (l) { DECK.states[l.id] = termState(l); });
+    tfBarPaint(); setTimeout(tfPeekTabs, 0);
+  }
+  /* The lists beside the deck open only where the deck is the page (Home, Sessions, a session), not beside one of the six pages. */
+  function TF_SIDE_OK(r) { return r === "home" || r === "sessions" || r.indexOf("session-") === 0; }
+  function tfSideOpen(kind) { ST.tfSide = kind; DECK = null; render(); setTimeout(function () { var b = document.querySelector(".ls-beside .x"); if (b) { b.focus(); } }, 60); }
+  function tfSideClose() { ST.tfSide = null; if (TF_SIDE) { TF_SIDE.beside.destroy(); TF_SIDE = null; } DECK = null; render(); }
+  /* What the panel beside the deck shows: the sessions the daemon's stop ended, with Resume and Resume all, or History. Drawn again when what it lists changes. */
+  function tfSidePaint(force) {
+    if (!TF_SIDE) { return; }
+    var sig = TF_SIDE.kind === "lost" ? SESS_LOST.map(function (x) { return x.id; }).join(",") + "|" + SESSH.busy + "|" + sessWatching() : "history|" + SESSH.read + "|" + SESSH.q;
+    if (!force && sig === TF_SIDE.sig) { return; }
+    TF_SIDE.sig = sig;
+    var box = el("div", { "class": "tfside" });
+    if (TF_SIDE.kind === "lost") {
+      box.appendChild(el("h2", { "class": "ls-vh", text: "Ended when the daemon stopped" }));
+      sessPickup(sessGroups(), { lostOnly: true, beside: true, then: function () { tfSidePaint(); } }).forEach(function (n) { box.appendChild(n); });
+    } else {
+      box.appendChild(el("h2", { "class": "ls-vh", text: "History" }));
+      box.appendChild(sessHistory({ onRead: function () { tfSidePaint(); } }));
+    }
+    keepFocus(function () { TF_SIDE.beside.set(box); });
+  }
+  /* Above the deck: the Waiting chip, the Ended menu and Edit layout for the top bar. */
+  function tfBarPaint() {
+    if (!DECK || !DECK.bar) { return; }
+    var bar = DECK.bar, w = tfWaitingIds(), ended = DECK.ended || [], a = document.activeElement, k = a && bar.contains(a) ? a.getAttribute("data-k") : null;
+    bar.textContent = "";
+    if (w.length) { bar.appendChild(el("span", { "class": "tfpart tf-waiting" }, [halo({ label: "Waiting (" + w.length + ")", kind: "needs", solid: true, size: "small", cmd: w.length > 1 ? "shows the next one waiting on you · hidden tabs too" : "shows the one waiting on you", onPress: tfNextWaiting }, "tf-waiting")])); }
+    if (ended.length) {
+      var eb = el("button", { type: "button", "class": "tfmenu-btn", "aria-haspopup": "menu", "aria-expanded": "false", "data-k": "tf-ended", text: "Ended (" + ended.length + ")" });
+      eb.addEventListener("click", function () { tfEndedMenu(eb); });
+      bar.appendChild(el("span", { "class": "tfpart tf-ended" }, [eb]));
+    }
+    bar.appendChild(el("span", { "class": "grow" }));
+    bar.appendChild(DECK.le.button);
+    if (k) { var n = bar.querySelector('[data-k="' + k + '"]'); if (n) { n.focus({ preventScroll: true }); } }
+  }
+  /* The next session waiting on you after the one showing, oldest first, round again; a hidden tab comes back to the strip for it. */
+  function tfNextWaiting() {
+    var w = tfWaitingIds(); if (!w.length || !DECK) { return; }
+    var at = w.indexOf(P.deckCurrent), id = w[(at + 1) % w.length], t = tfTabs();
+    if (t.hidden.indexOf(id) >= 0) { t.hidden = t.hidden.filter(function (x) { return x !== id; }); tfKeepTabs(t); }
+    P.deckCurrent = id; savePrefs(); tfUpdate(); DECK.deck.pick(id, true);
+    var l = line(id); if (l) { said("Waiting on you: " + l.title, "shows it in a pane · changes nothing"); }
+  }
+  /* A small menu, as the tab menu is drawn (ls-tabmenu): arrows, Home and End move, Escape closes it and goes back to what opened it. */
+  var TF_MENU = null;
+  function tfMenuClose(back) { if (!TF_MENU) { return; } var m = TF_MENU; TF_MENU = null; m.el.remove(); document.removeEventListener("pointerdown", m.away, true); if (m.from) { m.from.setAttribute("aria-expanded", "false"); if (back && m.from.isConnected) { m.from.focus(); } } }
+  function tfMenu(from, label, items) {
+    tfMenuClose(false);
+    var box = from.getBoundingClientRect(), m = el("div", { "class": "ls-tabmenu tfmenu", role: "menu", tabindex: "-1", "aria-label": label });
+    items.forEach(function (it) {
+      m.appendChild(el("button", { type: "button", role: "menuitem", tabindex: "-1", "class": it.danger ? "danger" : null, title: it.cmd || null, "aria-disabled": it.off ? "true" : null, onclick: function () { if (it.off) { return; } tfMenuClose(false); it.run(); } },
+        [el("span", { text: it.label }), it.hint ? el("kbd", { text: it.hint }) : null]));
+    });
+    m.style.left = Math.round(Math.max(8, Math.min(box.left, window.innerWidth - 330))) + "px";
+    m.style.top = Math.round(Math.max(8, Math.min(box.bottom + 4, window.innerHeight - 40 * items.length - 20))) + "px";
+    m.addEventListener("keydown", function (e) {
+      var all = Array.prototype.slice.call(m.querySelectorAll('[role="menuitem"]')), i = all.indexOf(document.activeElement), dd = { ArrowDown: 1, ArrowUp: -1 }[e.key];
+      if (dd) { e.preventDefault(); all[(i + dd + all.length) % all.length].focus(); }
+      else if (e.key === "Home" || e.key === "End") { e.preventDefault(); all[e.key === "Home" ? 0 : all.length - 1].focus(); }
+      else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); tfMenuClose(true); }
+      else if (e.key === "Tab") { tfMenuClose(false); }
+    });
+    var away = function (e) { if (!m.contains(e.target) && e.target !== from) { tfMenuClose(false); } };
+    document.body.appendChild(m); from.setAttribute("aria-expanded", "true");
+    TF_MENU = { el: m, from: from, away: away };
+    document.addEventListener("pointerdown", away, true);
+    setTimeout(function () { var f = m.querySelector('[role="menuitem"]'); if (f) { f.focus(); } }, 0);
+  }
+  /* The "+": a new session, or what is not on the strip: what the daemon's stop ended, and every past conversation, each beside the deck. */
+  function tfPlusMenu() {
+    var add = DECK && DECK.deck.el.querySelector(".ls-stabs .add"); if (!add) { if (!sessWatching()) { openLaunch(); } return; }
+    add.setAttribute("aria-haspopup", "menu");
+    var n = SESS_LOST.filter(function (x) { return x.conversation; }).length;
+    tfMenu(add, "New session, or what is not on the strip", [
+      { label: "New session…", cmd: sessUnable() || "opens the launch sheet · changes nothing yet", off: !!sessUnable(), run: function () { openLaunch(); } },
+      { label: "Ended when the daemon stopped (" + n + ")", cmd: "opens beside the deck · changes nothing", run: function () { tfSideOpen("lost"); } },
+      { label: "History…", cmd: "every past conversation, beside the deck · changes nothing", run: function () { tfSideOpen("history"); } }]);
+  }
+  /* Ended (N): the ended tabs folded away. One brought back shows in a pane; Clear them all takes them off this browser's strip. */
+  function tfEndedMenu(from) {
+    var ended = (DECK && DECK.ended) || [];
+    if (TF_MENU && TF_MENU.from === from) { tfMenuClose(true); return; }
+    tfMenu(from, "Ended tabs", ended.map(function (s) {
+      var l = line(s.id);
+      return { label: s.title + (l && l.exitCode ? " · exit " + l.exitCode : " · ended"), cmd: "shows it in a pane · changes nothing", run: function () { ST.tfEndedBack = (ST.tfEndedBack || []).concat([s.id]); P.deckCurrent = s.id; savePrefs(); tfUpdate(); DECK.deck.pick(s.id, true); } };
+    }).concat([{ label: "Clear them all", cmd: "this browser only · changes nothing anywhere else", run: function () { var t = tfTabs(); ended.forEach(function (s) { if (t.cleared.indexOf(s.id) < 0) { t.cleared.push(s.id); } }); tfKeepTabs(t); tfUpdate(); said("Cleared " + ended.length + " ended " + (ended.length === 1 ? "tab" : "tabs"), "this browser only · changes nothing anywhere else"); } }]));
+  }
+  /* A tab whose session is not in a pane peeks its last lines (the daemon's read-only tail), so a tab can be checked without moving it. */
+  function tfPeekTabs() {
+    if (!DECK || !DECK.deck.el.isConnected) { return; }
+    var inPane = Array.prototype.map.call(DECK.deck.el.querySelectorAll(".pane[data-id]"), function (p) { return p.getAttribute("data-id"); });
+    /* A tab the strip drew again is gone with its peek wiring; one now in a pane gives its peek up; the rest keep theirs, so an open peek stays open. */
+    DECK.peeks = (DECK.peeks || []).filter(function (p) {
+      if (!p.wrap.isConnected) { return false; }
+      if (inPane.indexOf(p.id) >= 0) { p.detach(); p.btn.remove(); p.wrap.__tfPeek = false; return false; }
+      return true;
+    });
+    Array.prototype.forEach.call(DECK.deck.el.querySelectorAll(".ls-stabs .tab"), function (wrap) {
+      var b = wrap.querySelector('[role="tab"]'), id = b && b.getAttribute("data-id");
+      if (wrap.__tfPeek || !id || inPane.indexOf(id) >= 0 || !line(id)) { return; }
+      var btn = el("button", { type: "button", "class": "ls-peek-btn tfpk", "data-peek": "", tabindex: "-1" }, [el("span", { "class": "ring", "aria-hidden": "true" }), el("span", { "class": "ls-vh", text: "Peek" })]);
+      wrap.appendChild(btn); wrap.__tfPeek = true;
+      DECK.peeks.push({ id: id, wrap: wrap, btn: btn, detach: sessPeekKeep(wrap, function () { return peekSession(line(id)); }, { button: btn, target: b }) });
+    });
   }
   /* The daemon's list again: new tabs, words and marks; a session just started takes a pane of its own. */
-  function tfUpdate() { var a = tfArrange(deckSessions(), tfTabs()); DECK.deck.update({ sessions: a.shown, hidden: a.hidden, changes: !sessWatching(), active: ST.active || {}, launch: ST.deckLaunch || null }); }
+  function tfUpdate() {
+    var a = tfFold(tfArrange(deckSessions(), tfTabs()));
+    DECK.ended = a.ended;
+    DECK.deck.update({ sessions: a.shown, hidden: a.hidden, changes: !sessWatching(), active: ST.active || {}, launch: ST.deckLaunch || null });
+    tfBarPaint(); tfSidePaint(); setTimeout(tfPeekTabs, 0);
+  }
   function refreshDeck() {
     tfUpdate();
     ST.lines.filter(function (l) { return l.kind === "session"; }).forEach(function (l) { var st = termState(l), t = DECK.deck.terminal(l.id); if (t && DECK.states[l.id] !== st) { t.setState(st, { code: l.exitCode }); } DECK.states[l.id] = st; });
   }
-
   /* Team Focus */
   function boardRuns(list) {
     return (list || TR).map(function (r) { var g = runGate(r); return { id: r.id, goal: r.goal, team: r.team, project: r.project, word: runWord(r), since: shRunSince(r), round: r.round, rounds: r.shape, spent: r.spent, cap: r.cap, projected: r.ended ? null : r.projected, gate: g, progress: progressOf(r) }; });
@@ -6656,6 +7092,7 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     else if (r === "events" || r.indexOf("events?") === 0) { renderEvents(main, r); }
     else if (r === "commands" || r.indexOf("commands/") === 0) { renderCommands(main, r); }
     else { renderElsewhere(main, r); }
+    sessSideWrap(main);
     main.appendChild(el("p", { "class": "sample", text: "Example data and scripted agents: this prototype doesn't talk to Loadout. Every command shown is the real one." }));
     if (lay) { var ln = Array.prototype.filter.call(document.querySelectorAll(".ls-layout button, .ls-layout-bar button"), function (b) { return (b.getAttribute("aria-label") || b.textContent) === lay && !b.disabled; })[0]; if (ln) { ln.focus({ preventScroll: true }); } }
     if (k) { var n = k === "home-task" ? document.getElementById("home-task") : document.querySelector('[data-k="' + CSS.escape(k) + '"]'); if (n) { n.focus({ preventScroll: true }); if (caret !== undefined && n.setSelectionRange && caret !== null) { try { n.setSelectionRange(caret, caret); } catch (e) { /* not a text field */ } } } }
