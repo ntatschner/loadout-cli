@@ -2058,7 +2058,7 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
       var get = function () { return shToastPeekOf(target); };
       if (!get()) { return; }
       shShellPeek(); n.__shPeek = SHW;
-      if (n.classList.contains("ls-toast")) { SHW.peek.attach(n, get); return; }
+      if (n.classList.contains("ls-toast")) { SHW.peek.attach(n, get, { into: n.querySelector(".ls-answers, .acts") || n, word: "Peek" }); return; }
       /* A chip is a button already: it peeks on pointing, without a button of its own. */
       var tm = null;
       n.addEventListener("pointerenter", function () { clearTimeout(tm); tm = setTimeout(function () { if (n.matches(":hover")) { var it = get(); if (it) { shShellPeek(); SHW.from = "toast"; SHW.anchor = n; SHW.hover = true; SHW.peek.show(it, n); } } }, 350); });
