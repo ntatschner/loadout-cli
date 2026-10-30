@@ -109,7 +109,7 @@ export interface LiveOptions<T> {
   /** Keeps only these groups. */
   only?: LiveGroup[];
 }
-/** Which group an item is in: opts.group; then waiting or a gate; then its state word (a gate, question, approval, waiting session or idea with questions open is waiting; working, idle, shaping or held is running; failed, blocked, stalled, lost, unmet or waiting to land is pick up; ended, done, stopped or dropped is history); then open questions and its flags (failed, blocked, problem, ended, running); then the word's signal family. */
+/** Which group an item is in: opts.group; then waiting or a gate; then its state word (a gate, question, approval, waiting session or idea with questions open is waiting, and so is a blocked team run (kind "team run" or "run": it waits for you to confirm what it does next); working, idle, shaping or held is running; failed, blocked, stalled, lost, unmet or waiting to land is pick up; ended, done, stopped or dropped is history); then open questions and its flags (failed, blocked, problem, ended, running); then the word's signal family. */
 export declare function liveGroup<T extends object>(item: T, opts?: LiveOptions<T>): LiveGroup;
 /** Live work first, as WORKFLOW.md decides it for every list: waiting on you, running, you might pick it up, history. The oldest wait first within each live group (one with no time after those with one); history keeps the order given. Returns a new array. */
 export declare function liveFirst<T extends object>(items: T[], opts?: LiveOptions<T>): T[];

@@ -2454,21 +2454,25 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
   function renderTeams(main) {
     var head = teamsHead(main, "teams"), needs = teamNeeds();
     var read = teamQRead(TEAMQ.query), filtering = !!TEAMQ.query.trim() && read.kept !== null, shown = filtering ? read.kept : TR;
-    var running = teamLive(shown.filter(teamRunning)), ended = teamLive(shown.filter(function (r) { return !teamRunning(r); })), landing = teamLanding();
+    var running = teamLive(shown.filter(teamRunning)), ended = teamLive(shown.filter(function (r) { return !teamRunning(r) && runWord(r) !== "blocked"; })), landing = teamLanding();
     function cards(list, none) { var box = el("div", { "class": "tcards" }); list.forEach(function (r) { box.appendChild(teamCard(r, runActs(r))); }); if (!list.length) { box.appendChild(el("p", { "class": "calm", text: none })); } return box; }
     var body = {
-      needs: function () { var ny = S.NeedsYou({ items: needs }); teamPeekNeeds(ny, needs); return el("div", { "class": "tneeds" }, [ny]); },
+      /* Blocked runs wait on you (each needs a Confirm), so they sit in Needs you, after its other items. */
+      needs: function () {
+        var ny = S.NeedsYou({ items: needs }); teamPeekNeeds(ny, needs);
+        var nb = TEAMQ_BLOCKED.length, out = [el("div", { "class": "tneeds" }, [ny])];
+        if (nb) { out.push(el("h3", { "class": "ls-zone sub-zone", id: "z-tblocked", text: "Blocked: confirm what happens next" }),
+          el("p", { "class": "calm", style: "max-width: 980px", text: nb + " run" + (nb === 1 ? "" : "s") + " ended short of " + (nb === 1 ? "its" : "their") + " done-when. Each has a suggestion and the reason for it; nothing happens until you confirm." }),
+          el("div", { style: "max-width: 980px" }, [teamBlockedList()])); }
+        return out;
+      },
       running: function () {
         var tb = S.ListToolbar({ noun: "runs", query: TEAMQ.query, shape: read.shape, shown: filtering ? shown.length : null, recorded: filtering ? TR.length : null, problem: read.problem, onchange: function (q) { TEAMQ.query = q; teamBump(); } });
         var qbox = tb.el.querySelector("input"); if (qbox) { qbox.setAttribute("data-k", "t-runs-q"); }
         return [el("div", { "class": "tqtool" }, [tb.el]), el("p", { "class": "calm small", style: "margin: -6px 0 12px", text: "The filter reads Running and Ended alike." }), cards(running, filtering ? "Nothing running matches the filter." : "Nothing is running.")];
       },
       pickup: function () {
-        var nb = TEAMQ_BLOCKED.length;
-        return [el("h3", { "class": "ls-zone sub-zone", id: "z-tblocked", text: "Blocked" }),
-          el("p", { "class": "calm", style: "max-width: 980px", text: nb ? nb + " run" + (nb === 1 ? "" : "s") + " ended short of " + (nb === 1 ? "its" : "their") + " done-when. Each has a suggestion and the reason for it; nothing happens until you confirm." : "No run ended short of its done-when." }),
-          nb ? el("div", { style: "max-width: 980px" }, [teamBlockedList()]) : null,
-          el("h3", { "class": "ls-zone sub-zone", id: "tm-landing", text: "Waiting to land" }), el("div", { style: "max-width: 980px" }, [teamLandings()])];
+        return [el("h3", { "class": "ls-zone sub-zone", id: "tm-landing", text: "Waiting to land" }), el("div", { style: "max-width: 980px" }, [teamLandings()])];
       },
       ended: function () { return ended.length ? cards(ended, "") : el("p", { "class": "calm", text: filtering ? "No ended run matches the filter." : "No run has ended on this machine." }); },
       library: function () {
@@ -2497,8 +2501,8 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     };
     var le = shLayout("teams", "", TEAMS_PANELS, { "class": "tlay", label: "Teams", editing: !!TEAMQ.editing, onedit: function (on) { TEAMQ.editing = on; teamBump(); },
       render: function (id) { return body[id](); },
-      count: function (id) { return id === "needs" ? needs.length : id === "running" ? running.length : id === "pickup" ? TEAMQ_BLOCKED.length + landing.length : id === "ended" ? ended.length : undefined; },
-      locked: function (id) { return (id === "needs" && needs.length > 0) || (id === "running" && running.length > 0) || (id === "pickup" && TEAMQ_BLOCKED.length + landing.length > 0); } });
+      count: function (id) { return id === "needs" ? needs.length + TEAMQ_BLOCKED.length : id === "running" ? running.length : id === "pickup" ? landing.length : id === "ended" ? ended.length : undefined; },
+      locked: function (id) { return (id === "needs" && needs.length + TEAMQ_BLOCKED.length > 0) || (id === "running" && running.length > 0) || (id === "pickup" && landing.length > 0); } });
     if (head) { head.appendChild(key(le.button, "t-layout")); head.parentNode.insertBefore(le.bar, head.nextSibling); }
     main.appendChild(le.el);
   }
@@ -3462,8 +3466,9 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
     if (r.indexOf("team-") === 0) { TS.boardTeam = r.slice(5); }
     var team = TS.boardTeam && TEAMLIB.some(function (t) { return t.name === TS.boardTeam; }) ? TS.boardTeam : null;
     var w = shWaiting().count, live = TR.filter(teamRunning).length;
-    var waitingRuns = TR.filter(function (x) { return runWord(x) === "waiting for you"; }), runningRuns = TR.filter(function (x) { return teamRunning(x) && runWord(x) !== "waiting for you"; });
-    var endedRuns = TR.filter(function (x) { return !teamRunning(x); }), pickRuns = endedRuns.filter(function (x) { return S.liveGroup({ word: runWord(x) }, { state: function (y) { return y.word; } }) === "pickup"; }), pastRuns = endedRuns.filter(function (x) { return pickRuns.indexOf(x) < 0; });
+    /* A blocked run waits on you (Confirm what happens next), so it is in Waiting, never Pick up. */
+    var waitingRuns = TR.filter(function (x) { return runWord(x) === "waiting for you" || runWord(x) === "blocked"; }), runningRuns = TR.filter(function (x) { return teamRunning(x) && runWord(x) !== "waiting for you"; });
+    var endedRuns = TR.filter(function (x) { return !teamRunning(x); }), pickRuns = endedRuns.filter(function (x) { return runWord(x) !== "blocked" && S.liveGroup({ word: runWord(x) }, { state: function (y) { return y.word; } }) === "pickup"; }), pastRuns = endedRuns.filter(function (x) { return pickRuns.indexOf(x) < 0 && waitingRuns.indexOf(x) < 0; });
     var needs = teamNeeds().filter(function (x) { return !x.gate; }), landing = teamLanding(), blocked = TEAMQ_BLOCKED.length;
     var body = {
       teams: function () {

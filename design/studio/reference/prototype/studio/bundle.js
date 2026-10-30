@@ -251,6 +251,8 @@
     if (given && LIVE_NAMES[given]) { return given; }
     if (it.waiting || it.gate) { return "waiting"; }
     var s = liveState(it, opts);
+    /* A blocked team run waits on you: nothing happens until you confirm what it does next. (A blocked task is still one to pick up.) */
+    if (s === "blocked" && (it.kind === "team run" || it.kind === "run")) { return "waiting"; }
     if (LIVE_WORDS[s]) { return LIVE_WORDS[s]; }
     if (openQuestions(it)) { return "waiting"; }
     if (it.failed || it.blocked || it.problem || it.lost || it.short) { return "pickup"; }

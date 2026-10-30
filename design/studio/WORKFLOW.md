@@ -55,11 +55,12 @@ Don't reopen these. Ask me only if one turns out to be impossible.
      - a gate or question;
      - a trigger approval;
      - a session waiting for you or asking for approval;
-     - an idea with questions open.
+     - an idea with questions open;
+     - a blocked team run, to confirm what it does next.
   2. **Running.**
   3. **You might pick it up:**
      - failed;
-     - blocked, or ended short of its done-when;
+     - ended short of its done-when, or a blocked task;
      - ended when the daemon stopped;
      - a round that failed;
      - a branch waiting to land.
@@ -182,16 +183,16 @@ These are the default orders. Each page's sections are editable unless it says o
   - Beside the deck or board, Ideas opens on the bench with the shelf as a picker.
 - **Teams (Default):**
   - The order:
-    1. Needs you (gates, approvals, attention);
+    1. Needs you (gates, approvals, attention, then blocked runs with Confirm);
     2. Running;
-    3. Pick up (Blocked inline with Confirm, and Waiting to land);
+    3. Pick up (Waiting to land), with Blocked inline with Confirm under Needs you;
     4. Ended;
     5. Teams you can run;
     6. On a schedule;
     7. Queued.
   - Remedies puts "Requests waiting on you" first.
 - **The board (Team Focus):**
-  - Lanes: Waiting (every kind in Decisions), Running, Pick up (blocked, failed, landings), Ended (8).
+  - Lanes: Waiting (every kind in Decisions, blocked runs with Confirm included), Running, Pick up (failed, stalled, landings), Ended (8).
   - The teams strip, the ended rows and the spend column can be hidden.
   - Board rows peek the round and the node working now.
   - A team opens in its own panel rather than competing with a run.
