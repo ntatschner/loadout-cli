@@ -133,6 +133,7 @@ Don't reopen these. Ask me only if one turns out to be impossible.
    - `readLayout`, `move`, `place`, `hide` and `show` as now.
    - Kept under `studio-layouts` with the key `<page>` or `<page>/<surface>` and the mode. `""` means the default.
    - An "Edit layout" button in each page's head opens the same edit bar Home has.
+   - Dragging fixes a bug in Home's today: `place()` only puts a section before the one it's dropped on, so dropping on the next section changes nothing and nothing can go last, and HTML drag-and-drop does nothing on touch. Drag by pointer from a section's bar, landing before or after the nearest section by which half the pointer is over (`drop()`), with a bar in the gap showing where, scrolling near the window's edges, and Escape to put it back. Hold redraws while a section is dragged. As `reference/components/LayoutEdit/`.
    - `studio-layout-lens` and `studio-layout-map` are read as Home's Lens and Map until the new setting is written, then retired the way `studio-map-scope` was: setting one fails, naming `studio-layouts`.
 7. **Dialog's rule**, as in Decisions:
    - HaloButton gets a `busy` state: the label word is replaced, the button is inactive, and `aria-busy` is set.
