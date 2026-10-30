@@ -153,7 +153,7 @@
   var liveItems = [sessWait, sessWork, runAsk, runWork, idea, task, blocked, nodeOpen];
   var ul = document.getElementById("live");
   liveItems.forEach(function (it) {
-    var li = el("li", {}, [el("a", { href: "#" + it.id, text: it.title || it.goal }), S.Signal(word(it))]);
+    var li = el("li", {}, [el("a", { href: "#" + it.id, text: it.kind === "node" ? it.node + " · crew of " + it.goal : it.title || it.goal }), S.Signal(word(it))]);
     li.querySelector("a").addEventListener("click", function (e) { e.preventDefault(); log("Open " + (it.title || it.goal)); });
     ul.appendChild(li); live.attach(li, function () { return it; });
   });

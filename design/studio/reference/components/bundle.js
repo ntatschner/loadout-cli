@@ -4405,6 +4405,7 @@
 
 
 
+
 /* ---------- Stage 14: what main's Studio built since the design ---------- */
 (function () {
   "use strict";
@@ -6008,6 +6009,19 @@
         if (panel.contains(t) || (cur.row && cur.row.contains(t))) { return; }
         close(false);
       }
+      /* On hover a command floats under its button; inside the panel it is kept within the panel, which clips what overflows. */
+      function fitFloats() {
+        var box = panel.getBoundingClientRect();
+        Array.prototype.forEach.call(panel.querySelectorAll(".ls-cmd:not(.reason), .ls-cmdline"), function (n) {
+          var cs = getComputedStyle(n);
+          if (cs.position !== "absolute" || cs.display === "none") { return; }
+          n.style.maxWidth = Math.max(160, box.width - 28) + "px"; n.style.marginLeft = "";
+          var r = n.getBoundingClientRect(), over = r.right - (box.right - 10);
+          if (over > 0) { n.style.marginLeft = -Math.min(over, Math.max(0, r.left - box.left - 10)) + "px"; }
+        });
+      }
+      function queueFit() { requestAnimationFrame(function () { requestAnimationFrame(fitFloats); }); }
+      panel.addEventListener("pointerover", queueFit); panel.addEventListener("focusin", queueFit); panel.addEventListener("keyup", queueFit);
       window.addEventListener("keydown", onKey, true);
       document.addEventListener("pointerdown", onDown, true);
       panel.addEventListener("pointerenter", function () { clearTimeout(closeTimer); });

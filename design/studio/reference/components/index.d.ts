@@ -819,6 +819,8 @@ export declare function OfficePanel(o: { kind?: string; title: string; lines?: s
 
 
 
+
+
 /* ---------- What main's Studio built since the design (stage 14) ---------- */
 /** What 'loadout ask --json' answers (main's ask.ts AskReply). Properties --json leaves out may be missing. */
 export interface AskReply {

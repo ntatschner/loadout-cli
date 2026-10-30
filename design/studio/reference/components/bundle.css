@@ -2026,6 +2026,7 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 
 
 
+
 /* ---------- Stage 14: what main's Studio built since the design ---------- */
 /* --- AskPane --- */
 .ls-ask { padding: 0 18px; }
@@ -2291,7 +2292,7 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 .ls-peek.pinned { box-shadow: inset 3px 0 0 var(--c), inset 0 2px 0 var(--accent), inset 0 0 0 1px var(--rule), 0 18px 44px -14px rgb(0 0 0 / .55), 0 0 30px -18px var(--glow); }
 .ls-peek > .in { display: grid; gap: 10px; min-width: 0; }
 .ls-peek .hd { display: grid; gap: 6px; min-width: 0; }
-.ls-peek .hd .name { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-width: 0; padding-right: 76px; }
+.ls-peek .hd .name { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-width: 0; padding-right: 100px; }
 .ls-peek:not(.pinned):not(.inline) .hd .name { padding-right: 0; }
 .ls-peek .ttl { display: grid; gap: 2px; margin: 0; min-width: 0; flex: 1 1 200px; font-size: 16px; font-weight: 400; line-height: 1.3; color: var(--ink-strong); overflow-wrap: anywhere; }
 .ls-peek .ttl .kind { font-size: 11.5px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
@@ -2368,7 +2369,7 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 .ls-peek.inline, .ls-peek.preview { position: relative; z-index: auto; width: auto; max-height: none; overflow: visible; }
 .ls-peek.inline { margin: 4px 0 8px; flex-basis: 100%; box-shadow: inset 3px 0 0 var(--c), inset 0 0 0 1px var(--rule); }
 .ls-peek.preview { box-shadow: inset 3px 0 0 var(--c), inset 0 0 0 1px var(--rule); }
-.ls-peek.preview .hd .name, .ls-peek.inline .hd .name { padding-right: 76px; }
+.ls-peek.preview .hd .name, .ls-peek.inline .hd .name { padding-right: 100px; }
 /* framed: drawn in place exactly as it floats, for a page that shows it (a catalogue, a guide). */
 .ls-peek.framed { position: relative; z-index: auto; width: auto; max-width: 400px; max-height: none; }
 .ls-peek.framed:not(.pinned) { box-shadow: inset 3px 0 0 var(--c), inset 0 0 0 1px var(--rule), 0 18px 44px -14px rgb(0 0 0 / .55), 0 0 30px -18px var(--glow); }
