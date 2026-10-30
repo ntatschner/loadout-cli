@@ -212,8 +212,26 @@
 .ls-progress .pct { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--font-mono); font-size: 20px; color: var(--ink-strong); }
 [data-theme="hc-dark"] .ls-progress .bg, [data-theme="hc-light"] .ls-progress .bg { stroke: var(--control-edge); stroke-width: 2; }
 
-/* ---------- Toasts: top right, four levels, folding after dur-toast-fold ---------- */
-.ls-toasts { position: fixed; top: 18px; right: 24px; z-index: var(--z-toast); width: min(390px, calc(100% - 32px)); display: grid; gap: 8px; justify-items: end; }
+/* ---------- Toasts: top right, four levels, folding after 4 seconds and leaving after 10, into Earlier ---------- */
+.ls-toasts { position: fixed; top: 18px; right: 24px; z-index: var(--z-toast); width: min(390px, calc(100% - 32px)); display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; justify-items: end; pointer-events: none; }
+.ls-toasts > * { pointer-events: auto; }
+.ls-toasts [data-gives-way] { transition: opacity var(--dur-quick); }
+.ls-toasts.near [data-gives-way] { opacity: .18; pointer-events: none; }
+.ls-toasts.calm [data-gives-way] { transition: none; }
+.ls-toast .n, .ls-toast-chip .n, .ls-toast-history .n { font-style: normal; font-variant-numeric: tabular-nums; color: var(--muted); }
+.ls-toast-past { min-height: var(--control-sm); padding: 0 12px; border: 0; border-radius: var(--radius-pill); background: var(--surface); color: var(--muted); font: inherit; font-family: var(--font-sans); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; cursor: pointer; box-shadow: 0 0 0 1px var(--rule), var(--shadow-float); }
+.ls-toast-past b { font-weight: 600; color: var(--ink-strong); letter-spacing: 0; }
+.ls-toast-past:hover, .ls-toast-past:focus-visible { color: var(--ink-strong); outline: 2px solid var(--focus); outline-offset: 2px; }
+.ls-toast-history { width: 100%; max-height: min(360px, 50vh); overflow: auto; padding: 10px 14px; background: var(--surface); box-shadow: 0 0 0 1px var(--rule), var(--shadow-float); }
+.ls-toast-history ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.ls-toast-history li { --c: var(--moving); display: grid; grid-template-columns: 20px 1fr; gap: 2px 10px; align-items: start; font-size: 13px; color: var(--ink); }
+.ls-toast-history li.done { --c: var(--good); } .ls-toast-history li.needs { --c: var(--needs); } .ls-toast-history li.problem { --c: var(--bad); }
+.ls-toast-history .gl { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; font-size: 11px; font-weight: 600; color: var(--on-signal); background: var(--c); }
+.ls-toast-history b { font-weight: 500; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--c); }
+.ls-toast-history li.needs b { color: var(--needs-text); } .ls-toast-history li.problem b { color: var(--bad-text); }
+.ls-toast-history .ls-cmd { grid-column: 2; font-size: 11px; }
+.ls-toast-history .clear { margin-top: 8px; padding: 0; border: 0; background: none; color: var(--muted); font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; }
+.ls-toast-history .clear:hover, .ls-toast-history .clear:focus-visible { color: var(--ink-strong); outline: 2px solid var(--focus); outline-offset: 2px; }
 .ls-toast { --c: var(--moving); position: relative; width: 100%; padding: 12px 14px 12px 18px; background: var(--surface); box-shadow: inset 3px 0 0 var(--c), 0 0 0 1px var(--rule), 0 16px 36px -18px var(--cgf), var(--shadow-float); }
 .ls-toast.done { --c: var(--good); } .ls-toast.info { --c: var(--moving); }
 .ls-toast.needs { --c: var(--needs); background: var(--needs-wash); box-shadow: inset 4px 0 0 var(--c), 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent), 0 0 40px -12px var(--cgf), var(--shadow-float); }
@@ -240,7 +258,7 @@
 .ls-toast-chip .gl { width: 20px; height: 20px; font-size: 11px; box-shadow: none; }
 .ls-toast-chip b { font-weight: 500; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--c); white-space: nowrap; }
 .ls-toast-chip.needs b { color: var(--needs-text); } .ls-toast-chip.problem b { color: var(--bad-text); }
-.ls-toast-chip span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; max-width: 220px; }
+.ls-toast-chip span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; max-width: 220px; min-width: 0; }
 .ls-toast-chip:hover, .ls-toast-chip:focus-visible { color: var(--ink-strong); outline: 2px solid var(--focus); outline-offset: 2px; }
 [data-theme="hc-dark"] .ls-toast, [data-theme="hc-light"] .ls-toast { box-shadow: inset 4px 0 0 var(--c), 0 0 0 2px var(--c); }
 [data-theme="hc-dark"] .ls-toast.problem, [data-theme="hc-light"] .ls-toast.problem { box-shadow: 0 0 0 2px var(--c); }
@@ -1171,7 +1189,7 @@ html[data-vt="fade"]::view-transition-group(*) { animation-duration: 0s; }
 [data-motion="none"] .ls-ack { animation: none; }
 
 /* ---------- WorkDesk: list, view and actions, with the command bar under them ---------- */
-.ls-desk { --c: var(--accent); display: grid; grid-template-columns: minmax(250px, 320px) minmax(0, 1fr) minmax(230px, 280px); grid-template-rows: minmax(0, 1fr) auto; height: 100%; min-height: 0; background: var(--ground); box-shadow: inset 0 0 0 1px var(--rule); }
+.ls-desk { --c: var(--accent); position: relative; display: grid; grid-template-columns: var(--desk-cols, minmax(250px, 320px) minmax(0, 1fr) minmax(230px, 280px)); grid-template-rows: minmax(0, 1fr) auto; height: 100%; min-height: 0; background: var(--ground); box-shadow: inset 0 0 0 1px var(--rule); }
 .ls-desk > section { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; min-width: 0; outline: none; }
 .ls-desk > section + section { box-shadow: inset 1px 0 0 var(--rule); }
 .ls-desk > section:focus-within > .ph { box-shadow: inset 0 -1px 0 var(--rule), inset 0 2px 0 var(--accent); }
@@ -2479,6 +2497,10 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 .ls-setrow .ctl > .ls-text { flex: 1 1 220px; max-width: 420px; }
 .ls-setrow .ctl .acts { display: flex; flex-wrap: wrap; gap: 8px 22px; }
 .ls-setrow.sw .head { align-items: center; }
+/* Held (disabledReason): the control is dimmed as a disabled one is, and the reason stands in place of the line, wrapping. */
+.ls-setrow.held :is(.ctl > .ls-text, .ls-switch .track) { opacity: .6; }
+.ls-setrow.held :is(.ctl > .ls-text, .ls-switch) { cursor: not-allowed; }
+.ls-setrow > .ls-cmd.reason { white-space: normal; overflow-wrap: anywhere; }
 
 .ls-ilist .bar, .ls-readout .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
 .ls-ilist .bar .grow, .ls-readout .bar .grow { flex: 1; }
@@ -2558,4 +2580,7 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 :root:not([data-commands="never"]) .ls-aform:has(> .ls-answers:is(:hover, :focus-within)), :root:not([data-commands="never"]) :is(:hover, :focus-within) + .ls-cmdline:not(.ls-aform > *) { --cmd-form: block; }
 :root:not([data-commands="never"]) :is(:hover, :focus-within) + :is(.ls-from, .from) { --cmd-from: block; }
 .ls-tonly, [data-commands="always"] { --cmd-btn: block; --cmd-form: block; --cmd-from: block; }
+/* A disabled card's reason is not a command: it stays in place under its button and wraps inside the card, whatever the setting floats commands as. */
+:root:not([data-commands="always"]) .ls-tboard .task :is(.moves, .go) > .ls-action:has(> .ls-cmd.reason) { min-width: 0; max-width: 100%; }
+:root:not([data-commands="always"]) .ls-tboard .task :is(.moves, .go) .ls-cmd.reason { position: static; top: auto; right: auto; bottom: auto; left: auto; height: auto; visibility: visible; white-space: normal; overflow-wrap: anywhere; overflow: visible; -webkit-mask-image: none; mask-image: none; }
 /* end stage 13 */

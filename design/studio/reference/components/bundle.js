@@ -6705,11 +6705,12 @@
     return h("div", { "class": "ls-arow" }, [o.title ? h("h4", { "class": "t", text: o.title }) : null, o.why ? h("p", { "class": "why", text: o.why }) : null, row, out]);
   }
 
-  /* SettingRow: a value a command keeps. What it is now, a control to change it, and the line that sets or clears it. */
+  /* SettingRow: a value a command keeps. What it is now, a control to change it, and the line that sets or clears it.
+     disabledReason holds the control and its buttons and says why in place of the line, as a disabled button does. */
   function SettingRow(o) {
     o = o || {};
-    var cur = o.value === undefined || o.value === null ? "" : String(o.value), draft = cur, id = uid("ls-sr-");
-    var now = h("span", { "class": "now" }), line = h("code", { "class": "ls-cmd" }), out = h("p", { "class": "ls-said", role: "status" }), acts = h("div", { "class": "acts" });
+    var cur = o.value === undefined || o.value === null ? "" : String(o.value), draft = cur, id = uid("ls-sr-"), why = o.disabledReason || null;
+    var now = h("span", { "class": "now" }), line = h("code", { "class": "ls-cmd", id: id + "-line" }), out = h("p", { "class": "ls-said", role: "status" }), acts = h("div", { "class": "acts" });
     var ctl;
     if (o.kind === "switch") {
       ctl = NS.Switch({ label: o.label, sub: o.sub, checked: cur === "on" || cur === "true", onChange: function (on) { draft = on ? "on" : "off"; commit(); } });
@@ -6719,20 +6720,25 @@
       ctl = h("input", { "class": "ls-text", id: id, type: o.kind === "number" ? "number" : "text", placeholder: o.placeholder || null, autocomplete: "off", spellcheck: "false", oninput: function () { draft = ctl.value; paint(); } });
       ctl.value = cur;
     }
-    function commit() { var v = draft.trim(); var r = v ? (o.onSet && o.onSet(v)) : (o.onClear && o.onClear()); cur = v; said(out, typeof r === "string" ? r : (v ? (o.setSaid || "Set") : (o.clearSaid || "Cleared"))); paint(); }
+    if (why) { ctl.disabled = true; ctl.setAttribute("aria-disabled", "true"); ctl.setAttribute("aria-describedby", id + "-line"); }
+    function commit() { if (why) { return; } var v = draft.trim(); var r = v ? (o.onSet && o.onSet(v)) : (o.onClear && o.onClear()); cur = v; said(out, typeof r === "string" ? r : (v ? (o.setSaid || "Set") : (o.clearSaid || "Cleared"))); paint(); }
     function paint() {
       var v = String(draft).trim();
       now.textContent = cur ? (o.show ? o.show(cur) : cur) : (o.unset || "not set");
       now.classList.toggle("unset", !cur);
       line.textContent = v ? o.setCmd(v) : (cur && o.clearCmd ? o.clearCmd : o.setCmd("<" + (o.valueWord || "value") + ">"));
       acts.textContent = "";
-      if (o.kind === "switch") { line.textContent = o.setCmd(cur === "on" ? "off" : "on"); return; }
-      acts.appendChild(NS.HaloButton({ label: o.setLabel || "Set it", size: "small", solid: true, disabledReason: !v ? "write a value first" : v === cur ? "that is already the value" : null, onPress: commit }));
-      if (o.clearCmd && cur) { acts.appendChild(NS.HaloButton({ label: o.clearLabel || "Clear it", size: "small", onPress: function () { draft = ""; if (ctl.value !== undefined && o.kind !== "choice") { ctl.value = ""; } commit(); } })); }
+      if (o.kind === "switch") { line.textContent = o.setCmd(cur === "on" ? "off" : "on"); }
+      /* Held: the reason stands where the command would, and the buttons point at it rather than each saying it again. */
+      line.classList.toggle("reason", !!why);
+      if (why) { line.textContent = why; }
+      if (o.kind === "switch") { return; }
+      acts.appendChild(NS.HaloButton({ label: o.setLabel || "Set it", size: "small", solid: !why, inactive: !!why, describedBy: why ? id + "-line" : null, disabledReason: why ? null : !v ? "write a value first" : v === cur ? "that is already the value" : null, onPress: commit }));
+      if (o.clearCmd && cur) { acts.appendChild(NS.HaloButton({ label: o.clearLabel || "Clear it", size: "small", inactive: !!why, describedBy: why ? id + "-line" : null, onPress: function () { if (why) { return; } draft = ""; if (ctl.value !== undefined && o.kind !== "choice") { ctl.value = ""; } commit(); } })); }
     }
     paint();
     var head = o.kind === "switch" ? [ctl] : [h("label", { "class": "nm", "for": id, text: o.label }), o.sub ? h("span", { "class": "sub", text: o.sub }) : null, h("span", { "class": "nowwrap" }, [h("span", { "class": "k", text: "now " }), now])];
-    return h("div", { "class": "ls-setrow" + (o.kind === "switch" ? " sw" : "") }, [h("div", { "class": "head" }, head), o.kind === "switch" ? null : h("div", { "class": "ctl" }, [ctl, acts]), line, out]);
+    return h("div", { "class": "ls-setrow" + (o.kind === "switch" ? " sw" : "") + (why ? " held" : "") }, [h("div", { "class": "head" }, head), o.kind === "switch" ? null : h("div", { "class": "ctl" }, [ctl, acts]), line, out]);
   }
 
   /* ItemList: the things a command keeps, each with what can be done to it, and a way to add one. The commands a row's buttons run show under the row, for whichever button is pointed at or focused. */

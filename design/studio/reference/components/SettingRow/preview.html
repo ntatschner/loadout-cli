@@ -1,4 +1,4 @@
-<!-- @dsCard group="Commands as controls" height=560 width=1000 subtitle="A value a command keeps: what it is now, the control, Set and Clear, and the line" -->
+<!-- @dsCard group="Commands as controls" height=760 width=1000 subtitle="A value a command keeps: what it is now, the control, Set and Clear, and the line" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -23,6 +23,9 @@
     setCmd: function (v) { return "$ loadout team notify set " + v; }, clearCmd: "$ loadout team notify clear" }));
   a.appendChild(S.SettingRow({ label: "The webhook", sub: "Lets another service start a team run.", value: "off", kind: "switch", setCmd: function (v) { return v === "on" ? "$ loadout team webhook enable" : "$ loadout team webhook disable"; } }));
   a.appendChild(S.SettingRow({ label: "Hours in a working day", sub: "Used when your voice writes estimates.", value: "6", kind: "number", setCmd: function (v) { return "$ loadout voice time set hours-per-day " + v + " --project loadout-cli"; }, clearCmd: "$ loadout voice time unset hours-per-day --project loadout-cli" }));
+  a.appendChild(S.SettingRow({ label: "Hours in a working day, held", sub: "The same row with disabledReason: the control and its buttons are held, and the reason stands where the line was.", value: "6", kind: "number", disabledReason: "Studio is only watching: type the command in a terminal",
+    setCmd: function (v) { return "$ loadout voice time set hours-per-day " + v + " --project loadout-cli"; }, clearCmd: "$ loadout voice time unset hours-per-day --project loadout-cli" }));
+  a.appendChild(S.SettingRow({ label: "The webhook, held", sub: "Lets another service start a team run.", value: "off", kind: "switch", disabledReason: "Studio is only watching: type the command in a terminal", setCmd: function (v) { return v === "on" ? "$ loadout team webhook enable" : "$ loadout team webhook disable"; } }));
 })();
 </script>
 </body>

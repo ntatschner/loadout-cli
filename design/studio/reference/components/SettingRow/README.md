@@ -13,6 +13,10 @@ A value a command keeps, shown as a setting rather than a form. It is used for a
 
 A Switch acts at once, because on and off need no second press. Its line shows what the next press will run.
 
+## Held
+
+`disabledReason` holds the row: the control is disabled, Set it and Clear it are disabled and described by the reason, and the reason stands in place of the line, as a disabled HaloButton's does. Like any reason it shows whatever the commands setting, since it is not a command. Use it when the row can't change anything here, such as while Studio is only watching.
+
 ## Do and don't
 
 - Do show the current value read from the command, never a guess.

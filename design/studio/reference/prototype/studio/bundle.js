@@ -254,65 +254,149 @@
     return { el: wrap, set: set };
   }
 
-  /* Toasts: a region top right. Done and For your information fold into a chip after dur-toast-fold; Needs you and Problem
-     stay open until answered or acknowledged. Nothing folds while the pointer or keyboard is on the stack. */
+  /* Toasts: as main's Toasts.svelte and toasts.svelte.ts. A region top right. Done and For your information fold into a chip
+     after 4 seconds and leave after 10, into Earlier; Needs you and Problem stay open until answered or acknowledged and then
+     follow the same times. Each toast counts its own seconds, so the one under the pointer or holding the keyboard stops while
+     the rest go on. The same Done or notice again counts up instead of stacking. In a named place ("session", "pure", "desk")
+     everything arrives as a chip, and Done and notice chips go see-through and let clicks pass while the pointer is near.
+     Ctrl+Shift+X folds what is open and, pressed again, clears what is not waiting on you. */
   var LEVELS = { done: ["✓", "Done"], info: ["↻", "For your information"], needs: ["!", "Needs you"], problem: ["✕", "Problem"] };
-  function Toasts(region) {
-    var list = [], seq = 0, now = 0, hold = false;
-    var foldAfter = Math.round((parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--dur-toast-fold")) || 6000) / 1000);
+  var TOAST_OPEN_FOR = 4, TOAST_GONE_AFTER = 10, TOAST_KEPT = 50, TOAST_NEAR = 48;
+  function Toasts(region, o) {
+    o = o || {};
+    var list = [], past = [], seq = 0, tucked = false, place = null, near = false, pointed = null, focused = null, showPast = false, timer = null;
     var polite = h("p", { role: "status", "class": "ls-sr" }), alert = h("p", { role: "alert", "class": "ls-sr" });
-    region.classList.add("ls-toasts"); region.setAttribute("role", "region"); region.setAttribute("aria-label", "Notifications");
+    region.classList.add("ls-toasts"); region.setAttribute("role", "region"); region.setAttribute("aria-label", "Notifications"); region.setAttribute("aria-keyshortcuts", "Control+Shift+X");
     region.parentNode.insertBefore(polite, region.nextSibling); region.parentNode.insertBefore(alert, polite.nextSibling);
-    region.addEventListener("mouseenter", function () { hold = true; }); region.addEventListener("mouseleave", function () { hold = false; });
-    region.addEventListener("focusin", function () { hold = true; }); region.addEventListener("focusout", function () { hold = false; });
-    var timer = setInterval(tick, 1000);
-    function anim() { return NS.motion && NS.motion() === "full" ? " anim" : ""; }
-    function add(t) {
-      t = Object.assign({ level: "info", text: "", cmd: "", actions: [] }, t, { id: ++seq, born: now, folded: false, settled: null });
-      list.unshift(t);
-      if (t.level === "problem") { alert.textContent = "Problem: " + t.text; } else { polite.textContent = LEVELS[t.level][1] + ": " + t.text; }
-      render(t.id); return t.id;
+    function shown(t) { return t.settled ? "done" : t.level; }
+    /* Whether its seconds count: a question waiting on someone never leaves by itself. */
+    function timed(t) { return t.level === "done" || t.level === "info" || t.settled; }
+    /* Done and notices give way in a named place; a question waiting on you never does. */
+    function givesWay(t) { return place !== null && shown(t) !== "needs" && shown(t) !== "problem"; }
+    function full() { return !NS.motion || NS.motion() === "full"; }
+    function tk(node, key) { var b = node.tagName === "BUTTON" ? node : node.querySelector("button"); if (b) { b.setAttribute("data-tk", key); } return node; }
+    function remember(gone) {
+      if (!gone.length) { return; }
+      gone.forEach(function (t) { if (pointed === t.id) { pointed = null; } if (focused === t.id) { focused = null; } });
+      past = gone.map(function (t) { return { id: t.id, level: shown(t), text: t.text, cmd: t.cmd, count: t.count }; }).concat(past).slice(0, TOAST_KEPT);
     }
-    function settle(id, words) {
-      list.forEach(function (t) { if (t.id === id) { t.settled = now; t.text = words || t.text; t.actions = []; } });
-      polite.textContent = words || ""; render();
+    function leave(gone) { var ids = gone.map(function (t) { return t.id; }); list = list.filter(function (t) { return ids.indexOf(t.id) < 0; }); remember(gone); paint(); }
+    function watch(n, t) {
+      n.addEventListener("mouseenter", function () { pointed = t.id; }); n.addEventListener("mouseleave", function () { if (pointed === t.id) { pointed = null; } });
+      n.addEventListener("focusin", function () { focused = t.id; }); n.addEventListener("focusout", function () { if (focused === t.id) { focused = null; } });
     }
-    function tick() {
-      if (hold) { return; }
-      now += 1;
+    /* An answer does its thing (it may return a promise), then settles the toast with the words it returns, or its label. */
+    function answer(t, ac) {
+      var w = ac.onPress ? ac.onPress() : ac.onpress ? ac.onpress() : null;
+      function done(v) { settle(t.id, typeof v === "string" && v ? v : ac.label); }
+      if (w && typeof w.then === "function") { w.then(done, function () { done(null); }); } else { done(w); }
+    }
+    function paint() {
+      var a = document.activeElement, keep = a && region.contains(a) ? a.getAttribute("data-tk") : null;
+      region.textContent = ""; region.classList.toggle("near", near); region.classList.toggle("calm", !full());
       list.forEach(function (t) {
-        var age = now - t.born, sAge = t.settled === null ? -1 : now - t.settled;
-        if ((t.level === "done" || t.level === "info") ? age >= foldAfter : sAge >= foldAfter) { t.folded = true; }
+        var lv = shown(t), L = LEVELS[lv], anim = t.fresh && full() ? " anim" : "";
+        if (t.folded) {
+          var chip = h("button", { type: "button", "class": "ls-toast-chip " + lv + anim, "data-gives-way": givesWay(t) ? "" : null, "data-tk": "c" + t.id, "aria-label": L[1] + ": " + t.text + (t.count > 1 ? ", " + t.count + " times" : "") + ". Open it",
+            onclick: function () { open(t.id); var x = region.querySelector('[data-tk="x' + t.id + '"]'); if (x) { x.focus({ preventScroll: true }); } } },
+            [h("span", { "class": "gl", "aria-hidden": "true", text: L[0] }), h("b", { text: L[1] }), h("span", { text: t.text }), t.count > 1 ? h("i", { "class": "n", "aria-hidden": "true", text: "×" + t.count }) : null]);
+          watch(chip, t); region.appendChild(chip); return;
+        }
+        var card = h("div", { "class": "ls-toast " + lv + anim, role: "group", "aria-label": L[1] }, [
+          h("div", { "class": "th" }, [h("span", { "class": "gl", "aria-hidden": "true", text: L[0] }), h("span", { "class": "lv" }, [L[1], t.count > 1 ? h("i", { "class": "n", text: " ×" + t.count }) : null]),
+            h("button", { type: "button", "class": "x", "data-tk": "x" + t.id, "aria-label": "Dismiss: " + t.text, text: "✕", onclick: function () { dismiss(t.id); } })]),
+          h("p", { text: t.text }), cmd(t.cmd),
+          t.actions.length ? h("div", { "class": "acts" }, t.actions.map(function (ac, i) {
+            return tk(HaloButton({ label: ac.label, kind: ac.kind || "", size: "small", cmd: ac.cmd, onPress: function () { answer(t, ac); } }), "t" + t.id + "a" + i);
+          })) : null]);
+        watch(card, t); region.appendChild(card);
       });
+      if (past.length) {
+        region.appendChild(h("button", { type: "button", "class": "ls-toast-past", "aria-expanded": showPast ? "true" : "false", "data-tk": "past", onclick: function () { showPast = !showPast; paint(); } }, ["Earlier ", h("b", { text: String(past.length) })]));
+        if (showPast) {
+          region.appendChild(h("div", { "class": "ls-toast-history", role: "group", "aria-label": "Earlier notifications, this session" }, [
+            h("ul", {}, past.map(function (g) { return h("li", { "class": g.level }, [h("span", { "class": "gl", "aria-hidden": "true", text: LEVELS[g.level][0] }), h("span", { "class": "t" }, [h("b", { text: LEVELS[g.level][1] }), " " + g.text, g.count > 1 ? h("i", { "class": "n", text: " ×" + g.count }) : null]), cmd(g.cmd)]); })),
+            h("button", { type: "button", "class": "clear", "data-tk": "clear", text: "Clear", onclick: function () { past = []; showPast = false; paint(); var p = region.querySelector(".ls-toast-chip, .ls-toast .x"); if (p) { p.focus({ preventScroll: true }); } } })]));
+        }
+      }
+      if (keep) {
+        /* An answered toast's buttons are gone: its dismiss button takes the keyboard instead. */
+        var k = region.querySelector('[data-tk="' + keep + '"]') || (/^t\d+a/.test(keep) ? region.querySelector('[data-tk="x' + keep.slice(1).split("a")[0] + '"]') : null);
+        if (k) { k.focus({ preventScroll: true }); }
+      }
+    }
+    /* Adds one at the top of the stack, or counts one more of the same Done or notice. */
+    function add(t) {
+      var c = t.cmd || "", level = LEVELS[t.level] ? t.level : "info";
+      if (level === "done" || level === "info") {
+        var same = list.filter(function (x) { return x.level === level && !x.settled && x.text === t.text && x.cmd === c; })[0];
+        if (same) { same.count += 1; same.aged = 0; polite.textContent = LEVELS[level][1] + ": " + t.text + ", " + same.count + " times"; paint(); return same.id; }
+      }
+      list.forEach(function (x) { x.fresh = false; });
+      var n = { id: ++seq, level: level, text: t.text || "", cmd: c, actions: t.actions || [], aged: 0, folded: tucked, settled: false, fresh: true, count: 1 };
+      list.unshift(n);
+      if (level === "problem") { alert.textContent = "Problem: " + n.text; } else { polite.textContent = LEVELS[level][1] + ": " + n.text; }
+      paint(); return n.id;
+    }
+    /* Answered or acknowledged: it shows as done, with these words, and from now on follows Done's times. */
+    function settle(id, words) {
+      list.forEach(function (x) { if (x.id === id) { x.settled = true; x.aged = 0; x.text = words || x.text; x.actions = []; x.fresh = false; } });
+      polite.textContent = words || ""; if (focused === id) { focused = null; } paint();
+    }
+    /* Opens a folded one again, for another run of the times. */
+    function open(id) { list.forEach(function (x) { if (x.id === id) { x.folded = false; x.aged = 0; } }); if (focused === id) { focused = null; } paint(); }
+    function dismiss(id) { leave(list.filter(function (x) { return x.id === id; })); }
+    /* Entering a named place folds everything to a chip; leaving it opens again whatever still needs someone. */
+    function tuck(on) {
+      if (on === tucked) { return; }
+      tucked = on;
+      list.forEach(function (x) { if (on) { x.folded = true; x.fresh = false; } else if (!timed(x)) { x.folded = false; x.fresh = false; } });
+    }
+    function setPlace(p) {
+      p = p === "session" || p === "pure" || p === "desk" ? p : null;
+      if (p === place) { return; }
+      place = p; if (p === null) { near = false; }
+      tuck(p !== null); paint();
+    }
+    /* The key: folds whatever is open; with nothing open, sends everything not waiting on someone into the history. */
+    function sweep() {
+      if (list.some(function (x) { return !x.folded; })) { list.forEach(function (x) { x.folded = true; x.fresh = false; }); paint(); return; }
+      leave(list.filter(timed));
+    }
+    /* One second passes. Called by the clock, or by a page that runs its own (clock: false). */
+    function tick() {
+      var gone = [], changed = false;
       list = list.filter(function (t) {
-        if (t.level === "done") { return now - t.born < 60; }
-        if (t.level === "needs" || t.level === "problem") { return t.settled === null || now - t.settled < 60; }
+        if (!timed(t) || t.id === pointed || t.id === focused) { return true; }
+        t.aged += 1;
+        if (t.aged >= TOAST_GONE_AFTER) { gone.push(t); changed = true; return false; }
+        if (t.aged >= TOAST_OPEN_FOR && !t.folded) { t.folded = true; t.fresh = false; changed = true; }
         return true;
       });
-      var infos = list.filter(function (t) { return t.level === "info" && t.folded; });
-      if (infos.length > 3) { var drop = infos.slice(3).map(function (t) { return t.id; }); list = list.filter(function (t) { return drop.indexOf(t.id) < 0; }); }
-      render();
+      remember(gone);
+      if (changed) { paint(); }
     }
-    function render(fresh) {
-      region.textContent = "";
-      list.forEach(function (t) {
-        var L = LEVELS[t.settled !== null ? "done" : t.level], lvl = t.settled !== null ? "done" : t.level, a = t.id === fresh ? anim() : "";
-        if (t.folded) {
-          region.appendChild(h("button", { type: "button", "class": "ls-toast-chip " + lvl + a, "aria-label": L[1] + ": " + t.text + ". Open it",
-            onclick: function () { t.folded = false; t.born = now; if (t.settled !== null) { t.settled = now; } render(); } },
-            [h("span", { "class": "gl", "aria-hidden": "true", text: L[0] }), h("b", { text: L[1] }), h("span", { text: t.text })]));
-          return;
-        }
-        region.appendChild(h("div", { "class": "ls-toast " + lvl + a }, [
-          h("div", { "class": "th" }, [h("span", { "class": "gl", "aria-hidden": "true", text: L[0] }), h("span", { "class": "lv", text: L[1] }),
-            h("button", { type: "button", "class": "x", "aria-label": "Dismiss: " + t.text, text: "✕", onclick: function () { list = list.filter(function (x) { return x.id !== t.id; }); render(); } })]),
-          h("p", { text: t.text }), t.cmd ? cmd(t.cmd) : null,
-          t.actions.length ? h("div", { "class": "acts" }, t.actions.map(function (ac) {
-            return HaloButton({ label: ac.label, kind: ac.kind, size: "small", cmd: ac.cmd, onPress: function () { settle(t.id, ac.onPress ? ac.onPress() : ac.label); } });
-          })) : null]));
+    /* A chip that lets clicks through never sees the pointer, so the page is watched instead, and only in a named place. */
+    function onMove(e) {
+      if (place === null) { if (near) { near = false; region.classList.remove("near"); } return; }
+      var now = Array.prototype.some.call(region.querySelectorAll("[data-gives-way]"), function (c) {
+        var b = c.getBoundingClientRect(), dx = Math.max(b.left - e.clientX, 0, e.clientX - b.right), dy = Math.max(b.top - e.clientY, 0, e.clientY - b.bottom);
+        return Math.sqrt(dx * dx + dy * dy) <= TOAST_NEAR;
       });
+      if (now !== near) { near = now; region.classList.toggle("near", near); }
     }
-    return { add: add, settle: settle, stop: function () { clearInterval(timer); } };
+    /* Ctrl+Shift+X, caught before a terminal takes it. */
+    function onKey(e) {
+      if (e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey && e.code === "KeyX" && list.length) { e.preventDefault(); e.stopPropagation(); sweep(); }
+    }
+    window.addEventListener("pointermove", onMove, { passive: true });
+    window.addEventListener("keydown", onKey, true);
+    if (o.clock !== false) { timer = setInterval(tick, 1000); }
+    if (o.place) { setPlace(o.place); }
+    return { add: add, settle: settle, open: open, dismiss: dismiss, sweep: sweep, tick: tick, place: setPlace,
+      clearHistory: function () { past = []; showPast = false; paint(); },
+      list: function () { return list.slice(); }, history: function () { return past.slice(); },
+      stop: function () { clearInterval(timer); window.removeEventListener("pointermove", onMove); window.removeEventListener("keydown", onKey, true); } };
   }
 
   Object.assign(NS, {
@@ -2759,9 +2843,46 @@
       if (/^[1-9]$/.test(k) && AP) { e.preventDefault(); AP.run(parseInt(k, 10) - 1); }
     }
     document.addEventListener("keydown", onKey);
+    /* The dividers between the panes (main's WorkDesk split): split is [list, actions] as fractions of the width, kept by the
+       page through onSplit; null for the stylesheet's widths. The list and the actions keep the floors they always had, the
+       view a terminal's (40 columns by 8 rows at 13px). Until a divider is moved the panes are as the stylesheet draws them
+       and the dividers say where that is; Enter or a double click gives a pane the width the stylesheet would. Below 1024px
+       the panes stack and the dividers go. */
+    var split = o.split && o.split.length === 2 ? o.split.slice() : null, wide = 0, SP1 = null, SP2 = null, ro = null;
+    var VIEW_FLOOR = Math.ceil(40 * 13 * 0.6 + 24);
+    function deskFloor(px) { return wide > 0 ? Math.min(0.5, px / wide) : 0; }
+    function deskClamp(v, min, max) { return min > max ? (min + max) / 2 : Math.min(max, Math.max(min, v)); }
+    function splitAt() {
+      wide = el.getBoundingClientRect().width;
+      return split || [wide ? listPane.getBoundingClientRect().width / wide : 0.25, wide ? actPane.getBoundingClientRect().width / wide : 0.2];
+    }
+    function paintCols() {
+      if (split) { el.style.setProperty("--desk-cols", "minmax(250px, " + split[0].toFixed(4) + "fr) minmax(0, " + (1 - split[0] - split[1]).toFixed(4) + "fr) minmax(230px, " + split[1].toFixed(4) + "fr)"); } else { el.style.removeProperty("--desk-cols"); }
+    }
+    function syncSplit() {
+      if (!SP1) { return; }
+      var v = splitAt(), listMin = deskFloor(250), actsMin = deskFloor(230), viewMin = deskFloor(VIEW_FLOOR);
+      SP1.set({ value: deskClamp(v[0], listMin, 1 - v[1] - viewMin), min: listMin, max: 1 - v[1] - viewMin, reset: deskFloor(320) });
+      SP2.set({ value: deskClamp(1 - v[1], v[0] + viewMin, 1 - actsMin), min: v[0] + viewMin, max: 1 - actsMin, reset: 1 - deskFloor(280) });
+    }
+    function setSplit(next, quiet) {
+      split = next && next.length === 2 ? next.slice() : null; paintCols(); syncSplit();
+      if (!quiet) { (o.onSplit || o.onsplit || function () {})(split ? split.slice() : null); }
+    }
+    if (NS.Splitter) {
+      SP1 = NS.Splitter({ "class": "first", label: "Width of the list", value: 0.25, reset: 0.25, onchange: function (to) { var v = splitAt(); setSplit([to, v[1]]); } });
+      SP2 = NS.Splitter({ "class": "second", label: "Width of the actions", value: 0.8, reset: 0.8, onchange: function (b) { var v = splitAt(); setSplit([v[0], 1 - b]); } });
+      /* After the panes, so the panes' own order is untouched. */
+      el.appendChild(SP1.el); el.appendChild(SP2.el);
+      if (typeof ResizeObserver === "function") { ro = new ResizeObserver(function () { syncSplit(); }); ro.observe(el); } else { setTimeout(syncSplit, 0); }
+    }
+    paintCols();
     if (!selected) { var first = all()[0]; selected = first ? first.id : null; }
     paintList(); paintView();
-    return { el: el, select: select, focusList: focusList, openView: openView, closeView: closeView, refresh: function (g) { groups = g; if (!item(selected)) { var f = all()[0]; selected = f ? f.id : null; paintView(); } paintList(); }, repaintView: paintView, repaintActions: function () { paintActions(item(selected)); }, get selected() { return selected; }, destroy: function () { document.removeEventListener("keydown", onKey); } };
+    return { el: el, select: select, focusList: focusList, openView: openView, closeView: closeView, refresh: function (g) { groups = g; if (!item(selected)) { var f = all()[0]; selected = f ? f.id : null; paintView(); } paintList(); }, repaintView: paintView, repaintActions: function () { paintActions(item(selected)); }, get selected() { return selected; },
+      /** The widths the page keeps, as main's split prop: set them (null for the stylesheet's) without calling onSplit. */
+      setSplit: function (s) { setSplit(s, true); }, get split() { return split ? split.slice() : null; },
+      destroy: function () { document.removeEventListener("keydown", onKey); if (ro) { ro.disconnect(); } } };
   }
 
   Object.assign(NS, { WorkDesk: WorkDesk, ActionPane: ActionPane, CommandBar: CommandBar, KeyHelp: KeyHelp, PURE_KEYS: KEYS });
@@ -3102,10 +3223,11 @@
   function PlanLayer(o) {
     o = o || {};
     var L = o.layer || o.addition || {}, add = !!o.addition, id = o.idea || "<id>", where = o.where || [], dis = o.disabledReason || null, lock = !!o.accepted;
-    var onrework = o.onRework || o.onrework;
+    var onrework = o.onRework || o.onrework, onrequest = o.onRequest || o.onrequest;
     /* Made here and not yet read back: shown in place of what the idea says. */
     var choosing = null, judging = null, chosenNow = L.chosen || null, verdictNow = null;
-    var reworking = false, request = "", saidText = "", failed = false, pending = false;
+    /* A page that draws the layer again gives back what was typed and not sent (request), and the box opens with it. */
+    var request = typeof o.request === "string" ? o.request : "", reworking = !lock && !!request.trim(), saidText = "", failed = false, pending = false;
     function cap(w) { w = String(w || "Undecided"); return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(); }
     function verdict() { return judging || verdictNow || cap(L.verdict); }
     function chosen() { return choosing || chosenNow; }
@@ -3114,6 +3236,7 @@
     var el = h("section", { "aria-label": (add ? "Addition " : "Layer ") + L.id + ": " + name, "data-anchor": "piece:" + L.id });
     var out = h("p", { "class": "ls-said held", role: "status" });
     var ta = h("textarea", { "class": "ls-text", id: uid("rw-"), rows: 2, placeholder: "What should change, in a sentence", "aria-label": "What should change about " + L.id });
+    ta.value = request;
     var sendBox = h("div", {});
     function tell() { var now = reworking && !!request.trim(); if (now !== pending) { pending = now; if (onrework) { onrework(now); } } }
     function keeping(fn) {
@@ -3147,10 +3270,10 @@
     }
     function sendBack() {
       var text = request.trim();
-      reworking = false; request = ""; ta.value = ""; tell();
+      reworking = false; request = ""; ta.value = ""; tell(); if (onrequest) { onrequest(""); }
       judge("Improve", function () { return o.onImprove ? o.onImprove(text) : false; }, "Sent " + L.id + " back to be reworked");
     }
-    ta.addEventListener("input", function () { request = ta.value; paintSend(); tell(); });
+    ta.addEventListener("input", function () { request = ta.value; paintSend(); tell(); if (onrequest) { onrequest(request); } });
     function paint() {
       keeping(function () {
         var v = verdict(), pick = chosen();
@@ -3193,6 +3316,7 @@
       });
     }
     paint();
+    tell();
     return el;
   }
 
@@ -6581,11 +6705,12 @@
     return h("div", { "class": "ls-arow" }, [o.title ? h("h4", { "class": "t", text: o.title }) : null, o.why ? h("p", { "class": "why", text: o.why }) : null, row, out]);
   }
 
-  /* SettingRow: a value a command keeps. What it is now, a control to change it, and the line that sets or clears it. */
+  /* SettingRow: a value a command keeps. What it is now, a control to change it, and the line that sets or clears it.
+     disabledReason holds the control and its buttons and says why in place of the line, as a disabled button does. */
   function SettingRow(o) {
     o = o || {};
-    var cur = o.value === undefined || o.value === null ? "" : String(o.value), draft = cur, id = uid("ls-sr-");
-    var now = h("span", { "class": "now" }), line = h("code", { "class": "ls-cmd" }), out = h("p", { "class": "ls-said", role: "status" }), acts = h("div", { "class": "acts" });
+    var cur = o.value === undefined || o.value === null ? "" : String(o.value), draft = cur, id = uid("ls-sr-"), why = o.disabledReason || null;
+    var now = h("span", { "class": "now" }), line = h("code", { "class": "ls-cmd", id: id + "-line" }), out = h("p", { "class": "ls-said", role: "status" }), acts = h("div", { "class": "acts" });
     var ctl;
     if (o.kind === "switch") {
       ctl = NS.Switch({ label: o.label, sub: o.sub, checked: cur === "on" || cur === "true", onChange: function (on) { draft = on ? "on" : "off"; commit(); } });
@@ -6595,20 +6720,25 @@
       ctl = h("input", { "class": "ls-text", id: id, type: o.kind === "number" ? "number" : "text", placeholder: o.placeholder || null, autocomplete: "off", spellcheck: "false", oninput: function () { draft = ctl.value; paint(); } });
       ctl.value = cur;
     }
-    function commit() { var v = draft.trim(); var r = v ? (o.onSet && o.onSet(v)) : (o.onClear && o.onClear()); cur = v; said(out, typeof r === "string" ? r : (v ? (o.setSaid || "Set") : (o.clearSaid || "Cleared"))); paint(); }
+    if (why) { ctl.disabled = true; ctl.setAttribute("aria-disabled", "true"); ctl.setAttribute("aria-describedby", id + "-line"); }
+    function commit() { if (why) { return; } var v = draft.trim(); var r = v ? (o.onSet && o.onSet(v)) : (o.onClear && o.onClear()); cur = v; said(out, typeof r === "string" ? r : (v ? (o.setSaid || "Set") : (o.clearSaid || "Cleared"))); paint(); }
     function paint() {
       var v = String(draft).trim();
       now.textContent = cur ? (o.show ? o.show(cur) : cur) : (o.unset || "not set");
       now.classList.toggle("unset", !cur);
       line.textContent = v ? o.setCmd(v) : (cur && o.clearCmd ? o.clearCmd : o.setCmd("<" + (o.valueWord || "value") + ">"));
       acts.textContent = "";
-      if (o.kind === "switch") { line.textContent = o.setCmd(cur === "on" ? "off" : "on"); return; }
-      acts.appendChild(NS.HaloButton({ label: o.setLabel || "Set it", size: "small", solid: true, disabledReason: !v ? "write a value first" : v === cur ? "that is already the value" : null, onPress: commit }));
-      if (o.clearCmd && cur) { acts.appendChild(NS.HaloButton({ label: o.clearLabel || "Clear it", size: "small", onPress: function () { draft = ""; if (ctl.value !== undefined && o.kind !== "choice") { ctl.value = ""; } commit(); } })); }
+      if (o.kind === "switch") { line.textContent = o.setCmd(cur === "on" ? "off" : "on"); }
+      /* Held: the reason stands where the command would, and the buttons point at it rather than each saying it again. */
+      line.classList.toggle("reason", !!why);
+      if (why) { line.textContent = why; }
+      if (o.kind === "switch") { return; }
+      acts.appendChild(NS.HaloButton({ label: o.setLabel || "Set it", size: "small", solid: !why, inactive: !!why, describedBy: why ? id + "-line" : null, disabledReason: why ? null : !v ? "write a value first" : v === cur ? "that is already the value" : null, onPress: commit }));
+      if (o.clearCmd && cur) { acts.appendChild(NS.HaloButton({ label: o.clearLabel || "Clear it", size: "small", inactive: !!why, describedBy: why ? id + "-line" : null, onPress: function () { if (why) { return; } draft = ""; if (ctl.value !== undefined && o.kind !== "choice") { ctl.value = ""; } commit(); } })); }
     }
     paint();
     var head = o.kind === "switch" ? [ctl] : [h("label", { "class": "nm", "for": id, text: o.label }), o.sub ? h("span", { "class": "sub", text: o.sub }) : null, h("span", { "class": "nowwrap" }, [h("span", { "class": "k", text: "now " }), now])];
-    return h("div", { "class": "ls-setrow" + (o.kind === "switch" ? " sw" : "") }, [h("div", { "class": "head" }, head), o.kind === "switch" ? null : h("div", { "class": "ctl" }, [ctl, acts]), line, out]);
+    return h("div", { "class": "ls-setrow" + (o.kind === "switch" ? " sw" : "") + (why ? " held" : "") }, [h("div", { "class": "head" }, head), o.kind === "switch" ? null : h("div", { "class": "ctl" }, [ctl, acts]), line, out]);
   }
 
   /* ItemList: the things a command keeps, each with what can be done to it, and a way to add one. The commands a row's buttons run show under the row, for whichever button is pointed at or focused. */

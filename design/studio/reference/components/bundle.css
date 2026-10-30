@@ -2497,6 +2497,10 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 .ls-setrow .ctl > .ls-text { flex: 1 1 220px; max-width: 420px; }
 .ls-setrow .ctl .acts { display: flex; flex-wrap: wrap; gap: 8px 22px; }
 .ls-setrow.sw .head { align-items: center; }
+/* Held (disabledReason): the control is dimmed as a disabled one is, and the reason stands in place of the line, wrapping. */
+.ls-setrow.held :is(.ctl > .ls-text, .ls-switch .track) { opacity: .6; }
+.ls-setrow.held :is(.ctl > .ls-text, .ls-switch) { cursor: not-allowed; }
+.ls-setrow > .ls-cmd.reason { white-space: normal; overflow-wrap: anywhere; }
 
 .ls-ilist .bar, .ls-readout .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
 .ls-ilist .bar .grow, .ls-readout .bar .grow { flex: 1; }
@@ -2576,4 +2580,7 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 :root:not([data-commands="never"]) .ls-aform:has(> .ls-answers:is(:hover, :focus-within)), :root:not([data-commands="never"]) :is(:hover, :focus-within) + .ls-cmdline:not(.ls-aform > *) { --cmd-form: block; }
 :root:not([data-commands="never"]) :is(:hover, :focus-within) + :is(.ls-from, .from) { --cmd-from: block; }
 .ls-tonly, [data-commands="always"] { --cmd-btn: block; --cmd-form: block; --cmd-from: block; }
+/* A disabled card's reason is not a command: it stays in place under its button and wraps inside the card, whatever the setting floats commands as. */
+:root:not([data-commands="always"]) .ls-tboard .task :is(.moves, .go) > .ls-action:has(> .ls-cmd.reason) { min-width: 0; max-width: 100%; }
+:root:not([data-commands="always"]) .ls-tboard .task :is(.moves, .go) .ls-cmd.reason { position: static; top: auto; right: auto; bottom: auto; left: auto; height: auto; visibility: visible; white-space: normal; overflow-wrap: anywhere; overflow: visible; -webkit-mask-image: none; mask-image: none; }
 /* end stage 13 */
