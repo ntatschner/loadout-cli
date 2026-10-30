@@ -815,6 +815,10 @@ export declare function OfficePanel(o: { kind?: string; title: string; lines?: s
 
 
 
+
+
+
+
 /* ---------- What main's Studio built since the design (stage 14) ---------- */
 /** What 'loadout ask --json' answers (main's ask.ts AskReply). Properties --json leaves out may be missing. */
 export interface AskReply {
@@ -1068,6 +1072,95 @@ export declare function Landings(o: {
   /** The clock ages are counted against, for tests. */
   now?: Date;
 }): { el: HTMLElement; /** A reread: the merge message being written is kept. */ set: (patch: Partial<{ landings: LandingRead[]; act: (path: string, words: string[], done: string) => Promise<boolean | void> | boolean | void; disabledReason: string; now: Date }>) => void };
+/** A layout: the order of a page's sections (hidden ones included) and which are hidden. As main's lib/layout.ts. */
+export interface Layout { order: string[]; hidden: string[] }
+/** Edit layout for any page or mode surface, as main's Home has it: the sections in their saved order, an "Edit layout" button for the page head, and the edit bar (drag by name, arrows, Hide, Add back, Reset, Done). Kept in one setting, studio-layouts: {"<page>" | "<page>/<surface>": {"<mode>": {order, hidden}}}; "" is the default. */
+export declare function LayoutEdit(o: {
+  /** The page: "home", "sessions", "teams", "board"… */
+  page: string;
+  /** The surface within it, where a page has more than one: "lens", "map", "details". The key is "<page>/<surface>". */
+  surface?: string;
+  /** The mode it is drawn in: "default" (the default), "terminals", "teams", "minimal" or "pure". Each mode keeps its own layout. */
+  mode?: "default" | "terminals" | "teams" | "minimal" | "pure" | string;
+  /** The sections, in their default order: { id, name }, or ids named by `names`. */
+  sections: ({ id: string; name?: string } | string)[];
+  /** Names by id: "Needs you", "Focus". */
+  names?: Record<string, string>;
+  /** The default order, where it is not the order of `sections`. */
+  order?: string[];
+  /** studio-layouts as Loadout has it: the whole JSON object (as a string or parsed), or "" for every default. */
+  value?: string | Record<string, Record<string, Layout>>;
+  /** An older saved value for this one layout (Home's studio-layout-lens or studio-layout-map), read until studio-layouts is written. */
+  legacy?: string;
+  /** Draws a section's body, once; refresh(id) draws it again. */
+  render?: (id: string) => Node | Node[] | null;
+  /** True for a section that holds live work right now: it can be moved but not hidden, and is shown even if it was hidden. */
+  locked?: (id: string) => boolean;
+  /** What the section's heading counts: "Needs you · 3". */
+  count?: (id: string) => number | undefined;
+  /** Numbers the headings 01, 02… by their default place, as Home's Lens does. */
+  numbered?: boolean;
+  /** Sections that take the full width of the page's grid (class "wide"). */
+  wide?: string[] | ((id: string) => boolean);
+  /** Headings for screen readers only outside editing, as Home's Map has them. */
+  quiet?: boolean;
+  /** Hide and Add back only, no moving: Minimal stays one column. */
+  hideOnly?: boolean;
+  /** What the bar calls it: "Editing the Lens layout." */
+  label?: string;
+  /** Extra classes for the sections' container, e.g. Home's "lens". */
+  class?: string;
+  /** Starts in editing. */
+  editing?: boolean;
+  /** Set where layouts cannot be kept (only watching): the button shows this in place of a command. */
+  disabledReason?: string;
+  /** Called with "studio-layouts", the whole new value ("" when every layout is the default), and the line that writes it: $ loadout config set studio-layouts '<json>'. */
+  onchange?: (key: string, value: string, command: string) => void;
+  /** Called when editing starts or stops. */
+  onedit?: (editing: boolean) => void;
+}): {
+  /** The sections, in order. */
+  el: HTMLElement;
+  /** The edit bar, for under the page head; hidden outside editing. */
+  bar: HTMLElement;
+  /** The "Edit layout" / "Done" button, for the page head. */
+  button: HTMLElement;
+  /** "<page>" or "<page>/<surface>". */
+  readonly key: string;
+  readonly layout: Layout;
+  readonly editing: boolean;
+  /** studio-layouts as it now stands here. */
+  readonly value: string;
+  edit: (on: boolean) => void;
+  /** New props from the page. */
+  set: (p: { value?: string; editing?: boolean; locked?: (id: string) => boolean; mode?: string; legacy?: string; disabledReason?: string; count?: (id: string) => number | undefined; label?: string }) => void;
+  /** Draws a section's body again; all of them with no id. */
+  refresh: (id?: string) => void;
+};
+export declare namespace LayoutEdit {
+  /** The layout a saved value describes, mended: unknown panels dropped, missing ones added at the end. */
+  function readLayout(saved: string | Layout | null | undefined, panels: readonly string[]): Layout;
+  /** Moves a panel by `by` places among all of them, hidden ones included. */
+  function move(layout: Layout, panel: string, by: number): Layout;
+  /** Puts `panel` where `before` is, for a drop. */
+  function place(layout: Layout, panel: string, before: string): Layout;
+  function hide(layout: Layout, panel: string): Layout;
+  function show(layout: Layout, panel: string): Layout;
+  /** What Loadout keeps for one layout: "" for the default, so a reset unsets it. */
+  function saved(layout: Layout, panels: readonly string[]): string;
+  /** "<page>" or "<page>/<surface>". */
+  function keyOf(page: string, surface?: string): string;
+  /** One page-and-mode's layout out of studio-layouts. */
+  function read(value: string | object, key: string, mode: string, panels: readonly string[]): Layout;
+  /** studio-layouts with one page-and-mode's layout written in; a default layout takes its entry out, and nothing left is "". */
+  function write(value: string | object, key: string, mode: string, layout: Layout, panels: readonly string[]): string;
+  /** $ loadout config set studio-layouts '<json>', or "" for the default. */
+  function command(value: string): string;
+  /** "studio-layouts". */
+  const KEY: string;
+  /** "default", "terminals", "teams", "minimal", "pure". */
+  const MODES: string[];
+}
 /** A field a list can be filtered or sorted on, as the daemon reports it. */
 export interface ListField { name: string; type: "text" | "choice" | "date" | "number"; description: string; choices: string[] }
 /** What the daemon made of a list's query: its pieces, the fields and the default (main's lib/lists.ts ListShape). */
@@ -1136,6 +1229,115 @@ export declare function MiniLine(o: {
   /** A dashed stop for what comes next. Wins over end. */
   running?: boolean;
 }): { el: HTMLElement; set: (patch: Partial<{ rounds: { word: string; nodes?: [string, string][] }[]; end: boolean; running: boolean }>) => void };
+/** A hosted session's last lines, as `GET /api/v1/sessions/{id}/tail?lines=N` serves them: plain text, no escapes. */
+export interface PeekTail { lines?: string[]; text?: string; cols?: number; rows?: number; /** When it was read, as words or a time. */ at?: string; running?: boolean }
+interface PeekCommon {
+  id: string;
+  /** Its state word; worked out from the rest when left out ("waiting for you", "running", "doing"…). */
+  word?: string;
+  /** When it started waiting on you, in ms: the waiting list puts the oldest first. */
+  since?: number;
+  /** Every action says this in place of its command, and does nothing. */
+  disabledReason?: string;
+}
+export interface PeekSession extends PeekCommon { kind: "session"; title: string; project?: string; agent?: string; mode?: string;
+  /** The daemon's host id, when it differs from id: what `session end` takes. */ hid?: string;
+  /** What it is waiting for, in words from its hooks ("approval to run npm test"); null when it is not waiting. */ waitingFor?: string | null;
+  ended?: boolean; tail?: PeekTail | null; status?: SessionStatus | null }
+export interface PeekRun extends PeekCommon { kind: "run"; goal: string; title?: string; team?: string; project?: string; round?: number; rounds?: number; elapsed?: string;
+  /** Its rounds, for a MiniLine. */ line?: { rounds: { word: string; nodes?: [string, string][] }[]; running?: boolean; end?: boolean };
+  /** The node working now. */ working?: { node: string; role?: string; word?: string; doing?: string } | null;
+  /** What it asks: drawn as a compact Gate. */ gate?: GateOptions | null;
+  spend?: { spent: number; cap?: number | null; uncapped?: boolean; projected?: number | null; rate?: string | null } | null;
+  /** Held after this round: offers Let it carry on instead of Hold. */ held?: boolean }
+export interface PeekIdea extends PeekCommon { kind: "idea"; title: string; project?: string; /** Where its commands point: ["--project", p] or ["--global"]; from project when left out. */ where?: string[];
+  /** One of IdeaStages' names: Captured, Answering, Ready, Proposed, Accepted. */ stage?: string; round?: number; questions?: IdeaQuestion[] }
+export interface PeekTask extends PeekCommon { kind: "task"; title: string; state: "open" | "doing" | "blocked" | "done" | "dropped"; note?: string | null; project?: string; where?: string[];
+  taskKind?: string; declaredBy?: string; declaredAt?: string; hasDetail?: boolean }
+/** A run's crew node (the run page's Who is on it). */
+export interface PeekNode extends PeekCommon { kind: "node"; /** "<run>/<node>". */ id: string; run: string; node: string; role?: string; model?: string;
+  /** The run's goal, for the facts line. */ goal?: string; turns?: number; /** The branch it works on. */ branch?: string | null;
+  /** Quiet for this long, three times its usual turn ("12 min"): its word becomes quiet. */ quiet?: string | null;
+  /** Its last journal lines, when the page has them already: [time, text, family?] or { at, text, family }. */ journal?: (JournalLine | { at?: string; text: string; family?: string })[] | null;
+  /** Say to it: SayToNode's state ("unset", "locked", "open", "ended") and the grant's minutes left. A node that has finished is "ended". */ say?: { state?: "unset" | "locked" | "open" | "ended"; minutesLeft?: number } }
+/** Only in the waiting list: a trigger rule's approval. */
+export interface PeekApproval extends PeekCommon { kind: "approval"; title: string; rule?: string; project?: string; detail?: string }
+export type PeekItem = PeekSession | PeekRun | PeekIdea | PeekTask | PeekNode | PeekApproval;
+/** What a callback that changes something returns: false, a throw or a rejection failed (✕ and why, in the peek); a string is the words of its success; anything else succeeded. */
+type PeekResult = void | boolean | string | Promise<void | boolean | string>;
+/**
+ * One overlay over any session, run, idea, task or crew node: its live state and main actions, without leaving the page. attach() a row and it
+ * opens beside it on hover (after `delay`) or focus; the row's peek button pins it; Escape closes it first (never from a terminal); a
+ * click away closes one that is not pinned. One open at a time. Below 600px it is a sheet from the foot. Also the waiting list
+ * (list()), an expansion under the row (mode "inline", Minimal) and a pane's preview (mode "preview", Pure).
+ */
+export declare function Peek(o?: {
+  /** "float" (default): beside the row, on the menu layer. "inline": a short block under the row (Minimal). "preview": drawn into `container` (Pure's view pane). */
+  mode?: "float" | "inline" | "preview";
+  /** preview: the pane to draw into. */
+  container?: HTMLElement;
+  /** float: where the panel lives. Default document.body. */
+  host?: HTMLElement;
+  /** Hover delay before it opens, in ms. Default 350. Focus opens it at once. */
+  delay?: number;
+  /** A session's last lines, read-only: the page's call to the daemon's tail. Read on opening and every `tailEvery` ms while open. */
+  tail?: (item: PeekSession) => PeekTail | Promise<PeekTail>;
+  /** A crew node's last journal lines: the page's read of the run's journal for that node. Read like tail. */
+  journal?: (item: PeekNode) => (JournalLine | { at?: string; text: string; family?: string })[] | Promise<(JournalLine | { at?: string; text: string; family?: string })[]>;
+  /** ms between tail (or journal) reads while open; 0 reads once. Default 2000. */
+  tailEvery?: number;
+  /** How many of the last lines to show. Default 8 (4 inline). */
+  lines?: number;
+  /** The time to measure ages against, in ms. Default Date.now(). */
+  now?: number;
+  /** preview: drawn in place as it would float (true) or as the narrow sheet ("sheet", inside a positioned frame), for a page that shows it. */
+  framed?: boolean | "sheet";
+  /** preview: what the empty pane says. */
+  empty?: string;
+  /** Open: the full view, in the mode you are in. Every kind. */
+  onOpen?: (item: PeekItem) => void;
+  /** Session: Type here, which opens its terminal with the keyboard in it. */
+  onTypeHere?: (item: PeekSession) => void;
+  /** Session: Open beside (Default mode). */
+  onOpenBeside?: (item: PeekSession) => void;
+  /** Session: End session…, which the page asks about first. Resolve when it has ended; say nothing (undefined) and the peek claims nothing. */
+  onEnd?: (item: PeekSession) => PeekResult;
+  /** Run: an answer to its gate, as Gate's onAnswer gives it. */
+  onAnswer?: (item: PeekRun, answer: string, extra: { instead?: string | string[] | null }) => PeekResult;
+  onHold?: (item: PeekRun) => PeekResult;
+  onCarryOn?: (item: PeekRun) => PeekResult;
+  onStop?: (item: PeekRun) => PeekResult;
+  /** Idea: the first open question's answer, with the line it runs. */
+  onAnswerIdea?: (item: PeekIdea, question: IdeaQuestion, answer: string, line: string) => PeekResult;
+  onRefine?: (item: PeekIdea) => PeekResult;
+  /** Task: Start a session on it. */
+  onStart?: (item: PeekTask) => PeekResult;
+  /** Task: History, the task in full. */
+  onHistory?: (item: PeekTask) => void;
+  /** Node: Say to it, as SayToNode sends it: `$ loadout team say <run> --node <node> --message "…"`. */
+  onSay?: (item: PeekNode, message: string) => void | boolean;
+  /** Node: swaps the attach passphrase for a 30-minute grant; returns whether it was right. Without it any non-empty passphrase unlocks (a preview). */
+  onUnlock?: (item: PeekNode, passphrase: string) => boolean;
+  /** Waiting list: approve a trigger rule's run. */
+  onApprove?: (item: PeekApproval) => PeekResult;
+}): {
+  /** The panel. */
+  el: HTMLElement;
+  /** Wires a row: hover, focus, and its peek button (one marked [data-peek] inside it, `button`, or one added at its end). Returns detach. */
+  attach: (row: HTMLElement, item: () => PeekItem | null, opt?: { button?: HTMLElement; into?: HTMLElement; target?: HTMLElement; after?: HTMLElement }) => () => void;
+  /** Opens it for an item, beside a row if given; pin: true to pin. False when it would have covered the terminal you are typing in. */
+  show: (item: PeekItem, row?: HTMLElement | null, how?: { pin?: boolean }) => boolean;
+  /** The waiting list beside `anchor` (the mode bar's count), every item oldest first; called again with the same anchor, it closes. */
+  list: (items: PeekItem[], anchor?: HTMLElement) => void;
+  pin: () => void;
+  close: () => void;
+  /** A fresh read of the open item: drawn again in place, keeping what is typed; a change of its word is said politely. */
+  set: (item: PeekItem) => void;
+  /** A fresh waiting list. */
+  setList: (items: PeekItem[]) => void;
+  destroy: () => void;
+  readonly item: PeekItem | null; readonly pinned: boolean; readonly open: boolean;
+};
 /** A ring that fills for stages, the Meter's round form. The figure in it is decoration: say the stage in words beside it. */
 export declare function ProgressRing(o: {
   /** How far, from 0 to 1; clamped. */

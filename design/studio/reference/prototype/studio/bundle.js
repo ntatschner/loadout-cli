@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format": 4, "namespace": "LoadoutStudio", "components": [{"name": "HaloButton"}, {"name": "StartRail"}, {"name": "Command"}, {"name": "Switch"}, {"name": "Tabs"}, {"name": "ModePicker"}, {"name": "Signal"}, {"name": "EventMark"}, {"name": "Urgency"}, {"name": "Meter"}, {"name": "Toasts"}, {"name": "SideRail"}, {"name": "Dialog"}, {"name": "Picker"}, {"name": "CommandPalette"}, {"name": "Halo"}, {"name": "TubeMap"}, {"name": "LineStrip"}, {"name": "NetworkStatus"}, {"name": "Terminal"}, {"name": "SessionView"}, {"name": "Gate"}, {"name": "RunCard"}, {"name": "NeedsYou"}, {"name": "RunShape"}, {"name": "Crew"}, {"name": "DoneWhen"}, {"name": "RunNumbers"}, {"name": "RunDepths"}, {"name": "Patch"}, {"name": "SayToNode"}, {"name": "TeamCard"}, {"name": "TeamNodes"}, {"name": "TeamRules"}, {"name": "RoleRecord"}, {"name": "TeamSheet"}, {"name": "Schedules"}, {"name": "Remedy"}, {"name": "Bin"}, {"name": "Outbox"}, {"name": "ModeSwitcher"}, {"name": "ModeBar"}, {"name": "SessionTabs"}, {"name": "TermDeck"}, {"name": "RunBoard"}, {"name": "QuietList"}, {"name": "FocusFrame"}, {"name": "WorkDesk"}, {"name": "ActionPane"}, {"name": "CommandBar"}, {"name": "KeyHelp"}, {"name": "ActionDrawer"}, {"name": "TerminalOnly"}, {"name": "HealthList"}, {"name": "IdeaStages"}, {"name": "QuestionSet"}, {"name": "PlanLayer"}, {"name": "NoteDump"}, {"name": "ProjectTile"}, {"name": "TaskBoard"}, {"name": "LoadStack"}, {"name": "ConfigList"}, {"name": "StoreList"}, {"name": "TopicEditor"}, {"name": "TokenSplit"}, {"name": "SpendBars"}, {"name": "PageBeside"}, {"name": "QuietPage"}, {"name": "ForgetProject"}, {"name": "ProgressLine"}, {"name": "CriteriaGrid"}, {"name": "PickUpSheet"}, {"name": "RefusalsList"}, {"name": "RedAlert"}, {"name": "TaskPicker"}, {"name": "ValueReport"}, {"name": "FieldMap"}, {"name": "OfficeView"}, {"name": "OfficePanel"}, {"name": "ActionForm"}, {"name": "ItemList"}, {"name": "SettingRow"}, {"name": "Readout"}, {"name": "ActionRow"}, {"name": "AskPane"}, {"name": "AskPlanCard"}, {"name": "BlockedRuns"}, {"name": "ContextMark"}, {"name": "ConversationList"}, {"name": "Handover"}, {"name": "JobResult"}, {"name": "Journal"}, {"name": "ListToolbar"}, {"name": "MiniLine"}, {"name": "ProgressRing"}, {"name": "QueuePanel"}, {"name": "Spend"}, {"name": "SplitCross"}, {"name": "Splitter"}, {"name": "StatusBlock"}, {"name": "StatusStrip"}, {"name": "TaskDetail"}, {"name": "TriggerRules"}, {"name": "Landings"}, {"name": "MapFilterBar"}]} */
+/* @ds-bundle: {"format": 4, "namespace": "LoadoutStudio", "components": [{"name": "HaloButton"}, {"name": "StartRail"}, {"name": "Command"}, {"name": "Switch"}, {"name": "Tabs"}, {"name": "ModePicker"}, {"name": "Signal"}, {"name": "EventMark"}, {"name": "Urgency"}, {"name": "Meter"}, {"name": "Toasts"}, {"name": "SideRail"}, {"name": "Dialog"}, {"name": "Picker"}, {"name": "CommandPalette"}, {"name": "Halo"}, {"name": "TubeMap"}, {"name": "LineStrip"}, {"name": "NetworkStatus"}, {"name": "Terminal"}, {"name": "SessionView"}, {"name": "Gate"}, {"name": "RunCard"}, {"name": "NeedsYou"}, {"name": "RunShape"}, {"name": "Crew"}, {"name": "DoneWhen"}, {"name": "RunNumbers"}, {"name": "RunDepths"}, {"name": "Patch"}, {"name": "SayToNode"}, {"name": "TeamCard"}, {"name": "TeamNodes"}, {"name": "TeamRules"}, {"name": "RoleRecord"}, {"name": "TeamSheet"}, {"name": "Schedules"}, {"name": "Remedy"}, {"name": "Bin"}, {"name": "Outbox"}, {"name": "ModeSwitcher"}, {"name": "ModeBar"}, {"name": "SessionTabs"}, {"name": "TermDeck"}, {"name": "RunBoard"}, {"name": "QuietList"}, {"name": "FocusFrame"}, {"name": "WorkDesk"}, {"name": "ActionPane"}, {"name": "CommandBar"}, {"name": "KeyHelp"}, {"name": "ActionDrawer"}, {"name": "TerminalOnly"}, {"name": "HealthList"}, {"name": "IdeaStages"}, {"name": "QuestionSet"}, {"name": "PlanLayer"}, {"name": "NoteDump"}, {"name": "ProjectTile"}, {"name": "TaskBoard"}, {"name": "LoadStack"}, {"name": "ConfigList"}, {"name": "StoreList"}, {"name": "TopicEditor"}, {"name": "TokenSplit"}, {"name": "SpendBars"}, {"name": "PageBeside"}, {"name": "QuietPage"}, {"name": "ForgetProject"}, {"name": "ProgressLine"}, {"name": "CriteriaGrid"}, {"name": "PickUpSheet"}, {"name": "RefusalsList"}, {"name": "RedAlert"}, {"name": "TaskPicker"}, {"name": "ValueReport"}, {"name": "FieldMap"}, {"name": "OfficeView"}, {"name": "OfficePanel"}, {"name": "ActionForm"}, {"name": "ItemList"}, {"name": "SettingRow"}, {"name": "Readout"}, {"name": "ActionRow"}, {"name": "AskPane"}, {"name": "AskPlanCard"}, {"name": "BlockedRuns"}, {"name": "ContextMark"}, {"name": "ConversationList"}, {"name": "Handover"}, {"name": "JobResult"}, {"name": "Journal"}, {"name": "ListToolbar"}, {"name": "MiniLine"}, {"name": "ProgressRing"}, {"name": "QueuePanel"}, {"name": "Spend"}, {"name": "SplitCross"}, {"name": "Splitter"}, {"name": "StatusBlock"}, {"name": "StatusStrip"}, {"name": "TaskDetail"}, {"name": "TriggerRules"}, {"name": "Landings"}, {"name": "MapFilterBar"}, {"name": "LayoutEdit"}, {"name": "Peek"}]} */
 /* Loadout Studio — plain JavaScript, no framework, no imports, no network.
    Components are CSS classes plus small helpers, written to port line for line to Svelte. */
 (function () {
@@ -64,17 +64,38 @@
 
   /* HaloButton: a word beside a ring of light. kind: "" | "needs" | "danger"; size: "" | "small" | "big".
      describedBy points the button at a line that says more; key and next mark it as main's data-k and data-next do. */
+  /* busy: while what it started is working, the label gives way to the busy word ("ending…"; true is "working…"), it is inactive and aria-busy. */
   function HaloButton(o) {
     o = o || {};
     var cls = ["ls-halo", o.kind, o.size, o.solid ? "solid" : ""].filter(Boolean).join(" ");
     var ring = h("span", { "class": "ring", "aria-hidden": "true" }, o.glyph ? [h("b", { text: o.glyph })] : []);
-    var btn = h("button", { type: "button", "class": cls, "aria-disabled": o.disabledReason || o.inactive ? "true" : null, "aria-describedby": o.describedBy || null, "data-k": o.key || null, "data-next": o.next || null,
-      onclick: function (e) { if (!o.disabledReason && !o.inactive && o.onPress) { o.onPress(e); } } }, [ring, o.label || ""]);
+    var word = o.busy === true ? BUSY_WORD : o.busy || "";
+    var btn = h("button", { type: "button", "class": cls, "aria-disabled": o.disabledReason || o.inactive || word ? "true" : null, "aria-busy": word ? "true" : null, "aria-describedby": o.describedBy || null, "data-k": o.key || null, "data-next": o.next || null,
+      onclick: function (e) { if (!o.disabledReason && !o.inactive && btn.getAttribute("aria-busy") !== "true" && o.onPress) { o.onPress(e); } } }, [ring, word || o.label || ""]);
+    btn.__lsLabel = o.label || ""; btn.__lsWas = o.disabledReason || o.inactive ? "true" : null;
     if (!o.cmd && !o.disabledReason) { return btn; }
     var line = cmd(o.disabledReason || o.cmd);
     if (o.disabledReason && line) { line.classList.add("reason"); }
     return h("div", { "class": "ls-action" }, [btn, line]);
   }
+  var BUSY_WORD = "working\u2026";
+  /* The button itself, given it or the wrapper HaloButton returned. */
+  function haloOf(node) { if (!node) { return null; } if (node.classList && node.classList.contains("ls-halo")) { return node; } return node.querySelector ? node.querySelector("button.ls-halo") : null; }
+  /* HaloButton.setBusy(node, "ending…" | true | false): puts a button made by HaloButton into its busy state, or back as it was. */
+  function setBusy(node, busy) {
+    var btn = haloOf(node); if (!btn) { return; }
+    var word = busy === true ? BUSY_WORD : busy || "";
+    var text = btn.lastChild && btn.lastChild.nodeType === 3 ? btn.lastChild : btn.appendChild(document.createTextNode(""));
+    if (word) {
+      if (btn.getAttribute("aria-busy") !== "true") { btn.__lsWas = btn.getAttribute("aria-disabled"); }
+      text.data = word; btn.setAttribute("aria-busy", "true"); btn.setAttribute("aria-disabled", "true");
+    } else if (btn.getAttribute("aria-busy") === "true") {
+      text.data = btn.__lsLabel || ""; btn.removeAttribute("aria-busy");
+      if (btn.__lsWas) { btn.setAttribute("aria-disabled", btn.__lsWas); } else { btn.removeAttribute("aria-disabled"); }
+    }
+  }
+  HaloButton.setBusy = setBusy;
+  HaloButton.BUSY = BUSY_WORD;
 
   /* Command: the block form of a command, with an optional line saying why it must be run in a terminal. */
   function Command(o) {
@@ -207,11 +228,81 @@
     container.appendChild(r); setTimeout(function () { r.remove(); }, 1500);
   }
 
-  /* Urgency: rank waiting items (a problem first, then the oldest question) and raise the first; the rest recede. */
-  function rankUrgent(items) {
-    return items.filter(function (i) { return i.waiting || i.problem; }).sort(function (a, b) {
-      if (!!a.problem !== !!b.problem) { return a.problem ? -1 : 1; } return (a.askedAt || 0) - (b.askedAt || 0);
+  /* liveFirst: live work first, as WORKFLOW.md's Decisions put it. Four groups, in this order: waiting on you (a gate or question,
+     a trigger approval, a session waiting or asking for approval, an idea with questions open); running; you might pick it up (failed,
+     blocked or ended short of its done-when, ended when the daemon stopped, a round that failed, a branch waiting to land); and history
+     (ended, done, past conversations). Within each live group the oldest wait comes first; history keeps the order it was given.
+     Returns a new array; the items are not changed. */
+  var LIVE_ORDER = ["waiting", "running", "pickup", "history"];
+  var LIVE_NAMES = { waiting: "Waiting on you", running: "Running", pickup: "Pick up", history: "History" };
+  var LIVE_WORDS = {};
+  [["waiting", ["waiting", "waiting on you", "waiting for you", "needs a decision", "needs approval", "approval", "approving", "asking", "asked", "gate", "question", "questions", "questions open"]],
+   ["running", ["running", "working", "doing", "round running", "starting", "shaping", "refining", "idle", "connecting", "reconnecting", "waiting on background work", "background", "held", "held after this round", "live"]],
+   ["pickup", ["failed", "last round failed", "round failed", "blocked", "stalled", "limited", "unmet", "short", "ended short", "lost", "ended when the daemon stopped", "exited with an error", "error", "waiting to land", "to land", "landing"]],
+   ["history", ["ended", "done", "met", "accepted", "stopped", "dropped", "moved", "abandoned", "merged", "history", "past"]]
+  ].forEach(function (g) { g[1].forEach(function (w) { LIVE_WORDS[w] = g[0]; }); });
+  function liveState(it, opts) { var s = opts && opts.state ? opts.state(it) : (it.state !== undefined && it.state !== null ? it.state : it.word); return s === undefined || s === null ? "" : String(s).toLowerCase(); }
+  function openQuestions(it) { return !!(it.questions && it.questions.length && it.questions.some(function (x) { return x && !x.answer; })); }
+  /* Which of the four groups an item is in: what opts.group says, then waiting or a gate, then its state word, then its other flags,
+     then the word's signal family. */
+  function liveGroup(it, opts) {
+    it = it || {};
+    var given = opts && opts.group ? opts.group(it) : undefined;
+    if (given && LIVE_NAMES[given]) { return given; }
+    if (it.waiting || it.gate) { return "waiting"; }
+    var s = liveState(it, opts);
+    if (LIVE_WORDS[s]) { return LIVE_WORDS[s]; }
+    if (openQuestions(it)) { return "waiting"; }
+    if (it.failed || it.blocked || it.problem || it.lost || it.short) { return "pickup"; }
+    if (it.ended || it.done) { return "history"; }
+    if (it.running || it.stage === 2) { return "running"; }
+    if (s && STATES[s]) { var f = STATES[s][0]; return f === "needs" ? "waiting" : f === "moving" ? "running" : f === "bad" ? "pickup" : "history"; }
+    return "history";
+  }
+  /* When an item's wait began: since, at or askedAt (a number, a Date or a date in words); null when it has none. */
+  function liveSince(it, opts) {
+    var v = opts && opts.since ? opts.since(it) : [it.since, it.at, it.askedAt].filter(function (x) { return x !== undefined && x !== null && x !== ""; })[0];
+    if (v === undefined || v === null || v === "") { return null; }
+    if (typeof v === "number") { return v; }
+    if (v instanceof Date) { return v.getTime(); }
+    var t = Date.parse(v); return isNaN(t) ? null : t;
+  }
+  function liveFirst(items, opts) {
+    opts = opts || {};
+    var rows = (items || []).map(function (it, i) { return { it: it, i: i, g: LIVE_ORDER.indexOf(liveGroup(it, opts)), t: liveSince(it, opts) }; });
+    if (opts.only) { rows = rows.filter(function (r) { return opts.only.indexOf(LIVE_ORDER[r.g]) >= 0; }); }
+    rows.sort(function (a, b) {
+      if (a.g !== b.g) { return a.g - b.g; }
+      if (a.g < 3 && a.t !== b.t) { if (a.t === null) { return 1; } if (b.t === null) { return -1; } return a.t - b.t; }
+      return a.i - b.i;
     });
+    return rows.map(function (r) { return r.it; });
+  }
+  /* waitingOf: the one count of what is waiting on you, and the list, oldest first. A line or a run counts while it waits on you
+     (a gate, a question, a session waiting or asking for approval); every trigger approval counts; an idea counts while a question
+     is open (open: N, or a question with no answer). Something given twice under one id (a run that is also a line) counts once. */
+  function waitingOf(state) {
+    state = state || {};
+    var seen = {}, list = [];
+    function add(kind, it, counts) {
+      if (!it || !counts) { return; }
+      var key = it.id !== undefined && it.id !== null ? String(it.id) : null;
+      if (key !== null) { if (seen[key]) { return; } seen[key] = true; }
+      list.push({ kind: kind, id: key, title: it.title || it.goal || it.name || it.rule || key || "", since: liveSince(it), item: it });
+    }
+    (state.lines || []).forEach(function (l) { add(l.kind || "line", l, liveGroup(l) === "waiting"); });
+    (state.runs || []).forEach(function (r) { add("team run", r, liveGroup(r) === "waiting"); });
+    (state.approvals || []).forEach(function (a) { add("approval", a, true); });
+    (state.ideas || []).forEach(function (x) { add("idea", x, typeof x.open === "number" ? x.open > 0 : x.questions ? openQuestions(x) : liveGroup(x) === "waiting"); });
+    list = liveFirst(list, { group: function () { return "waiting"; } });
+    return { count: list.length, list: list };
+  }
+
+  /* Urgency: rank waiting items and raise the first; the rest recede. The order is liveFirst's: what waits on you before a problem,
+     the oldest first within each. */
+  function rankUrgent(items) {
+    return liveFirst(items.filter(function (i) { return i.waiting || i.problem; }), {
+      group: function (i) { return i.waiting ? "waiting" : "pickup"; }, since: function (i) { return i.askedAt || 0; } });
   }
   function applyUrgency(rows, risingIndex, level) {
     rows.forEach(function (r, i) {
@@ -403,6 +494,7 @@
     HaloButton: HaloButton, Command: Command, StartRail: StartRail, Switch: Switch, Tabs: Tabs, ModePicker: ModePicker,
     Signal: Signal, signalOf: signalOf, wordFor: wordFor, SIGNAL_STATES: STATES, SIGNAL_GLYPHS: GLYPHS,
     EventMark: EventMark, ping: ping, rankUrgent: rankUrgent, applyUrgency: applyUrgency,
+    liveFirst: liveFirst, liveGroup: liveGroup, LIVE_GROUPS: LIVE_NAMES, waitingOf: waitingOf,
     Meter: Meter, ProgressRing: ProgressRing, Toasts: Toasts, roving: roving
   });
 })();
@@ -474,30 +566,66 @@
     return root;
   }
 
-  /* Dialog: a projected panel over a dim. Focus is held inside; Escape and the scrim close it; focus returns to what opened it. */
+  /* Dialog: a projected panel over a dim. Focus is held inside; Escape and the scrim close it; focus returns to what opened it.
+     Confirmations wait, then close: pressing an action makes it busy (its busy word, "working…" by default) and the other buttons
+     inactive, and waits for what its onPress returns. false, a throw or a rejection keeps the dialog open with "✕ <why>" in an alert
+     line inside, every field as typed; anything else closes it, unless the action says stay: true. Nothing closes it while it works. */
   function Dialog(o) {
     o = o || {};
-    var id = "ls-dlg-" + Math.random().toString(36).slice(2, 7), back = null, scrim, panel, host = o.host || document.body;
+    var id = "ls-dlg-" + Math.random().toString(36).slice(2, 7), back = null, scrim, panel, fail = null, btns = [], working = false, host = o.host || document.body;
     function close() {
-      if (!panel) { return; } scrim.remove(); panel.remove(); panel = null;
+      if (!panel) { return; } scrim.remove(); panel.remove(); panel = null; working = false;
       if (o.behind) { o.behind.classList.remove("is-back"); }
       if (back && back.focus) { back.focus(); } if (o.onClose) { o.onClose(); }
     }
+    /* Escape, the dim and Cancel: not while an action is working. */
+    function leave() { if (!working) { close(); } }
+    function why(e) { var m = e && e.message !== undefined ? e.message : e; m = m === undefined || m === null || m === "" ? "It did not go through." : String(m); return m.replace(/^✕\s*/, ""); }
+    function buttonOf(b) { return b.matches && b.matches("button") ? b : b.querySelector("button"); }
+    function press(a, i) {
+      if (working || !panel) { return; }
+      fail.textContent = "";
+      var r;
+      try { r = a.onPress ? a.onPress() : undefined; } catch (e) { settle(a, false, e); return; }
+      if (!r || typeof r.then !== "function") { settle(a, r !== false, a.failed); return; }
+      working = true;
+      btns.forEach(function (b, j) {
+        var btn = buttonOf(b);
+        if (j === i) { NS.HaloButton.setBusy(b, a.busy || true); }
+        else if (btn) { btn.__lsDlgWas = btn.getAttribute("aria-disabled"); btn.setAttribute("aria-disabled", "true"); }
+      });
+      r.then(function (v) { settle(a, v !== false, a.failed, true); }, function (e) { settle(a, false, e, true); });
+    }
+    function settle(a, ok, e, waited) {
+      if (!panel) { return; }
+      working = false;
+      if (waited) {
+        btns.forEach(function (b) {
+          var btn = buttonOf(b);
+          NS.HaloButton.setBusy(b, false);
+          if (btn && "__lsDlgWas" in btn) { if (btn.__lsDlgWas) { btn.setAttribute("aria-disabled", btn.__lsDlgWas); } else { btn.removeAttribute("aria-disabled"); } delete btn.__lsDlgWas; }
+        });
+      }
+      if (!ok) { fail.textContent = "✕ " + why(e); return; }
+      if (!a.stay) { close(); }
+    }
     function open() {
       back = document.activeElement;
-      scrim = h("div", { "class": "ls-scrim", onclick: close });
-      var acts = (o.actions || []).map(function (a) { return NS.HaloButton(Object.assign({}, a, { onPress: function () { var keep = a.onPress && a.onPress(); if (keep !== true) { close(); } } })); });
+      scrim = h("div", { "class": "ls-scrim", onclick: leave });
+      btns = (o.actions || []).map(function (a, i) { return NS.HaloButton(Object.assign({}, a, { busy: false, onPress: function () { press(a, i); } })); });
+      if (btns.length) { btns.push(NS.HaloButton({ label: o.cancelLabel || "Cancel", size: "small", onPress: leave })); }
+      fail = h("p", { "class": "fail", role: "alert" });
       panel = h("div", { "class": "ls-dialog" + (o.danger ? " danger" : "") + (full() ? " anim" : " fade") + (o.extraClass ? " " + o.extraClass : ""), role: o.role || "dialog", "aria-modal": "true", "aria-labelledby": o.title ? id : null, "aria-label": o.title ? null : (o.label || null) },
-        [o.title ? h("h2", { id: id, text: o.title }) : null, o.why ? h("p", { "class": "why", text: o.why }) : null, o.content || null,
-         acts.length ? h("div", { "class": "acts" }, acts.concat([NS.HaloButton({ label: o.cancelLabel || "Cancel", size: "small", onPress: close })])) : null]);
+        [o.title ? h("h2", { id: id, text: o.title }) : null, o.why ? h("p", { "class": "why", text: o.why }) : null, o.content || null, fail,
+         btns.length ? h("div", { "class": "acts" }, btns) : null]);
       if (o.contained) { scrim.style.position = "absolute"; panel.style.position = "absolute"; }
       host.appendChild(scrim); host.appendChild(panel);
       if (o.behind) { o.behind.classList.add("ls-behind", "is-back"); }
-      trap(panel, close);
+      trap(panel, leave);
       setTimeout(function () { if (!panel) { return; } var list = focusables(panel), f = o.initialFocus ? panel.querySelector(o.initialFocus) : (o.danger ? list[list.length - 1] : list[0]); if (f) { f.focus(); } }, 60);
       return panel;
     }
-    return { open: open, close: close, get panel() { return panel; } };
+    return { open: open, close: close, get panel() { return panel; }, get working() { return working; } };
   }
 
   /* Picker: a trigger that opens a listbox on a light tether. Arrow keys, Home, End, Enter and Escape. */
@@ -1159,9 +1287,12 @@
     stale: ["held too long", "It held events past the 24-hour window.", "you release them, or they are dropped after a week"],
     source: ["stopped", "A trigger source has stopped.", "what stopped it is put right"]
   };
+  /* Live work first: a question or an approval waits on you; the lead's quiet rounds, a quiet node and a projected overrun are on a
+     run still going; a spent budget, a stall, a paused rule, held events and a stopped source are for you to pick up. Oldest first in each. */
+  var NEED_GROUP = { asked: "waiting", approval: "waiting", silent: "running", quiet: "running", budget: "running", spent: "pickup", stalled: "pickup", paused: "pickup", stale: "pickup", source: "pickup" };
   function NeedsYou(o) {
     o = o || {};
-    var items = o.items || [], hid = uid("ls-nh-");
+    var items = NS.liveFirst(o.items || [], { group: function (it) { return it.gate ? "waiting" : NEED_GROUP[it.reason] || "waiting"; } }), hid = uid("ls-nh-");
     var el = h("section", { "class": "ls-needs", "aria-labelledby": hid }, [h("h2", { "class": "ls-zone", id: hid }, [h("span", { "class": "no", text: String(items.length) }), "Needs you"])]);
     if (!items.length) { el.appendChild(h("p", { "class": "calm", text: "Nothing needs you. Each reason clears itself, so this only ever holds what is still true." })); return el; }
     el.appendChild(h("ul", {}, items.map(function (it) {
@@ -1344,14 +1475,14 @@
       field("Its title", t, "The run's goal unless you give one.", true), line]);
     paint();
     NS.Dialog({ title: "Open a pull request for " + o.node + "?", why: "This is the one thing on the page that reaches a remote. It pushes " + (o.branch || "the node's branch") + " to origin and opens the pull request with gh, using the GitHub login you already have.", content: content,
-      actions: [{ label: "Push and open it", kind: "needs", solid: true, cmd: "runs the command above", onPress: function () { prSay(o, said, { draft: draft, title: title, dry: false }); } },
-        { label: "Say what it would do", cmd: "the same, with --dry-run · pushes nothing", onPress: function () { prSay(o, said, { draft: draft, title: title, dry: true }); } }] }).open();
+      actions: [{ label: "Push and open it", kind: "needs", solid: true, cmd: "runs the command above", busy: "pushing\u2026", onPress: function () { return prSay(o, said, { draft: draft, title: title, dry: false }); } },
+        { label: "Say what it would do", cmd: "the same, with --dry-run · pushes nothing", busy: "checking\u2026", onPress: function () { return prSay(o, said, { draft: draft, title: title, dry: true }); } }] }).open();
   }
   /* As main: onPr is asked both ways, dry or not, and what it answers (or resolves to) is what is said; with no answer, the words main falls back on. */
   function prSay(o, said, p) {
     var answer = o.onPr ? o.onPr(p) : null;
     function show(a) { said.textContent = a === null || a === undefined || a === "" ? (p.dry ? "\u2713 Dry run: it would push " + (o.branch || "the branch") + " and open the pull request. Nothing was pushed." : "\u2713 Pushed " + (o.branch || "the branch") + " and opened a " + (p.draft ? "draft " : "") + "pull request.") : String(a); }
-    if (answer && typeof answer.then === "function") { answer.then(show, function (e) { said.textContent = "\u2715 " + ((e && e.message) || e); }); } else { show(answer); }
+    return Promise.resolve(answer).then(function (a) { if (a === false) { throw new Error("It did not go through."); } show(a); }, function (e) { said.textContent = "\u2715 " + ((e && e.message) || e); throw e; });
   }
 
   /* ---------- SayToNode: typing at a live node, behind a second credential ---------- */
@@ -1686,7 +1817,7 @@
       emptyActs.textContent = "";
       emptyActs.appendChild(halo({ label: "Empty it for good", kind: "danger", size: "small", cmd: "$ loadout team bin empty --yes", disabledReason: o.disabledReason || (entries.length ? null : "the bin is already empty"), onPress: function () {
         NS.Dialog({ danger: true, title: "Empty the bin for good?", why: "This is the one thing here with no way back. It deletes:", content: h("ul", { "class": "binlist" }, entries.map(function (e) { return h("li", { text: e.kind + " " + e.name }); })),
-          actions: [{ label: "Empty it", kind: "danger", cmd: "$ loadout team bin empty --yes", onPress: function () { then(o.onEmpty ? o.onEmpty() : undefined, function (v) { if (v === false) { return; } entries = []; said.textContent = "✓ The bin is empty."; paint(); }); } }] }).open(); } }));
+          actions: [{ label: "Empty it", kind: "danger", cmd: "$ loadout team bin empty --yes", busy: "emptying\u2026", onPress: function () { return Promise.resolve(o.onEmpty ? o.onEmpty() : undefined).then(function (v) { if (v === false) { return false; } entries = []; said.textContent = "✓ The bin is empty."; paint(); }); } }] }).open(); } }));
     }
     paint();
     el.appendChild(h("p", { "class": "ls-note", style: "margin: 0", text: "Removed runs and teams wait here for " + (o.keptDays || 30) + " days, then go for good. A run's branches were never touched, so they are not in here." }));
@@ -1700,14 +1831,14 @@
     function clear(dry) {
       var line = pcmd(dry), asks = o.onPrune && (!dry || o.onPrune.length >= 2);
       var r = asks ? o.onPrune(line, dry, { outcome: P.outcome, olderThan: P.older, keep: P.keep }) : undefined;
-      then(r, function (a) { said.textContent = typeof a === "string" && a ? "✓ " + a : dry ? "✓ Dry run: it lists what it would take and why it keeps the rest. Nothing moved." : "✓ Cleared out. They are in the bin."; });
+      return Promise.resolve(r).then(function (a) { if (a === false) { said.textContent = "\u2715 It did not go through. Nothing moved."; return false; } said.textContent = typeof a === "string" && a ? "✓ " + a : dry ? "✓ Dry run: it lists what it would take and why it keeps the rest. Nothing moved." : "✓ Cleared out. They are in the bin."; });
     }
     function ppaint() {
       var none = !P.outcome && !P.older && !P.keep;
       sentence.textContent = none ? "Say which runs: an ending, an age or how many to keep." : "Moves " + (P.outcome ? "the " + P.outcome + " runs" : "the runs") + (P.older ? " older than " + P.older : "") + " to the bin" + (P.keep ? ", never the newest " + P.keep : "") + ", and never one still going or one that left a branch nothing merged.";
       pacts.textContent = "";
       pacts.appendChild(halo({ label: "Say which first", size: "small", cmd: pcmd(true), disabledReason: none ? "say which runs first" : null, onPress: function () { clear(true); } }));
-      pacts.appendChild(halo({ label: "Clear them out", size: "small", cmd: pcmd(false), disabledReason: o.disabledReason || (none ? "say which runs first" : null), onPress: function () { NS.Dialog({ title: "Clear out these runs?", why: sentence.textContent + " They wait in the bin for " + (o.keptDays || 30) + " days.", actions: [{ label: "Clear them out", kind: "needs", cmd: pcmd(false), onPress: function () { clear(false); } }] }).open(); } }));
+      pacts.appendChild(halo({ label: "Clear them out", size: "small", cmd: pcmd(false), disabledReason: o.disabledReason || (none ? "say which runs first" : null), onPress: function () { NS.Dialog({ title: "Clear out these runs?", why: sentence.textContent + " They wait in the bin for " + (o.keptDays || 30) + " days.", actions: [{ label: "Clear them out", kind: "needs", cmd: pcmd(false), busy: "clearing\u2026", onPress: function () { return clear(false); } }] }).open(); } }));
     }
     /* Main's endings since 0.104: abandoned, and stalled (a lead given up on). */
     var ENDS = ["any ending", "failed", "stopped", "abandoned", "limited", "blocked", "done", "needs-decision", "unrecorded", "stalled"];
@@ -2109,14 +2240,14 @@
     function doClear(id) { sessions = sessions.filter(function (x) { return x.id !== id; }); hidden = hidden.filter(function (x) { return x.id !== id; }); paint(); if (o.onClear) { o.onClear(id); } }
     function doUnhide(id) { var s = byId(id); hidden = hidden.filter(function (x) { return x.id !== id; }); if (s && sessions.indexOf(s) < 0) { sessions.push(s); } paint(); if (o.onUnhide) { o.onUnhide(id); } }
     function doRename(id, name) { var s = byId(id); if (s) { s.launchTitle = s.launchTitle || s.title; s.title = name === null ? s.launchTitle : name; } paint(); if (o.onRename) { o.onRename(id, name); } }
-    function doEnd(id) { if (o.onEnd) { o.onEnd(id); } }
+    function doEnd(id) { return o.onEnd ? o.onEnd(id) : undefined; }
     function pick(id) { setCurrent(id); if (o.onPick) { o.onPick(id); } }
 
     /* ---------- closing ---------- */
     function askEnd(id) {
       var s = byId(id); if (!s || !NS.Dialog) { return; }
       NS.Dialog({ danger: true, title: "End " + s.title + "?", why: "This stops its agent" + (s.project ? " in " + s.project : "") + ", and cannot be undone. The session stays listed, ended, so you can still see how it ended.",
-        actions: [{ label: "End session", kind: "danger", solid: true, cmd: endCommand(hostOf(s)), onPress: function () { doEnd(id); } }] }).open();
+        actions: [{ label: "End session", kind: "danger", solid: true, cmd: endCommand(hostOf(s)), busy: "ending\u2026", onPress: function () { return doEnd(id); } }] }).open();
     }
     function close(id) {
       var s = byId(id); if (!s) { return; }
@@ -2584,7 +2715,8 @@
         return h("button", { type: "button", "aria-pressed": o.team === t.name ? "true" : "false", onclick: function () { if (o.onTeam) { o.onTeam(t.name); } } }, [NS.Signal(t.word || "idle"), t.name, h("em", { text: t.fact || "" })]);
       })));
     }
-    var runs = (o.runs || []).slice().sort(function (a, b) { var r = function (x) { var f = NS.signalOf(x.word).family; return f === "needs" ? 0 : f === "bad" ? 1 : f === "moving" ? 2 : 3; }; return r(a) - r(b); });
+    /* Live work first (liveFirst): what waits on you, then running, then what you might pick up, then the ended; oldest wait first. */
+    var runs = NS.liveFirst(o.runs || [], { state: function (r) { return r.word; } });
     var ol = h("ol", { "aria-label": "Runs, the one that needs you first" });
     runs.forEach(function (r, i) {
       var f = NS.signalOf(r.word).family, live = f === "moving" || f === "needs" || r.word === "held after this round";
@@ -3946,7 +4078,7 @@
       count.textContent = items.length === 1 ? (problem ? "Something went wrong" : "Needs you") : items.length + " need you";
       reason.textContent = items[0].text + (items.length > 1 ? " (and " + (items.length - 1) + " more)" : "");
     }
-    return { el: el, set: function (xs) { var before = sig(); items = (xs || []).slice().sort(function (a, b) { return (b.level === "problem") - (a.level === "problem"); }); if (sig() !== before && quietSig && sig().indexOf(quietSig) < 0) { quietSig = null; } if (!items.length) { quietSig = null; } paint(); }, enable: function (v) { o.enabled = !!v; paint(); }, get showing() { return !el.hidden; }, destroy: function () { el.remove(); } };
+    return { el: el, set: function (xs) { var before = sig(); items = NS.liveFirst(xs || [], { group: function (x) { return x.level === "problem" ? "pickup" : "waiting"; } }); if (sig() !== before && quietSig && sig().indexOf(quietSig) < 0) { quietSig = null; } if (!items.length) { quietSig = null; } paint(); }, enable: function (v) { o.enabled = !!v; paint(); }, get showing() { return !el.hidden; }, destroy: function () { el.remove(); } };
   }
 
   /* TaskPicker: which recorded task this is for, doing first, then open and blocked, newest first; or something else. */
@@ -4268,6 +4400,8 @@
 
   Object.assign(NS, { OfficeView: OfficeView, OfficePanel: OfficePanel });
 })();
+
+
 
 
 
@@ -5077,6 +5211,189 @@
     NS.Landings = Landings;
   })();
 
+  /* --- LayoutEdit --- */
+  (function () {
+    /* LayoutEdit: Edit layout for any page or mode surface, generalised from main's Home (pages/Home.svelte, pages/Panel.svelte and
+       lib/layout.ts). A page's sections are shown in their saved order, hidden ones left out. "Edit layout" in the page's head opens
+       the edit bar: drag a section by its name or use its arrows, Hide it, Add it back, Reset to the default, Done. A section that holds
+       live work (locked) can be moved but not hidden while it has something in it.
+       Every layout is kept in one setting, studio-layouts: a JSON object keyed "<page>" or "<page>/<surface>", then the mode, each
+       { order, hidden }. "" (for the whole setting or one entry) is the default. Sizes are not kept here; they stay in the browser. */
+    var KEY = "studio-layouts";
+    var MODES = ["default", "terminals", "teams", "minimal", "pure"];
+
+    function uniq(list) { return list.filter(function (one, i) { return list.indexOf(one) === i; }); }
+    /* The layout a saved value describes, mended: unknown panels dropped, missing ones added at the end. As main's readLayout. */
+    function readLayout(saved, panels) {
+      var parsed = {};
+      if (saved && typeof saved === "object") { parsed = saved; }
+      else { try { parsed = saved ? JSON.parse(saved) : {}; } catch (e) { parsed = {}; } }
+      if (!parsed || typeof parsed !== "object") { parsed = {}; }
+      function known(list) { return Array.isArray(list) ? list.filter(function (one) { return typeof one === "string" && panels.indexOf(one) >= 0; }) : []; }
+      var order = uniq(known(parsed.order));
+      panels.forEach(function (p) { if (order.indexOf(p) < 0) { order.push(p); } });
+      return { order: order, hidden: uniq(known(parsed.hidden)) };
+    }
+    /* Moves a panel by `by` places among all of them, hidden ones included. */
+    function move(layout, panel, by) {
+      var order = layout.order.slice(), from = order.indexOf(panel), to = Math.max(0, Math.min(order.length - 1, from + by));
+      if (from < 0 || from === to) { return layout; }
+      order.splice(from, 1); order.splice(to, 0, panel);
+      return { order: order, hidden: layout.hidden.slice() };
+    }
+    /* Puts `panel` where `before` is, for a drop. */
+    function place(layout, panel, before) {
+      if (panel === before) { return layout; }
+      var order = layout.order.filter(function (one) { return one !== panel; });
+      order.splice(Math.max(0, order.indexOf(before)), 0, panel);
+      return { order: order, hidden: layout.hidden.slice() };
+    }
+    function hide(layout, panel) { return { order: layout.order.slice(), hidden: uniq(layout.hidden.concat([panel])) }; }
+    function show(layout, panel) { return { order: layout.order.slice(), hidden: layout.hidden.filter(function (one) { return one !== panel; }) }; }
+    /* What Loadout keeps for one layout; the default keeps nothing, so a reset unsets it. */
+    function saved(layout, panels) {
+      var plain = !layout.hidden.length && layout.order.every(function (one, i) { return one === panels[i]; });
+      return plain ? "" : JSON.stringify({ order: layout.order, hidden: layout.hidden });
+    }
+
+    function keyOf(page, surface) { return surface ? page + "/" + surface : page; }
+    /* The whole setting as an object: {} for "" or anything that is not one. */
+    function parseAll(value) {
+      if (value && typeof value === "object") { return value; }
+      try { var v = value ? JSON.parse(value) : {}; return v && typeof v === "object" && !Array.isArray(v) ? v : {}; } catch (e) { return {}; }
+    }
+    /* One page-and-mode's layout out of the whole setting. */
+    function readFrom(value, key, mode, panels) {
+      var all = parseAll(value), entry = all[key];
+      return readLayout(entry && typeof entry === "object" ? entry[mode || "default"] : "", panels);
+    }
+    /* The whole setting with one page-and-mode's layout written in; a default layout takes its entry out, and nothing left is "". */
+    function writeTo(value, key, mode, layout, panels) {
+      var all = JSON.parse(JSON.stringify(parseAll(value))), m = mode || "default", one = saved(layout, panels);
+      var entry = all[key] && typeof all[key] === "object" ? all[key] : {};
+      if (one) { entry[m] = { order: layout.order, hidden: layout.hidden }; } else { delete entry[m]; }
+      if (Object.keys(entry).length) { all[key] = entry; } else { delete all[key]; }
+      return Object.keys(all).length ? JSON.stringify(all) : "";
+    }
+    /* The line that writes it, quoted for a shell: '…' around the JSON, "" for the default. */
+    function command(value) {
+      return "$ loadout config set " + KEY + " " + (value ? "'" + String(value).replace(/'/g, "'\\''") + "'" : "\"\"");
+    }
+
+    function LayoutEdit(o) {
+      var cur = Object.assign({ mode: "default", editing: false, numbered: false, hideOnly: false }, o || {});
+      var sections = (cur.sections || []).map(function (s) { return typeof s === "string" ? { id: s, name: (cur.names || {})[s] || s } : s; });
+      var names = {}; sections.forEach(function (s) { names[s.id] = s.name || (cur.names || {})[s.id] || s.id; });
+      var panels = (cur.order || sections.map(function (s) { return s.id; })).filter(function (id) { return names[id] !== undefined; });
+      sections.forEach(function (s) { if (panels.indexOf(s.id) < 0) { panels.push(s.id); } });
+      var key = keyOf(cur.page || "page", cur.surface), value = cur.value || "", dragging = null, bodies = {};
+      var el = h("div", { "class": "ls-layout" + (cur.class ? " " + cur.class : "") });
+      var bar = h("div", { "class": "editbar ls-layout-bar", role: "region", "aria-label": "Editing the layout", hidden: true });
+      var slot = h("span", { "class": "ls-layout-btn" });
+
+      function layout() {
+        /* Until studio-layouts is written at all, an older key (Home's studio-layout-lens and -map) is read in its place. */
+        if (!value && cur.legacy) { return readLayout(cur.legacy, panels); }
+        return readFrom(value, key, cur.mode, panels);
+      }
+      function locked(id) { return !!(cur.locked && cur.locked(id)); }
+      /* A hidden section that has live work in it again is shown: live work is never hidden. */
+      function hiddenNow(L, id) { return L.hidden.indexOf(id) >= 0 && !locked(id); }
+      function keep(next) {
+        var v = writeTo(value, key, cur.mode, next, panels);
+        value = v;
+        paint();
+        if (cur.onchange) { cur.onchange(KEY, v, command(v)); }
+      }
+      function edit(on) { cur.editing = !!on; paint(); if (cur.onedit) { cur.onedit(cur.editing); } }
+      function bodyOf(id) {
+        if (!(id in bodies)) { var b = cur.render ? cur.render(id) : null; bodies[id] = b; }
+        return bodies[id];
+      }
+
+      function panelFor(L, id, position) {
+        var name = names[id], editing = cur.editing, first = position === 0, last = position === L.order.length - 1;
+        var wide = typeof cur.wide === "function" ? cur.wide(id) : Array.isArray(cur.wide) ? cur.wide.indexOf(id) >= 0 : false;
+        var sec = h("section", { "class": "panel p-" + id + (wide ? " wide" : "") + (editing ? " editing" : "") + (dragging === id ? " dragging" : ""), "aria-labelledby": "z-" + key.replace(/\W/g, "-") + "-" + id, "data-section": id });
+        if (editing) {
+          if (!cur.hideOnly) {
+            sec.addEventListener("dragover", function (e) { e.preventDefault(); sec.classList.add("over"); });
+            sec.addEventListener("dragleave", function () { sec.classList.remove("over"); });
+            sec.addEventListener("drop", function (e) { e.preventDefault(); sec.classList.remove("over"); var from = dragging; dragging = null; if (from) { keep(place(L, from, id)); } });
+          }
+          var kids = [];
+          if (cur.hideOnly) { kids.push(h("span", { "class": "grip still" }, [name])); }
+          else {
+            var grip = h("span", { "class": "grip", role: "button", tabindex: "-1", draggable: "true", "aria-label": "Drag " + name }, [h("span", { "aria-hidden": "true", text: "⠿" }), name]);
+            grip.addEventListener("dragstart", function (e) { if (e.dataTransfer) { e.dataTransfer.setData("text/plain", id); } dragging = id; sec.classList.add("dragging"); });
+            grip.addEventListener("dragend", function () { dragging = null; sec.classList.remove("dragging"); });
+            var nudge = function (word, glyph, by, off) { return h("button", { type: "button", "aria-label": "Move " + name + " " + word, disabled: off, text: glyph, onclick: function () { keep(move(L, id, by)); } }); };
+            kids.push(grip, h("span", { "class": "nudge", role: "group", "aria-label": "Move " + name }, [nudge("earlier", "←", -1, first), nudge("up", "↑", -1, first), nudge("down", "↓", 1, last), nudge("later", "→", 1, last)]));
+          }
+          if (locked(id)) {
+            var wid = uid("ls-lay-why-");
+            kids.push(h("span", { "class": "hidewrap" }, [h("button", { type: "button", "class": "hidebtn", "aria-disabled": "true", "aria-describedby": wid, text: "Hide" }), h("span", { "class": "why", id: wid, text: "holds live work, so it stays while it has something in it" })]));
+          } else {
+            kids.push(h("button", { type: "button", "class": "hidebtn", text: "Hide", onclick: function () { keep(hide(L, id)); } }));
+          }
+          sec.appendChild(h("div", { "class": "chrome" }, kids));
+        }
+        var count = cur.count ? cur.count(id) : undefined;
+        var number = cur.numbered ? (panels.indexOf(id) + 1 < 10 ? "0" : "") + (panels.indexOf(id) + 1) : "";
+        sec.appendChild(h("h2", { "class": cur.quiet && !editing ? "ls-sr" : "ls-zone", id: "z-" + key.replace(/\W/g, "-") + "-" + id }, [number ? h("span", { "class": "no", text: number }) : null, name + (count === undefined || count === null ? "" : " · " + count)]));
+        var body = bodyOf(id);
+        (Array.isArray(body) ? body : [body]).forEach(function (b) { if (b) { sec.appendChild(b); } });
+        return sec;
+      }
+
+      function paintButton() {
+        slot.textContent = "";
+        slot.appendChild(NS.HaloButton({ label: cur.editing ? "Done" : "Edit layout", size: "small", key: "edit-layout-" + key, disabledReason: cur.disabledReason || undefined, onPress: function () { edit(!cur.editing); } }));
+      }
+      function paintBar(L) {
+        bar.hidden = !cur.editing; bar.textContent = "";
+        if (!cur.editing) { return; }
+        var what = cur.label ? "the " + cur.label + " layout" : "this layout";
+        bar.appendChild(h("p", { text: cur.hideOnly ? "Editing " + what + ". Hide a section, or add it back; the order stays as it is here." : "Editing " + what + ". Drag a section by its name, or use its arrows." }));
+        L.hidden.filter(function (id) { return !locked(id); }).forEach(function (id) {
+          var next = show(L, id);
+          bar.appendChild(NS.HaloButton({ label: "Add back " + names[id], size: "small", cmd: command(writeTo(value, key, cur.mode, next, panels)), onPress: function () { keep(next); } }));
+        });
+        var reset = writeTo(value, key, cur.mode, readLayout("", panels), panels), plain = !saved(L, panels);
+        bar.appendChild(NS.HaloButton({ label: "Reset", size: "small", cmd: plain ? undefined : command(reset), disabledReason: plain ? "it is already the default" : undefined, onPress: function () { keep(readLayout("", panels)); } }));
+        bar.appendChild(NS.HaloButton({ label: "Done", size: "small", solid: true, onPress: function () { edit(false); } }));
+        bar.appendChild(h("code", { "class": "ls-cmd", text: "Kept in Loadout's config: " + command(value) }));
+      }
+      function paint() {
+        var L = layout(), focused = document.activeElement, hadFocus = focused && (el.contains(focused) || bar.contains(focused)), label = hadFocus ? focused.getAttribute("aria-label") || focused.textContent : null;
+        el.classList.toggle("editing", !!cur.editing);
+        Array.prototype.slice.call(el.children).forEach(function (c) { c.remove(); });
+        var shown = L.order.filter(function (id) { return !hiddenNow(L, id); });
+        L.order.forEach(function (id, position) { if (!hiddenNow(L, id)) { el.appendChild(panelFor(L, id, position)); } });
+        if (!shown.length) { el.appendChild(h("p", { "class": "calm", text: "Every section is hidden. Add one back from the bar above, or Reset." })); }
+        paintButton(); paintBar(L);
+        /* Keep focus on the control that was pressed, across the redraw. */
+        if (label) {
+          var again = Array.prototype.filter.call(el.querySelectorAll("button, [role=button]"), function (b) { return (b.getAttribute("aria-label") || b.textContent) === label && !b.disabled; })[0];
+          if (again) { again.focus(); }
+        }
+      }
+      paint();
+      return {
+        el: el, bar: bar, button: slot, key: key,
+        get layout() { return layout(); }, get editing() { return !!cur.editing; }, get value() { return value; },
+        edit: edit,
+        /* New props from the page: the saved value, editing, locked, the mode. */
+        set: function (p) { p = p || {}; if ("value" in p) { value = p.value || ""; } ["editing", "locked", "mode", "legacy", "disabledReason", "count", "label"].forEach(function (k) { if (k in p) { cur[k] = p[k]; } }); paint(); },
+        /* Draws a section's body again (all of them with no id). */
+        refresh: function (id) { if (id) { delete bodies[id]; } else { bodies = {}; } paint(); }
+      };
+    }
+    LayoutEdit.readLayout = readLayout; LayoutEdit.move = move; LayoutEdit.place = place; LayoutEdit.hide = hide; LayoutEdit.show = show; LayoutEdit.saved = saved;
+    LayoutEdit.keyOf = keyOf; LayoutEdit.read = readFrom; LayoutEdit.write = writeTo; LayoutEdit.command = command; LayoutEdit.KEY = KEY; LayoutEdit.MODES = MODES;
+    NS.LayoutEdit = LayoutEdit;
+  })();
+
   /* --- ListToolbar --- */
   (function () {
     /* ListToolbar: the same search, filter and sort controls over every list. The box takes the query typed; the chips
@@ -5318,6 +5635,473 @@
       return { el: el, set: function (patch) { cur = Object.assign({}, cur, patch || {}); paint(cur); } };
     }
     NS.MiniLine = MiniLine;
+  })();
+
+  /* --- Peek --- */
+  (function () {
+    /* Peek: one overlay over any piece of work (a session, a team run, an idea, a task, or a run's crew node) that shows its live state and
+       its main actions without leaving the page. It opens beside a row on hover after a short delay, or at once on focus;
+       the row's peek button pins it; Escape closes it before anything else that claims Escape, but never while you are
+       typing in a terminal. Below 600px it is a sheet from the foot of the screen. Three more forms: the waiting list
+       (the mode bar's count), an expansion under the row (Minimal) and a preview drawn into a pane (Pure). New design for
+       WORKFLOW.md; main has no peek yet. */
+    var KIND = { session: "session", run: "team run", idea: "idea", task: "task", approval: "approval", node: "crew node" };
+    var TERMINAL = ".xterm, .ls-term .screen, [data-terminal]";
+    var FOCUSABLE = "a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex=\"-1\"])";
+    function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+    function family(word) { return NS.signalOf ? NS.signalOf(word).family : "rest"; }
+    function sig(word) { return NS.Signal ? NS.Signal(word) : h("b", { text: word }); }
+    function halo(o) { return NS.HaloButton(Object.assign({ size: "small" }, o)); }
+    function titleOf(it) { return it.kind === "node" ? it.node || it.id || "" : it.title || it.goal || it.id || ""; }
+    function inTerminal(n) { return !!(n && n.closest && n.closest(TERMINAL)); }
+    function shown(n) { return !!(n.offsetWidth || n.offsetHeight || n.getClientRects().length); }
+    function focusables(root) { return Array.prototype.filter.call(root.querySelectorAll(FOCUSABLE), function (n) { return shown(n) && !n.closest("[hidden]") && n.getAttribute("aria-hidden") !== "true"; }); }
+    function overlaps(a, b) { return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom; }
+    function where(it) { return it.where || (it.project ? ["--project", it.project] : ["--global"]); }
+    function line(words) { return "$ loadout " + words.map(function (w) { return /^--[\w-]+=/.test(w) ? w.split("=")[0] + "=" + q(w.slice(w.indexOf("=") + 1)) : /^--[\w-]+$/.test(w) ? w : q(w); }).join(" "); }
+    function ago(ms, now) {
+      if (!ms) { return ""; }
+      var s = Math.max(0, Math.round((now - ms) / 1000));
+      return s < 45 ? "just now" : s < 3600 ? Math.round(s / 60) + " min" : s < 86400 ? Math.round(s / 3600) + " h" : Math.round(s / 86400) + " d";
+    }
+    function openQuestions(it, local) { return (it.questions || []).filter(function (x) { return !x.answer && !local[it.id + "/" + x.id]; }); }
+    function wordOf(it, local) {
+      if (it.word) { return it.word; }
+      if (it.kind === "session") { return it.ended ? "ended" : it.waitingFor ? "waiting for you" : "working"; }
+      if (it.kind === "run") { return it.gate ? "needs a decision" : it.held ? "held after this round" : "running"; }
+      if (it.kind === "idea") { return openQuestions(it, local || {}).length ? "waiting for you" : "shaping"; }
+      if (it.kind === "task") { return it.state || "open"; }
+      if (it.kind === "approval") { return "needs approval"; }
+      if (it.kind === "node") { return it.quiet ? "quiet" : "working"; }
+      return "unknown";
+    }
+    /* What a screen reader hears from a focused row: the peek's gist, before anyone opens it. */
+    function gist(it, local) {
+      var w = wordOf(it, local), first = it.kind === "idea" ? openQuestions(it, local || {})[0] : null;
+      return [KIND[it.kind] || it.kind, it.kind === "node" ? it.role : null, w, it.waitingFor || (it.gate && it.gate.question) || (first && first.question) || it.note || null].filter(Boolean).join(" · ") + ". The peek button keeps it open.";
+    }
+
+    function Peek(o) {
+      o = o || {};
+      var mode = o.mode === "inline" || o.mode === "preview" ? o.mode : "float", delay = o.delay === undefined ? 350 : o.delay;
+      var every = o.tailEvery === undefined ? 2000 : o.tailEvery, lines = o.lines || (mode === "inline" ? 4 : 8);
+      var pid = uid("ls-peek-"), tid = pid + "-t";
+      var cur = { item: null, row: null, get: null, btn: null, pinned: false, list: null, anchor: null, back: false };
+      var drafts = {}, local = {}, busy = null, said = "", saidBad = false, tail = null, tailEl = null, poll = null, openTimer = null, closeTimer = null, lastWord = null;
+      var inner = h("div", { "class": "in" }), live = h("span", { "class": "ls-vh", role: "status", "aria-live": "polite" });
+      var panel = h("section", { "class": "ls-peek " + mode, id: pid, tabindex: "-1", hidden: mode === "preview" ? null : true }, [inner, live]);
+      var host = mode === "preview" ? o.container : (o.host || document.body);
+      if (mode !== "inline" && host) { host.appendChild(panel); }
+      function now() { return o.now || Date.now(); }
+      function isOpen() { return mode === "preview" ? !!cur.item || !!cur.list : !panel.hidden; }
+      function call(name) { var f = o[name]; return typeof f === "function" ? f : null; }
+
+      /* ---------- what it says and does ---------- */
+      function keeping(fn) {
+        var a = document.activeElement, k = a && panel.contains(a) ? (a.closest("[data-k]") || a).getAttribute("data-k") : null;
+        fn();
+        if (k) { var b = panel.querySelector("[data-k=\"" + k + "\"]"); if (b && b !== document.activeElement) { b.focus({ preventScroll: true }); } }
+      }
+      /* An action that changes something: busy while it goes, then ✓ with its command, or ✕ and why. False, a throw or a rejection failed. */
+      function act(key, busyWord, done, cmd, fn) {
+        if (busy || !fn) { return; }
+        var v;
+        try { v = fn(); } catch (e) { settle(false, e, done, cmd); return; }
+        if (v && typeof v.then === "function") {
+          busy = { key: key, word: busyWord }; said = ""; paint();
+          v.then(function (r) { busy = null; settle(r, null, done, cmd); }, function (e) { busy = null; settle(false, e, done, cmd); });
+        } else { settle(v, null, done, cmd); }
+      }
+      function settle(r, e, done, cmd) {
+        saidBad = r === false;
+        if (!saidBad && done === null && typeof r !== "string") { said = ""; paint(); return; }
+        said = saidBad ? "✕ " + (e && e.message ? e.message : "It did not go through. Nothing changed.") : "✓ " + (typeof r === "string" ? r : done) + (cmd && cmd.indexOf("$ ") === 0 ? " · " + cmd : "");
+        paint();
+      }
+      /* An action that goes somewhere else: the peek gets out of the way, unless it is the pane. */
+      function go(fn) { return function () { var it = cur.item; if (mode !== "preview") { close(false); } fn(it); }; }
+      function button(key, b) {
+        var spin = busy && busy.key === key;
+        var el = halo(Object.assign({}, b, { key: "pk-" + key, label: spin ? busy.word : b.label, inactive: !!busy && !b.disabledReason }));
+        if (spin) { (el.querySelector ? el.querySelector("button") || el : el).setAttribute("aria-busy", "true"); }
+        return el;
+      }
+
+      /* ---------- the bodies: session, run, idea, task, node ---------- */
+      function facts(bits) { bits = bits.filter(Boolean); return bits.length ? h("p", { "class": "facts", text: bits.join(" · ") }) : null; }
+      function paintTail() {
+        if (!tailEl) { return; }
+        var t = tail || cur.item.tail || null;
+        tailEl.pre.textContent = t ? (t.lines || String(t.text || "").split("\n")).slice(-lines).join("\n") : "Reading its last lines…";
+        tailEl.cap.textContent = ["Its last lines", "read-only", t && t.running === false ? "it has stopped" : null, t && t.at ? t.at : null].filter(Boolean).join(" · ");
+      }
+      /* A session's tail and a node's journal are read the same way: on opening, then every `every` ms while open. */
+      function reader(it) { return it ? (it.kind === "session" ? call("tail") : it.kind === "node" ? call("journal") : null) : null; }
+      function readTail() {
+        var it = cur.item, f = reader(it);
+        if (!f) { return; }
+        var v; try { v = f(it); } catch (e) { return; }
+        Promise.resolve(v).then(function (t) { if (t && cur.item === it) { tail = t; if (it.kind === "node") { paintJournal(); } else { paintTail(); } } }, function () {});
+      }
+      /* A crew node: what it did last (its journal's last lines, as [time, text, family?] or { at, text, family }). */
+      function paintJournal() {
+        if (!tailEl || !tailEl.jl) { return; }
+        var got = tail || cur.item.journal || null, rows = got ? (got.lines || got).slice(-Math.min(lines, 6)) : null;
+        tailEl.jl.textContent = "";
+        if (!rows) { tailEl.jl.appendChild(h("li", { "class": "none", text: "Reading what it did last…" })); return; }
+        if (!rows.length) { tailEl.jl.appendChild(h("li", { "class": "none", text: "It has not done anything yet." })); return; }
+        rows.forEach(function (r) {
+          var at = Array.isArray(r) ? r[0] : r.at || r.time, text = Array.isArray(r) ? r[1] : r.text, fam = Array.isArray(r) ? r[2] : r.family;
+          tailEl.jl.appendChild(h("li", { "class": fam ? "f-" + fam : null }, [at ? h("time", { text: at }) : null, h("span", { text: text || "" })]));
+        });
+      }
+      var says = {};
+      function node(it, kids, acts) {
+        var w = wordOf(it), gone = /done|failed|stopped|ended|abandoned/.test(w);
+        kids.push(facts([it.role, it.model, it.goal || it.runTitle, it.turns !== undefined ? it.turns + " turn" + (it.turns === 1 ? "" : "s") : null]));
+        if (it.branch) { kids.push(h("p", { "class": "branch" }, [h("span", { "class": "k", text: "Works on " }), h("code", { text: it.branch })])); }
+        var jl = h("ol", { "class": "jl", "aria-label": "What it did last" });
+        tailEl = { jl: jl }; paintJournal();
+        kids.push(h("div", { "class": "last" }, [h("p", { "class": "cap", text: "What it did last" }), jl]));
+        if (it.quiet) { kids.push(h("p", { "class": "quiet-n", text: "Quiet for " + it.quiet + ", three times its usual turn." })); }
+        /* Say to it: SayToNode, kept across redraws so what is typed stays. */
+        if (call("onSay") && NS.SayToNode) {
+          var say = it.say || {}, key = it.run + "/" + it.node + "/" + (gone ? "ended" : say.state || "locked");
+          if (!says[key]) {
+            says[key] = NS.SayToNode({ run: it.run, node: it.node, state: gone ? "ended" : say.state || "locked", minutesLeft: say.minutesLeft, disabledReason: it.disabledReason,
+              onUnlock: function (pass) { return o.onUnlock ? o.onUnlock(it, pass) : pass.length > 0; },
+              onSend: function (message) { return o.onSay(cur.item || it, message); } });
+          }
+          kids.push(says[key]);
+        }
+      }
+      function session(it, kids, acts) {
+        var ended = !!it.ended || wordOf(it) === "ended";
+        kids.push(facts([it.project, it.agent, it.mode, it.since ? "for " + ago(it.since, now()) : null]));
+        var pre = h("pre", { "class": "tail", "aria-label": "Its last lines, read-only" }), cap = h("p", { "class": "cap" });
+        tailEl = { pre: pre, cap: cap }; paintTail();
+        var well = h("div", { "class": "well" }, [cap, pre]);
+        if (it.status && NS.StatusStrip && mode !== "inline") { var s = NS.StatusStrip({ status: it.status, now: o.now }); well.appendChild(h("div", { "class": "foot" }, [s.el || s])); }
+        kids.push(well);
+        if (it.waitingFor) { kids.push(h("div", { "class": "wait" }, [h("p", {}, [h("b", { text: "It is waiting for: " }), it.waitingFor + ". Answer it in its terminal: Studio never answers for it."])])); }
+        if (call("onTypeHere")) { acts.push(button("type", { label: "Type here", kind: it.waitingFor ? "needs" : "", solid: !!it.waitingFor, glyph: "›", cmd: "opens its terminal with the keyboard in it · changes nothing", disabledReason: ended ? "it has ended" : it.disabledReason, onPress: go(o.onTypeHere) })); }
+        if (call("onOpenBeside")) { acts.push(button("beside", { label: "Open beside", cmd: "opens it beside this page · changes nothing", onPress: go(o.onOpenBeside) })); }
+        if (call("onEnd") && !ended) { acts.push(button("end", { label: "End session…", kind: "danger", cmd: line(["session", "end", it.hid || it.id, "--yes"]) + " · asks first", disabledReason: it.disabledReason, onPress: function () { act("end", "ending…", null, line(["session", "end", it.hid || it.id, "--yes"]), function () { return o.onEnd(it); }); } })); }
+      }
+      function run(it, kids, acts) {
+        var w = wordOf(it), over = /done|failed|stopped|abandoned|ended|accepted/.test(w);
+        kids.push(facts([it.team, it.project, it.round ? "round " + it.round + (it.rounds ? " of " + it.rounds : "") : null, it.elapsed]));
+        if (it.line && NS.MiniLine) {
+          /* Stage 14's MiniLine takes one object; the base one before it took (rounds, end, running). */
+          var m = NS.MiniLine.length > 1 ? NS.MiniLine(it.line.rounds || [], !!it.line.end, !!it.line.running) : NS.MiniLine(it.line);
+          kids.push(h("div", { "class": "mini" }, [m.el || m]));
+        }
+        if (it.working) {
+          kids.push(h("div", { "class": "now" }, [h("span", { "class": "k", text: "Working now" }), h("p", {}, [h("b", { text: it.working.node }), it.working.role ? " (" + it.working.role + ")" : "", it.working.doing ? ": " + it.working.doing : ""]), sig(it.working.word || "working")]));
+        } else if (!over && !it.gate) { kids.push(h("p", { "class": "quiet", text: "No node is working: the lead is deciding the next round." })); }
+        if (it.gate && NS.Gate) {
+          kids.push(NS.Gate(Object.assign({ compact: true, run: it.id, disabledReason: it.disabledReason }, it.gate, {
+            onAnswer: function (answer, extra) { if (o.onAnswer) { var v = o.onAnswer(it, answer, extra); if (v && v.then) { v.then(null, function () {}); } } } })));
+        }
+        if (it.spend && NS.Spend) { var sp = NS.Spend(it.spend); kids.push(sp.el || sp); }
+        if (over) { return; }
+        var hold = line(["team", "halt", it.id, "--pause"]), carry = line(["team", "halt", it.id, "--resume"]), stop = line(["team", "halt", it.id]);
+        if (it.held) { if (call("onCarryOn")) { acts.push(button("carry", { label: "Let it carry on", cmd: carry, disabledReason: it.disabledReason, onPress: function () { act("carry", "carrying on…", "It carries on", carry, function () { return o.onCarryOn(it); }); } })); } }
+        else if (call("onHold")) { acts.push(button("hold", { label: "Hold after this round", glyph: "‖", cmd: hold, disabledReason: it.disabledReason, onPress: function () { act("hold", "holding…", "It holds after this round", hold, function () { return o.onHold(it); }); } })); }
+        if (call("onStop")) { acts.push(button("stop", { label: "Stop after this round", kind: "danger", glyph: "■", cmd: stop, disabledReason: it.disabledReason, onPress: function () { act("stop", "stopping…", "It stops after this round", stop, function () { return o.onStop(it); }); } })); }
+      }
+      function idea(it, kids, acts) {
+        var open = openQuestions(it, local), x = open[0];
+        kids.push(facts([it.project || (where(it)[0] === "--global" ? "workspace" : null), it.round ? "round " + it.round : null, open.length ? open.length + " question" + (open.length === 1 ? "" : "s") + " open" : "no questions open"]));
+        if (NS.IdeaStages) { kids.push(h("div", { "class": "stages" }, [NS.IdeaStages({ stage: it.stage || "Captured", word: wordOf(it, local) })])); }
+        if (x) {
+          var key = it.id + "/" + x.id, typed = (drafts[key] || "").trim(), qid = pid + "-q";
+          var cmd = line(["idea", "answer", it.id, x.id, "--answer=" + (typed || "<answer>")].concat(where(it)));
+          var fs = h("fieldset", {}, [h("legend", { id: qid, text: x.question })]);
+          if (x.why) { fs.appendChild(h("p", { "class": "why", text: x.why })); }
+          var own = h("textarea", { "class": "ls-text", id: qid + "-w", rows: 2, "data-k": "pk-own", placeholder: "Or say it in your own words" });
+          var opts = h("div", { "class": "opts" });
+          (x.options || []).forEach(function (op) {
+            var r = h("input", { type: "radio", name: qid + "-o", value: op, "data-k": "pk-o-" + op, onchange: function () { drafts[key] = op; own.value = ""; paint(); } });
+            r.checked = typed === op;
+            opts.appendChild(h("label", { "class": "opt" }, [r, op, x.recommendation === op ? h("span", { "class": "rec", text: "recommended" }) : null]));
+          });
+          if ((x.options || []).length) { fs.appendChild(opts); }
+          if (typed && (x.options || []).indexOf(typed) < 0) { own.value = drafts[key]; }
+          own.addEventListener("input", function () { drafts[key] = own.value; refreshAnswer(); });
+          fs.appendChild(h("div", { "class": "own" }, [h("label", { "for": qid + "-w", text: "Or in your own words" }), own]));
+          var row = h("div", { "class": "ls-answers flush" });
+          function refreshAnswer() {
+            var t = (drafts[key] || "").trim(), c = line(["idea", "answer", it.id, x.id, "--answer=" + (t || "<answer>")].concat(where(it)));
+            Array.prototype.forEach.call(opts.querySelectorAll("input"), function (r) { r.checked = r.value === t; });
+            keeping(function () {
+              row.textContent = "";
+              row.appendChild(button("answer", { label: "Answer", kind: "needs", solid: !!t, glyph: "✓", cmd: c, disabledReason: it.disabledReason || (t ? null : "pick an answer or write one"),
+                onPress: function () { act("answer", "answering…", "Answered " + x.id + (open.length > 1 ? ". The next question is below." : ". Refine when you are ready."), c, function () {
+                  var v = o.onAnswerIdea(it, x, t, c);
+                  function keep(ok) { if (ok !== false) { local[key] = t; delete drafts[key]; } return ok; }
+                  return v && v.then ? v.then(keep) : keep(v);
+                }); } }));
+            });
+          }
+          if (call("onAnswerIdea")) { refreshAnswer(); }
+          kids.push(h("div", { "class": "ls-qset one" }, [h("section", { "class": "q" + (typed ? " drafted" : ""), "aria-labelledby": qid }, [
+            h("span", { "class": "who", text: [x.id, typed ? "your answer, not sent yet" : "the agent asks", open.length > 1 ? "1 of " + open.length : null].filter(Boolean).join(" · ") }), fs, row])]));
+        }
+        if (call("onRefine")) {
+          var ref = line(["idea", "refine", it.id].concat(where(it)));
+          acts.push(button("refine", { label: "Refine", glyph: "↻", cmd: ref, disabledReason: it.disabledReason, onPress: function () { act("refine", "refining…", "The next round has started: it runs on the daemon, and a toast says when it ends", ref, function () { return o.onRefine(it); }); } }));
+        }
+      }
+      function task(it, kids, acts) {
+        var state = it.state || "open";
+        kids.push(facts([it.project || "workspace", it.taskKind, it.declaredBy ? "by " + it.declaredBy : null, it.declaredAt]));
+        if (it.note) { kids.push(h("p", { "class": "note" + (state === "blocked" ? " bad" : ""), text: it.note })); }
+        var start = it.project ? line(["launch", it.project, "--task-id", it.id]) : null;
+        if (call("onStart")) { acts.push(button("start", { label: "Start", solid: true, glyph: "▸", cmd: start || "opens the launch sheet with this task chosen", disabledReason: state === "dropped" ? "it was dropped" : state === "done" ? "it is done" : it.disabledReason, onPress: function () { act("start", "starting…", "Started a session on it", start, function () { return o.onStart(it); }); } })); }
+        if (call("onHistory")) { acts.push(button("history", { label: it.hasDetail ? "Details and history" : "History", cmd: line(["task", "show", it.id].concat(where(it))), onPress: go(o.onHistory) })); }
+      }
+
+      /* ---------- the waiting list: every waiting item, oldest first, each with its main action ---------- */
+      function sorted(items) { return items.slice().sort(function (a, b) { return (a.since || Infinity) - (b.since || Infinity); }); }
+      function mainOf(it) {
+        if (it.kind === "session" && call("onTypeHere")) { return button("w-" + it.id, { label: "Type here", kind: "needs", glyph: "›", cmd: "opens its terminal with the keyboard in it · changes nothing", onPress: function () { close(false); o.onTypeHere(it); } }); }
+        if (it.kind === "approval" && call("onApprove")) { var ap = "$ loadout trigger approve " + it.id; return button("w-" + it.id, { label: "Approve", kind: "needs", solid: true, glyph: "✓", cmd: ap, onPress: function () { act("w-" + it.id, "approving…", "Approved: " + titleOf(it), ap, function () { return o.onApprove(it); }); } }); }
+        if (it.kind === "run" || it.kind === "idea") { return button("w-" + it.id, { label: "Answer", kind: "needs", glyph: "?", cmd: "shows its question here · changes nothing", onPress: function () { drill(it); } }); }
+        return null;
+      }
+      function paintList(kids) {
+        var items = sorted(cur.list || []);
+        if (!items.length) { kids.push(h("p", { "class": "calm", text: "Nothing is waiting on you." })); return; }
+        kids.push(h("ul", { "class": "wlist" }, items.map(function (it) {
+          return h("li", { "class": "w " + family(wordOf(it, local)) }, [
+            h("div", { "class": "top" }, [h("span", { "class": "kind", text: KIND[it.kind] || it.kind }), it.since ? h("span", { "class": "age", text: "waiting " + ago(it.since, now()) }) : null]),
+            it.kind === "approval" ? h("p", { "class": "t", text: titleOf(it) }) : h("button", { type: "button", "class": "t", "data-k": "pk-t-" + it.id, text: titleOf(it), "aria-label": "Peek at " + titleOf(it), onclick: function () { drill(it); } }),
+            h("div", { "class": "row" }, [sig(wordOf(it, local)), mainOf(it)])]);
+        })));
+      }
+      function drill(it) { var inside = panel.contains(document.activeElement); cur.item = it; cur.back = true; said = ""; tail = null; startTail(); paint(); var f = focusables(inner)[0]; if (f && inside) { f.focus(); } }
+
+      /* ---------- drawing ---------- */
+      function paint() {
+        keeping(function () {
+          inner.textContent = ""; tailEl = null;
+          var it = cur.item, listing = !!cur.list && !it, kids = [], acts = [];
+          var w = it ? wordOf(it, local) : "", fam = it ? family(w) : listing && (cur.list || []).length ? "needs" : "rest";
+          panel.className = "ls-peek " + mode + " " + fam + (cur.pinned ? " pinned" : "") + (o.framed ? " framed" : "") + (cur.sheet || o.framed === "sheet" ? " sheet" : "");
+          if (!it && !listing) {
+            inner.appendChild(h("p", { "class": "calm", text: o.empty || "Move through the list to see each one here." }));
+            panel.removeAttribute("role"); panel.removeAttribute("aria-labelledby"); panel.setAttribute("aria-label", "Preview"); return;
+          }
+          var head = h("div", { "class": "hd" });
+          if (cur.back && it) { head.appendChild(h("button", { type: "button", "class": "back", "data-k": "pk-back", text: "← Waiting on you (" + (cur.list || []).length + ")", onclick: function () { var inside = panel.contains(document.activeElement); cur.item = null; cur.back = false; stopTail(); said = ""; paint(); var f = focusables(inner)[0]; if (f && inside) { f.focus(); } } })); }
+          var name = listing ? h("h2", { "class": "ttl count", id: tid }, [h("span", { "class": "no", text: String((cur.list || []).length) }), " waiting on you"])
+            : h("h2", { "class": "ttl", id: tid }, [h("span", { "class": "kind", text: KIND[it.kind] || it.kind }), h("span", { "class": "nm", text: titleOf(it) })]);
+          head.appendChild(h("div", { "class": "name" }, [name, it ? sig(w) : null]));
+          if (cur.pinned || mode === "inline") { head.appendChild(h("button", { type: "button", "class": "x", "data-k": "pk-x", "aria-label": "Close the peek", onclick: function () { close(true); } }, [h("span", { "aria-hidden": "true", text: "✕" }), h("span", { text: "Close" })])); }
+          inner.appendChild(head);
+          if (listing) { paintList(kids); }
+          else { ({ session: session, run: run, idea: idea, task: task, node: node, approval: function (x, k) { k.push(facts([x.rule, x.project, x.detail])); } }[it.kind] || function () {})(it, kids, acts); }
+          kids.forEach(function (k) { if (k) { inner.appendChild(k); } });
+          if (it && call("onOpen")) { acts.push(button("open", { label: "Open", glyph: "↗", cmd: it.kind === "node" ? "opens its run at this node, in the mode you are in · changes nothing" : "opens it in full, in the mode you are in · changes nothing", onPress: go(o.onOpen) })); }
+          if (acts.length) { inner.appendChild(h("div", { "class": "acts" }, acts)); }
+          inner.appendChild(h("p", { "class": "ls-said" + (saidBad ? " no" : ""), role: "status", text: said }));
+          if ((mode === "float" || o.framed) && !cur.pinned && !listing) { inner.appendChild(h("p", { "class": "hint", text: "The peek button keeps it open for the keyboard · Esc closes it" })); }
+          /* Pinned, it is a non-modal dialog named by the item; the list is named by its count; otherwise a group the row points at. */
+          if (mode === "float") { panel.setAttribute("role", cur.pinned || listing ? "dialog" : "group"); if (cur.pinned || listing) { panel.setAttribute("aria-modal", "false"); } else { panel.removeAttribute("aria-modal"); } }
+          else { panel.setAttribute("role", "region"); panel.removeAttribute("aria-modal"); }
+          panel.removeAttribute("aria-label"); panel.setAttribute("aria-labelledby", tid);
+        });
+        place();
+      }
+
+      /* ---------- where it goes ---------- */
+      function anchorEl() { return cur.list && !cur.row ? cur.anchor : cur.row; }
+      function place() {
+        if (mode !== "float" || panel.hidden) { return; }
+        var a = anchorEl(), vw = document.documentElement.clientWidth, vh = window.innerHeight, m = 8, gap = 8;
+        var narrow = vw <= 600;
+        if (narrow !== !!cur.sheet) { cur.sheet = narrow; panel.classList.toggle("sheet", narrow); }
+        if (narrow || !a) { panel.style.left = ""; panel.style.top = ""; return; }
+        var r = a.getBoundingClientRect(), w = panel.offsetWidth, ht = panel.offsetHeight, left, top;
+        if (r.right + gap + w <= vw - m) { left = r.right + gap; top = r.top; }
+        else if (r.left - gap - w >= m) { left = r.left - gap - w; top = r.top; }
+        else {
+          left = clamp(r.left, m, Math.max(m, vw - w - m)); top = r.bottom + 6;
+          if (top + ht > vh - m && r.top - 6 - ht >= m) { top = r.top - 6 - ht; }
+        }
+        panel.style.left = Math.round(left) + "px"; panel.style.top = Math.round(clamp(top, m, Math.max(m, vh - ht - m))) + "px";
+      }
+      function onMove() { if (!isOpen() || mode !== "float") { return; } var a = anchorEl(); if (a && !a.isConnected) { close(false); return; } place(); }
+
+      /* ---------- opening and closing ---------- */
+      function startTail() { stopTail(); readTail(); if (every > 0 && reader(cur.item)) { poll = setInterval(readTail, every); } }
+      function stopTail() { if (poll) { clearInterval(poll); poll = null; } }
+      function mark(open) {
+        if (cur.btn) { cur.btn.setAttribute("aria-expanded", open ? "true" : "false"); }
+        if (cur.anchor) { cur.anchor.setAttribute("aria-expanded", open ? "true" : "false"); }
+      }
+      function show(item, row, how) {
+        how = how || {};
+        clearTimeout(openTimer); clearTimeout(closeTimer);
+        var same = cur.item && item && cur.item.kind === item.kind && cur.item.id === item.id && !cur.list;
+        if (!same) { said = ""; saidBad = false; busy = null; tail = null; }
+        mark(false);
+        cur.item = item; cur.list = null; cur.back = false; cur.anchor = null;
+        cur.row = row || null; cur.btn = row ? row.__peekBtn || null : null; cur.pinned = !!how.pin;
+        lastWord = item ? wordOf(item, local) : null;
+        if (mode === "inline" && row) { var at = row.__peekAfter || row; if (panel.previousSibling !== at || !panel.isConnected) { if (at === row && /^(UL|OL)$/.test(row.parentNode && row.parentNode.tagName)) { row.appendChild(panel); } else { at.parentNode.insertBefore(panel, at.nextSibling); } } }
+        var was = panel.hidden;
+        panel.hidden = false;
+        paint();
+        /* Never over a terminal you are typing in: an opening that would cover it does not happen. */
+        var act = document.activeElement;
+        if (!how.pin && mode === "float" && inTerminal(act)) {
+          var t = act.closest(".ls-term, .xterm, [data-terminal]") || act;
+          if (overlaps(t.getBoundingClientRect(), panel.getBoundingClientRect())) { panel.hidden = true; cur.item = null; cur.row = null; stopTail(); return false; }
+        }
+        if (was && mode !== "preview" && full()) { panel.classList.remove("anim"); void panel.offsetWidth; panel.classList.add("anim"); }
+        mark(true); startTail(); watch(true);
+        return true;
+      }
+      function list(items, anchor) {
+        if (cur.list && cur.anchor === anchor && isOpen() && !cur.item) { close(true); return; }
+        clearTimeout(openTimer); clearTimeout(closeTimer); mark(false); stopTail();
+        cur.item = null; cur.row = null; cur.btn = null; cur.list = items || []; cur.anchor = anchor || null; cur.pinned = true; cur.back = false; said = "";
+        if (anchor) { anchor.setAttribute("aria-controls", pid); anchor.setAttribute("aria-haspopup", "dialog"); }
+        var was = panel.hidden; panel.hidden = false; paint();
+        if (was && full()) { panel.classList.remove("anim"); void panel.offsetWidth; panel.classList.add("anim"); }
+        mark(true); watch(true);
+      }
+      function close(refocus) {
+        clearTimeout(openTimer); clearTimeout(closeTimer); stopTail();
+        var back = refocus && (panel.contains(document.activeElement) || document.activeElement === document.body) ? (cur.btn || cur.anchor || null) : null;
+        mark(false);
+        cur.item = null; cur.list = null; cur.pinned = false; cur.back = false; busy = null; said = "";
+        if (mode === "preview") { paint(); } else { panel.hidden = true; panel.classList.remove("anim"); if (mode === "inline" && panel.parentNode) { panel.remove(); } }
+        cur.row = null; cur.btn = null; cur.anchor = null;
+        watch(false);
+        if (back && back.isConnected) { hush = true; back.focus(); hush = false; }
+      }
+      function pin() { if (!isOpen() || cur.pinned) { return; } cur.pinned = true; paint(); }
+      var watching = false, hush = false;
+      function watch(on) {
+        if (mode !== "float" || on === watching) { return; }
+        watching = on;
+        var f = on ? "addEventListener" : "removeEventListener";
+        window[f]("scroll", onMove, true); window[f]("resize", onMove);
+      }
+
+      /* Escape closes it first, before anything else that claims Escape: never from a terminal, nor from a modal dialog over it. */
+      function onKey(e) {
+        if (e.key !== "Escape" || mode === "preview" || !isOpen()) { return; }
+        var a = document.activeElement;
+        if (inTerminal(a) || inTerminal(e.target)) { return; }
+        if (a && a.closest && a.closest(".ls-dialog, [aria-modal=\"true\"]") && !panel.contains(a)) { return; }
+        e.preventDefault(); e.stopPropagation(); if (e.stopImmediatePropagation) { e.stopImmediatePropagation(); }
+        close(true);
+      }
+      /* A click away closes one that is not pinned. */
+      function onDown(e) {
+        if (!isOpen() || mode === "preview" || cur.pinned) { return; }
+        var t = e.target;
+        if (panel.contains(t) || (cur.row && cur.row.contains(t))) { return; }
+        close(false);
+      }
+      window.addEventListener("keydown", onKey, true);
+      document.addEventListener("pointerdown", onDown, true);
+      panel.addEventListener("pointerenter", function () { clearTimeout(closeTimer); });
+      panel.addEventListener("pointerleave", function () { later(); });
+      /* Using it pins it: a press inside an open peek keeps it. */
+      panel.addEventListener("pointerdown", function () { if (mode === "float" && isOpen() && !cur.pinned) { pin(); } });
+      panel.addEventListener("focusout", function () { setTimeout(function () { if (isOpen() && !cur.pinned && mode !== "preview" && !panel.contains(document.activeElement) && !(cur.row && cur.row.contains(document.activeElement))) { close(false); } }, 0); });
+      /* Tab off either end goes back to the row's peek button, or on past it. */
+      panel.addEventListener("keydown", function (e) {
+        if (e.key !== "Tab" || mode !== "float") { return; }
+        var f = focusables(panel), from = cur.btn || cur.anchor;
+        if (!f.length || !from) { return; }
+        if (e.shiftKey && document.activeElement === f[0]) { e.preventDefault(); from.focus(); }
+        else if (!e.shiftKey && document.activeElement === f[f.length - 1]) {
+          var all = focusables(document.body).filter(function (n) { return !panel.contains(n); }), i = all.indexOf(from), next = all[i + 1];
+          e.preventDefault(); close(false); (next || from).focus();
+        }
+      });
+      function later() {
+        clearTimeout(closeTimer);
+        if (!isOpen() || cur.pinned || mode === "preview") { return; }
+        closeTimer = setTimeout(function () { if (!cur.pinned && !panel.contains(document.activeElement) && !panel.matches(":hover") && !(cur.row && cur.row.matches(":hover"))) { close(false); } }, 220);
+      }
+
+      /* ---------- wiring a row ---------- */
+      function attach(row, get, opt) {
+        opt = opt || {};
+        var btn = opt.button || row.querySelector("[data-peek]");
+        if (!btn) {
+          btn = h("button", { type: "button", "class": "ls-peek-btn", "data-peek": "" }, [h("span", { "class": "ring", "aria-hidden": "true" }), h("span", { "class": "ls-vh", text: "Peek" })]);
+          (opt.into || row).appendChild(btn);
+        }
+        var target = opt.target || (row.hasAttribute("tabindex") ? row : row.querySelector("a[href], button:not([data-peek]), [tabindex]")) || row;
+        var sid = uid("ls-pk-s-"), sum = h("span", { "class": "ls-vh", id: sid });
+        row.appendChild(sum);
+        row.__peekBtn = btn; if (opt.after) { row.__peekAfter = opt.after; }
+        function item() { var it = get(); sum.textContent = it ? gist(it, local) : ""; return it; }
+        item();
+        btn.setAttribute("aria-controls", pid); btn.setAttribute("aria-expanded", "false");
+        if (mode === "float") { btn.setAttribute("aria-haspopup", "dialog"); }
+        if (!btn.getAttribute("aria-label")) { btn.setAttribute("aria-label", "Peek at " + titleOf(get() || {})); }
+        target.setAttribute("aria-describedby", [target.getAttribute("aria-describedby"), sid].filter(Boolean).join(" "));
+        target.setAttribute("aria-controls", pid);
+        var pointing = false;
+        function down() { pointing = true; document.addEventListener("pointerup", function up() { document.removeEventListener("pointerup", up, true); setTimeout(function () { pointing = false; }, 0); }, true); }
+        var mine = function () { return cur.row === row && isOpen(); };
+        var taken = function () { return isOpen() && cur.pinned && cur.row !== row; };
+        function enter() {
+          if (mode !== "float" || taken() || mine()) { clearTimeout(closeTimer); return; }
+          clearTimeout(openTimer);
+          openTimer = setTimeout(function () { if (row.matches(":hover") && !taken()) { show(item(), row); } }, delay);
+        }
+        function leave() { clearTimeout(openTimer); if (mine()) { later(); } }
+        function focusIn(e) {
+          /* Focus from a press is not a keyboard visit: the press itself decides (a sheet opened at pointerdown would take the click). */
+          if (pointing) { return; }
+          if (hush || panel.contains(e.target) || taken() || (mine() && cur.pinned)) { return; }
+          if (e.target === btn && mine()) { return; }
+          clearTimeout(openTimer); show(item(), row);
+        }
+        function focusOut() { setTimeout(function () { var a = document.activeElement; if (mine() && !cur.pinned && mode !== "preview" && !row.contains(a) && !panel.contains(a)) { close(false); } }, 0); }
+        function press(e) { e.preventDefault(); e.stopPropagation(); if (mine() && cur.pinned) { close(true); } else { show(item(), row, { pin: true }); } }
+        function tab(e) { if (e.key === "Tab" && !e.shiftKey && mine() && cur.pinned && mode !== "preview") { var f = focusables(panel)[0]; if (f) { e.preventDefault(); f.focus(); } } }
+        row.addEventListener("pointerenter", enter); row.addEventListener("pointerleave", leave); row.addEventListener("pointerdown", down);
+        row.addEventListener("focusin", focusIn); row.addEventListener("focusout", focusOut);
+        btn.addEventListener("click", press); btn.addEventListener("keydown", tab);
+        return function detach() {
+          row.removeEventListener("pointerenter", enter); row.removeEventListener("pointerleave", leave); row.removeEventListener("pointerdown", down);
+          row.removeEventListener("focusin", focusIn); row.removeEventListener("focusout", focusOut);
+          btn.removeEventListener("click", press); btn.removeEventListener("keydown", tab);
+          if (mine()) { close(false); }
+          sum.remove();
+        };
+      }
+
+      /* A fresh read of what is open: drawn again in place, keeping what you typed; a change of state is said politely. */
+      function set(item) {
+        if (!item) { return; }
+        if (cur.list && !cur.item) { return; }
+        if (!cur.item || cur.item.kind !== item.kind || cur.item.id !== item.id) { return; }
+        cur.item = item; if (item.tail) { tail = item.tail; }
+        var w = wordOf(item, local);
+        if (w !== lastWord) { live.textContent = titleOf(item) + ": " + w + (item.waitingFor ? ", waiting for " + item.waitingFor : "") + "."; lastWord = w; }
+        paint();
+      }
+      function setList(items) { if (cur.list) { cur.list = items || []; if (!cur.item) { live.textContent = cur.list.length + " waiting on you."; paint(); } } }
+      function destroy() { close(false); window.removeEventListener("keydown", onKey, true); document.removeEventListener("pointerdown", onDown, true); watch(false); panel.remove(); }
+      if (mode === "preview") { paint(); }
+      return {
+        el: panel, attach: attach, show: function (item, row, how) { return show(item, row, how); }, list: list, pin: pin, close: function () { close(true); }, set: set, setList: setList, destroy: destroy,
+        get item() { return cur.item; }, get pinned() { return cur.pinned; }, get open() { return isOpen(); }
+      };
+    }
+    NS.Peek = Peek;
   })();
 
   /* --- ProgressRing --- */
@@ -6557,7 +7341,7 @@
       function removing(r) {
         NS.Dialog({ danger: true, role: "alertdialog", title: "Remove " + r.id + "?", host: o.host, contained: o.contained,
           why: "It stops acting at once, and anything waiting to start under it, or waiting for your approval, is withdrawn. Its history stays in the journal.",
-          actions: [{ label: "Remove it", kind: "danger", disabledReason: disabledReason, cmd: line("trigger remove", [r.id]), onPress: function () { act("trigger remove", [r.id]); } }] }).open();
+          actions: [{ label: "Remove it", kind: "danger", disabledReason: disabledReason, cmd: line("trigger remove", [r.id]), busy: "removing\u2026", onPress: function () { return Promise.resolve().then(function () { return run("trigger remove", [r.id]); }).then(function () { return load(); }); } }] }).open();
       }
 
       function tried(ruleId, said) {

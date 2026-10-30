@@ -2024,6 +2024,8 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 
 
 
+
+
 /* ---------- Stage 14: what main's Studio built since the design ---------- */
 /* --- AskPane --- */
 .ls-ask { padding: 0 18px; }
@@ -2185,6 +2187,35 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 /* Long labels wrap at 320 rather than run off the screen, as the design system's forms do. */
 .ls-landings .ls-halo { white-space: normal; text-align: left; max-width: 100%; }
 
+/* --- LayoutEdit --- */
+/* LayoutEdit: main's Home edit layout (studio.css's .editbar, .panel and .chrome), for any page. Scoped under .ls-layout and
+   .ls-layout-bar so a page's own .panel rules stay its own. */
+.ls-layout { display: grid; gap: var(--space-6); min-width: 0; }
+.ls-layout > .panel { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-3); align-content: start; }
+.ls-layout > .panel.editing { padding: var(--space-3); border-radius: var(--radius-chip); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
+.ls-layout > .panel.editing.over { box-shadow: inset 0 0 0 2px var(--accent); }
+.ls-layout > .panel.dragging { opacity: .5; }
+[data-theme="hc-dark"] .ls-layout > .panel.editing, [data-theme="hc-light"] .ls-layout > .panel.editing { box-shadow: inset 0 0 0 2px var(--accent); }
+.ls-layout .chrome { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); }
+.ls-layout .chrome .grip { display: inline-flex; gap: var(--space-2); align-items: center; cursor: grab; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--accent-text); }
+.ls-layout .chrome .grip.still { cursor: default; }
+.ls-layout .chrome .nudge { display: inline-flex; gap: 2px; }
+.ls-layout .chrome button { min-width: 36px; min-height: 36px; border: 0; border-radius: var(--radius-chip); background: none; color: var(--ink); box-shadow: inset 0 0 0 1px var(--control-edge); font: inherit; cursor: pointer; }
+.ls-layout .chrome button:hover:not(:disabled):not([aria-disabled="true"]) { background: var(--tint-hover-c); }
+.ls-layout .chrome button:disabled { opacity: .4; cursor: default; }
+.ls-layout .chrome button[aria-disabled="true"] { color: var(--muted); cursor: default; box-shadow: inset 0 0 0 1px var(--rule); text-decoration: line-through; }
+.ls-layout .chrome button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ls-layout .chrome .hidebtn { padding: 0 14px; margin-left: auto; }
+.ls-layout .chrome .hidewrap { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-left: auto; }
+.ls-layout .chrome .hidewrap .hidebtn { margin-left: 0; }
+.ls-layout .chrome .why { font-size: 12.5px; color: var(--muted); }
+.ls-layout-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-5); margin: 0 0 var(--space-6); padding: var(--space-3) var(--space-4); border-radius: var(--radius-chip); background: var(--tint-picked-c); box-shadow: inset 0 0 0 1px var(--accent); }
+.ls-layout-bar[hidden] { display: none; }
+.ls-layout-bar p { margin: 0; flex: 1 1 260px; color: var(--ink-strong); }
+.ls-layout-bar > .ls-cmd { flex: 1 1 100%; overflow-wrap: anywhere; }
+[data-theme="hc-dark"] .ls-layout-bar, [data-theme="hc-light"] .ls-layout-bar { box-shadow: inset 0 0 0 2px var(--accent); }
+.ls-layout-btn { display: inline-flex; }
+
 /* --- ListToolbar --- */
 /* Main's own <style> block, scoped under the toolbar. */
 .ls-ltool { display: grid; gap: 8px; margin-bottom: 14px; }
@@ -2242,6 +2273,122 @@ body:has(.ls-dialog) .ls-alert .bar { display: none; }
 @media (prefers-reduced-motion: reduce) { .ls-mini .st.cur i { animation: none !important; } .ls-mini .seg.into::after { display: none; } }
 /* Main draws it only inside RunBoard, whose .ls-board gives it --c and --cgf; the same here, so it stands alone. */
 .ls-mini { --c: var(--accent); --cgf: color-mix(in srgb, var(--c) calc(var(--glow-on) * 100%), transparent); }
+
+/* --- Peek --- */
+/* Peek: the overlay over any piece of work. Floating beside its row on the menu layer; a sheet from the foot below 600px;
+   an expansion under the row in Minimal; a pane's preview in Pure. Its edge and word carry the item's state family. */
+.ls-peek { --c: var(--rest); position: fixed; z-index: var(--z-menu); box-sizing: border-box; width: min(400px, calc(100vw - 16px)); max-height: calc(100vh - 16px); overflow: auto; overscroll-behavior: contain;
+  padding: 12px 14px 10px; background: var(--surface); color: var(--ink); font-family: var(--font-sans); font-size: 13.5px; line-height: 1.45; text-align: left;
+  box-shadow: inset 3px 0 0 var(--c), inset 0 0 0 1px var(--rule), 0 18px 44px -14px rgb(0 0 0 / .55), 0 0 30px -18px var(--glow); }
+.ls-peek[hidden] { display: none; }
+.ls-peek:focus { outline: none; }
+.ls-peek:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ls-peek.moving { --c: var(--moving); }
+.ls-peek.needs { --c: var(--needs); }
+.ls-peek.bad { --c: var(--bad); }
+.ls-peek.good { --c: var(--good); }
+/* Pinned: the accent along the top as well, and a Close button in the head that says so in words. */
+.ls-peek.pinned { box-shadow: inset 3px 0 0 var(--c), inset 0 2px 0 var(--accent), inset 0 0 0 1px var(--rule), 0 18px 44px -14px rgb(0 0 0 / .55), 0 0 30px -18px var(--glow); }
+.ls-peek > .in { display: grid; gap: 10px; min-width: 0; }
+.ls-peek .hd { display: grid; gap: 6px; min-width: 0; }
+.ls-peek .hd .name { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-width: 0; padding-right: 76px; }
+.ls-peek:not(.pinned):not(.inline) .hd .name { padding-right: 0; }
+.ls-peek .ttl { display: grid; gap: 2px; margin: 0; min-width: 0; flex: 1 1 200px; font-size: 16px; font-weight: 400; line-height: 1.3; color: var(--ink-strong); overflow-wrap: anywhere; }
+.ls-peek .ttl .kind { font-size: 11.5px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+.ls-peek .ttl.count { display: block; }
+.ls-peek .ttl .no { font-family: var(--font-mono); font-size: 16px; color: var(--needs-text); margin-right: 2px; }
+.ls-peek .hd .x { position: absolute; top: 8px; right: 8px; display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 10px; border: 0; background: none; color: var(--ink-soft);
+  font: inherit; font-size: 12px; font-weight: 500; letter-spacing: .18em; text-transform: uppercase; cursor: pointer; box-shadow: inset 0 0 0 1px var(--control-edge); }
+.ls-peek .hd .x:hover { color: var(--ink-strong); background: var(--tint-hover-c); }
+.ls-peek .hd .x:focus-visible, .ls-peek .back:focus-visible, .ls-peek .wlist .t:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ls-peek .back { justify-self: start; min-height: 28px; padding: 0; border: 0; background: none; color: var(--accent-text); font: inherit; font-size: 13px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.ls-peek .facts { margin: 0; font-family: var(--font-mono); font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.ls-peek .calm, .ls-peek .quiet { margin: 0; color: var(--muted); }
+.ls-peek .note { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+.ls-peek .note.bad { color: var(--bad-text); }
+/* A session's last lines: the terminal's own ground and ink, read-only, wrapped so nothing scrolls sideways. */
+.ls-peek .well { display: grid; min-width: 0; background: var(--term-bg); box-shadow: inset 0 0 0 1px var(--rule); }
+.ls-peek .well .cap { margin: 0; padding: 5px 10px 0; font-family: var(--font-mono); font-size: 11px; color: var(--term-fg); opacity: 1; }
+.ls-peek .tail { margin: 0; padding: 4px 10px 8px; font-family: var(--font-mono); font-size: 12px; line-height: 1.45; color: var(--term-fg); white-space: pre-wrap; overflow-wrap: anywhere; min-height: 3lh; }
+.ls-peek .well .foot { box-shadow: inset 0 1px 0 var(--rule); background: var(--surface); }
+.ls-peek .well .foot .ls-sstrip { padding: 4px 10px; gap: 2px 12px; }
+.ls-peek .wait { display: grid; gap: 4px; padding: 8px 10px; background: var(--needs-wash); box-shadow: inset 3px 0 0 var(--needs); }
+.ls-peek .wait p { margin: 0; color: var(--needs-text); overflow-wrap: anywhere; }
+.ls-peek .wait b { font-weight: 600; }
+.ls-peek .now { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; }
+.ls-peek .now .k { grid-column: 1 / -1; font-size: 11.5px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+.ls-peek .now p { margin: 0; overflow-wrap: anywhere; }
+.ls-peek .now b { font-weight: 500; color: var(--ink-strong); }
+.ls-peek .mini { min-width: 0; overflow: hidden; }
+/* A crew node: its branch, what it did last, and Say to it. */
+.ls-peek .branch { margin: 0; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.ls-peek .branch code { font-family: var(--font-mono); font-size: 12px; color: var(--ink-soft); }
+.ls-peek .last { display: grid; gap: 4px; padding: 8px 10px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--rule); min-width: 0; }
+.ls-peek .last .cap { margin: 0; font-size: 11.5px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+.ls-peek .jl { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
+.ls-peek .jl li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 10px; font-size: 13px; color: var(--ink); }
+.ls-peek .jl li.none { grid-template-columns: minmax(0, 1fr); color: var(--muted); }
+.ls-peek .jl time { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); padding-top: 1px; }
+.ls-peek .jl span { overflow-wrap: anywhere; }
+.ls-peek .jl li.f-bad span { color: var(--bad-text); }
+.ls-peek .jl li.f-needs span { color: var(--needs-text); }
+.ls-peek .quiet-n { margin: 0; padding: 6px 10px; background: var(--needs-wash); color: var(--needs-text); box-shadow: inset 3px 0 0 var(--needs); }
+.ls-peek .ls-say { padding: 10px 12px; }
+.ls-peek .ls-say .row .ls-text { flex-basis: 200px; }
+.ls-peek .ls-gate.compact { padding: 10px 12px; }
+.ls-peek .ls-gate.compact .q { font-size: 15px; }
+.ls-peek .ls-gate .ls-answers { gap: 8px 18px; }
+/* The idea's stages always in their short form here: the dots and one line. */
+.ls-peek .ls-istages li .nm, .ls-peek .ls-istages li .w { display: none; }
+.ls-peek .ls-istages-wrap .cap { display: block; }
+.ls-peek .ls-qset.one .q { padding: 10px 12px; }
+.ls-peek .ls-qset.one .q legend { font-size: 15px; }
+.ls-peek .ls-qset .ls-answers.flush { margin: 4px 0 0; }
+.ls-peek .acts { display: flex; flex-wrap: wrap; gap: 8px 18px; padding-top: 2px; }
+.ls-peek .ls-said { margin: 0; font-size: 13.5px; overflow-wrap: anywhere; }
+.ls-peek .hint { margin: 0; padding-top: 6px; box-shadow: inset 0 1px 0 var(--rule); font-family: var(--font-mono); font-size: 11px; color: var(--subtle); }
+/* On hover a button's command floats under it; the last row keeps room for it inside the panel. */
+:root:not([data-commands="always"]):not([data-commands="never"]) .ls-peek > .in { padding-bottom: 22px; }
+:root:not([data-commands="always"]):not([data-commands="never"]) .ls-peek.framed > .in, :root:not([data-commands="always"]):not([data-commands="never"]) .ls-peek.inline > .in { padding-bottom: 0; }
+/* The waiting list. */
+.ls-peek .wlist { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.ls-peek .wlist .w { --c: var(--needs); display: grid; gap: 4px; padding: 8px 10px; background: var(--surface-2); box-shadow: inset 3px 0 0 var(--c); }
+.ls-peek .wlist .w.bad { --c: var(--bad); }
+.ls-peek .wlist .top { display: flex; flex-wrap: wrap; gap: 2px 10px; justify-content: space-between; }
+.ls-peek .wlist .kind { font-size: 11px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+.ls-peek .wlist .age { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+.ls-peek .wlist .t { margin: 0; padding: 0; border: 0; background: none; color: var(--ink-strong); font: inherit; font-size: 14.5px; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+.ls-peek .wlist button.t:hover { text-decoration: underline; text-underline-offset: 3px; }
+.ls-peek .wlist .row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 14px; }
+/* The sheet: below 600px it rises from the foot of the screen, full width. */
+.ls-peek.sheet { left: 0; right: 0; bottom: 0; top: auto; width: auto; max-height: min(78vh, 640px); padding: 14px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  box-shadow: inset 0 3px 0 var(--c), inset 0 0 0 1px var(--rule), 0 -18px 44px -14px rgb(0 0 0 / .55); }
+.ls-peek.sheet.pinned { box-shadow: inset 0 3px 0 var(--c), inset 0 5px 0 var(--accent), inset 0 0 0 1px var(--rule), 0 -18px 44px -14px rgb(0 0 0 / .55); }
+/* Minimal: a short block under the row, in the flow. Pure: the view pane's preview, flat, no shadow. */
+.ls-peek.inline, .ls-peek.preview { position: relative; z-index: auto; width: auto; max-height: none; overflow: visible; }
+.ls-peek.inline { margin: 4px 0 8px; flex-basis: 100%; box-shadow: inset 3px 0 0 var(--c), inset 0 0 0 1px var(--rule); }
+.ls-peek.preview { box-shadow: inset 3px 0 0 var(--c), inset 0 0 0 1px var(--rule); }
+.ls-peek.preview .hd .name, .ls-peek.inline .hd .name { padding-right: 76px; }
+/* framed: drawn in place exactly as it floats, for a page that shows it (a catalogue, a guide). */
+.ls-peek.framed { position: relative; z-index: auto; width: auto; max-width: 400px; max-height: none; }
+.ls-peek.framed:not(.pinned) { box-shadow: inset 3px 0 0 var(--c), inset 0 0 0 1px var(--rule), 0 18px 44px -14px rgb(0 0 0 / .55), 0 0 30px -18px var(--glow); }
+.ls-peek.framed.pinned { box-shadow: inset 3px 0 0 var(--c), inset 0 2px 0 var(--accent), inset 0 0 0 1px var(--rule), 0 18px 44px -14px rgb(0 0 0 / .55), 0 0 30px -18px var(--glow); }
+/* Full motion only: a short fade and slide in. */
+.ls-peek.anim { animation: ls-peek-in var(--dur-instant) var(--ease-out); }
+.ls-peek.sheet.anim { animation-name: ls-peek-up; }
+@keyframes ls-peek-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes ls-peek-up { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .ls-peek.anim { animation: none; } }
+:root[data-motion="reduced"] .ls-peek.anim, :root[data-motion="none"] .ls-peek.anim, :root[data-mode="pure"] .ls-peek.anim { animation: none; }
+/* The row's peek button: a small halo ring, 24px at least, that pins the peek. */
+.ls-peek-btn { display: inline-grid; place-items: center; flex: none; width: 32px; height: 32px; min-width: 24px; padding: 0; border: 0; background: none; color: var(--accent); cursor: pointer; vertical-align: middle; }
+.ls-peek-btn .ring { width: 16px; height: 16px; border-radius: var(--radius-round); box-shadow: inset 0 0 0 1.5px var(--control-edge); position: relative; }
+.ls-peek-btn .ring::after { content: ""; position: absolute; inset: 5px; border-radius: var(--radius-round); background: var(--accent); }
+.ls-peek-btn:hover .ring, .ls-peek-btn[aria-expanded="true"] .ring { box-shadow: inset 0 0 0 1.5px var(--accent), 0 0 var(--glow-sm) var(--glow); }
+.ls-peek-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ls-peek.framed.sheet { position: absolute; left: 0; right: 0; bottom: 0; top: auto; width: auto; max-width: none; max-height: 78%; overflow: auto; }
+.ls-peek.framed.sheet:not(.pinned) { box-shadow: inset 0 3px 0 var(--c), inset 0 0 0 1px var(--rule), 0 -18px 44px -14px rgb(0 0 0 / .55); }
+.ls-peek.framed.sheet.pinned { box-shadow: inset 0 3px 0 var(--c), inset 0 5px 0 var(--accent), inset 0 0 0 1px var(--rule), 0 -18px 44px -14px rgb(0 0 0 / .55); }
 
 /* --- ProgressRing --- */
 .ls-progress { position: relative; width: 120px; height: 120px; }

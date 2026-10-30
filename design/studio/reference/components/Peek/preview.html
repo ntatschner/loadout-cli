@@ -1,0 +1,212 @@
+<!-- @dsCard group="Overlays" height=3900 width=1200 subtitle="One overlay over any session, run, idea, task or crew node: its live state and main actions, without leaving the page" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Peek</title>
+<style>
+  body { margin: 0; padding: 20px 24px 60px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  h2.sec { margin: 34px 0 6px; font-size: 13px; font-weight: 500; letter-spacing: .24em; text-transform: uppercase; color: var(--ink-soft); }
+  h2.sec:first-child { margin-top: 0; }
+  p.say { margin: 0 0 14px; max-width: 76ch; font-size: 14px; color: var(--muted); }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .pairs { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 28px 24px; align-items: start; }
+  .col { min-width: 0; }
+  /* A list of work, as a page lists it. */
+  .rows { display: grid; gap: 2px; max-width: 520px; margin: 0; padding: 0; list-style: none; }
+  .rows > li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-height: 44px; padding: 4px 8px 4px 12px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule); }
+  .rows > li:hover { background: var(--tint-hover-c); }
+  .rows a { flex: 1 1 200px; min-width: 0; color: var(--ink-strong); text-decoration: none; overflow-wrap: anywhere; }
+  .rows a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .rows a:focus-visible, .chip:focus-visible, .pane-list li:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .rows .ls-sig { flex: none; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; max-width: 520px; margin-bottom: 10px; padding: 8px 12px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule); }
+  .bar .m { font-size: 12px; font-weight: 500; letter-spacing: .22em; text-transform: uppercase; color: var(--ink-soft); }
+  .chip { display: inline-flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 12px; border: 0; background: var(--needs-wash); color: var(--needs-text); font: inherit; font-size: 13.5px; cursor: pointer; box-shadow: inset 3px 0 0 var(--needs); }
+  .chip b { font-family: var(--font-mono); font-weight: 500; }
+  .log { margin: 10px 0 0; max-width: 520px; font-family: var(--font-mono); font-size: 12px; color: var(--muted); min-height: 1.4em; }
+  /* Pure: a list and its view pane. */
+  .pane { display: grid; grid-template-columns: minmax(0, 260px) minmax(0, 1fr); gap: 0; max-width: 900px; background: var(--ground); box-shadow: inset 0 0 0 1px var(--rule); }
+  .pane-list { margin: 0; padding: 6px 0; list-style: none; box-shadow: inset -1px 0 0 var(--rule); }
+  .pane-list li { display: flex; gap: 8px; align-items: baseline; padding: 6px 12px; font-size: 14px; cursor: default; }
+  .pane-list li[aria-selected="true"] { background: var(--tint-picked-c); box-shadow: inset 3px 0 0 var(--accent); color: var(--ink-strong); }
+  .pane-list kbd { font-family: var(--font-mono); font-size: 11px; color: var(--subtle); }
+  .pane-view { min-width: 0; padding: 10px; }
+  .pane-keys { grid-column: 1 / -1; margin: 0; padding: 6px 12px; font-family: var(--font-mono); font-size: 11.5px; color: var(--subtle); box-shadow: inset 0 1px 0 var(--rule); }
+  @media (max-width: 600px) { .pane { grid-template-columns: minmax(0, 1fr); } .pane-list { box-shadow: inset 0 -1px 0 var(--rule); } }
+  /* A phone: where the sheet rises from the foot. */
+  .phone { position: relative; width: min(100%, 320px); height: 600px; overflow: hidden; background: var(--ground); box-shadow: inset 0 0 0 1px var(--rule); }
+  .phone .rows { padding: 12px 0 0; }
+  .phone .rows > li { margin: 0 12px; }
+  .term-wrap { max-width: 720px; }
+  .term-wrap .ls-term .screen { height: 150px; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 2px; max-width: 720px; margin: 0 0 2px; padding: 0; list-style: none; }
+  .tabs > li { display: flex; align-items: center; gap: 4px; padding: 0 4px 0 12px; min-height: 40px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule); }
+  .tabs a { color: var(--ink); text-decoration: none; font-size: 13.5px; }
+  .tabs a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+</style>
+</head>
+<body class="ls">
+<h2 class="sec">Each body: as it opens on hover or focus, and pinned</h2>
+<p class="say">Unpinned, it is a glance: it closes when the pointer or focus leaves. Pinned (the row's peek button, or pressing anything inside it), it is a dialog that stays, with Close, and Tab moves into it.</p>
+<div class="pairs" id="bodies"></div>
+
+<h2 class="sec">Live: hover a row, focus it, or press its peek button</h2>
+<p class="say">Hover opens it after 350ms beside the row, kept on screen; focus opens it at once. The peek button pins it. Escape closes it first. A click away closes one that is not pinned. Below 600px wide it is a sheet from the foot.</p>
+<div class="bar"><span class="m">Mode bar</span><button type="button" class="chip" id="count"><b>4</b> waiting on you</button></div>
+<ul class="rows" id="live"></ul>
+<p class="log" id="log" role="status"></p>
+
+<h2 class="sec">The waiting list: the mode bar's count</h2>
+<p class="say">Every waiting item, oldest first, each with its main action. A run or an idea opens its own peek in the same panel, with the way back. Pressing the count again, or Escape, closes it.</p>
+<div class="pairs"><div class="col" id="wl"></div><div class="col" id="wl2"></div></div>
+
+<h2 class="sec">Minimal: a short block under the row</h2>
+<p class="say">In Minimal the peek is an expansion in the column, before the frame opens: four lines, the state and the actions. It opens on focus or with the peek button, never on hover, so nothing moves under the pointer.</p>
+<ul class="rows" id="minimal"></ul>
+
+<h2 class="sec">Pure Focus: the view pane's preview</h2>
+<p class="say">J and K move through the list; the pane shows each one's peek without pressing Enter. Flat, with no motion.</p>
+<div class="pane" id="pure"><ul class="pane-list" id="pure-list" role="listbox" aria-label="Needs you, then running" tabindex="0"></ul><div class="pane-view" id="pure-view"></div><p class="pane-keys">J K move · Enter opens · 1 to 9 act</p></div>
+
+<h2 class="sec">Below 600px: the sheet from the foot</h2>
+<div class="pairs">
+  <div class="col"><p class="lab">A session, as it opens</p><div class="phone" id="ph1"></div></div>
+  <div class="col"><p class="lab">A run, pinned</p><div class="phone" id="ph2"></div></div>
+</div>
+
+<h2 class="sec">A terminal: Escape is left to it</h2>
+<p class="say">Pin the peek of the hidden tab, then click in the terminal and press Escape: the terminal takes it, and the peek stays. Hovering a tab while you type does not open a peek over the terminal.</p>
+<div class="term-wrap"><ul class="tabs" id="tabs"></ul><div id="term"></div></div>
+
+<script>
+(function () {
+  var S = window.LoadoutStudio, NOW = Date.parse("2026-10-27T12:00:00Z"), MIN = 60000;
+  function el(tag, attrs, kids) { var e = document.createElement(tag); Object.keys(attrs || {}).forEach(function (k) { if (k === "text") { e.textContent = attrs[k]; } else { e.setAttribute(k, attrs[k]); } }); (kids || []).forEach(function (c) { e.appendChild(typeof c === "string" ? document.createTextNode(c) : c); }); return e; }
+  var status = { version: 1, at: "2026-10-27T11:59:52Z", refreshSeconds: 30, terminal: "off", wrapping: false, model: "Opus 5.5",
+    context: { usedPercent: 46, inputTokens: 92000, windowSize: 200000, uncachedTokens: 1100, cacheReadTokens: 88000, cacheWriteTokens: 2900, outputTokens: 800 },
+    cost: { usd: 2.41, durationMs: 1500000, linesAdded: 120, linesRemoved: 18 }, limits: { fiveHour: { usedPercent: 38, resetsAt: "2026-10-27T15:10:00Z" }, sevenDay: null, spend: null },
+    project: "loadout-cli", specialists: ["role.implementer", "language.typescript"] };
+  var sessWait = { kind: "session", id: "4f2a", title: "Port the peek to Svelte", project: "loadout-cli", agent: "claude", mode: "implement", since: NOW - 6 * MIN,
+    waitingFor: "approval to run npm test -- peek", status: status,
+    tail: { running: true, at: "12:00:04", cols: 100, rows: 30, lines: ["Edited studio/src/lib/components/Peek.svelte (+212 −0)", "Edited studio/src/lib/peek.ts (+64 −3)", "", "I'd like to run the component tests now.", "", "  Bash  npm test -- peek", "", "Do you want to proceed?", "› 1. Yes", "  2. Yes, and don't ask again for npm test", "  3. No, and tell Claude what to do differently"] } };
+  var sessWork = { kind: "session", id: "9c1d", title: "Tidy the release notes", project: "loadout-cli", agent: "claude", since: NOW - 22 * MIN, status: null,
+    tail: { running: true, at: "12:00:01", lines: ["Reading CHANGELOG.md", "Writing the 0.110 entry", "  - The peek: a look over any session, run, idea or task", "  - Live work first, everywhere work is listed"] } };
+  var runAsk = { kind: "run", id: "20261027-1104-7d2e", goal: "Ship the waiting count everywhere", team: "release-crew", project: "loadout-cli", round: 3, rounds: 6, elapsed: "54 min", since: NOW - 14 * MIN,
+    line: { rounds: [{ word: "done", nodes: [["planner", "done"], ["implementer", "done"]] }, { word: "done", nodes: [["implementer", "done"], ["reviewer", "done"]] }, { word: "waiting for you", nodes: [["implementer", "waiting for you"]] }], running: true },
+    working: null,
+    gate: { kind: "question", gate: "gate-5e1d9a20", node: "lead", asked: "14 min ago", question: "Count trigger approvals in the mode bar even when the Teams page is closed?", options: ["Yes, fetch them where the count is made", "No, only on Teams"], recommendation: "Yes, fetch them where the count is made" },
+    spend: { spent: 3.12, cap: 8, projected: 6.4, rate: "$0.98 a round" } };
+  var runWork = { kind: "run", id: "20261027-0930-1b44", goal: "Make every list live first", team: "release-crew", project: "loadout-cli", round: 4, rounds: 6, elapsed: "2 h 10 min",
+    line: { rounds: [{ word: "done", nodes: [["planner", "done"]] }, { word: "done", nodes: [["implementer", "done"], ["reviewer", "done"]] }, { word: "done", nodes: [["implementer", "done"]] }, { word: "running", nodes: [["implementer", "working"], ["tester", "done"]] }], running: true },
+    working: { node: "implementer", role: "role.implementer", word: "working", doing: "Editing studio/src/lib/liveFirst.ts" },
+    spend: { spent: 5.06, cap: 12, projected: 9.1, rate: "$1.21 a round" } };
+  var idea = { kind: "idea", id: "studio-layouts", title: "Keep layouts in Loadout's config", project: "loadout-cli", stage: "Answering", round: 2, since: NOW - 40 * MIN,
+    questions: [{ id: "Q1", question: "Should sizes follow you too?", answer: "No, sizes stay in this browser" },
+      { id: "Q2", question: "When an old Lens or Map layout exists, which wins?", why: "Home's Lens and Map are kept under their own keys today.", options: ["The new setting, once written", "The old keys, always", "Ask the first time"], recommendation: "The new setting, once written" },
+      { id: "Q3", question: "May Minimal reorder its zones, or only hide them?", options: ["Only hide", "Reorder too"], recommendation: "Only hide" }] };
+  var task = { kind: "task", id: "studio-workflow", title: "Studio: what you came for, first, in every mode", state: "open", project: "loadout-cli", taskKind: "feature", declaredBy: "studio design", declaredAt: "27 Oct",
+    note: "Designed in design/studio/WORKFLOW.md: live work first everywhere, one waiting count, a peek over any piece of work." };
+  var blocked = { kind: "task", id: "tail-endpoint", title: "A read-only tail of a hosted session", state: "blocked", project: "loadout-cli", declaredBy: "nigel", declaredAt: "26 Oct",
+    note: "Blocked: the daemon's buffer keeps escapes; it needs a plain-text copy first." };
+  var nodeOpen = { kind: "node", id: "20261027-0930-1b44/implementer", run: "20261027-0930-1b44", node: "implementer", role: "role.implementer", model: "Opus 5.5", goal: "Make every list live first", turns: 7,
+    branch: "team/20261027-0930-1b44/implementer", say: { state: "open", minutesLeft: 24 },
+    journal: [["11:52", "Read studio/src/lib/state.svelte.ts"], ["11:55", "Wrote liveFirst() with the four groups"], ["11:58", "Ran npm test -- liveFirst: 14 passed"], ["12:00", "Editing studio/src/lib/liveFirst.ts"]] };
+  var nodeQuiet = { kind: "node", id: "20261027-1104-7d2e/tester", run: "20261027-1104-7d2e", node: "tester", role: "role.tester", model: "Sonnet 5", goal: "Ship the waiting count everywhere", turns: 3,
+    branch: "team/20261027-1104-7d2e/tester", quiet: "12 min", say: { state: "locked" },
+    journal: [["11:41", "Started the Playwright suite"], ["11:44", "3 of 9 specs failed: mode bar count", "bad"], ["11:46", "Waiting on the dev server"]] };
+  var approval = { kind: "approval", id: "ap-20261027-a41c", title: "Review the outside pull request #212", rule: "review-outside-pulls", project: "starstats", since: NOW - 31 * MIN, detail: "writes: comments on the PR" };
+
+  function word(it) { if (it.kind === "node") { return it.quiet ? "quiet" : "working"; } return it.kind === "task" ? it.state : it.kind === "run" ? (it.gate ? "needs a decision" : "running") : it.waitingFor || it.kind === "idea" ? "waiting for you" : "working"; }
+  function log(t) { document.getElementById("log").textContent = t; }
+  function later(words, ms) { return new Promise(function (ok) { setTimeout(function () { ok(words); }, ms || 700); }); }
+  var acts = {
+    now: NOW,
+    onOpen: function (it) { log("Open " + (it.title || it.goal) + ", in the mode you are in"); },
+    onTypeHere: function (it) { log("Type here: " + it.title + "'s terminal, with the keyboard in it"); },
+    onOpenBeside: function (it) { log("Open beside: " + it.title); },
+    onEnd: function (it) { log("End session…: the page asks first"); },
+    onAnswer: function (it, a) { log("Answered " + it.id + ": " + a); },
+    onHold: function () { return later("It holds after this round"); },
+    onCarryOn: function () { return later(); },
+    onStop: function () { return later("It stops after this round"); },
+    onAnswerIdea: function (it, x, a) { return later(); },
+    onRefine: function () { return later(); },
+    onStart: function () { return later("Started a session on it"); },
+    onHistory: function (it) { log("History: " + it.title); },
+    onApprove: function () { return later("Approved; the run starts"); },
+    onSay: function (it, m) { log("team say " + it.run + " --node " + it.node + ": " + m); }
+  };
+  function opts(extra) { return Object.assign({}, acts, extra || {}); }
+
+  /* Each body, unpinned and pinned, drawn in place as it floats. */
+  var bodies = document.getElementById("bodies");
+  [[sessWait, "A session waiting for you"], [sessWork, "A session working"], [runAsk, "A run that asks"], [runWork, "A run working"], [idea, "An idea with questions open"], [task, "A task"], [nodeQuiet, "A crew node, quiet and locked"], [nodeOpen, "A crew node, unlocked"]].forEach(function (pair, i) {
+    var col = el("div", { "class": "col" }, [el("p", { "class": "lab", text: pair[1] + (i % 2 ? ", pinned" : ", as it opens") })]);
+    var box = el("div"); col.appendChild(box); bodies.appendChild(col);
+    var p = S.Peek(opts({ mode: "preview", framed: true, container: box }));
+    p.show(pair[0], null, { pin: i % 2 === 1 });
+  });
+
+  /* The live list. */
+  var live = S.Peek(opts({ tail: function (it) { return it.tail; }, journal: function (it) { return it.journal; }, tailEvery: 0 }));
+  var liveItems = [sessWait, sessWork, runAsk, runWork, idea, task, blocked, nodeOpen];
+  var ul = document.getElementById("live");
+  liveItems.forEach(function (it) {
+    var li = el("li", {}, [el("a", { href: "#" + it.id, text: it.title || it.goal }), S.Signal(word(it))]);
+    li.querySelector("a").addEventListener("click", function (e) { e.preventDefault(); log("Open " + (it.title || it.goal)); });
+    ul.appendChild(li); live.attach(li, function () { return it; });
+  });
+  var waiting = [runAsk, sessWait, idea, approval];
+  var count = document.getElementById("count");
+  count.addEventListener("click", function () { live.list(waiting, count); });
+
+  /* The waiting list, drawn in place; and one item opened from it. */
+  var wl = S.Peek(opts({ mode: "preview", framed: true, container: document.getElementById("wl") })); wl.list(waiting);
+  var wl2 = S.Peek(opts({ mode: "preview", framed: true, container: document.getElementById("wl2") })); wl2.list(waiting);
+  setTimeout(function () { var b = document.querySelector("#wl2 .wlist li:first-child button.t"); if (b) { b.click(); } }, 0);
+
+  /* Minimal. */
+  var mini = S.Peek(opts({ mode: "inline", tail: function (it) { return it.tail; }, tailEvery: 0 }));
+  var mul = document.getElementById("minimal"), firstRow = null;
+  [sessWait, runWork, task].forEach(function (it) {
+    var li = el("li", {}, [el("a", { href: "#" + it.id, text: it.title || it.goal }), S.Signal(word(it))]);
+    li.querySelector("a").addEventListener("click", function (e) { e.preventDefault(); });
+    mul.appendChild(li); mini.attach(li, function () { return it; }); if (!firstRow) { firstRow = li; }
+  });
+  mini.show(sessWait, firstRow, { pin: true });
+
+  /* Pure: J and K preview in the pane. */
+  var pureItems = [runAsk, sessWait, idea, runWork, task], at = 0;
+  var pure = S.Peek(opts({ mode: "preview", container: document.getElementById("pure-view") }));
+  var pl = document.getElementById("pure-list");
+  pureItems.forEach(function (it, i) { pl.appendChild(el("li", { role: "option", "aria-selected": i === 0 ? "true" : "false" }, [el("kbd", { text: String(i + 1) }), it.title || it.goal])); });
+  function pick(i) { at = (i + pureItems.length) % pureItems.length; Array.prototype.forEach.call(pl.children, function (li, n) { li.setAttribute("aria-selected", n === at ? "true" : "false"); }); pure.show(pureItems[at]); }
+  pl.addEventListener("keydown", function (e) { if (e.key === "j" || e.key === "ArrowDown") { e.preventDefault(); pick(at + 1); } if (e.key === "k" || e.key === "ArrowUp") { e.preventDefault(); pick(at - 1); } });
+  pick(0);
+
+  /* The sheet, in two phones. */
+  function phone(id, it, pin) {
+    var ph = document.getElementById(id);
+    var rows = el("ul", { "class": "rows" }, [el("li", {}, [el("a", { href: "#", text: it.title || it.goal }), S.Signal(word(it))]), el("li", {}, [el("a", { href: "#", text: "Tidy the release notes" }), S.Signal("working")])]);
+    ph.appendChild(rows);
+    S.Peek(opts({ mode: "preview", framed: "sheet", container: ph })).show(it, null, { pin: pin });
+  }
+  phone("ph1", sessWait, false); phone("ph2", runAsk, true);
+
+  /* The terminal. */
+  var t = S.Terminal({ title: "Tidy the release notes", project: "loadout-cli", agent: "claude", state: "working", size: [100, 8], lines: ["Reading CHANGELOG.md", "Writing the 0.110 entry"] });
+  document.getElementById("term").appendChild(t.el);
+  var screen = t.el.querySelector(".screen");
+  screen.addEventListener("keydown", function (e) { if (e.key === "Escape") { t.write([["^[ Escape reached the terminal; the peek stayed open", "fg-bright-black"]]); } });
+  var tp = S.Peek(opts({ tail: function (it) { return it.tail; }, tailEvery: 0 }));
+  var tabs = document.getElementById("tabs");
+  [[sessWork, "in the pane"], [sessWait, "hidden tab"]].forEach(function (pair) {
+    var li = el("li", {}, [el("a", { href: "#", text: pair[0].title + " · " + pair[1] })]);
+    li.querySelector("a").addEventListener("click", function (e) { e.preventDefault(); });
+    tabs.appendChild(li); tp.attach(li, function () { return pair[0]; });
+  });
+})();
+</script>
+</body>
+</html>

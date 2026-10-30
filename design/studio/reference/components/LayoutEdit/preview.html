@@ -1,0 +1,77 @@
+<!-- @dsCard group="Pages" height=1180 width=1200 subtitle="Edit layout on any page and mode: drag a section by its name or use its arrows, hide it, add it back, reset; kept as studio-layouts" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LayoutEdit</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .hd { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 0 0 var(--space-5); }
+  .head h1 { margin: 0; font-size: 28px; font-weight: 300; color: var(--ink-strong); }
+  .head .fact { font-size: 13.5px; color: var(--muted); } .head .fact.need { color: var(--needs-text); }
+  .head .grow { flex: 1 1 auto; }
+  .page { margin: 0 0 40px; padding: 0 0 24px; border-bottom: 1px solid var(--rule); }
+  .row { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 14px; }
+  .row li { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; }
+  .calm { margin: 0; color: var(--muted); font-size: 14px; }
+  .said { margin: 8px 0 0; font-family: var(--font-mono); font-size: 12px; color: var(--ink-soft); overflow-wrap: anywhere; }
+  .two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .two > .wide { grid-column: 1 / -1; }
+  @media (max-width: 720px) { .two { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 480px) { body { padding: 16px; } }
+</style>
+</head>
+<body class="ls">
+<p class="hd">Sessions, in Default, being edited: Waiting on you holds live work, so it can move but not hide; History is hidden</p>
+<div class="page" id="a"></div>
+<p class="hd">Teams, in Team Focus, as saved: Ended moved last, Queued hidden</p>
+<div class="page" id="b"></div>
+<p class="hd">Minimal, hide-only, being edited</p>
+<div class="page" id="c"></div>
+<p class="said" id="said" role="status">Nothing changed yet.</p>
+<script>
+(function () {
+  var S = window.LoadoutStudio, said = document.getElementById("said");
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) { e.className = cls; } if (text !== undefined) { e.textContent = text; } return e; }
+  /* studio-layouts as Loadout keeps it: one object, keyed page (or page/surface), then mode. */
+  var value = JSON.stringify({
+    sessions: { "default": { order: ["waiting", "running", "pickup", "recent", "history"], hidden: ["history"] } },
+    teams: { teams: { order: ["needs", "running", "pickup", "teams", "scheduled", "queued", "ended"], hidden: ["queued"] } }
+  });
+  var all = [];
+  function changed(key, v, line) { value = v; all.forEach(function (x) { x.set({ value: v }); }); said.textContent = "✓ " + line; }
+  function rows(list) { var ul = el("ul", "row"); list.forEach(function (r) { var li = el("li"); li.appendChild(S.Signal(r[0])); li.appendChild(el("span", "", r[1])); ul.appendChild(li); }); return ul; }
+  function page(host, title, fact, L) {
+    var head = el("div", "head"), left = el("div");
+    left.appendChild(el("h1", "", title)); if (fact) { left.appendChild(el("span", "fact" + (fact.need ? " need" : ""), fact.text)); }
+    head.appendChild(left); head.appendChild(el("span", "grow")); head.appendChild(L.button);
+    host.appendChild(head); host.appendChild(L.bar); host.appendChild(L.el); all.push(L);
+  }
+
+  var SESS = { waiting: [["waiting for you", "Tidy the webhook retries · webhooks · 12 min"], ["needs approval", "Bump the SDK · starstats · 3 min"]], running: [["working", "Write the release notes · starstats"]], pickup: [["lost", "Port the importer · home-lab · ended when the daemon stopped"]], recent: [["ended", "Fix the flaky test · webhooks"]], history: [["ended", "Last week's conversations"]] };
+  page(document.getElementById("a"), "Sessions", { text: "2 waiting · 1 running", need: true }, S.LayoutEdit({
+    page: "sessions", mode: "default", label: "Sessions", value: value, editing: true,
+    sections: [{ id: "waiting", name: "Waiting on you" }, { id: "running", name: "Running" }, { id: "pickup", name: "Pick up" }, { id: "recent", name: "Recent" }, { id: "history", name: "History" }],
+    count: function (id) { return SESS[id] ? SESS[id].length : undefined; },
+    locked: function (id) { return (id === "waiting" || id === "running") && SESS[id].length > 0; },
+    render: function (id) { return rows(SESS[id]); }, onchange: changed }));
+
+  var TEAMS = { needs: [["needs a decision", "release-crew · Push the tag v0.66.0?"]], running: [["running", "dev-team · round 3"]], pickup: [["blocked", "docs-crew · waiting on a review"]], teams: [["idle", "dev-team, release-crew, docs-crew"]], scheduled: [["scheduled", "nightly-audit · 02:00"]], queued: [["open", "T-41, T-42"]], ended: [["done", "dev-team · Make the importer resumable"]] };
+  var NAMES = { needs: "Needs you", running: "Running", pickup: "Pick up", teams: "Teams you can run", scheduled: "On a schedule", queued: "Queued", ended: "Ended" };
+  page(document.getElementById("b"), "Teams", { text: "1 waiting on you", need: true }, S.LayoutEdit({
+    page: "teams", mode: "teams", label: "Teams", value: value, class: "two",
+    sections: ["needs", "running", "pickup", "ended", "teams", "scheduled", "queued"], names: NAMES, wide: ["needs"],
+    locked: function (id) { return id === "needs" || id === "running"; },
+    render: function (id) { return rows(TEAMS[id]); }, onchange: changed }));
+
+  page(document.getElementById("c"), "Minimal", null, S.LayoutEdit({
+    page: "minimal", mode: "minimal", label: "Minimal", value: value, editing: true, hideOnly: true,
+    sections: [{ id: "needs", name: "Needs you" }, { id: "running", name: "Running" }, { id: "pickup", name: "Might pick up" }],
+    locked: function (id) { return id === "needs"; },
+    render: function (id) { return id === "pickup" ? el("p", "calm", "Nothing to pick up.") : rows(id === "needs" ? SESS.waiting : SESS.running); }, onchange: changed }));
+})();
+</script>
+</body>
+</html>
