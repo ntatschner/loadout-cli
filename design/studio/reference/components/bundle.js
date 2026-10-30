@@ -2522,7 +2522,7 @@
       onHide: function (id) { var s = all.filter(function (x) { return x.id === id; })[0]; all = all.filter(function (x) { return x.id !== id; }); if (s) { hidden.push(s); } if (o.onHide) { o.onHide(id); } release(id); },
       onUnhide: function (id) { var s = hidden.filter(function (x) { return x.id === id; })[0]; hidden = hidden.filter(function (x) { return x.id !== id; }); if (s) { all.push(s); } if (o.onUnhide) { o.onUnhide(id); } },
       onClear: function (id) { all = all.filter(function (x) { return x.id !== id; }); hidden = hidden.filter(function (x) { return x.id !== id; }); if (o.onClear) { o.onClear(id); } release(id); },
-      onEnd: function (id) { if (o.onEnd) { o.onEnd(id); } } });
+      onEnd: function (id) { return o.onEnd ? o.onEnd(id) : undefined; } });
     var top = h("div", { "class": "dtop" }, [tabs, lay]);
     var waitHost = h("span", { style: "display: contents" }), noteEl = h("span", { "class": "note", role: "status" }), keysEl = h("span", { "class": "keys" });
     var findIn = h("input", { "class": "ls-text", type: "search", placeholder: "Find in this terminal", "aria-label": "Find in the focused terminal: Enter for the next, Shift Enter for the one before", autocomplete: "off" }), findOut = h("span", { role: "status" });

@@ -3305,7 +3305,7 @@ body.sh-out #nav, body.sh-out #modebar { display: none; }
       onClear: function (id) { var t = tfTabs(); if (t.cleared.indexOf(id) < 0) { t.cleared.push(id); } t.hidden = t.hidden.filter(function (x) { return x !== id; }); tfKeepTabs(t); },
       /* SessionTabs' End session waits for this ("ending…", then it closes; a failure keeps it open with why) once TermDeck hands the promise on:
          today TermDeck drops onEnd's return, so the dialog closes at once, and a failure is said here instead. */
-      onEnd: function (id) { var l = line(id); if (!l) { return false; } var pr = sessEndNow(l, "$ loadout session end " + l.hid + " --yes"); pr.catch(function (e) { said("✕ " + l.title + " did not end: " + (e && e.message || "it did not go through"), "$ loadout session end " + l.hid + " --yes", "problem"); }); return pr; } });
+      onEnd: function (id) { var l = line(id); if (!l) { return false; } var pr = sessEndNow(l, "$ loadout session end " + l.hid + " --yes"); /* SessionTabs' End dialog waits on it, and says why when it fails. */ return pr; } });
     var bar = el("div", { "class": "tfbar" }), le = shLayout("deck", "top", TF_TOP, { "class": "tftop", label: "the deck's top bar", hideOnly: true, editing: TF_EDIT.editing,
       onedit: function (on) { TF_EDIT.editing = on; DECK = null; render(); },
       onchange: function () { DECK = null; render(); },
