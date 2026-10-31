@@ -1,3 +1,4 @@
+using Loadout.Core.Tasks;
 using Loadout.Models.Tasks;
 using Loadout.Models.Teams;
 
@@ -137,6 +138,10 @@ public static class QueueRules
     /// <param name="queue">The queue, with its runs.</param>
     /// <param name="tasksOf">Every task on a project's list, or null when the list cannot be read.</param>
     /// <param name="window">The window being worked in, or null when a person asked by hand.</param>
+    /// <param name="requires">
+    /// Every list in the workspace, for holding an item whose task requires one
+    /// not yet done; null when the guard is off, and nothing is held for it.
+    /// </param>
     /// <remarks>
     /// A person asking by hand is not held to a window's caps, because they
     /// are there to see what it costs. One run at a time and the cap on held
@@ -146,7 +151,8 @@ public static class QueueRules
     public static QueueDecision Next(
         TeamQueue queue,
         Func<string, IReadOnlyList<TaskItem>?> tasksOf,
-        QueueWindow? window)
+        QueueWindow? window,
+        TaskRequires.Lists? requires = null)
     {
         ArgumentNullException.ThrowIfNull(queue);
         ArgumentNullException.ThrowIfNull(tasksOf);
@@ -211,6 +217,17 @@ public static class QueueRules
             if (Waiting(item, tasks, queue) is { } waits)
             {
                 skipped.Add(new QueueSkip(item, waits));
+
+                continue;
+            }
+
+            // Passed over rather than stopped at: the next ready item starts,
+            // and order that matters is what requires and 'after' are for.
+            if (requires is not null
+                && Find(tasks, item.Task) is { } task
+                && TaskRequires.Said(TaskRequires.Unmet(task, requires), item.Project) is { } waitsFor)
+            {
+                skipped.Add(new QueueSkip(item, $"'{item.Task}' {waitsFor}."));
 
                 continue;
             }

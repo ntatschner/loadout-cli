@@ -2484,6 +2484,19 @@ its done-when, so the pieces of a split plan run in order. A loop of afters, or
 an after naming a dropped task, is refused when it is added, because either
 would stall the queue without a word.
 
+**A task can require another, on any list.** `task declare <id> <state> --requires
+<task>`, or `task requires <id> <task>`, says this task must wait until that one
+is done, where `after` only orders items in one queue. A queue passes over a task
+whose requirement isn't done, says which and why in `team queue plan`, and starts
+the next ready item instead; the waiting list shows it held. It starts the next
+time the queue looks once its requirement is declared done. Done is the only
+thing that releases it: a requirement that is dropped, removed, or on a project
+that has left the workspace keeps holding, because quietly starting the work it
+was waiting for is exactly what the link is there to stop. Starting one by hand
+with `team run --task` asks first, and with nobody there to ask it refuses unless
+you pass `--despite-requires`. `loadout config set requires-guard off` turns the
+holding off everywhere, without a release, if it ever gets in the way.
+
 **Everything is checked twice.** Once when it is added, and again just before
 it runs, because a task can be finished, dropped or stripped of its done-when
 in between. `team queue list` shows what would be refused now, and

@@ -635,6 +635,12 @@ public sealed class TaskDeclareCommand : AsyncCommand<TaskDeclareCommand.Setting
         [Description("Who is saying so. Defaults to this machine's user.")]
         public string? By { get; init; }
 
+        [CommandOption("--requires <TASK>")]
+        [Description(
+            "A task this one must wait for: an id on the same list, project/id, or global/id. Repeat it for each. "
+            + "Team queues hold the task until each is done.")]
+        public string[] Requires { get; init; } = [];
+
         [CommandOption("--type <TYPE>")]
         [Description(
             "What the work is about: new-project, feature, bug-fix, ci-cd, release, docs or maintenance. "
@@ -692,6 +698,26 @@ public sealed class TaskDeclareCommand : AsyncCommand<TaskDeclareCommand.Setting
         }
 
         var slug = resolution.Value?.Entry.Slug;
+        var requires = new List<TaskLink>();
+
+        foreach (var said in settings.Requires)
+        {
+            var (link, refusal) = TaskRequires.Parse(said, slug);
+
+            if (link is null)
+            {
+                return output.Fail(refusal!, ExitCode.InvalidArguments);
+            }
+
+            requires.Add(link);
+        }
+
+        // Checked before anything is written, so a link that would be refused
+        // does not leave the task recorded without it.
+        if (await _tasks.RequiresRefusalAsync(slug, settings.Id, requires, cancellationToken).ConfigureAwait(false) is { } unlinkable)
+        {
+            return output.Fail(unlinkable, ExitCode.InvalidArguments);
+        }
 
         var shortens = settings.Title is { Length: > 0 } title && TaskTitles.Shortens(title);
 
@@ -729,10 +755,34 @@ public sealed class TaskDeclareCommand : AsyncCommand<TaskDeclareCommand.Setting
             return output.Fail(declared);
         }
 
+        if (requires.Count > 0)
+        {
+            var linked = await _tasks.RequireAsync(slug, settings.Id, requires, [], cancellationToken).ConfigureAwait(false);
+
+            if (linked.Failed)
+            {
+                return output.Fail(
+                    $"{declared.Value!.Id} was recorded, but what it requires was not: {linked.Error}", linked.ExitCode);
+            }
+        }
+
         output.WriteLine(
             $"[green]+[/] {Markup.Escape(declared.Value!.Id)} is "
             + $"{declared.Value.State.ToString().ToLowerInvariant()}"
             + (declared.Value.Type is { } kept ? $", {Markup.Escape(TaskTypeLine.Said(kept, declared.Value.TypeBy))}." : "."));
+
+        if (requires.Count > 0)
+        {
+            output.WriteLine(
+                $"  requires {Markup.Escape(string.Join(", ", requires.Select(link => TaskRequires.Name(link, TaskRequires.Key(slug)))))}"
+                + "[dim], and team queues hold it until each is done.[/]");
+        }
+
+        if (state == TaskState.Dropped
+            && await TaskLinks.StillWaitingAsync(_tasks, slug, declared.Value.Id, cancellationToken).ConfigureAwait(false) is { } still)
+        {
+            output.WriteLine($"[yellow]![/] {Markup.Escape(still)}");
+        }
 
         // Said where the title is written, or long titles come back: the
         // tidying pass only ever cleans up what is already there.
@@ -1057,6 +1107,11 @@ public sealed class TaskRemoveCommand : AsyncCommand<TaskRemoveCommand.Settings>
 
         output.WriteLine($"[green]+[/] Forgot {Markup.Escape(settings.Id)}.");
 
+        if (await TaskLinks.StillWaitingAsync(_tasks, slug, settings.Id, cancellationToken).ConfigureAwait(false) is { } still)
+        {
+            output.WriteLine($"[yellow]![/] {Markup.Escape(still)}");
+        }
+
         return CommandOutput.Success();
     }
 }
@@ -1149,6 +1204,14 @@ public sealed class TaskShowCommand : AsyncCommand<TaskShowCommand.Settings>
             ? []
             : new Core.Teams.BlockedRunReader(_journal).ChainsFor(slug, task.Id);
 
+        // Both ends of every link, so dropping a task others wait for is never a surprise.
+        var every = (await _tasks.EveryListAsync(cancellationToken).ConfigureAwait(false)).Value
+            ?? new Dictionary<string, IReadOnlyList<TaskItem>>();
+        TaskRequires.Lists lists = key => every.TryGetValue(key, out var list) ? list : null;
+        var here = TaskRequires.Key(slug);
+        var unmet = TaskRequires.Unmet(task, lists);
+        var requiredBy = TaskLinks.RequiredBy(new TaskLink { Project = here, Id = task.Id }, every);
+
         if (output.IsJson)
         {
             // The task as every surface writes it, beside the list's revision,
@@ -1159,6 +1222,8 @@ public sealed class TaskShowCommand : AsyncCommand<TaskShowCommand.Settings>
                 revision = read.Value.Revision,
                 task = TaskOperations.Json(task),
                 idea = accepted is null ? null : new { plan = accepted.PlanPath, accepted = accepted.AcceptedUtc, by = accepted.AcceptedBy },
+                held = unmet.Count > 0,
+                requiredBy = requiredBy.Select(TaskRequires.Name),
                 runs = chains.Select(chain => chain.Select(run => new
                 {
                     id = run.RunId,
@@ -1197,6 +1262,9 @@ public sealed class TaskShowCommand : AsyncCommand<TaskShowCommand.Settings>
         }
 
         Section(output, "Labels", string.Join(", ", task.Labels));
+        Section(output, "Requires", string.Join('\n', task.Requires.Select(link =>
+            TaskRequires.Name(link, here) + (unmet.FirstOrDefault(one => TaskRequires.Same(one.Link, link)) is { } waits ? $" ({waits.Why})" : " (done)"))));
+        Section(output, "Required by", string.Join('\n', requiredBy.Select(link => TaskRequires.Name(link, here))));
         Section(output, "Note", task.Note);
         Section(output, "Detail", task.Detail);
         Section(output, "Done when", string.Join('\n', task.DoneWhen.Select(one => $"- {one}")));

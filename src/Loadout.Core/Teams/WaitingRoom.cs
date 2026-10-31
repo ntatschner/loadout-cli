@@ -146,6 +146,11 @@ public static class WaitingRoom
 
         if (tasks is not null && projects is not null)
         {
+            // Every list, read once, for what a task requires: the work it
+            // waits for may be on any project's list.
+            var every = (await tasks.EveryListAsync(ct).ConfigureAwait(false)).Value;
+            TaskRequires.Lists lists = key => every is not null && every.TryGetValue(key, out var list) ? list : null;
+
             foreach (var slug in projects)
             {
                 if (slug.Length == 0)
@@ -169,6 +174,10 @@ public static class WaitingRoom
 
                 foreach (var task in queued)
                 {
+                    // Held by what it requires before anything else, since
+                    // that is what an unattended run will be told.
+                    var requires = task.Requires.Count > 0 ? TaskRequires.Said(TaskRequires.Unmet(task, lists), slug) : null;
+
                     waiting.Add(new Waiting(
                         WaitingKind.Task,
                         task.Id,
@@ -176,10 +185,11 @@ public static class WaitingRoom
                         Team: null,
                         slug,
                         Due: null,
-                        task.State == TaskState.Blocked
-                            ? Blocked(task)
-                            : $"open since {task.DeclaredUtc.ToLocalTime():d MMMM}",
-                        task.State == TaskState.Blocked));
+                        requires
+                            ?? (task.State == TaskState.Blocked
+                                ? Blocked(task)
+                                : $"open since {task.DeclaredUtc.ToLocalTime():d MMMM}"),
+                        requires is not null || task.State == TaskState.Blocked));
                 }
             }
         }

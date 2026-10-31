@@ -39,6 +39,7 @@ public sealed class TeamQueueDriver
     internal static readonly TimeSpan MergeEvery = TimeSpan.FromMinutes(15);
 
     private readonly IQueueService _queues;
+    private readonly Core.Configuration.IConfigurationService? _configuration;
     private readonly IScheduleService _schedules;
     private readonly ITaskService _tasks;
     private readonly IRunJournal _journal;
@@ -69,8 +70,10 @@ public sealed class TeamQueueDriver
         IDeliveryService delivery,
         IWorkspaceManager workspace,
         IPlatformPaths paths,
-        TimeProvider time)
+        TimeProvider time,
+        Core.Configuration.IConfigurationService? configuration = null)
     {
+        _configuration = configuration;
         _queues = queues;
         _schedules = schedules;
         _tasks = tasks;
@@ -175,6 +178,10 @@ public sealed class TeamQueueDriver
         }
 
         var lists = await TeamQueueing.ListsAsync(_tasks, loaded.Value!, ct).ConfigureAwait(false);
+
+        // Read fresh for every item taken, so a prerequisite marked done
+        // partway through a window releases what waits for it the next time.
+        var requires = await TeamQueueing.RequiresAsync(_tasks, _configuration, ct).ConfigureAwait(false);
         var started = _time.GetUtcNow();
         QueueDecision? decision = null;
         QueueRun? run = null;
@@ -183,7 +190,7 @@ public sealed class TeamQueueDriver
             team,
             queue =>
             {
-                decision = QueueRules.Next(queue, lists, window);
+                decision = QueueRules.Next(queue, lists, window, requires);
 
                 if (decision.Verdict != QueueVerdict.Start)
                 {

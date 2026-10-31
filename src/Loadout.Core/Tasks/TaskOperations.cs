@@ -36,6 +36,8 @@ namespace Loadout.Core.Tasks;
 /// <param name="TypeBy">Who gave <paramref name="Type"/>: a person when null.</param>
 /// <param name="Labels">For label, the labels to add.</param>
 /// <param name="Unlabels">For label, the labels to take off.</param>
+/// <param name="Requires">For require, the tasks to wait for.</param>
+/// <param name="Unrequires">For require, the tasks to stop waiting for.</param>
 public sealed record TaskOperation(
     string Op,
     string? Project = null,
@@ -54,7 +56,9 @@ public sealed record TaskOperation(
     TaskType? Type = null,
     TaskTypeSource? TypeBy = null,
     IReadOnlyList<string>? Labels = null,
-    IReadOnlyList<string>? Unlabels = null)
+    IReadOnlyList<string>? Unlabels = null,
+    IReadOnlyList<TaskLink>? Requires = null,
+    IReadOnlyList<TaskLink>? Unrequires = null)
 {
     public const string Add = "add";
     public const string Declare = "declare";
@@ -80,6 +84,13 @@ public sealed record TaskOperation(
     /// only <see cref="ITaskService.LabelAsync"/> makes it.
     /// </summary>
     internal const string Label = "label";
+
+    /// <summary>
+    /// Adds and takes off requirements, and nothing else. Not one of
+    /// <see cref="Ops"/>: only <see cref="ITaskService.RequireAsync"/> makes it,
+    /// after checking every list for a loop.
+    /// </summary>
+    internal const string Require = "require";
 
     /// <summary>Every op a batch takes, in the order they are documented.</summary>
     public static IReadOnlyList<string> Ops => [Add, Declare, Remove, Move];
@@ -255,6 +266,7 @@ public static class TaskOperations
             type = task.Type is { } type ? TaskTypes.Name(type) : null,
             typeBy = task.TypeBy is { } typeBy ? TaskTypes.Name(typeBy) : null,
             labels = task.Labels,
+            requires = task.Requires.Select(TaskRequires.Name),
             by = task.DeclaredBy,
             declared = task.DeclaredUtc,
             note = task.Note,

@@ -71,6 +71,31 @@ internal static class TeamQueueing
         return project => read.TryGetValue(project, out var list) ? list : null;
     }
 
+    /// <summary>
+    /// Every list in the workspace, for the requires guard; or null when the
+    /// workspace has turned the guard off, so nothing is held for it.
+    /// </summary>
+    /// <remarks>
+    /// A list that cannot be read reads as null, which holds any task that
+    /// requires one on it: an unreadable list is no reason to let work start.
+    /// </remarks>
+    public static async Task<TaskRequires.Lists?> RequiresAsync(
+        ITaskService tasks,
+        Core.Configuration.IConfigurationService? configuration,
+        CancellationToken ct)
+    {
+        if (configuration is not null
+            && (await configuration.LoadConfigAsync(ct).ConfigureAwait(false)).Value is { Workspace.RequiresGuard: false })
+        {
+            return null;
+        }
+
+        var every = await tasks.EveryListAsync(ct).ConfigureAwait(false);
+        var lists = every.Value ?? new Dictionary<string, IReadOnlyList<TaskItem>>();
+
+        return key => lists.TryGetValue(key, out var list) ? list : null;
+    }
+
     /// <summary>One item, in a line.</summary>
     public static string Describe(QueueItem item) =>
         $"{item.Task} on {item.Project}" + (item.After.Length > 0 ? $", after {item.After}" : string.Empty)
@@ -926,6 +951,8 @@ public sealed class TeamQueuePlanCommand : AsyncCommand<TeamQueueSettings>
     private readonly IAnsiConsole _console;
     private readonly TimeProvider _time;
 
+    private readonly Core.Configuration.IConfigurationService _configuration;
+
     public TeamQueuePlanCommand(
         IQueueService queues,
         ITaskService tasks,
@@ -934,8 +961,10 @@ public sealed class TeamQueuePlanCommand : AsyncCommand<TeamQueueSettings>
         ISpecialistLibrary library,
         IWorkspaceManager workspace,
         IAnsiConsole console,
-        TimeProvider time)
+        TimeProvider time,
+        Core.Configuration.IConfigurationService configuration)
     {
+        _configuration = configuration;
         _queues = queues;
         _tasks = tasks;
         _projects = projects;
@@ -970,7 +999,8 @@ public sealed class TeamQueuePlanCommand : AsyncCommand<TeamQueueSettings>
         }
 
         var lists = await TeamQueueing.ListsAsync(_tasks, loaded.Value!, cancellationToken).ConfigureAwait(false);
-        var plan = Plan(loaded.Value!, lists, _time.GetUtcNow());
+        var requires = await TeamQueueing.RequiresAsync(_tasks, _configuration, cancellationToken).ConfigureAwait(false);
+        var plan = Plan(loaded.Value!, lists, _time.GetUtcNow(), requires);
 
         if (output.IsJson)
         {
@@ -1011,8 +1041,18 @@ public sealed class TeamQueuePlanCommand : AsyncCommand<TeamQueueSettings>
     internal static (IReadOnlyList<QueueItem> Order, IReadOnlyList<QueueSkip> Left, string Stops) Plan(
         TeamQueue queue,
         Func<string, IReadOnlyList<TaskItem>?> lists,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        TaskRequires.Lists? requires = null)
     {
+        // A task the plan pretends has run is done as far as anything that
+        // requires it is concerned, as a real one met mid-window would be.
+        var finished = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        TaskRequires.Lists? pretended = requires is null
+            ? null
+            : key => requires(key) is { } list
+                ? [.. list.Select(task => finished.Contains($"{key}/{task.Id}") ? Done(task) : task)]
+                : null;
+
         // A copy, so the pretending touches nothing real. Runs already going
         // or held are kept, since they count against the caps as they are.
         var pretend = new TeamQueue
@@ -1031,7 +1071,7 @@ public sealed class TeamQueuePlanCommand : AsyncCommand<TeamQueueSettings>
 
         while (true)
         {
-            var decision = QueueRules.Next(pretend, lists, window);
+            var decision = QueueRules.Next(pretend, lists, window, pretended);
 
             if (decision.Verdict != QueueVerdict.Start)
             {
@@ -1039,6 +1079,7 @@ public sealed class TeamQueuePlanCommand : AsyncCommand<TeamQueueSettings>
             }
 
             order.Add(decision.Item!);
+            finished.Add($"{decision.Item!.Project}/{decision.Item.Task}");
             pretend.Items.Remove(decision.Item!);
             pretend.Runs.Add(new QueueRun
             {
@@ -1049,6 +1090,9 @@ public sealed class TeamQueuePlanCommand : AsyncCommand<TeamQueueSettings>
             });
         }
     }
+
+    /// <summary>A task as the rules see one that is done: only its id and state are read.</summary>
+    private static TaskItem Done(TaskItem task) => new() { Id = task.Id, Kind = task.Kind, State = TaskState.Done };
 }
 
 /// <summary>Starts the next item in a team's queue now, by hand.</summary>
@@ -1077,6 +1121,7 @@ public sealed class TeamQueueRunNextCommand : AsyncCommand<TeamQueueSettings>
     private readonly IWorkspaceManager _workspace;
     private readonly ICommandCatalogue _commands;
     private readonly TeamQueueDriver _driver;
+    private readonly Core.Configuration.IConfigurationService _configuration;
     private readonly IAnsiConsole _console;
 
     public TeamQueueRunNextCommand(
@@ -1088,8 +1133,10 @@ public sealed class TeamQueueRunNextCommand : AsyncCommand<TeamQueueSettings>
         IWorkspaceManager workspace,
         ICommandCatalogue commands,
         TeamQueueDriver driver,
-        IAnsiConsole console)
+        IAnsiConsole console,
+        Core.Configuration.IConfigurationService configuration)
     {
+        _configuration = configuration;
         _queues = queues;
         _tasks = tasks;
         _projects = projects;
@@ -1127,7 +1174,8 @@ public sealed class TeamQueueRunNextCommand : AsyncCommand<TeamQueueSettings>
             }
 
             var lists = await TeamQueueing.ListsAsync(_tasks, loaded.Value!, cancellationToken).ConfigureAwait(false);
-            var preview = QueueRules.Next(loaded.Value!, lists, window: null);
+            var requires = await TeamQueueing.RequiresAsync(_tasks, _configuration, cancellationToken).ConfigureAwait(false);
+            var preview = QueueRules.Next(loaded.Value!, lists, window: null, requires);
 
             return TeamQueueMoveCommand.Said(
                 output,
