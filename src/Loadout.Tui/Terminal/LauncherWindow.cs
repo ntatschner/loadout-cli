@@ -146,12 +146,26 @@ internal sealed class LauncherWindow : Window
 
         _build = new Label
         {
+            Id = "launcher-build",
             X = Pos.AnchorEnd(version.Length + 1),
             Y = 0,
             Text = version,
         };
 
         _build.SetScheme(LauncherTheme.MutedOnGround);
+
+        // Clicking the version opens About, whether or not an update is named
+        // beside it. A click and nothing else: a key here would take a slot
+        // some other screen already answers to. The mouse event rather than
+        // Accepting, because clicking a label raises no command at all.
+        _build.MouseEvent += (_, mouse) =>
+        {
+            if (mouse.Flags.HasFlag(MouseFlags.LeftButtonClicked))
+            {
+                mouse.Handled = true;
+                Close(new LauncherIntent(LauncherAction.About));
+            }
+        };
 
         var build = _build;
 
@@ -491,6 +505,11 @@ internal sealed class LauncherWindow : Window
                 {
                     Title = "_Settings and paths",
                     Action = () => Close(new LauncherIntent(LauncherAction.Settings)),
+                },
+                new MenuItem
+                {
+                    Title = "_About Loadout…",
+                    Action = () => Close(new LauncherIntent(LauncherAction.About)),
                 },
             ]),
             new MenuBarItem("_Help", [
@@ -1163,7 +1182,8 @@ internal sealed class LauncherWindow : Window
     /// launcher that could not find out simply never calls this. What is
     /// shown is the number and the word, not a command, because the command
     /// is <c>loadout update</c> and the corner of a screen is no place to
-    /// teach it — anyone who wants it will find it under Tools.
+    /// teach it. Clicking the corner, or Tools, About Loadout, opens the About
+    /// window, which has Update now.
     /// </remarks>
     internal void ShowUpdate(string available)
     {

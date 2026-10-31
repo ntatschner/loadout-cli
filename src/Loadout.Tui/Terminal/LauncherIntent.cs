@@ -102,6 +102,12 @@ internal enum LauncherAction
 
     /// <summary>Search everything for <see cref="LauncherIntent.Query"/>, as 'loadout find' does.</summary>
     Find,
+
+    /// <summary>
+    /// What version is running, what it can do, where that is explained, and
+    /// the releases around it, with Update now.
+    /// </summary>
+    About,
 }
 
 /// <summary>

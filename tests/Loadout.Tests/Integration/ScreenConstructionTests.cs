@@ -1132,4 +1132,31 @@ public sealed class ScreenConstructionTests
             app));
     }
 
+    [Fact]
+    public void The_about_screen_can_be_built_and_drawn()
+    {
+        var model = new Loadout.Core.About.AboutModel(
+            "0.109.5",
+            false,
+            null,
+            false,
+            [new Loadout.Core.About.AboutFeature("teams", "Teams", "0.40.0", "stable", "teams", true)],
+            [new Loadout.Core.About.AboutGuide("teams", "Teams", "https://github.com/ntatschner/loadout-cli/blob/main/docs/teams.md")],
+            new Loadout.Core.About.AboutTimeline([], Loadout.Core.About.TimelineEmpty.Off, null, false));
+
+        Drawn(app => new AboutWindow(
+            model,
+            _ => AsyncEnumerable.Empty<Loadout.Core.Updates.UpdateProgress>(),
+            new NoOpener(),
+            app));
+    }
+
+    private sealed class NoOpener : Loadout.Platform.Abstractions.IApplicationLauncher
+    {
+        public Task<Loadout.Models.Results.OperationResult> OpenInFileManagerAsync(string path, CancellationToken ct = default) =>
+            Task.FromResult(Loadout.Models.Results.OperationResult.Ok());
+
+        public Task<Loadout.Models.Results.OperationResult> OpenUrlAsync(string url, CancellationToken ct = default) =>
+            Task.FromResult(Loadout.Models.Results.OperationResult.Ok());
+    }
 }
