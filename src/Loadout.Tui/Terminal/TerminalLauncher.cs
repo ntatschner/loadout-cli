@@ -818,8 +818,7 @@ public sealed class TerminalLauncher : ILauncherTui
                 return null;
 
             case LauncherAction.About:
-                await ShowAboutAsync(ct).ConfigureAwait(false);
-                return null;
+                return AfterAbout(await ShowAboutAsync(ct).ConfigureAwait(false));
 
             case LauncherAction.Drift:
                 await CheckDriftAsync(ct).ConfigureAwait(false);
@@ -1282,7 +1281,8 @@ public sealed class TerminalLauncher : ILauncherTui
     /// background with a refresh. The second answer crosses to the main loop
     /// the way the update notice does, and is dropped if the window has gone.
     /// </remarks>
-    private async Task ShowAboutAsync(CancellationToken ct)
+    /// <returns>Whether an update replaced this launcher's binary.</returns>
+    private async Task<bool> ShowAboutAsync(CancellationToken ct)
     {
         var loaded = await _about.GetAsync(ct: ct).ConfigureAwait(false);
 
@@ -1290,7 +1290,7 @@ public sealed class TerminalLauncher : ILauncherTui
         {
             _console.MarkupLine($"[red]{Shown.Safely(loaded.Error!)}[/]");
             Pause();
-            return;
+            return false;
         }
 
         var runner = new AboutUpdateRunner(_processes);
@@ -1308,7 +1308,20 @@ public sealed class TerminalLauncher : ILauncherTui
         await application.RunAsync(window, ct).ConfigureAwait(false);
 
         await closed.CancelAsync().ConfigureAwait(false);
+
+        return window.Updated;
     }
+
+    /// <summary>
+    /// What the launcher does once the About window has closed: ends the
+    /// session after an update, and goes round again otherwise.
+    /// </summary>
+    /// <remarks>
+    /// After an update this process is still running from the bundle that was
+    /// replaced, so going round again would load from files that are gone.
+    /// </remarks>
+    internal static int? AfterAbout(bool updated) =>
+        updated ? (int)ExitCode.Success : null;
 
     private async Task RefreshAboutAsync(AboutWindow window, IApplication application, CancellationToken ct)
     {

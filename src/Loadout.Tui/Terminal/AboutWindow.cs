@@ -179,8 +179,19 @@ internal sealed class AboutWindow : Window
 
         this.Bind(Key.Esc, Command.Quit);
 
+        // Closing mid-update is refused rather than cancelled: stopping the
+        // child part-way through putting the new version in place could leave
+        // no working launcher, and closing without stopping it would leave it
+        // installing where nobody can see.
         AddCommand(Command.Quit, () =>
         {
+            if (_updating)
+            {
+                // Commands arrive on the main loop, so this is shown directly.
+                ShowStep(new UpdateProgress(UpdateStage.Checking, null, null, StillUpdatingText));
+                return true;
+            }
+
             _application.RequestStop(this);
             return true;
         });
@@ -340,6 +351,9 @@ internal sealed class AboutWindow : Window
         SetNeedsLayout();
         SetNeedsDraw();
     }
+
+    internal const string StillUpdatingText =
+        "The update is still running. Close this window once it has finished.";
 
     internal static string UpdatedText(string version) =>
         $"Updated to {version}. Restart Loadout to use it.";

@@ -186,6 +186,44 @@ public sealed class AboutWindowTests
     }
 
     [Fact]
+    public async Task Closing_while_an_update_runs_is_refused_and_says_why()
+    {
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        async IAsyncEnumerable<UpdateProgress> Held([EnumeratorCancellation] CancellationToken ct = default)
+        {
+            yield return new UpdateProgress(UpdateStage.Downloading, 1, 10, "Downloading");
+            await gate.Task;
+        }
+
+        using var session = About(Model(), out var window, Held);
+
+        window.StopRequested = false;
+
+        var running = window.UpdateAsync(CancellationToken.None);
+
+        window.InvokeCommand(Command.Quit);
+
+        window.StopRequested.Should().BeFalse();
+        window.ProgressText.Should().Contain(AboutWindow.StillUpdatingText);
+
+        gate.SetResult();
+        await running;
+    }
+
+    [Fact]
+    public void Closing_with_no_update_running_closes()
+    {
+        using var session = About(Model(), out var window);
+
+        window.StopRequested = false;
+
+        window.InvokeCommand(Command.Quit);
+
+        window.StopRequested.Should().BeTrue();
+    }
+
+    [Fact]
     public void Newer_release_shows_not_installed()
     {
         using var session = About(
