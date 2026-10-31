@@ -249,6 +249,17 @@ public static class ServiceRegistration
             provider.GetRequiredService<HttpClient>(),
             installedBin: provider.GetRequiredService<Platform.Abstractions.IInstallRecord>().InstalledPath));
 
+        // What a project already has. It reaches GitHub only when a caller
+        // asks it to, through the same client as everything else.
+        services.AddSingleton<Capabilities.ICapabilityProfiles>(provider => new Capabilities.CapabilityProfiles(
+            provider.GetRequiredService<IWorkspaceManager>(),
+            provider.GetRequiredService<YamlStore>(),
+            provider.GetRequiredService<HttpClient>(),
+            provider.GetRequiredService<Platform.Abstractions.IExecutableResolver>(),
+            provider.GetRequiredService<Platform.Abstractions.IProcessLauncher>(),
+            provider.GetRequiredService<Platform.Abstractions.IEnvironmentProvider>(),
+            provider.GetRequiredService<TimeProvider>()));
+
         // In front of the service, for the launcher's corner: cached for a day
         // and never an error, where the service is fresh every time and says
         // what went wrong.

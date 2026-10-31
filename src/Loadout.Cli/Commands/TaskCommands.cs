@@ -1421,17 +1421,20 @@ public sealed class TaskClassifyCommand : AsyncCommand<TaskClassifyCommand.Setti
     private readonly ITaskService _tasks;
     private readonly IProjectService _projects;
     private readonly Core.Workspace.IWorkspaceManager _workspace;
+    private readonly Core.Capabilities.ICapabilityProfiles _profiles;
     private readonly IAnsiConsole _console;
 
     public TaskClassifyCommand(
         ITaskService tasks,
         IProjectService projects,
         Core.Workspace.IWorkspaceManager workspace,
+        Core.Capabilities.ICapabilityProfiles profiles,
         IAnsiConsole console)
     {
         _tasks = tasks;
         _projects = projects;
         _workspace = workspace;
+        _profiles = profiles;
         _console = console;
     }
 
@@ -1505,6 +1508,13 @@ public sealed class TaskClassifyCommand : AsyncCommand<TaskClassifyCommand.Setti
             found.AddRange(classified.Value!.Select(one => (list, one)));
         }
 
+        var gaps = await GapsAsync(found.Select(one => one.List).Distinct(), cancellationToken).ConfigureAwait(false);
+
+        IReadOnlyList<string> GapsOf(string? list, TaskClassified task) =>
+            list is { } slug && gaps.TryGetValue(slug, out var seen)
+                ? [.. Core.Capabilities.CapabilityChecks.For(task.Type).Select(check => check.Id).Where(seen.Contains)]
+                : [];
+
         if (output.IsJson)
         {
             output.WriteJson(new
@@ -1516,6 +1526,7 @@ public sealed class TaskClassifyCommand : AsyncCommand<TaskClassifyCommand.Setti
                     id = one.Task.Id,
                     title = one.Task.Title,
                     type = TaskTypes.Name(one.Task.Type),
+                    gaps = GapsOf(one.List, one.Task),
                 }),
             });
 
@@ -1535,7 +1546,8 @@ public sealed class TaskClassifyCommand : AsyncCommand<TaskClassifyCommand.Setti
         {
             output.WriteLine(
                 $"{Markup.Escape(TaskPaths.Describe(list))}  [bold]{Markup.Escape(task.Id)}[/]  "
-                + $"{Markup.Escape(TaskTypes.Name(task.Type).PadRight(width))}  [dim]{Markup.Escape(task.Title)}[/]");
+                + $"{Markup.Escape(TaskTypes.Name(task.Type).PadRight(width))}  [dim]{Markup.Escape(task.Title)}[/]"
+                + (GapsOf(list, task) is { Count: > 0 } missing ? $"  [yellow]gap: {Markup.Escape(string.Join(", ", missing))}[/]" : string.Empty));
         }
 
         output.WriteBlankLine();
@@ -1544,6 +1556,39 @@ public sealed class TaskClassifyCommand : AsyncCommand<TaskClassifyCommand.Setti
             : $"[green]+[/] Typed {found.Count} task(s). Each type is recorded as a guess, so refining an idea may "
                 + "still change it; give one --type with task declare to choose it yourself.");
 
+        if (found.Any(one => GapsOf(one.List, one.Task).Count > 0))
+        {
+            output.WriteLine(
+                "[dim]  A gap is something the project lacks that work of that type depends on. Nothing was created for it; "
+                + "loadout project capabilities <project> says more.[/]");
+        }
+
         return CommandOutput.Success();
+    }
+
+    /// <summary>
+    /// The gaps each project's profile has seen, from the one kept or else the
+    /// repository's files: never from GitHub, and nothing is kept, since this
+    /// only reports.
+    /// </summary>
+    private async Task<Dictionary<string, HashSet<string>>> GapsAsync(IEnumerable<string?> lists, CancellationToken ct)
+    {
+        var gaps = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+
+        foreach (var slug in lists.OfType<string>())
+        {
+            var profile = await _profiles.CachedAsync(slug, ct).ConfigureAwait(false);
+
+            if (profile is null && (await _projects.ResolveAsync(slug).ConfigureAwait(false)) is { Succeeded: true } resolved)
+            {
+                profile = await _profiles.BuildAsync(resolved.Value!, askGitHub: false, ct).ConfigureAwait(false);
+            }
+
+            gaps[slug] = [.. (profile?.Checks ?? [])
+                .Where(check => check.State == Loadout.Models.Capabilities.CapabilityState.Gap)
+                .Select(check => check.Id)];
+        }
+
+        return gaps;
     }
 }
