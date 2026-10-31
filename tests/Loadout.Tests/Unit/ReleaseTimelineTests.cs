@@ -105,6 +105,44 @@ public sealed class ReleaseTimelineTests : IDisposable
     }
 
     [Fact]
+    public async Task Offline_makes_no_request_and_says_offline()
+    {
+        _handler.Answer = _ => Ok(Releases, "\"one\"");
+
+        var timeline = await Timeline().ReadAsync(refresh: true, offline: true);
+
+        _handler.Requests.Should().BeEmpty();
+        timeline.Empty.Should().Be(TimelineEmpty.Offline);
+    }
+
+    [Fact]
+    public async Task Network_failure_with_cache_serves_stale()
+    {
+        _handler.Answer = _ => Ok(Releases, "\"one\"");
+        await Timeline().ReadAsync(refresh: true, offline: false);
+
+        _handler.Answer = _ => throw new HttpRequestException("unreachable");
+
+        var timeline = await Timeline().ReadAsync(refresh: true, offline: false);
+
+        timeline.Stale.Should().BeTrue();
+        timeline.Releases.Should().HaveCount(2);
+        timeline.Empty.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Network_failure_without_cache_says_unreachable()
+    {
+        _handler.Answer = _ => throw new HttpRequestException("unreachable");
+
+        var timeline = await Timeline().ReadAsync(refresh: true, offline: false);
+
+        _handler.Requests.Should().ContainSingle();
+        timeline.Releases.Should().BeEmpty();
+        timeline.Empty.Should().Be(TimelineEmpty.Unreachable);
+    }
+
+    [Fact]
     public async Task Sends_a_user_agent()
     {
         _handler.Answer = _ => Ok(Releases, "\"one\"");

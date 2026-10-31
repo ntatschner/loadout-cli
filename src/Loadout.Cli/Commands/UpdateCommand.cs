@@ -79,6 +79,9 @@ public sealed class UpdateCommand : AsyncCommand<UpdateCommand.Settings>
         /// text, for the launcher's About window to follow from a child process.
         /// </summary>
         [CommandOption("--progress", IsHidden = true)]
+        [Description(
+            "Write each step as one JSON line, for a screen following the update. Takes the place of --json; "
+            + "ignored with --restart-daemon, which reports as --json does.")]
         public bool Progress { get; init; }
 
         /// <summary>The plan the update helper carries out, given by the daemon handing over.</summary>
@@ -366,10 +369,18 @@ public sealed class UpdateCommand : AsyncCommand<UpdateCommand.Settings>
             return CommandOutput.Success();
         }
 
+        if (settings.CheckOnly)
+        {
+            lines.Report(new UpdateProgress(UpdateStage.Done, null, null,
+                $"{check.AvailableVersion} is available; {check.CurrentVersion} is installed. Nothing was changed."));
+            return CommandOutput.Success();
+        }
+
         if (!settings.Yes)
         {
             return output.Fail(
-                "Updating replaces the executable, so it needs confirmation. Pass --yes.",
+                "Updating replaces the executable, so it needs confirmation. Pass --yes, "
+                + "or --check to see what is available.",
                 ExitCode.InvalidArguments);
         }
 

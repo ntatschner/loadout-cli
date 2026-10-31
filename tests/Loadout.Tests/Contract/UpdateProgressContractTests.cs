@@ -41,12 +41,53 @@ public sealed class UpdateProgressContractTests
         var run = await loadout.RunAsync("update", "--yes", "--progress", "--dry-run");
         run.ExitCode.Should().Be(0, run.StandardError);
 
-        var lines = run.StandardOutput
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(line => JsonDocument.Parse(line).RootElement)
-            .ToList();
+        var lines = Lines(run.StandardOutput);
 
         lines.Select(line => line.GetProperty("stage").GetString()).Should().Equal("Checking", "Done");
         lines[^1].GetProperty("message").GetString().Should().Contain("999.0.0");
     }
+
+    [BuiltCliFact]
+    public async Task Check_with_progress_installs_nothing()
+    {
+        using var loadout = new LoadoutProcess();
+        loadout.Environment["LOADOUT_LOCAL"] = "1";
+
+        // --yes and no --dry-run, so only --check stands between this and an
+        // install. The artifact does not exist, so a missed --check fails the
+        // download rather than replacing anything.
+        var feed = Path.Combine(loadout.Home, "feed.json");
+        var artifact = new { url = Path.Combine(loadout.Home, "loadout.zip"), sha256 = "00" };
+        await File.WriteAllTextAsync(feed, JsonSerializer.Serialize(new
+        {
+            version = "999.0.0",
+            artifacts = new Dictionary<string, object>
+            {
+                ["win-x64"] = artifact,
+                ["win-arm64"] = artifact,
+                ["linux-x64"] = artifact,
+                ["linux-arm64"] = artifact,
+                ["osx-x64"] = artifact,
+                ["osx-arm64"] = artifact,
+            },
+        }));
+
+        var set = await loadout.RunAsync("config", "set", "updates-source", feed);
+        set.ExitCode.Should().Be(0, set.StandardError);
+
+        var run = await loadout.RunAsync("update", "--check", "--yes", "--progress");
+        run.ExitCode.Should().Be(0, run.StandardError);
+
+        var lines = Lines(run.StandardOutput);
+
+        lines.Select(line => line.GetProperty("stage").GetString()).Should().Equal("Checking", "Done");
+        lines[^1].GetProperty("message").GetString().Should().Contain("999.0.0");
+        Directory.EnumerateDirectories(loadout.Home, "update-*", SearchOption.AllDirectories)
+            .Should().BeEmpty("checking stages nothing");
+    }
+
+    private static List<JsonElement> Lines(string output) => output
+        .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .Select(line => JsonDocument.Parse(line).RootElement)
+        .ToList();
 }
