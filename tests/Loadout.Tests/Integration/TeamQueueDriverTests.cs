@@ -139,6 +139,41 @@ public sealed class TeamQueueDriverTests : IDisposable
     }
 
     [Fact]
+    public async Task A_task_whose_requirement_is_not_done_is_not_started_and_says_what_it_waits_for()
+    {
+        await ReadyAsync();
+        await _space.Tasks.DeclareAsync("website", "ci", TaskState.Open, "nigel", "Add CI");
+        (await _space.Tasks.RequireAsync("website", "login", [new TaskLink { Project = "website", Id = "ci" }], []))
+            .Succeeded.Should().BeTrue();
+
+        await PassAsync();
+
+        _launcher.Background.Should().BeNull("an unattended run waits for what its task requires");
+        (await QueueAsync()).Items.Should().ContainSingle();
+
+        // A pass that starts nothing says nothing, as one held by 'after'
+        // does; the waiting list is where the hold is shown, and why.
+        var waiting = await WaitingRoom.ReadAsync(null, _space.Tasks, ["website"], _clock.Now);
+        var login = waiting.Single(one => one.Id == "login");
+        login.Held.Should().BeTrue();
+        login.Because.Should().Be("waits for ci, which is open");
+    }
+
+    [Fact]
+    public async Task Once_the_requirement_is_done_the_next_pass_starts_it()
+    {
+        await ReadyAsync();
+        await _space.Tasks.DeclareAsync("website", "ci", TaskState.Open, "nigel", "Add CI");
+        await _space.Tasks.RequireAsync("website", "login", [new TaskLink { Project = "website", Id = "ci" }], []);
+        await PassAsync();
+
+        await _space.Tasks.DeclareAsync("website", "ci", TaskState.Done, "nigel");
+        await PassAsync();
+
+        _launcher.Background!.Arguments.Should().ContainInOrder("--task", "login");
+    }
+
+    [Fact]
     public async Task A_paused_daemon_starts_nothing_but_still_marks_the_window_open()
     {
         await ReadyAsync();

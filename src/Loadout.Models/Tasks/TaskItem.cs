@@ -138,6 +138,23 @@ public sealed class TaskItem
     /// </remarks>
     public List<string> Labels { get; set; } = [];
 
+    /// <summary>The tasks that must be done before this one may start unattended. Empty is normal.</summary>
+    /// <remarks>
+    /// <para>
+    /// A link to a task on any list in the workspace, released only when that
+    /// task is declared done. A target that is dropped, removed, or on a
+    /// project no longer in the workspace keeps holding: releasing work
+    /// quietly because what it waited for went away is the failure the link
+    /// exists to prevent.
+    /// </para>
+    /// <para>
+    /// Kept on the waiting task rather than the one it waits for, so the list
+    /// that holds the work is the list that says why, and a target on another
+    /// project need not be written to when a link is made.
+    /// </para>
+    /// </remarks>
+    public List<TaskLink> Requires { get; set; } = [];
+
     /// <summary>Who said so: an agent name, or whoever was at the keyboard.</summary>
     public string DeclaredBy { get; set; } = string.Empty;
 
@@ -231,6 +248,16 @@ public sealed class TaskProposal
 
     /// <summary>What went wrong the last time a pass asked, or empty when nothing did.</summary>
     public string Error { get; set; } = string.Empty;
+}
+
+/// <summary>A task named from any list: its project and its id.</summary>
+public sealed class TaskLink
+{
+    /// <summary>The project whose list it is on, or empty for the workspace-wide list.</summary>
+    public string Project { get; set; } = string.Empty;
+
+    /// <summary>The task's id on that list.</summary>
+    public string Id { get; set; } = string.Empty;
 }
 
 /// <summary>Where a task came from, and when it left.</summary>

@@ -214,6 +214,37 @@ public interface ITaskService
         CancellationToken ct = default) =>
         Task.FromResult(OperationResult<IReadOnlyList<string>>.Fail("This task list cannot rename a label."));
 
+    /// <summary>Every list in the workspace, each keyed as <see cref="TaskRequires.Key"/> keys it.</summary>
+    /// <remarks>The default knows of no lists, for the doubles in the tests; the real service reads them all.</remarks>
+    Task<OperationResult<IReadOnlyDictionary<string, IReadOnlyList<TaskItem>>>> EveryListAsync(CancellationToken ct = default) =>
+        Task.FromResult(OperationResult<IReadOnlyDictionary<string, IReadOnlyList<TaskItem>>>.Fail("This task list cannot read every list."));
+
+    /// <summary>
+    /// Why these requirements cannot be added to a task, or null when they can:
+    /// each must name a task, not an idea and not itself, and none may close a
+    /// loop, whichever lists the loop runs through.
+    /// </summary>
+    Task<string?> RequiresRefusalAsync(
+        string? projectSlug,
+        string id,
+        IReadOnlyList<TaskLink> add,
+        CancellationToken ct = default) =>
+        Task.FromResult<string?>("This task list cannot check a requirement.");
+
+    /// <summary>
+    /// Adds requirements to a task and takes others off, refusing as
+    /// <see cref="RequiresRefusalAsync"/> says, without claiming anything about
+    /// where the work stands.
+    /// </summary>
+    /// <remarks>The default refuses, for the doubles in the tests; the real service links.</remarks>
+    Task<OperationResult<TaskItem>> RequireAsync(
+        string? projectSlug,
+        string id,
+        IReadOnlyList<TaskLink> add,
+        IReadOnlyList<TaskLink> remove,
+        CancellationToken ct = default) =>
+        Task.FromResult(OperationResult<TaskItem>.Fail("This task list cannot link tasks."));
+
     /// <summary>A list, with the revision a change made from it should name.</summary>
     /// <remarks>
     /// The default has no revision to give, which a caller reads as nothing to
@@ -547,6 +578,99 @@ internal sealed class TaskService : ITaskService
     }
 
     /// <inheritdoc />
+    public async Task<OperationResult<IReadOnlyDictionary<string, IReadOnlyList<TaskItem>>>> EveryListAsync(CancellationToken ct = default)
+    {
+        if (!_workspace.IsAvailable())
+        {
+            return OperationResult<IReadOnlyDictionary<string, IReadOnlyList<TaskItem>>>.Fail(NoWorkspace, ExitCode.WorkspaceSyncFailed);
+        }
+
+        var every = new Dictionary<string, IReadOnlyList<TaskItem>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var slug in TaskPaths.Lists(_workspace.LocalPath))
+        {
+            var listed = await ListAsync(slug, ct).ConfigureAwait(false);
+
+            if (listed.Succeeded)
+            {
+                every[TaskRequires.Key(slug)] = listed.Value!;
+            }
+        }
+
+        return OperationResult<IReadOnlyDictionary<string, IReadOnlyList<TaskItem>>>.Ok(every);
+    }
+
+    /// <inheritdoc />
+    public async Task<string?> RequiresRefusalAsync(
+        string? projectSlug,
+        string id,
+        IReadOnlyList<TaskLink> add,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(add);
+
+        if (add.Count == 0)
+        {
+            return null;
+        }
+
+        var every = await EveryListAsync(ct).ConfigureAwait(false);
+
+        if (every.Failed)
+        {
+            return every.Error;
+        }
+
+        TaskRequires.Lists lists = key => every.Value!.TryGetValue(key, out var list) ? list : null;
+        var from = new TaskLink { Project = TaskRequires.Key(projectSlug), Id = id.Trim() };
+
+        foreach (var link in add)
+        {
+            if (TaskRequires.Same(link, from))
+            {
+                return $"'{from.Id}' can't require itself.";
+            }
+
+            if (lists(link.Project) is null)
+            {
+                return $"'{link.Project}' is not a project in this workspace, so {TaskRequires.Name(link)} can't be required.";
+            }
+
+            switch (TaskRequires.Find(link, lists))
+            {
+                case null:
+                    return $"There is no task {TaskRequires.Name(link)} to require.";
+                case { Kind: TaskKind.Idea }:
+                    return $"{TaskRequires.Name(link)} is an idea, and only a task can be required: an idea may never become work.";
+            }
+        }
+
+        return TaskRequires.Loop(from, add, lists) is { } loop
+            ? $"That would make a loop, {loop}, so none of them could ever start."
+            : null;
+    }
+
+    /// <inheritdoc />
+    public async Task<OperationResult<TaskItem>> RequireAsync(
+        string? projectSlug,
+        string id,
+        IReadOnlyList<TaskLink> add,
+        IReadOnlyList<TaskLink> remove,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(add);
+        ArgumentNullException.ThrowIfNull(remove);
+
+        if (await RequiresRefusalAsync(projectSlug, id, add, ct).ConfigureAwait(false) is { } refused)
+        {
+            return OperationResult<TaskItem>.Fail(refused, ExitCode.InvalidArguments);
+        }
+
+        return One(await ApplyCoreAsync(
+            [new TaskOperation(TaskOperation.Require, projectSlug, id, Requires: add, Unrequires: remove)], false, ct).ConfigureAwait(false));
+    }
+
+    /// <inheritdoc />
     public Task<OperationResult<TaskBatch>> ApplyAsync(IReadOnlyList<TaskOperation> operations, CancellationToken ct = default) =>
         ApplyCoreAsync(operations, true, ct);
 
@@ -695,7 +819,7 @@ internal sealed class TaskService : ITaskService
                     outcomes[index] = Failed(
                         index, operation, $"'{missing}' is not a project this workspace has.", ExitCode.ProjectNotFound);
                 }
-                else if (operation.Op is TaskOperation.Hold or TaskOperation.Retype or TaskOperation.Label)
+                else if (operation.Op is TaskOperation.Hold or TaskOperation.Retype or TaskOperation.Label or TaskOperation.Require)
                 {
                     // Only a backfill pass holds a proposal. One sent from a
                     // page or an agent would be a done-when nobody asked for.
@@ -937,7 +1061,8 @@ internal sealed class TaskService : ITaskService
     /// <summary>What can be refused about an operation from the operation alone.</summary>
     private static (string Error, ExitCode Code)? Precheck(TaskOperation operation)
     {
-        if (!TaskOperation.Ops.Contains(operation.Op) && operation.Op is not (TaskOperation.Hold or TaskOperation.Retype or TaskOperation.Label))
+        if (!TaskOperation.Ops.Contains(operation.Op)
+            && operation.Op is not (TaskOperation.Hold or TaskOperation.Retype or TaskOperation.Label or TaskOperation.Require))
         {
             return ($"There is nothing called '{operation.Op}' to do to a task. It is one of {string.Join(", ", TaskOperation.Ops)}.",
                 ExitCode.InvalidArguments);
@@ -1111,6 +1236,36 @@ internal sealed class TaskService : ITaskService
                 groups[0].Changed = true;
 
                 return OperationResult<TaskItem>.Ok(retyping);
+            }
+
+            case TaskOperation.Require:
+            {
+                var id = operation.Id!.Trim();
+
+                if (list.Items.FirstOrDefault(item => Same(item.Id, id)) is not { } linking)
+                {
+                    return OperationResult<TaskItem>.Fail(
+                        $"'{id}' is not a task of {TaskPaths.Describe(operation.Project)}.", ExitCode.InvalidArguments);
+                }
+
+                var before = linking.Requires.Count;
+                var removed = linking.Requires.RemoveAll(link => (operation.Unrequires ?? []).Any(gone => TaskRequires.Same(link, gone)));
+
+                foreach (var link in operation.Requires ?? [])
+                {
+                    if (!linking.Requires.Any(one => TaskRequires.Same(one, link)))
+                    {
+                        linking.Requires.Add(new TaskLink { Project = link.Project.Trim(), Id = link.Id.Trim() });
+                    }
+                }
+
+                // Nothing written when nothing changed, the same as everywhere else.
+                if (removed > 0 || linking.Requires.Count != before)
+                {
+                    groups[0].Changed = true;
+                }
+
+                return OperationResult<TaskItem>.Ok(linking);
             }
 
             case TaskOperation.Label:
@@ -1494,6 +1649,7 @@ internal sealed class TaskService : ITaskService
         Type = item.Type,
         TypeBy = item.TypeBy,
         Labels = [.. item.Labels],
+        Requires = [.. item.Requires.Select(link => new TaskLink { Project = link.Project, Id = link.Id })],
         DeclaredBy = item.DeclaredBy,
         DeclaredUtc = item.DeclaredUtc,
         Note = item.Note,

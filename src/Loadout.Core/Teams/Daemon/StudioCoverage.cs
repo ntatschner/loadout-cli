@@ -121,6 +121,7 @@ public static class StudioCoverage
         ["task list"] = new("projects", StudioEffect.Reads),
         ["task show"] = Terminal("prints one task for a terminal or a script; Studio's task board opens each task in full through the same command, in a dialog rather than a form"),
         ["task shorten"] = Terminal("a one-off tidy of titles written before the 72-character limit, best tried with --dry-run first, which no page needs to offer"),
+        ["task requires"] = Terminal("links are made and read from the terminal for now; Studio shows what each holds once offers arrive"),
         ["task label"] = Terminal("labels are the person's own and trigger nothing, so no page depends on them yet; a list filters on them with label:"),
         ["task labels list"] = Terminal("a count of labels across the workspace, which no page shows yet"),
         ["task labels rename"] = Terminal("changes a label on every list at once after asking, which no page offers yet"),

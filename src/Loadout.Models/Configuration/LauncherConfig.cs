@@ -412,6 +412,13 @@ public sealed class WorkspaceSettings
     public string Remote { get; set; } = string.Empty;
 
     public string Branch { get; set; } = "main";
+
+    /// <summary>
+    /// Whether an unattended run waits for every task its task requires to be
+    /// done. On unless turned off, because the link holds nothing otherwise;
+    /// the setting is the way out that needs no release.
+    /// </summary>
+    public bool RequiresGuard { get; set; } = true;
 }
 
 /// <summary>Workspace synchronisation policy (spec section 45).</summary>

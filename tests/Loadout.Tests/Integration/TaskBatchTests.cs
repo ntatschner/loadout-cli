@@ -249,6 +249,7 @@ public sealed class TaskBatchTests : IDisposable
                 var type when type == typeof(DateTimeOffset) => DateTimeOffset.UnixEpoch.AddDays(3),
                 var type when type == typeof(TaskMove) => new TaskMove { From = "elsewhere", Utc = DateTimeOffset.UnixEpoch },
                 var type when type == typeof(List<string>) => new List<string> { "set-" + property.Name },
+                var type when type == typeof(List<TaskLink>) => new List<TaskLink> { new() { Project = "elsewhere", Id = "set-" + property.Name } },
                 var type when type == typeof(List<TaskEvent>) => new List<TaskEvent> { new() { State = TaskState.Doing, By = "someone", Utc = DateTimeOffset.UnixEpoch, Reason = "why" } },
                 var type when type == typeof(TaskProposal) => new TaskProposal { DoneWhen = ["it works"], Why = "why", Utc = DateTimeOffset.UnixEpoch, Error = "it failed" },
                 var type => throw new InvalidOperationException($"TaskItem.{property.Name} is a {type.Name}, which this test does not know how to set."),
@@ -273,6 +274,9 @@ public sealed class TaskBatchTests : IDisposable
     [InlineData(nameof(ITaskService.RetypeAsync))]
     [InlineData(nameof(ITaskService.LabelAsync))]
     [InlineData(nameof(ITaskService.RelabelAsync))]
+    [InlineData(nameof(ITaskService.EveryListAsync))]
+    [InlineData(nameof(ITaskService.RequiresRefusalAsync))]
+    [InlineData(nameof(ITaskService.RequireAsync))]
     public void The_service_has_its_own_rather_than_the_default_for_the_doubles(string method)
     {
         var map = typeof(TaskService).GetInterfaceMap(typeof(ITaskService));

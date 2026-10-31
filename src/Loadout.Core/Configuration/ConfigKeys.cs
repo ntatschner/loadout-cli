@@ -160,6 +160,13 @@ public static class ConfigKeys
             (c, _, v) => c.Workspace.Branch = v, false,
             Group: Groups.Workspace),
 
+        new("requires-guard",
+            "Hold a task out of team queues until every task it requires is done. A person starting it by hand is asked first",
+            (c, _) => Boolean(c.Workspace.RequiresGuard),
+            (c, _, v) => c.Workspace.RequiresGuard = Flag(v), false,
+            Group: Groups.Workspace,
+            IsFlag: true),
+
         new("default-agent", "Agent launched when a project names none",
             (c, _) => c.DefaultAgent,
             (c, _, v) => c.DefaultAgent = v, false,

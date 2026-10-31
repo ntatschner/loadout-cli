@@ -1605,6 +1605,12 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             + "instead of adding a task of its own.")]
         public string? Task { get; init; }
 
+        [CommandOption("--despite-requires")]
+        [Description(
+            "Start the run even though its --task requires a task not yet done. Asked for instead when somebody is "
+            + "there to answer; needed when nobody is.")]
+        public bool DespiteRequires { get; init; }
+
         /// <summary>
         /// A worktree of the project's repository to work in instead of its checkout.
         /// </summary>
@@ -1935,6 +1941,32 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             }
 
             taskDoneWhen = Loadout.Core.Tasks.TaskRuns.Find(forTask, listed.Value!)?.DoneWhen;
+
+            // The same guard a team queue keeps, asked rather than enforced
+            // when a person is starting it: they may have decided.
+            if (Loadout.Core.Tasks.TaskRuns.Find(forTask, listed.Value!) is { Requires.Count: > 0 } waiting
+                && await TeamQueueing.RequiresAsync(_tasks, _configuration, cancellationToken).ConfigureAwait(false) is { } lists
+                && Loadout.Core.Tasks.TaskRequires.Said(Loadout.Core.Tasks.TaskRequires.Unmet(waiting, lists), project.Entry.Slug) is { } held
+                && !settings.DespiteRequires)
+            {
+                if (settings.DryRun)
+                {
+                    output.WriteLine(TeamStyle.Note($"'{waiting.Id}' {held}, so a real run would ask before starting."));
+                }
+                else if (!settings.AllowsPrompting)
+                {
+                    return output.Fail(
+                        $"'{waiting.Id}' {held}. Nobody is here to agree to starting it anyway, so nothing started. "
+                        + "Pass --despite-requires to start it regardless.",
+                        ExitCode.InvalidArguments);
+                }
+                else if (!_console.Confirm($"'{Markup.Escape(waiting.Id)}' {Markup.Escape(held)}. Start it anyway?", defaultValue: false))
+                {
+                    output.WriteLine("Nothing started.");
+
+                    return CommandOutput.Success();
+                }
+            }
         }
 
         // The project's standing criteria. A manifest that cannot be read
