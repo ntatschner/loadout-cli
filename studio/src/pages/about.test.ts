@@ -220,4 +220,31 @@ describe('About Loadout', () => {
     expect(screen.queryByText('Restarting Loadout…')).toBeNull();
     expect(document.querySelector('.vline b')?.textContent).toBe('0.110.0');
   });
+
+  it('a daemon that comes back on the old version is a failed update, not a success', async () => {
+    answers = [structuredClone(MODEL), new TypeError('Failed to fetch'), structuredClone(MODEL)];
+    reads = [job('running', 'Downloading 0.111.0'), new TypeError('Failed to fetch')];
+    render(About);
+
+    await fireEvent.click(await screen.findByRole('button', { name: /Update now/ }));
+    await fireEvent.click(screen.getByRole('button', { name: /Restart when its runs finish/ }));
+
+    expect(await screen.findByText('Restarting Loadout…', {}, { timeout: 3000 })).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText('Restarting Loadout…')).toBeNull(), { timeout: 5000 });
+    expect(toasts.list.map((one) => [one.level, one.text])).toEqual([['problem', 'Loadout came back on the old version, 0.110.0, so the update to 0.111.0 did not install.']]);
+    expect(within(screen.getByRole('log')).getByText('Loadout came back on 0.110.0, so the update to 0.111.0 did not install.')).toBeTruthy();
+    expect(document.querySelector('.vline b')?.textContent).toBe('0.110.0');
+  });
+
+  it('a refusal before the job has been read is shown as the refusal, not a restart', async () => {
+    const { commands, Refused } = await import('../lib/api');
+    vi.mocked(commands.run).mockRejectedValueOnce(new Refused('An update is already running.', 409));
+    render(About);
+
+    await fireEvent.click(await screen.findByRole('button', { name: /Update now/ }));
+    await fireEvent.click(screen.getByRole('button', { name: /Restart when its runs finish/ }));
+
+    await waitFor(() => expect(toasts.list.map((one) => [one.level, one.text])).toEqual([['problem', 'An update is already running.']]), { timeout: 3000 });
+    expect(screen.queryByText('Restarting Loadout…')).toBeNull();
+  });
 });

@@ -59,6 +59,10 @@
     // job has been seen running, losing the daemon is the restart it asked
     // for; a job that ended failed was read as failed before that.
     let last: Job | null = null;
+    // What was installed and what the update was for, so a daemon that comes
+    // back on the old version is told apart from one that updated.
+    const from = model?.version ?? null;
+    const to = model?.available ?? null;
 
     try {
       const job = await runJob('update', words, 600_000, (seen) => {
@@ -73,7 +77,7 @@
       } else if ((last as Job | null)?.state === 'running' && (error instanceof TypeError || error instanceof Refused)) {
         // The read itself failed: no answer at all, or a daemon that has
         // already come back and never heard of the job.
-        await comeBack(words);
+        await comeBack(words, from, to);
       } else {
         toasts.add({ level: 'problem', text: (error as Error).message, cmd: lineFor('update', words) });
       }
@@ -83,8 +87,12 @@
     }
   }
 
-  /** Waits for the restarted daemon to answer, then reads the page again, so the version shown is the one now installed. */
-  async function comeBack(words: string[]) {
+  /**
+   * Waits for the restarted daemon to answer, then reads the page again, so the
+   * version shown is the one now installed. A daemon that comes back on the
+   * version it had before was put back by the updater, so that is a failure.
+   */
+  async function comeBack(words: string[], from: string | null, to: string | null) {
     restarting = true;
     const until = Date.now() + 300_000;
 
@@ -93,9 +101,16 @@
         await new Promise((resolve) => setTimeout(resolve, 1000));
 
         try {
-          model = await aboutLoadout(true);
+          const now = await aboutLoadout(true);
+          model = now;
           problem = null;
           await studio.loadUpdate();
+
+          if (from !== null && now.version === from) {
+            const target = to ? ` to ${to}` : '';
+            progress = [...progress, `Loadout came back on ${from}, so the update${target} did not install.`];
+            toasts.add({ level: 'problem', text: `Loadout came back on the old version, ${from}, so the update${target} did not install.`, cmd: lineFor('update', words) });
+          }
 
           return;
         } catch (error) {
