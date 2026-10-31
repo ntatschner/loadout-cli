@@ -791,6 +791,15 @@ public static class Program
             task.AddCommand<TaskDeclareCommand>("declare");
             task.AddCommand<TaskProposeDoneWhenCommand>("propose-done-when");
             task.AddCommand<TaskShortenCommand>("shorten");
+            task.AddCommand<TaskClassifyCommand>("classify");
+            task.AddCommand<TaskLabelCommand>("label");
+            task.AddBranch("labels", labels =>
+            {
+                labels.SetDescription("Your own labels on tasks and ideas, kept for the whole workspace.");
+                labels.AddCommand<TaskLabelsListCommand>("list");
+                labels.AddCommand<TaskLabelsRenameCommand>("rename");
+                labels.AddCommand<TaskLabelsRemoveCommand>("remove");
+            });
             task.AddCommand<TaskMoveCommand>("move");
             task.AddCommand<TaskRemoveCommand>("remove");
             task.AddCommand<TaskApplyCommand>("apply");
@@ -813,6 +822,7 @@ public static class Program
             idea.AddCommand<IdeaImproveCommand>("improve");
             idea.AddCommand<IdeaAcceptCommand>("accept");
             idea.AddCommand<IdeaDismissCommand>("dismiss");
+            idea.AddCommand<IdeaTypeCommand>("type");
             idea.AddCommand<IdeaMoveCommand>("move");
             idea.AddCommand<IdeaRemoveCommand>("remove");
             idea.AddCommand<IdeaApplyCommand>("apply");

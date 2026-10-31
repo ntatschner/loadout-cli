@@ -288,6 +288,9 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
                     item.Title,
                     state = item.State.ToString().ToLowerInvariant(),
                     kind = item.Kind.ToString().ToLowerInvariant(),
+                    type = item.Type is { } type ? TaskTypes.Name(type) : null,
+                    typeBy = item.TypeBy is { } typeBy ? TaskTypes.Name(typeBy) : null,
+                    labels = item.Labels,
                     project = where[item],
                     item.DeclaredBy,
                     declared = item.DeclaredUtc,
@@ -492,6 +495,7 @@ internal sealed class TaskRows
 {
     private const int IdWidth = 22;
     private const int StateWidth = 7;
+    private static readonly int TypeWidth = TaskTypes.Names.Max(name => name.Length);
     private const int ProjectLimit = 16;
 
     private readonly int? _width;
@@ -532,11 +536,26 @@ internal sealed class TaskRows
             used += 5;
         }
 
+        // In its own column, padded to the longest name, so titles still line
+        // up; a task recorded before there were types leaves it blank.
+        var type = item.Type is { } typed ? TaskTypes.Name(typed) : string.Empty;
+
+        line.Append("[dim]").Append(Markup.Escape(type.PadRight(TypeWidth))).Append("[/] ");
+        used += TypeWidth + 1;
+
+        // After the title, and taken from its room, so a row with labels
+        // still fits rather than wrapping its labels onto a line of their own.
+        var labels = item.Labels.Count > 0 ? " " + string.Join(' ', item.Labels.Select(label => $"#{label}")) : string.Empty;
+
         // Less room than this and the title is left to wrap rather than cut
         // to a word or two, which would say nothing.
-        var title = _width is { } width && width - used >= 20 ? Fit(item.Title, width - used) : item.Title;
+        var title = _width is { } width && width - used - labels.Length >= 20
+            ? Fit(item.Title, width - used - labels.Length)
+            : item.Title;
 
-        return line.Append(Markup.Escape(title)).ToString();
+        line.Append(Markup.Escape(title));
+
+        return (labels.Length > 0 ? line.Append("[dim]").Append(Markup.Escape(labels)).Append("[/]") : line).ToString();
     }
 
     private static string Fit(string text, int room) =>
@@ -616,6 +635,12 @@ public sealed class TaskDeclareCommand : AsyncCommand<TaskDeclareCommand.Setting
         [Description("Who is saying so. Defaults to this machine's user.")]
         public string? By { get; init; }
 
+        [CommandOption("--type <TYPE>")]
+        [Description(
+            "What the work is about: new-project, feature, bug-fix, ci-cd, release, docs or maintenance. "
+            + "Your choice is kept until you change it. Left out, a new task's type is guessed from its words.")]
+        public string? Type { get; init; }
+
         /// <summary>The done-when to record: null to leave it, empty to clear it.</summary>
         internal IReadOnlyList<string>? DoneWhenGiven =>
             NoDoneWhen ? [] : DoneWhen.Length > 0 ? DoneWhen : null;
@@ -643,6 +668,20 @@ public sealed class TaskDeclareCommand : AsyncCommand<TaskDeclareCommand.Setting
             return output.Fail(
                 "--done-when and --no-done-when say opposite things. Give one or the other.",
                 ExitCode.InvalidArguments);
+        }
+
+        TaskType? type = null;
+
+        if (settings.Type is { } typed)
+        {
+            if (TaskTypes.Parse(typed) is not { } parsed)
+            {
+                return output.Fail(
+                    $"'{typed}' is not a type. Use {string.Join(", ", TaskTypes.Names)}.",
+                    ExitCode.InvalidArguments);
+            }
+
+            type = parsed;
         }
 
         var resolution = await settings.ListAsync(_projects, cancellationToken).ConfigureAwait(false);
@@ -682,7 +721,8 @@ public sealed class TaskDeclareCommand : AsyncCommand<TaskDeclareCommand.Setting
             settings.Note,
             cancellationToken,
             detail: settings.Detail,
-            doneWhen: settings.DoneWhenGiven).ConfigureAwait(false);
+            doneWhen: settings.DoneWhenGiven,
+            type: type).ConfigureAwait(false);
 
         if (declared.Failed)
         {
@@ -691,7 +731,8 @@ public sealed class TaskDeclareCommand : AsyncCommand<TaskDeclareCommand.Setting
 
         output.WriteLine(
             $"[green]+[/] {Markup.Escape(declared.Value!.Id)} is "
-            + $"{declared.Value.State.ToString().ToLowerInvariant()}.");
+            + $"{declared.Value.State.ToString().ToLowerInvariant()}"
+            + (declared.Value.Type is { } kept ? $", {Markup.Escape(TaskTypeLine.Said(kept, declared.Value.TypeBy))}." : "."));
 
         // Said where the title is written, or long titles come back: the
         // tidying pass only ever cleans up what is already there.
@@ -744,6 +785,23 @@ public sealed class TaskDeclareCommand : AsyncCommand<TaskDeclareCommand.Setting
             "[dim]  Turn it on with: loadout project context tasks on "
             + $"--project {Markup.Escape(slug)}[/]");
     }
+}
+
+/// <summary>How a task's type is said on the command line.</summary>
+internal static class TaskTypeLine
+{
+    /// <summary>The type, and whether it was a guess: <c>type bug fix (guessed)</c>.</summary>
+    /// <remarks>
+    /// Said beside the type every time, because a guess and a choice are
+    /// worth different amounts, and only a choice is left alone by later guesses.
+    /// </remarks>
+    public static string Said(TaskType type, TaskTypeSource? by) =>
+        $"type {TaskTypes.Words(type)}" + by switch
+        {
+            TaskTypeSource.Rule => " (guessed)",
+            TaskTypeSource.Agent => " (the agent's guess)",
+            _ => string.Empty,
+        };
 }
 
 /// <summary>How a moved task's trace is said, on the command line and in JSON.</summary>
@@ -1120,6 +1178,7 @@ public sealed class TaskShowCommand : AsyncCommand<TaskShowCommand.Settings>
         output.WriteLine(
             $"[bold]{Markup.Escape(task.Id)}[/]  {task.State.ToString().ToLowerInvariant()}"
             + (task.Kind == TaskKind.Idea ? "  [blue]idea[/]" : string.Empty)
+            + (task.Type is { } type ? $"  {Markup.Escape(TaskTypeLine.Said(type, task.TypeBy))}" : string.Empty)
             + $"  [dim]{Markup.Escape(TaskPaths.Describe(slug))}[/]");
         output.WriteLine(Markup.Escape(task.Title.Length > 0 ? task.Title : task.Id));
         output.WriteLine(
@@ -1137,6 +1196,7 @@ public sealed class TaskShowCommand : AsyncCommand<TaskShowCommand.Settings>
                 + $"loadout idea show {Markup.Escape(task.Id)} {(slug is null ? "--global" : $"--project {Markup.Escape(slug)}")} --full shows it.[/]");
         }
 
+        Section(output, "Labels", string.Join(", ", task.Labels));
         Section(output, "Note", task.Note);
         Section(output, "Detail", task.Detail);
         Section(output, "Done when", string.Join('\n', task.DoneWhen.Select(one => $"- {one}")));
@@ -1343,6 +1403,146 @@ public sealed class TaskShortenCommand : AsyncCommand<TaskShortenCommand.Setting
             ? $"Would shorten {found.Count} title(s). Nothing was written."
             : $"[green]+[/] Shortened {found.Count} title(s). Each one's whole text is at the start of its "
                 + "detail, and its history says so.");
+
+        return CommandOutput.Success();
+    }
+}
+
+/// <summary>Gives a type to the tasks and ideas recorded before there were types.</summary>
+/// <remarks>
+/// Run only when asked, and worth running with --dry-run first: typing a whole
+/// list unasked is a surprise, even when every type is only a guess.
+/// </remarks>
+[Description("Give every task and idea with no type the one its words suggest, recorded as a guess.")]
+[CommandMeta(CommandCategory.Workspace,
+    Intent = "classify type tasks ideas backlog guess bug feature migrate", Mutates = true)]
+public sealed class TaskClassifyCommand : AsyncCommand<TaskClassifyCommand.Settings>
+{
+    private readonly ITaskService _tasks;
+    private readonly IProjectService _projects;
+    private readonly Core.Workspace.IWorkspaceManager _workspace;
+    private readonly IAnsiConsole _console;
+
+    public TaskClassifyCommand(
+        ITaskService tasks,
+        IProjectService projects,
+        Core.Workspace.IWorkspaceManager workspace,
+        IAnsiConsole console)
+    {
+        _tasks = tasks;
+        _projects = projects;
+        _workspace = workspace;
+        _console = console;
+    }
+
+    public sealed class Settings : TaskSettings
+    {
+        [CommandOption("--every-list")]
+        [Description("Every project's list and the workspace-wide one, rather than one list.")]
+        public bool EveryList { get; init; }
+
+        [CommandOption("--by <WHO>")]
+        [Description("Who the history says did it. Defaults to this machine's user.")]
+        public string? By { get; init; }
+    }
+
+    /// <inheritdoc />
+    public override async Task<int> ExecuteAsync(
+        CommandContext context,
+        Settings settings,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var output = new CommandOutput(_console, settings);
+
+        IReadOnlyList<string?> lists;
+
+        if (settings.EveryList)
+        {
+            if (settings.Project is { Length: > 0 } || settings.Global)
+            {
+                return output.Fail(
+                    "--every-list already covers every list. Leave out --project and --global.",
+                    ExitCode.InvalidArguments);
+            }
+
+            if (!_workspace.IsAvailable())
+            {
+                return output.Fail(
+                    "There is no workspace on this machine, so there are no tasks to classify.",
+                    ExitCode.WorkspaceSyncFailed);
+            }
+
+            lists = TaskPaths.Lists(_workspace.LocalPath);
+        }
+        else
+        {
+            var resolution = await settings.ListAsync(_projects, cancellationToken).ConfigureAwait(false);
+
+            if (resolution.Failed)
+            {
+                return output.Fail(resolution);
+            }
+
+            lists = [resolution.Value?.Entry.Slug];
+        }
+
+        var by = settings.By is { Length: > 0 } who ? who : Environment.UserName;
+        var found = new List<(string? List, TaskClassified Task)>();
+
+        foreach (var list in lists)
+        {
+            var classified = await _tasks
+                .ClassifyAsync(list, by, apply: !settings.DryRun, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (classified.Failed)
+            {
+                return output.Fail(classified);
+            }
+
+            found.AddRange(classified.Value!.Select(one => (list, one)));
+        }
+
+        if (output.IsJson)
+        {
+            output.WriteJson(new
+            {
+                written = !settings.DryRun,
+                classified = found.Select(one => new
+                {
+                    project = one.List,
+                    id = one.Task.Id,
+                    title = one.Task.Title,
+                    type = TaskTypes.Name(one.Task.Type),
+                }),
+            });
+
+            return CommandOutput.Success();
+        }
+
+        if (found.Count == 0)
+        {
+            output.WriteLine("[dim]Every task already has a type. Nothing to do.[/]");
+
+            return CommandOutput.Success();
+        }
+
+        var width = TaskTypes.Names.Max(name => name.Length);
+
+        foreach (var (list, task) in found)
+        {
+            output.WriteLine(
+                $"{Markup.Escape(TaskPaths.Describe(list))}  [bold]{Markup.Escape(task.Id)}[/]  "
+                + $"{Markup.Escape(TaskTypes.Name(task.Type).PadRight(width))}  [dim]{Markup.Escape(task.Title)}[/]");
+        }
+
+        output.WriteBlankLine();
+        output.WriteLine(settings.DryRun
+            ? $"Would type {found.Count} task(s). Nothing was written."
+            : $"[green]+[/] Typed {found.Count} task(s). Each type is recorded as a guess, so refining an idea may "
+                + "still change it; give one --type with task declare to choose it yourself.");
 
         return CommandOutput.Success();
     }

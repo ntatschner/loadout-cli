@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using Loadout.Core.Ideas;
+using Loadout.Core.Tasks;
 using Loadout.Models.Ideas;
+using Loadout.Models.Tasks;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
@@ -47,6 +49,12 @@ internal interface IIdeaPrompts
 
     /// <summary>Which other list a misplaced idea belongs on.</summary>
     IdeaHome? MoveTo(IdeaPlace place, IReadOnlyList<string> projects);
+
+    /// <summary>
+    /// What the idea is about, as <c>idea type</c> takes it: a type's name, or
+    /// <c>agent</c> to hand the choice back.
+    /// </summary>
+    string? Type(IdeaPlace place, TaskType? type, TaskTypeSource? by);
 
     /// <summary>Yes or no, where a keypress alone is not agreement.</summary>
     bool Confirm(string question, string yes);
@@ -239,6 +247,21 @@ internal sealed class DialogIdeaPrompts : IIdeaPrompts
             && Pick($"Move {place.Id} from {place.Where} to which list? Its answers and plan go with it.",
                 homes.Select(home => home.Project ?? "The workspace-wide list").ToList()) is { } at
             ? homes[at]
+            : null;
+    }
+
+    public string? Type(IdeaPlace place, TaskType? type, TaskTypeSource? by)
+    {
+        var now = type is not { } typed
+            ? "It has no type yet."
+            : by == TaskTypeSource.Person
+                ? $"You chose {TaskTypes.Words(typed)}, and no round changes it."
+                : $"It is guessed as {TaskTypes.Words(typed)}, and each round may revise it.";
+
+        return Pick(
+                $"What is {place.Id} about? {now}",
+                [.. TaskTypes.All.Select(TaskTypes.Words), "Let the agent decide at its next round"]) is { } at
+            ? at < TaskTypes.All.Count ? TaskTypes.Name(TaskTypes.All[at]) : TaskTypes.HandBack
             : null;
     }
 

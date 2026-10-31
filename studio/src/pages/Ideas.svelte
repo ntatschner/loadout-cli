@@ -28,7 +28,7 @@
   import { runJob } from '../lib/jobs';
   import { BACKFILL_WORDS, fieldWord, backfillLine, backfillPatience, backfillSummary, markWord, type BackfillOutcome } from '../lib/backfill';
   import { router } from '../lib/router.svelte';
-  import { acceptWords, doneWhenLines, doneWhenWords, arrivalIn, gaps, keepUnchanged, needsChoice, nextStop, sendAnswers, stateWord, stopTarget, stopWords, type Arrival, type DumpItem, type Question, type Round } from '../lib/ideas';
+  import { acceptWords, doneWhenLines, doneWhenWords, arrivalIn, gaps, keepUnchanged, needsChoice, nextStop, sendAnswers, stateWord, stopTarget, stopWords, TYPE_AGENT, TYPES, typeSaid, typeWord, type Arrival, type DumpItem, type Question, type Round } from '../lib/ideas';
   import { studio } from '../lib/state.svelte';
   import { ideaHref, listHref, movedSaid, whereSaid } from '../lib/tasks';
   import { toasts } from '../lib/toasts.svelte';
@@ -51,6 +51,8 @@
     moved?: { from: string | null; at: string } | null;
     /** 'missing' when its plan lacks something the current contract asks for. */
     mark?: string | null;
+    /** What it is about, such as 'bug-fix'; absent for an idea recorded before there were types. */
+    type?: string | null;
   }
 
   /** An idea that is a task on another list now, shown so it is not simply gone. */
@@ -109,6 +111,9 @@
     /** The last backfill pass that could not fill its plan, when one could not. */
     gapFillFailure?: { when: string | null; error: string } | null;
     mark?: string | null;
+    /** What it is about, such as 'bug-fix', and who said so: 'rule', 'agent' or 'person'. */
+    type?: string | null;
+    typeBy?: string | null;
     accepted: { project: string; plan: string; by: string; when: string } | null;
     /** What was added since it was asked; taken is when a round read it, null until one has. */
     notes?: { id: string; text: string; by: string; added: string; taken: string | null }[];
@@ -160,6 +165,20 @@
   const listed = $derived(ideas?.find((one) => one.id === id && (one.project ?? null) === project) ?? null);
   const word = $derived(listed ? stateWord(listed) : idea ? stateWord({ stage: idea.stage, unanswered: idea.questions.filter((one) => !one.answer).length }) : '');
   const refused = $derived(studio.watchOnly ? studio.watchOnlyReason : undefined);
+
+  // The type picker: a type the person chose shows as chosen; any guess shows
+  // as the agent's to decide, which is what choosing that entry hands back.
+  const typeChosen = $derived(idea?.typeBy === 'person' && idea.type ? idea.type : TYPE_AGENT);
+  const typeHint = $derived(typeSaid(idea?.type, idea?.typeBy));
+
+  /** Chooses the idea's type, or hands it back to the agent, and reads the idea again. */
+  function retype(value: string) {
+    if (!idea || value === typeChosen) {
+      return;
+    }
+
+    void record('idea type', [idea.id, value, ...where], 'The type was not changed.');
+  }
 
   function fail(error: unknown) {
     if (error instanceof SignedOut) {
@@ -679,6 +698,7 @@
               <span class="t">{one.title}</span>
               <Signal word={stateWord(one)} />
               {#if markWord(one.mark)}<span class="ls-tag needs">{markWord(one.mark)}</span>{/if}
+              {#if typeWord(one.type)}<span class="ls-tag type">{typeWord(one.type)}</span>{/if}
               <span class="x">{one.failure ? 'last round failed' : one.unanswered ? `${one.unanswered} question${one.unanswered === 1 ? '' : 's'} for you` : one.stage}</span>
             </a>
           </li>
@@ -739,6 +759,17 @@
         {#if listed?.moved}<p class="slug">Moved here {movedSaid(listed.moved)}</p>{/if}
       </div>
       <IdeaStages stage={idea.stage} {word} />
+      {#if !idea.accepted}
+        <div class="itype">
+          <label for="idea-type">Type</label>
+          <select id="idea-type" class="ls-text" value={typeChosen} disabled={!!refused} title={lineFor('idea type', [idea.id, typeChosen, ...where])}
+            onchange={(event) => retype((event.currentTarget as HTMLSelectElement).value)}>
+            {#each TYPES as one (one)}<option value={one}>{typeWord(one)}</option>{/each}
+            <option value={TYPE_AGENT}>let the agent decide</option>
+          </select>
+          <span class="x">{typeHint}</span>
+        </div>
+      {/if}
       {#if idea.plan?.understanding}<p class="understand">{idea.plan.understanding}</p>{/if}
       <details class="asked"><summary>What was asked</summary><p>{idea.ask}</p></details>
 

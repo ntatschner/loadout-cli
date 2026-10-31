@@ -1,6 +1,7 @@
 using System.Drawing;
 using FluentAssertions;
 using Loadout.Core.Ideas;
+using Loadout.Core.Tasks;
 using Loadout.Models.Ideas;
 using Loadout.Models.Tasks;
 using Loadout.Tui.Terminal;
@@ -81,6 +82,56 @@ public sealed class IdeasWindowTests
         public IdeaHome? MoveTo(IdeaPlace place, IReadOnlyList<string> projects) { Asked.Add("move"); return Home; }
 
         public bool Confirm(string question, string yes) { Asked.Add("confirm"); return Yes; }
+
+        public string? Typed { get; init; }
+
+        public (TaskType? Type, TaskTypeSource? By)? TypeShown { get; private set; }
+
+        public string? Type(IdeaPlace place, TaskType? type, TaskTypeSource? by)
+        {
+            Asked.Add("type");
+            TypeShown = (type, by);
+
+            return Typed;
+        }
+    }
+
+    [Fact]
+    public void Choosing_a_type_runs_idea_type_with_what_was_chosen()
+    {
+        foreach (var chosen in new[] { "bug-fix", TaskTypes.HandBack })
+        {
+            var guessed = Entry("asking", "website", Questions()) is var entry
+                ? entry with { Summary = entry.Summary with { Type = TaskType.Feature, TypeBy = TaskTypeSource.Rule } }
+                : null!;
+            var prompts = new Scripted { Typed = chosen };
+            var (window, app) = Open(prompts, select: "asking", ideas: [guessed]);
+
+            using (app)
+            using (window)
+            {
+                var step = Press(window, Key.P);
+
+                prompts.TypeShown.Should().Be(((TaskType?)TaskType.Feature, (TaskTypeSource?)TaskTypeSource.Rule), "the question says what it is now");
+                step!.Command.Should().Be(LauncherCommands.IdeaType);
+                step.Arguments.Should().Equal("asking", chosen, "--project", "website");
+                step.Select.Should().Be("asking");
+            }
+        }
+    }
+
+    [Fact]
+    public void Choosing_no_type_builds_nothing()
+    {
+        var prompts = new Scripted { Typed = null };
+        var (window, app) = Open(prompts, select: "asking");
+
+        using (app)
+        using (window)
+        {
+            Press(window, Key.P).Should().BeNull();
+            prompts.Asked.Should().Equal("type");
+        }
     }
 
     [Fact]

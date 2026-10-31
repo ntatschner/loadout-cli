@@ -1076,6 +1076,11 @@ public sealed class LoadoutTools
         [Description("A short aside worth adding.")] string? note = null,
         [Description("The full description, read with `loadout task show`. Leave out to keep what is there.")]
         string? detail = null,
+        [Description(
+            "What the work is about: new-project, feature, bug-fix, ci-cd, release, docs or maintenance. "
+            + "Recorded as your guess, which never replaces a type a person chose. Leave out to keep what is there; "
+            + "a new task's type is guessed from its words.")]
+        string? type = null,
         CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
@@ -1086,6 +1091,18 @@ public sealed class LoadoutTools
             return $"There is no '{state}' state. The states are: open, doing, done, blocked, dropped.";
         }
 
+        Models.Tasks.TaskType? typed = null;
+
+        if (type is { Length: > 0 })
+        {
+            if (Core.Tasks.TaskTypes.Parse(type) is not { } known)
+            {
+                return $"There is no '{type}' type. The types are: {string.Join(", ", Core.Tasks.TaskTypes.Names)}.";
+            }
+
+            typed = known;
+        }
+
         var slug = await SlugAsync(ct).ConfigureAwait(false);
 
         if (slug is null)
@@ -1094,7 +1111,9 @@ public sealed class LoadoutTools
         }
 
         var declared = await _tasks
-            .DeclareAsync(slug, id, parsed, "agent", title, note, ct, detail: detail)
+            .DeclareAsync(
+                slug, id, parsed, "agent", title, note, ct, detail: detail,
+                type: typed, typeBy: typed is null ? null : Models.Tasks.TaskTypeSource.Agent)
             .ConfigureAwait(false);
 
         if (declared.Failed)

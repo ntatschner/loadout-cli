@@ -4160,7 +4160,8 @@ public sealed partial class TeamRunnerTests : IDisposable
         public Task<OperationResult<TaskItem>> DeclareAsync(
             string? projectSlug, string id, TaskState state, string declaredBy,
             string? title = null, string? note = null, CancellationToken ct = default, TaskKind? kind = null,
-            string? detail = null, IReadOnlyList<string>? doneWhen = null, string? reason = null)
+            string? detail = null, IReadOnlyList<string>? doneWhen = null, string? reason = null,
+            TaskType? type = null, TaskTypeSource? typeBy = null)
         {
             Declared.Add((projectSlug, id, state, declaredBy, title, note));
 

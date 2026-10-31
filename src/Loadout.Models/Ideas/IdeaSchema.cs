@@ -36,6 +36,11 @@ public static class IdeaSchema
     /// about; <c>relatesTo</c> may be empty for a question about nothing in
     /// particular. <c>doneWhen</c> on the plan stays optional, so a plan without
     /// one is still a plan; the person adds conditions at acceptance.
+    /// <para>
+    /// <c>type</c> is optional too, and added without a new contract: an
+    /// answer without it is the same shape, and says nothing about the type,
+    /// which is what a round from before there were types meant.
+    /// </para>
     /// </remarks>
     public const string Version3 = """
         {
@@ -46,6 +51,7 @@ public static class IdeaSchema
           "properties": {
             "contract": { "const": "idea/3" },
             "understanding": { "type": "string" },
+            "type": { "enum": ["new-project", "feature", "bug-fix", "ci-cd", "release", "docs", "maintenance"] },
             "questions": { "type": "array", "items": {
               "type": "object", "additionalProperties": false, "required": ["question", "why", "options", "recommendation", "relatesTo", "context"],
               "properties": {

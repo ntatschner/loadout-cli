@@ -35,6 +35,8 @@ public sealed record IdeaPlace(string? Project, string Id)
 /// <param name="Moved">Where it was moved from, or null when it has stayed where it was dropped in.</param>
 /// <param name="Outdated">How many of its questions may have been overtaken by a change since they were asked.</param>
 /// <param name="Mark">Whether its plan lacks something the current contract asks for.</param>
+/// <param name="Type">Its task's type, or null when it was recorded before there were types.</param>
+/// <param name="TypeBy">Who gave it <paramref name="Type"/>, or null when it has none.</param>
 public sealed record IdeaSummary(
     IdeaPlace Place,
     string Title,
@@ -47,7 +49,9 @@ public sealed record IdeaSummary(
     bool Running = false,
     TaskMove? Moved = null,
     int Outdated = 0,
-    Backfill.ContractMark Mark = Backfill.ContractMark.None);
+    Backfill.ContractMark Mark = Backfill.ContractMark.None,
+    TaskType? Type = null,
+    TaskTypeSource? TypeBy = null);
 
 /// <summary>What accepting an idea did.</summary>
 /// <param name="Task">The task it became.</param>
@@ -146,12 +150,30 @@ public interface IIdeaService
     /// <paramref name="seen"/>, the ones the round was shown, are marked taken
     /// in; null marks none.
     /// </summary>
+    /// <remarks>
+    /// A type in the answer revises the idea's task's type, unless the person
+    /// chose that type, which no answer changes.
+    /// </remarks>
     Task<OperationResult<IdeaRecord>> RecordReplyAsync(
         IdeaPlace place,
         IdeaReply reply,
         CancellationToken ct = default,
         IdeaAttempt? asked = null,
         IReadOnlyCollection<string>? seen = null);
+
+    /// <summary>The task an idea is, or null when its list has none by that id.</summary>
+    Task<TaskItem?> TaskOfAsync(IdeaPlace place, CancellationToken ct = default);
+
+    /// <summary>
+    /// Sets an idea's type as the person's choice, or with null hands it back
+    /// to the agent: the rules' guess from everything that was asked stands
+    /// until the next round revises it.
+    /// </summary>
+    Task<OperationResult<TaskItem>> RetypeAsync(
+        IdeaPlace place,
+        TaskType? type,
+        string by,
+        CancellationToken ct = default);
 
     /// <summary>
     /// Adds something the person wants the plan to take in, kept verbatim with
@@ -400,7 +422,11 @@ internal sealed partial class IdeaService : IIdeaService
             title is { Length: > 0 } ? Shorten(title) : TitleFrom(text),
             null,
             ct,
-            TaskKind.Idea).ConfigureAwait(false);
+            TaskKind.Idea,
+            // Guessed here rather than by the list, which sees only the
+            // title: what was asked says far more about what it is.
+            type: TaskTypes.Guess($"{title}\n{text}", TaskKind.Idea, project),
+            typeBy: TaskTypeSource.Rule).ConfigureAwait(false);
 
         return declared.Succeeded
             ? OperationResult<IdeaRecord>.Ok(record)
@@ -443,7 +469,9 @@ internal sealed partial class IdeaService : IIdeaService
                     _locks.Held(place),
                     item.Moved,
                     record is null ? 0 : IdeaWork.OutdatedCount(record),
-                    Backfill.ContractBackfill.MarkOf(record)));
+                    Backfill.ContractBackfill.MarkOf(record),
+                    item.Type,
+                    item.TypeBy));
             }
         }
 
@@ -686,7 +714,7 @@ internal sealed partial class IdeaService : IIdeaService
             return OperationResult<IdeaRecord>.Fail(refused, ExitCode.PolicyViolation);
         }
 
-        return await ChangeAsync(place, null, record =>
+        var recorded = await ChangeAsync(place, null, record =>
         {
             if (record.Accepted is not null)
             {
@@ -704,6 +732,60 @@ internal sealed partial class IdeaService : IIdeaService
 
             return null;
         }, ct).ConfigureAwait(false);
+
+        // After the round is kept, and not a reason to say it failed: the
+        // plan is what the round was for, and a type it could not set is
+        // still the guess it was before.
+        if (recorded.Succeeded && TaskTypes.Parse(reply.Type) is { } type)
+        {
+            await _tasks.RetypeAsync(place.Project, place.Id, type, TaskTypeSource.Agent, "agent", ct).ConfigureAwait(false);
+        }
+
+        return recorded;
+    }
+
+    /// <inheritdoc />
+    public async Task<TaskItem?> TaskOfAsync(IdeaPlace place, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(place);
+
+        var listed = await _tasks.ListAsync(place.Project, ct).ConfigureAwait(false);
+
+        return listed.Succeeded
+            ? listed.Value!.FirstOrDefault(item => string.Equals(item.Id, place.Id, StringComparison.OrdinalIgnoreCase))
+            : null;
+    }
+
+    /// <inheritdoc />
+    public async Task<OperationResult<TaskItem>> RetypeAsync(
+        IdeaPlace place,
+        TaskType? type,
+        string by,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(place);
+
+        if (type is { } chosen)
+        {
+            return await _tasks.RetypeAsync(place.Project, place.Id, chosen, TaskTypeSource.Person, by, ct).ConfigureAwait(false);
+        }
+
+        // Handed back: the rules' guess from what was asked, as at capture,
+        // which any round may revise because it is no longer a choice.
+        var read = await ReadAsync(place, ct).ConfigureAwait(false);
+
+        if (read.Failed)
+        {
+            return OperationResult<TaskItem>.Fail(read.Error!, read.ExitCode);
+        }
+
+        var task = await TaskOfAsync(place, ct).ConfigureAwait(false);
+        var guess = TaskTypes.Guess(
+            string.Join(' ', task?.Title ?? string.Empty, read.Value!.Ask, string.Join(' ', read.Value.Notes.Select(note => note.Text))),
+            TaskKind.Idea,
+            place.Project);
+
+        return await _tasks.RetypeAsync(place.Project, place.Id, guess, TaskTypeSource.Rule, by, ct).ConfigureAwait(false);
     }
 
     /// <inheritdoc />

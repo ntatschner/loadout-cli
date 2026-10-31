@@ -95,7 +95,11 @@
 | `loadout task list --missing` | Only open and blocked tasks without a done-when. Each is marked `missing`, or `proposal waiting` when a backfill pass has proposed one for you to confirm. `task show` prints the proposal with the `task declare` that records it, and recording it, or any done-when of your own, throws the proposal away |
 | `loadout backfill contract` | Fill in what open ideas and tasks lack under the current contract, on the project you are in, or `--all-projects` for every list. An idea's plan gets the missing fields as a new revision, marked gap-filled until you accept it. An open or blocked task gets a proposed done-when, held until you record it. Ideas still being questioned, or with answers or a request their plan hasn't taken in, are left for their next refine. `--dry-run` lists every gap and every skip with its reason, and counts the agent calls a real pass would make; `--limit <count>` caps a pass. A record that failed says why, and the next pass tries it again |
 | `loadout task show <id>` | One task in full: its detail, note, and every change of state with who said so and when, and the idea it was accepted from, if it was, with the revision of its list. Lists leave the detail out |
+| `loadout task declare <id> <state> --type <type>` | What the work is about: `new-project`, `feature`, `bug-fix`, `ci-cd`, `release`, `docs` or `maintenance`. Your choice stays until you change it, and no guess replaces it. Leave it out and a new task's type is guessed from its words and where you captured it: an idea on the workspace-wide list with nothing telling in it is taken for a new project. `task list` and `task show` say which types were guessed |
 | `loadout task shorten` | Shorten titles written before the 72-character limit, keeping each one whole in its detail and noting it in the history. `--every-list` covers every project and the workspace-wide list; `--dry-run` names what it would change |
+| `loadout task label <id> <label>...` | Put your own labels on a task or idea, beside its type, or take them off with `--remove`. Labels are the workspace's, so the same one can sort work on every project, and nothing acts on them: they're for you and for `--filter label:<word>` |
+| `loadout task labels list\|rename\|remove` | Every label in the workspace with how many carry it; rename one, or take it off, everywhere at once. Both say how many tasks and ideas that is and ask first, unless `--yes`; `--dry-run` only counts |
+| `loadout task classify` | Give a type to every task and idea recorded before there were types, guessed from its words and noted in its history. Each is kept as a guess, so refining an idea can still change it. `--every-list` covers every project and the workspace-wide list; `--dry-run` lists what each would get and writes nothing |
 | `loadout task list --filter <query> --sort <fields>` | Keep and order the list with the same query syntax Studio uses, described under [Filtering and sorting a list](#filtering-and-sorting-a-list) |
 | `loadout task list --every-list` | Every project's tasks and the workspace-wide list's, as one list, each row naming its project. Narrow it with `--filter project:<slug>`, or `project:global` for the workspace-wide list |
 | `loadout task list --limit <count> --page <number>` | Read a long list a page at a time. `--json` says how many there are in all and how many pages. On a terminal each row is cut to fit its width; output going to a file or a program is left whole |
@@ -111,6 +115,7 @@
 | `loadout idea apply <file>` | Several answers, choices and verdicts at once from a JSON array, each idea's all or nothing. Described under [Ideas the same way](#ideas-the-same-way) |
 | `loadout idea refine <id>` | Have an agent take an idea one round further: ask its questions, propose a plan with options for each layer, or revise it. It asks the agent and model the last round that came back used, unless you give `--agent` or `--model`, and says which before it starts. One round per idea at a time on this machine |
 | `loadout idea dismiss <id>` | Clear the "last round failed" marker on an idea you have stopped refining, without paying for another round. Answers and the plan stay |
+| `loadout idea type <id> <type>` | Choose what an idea is about: `new-project`, `feature`, `bug-fix`, `ci-cd`, `release`, `docs` or `maintenance`. Until you do, each refine round may revise the type it was guessed as when you dropped it in; once you choose, no round changes it, though the agent can still say it disagrees. `agent` hands the choice back, and the guess stands until the next round |
 | `loadout idea answer\|choose\|keep\|drop\|improve` | Answer the agent's questions, pick an option for a layer, keep or drop a piece, or ask for one to be reworked. An answer or request that starts with a dash goes as `--answer=` or `--request=`. Each question says what it's about, such as `Relates to L2 Storage` with a line of context, so you can answer it days later without rereading the history. If that thing has since changed or gone, a note removed or a layer reworked in a later revision, the question is marked possibly outdated, with why, here, in Studio and in the accepted plan, and the next round is told the answer may need revisiting. Answering again, even with the same answer, clears the marker |
 | `loadout idea accept <id>` | Write the plan out and turn the idea into a task on its project, or on a new one with `--new-project` |
 | `loadout idea accept <id> --done-when <condition>` | Accepting confirms the done-when the plan proposed, and the task carries them. Give `--done-when` (repeated) to replace them, or `--no-done-when` for none. A team queue takes only a task that has some |
@@ -302,7 +307,7 @@ older than that, and a bare `updated:7d` means within the week. `h`, `d` and
 `w` count hours, days and weeks. `updated:>=2026-10-01` is that day or after,
 and a bare day is that day only, in UTC.
 
-A task can be filtered on `id`, `title`, `state`, `kind`, `project`, `by`,
+A task can be filtered on `id`, `title`, `state`, `kind`, `type`, `label`, `project`, `by`,
 `updated`, `note`, `detail`, `runs` and `launches`. A word with no field is
 looked for in the detail too, so a task is found by its full description and
 not only its title. `runs` counts the team runs started for it and
@@ -319,7 +324,7 @@ The other lists take the same `--filter` and `--sort`, each over its own fields:
 | Command | Fields |
 | --- | --- |
 | `loadout list` | `id`, `name`, `agent`, `where` (`here` or `elsewhere`), `pinned`, `launched`, `launches` |
-| `loadout idea list` | `id`, `title`, `project`, `stage`, `by`, `updated`, `unanswered` |
+| `loadout idea list` | `id`, `title`, `project`, `stage`, `type`, `by`, `updated`, `unanswered` |
 | `loadout sessions` | `id`, `title`, `project`, `agent`, `branch`, `active` |
 | `loadout team runs` | `id`, `team`, `project`, `state` (`waiting`, `running` or `ended`), `goal`, `ended`, `started`, `cost`, `rounds` |
 
@@ -366,7 +371,7 @@ JSON
 There are four ops. `add` names a new task from its title, `declare` says where
 one stands (and adds it if the id is new), `remove` forgets one and `move` sends
 one to another list. Each can also carry `title`, `note`, `detail`, `kind`,
-`project`, `by` and `doneWhen` (a list of conditions), and a title over 72 characters is shortened as `task declare`
+`type`, `project`, `by` and `doneWhen` (a list of conditions), and a title over 72 characters is shortened as `task declare`
 shortens it. A change that names no project is made on the list the command names, the
 same as every other `task` command, and `"project": "-"` is the workspace-wide
 list.

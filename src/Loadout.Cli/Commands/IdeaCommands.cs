@@ -4,6 +4,7 @@ using Loadout.Cli.Infrastructure;
 using Loadout.Core.Configuration;
 using Loadout.Core.Ideas;
 using Loadout.Core.Projects;
+using Loadout.Core.Tasks;
 using Loadout.Models;
 using Loadout.Models.Ideas;
 using Loadout.Models.Results;
@@ -565,6 +566,7 @@ public sealed class IdeaListCommand : AsyncCommand<IdeaListCommand.Settings>
                     project = idea.Place.Project,
                     idea.Title,
                     stage = IdeaView.Stage(idea.Stage),
+                    type = idea.Type is { } type ? Core.Tasks.TaskTypes.Name(type) : null,
                     state = idea.State.ToString().ToLowerInvariant(),
                     by = idea.DeclaredBy,
                     declared = idea.DeclaredUtc,
@@ -619,6 +621,7 @@ public sealed class IdeaListCommand : AsyncCommand<IdeaListCommand.Settings>
             {
                 output.WriteLine(
                     $"  {Markup.Escape(idea.Place.Id),-28} {IdeaView.Marked(idea),-24} "
+                    + $"[dim]{Markup.Escape(idea.Type is { } type ? Core.Tasks.TaskTypes.Name(type) : string.Empty),-11}[/] "
                     + Markup.Escape(idea.Title)
                     + (Core.Backfill.ContractBackfill.Label(idea.Mark) is { } mark ? $"  [yellow]{mark}[/]" : string.Empty)
                     + (idea.Moved is { } came ? $"  [dim]{Markup.Escape(TaskTrace.From(came))}[/]" : string.Empty));
@@ -689,14 +692,16 @@ public sealed class IdeaShowCommand : AsyncCommand<IdeaShowCommand.Settings>
             return output.Fail(read);
         }
 
+        var task = await _ideas.TaskOfAsync(place.Value!, cancellationToken).ConfigureAwait(false);
+
         // JSON carries every option in full already; --full is for reading.
         if (output.IsJson)
         {
-            output.WriteJson(IdeaView.Of(place.Value!, read.Value!));
+            output.WriteJson(IdeaView.Of(place.Value!, read.Value!, task));
         }
         else
         {
-            IdeaView.Write(output, place.Value!, read.Value!, settings.Full);
+            IdeaView.Write(output, place.Value!, read.Value!, settings.Full, task);
         }
 
         return CommandOutput.Success();
@@ -1354,6 +1359,107 @@ public sealed class IdeaDismissCommand : AsyncCommand<IdeaSettings>
         }
 
         output.WriteLine($"[green]+[/] Cleared the failed round on {Markup.Escape(place.Value!.Id)}.");
+
+        return CommandOutput.Success();
+    }
+}
+
+/// <summary>Chooses what an idea is about, or hands the choice back to the agent.</summary>
+/// <remarks>
+/// The type picker every surface offers, so Studio and the launcher set a type
+/// through the same command. A type chosen here is kept until it is chosen
+/// again: no guess, the rules' or the agent's, replaces it. <c>agent</c> hands
+/// it back, and the rules' guess stands until the next round revises it.
+/// </remarks>
+[Description("Choose what an idea is about, or 'agent' to let the agent decide at its next round.")]
+[CommandMeta(CommandCategory.Workspace,
+    Intent = "idea type classify kind bug feature release docs agent decide",
+    Mutates = true,
+    Example = "status-page bug-fix")]
+public sealed class IdeaTypeCommand : AsyncCommand<IdeaTypeCommand.Settings>
+{
+    /// <summary>What hands the type back to the agent.</summary>
+    public const string Agent = TaskTypes.HandBack;
+
+    private readonly IIdeaService _ideas;
+    private readonly IProjectService _projects;
+    private readonly IAnsiConsole _console;
+
+    public IdeaTypeCommand(IIdeaService ideas, IProjectService projects, IAnsiConsole console)
+    {
+        _ideas = ideas;
+        _projects = projects;
+        _console = console;
+    }
+
+    public sealed class Settings : IdeaSettings
+    {
+        [CommandArgument(1, "<type>")]
+        [Description("new-project, feature, bug-fix, ci-cd, release, docs or maintenance; or agent, to let the agent decide.")]
+        public string Type { get; init; } = string.Empty;
+
+        [CommandOption("--by <WHO>")]
+        [Description("Who is choosing. Defaults to this machine's user.")]
+        public string? By { get; init; }
+    }
+
+    /// <inheritdoc />
+    public override async Task<int> ExecuteAsync(
+        CommandContext context,
+        Settings settings,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var output = new CommandOutput(_console, settings);
+        var handBack = string.Equals(settings.Type.Trim(), Agent, StringComparison.OrdinalIgnoreCase);
+        var type = handBack ? null : TaskTypes.Parse(settings.Type);
+
+        if (!handBack && type is null)
+        {
+            return output.Fail(
+                $"'{settings.Type}' is not a type. Use {string.Join(", ", TaskTypes.Names)}, or {Agent} to let the agent decide.",
+                ExitCode.InvalidArguments);
+        }
+
+        var place = await settings.PlaceAsync(_ideas, _projects, cancellationToken).ConfigureAwait(false);
+
+        if (place.Failed)
+        {
+            return output.Fail(place);
+        }
+
+        var id = Markup.Escape(place.Value!.Id);
+
+        if (settings.DryRun)
+        {
+            output.WriteLine(type is { } chosen
+                ? $"Would make {id} a {Markup.Escape(TaskTypes.Words(chosen))}, kept until you choose again. Nothing was changed."
+                : $"Would hand {id}'s type back to the agent, to decide at its next round. Nothing was changed.");
+
+            return CommandOutput.Success();
+        }
+
+        var by = settings.By is { Length: > 0 } who ? who : Environment.UserName;
+        var retyped = await _ideas.RetypeAsync(place.Value, type, by, cancellationToken).ConfigureAwait(false);
+
+        if (retyped.Failed)
+        {
+            return output.Fail(retyped);
+        }
+
+        if (output.IsJson)
+        {
+            output.WriteJson(new { project = place.Value.Project, task = TaskOperations.Json(retyped.Value!) });
+
+            return CommandOutput.Success();
+        }
+
+        var now = retyped.Value!.Type is { } kept ? TaskTypes.Words(kept) : "untyped";
+
+        output.WriteLine(handBack
+            ? $"[green]+[/] {id}'s type is the agent's to decide. Until its next round it is guessed as {Markup.Escape(now)}."
+            : $"[green]+[/] {id} is a {Markup.Escape(now)}, and stays one until you choose again.");
 
         return CommandOutput.Success();
     }
