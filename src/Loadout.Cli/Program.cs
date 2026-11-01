@@ -1041,6 +1041,18 @@ public static class Program
             pr.AddCommand<PrOpenCommand>("open");
             pr.AddCommand<PrReadyCommand>("ready");
             pr.AddCommand<PrMergeCommand>("merge");
+            pr.AddCommand<PrAbandonCommand>("abandon");
+            pr.AddCommand<PrExplainCommand>("explain");
+        });
+
+        TopBranch(config, "release", release =>
+        {
+            release.Describe(
+                "Release a project once its work has landed: propose the version and notes, then tag and push.",
+                CommandCategory.Start,
+                "release version tag publish ship notes");
+            release.AddCommand<ReleasePlanCommand>("plan");
+            release.AddCommand<ReleaseCutCommand>("cut");
         });
 
         TopBranch(config, "checkpoint", checkpoint =>

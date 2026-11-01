@@ -302,6 +302,14 @@ public sealed class TriggerAddCommand(
         [Description("What to ask the team for. {team}, {project}, {goal} and the event's other fields are filled in.")]
         public string? Goal { get; init; }
 
+        [CommandOption("--queue")]
+        [Description("Add a task to the team's queue from the goal, rather than start a run now. It runs in the queue's next window.")]
+        public bool Queue { get; init; }
+
+        [CommandOption("--pr-mode <MODE>")]
+        [Description("With --queue: draft, ready or none, what the queued run does about a pull request when it meets its done-when.")]
+        public string? PrMode { get; init; }
+
         [CommandOption("--autonomy <MODE>")]
         [Description("supervised or autonomous. Never manual: nobody is watching when it fires.")]
         public string? Autonomy { get; init; }
@@ -1420,8 +1428,16 @@ internal static class TriggerWords
                     Name = team.Trim(),
                     Goal = settings.Goal?.Trim() ?? string.Empty,
                     Autonomy = settings.Autonomy?.Trim().ToLowerInvariant() ?? "autonomous",
+                    Queue = settings.Queue,
+                    PrMode = settings.PrMode?.Trim().ToLowerInvariant() ?? string.Empty,
                 }
-                : new TriggerAction { Kind = TriggerActionKinds.Builtin, Name = settings.Builtin!.Trim().ToLowerInvariant() };
+                : new TriggerAction
+                {
+                    Kind = TriggerActionKinds.Builtin,
+                    Name = settings.Builtin!.Trim().ToLowerInvariant(),
+                    Queue = settings.Queue,
+                    PrMode = settings.PrMode?.Trim().ToLowerInvariant() ?? string.Empty,
+                };
         }
 
         foreach (var pair in settings.Where)

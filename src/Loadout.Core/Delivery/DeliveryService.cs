@@ -13,7 +13,18 @@ namespace Loadout.Core.Delivery;
 /// <param name="Project">The project's slug.</param>
 /// <param name="Repository">The project's checkout on this machine.</param>
 /// <param name="Landing">The landing as it is kept now.</param>
-public sealed record LandingFound(string Project, string Repository, BranchLanding Landing);
+/// <param name="Host">The host the project's branches land through, or null when it could not be worked out.</param>
+/// <param name="HostProblem">Why the host could not be worked out, or null when it was.</param>
+public sealed record LandingFound(
+    string Project,
+    string Repository,
+    BranchLanding Landing,
+    HostChoice? Host = null,
+    string? HostProblem = null)
+{
+    /// <summary>Whether the project lands with local git, squash-merging here rather than through pull requests.</summary>
+    public bool IsLocal => Host is { Host.OpensPullRequests: false };
+}
 
 /// <summary>
 /// What a person can do with a branch waiting to land: open its pull request,
@@ -55,11 +66,33 @@ public interface IDeliveryService
         CancellationToken ct = default);
 
     /// <summary>
-    /// Marks merged the landings whose pull request the host now lists as
-    /// merged, looking no more often than <see cref="DeliveryService.MergeEvery"/>.
+    /// Works out the squash-merge of a waiting branch into the target, for a
+    /// project that lands with local git, without changing anything.
     /// </summary>
-    /// <returns>How many were marked merged.</returns>
-    Task<int> MergedAsync(CancellationToken ct = default);
+    /// <param name="found">The landing.</param>
+    /// <param name="into">The branch to merge into, or null for origin's default, else main, else master.</param>
+    /// <param name="ct">Cancels the call.</param>
+    Task<OperationResult<LocalSquashPlan>> PlanLocalAsync(LandingFound found, string? into, CancellationToken ct = default);
+
+    /// <summary>Makes a squash-merge worked out by <see cref="PlanLocalAsync"/>, which the person has confirmed.</summary>
+    /// <returns>The landing as now kept, merged, and the new commit.</returns>
+    Task<OperationResult<(BranchLanding Landing, string Commit)>> MergeLocallyAsync(
+        LandingFound found,
+        LocalSquashPlan plan,
+        string subject,
+        string body,
+        CancellationToken ct = default);
+
+    /// <summary>Gives up on a waiting branch, closing its pull request first when it has one.</summary>
+    Task<OperationResult<BranchLanding>> AbandonAsync(LandingFound found, CancellationToken ct = default);
+
+    /// <summary>
+    /// Marks merged the landings whose pull request the host now lists as
+    /// merged, and pending again those whose pull request was closed unmerged,
+    /// looking no more often than <see cref="DeliveryService.MergeEvery"/>.
+    /// </summary>
+    /// <returns>How many were marked merged and how many went back to pending.</returns>
+    Task<(int Merged, int Reopened)> MergedAsync(CancellationToken ct = default);
 }
 
 /// <inheritdoc />
@@ -71,8 +104,8 @@ public sealed class DeliveryService : IDeliveryService
     private readonly ILandingService _landings;
     private readonly IProjectService _projects;
     private readonly IGitManager _git;
-    private readonly IRepositoryHost _host;
-    private readonly IPullRequestReader _pulls;
+    private readonly IRepositoryHosts _hosts;
+    private readonly ILocalSquash _squash;
     private readonly ITaskService _tasks;
     private readonly TimeProvider _time;
 
@@ -80,18 +113,56 @@ public sealed class DeliveryService : IDeliveryService
         ILandingService landings,
         IProjectService projects,
         IGitManager git,
-        IRepositoryHost host,
-        IPullRequestReader pulls,
+        IRepositoryHosts hosts,
+        ILocalSquash squash,
         ITaskService tasks,
         TimeProvider time)
     {
         _landings = landings;
         _projects = projects;
         _git = git;
-        _host = host;
-        _pulls = pulls;
+        _hosts = hosts;
+        _squash = squash;
         _tasks = tasks;
         _time = time;
+    }
+
+    /// <summary>Why a pull request can't be opened for this landing where it waits, or null when it can.</summary>
+    public static string? CannotOpen(LandingFound found)
+    {
+        ArgumentNullException.ThrowIfNull(found);
+
+        return found.IsLocal
+            ? $"{found.Project} lands with local git, which has no pull requests. Merge it here with: "
+                + $"loadout pr merge {found.Landing.Branch} --subject ..."
+            : CannotOpen(found.Landing) ?? NoHost(found);
+    }
+
+    /// <summary>Why this landing can't be merged where it waits, or null when it can.</summary>
+    /// <remarks>
+    /// With local git a pending branch is merged as it is, since there is no
+    /// pull request to open or mark ready first.
+    /// </remarks>
+    public static string? CannotMerge(LandingFound found)
+    {
+        ArgumentNullException.ThrowIfNull(found);
+
+        if (!found.IsLocal)
+        {
+            return CannotMerge(found.Landing) ?? NoHost(found);
+        }
+
+        return found.Landing.State is LandingState.Pending or LandingState.Ready && found.Landing.PullRequest.Length == 0
+            ? null
+            : $"{found.Landing.Branch} is {LandingMoves.Word(found.Landing.State)}, so there is nothing to merge.";
+    }
+
+    /// <summary>Why nothing can be asked of the project's host, or null when something can.</summary>
+    public static string? NoHost(LandingFound found)
+    {
+        ArgumentNullException.ThrowIfNull(found);
+
+        return found.Host is null ? found.HostProblem ?? $"Where {found.Project} lands could not be worked out." : null;
     }
 
     /// <summary>Why a pull request can't be opened for this landing, or null when it can.</summary>
@@ -134,6 +205,26 @@ public sealed class DeliveryService : IDeliveryService
             LandingState.Draft => $"{landing.Branch}'s pull request is a draft. Mark it ready first: loadout pr ready {landing.Branch}",
             LandingState.Pending => $"{landing.Branch} has no pull request yet. Open one with: loadout pr open {landing.Branch}",
             _ => $"{landing.Branch} is {LandingMoves.Word(landing.State)}, so there is nothing to merge.",
+        };
+    }
+
+    /// <summary>Why this landing can't be abandoned, or null when it can.</summary>
+    /// <remarks>
+    /// A merge already asked for is refused: the host may merge it at any
+    /// moment, so closing it now races the merge, and either outcome would be
+    /// a surprise. Turn auto-merge off on the host first.
+    /// </remarks>
+    public static string? CannotAbandon(BranchLanding landing)
+    {
+        ArgumentNullException.ThrowIfNull(landing);
+
+        return landing.State switch
+        {
+            LandingState.Ready when landing.MergeRequestedUtc is not null =>
+                $"{landing.Branch} has a merge asked for, which the host may finish at any moment. "
+                + $"Turn auto-merge off on {landing.PullRequest} first.",
+            LandingState.Pending or LandingState.Draft or LandingState.Ready => null,
+            _ => $"{landing.Branch} is {LandingMoves.Word(landing.State)} already.",
         };
     }
 
@@ -219,7 +310,11 @@ public sealed class DeliveryService : IDeliveryService
                 ExitCode.RepositoryUnavailable);
         }
 
-        return OperationResult<LandingFound>.Ok(new LandingFound(where, repository, kept));
+        var host = await _hosts.ForAsync(where, repository, ct).ConfigureAwait(false);
+
+        return OperationResult<LandingFound>.Ok(host.Succeeded
+            ? new LandingFound(where, repository, kept, host.Value)
+            : new LandingFound(where, repository, kept, HostProblem: host.Error));
     }
 
     /// <inheritdoc />
@@ -310,14 +405,16 @@ public sealed class DeliveryService : IDeliveryService
 
         var landing = found.Landing;
 
-        if (CannotOpen(landing) is { } refused)
+        if (CannotOpen(found) is { } refused)
         {
             return OperationResult<BranchLanding>.Fail(refused, ExitCode.InvalidArguments);
         }
 
+        var host = found.Host!.Host;
+
         // Asked before the push, so a branch never reaches the remote for a
         // pull request that was never going to open.
-        if (_host.Unavailable() is { } cannot)
+        if (await host.UnavailableAsync(found.Repository, ct).ConfigureAwait(false) is { } cannot)
         {
             return OperationResult<BranchLanding>.Fail(
                 $"No pull request can be opened from here: {cannot}.", ExitCode.AgentUnavailable);
@@ -339,7 +436,7 @@ public sealed class DeliveryService : IDeliveryService
             return OperationResult<BranchLanding>.Fail($"{landing.Branch} could not be pushed: {pushed.Error}", pushed.ExitCode);
         }
 
-        var opened = await _host.OpenAsync(found.Repository, opening, ct).ConfigureAwait(false);
+        var opened = await host.OpenAsync(found.Repository, opening, ct).ConfigureAwait(false);
 
         if (opened.Failed)
         {
@@ -361,12 +458,12 @@ public sealed class DeliveryService : IDeliveryService
 
         var landing = found.Landing;
 
-        if (CannotReady(landing) is { } refused)
+        if ((CannotReady(landing) ?? NoHost(found)) is { } refused)
         {
             return OperationResult<BranchLanding>.Fail(refused, ExitCode.InvalidArguments);
         }
 
-        var marked = await _host.MarkReadyAsync(found.Repository, landing.PullRequest, ct).ConfigureAwait(false);
+        var marked = await found.Host!.Host.MarkReadyAsync(found.Repository, landing.PullRequest, ct).ConfigureAwait(false);
 
         if (marked.Failed)
         {
@@ -390,12 +487,19 @@ public sealed class DeliveryService : IDeliveryService
 
         var landing = found.Landing;
 
-        if ((CannotMerge(landing) ?? CannotUseSubject(subject)) is { } refused)
+        if (found.IsLocal)
+        {
+            return OperationResult<(BranchLanding, string)>.Fail(
+                $"{found.Project} lands with local git, so it is merged here once you have seen what goes in, not asked of a host.",
+                ExitCode.InvalidArguments);
+        }
+
+        if ((CannotMerge(found) ?? CannotUseSubject(subject)) is { } refused)
         {
             return OperationResult<(BranchLanding, string)>.Fail(refused, ExitCode.InvalidArguments);
         }
 
-        var asked = await _host.MergeWhenReadyAsync(
+        var asked = await found.Host!.Host.MergeWhenReadyAsync(
             found.Repository, landing.PullRequest, subject.Trim(), body?.Trim() ?? string.Empty, ct).ConfigureAwait(false);
 
         if (asked.Failed)
@@ -414,10 +518,133 @@ public sealed class DeliveryService : IDeliveryService
     }
 
     /// <inheritdoc />
-    public async Task<int> MergedAsync(CancellationToken ct = default)
+    public async Task<OperationResult<LocalSquashPlan>> PlanLocalAsync(LandingFound found, string? into, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(found);
+
+        if (!found.IsLocal)
+        {
+            return OperationResult<LocalSquashPlan>.Fail(
+                NoHost(found) ?? $"{found.Project} lands through {found.Host!.Host.Provider}, not local git.", ExitCode.InvalidArguments);
+        }
+
+        if (CannotMerge(found) is { } refused)
+        {
+            return OperationResult<LocalSquashPlan>.Fail(refused, ExitCode.InvalidArguments);
+        }
+
+        string target;
+
+        if (into?.Trim() is { Length: > 0 } named)
+        {
+            target = named;
+        }
+        else
+        {
+            var worked = await _squash.TargetAsync(found.Repository, ct).ConfigureAwait(false);
+
+            if (worked.Failed)
+            {
+                return OperationResult<LocalSquashPlan>.Fail(worked.Error!, worked.ExitCode);
+            }
+
+            target = worked.Value!;
+        }
+
+        return await _squash.PlanAsync(found.Repository, found.Landing.Branch, target, ct).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<OperationResult<(BranchLanding Landing, string Commit)>> MergeLocallyAsync(
+        LandingFound found,
+        LocalSquashPlan plan,
+        string subject,
+        string body,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(found);
+        ArgumentNullException.ThrowIfNull(plan);
+
+        if (!found.IsLocal)
+        {
+            return OperationResult<(BranchLanding, string)>.Fail(
+                NoHost(found) ?? $"{found.Project} lands through {found.Host!.Host.Provider}, not local git.", ExitCode.InvalidArguments);
+        }
+
+        if ((CannotMerge(found) ?? CannotUseSubject(subject)) is { } refused)
+        {
+            return OperationResult<(BranchLanding, string)>.Fail(refused, ExitCode.InvalidArguments);
+        }
+
+        var made = await _squash.ApplyAsync(found.Repository, plan, subject, body ?? string.Empty, ct).ConfigureAwait(false);
+
+        if (made.Failed)
+        {
+            return OperationResult<(BranchLanding, string)>.Fail(made.Error!, made.ExitCode);
+        }
+
+        var commit = made.Value!;
+        var landing = found.Landing;
+        landing.State = LandingState.Merged;
+        landing.Why = $"Squash-merged into {plan.Target} on this machine as {commit[..Math.Min(12, commit.Length)]}.";
+
+        var kept = await KeepAsync(found.Project, landing, ct).ConfigureAwait(false);
+
+        return kept.Failed
+            ? OperationResult<(BranchLanding, string)>.Fail(kept.Error!, kept.ExitCode)
+            : OperationResult<(BranchLanding, string)>.Ok((kept.Value!, commit));
+    }
+
+    /// <inheritdoc />
+    public async Task<OperationResult<BranchLanding>> AbandonAsync(LandingFound found, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(found);
+
+        var landing = found.Landing;
+
+        if (CannotAbandon(landing) is { } refused)
+        {
+            return OperationResult<BranchLanding>.Fail(refused, ExitCode.InvalidArguments);
+        }
+
+        // Closed first, so a pull request is never left open on the host for a
+        // branch Loadout has stopped watching.
+        if (landing.PullRequest.Length > 0)
+        {
+            if (NoHost(found) is { } nowhere)
+            {
+                return OperationResult<BranchLanding>.Fail(nowhere, ExitCode.InvalidArguments);
+            }
+
+            var closed = await found.Host!.Host.CloseAsync(found.Repository, landing.PullRequest, ct).ConfigureAwait(false);
+
+            if (closed.Failed)
+            {
+                return OperationResult<BranchLanding>.Fail(
+                    $"{landing.Branch} was not abandoned, because its pull request did not close: {closed.Error}", closed.ExitCode);
+            }
+        }
+
+        landing.State = LandingState.Abandoned;
+        landing.Why = landing.PullRequest.Length > 0
+            ? $"Abandoned, and its pull request closed: {landing.PullRequest}"
+            : "Abandoned. The branch is left where it is.";
+
+        return await KeepAsync(found.Project, landing, ct).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Each pull request is asked about on its own, through the host its
+    /// project lands through, so a project on GitLab or Azure DevOps is
+    /// noticed the same way as one on GitHub. A host that cannot be asked, or
+    /// a pull request it cannot read, is passed over until the next look.
+    /// </remarks>
+    public async Task<(int Merged, int Reopened)> MergedAsync(CancellationToken ct = default)
     {
         var now = _time.GetUtcNow();
         var marked = 0;
+        var reopened = 0;
 
         foreach (var project in _landings.Projects())
         {
@@ -430,7 +657,7 @@ public sealed class DeliveryService : IDeliveryService
 
             var due = loaded.Value!.Landings
                 .Where(one => one.State is LandingState.Draft or LandingState.Ready
-                    && Number(one.PullRequest) is not null
+                    && one.PullRequest.Length > 0
                     && (one.MergeChecked is not { } checkedAt || now - checkedAt >= MergeEvery))
                 .ToList();
 
@@ -446,31 +673,53 @@ public sealed class DeliveryService : IDeliveryService
                 continue;
             }
 
-            var merged = await _pulls.MergedAsync(repository, 50, ct).ConfigureAwait(false);
+            var host = await _hosts.ForAsync(project, repository, ct).ConfigureAwait(false);
 
-            if (merged.Failed)
+            if (host.Failed || !host.Value!.Host.OpensPullRequests)
             {
                 continue;
             }
 
-            var numbers = merged.Value!.Select(one => one.Number).ToHashSet();
+            var looked = new List<BranchLanding>();
 
             foreach (var landing in due)
             {
-                landing.MergeChecked = now;
+                var state = await host.Value.Host.StateAsync(repository, landing.PullRequest, ct).ConfigureAwait(false);
 
-                if (numbers.Contains(Number(landing.PullRequest)!.Value))
+                if (state.Failed)
+                {
+                    continue;
+                }
+
+                landing.MergeChecked = now;
+                looked.Add(landing);
+
+                if (state.Value == PullRequestState.Merged)
                 {
                     landing.State = LandingState.Merged;
                     landing.Why = $"Its pull request was merged: {landing.PullRequest}";
                     marked++;
                 }
+                else if (state.Value == PullRequestState.Closed)
+                {
+                    // Pending again, with nothing of the closed pull request
+                    // left on it, so it can be opened afresh or abandoned.
+                    landing.Why = $"Its pull request was closed without being merged: {landing.PullRequest}";
+                    landing.State = LandingState.Pending;
+                    landing.PullRequest = string.Empty;
+                    landing.MergeRequestedUtc = null;
+                    landing.MergeChecked = null;
+                    reopened++;
+                }
             }
 
-            await _landings.RecordAsync(project, due, ct).ConfigureAwait(false);
+            if (looked.Count > 0)
+            {
+                await _landings.RecordAsync(project, looked, ct).ConfigureAwait(false);
+            }
         }
 
-        return marked;
+        return (marked, reopened);
     }
 
     private async Task<OperationResult<BranchLanding>> KeepAsync(string project, BranchLanding landing, CancellationToken ct)

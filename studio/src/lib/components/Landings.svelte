@@ -14,6 +14,8 @@
     /** When a squash-merge was asked for, or null when nobody has. */
     mergeRequested?: string | null;
     gone: boolean;
+    /** The host its project lands through: github, gitlab, azure-devops, local or command; empty when unknown. */
+    provider?: string;
   }
 
   /** The words for 'loadout pr merge', leaving out a body nobody wrote. */
@@ -47,10 +49,16 @@
   // Kept here rather than on the row, so a refresh of the list every few
   // seconds does not throw away a message half written.
   let merging = $state<string | null>(null);
+  // The branch whose abandoning is waiting for a second press, since it can
+  // close a pull request on the host.
+  let abandoning = $state<string | null>(null);
   let subject = $state('');
   let body = $state('');
 
   const keyOf = (one: LandingRead) => one.project + ' ' + one.branch;
+  // Local git has no pull requests: a pending branch is squash-merged on this
+  // machine, and the form below is where the person says so.
+  const local = (one: LandingRead) => one.provider === 'local';
   const at = (one: LandingRead) => [one.branch, '--project', one.project];
 
   function waited(created: string): string {
@@ -74,10 +82,23 @@
   }
 
   async function merge(one: LandingRead) {
-    if ((await act?.('pr merge', mergeWords(one, subject, body), `${one.branch} merges once its checks pass`)) !== false) {
+    // The form is the confirmation for local git, so --yes goes with it.
+    const words = local(one) ? [...mergeWords(one, subject, body), '--yes'] : mergeWords(one, subject, body);
+    const done = local(one) ? `${one.branch} is squash-merged here` : `${one.branch} merges once its checks pass`;
+
+    if ((await act?.('pr merge', words, done)) !== false) {
       merging = null;
     }
   }
+
+  async function abandon(one: LandingRead) {
+    if ((await act?.('pr abandon', at(one), `${one.branch} is abandoned`)) !== false) {
+      abandoning = null;
+    }
+  }
+
+  const canAbandon = (one: LandingRead) =>
+    (one.state === 'pending' || one.state === 'draft' || one.state === 'ready') && !one.mergeRequested;
 
   const subjectReason = () =>
     !subject.trim() ? 'Write the squash commit’s subject' : subject.includes('\n') ? 'The subject is one line' : undefined;
@@ -95,7 +116,9 @@
         {#if one.mergeRequested}<p class="calm small">Merges once its required checks pass.</p>{/if}
         {#if act}
           <div class="lacts">
-            {#if one.state === 'pending' && !one.gone}
+            {#if one.state === 'pending' && !one.gone && local(one)}
+              <HaloButton label={merging === keyOf(one) ? 'Not now' : 'Merge here…'} size="small" cmd={merging === keyOf(one) ? undefined : `opens the squash message for ${one.branch}`} {disabledReason} onpress={() => (merging === keyOf(one) ? (merging = null) : startMerge(one))} />
+            {:else if one.state === 'pending' && !one.gone}
               <HaloButton label="Open as a draft" size="small" cmd={`$ loadout pr open ${one.branch} --draft`} {disabledReason} onpress={() => void act('pr open', [...at(one), '--draft'], `${one.branch} has a draft pull request`)} />
               <HaloButton label="Open for review" size="small" cmd={`$ loadout pr open ${one.branch}`} {disabledReason} onpress={() => void act('pr open', at(one), `${one.branch} has a pull request`)} />
             {:else if one.state === 'draft' && one.pullRequest}
@@ -103,8 +126,17 @@
             {:else if one.state === 'ready' && one.pullRequest && !one.mergeRequested}
               <HaloButton label={merging === keyOf(one) ? 'Not now' : 'Merge…'} size="small" cmd={merging === keyOf(one) ? undefined : `opens the squash message for ${one.branch}`} {disabledReason} onpress={() => (merging === keyOf(one) ? (merging = null) : startMerge(one))} />
             {/if}
+            {#if canAbandon(one)}
+              <HaloButton label={abandoning === keyOf(one) ? 'Keep it' : 'Abandon…'} size="small" cmd={abandoning === keyOf(one) ? undefined : `asks before it abandons ${one.branch}`} {disabledReason} onpress={() => (abandoning = abandoning === keyOf(one) ? null : keyOf(one))} />
+            {/if}
           </div>
-          {#if merging === keyOf(one) && one.state === 'ready'}
+          {#if abandoning === keyOf(one) && canAbandon(one)}
+            <div class="lmerge" role="group" aria-label={`Abandon ${one.branch}`}>
+              <p class="small">{one.pullRequest ? `Closes ${one.pullRequest} without merging it, and stops waiting on ${one.branch}.` : `Stops waiting on ${one.branch}.`} The branch is left where it is.</p>
+              <HaloButton label="Abandon" kind="danger" cmd={`$ loadout pr abandon ${one.branch}`} {disabledReason} onpress={() => void abandon(one)} />
+            </div>
+          {/if}
+          {#if merging === keyOf(one) && (one.state === 'ready' || (one.state === 'pending' && local(one)))}
             <form class="lmerge" aria-label={`Squash-merge ${one.branch}`} onsubmit={(event) => { event.preventDefault(); void merge(one); }}>
               <div class="ls-field">
                 <label class="lab" for={`lm-subject-${index}`}>Subject</label>
@@ -114,7 +146,12 @@
                 <label class="lab" for={`lm-body-${index}`}>Body</label>
                 <textarea id={`lm-body-${index}`} class="ls-text" rows="4" bind:value={body} placeholder="Left empty, the commit has no body"></textarea>
               </div>
-              <HaloButton label="Squash-merge when checks pass" solid cmd={`$ loadout pr merge ${one.branch} --subject …`} disabledReason={disabledReason ?? subjectReason()} onpress={() => void merge(one)} />
+              {#if local(one)}
+                <p class="small">Squash-merges {one.branch} into the default branch on this machine, as one commit with this message. Nothing is pushed. <code class="ls-cmd">$ loadout pr merge {one.branch} --dry-run</code> shows what goes in first.</p>
+                <HaloButton label="Squash-merge here" solid cmd={`$ loadout pr merge ${one.branch} --subject … --yes`} disabledReason={disabledReason ?? subjectReason()} onpress={() => void merge(one)} />
+              {:else}
+                <HaloButton label="Squash-merge when checks pass" solid cmd={`$ loadout pr merge ${one.branch} --subject …`} disabledReason={disabledReason ?? subjectReason()} onpress={() => void merge(one)} />
+              {/if}
             </form>
           {/if}
         {/if}

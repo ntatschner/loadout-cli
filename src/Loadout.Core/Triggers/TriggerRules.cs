@@ -236,6 +236,20 @@ public sealed class TriggerRules : ITriggerRules
                     + "or autonomous.";
             }
         }
+        else if (action.Queue || action.PrMode.Trim().Length > 0)
+        {
+            return "Only a rule that starts a team can queue a task or set a pull request mode.";
+        }
+
+        if (action.PrMode.Trim().Length > 0 && !action.Queue)
+        {
+            return "A pull request mode is for a queued task: add --queue, so the run goes through the team's queue.";
+        }
+
+        if (!Delivery.PullRequestModes.TryParse(action.PrMode, out _))
+        {
+            return Delivery.PullRequestModes.Refusal(action.PrMode);
+        }
 
         if (rule.Window < TimeSpan.FromHours(1) || rule.Window > TimeSpan.FromDays(31))
         {

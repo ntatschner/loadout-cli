@@ -167,7 +167,7 @@
 | `loadout daemon` | Stay running: fire the scheduled runs and serve the dashboard |
 | `loadout daemon stop\|restart\|pause\|resume\|continue` | Control the running daemon from any shell: stop or restart it once its runs finish (`--now` does not wait), or hold and release its schedules |
 | `loadout team webhook enable\|disable\|show` | Let something outside this machine start a run, or stop letting it |
-| `loadout trigger list\|add\|remove\|resume` | Rules that start a team or a built-in when something happens, such as a run finishing, a pull request or a failed build, each with a spend cap. The daemon acts on them |
+| `loadout trigger list\|add\|remove\|resume` | Rules that start a team or a built-in when something happens, such as a run finishing, a pull request, a failed build, a branch landing or a release, each with a spend cap. `--queue` adds the team's work to its queue instead, with `--pr-mode` for what the run does about a pull request. The daemon acts on them |
 | `loadout trigger events` | The kinds of event a trigger rule can wait for, the fields each carries for `--where`, and the built-in commands a rule can start |
 | `loadout trigger adopt` | Move a team schedule that runs on a clock onto a trigger rule with a spend cap, and pause the schedule so nothing runs twice. Queue windows and schedules watching for a commit stay schedules |
 | `loadout trigger stale\|release` | Events a paused rule held for longer than a day, kept for you to release rather than acted on unasked. Released ones go through the rule's caps as usual; ones nobody releases are dropped after a week, and the journal says so |
@@ -187,9 +187,13 @@
 | `loadout team name` | Name a run's room, or clear the name to get the worked-out one back |
 | `loadout team pr` | Open a pull request for what one node of a run produced |
 | `loadout pr list` | The branches waiting to land: a queued run's own branch with its pull request, and each node branch its gate did not merge, pending. Says how long each has waited and which have gone from the repository; `--all` adds the merged and abandoned |
-| `loadout pr open` | Push a pending branch and open its pull request against the default branch, titled from its task; `--draft` opens it as a draft |
+| `loadout pr open` | Push a pending branch and open its pull request against the default branch, titled from its task; `--draft` opens it as a draft. Works on GitHub, GitLab and Azure DevOps through their own CLIs, and checks you are signed in before anything is pushed |
 | `loadout pr ready` | Mark a waiting branch's draft pull request ready for review |
-| `loadout pr merge` | Ask for a waiting branch's pull request to be squash-merged once its required checks pass, with the message you give: `--subject` is required and `--body` is the rest, empty when left out. The branch stays ready in `pr list` until the merge is seen |
+| `loadout pr merge` | Ask for a waiting branch's pull request to be squash-merged once its required checks pass, with the message you give: `--subject` is required and `--body` is the rest, empty when left out. The branch stays ready in `pr list` until the merge is seen. For a project that lands with local git it squash-merges into the default branch on this machine instead, `--into` for another, after showing what goes in and asking; `--yes` where nothing can ask |
+| `loadout pr abandon` | Stop waiting on a branch, closing its pull request unmerged if it has one. The branch is left where it is. Refuses a pull request with a merge already asked for, since the host may merge it at any moment |
+| `loadout pr explain` | How a project's work lands and is released, and which setting decided each part: the pull request mode on the project and on each team's queue, the host and how it was worked out, and the release recipe |
+| `loadout release plan` | What a release of a project would be: its recipe, the commits since the last release tag, a proposed version (patch when every commit is a repair, minor otherwise, major when one says it breaks something), notes to start from, and anything that would stop it now. Changes nothing |
+| `loadout release cut` | Release a project with the `--version` and `--notes` you give. `tag-push` bumps the version file if it needs it and commits that, tags with the notes in the tag's message, checks the tagged commit's version file says the version, and pushes; `workflow` starts the project's GitHub Actions workflow with the version. Shows what it will do and asks; `--yes` where nothing can ask. `--proposed` takes the plan's version and notes made from the commits since, for a trigger rule's release, which waits for your approval first |
 | `loadout team say` | Say something to one node while it is still working |
 | `loadout team attach set` | Set the passphrase that lets the dashboard type at a running node |
 | `loadout team attach show` | Say whether one is set, never what it is |

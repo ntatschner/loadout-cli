@@ -34,13 +34,20 @@ public sealed class PrListCommand : AsyncCommand<PrListCommand.Settings>
     private readonly ILandingService _landings;
     private readonly IProjectService _projects;
     private readonly IGitManager _git;
+    private readonly IRepositoryHosts _hosts;
     private readonly IAnsiConsole _console;
 
-    public PrListCommand(ILandingService landings, IProjectService projects, IGitManager git, IAnsiConsole console)
+    public PrListCommand(
+        ILandingService landings,
+        IProjectService projects,
+        IGitManager git,
+        IRepositoryHosts hosts,
+        IAnsiConsole console)
     {
         _landings = landings;
         _projects = projects;
         _git = git;
+        _hosts = hosts;
         _console = console;
     }
 
@@ -84,7 +91,7 @@ public sealed class PrListCommand : AsyncCommand<PrListCommand.Settings>
             slugs = _landings.Projects();
         }
 
-        var rows = new List<(string Project, BranchLanding Landing, bool Gone)>();
+        var rows = new List<(string Project, BranchLanding Landing, bool Gone, string Provider)>();
 
         foreach (var slug in slugs)
         {
@@ -107,9 +114,18 @@ public sealed class PrListCommand : AsyncCommand<PrListCommand.Settings>
 
             var repository = await RepositoryAsync(slug, cancellationToken).ConfigureAwait(false);
 
+            // Said beside each branch so Studio offers a merge here for local
+            // git and pull request buttons for a host. Empty when it could not
+            // be worked out, which the actions themselves then explain.
+            var provider = repository is null
+                ? string.Empty
+                : await _hosts.ForAsync(slug, repository, cancellationToken).ConfigureAwait(false) is { Succeeded: true } host
+                    ? host.Value!.Host.Provider
+                    : string.Empty;
+
             foreach (var landing in shown)
             {
-                rows.Add((slug, landing, await GoneAsync(repository, landing, cancellationToken).ConfigureAwait(false)));
+                rows.Add((slug, landing, await GoneAsync(repository, landing, cancellationToken).ConfigureAwait(false), provider));
             }
         }
 
@@ -130,6 +146,7 @@ public sealed class PrListCommand : AsyncCommand<PrListCommand.Settings>
                 created = row.Landing.CreatedUtc,
                 updated = row.Landing.UpdatedUtc,
                 gone = row.Gone,
+                provider = row.Provider,
             }));
 
             return CommandOutput.Success();
@@ -144,7 +161,7 @@ public sealed class PrListCommand : AsyncCommand<PrListCommand.Settings>
             return CommandOutput.Success();
         }
 
-        foreach (var (project, landing, gone) in rows)
+        foreach (var (project, landing, gone, provider) in rows)
         {
             var from = landing.Node.Length > 0
                 ? $"{landing.Node} in run {landing.RunId}"
@@ -157,6 +174,7 @@ public sealed class PrListCommand : AsyncCommand<PrListCommand.Settings>
             output.WriteLine(
                 $"         [dim]{Markup.Escape(project)}, {Markup.Escape(from)}"
                 + (landing.Task.Length > 0 ? $", task {Markup.Escape(landing.Task)}" : string.Empty)
+                + (provider == RepositoryHosts.Local ? ", lands with local git" : string.Empty)
                 + $", waiting {Markup.Escape(Waited(DateTimeOffset.UtcNow - landing.CreatedUtc))}[/]");
 
             if (landing.PullRequest.Length > 0)
@@ -271,13 +289,13 @@ public sealed class PrOpenCommand : AsyncCommand<PrOpenCommand.Settings>
             return output.Fail(found);
         }
 
-        if (DeliveryService.CannotOpen(found.Value!.Landing) is { } refused)
+        if (DeliveryService.CannotOpen(found.Value!) is { } refused)
         {
             return output.Fail(refused, ExitCode.InvalidArguments);
         }
 
         var opening = await _delivery.OpeningAsync(
-            found.Value, settings.Draft, settings.Title, settings.Body, cancellationToken).ConfigureAwait(false);
+            found.Value!, settings.Draft, settings.Title, settings.Body, cancellationToken).ConfigureAwait(false);
 
         if (settings.DryRun)
         {
@@ -298,7 +316,7 @@ public sealed class PrOpenCommand : AsyncCommand<PrOpenCommand.Settings>
             return CommandOutput.Success();
         }
 
-        var opened = await _delivery.OpenAsync(found.Value, opening, cancellationToken).ConfigureAwait(false);
+        var opened = await _delivery.OpenAsync(found.Value!, opening, cancellationToken).ConfigureAwait(false);
 
         if (opened.Failed)
         {
@@ -428,6 +446,14 @@ public sealed class PrMergeCommand : AsyncCommand<PrMergeCommand.Settings>
         [CommandOption("--body <TEXT>")]
         [Description("The squash commit's body. Empty when left out, rather than the branch's commit messages.")]
         public string? Body { get; init; }
+
+        [CommandOption("--into <BRANCH>")]
+        [Description("Local git only: the branch to merge into. Origin's default, else main, else master, when left out.")]
+        public string? Into { get; init; }
+
+        [CommandOption("--yes")]
+        [Description("Local git only: merge without asking, having seen what goes in. Needed where nothing can ask.")]
+        public bool Yes { get; init; }
     }
 
     /// <inheritdoc />
@@ -448,9 +474,14 @@ public sealed class PrMergeCommand : AsyncCommand<PrMergeCommand.Settings>
 
         var landing = found.Value!.Landing;
 
-        if ((DeliveryService.CannotMerge(landing) ?? DeliveryService.CannotUseSubject(settings.Subject)) is { } refused)
+        if ((DeliveryService.CannotMerge(found.Value) ?? DeliveryService.CannotUseSubject(settings.Subject)) is { } refused)
         {
             return output.Fail(refused, ExitCode.InvalidArguments);
+        }
+
+        if (found.Value.IsLocal)
+        {
+            return await LocallyAsync(output, found.Value, settings, cancellationToken).ConfigureAwait(false);
         }
 
         if (settings.DryRun)
@@ -498,6 +529,189 @@ public sealed class PrMergeCommand : AsyncCommand<PrMergeCommand.Settings>
         {
             output.WriteLine($"[dim]{Markup.Escape(asked.Value.Said)}[/]");
         }
+
+        return CommandOutput.Success();
+    }
+
+    /// <summary>
+    /// Squash-merges into the target on this machine, for a project with no
+    /// host: shows what goes in, then merges only once the person says so.
+    /// </summary>
+    /// <remarks>
+    /// Declining, or a dry run, leaves both branches as they were: nothing is
+    /// written until the confirmation, since the merge is worked out without
+    /// touching either branch or any working tree.
+    /// </remarks>
+    private async Task<int> LocallyAsync(CommandOutput output, LandingFound found, Settings settings, CancellationToken ct)
+    {
+        var plan = await _delivery.PlanLocalAsync(found, settings.Into, ct).ConfigureAwait(false);
+
+        if (plan.Failed)
+        {
+            return output.Fail(plan);
+        }
+
+        var squash = plan.Value!;
+        var subject = settings.Subject!.Trim();
+        var body = settings.Body?.Trim() ?? string.Empty;
+
+        if (settings.DryRun && output.IsJson)
+        {
+            output.WriteJson(new { dryRun = true, branch = squash.Branch, into = squash.Target, subject, body, diffStat = squash.DiffStat });
+
+            return CommandOutput.Success();
+        }
+
+        if (!output.IsJson)
+        {
+            output.WriteLine(
+                (settings.DryRun ? "[dim]Dry run: nothing was changed.[/] It would squash-merge " : "This squash-merges ")
+                + $"[bold]{Markup.Escape(squash.Branch)}[/] into [bold]{Markup.Escape(squash.Target)}[/] on this machine, as:");
+            output.WriteLine($"  {Markup.Escape(subject)}");
+
+            if (body.Length > 0)
+            {
+                output.WriteLine(string.Empty);
+                output.WriteLine(Markup.Escape(body));
+            }
+
+            if (squash.DiffStat.Length > 0)
+            {
+                output.WriteLine(string.Empty);
+                output.WriteLine($"[dim]{Markup.Escape(squash.DiffStat)}[/]");
+            }
+        }
+
+        if (settings.DryRun)
+        {
+            return CommandOutput.Success();
+        }
+
+        if (!settings.Yes)
+        {
+            if (!settings.AllowsPrompting)
+            {
+                return output.Fail(
+                    $"Merging into {squash.Target} on this machine needs your say-so. Look at it with --dry-run, then pass --yes.",
+                    ExitCode.InvalidArguments);
+            }
+
+            if (!_console.Confirm($"Squash-merge {Markup.Escape(squash.Branch)} into {Markup.Escape(squash.Target)}?", defaultValue: false))
+            {
+                output.WriteLine("[dim]Not merged. Both branches are as they were.[/]");
+
+                return CommandOutput.Success();
+            }
+        }
+
+        var merged = await _delivery.MergeLocallyAsync(found, squash, subject, body, ct).ConfigureAwait(false);
+
+        if (merged.Failed)
+        {
+            return output.Fail(merged);
+        }
+
+        if (output.IsJson)
+        {
+            output.WriteJson(new
+            {
+                branch = merged.Value.Landing.Branch,
+                state = LandingMoves.Word(merged.Value.Landing.State),
+                into = squash.Target,
+                commit = merged.Value.Commit,
+            });
+
+            return CommandOutput.Success();
+        }
+
+        output.WriteLine(
+            $"[green]+[/] {Markup.Escape(squash.Branch)} is squash-merged into {Markup.Escape(squash.Target)} "
+            + $"as {Markup.Escape(merged.Value.Commit[..Math.Min(12, merged.Value.Commit.Length)])}. Nothing was pushed.");
+
+        return CommandOutput.Success();
+    }
+}
+
+/// <summary>Gives up on a branch waiting to land, closing its pull request when it has one.</summary>
+/// <remarks>
+/// <para>
+/// The branch itself is left where it is, in the repository and on the
+/// remote: abandoning is about Loadout no longer waiting on it, not about
+/// throwing the work away. It shows in <c>pr list --all</c> as abandoned.
+/// </para>
+/// <para>
+/// A pull request with a merge already asked for is refused, because the host
+/// may merge it while it is being closed.
+/// </para>
+/// </remarks>
+[Description("Give up on a branch waiting to land, closing its pull request if it has one.")]
+[CommandMeta(CommandCategory.Start, Intent = "pr abandon close give up drop pending branch pull request", Mutates = true)]
+public sealed class PrAbandonCommand : AsyncCommand<PrAbandonCommand.Settings>
+{
+    private readonly IDeliveryService _delivery;
+    private readonly IAnsiConsole _console;
+
+    public PrAbandonCommand(IDeliveryService delivery, IAnsiConsole console)
+    {
+        _delivery = delivery;
+        _console = console;
+    }
+
+    public sealed class Settings : PrBranchSettings
+    {
+    }
+
+    /// <inheritdoc />
+    public override async Task<int> ExecuteAsync(
+        CommandContext context,
+        Settings settings,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var output = new CommandOutput(_console, settings);
+        var found = await _delivery.FindAsync(settings.Branch, settings.Project, cancellationToken).ConfigureAwait(false);
+
+        if (found.Failed)
+        {
+            return output.Fail(found);
+        }
+
+        var landing = found.Value!.Landing;
+
+        if (DeliveryService.CannotAbandon(landing) is { } refused)
+        {
+            return output.Fail(refused, ExitCode.InvalidArguments);
+        }
+
+        if (settings.DryRun)
+        {
+            output.WriteLine(
+                "[dim]Dry run: nothing was changed.[/] It would "
+                + (landing.PullRequest.Length > 0 ? $"close {Shown.Safely(landing.PullRequest)} unmerged and " : string.Empty)
+                + $"stop waiting on [bold]{Markup.Escape(landing.Branch)}[/]. The branch would be left where it is.");
+
+            return CommandOutput.Success();
+        }
+
+        var abandoned = await _delivery.AbandonAsync(found.Value, cancellationToken).ConfigureAwait(false);
+
+        if (abandoned.Failed)
+        {
+            return output.Fail(abandoned);
+        }
+
+        if (output.IsJson)
+        {
+            output.WriteJson(new { branch = abandoned.Value!.Branch, state = LandingMoves.Word(abandoned.Value.State), pullRequest = abandoned.Value.PullRequest });
+
+            return CommandOutput.Success();
+        }
+
+        output.WriteLine(
+            $"[green]+[/] {Markup.Escape(landing.Branch)} is abandoned"
+            + (landing.PullRequest.Length > 0 ? $", and {Shown.Safely(landing.PullRequest)} is closed." : ".")
+            + " The branch is left where it is.");
 
         return CommandOutput.Success();
     }

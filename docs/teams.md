@@ -2596,6 +2596,125 @@ where the work is: done is for when it is merged. When a pull request the queue
 opened is merged, the daemon notices within a quarter of an hour and marks the
 task done. Merging, and every other outward action, is still yours.
 
+### Branches waiting to land
+
+Every branch a queued run leaves behind waits in `loadout pr list`: the run's
+own branch with its pull request, and any node branch its gate didn't merge,
+pending. From there `pr open` pushes a pending one and opens its pull
+request, `pr ready` takes a draft out of draft, `pr merge` asks for a
+squash-merge with a message you write, and `pr abandon` stops waiting on one,
+closing its pull request if it has one. Studio's **Waiting to land** list has
+the same buttons, each running the command written under it.
+
+Merging is always yours. `pr merge` asks the host to merge once the required
+checks pass, so nothing goes in that the checks would have stopped. The
+daemon looks every quarter of an hour and marks the branch merged once the
+host says so. A pull request somebody closed without merging puts its branch
+back to pending, where it can be opened again or abandoned.
+
+**Where it lands** is worked out from the checkout's `origin`: GitHub through
+`gh`, GitLab through `glab`, Azure DevOps through `az repos`. Each runs under
+your own sign-in, and Loadout checks you are signed in before it pushes
+anything, so a branch never reaches the remote for a pull request that was
+never going to open. An `origin` that names none of those is refused rather
+than guessed at. A self-hosted GitLab whose address doesn't say so, or a
+host of your own, is set in the project's `project.yaml`:
+
+```yaml
+delivery:
+  provider: gitlab        # github, gitlab, azure-devops, local or command
+```
+
+`command` runs a program of yours for each action: `<command> open --head B
+--title T --body X [--draft]` printing the address as its last line, then
+`ready`, `close` and `state` (printing `open`, `merged` or `closed`) with the
+address, `merge <address> --subject S --body X`, and `check`, which succeeds
+when it can reach its host. Name the program with `command:` under `delivery`.
+
+**A project with no `origin`** lands with local git. There are no pull
+requests, so `pr merge` squash-merges the branch into the default branch on
+this machine as one commit with your message, and pushes nothing. It shows
+the message and what changes first, then asks; saying no leaves both
+branches as they were. Where nothing can ask, as from a script, it refuses
+unless you pass `--yes` having looked with `--dry-run`. The merge is worked
+out without touching any working tree, so one with conflicts is refused
+before anything is written. If the default branch is checked out somewhere,
+that checkout has to be clean, and it moves along with the branch. It needs
+git 2.38 or later.
+
+**Tried with tests only.** The exact arguments each CLI is given are pinned by
+tests, and local git's merge is tested against real repositories. None of
+`gh`, `glab` or `az` has been driven against a real host from here, and their
+flags change between versions, so the first real use of GitLab or Azure
+DevOps is worth watching.
+
+### Releasing
+
+Once work has landed, `loadout release plan <project>` says what a release
+would be: the commits since the last release tag, a proposed version, notes to
+start from, and anything that would stop it now. The proposal is patch when
+every commit since is a repair (fix, repair, correct, revert or bump, after an
+optional `Area: ` prefix), major when one says it breaks something, and minor
+otherwise. It's a starting point and nothing more: `loadout release cut
+<project> --version 1.3.0 --notes "..."` uses only what you give it, because
+both are public the moment the tag is pushed.
+
+What a release does is set in `project.yaml`, and nothing is released until
+it is:
+
+```yaml
+delivery:
+  release:
+    recipe: tag-push          # tag-push, workflow or none
+    version_file: Directory.Build.props   # found on its own when it's this or package.json
+```
+
+`tag-push` bumps the version file if it doesn't already say the version and
+commits that as "Release 1.3.0", tags `v1.3.0` with your notes in the tag's
+message, then checks that the version file on the tagged commit says 1.3.0
+before anything is pushed. If it doesn't, the tag is taken back and nothing
+leaves the machine: a tag without its bump is the mistake this is built to
+make impossible. It needs the checkout on the default branch, clean, and level
+with `origin` as of the last fetch. `workflow` starts the GitHub Actions
+workflow named by `workflow:` with the version as its `version` input, and is
+GitHub only. Either way it shows what it will do and asks first. Studio's Teams page has a **Release** panel that reads the plan, fills in
+the proposed version and notes for you to edit, and says what it will push
+before a second press runs `release cut`.
+
+`loadout pr explain <project>` puts it all in one place: the pull request mode
+on the project and on each team's queue, the host and how it was worked out,
+and the release recipe.
+
+Trigger rules can answer both ends of this. `branch-landed` fires when a
+branch Loadout was waiting on is marked merged, whichever host it went
+through or with local git, and `released` fires when `release cut` succeeds.
+`loadout trigger events` lists the fields each carries. `loadout doctor` says
+whether the CLI each waiting branch's host needs is there and signed in, so a
+lapsed `az login` turns up before a merge rather than halfway through one.
+
+A trigger rule can do two things with this. With `--queue`, a rule that
+starts a team records a task from its goal and adds it to the team's queue
+instead of starting a run there and then, and `--pr-mode` says what that run
+does about a pull request, over the queue's and the project's:
+
+```sh
+loadout trigger add fix-failures run-finished --where outcome=failed \
+  --team fixers --goal "Find out why {team} failed in {run}" \
+  --queue --pr-mode draft --cap-usd 20
+```
+
+And the built-in `release cut` releases a project with the version its plan
+proposes and notes made from the commits since, which say a rule released it:
+
+```sh
+loadout trigger add release-on-land branch-landed --project widget --builtin "release cut"
+```
+
+A release pushes, so it never goes out unattended. Every one waits in
+`loadout trigger approvals` until you approve it, and only then runs
+`release cut <project> --proposed --yes`. A release with a version nobody
+looked at is the mistake this keeps out.
+
 **A run that fails** - blocked, over budget, stopped, or whose process died -
 leaves the task blocked with the run and the reason in its history, and is not
 tried again: a spec that failed once usually needs a person to rewrite it.

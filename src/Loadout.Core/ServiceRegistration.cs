@@ -28,9 +28,11 @@ public static class ServiceRegistration
         services.AddSingleton<IConfigurationService, ConfigurationService>();
         services.AddSingleton<IGitManager, GitManager>();
         services.AddSingleton<IPullRequestReader, GhPullRequestReader>();
-        services.AddSingleton<IRepositoryHost, GhRepositoryHost>();
+        services.AddSingleton<IRepositoryHosts, RepositoryHosts>();
+        services.AddSingleton<ILocalSquash, LocalSquash>();
         services.AddSingleton<Delivery.ILandingService, Delivery.LandingService>();
         services.AddSingleton<Delivery.IDeliveryService, Delivery.DeliveryService>();
+        services.AddSingleton<Delivery.IReleaseService, Delivery.ReleaseService>();
         services.AddSingleton<IWorkspaceManager, WorkspaceManager>();
         services.AddSingleton<IProjectCheckouts, ProjectCheckouts>();
         services.AddSingleton<IProjectService, ProjectService>();
@@ -107,6 +109,7 @@ public static class ServiceRegistration
         services.AddSingleton<IDiagnosticContributor, Editors.EditorDiagnosticContributor>();
         services.AddSingleton<IDiagnosticContributor, Sessions.SessionDiagnosticContributor>();
         services.AddSingleton<IDiagnosticContributor, Tasks.TaskContextDiagnosticContributor>();
+        services.AddSingleton<IDiagnosticContributor, Delivery.DeliveryDiagnosticContributor>();
         services.AddSingleton<IDoctorService, DoctorService>();
         services.AddSingleton<IRemediationService, RemediationService>();
 

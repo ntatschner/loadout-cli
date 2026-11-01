@@ -94,6 +94,35 @@ describe('Landings', () => {
     expect(screen.getByText('Merges once its required checks pass.')).toBeTruthy();
   });
 
+  it('abandons only on a second press, saying first that it closes the pull request', async () => {
+    const acted: [string, string[]][] = [];
+    render(Landings, { now, act: (path: string, words: string[]) => { acted.push([path, words]); }, landings: [one({ state: 'draft', pullRequest: 'https://github.com/o/website/pull/42' })] });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Abandon…' }));
+    expect(acted).toEqual([]);
+    expect(screen.getByText(/Closes https:\/\/github.com\/o\/website\/pull\/42 without merging it/)).toBeTruthy();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Abandon' }));
+    expect(acted).toEqual([['pr abandon', ['queue/login', '--project', 'website']]]);
+  });
+
+  it('offers no abandon once a merge has been asked for', () => {
+    render(Landings, { now, act: () => {}, landings: [one({ pullRequest: 'https://github.com/o/website/pull/42', mergeRequested: '2026-10-28T08:00:00Z' })] });
+
+    expect(screen.queryByRole('button', { name: 'Abandon…' })).toBeNull();
+  });
+
+  it('offers a merge here, not a pull request, for a project that lands with local git', async () => {
+    const acted: [string, string[]][] = [];
+    render(Landings, { now, act: (path: string, words: string[]) => { acted.push([path, words]); }, landings: [one({ state: 'pending', provider: 'local' })] });
+
+    expect(screen.queryByRole('button', { name: 'Open for review' })).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Merge here…' }));
+    await fireEvent.input(screen.getByLabelText('Subject'), { target: { value: 'Fix the login' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Squash-merge here' }));
+    expect(acted).toEqual([['pr merge', ['queue/login', '--project', 'website', '--subject=Fix the login', '--yes']]]);
+  });
+
   it('keeps a body only when one was written, joined so a leading dash is still a value', () => {
     expect(mergeWords({ project: 'website', branch: 'b' }, '-x', '')).toEqual(['b', '--project', 'website', '--subject=-x']);
     expect(mergeWords({ project: 'website', branch: 'b' }, 'Fix', ' Why. ')).toEqual(['b', '--project', 'website', '--subject=Fix', '--body=Why.']);
