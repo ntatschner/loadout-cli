@@ -3,7 +3,7 @@ id: role.verifier
 kind: role
 mode: investigate
 deliverable: decision
-contract: report/1
+contract: report/2
 tools:
   denied:
     - 'Edit'

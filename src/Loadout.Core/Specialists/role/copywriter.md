@@ -3,7 +3,7 @@ id: role.copywriter
 kind: role
 mode: implement
 deliverable: document
-contract: report/1
+contract: report/2
 tools:
   denied:
     - 'Bash(git add:*)'

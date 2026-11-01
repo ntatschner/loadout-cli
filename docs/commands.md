@@ -97,6 +97,7 @@
 | `loadout backfill contract` | Fill in what open ideas and tasks lack under the current contract, on the project you are in, or `--all-projects` for every list. An idea's plan gets the missing fields as a new revision, marked gap-filled until you accept it. An open or blocked task gets a proposed done-when, held until you record it. Ideas still being questioned, or with answers or a request their plan hasn't taken in, are left for their next refine. `--dry-run` lists every gap and every skip with its reason, and counts the agent calls a real pass would make; `--limit <count>` caps a pass. A record that failed says why, and the next pass tries it again |
 | `loadout task show <id>` | One task in full: its detail, note, and every change of state with who said so and when, and the idea it was accepted from, if it was, with the revision of its list. Lists leave the detail out |
 | `loadout task declare <id> <state> --type <type>` | What the work is about: `new-project`, `feature`, `bug-fix`, `ci-cd`, `release`, `docs` or `maintenance`. Your choice stays until you change it, and no guess replaces it. Leave it out and a new task's type is guessed from its words and where you captured it: an idea on the workspace-wide list with nothing telling in it is taken for a new project. `task list` and `task show` say which types were guessed |
+| `loadout task declare <id> <state> --source <source>` | Where the work was put off: `run:<run id>`, `idea:<idea id>` or `transcript:<session id>`. It's recorded once, so a later declare that leaves it out keeps it and one naming a different source is refused. A deferral with a source is how `team follow-ups`, `idea later` and the deferral sweep know the work already has a task |
 | `loadout task shorten` | Shorten titles written before the 72-character limit, keeping each one whole in its detail and noting it in the history. `--every-list` covers every project and the workspace-wide list; `--dry-run` names what it would change |
 | `loadout task requires <id> [<task>...]` | Say this task must wait for others, by id on the same list, `project/id`, or `global/id` for the workspace-wide list; `--remove` takes them off. With none named, it lists both ends: what this task requires and whether each is done, and what requires it. A link that would make a loop, even through other projects, is refused and the loop named. Team queues hold the task until each requirement is done, and dropping or removing a task others require says which will keep waiting. `task declare --requires` makes the same link as it records a task |
 | `loadout task label <id> <label>...` | Put your own labels on a task or idea, beside its type, or take them off with `--remove`. Labels are the workspace's, so the same one can sort work on every project, and nothing acts on them: they're for you and for `--filter label:<word>` |
@@ -119,7 +120,8 @@
 | `loadout idea dismiss <id>` | Clear the "last round failed" marker on an idea you have stopped refining, without paying for another round. Answers and the plan stay |
 | `loadout idea type <id> <type>` | Choose what an idea is about: `new-project`, `feature`, `bug-fix`, `ci-cd`, `release`, `docs` or `maintenance`. Until you do, each refine round may revise the type it was guessed as when you dropped it in; once you choose, no round changes it, though the agent can still say it disagrees. `agent` hands the choice back, and the guess stands until the next round |
 | `loadout idea answer\|choose\|keep\|drop\|improve` | Answer the agent's questions, pick an option for a layer, keep or drop a piece, or ask for one to be reworked. An answer or request that starts with a dash goes as `--answer=` or `--request=`. Each question says what it's about, such as `Relates to L2 Storage` with a line of context, so you can answer it days later without rereading the history. If that thing has since changed or gone, a note removed or a layer reworked in a later revision, the question is marked possibly outdated, with why, here, in Studio and in the accepted plan, and the next round is told the answer may need revisiting. Answering again, even with the same answer, clears the marker |
-| `loadout idea accept <id>` | Write the plan out and turn the idea into a task on its project, or on a new one with `--new-project` |
+| `loadout idea later <id> <addition>...` | Leave additions out of the plan but keep them wanted: accepting the idea makes each its own task on the same project, with the idea as its source. Additions only, since a layer is part of the design. Studio has a Later button on each addition, and the terminal Ideas window has `l` |
+| `loadout idea accept <id>` | Write the plan out and turn the idea into a task on its project, or on a new one with `--new-project`. Each addition marked later becomes a task beside it; a dropped one makes nothing |
 | `loadout idea accept <id> --done-when <condition>` | Accepting confirms the done-when the plan proposed, and the task carries them. Give `--done-when` (repeated) to replace them, or `--no-done-when` for none. A team queue takes only a task that has some |
 | `loadout idea dump add <file\|->` | Drop in notes kept elsewhere, from a file, standard input or `--text`, and have an agent split them into separate ideas and tasks, each carrying its own words from the notes |
 | `loadout idea dump list\|show\|split\|apply` | See the notes dropped in, split one again, and record the pieces you want, all or `--only 1,3` |
@@ -141,6 +143,9 @@
 | `loadout team runs restore <run>` | Put a run back from the bin. Refused while a run with that identifier exists |
 | `loadout team blocked list\|show <run>` | Runs that ended short of their done-when (blocked, failed, limited, unrecorded, whose process died, or that handed you criteria still to tick off), each with a suggested action and the reason for it |
 | `loadout team blocked resolve <run> --action <action>` | Decide what happens to one: `carry-on`, `raise` (limited runs only, with `--rounds` or `--usd`), `requeue`, `edit-requeue`, `set-aside` or `drop`. Carrying on starts a run that follows it, and the old run is linked to the new one |
+| `loadout team follow-ups list [run]` | The work finished runs left for later. Each is held on its run as F1, F2 and so on until you accept or dismiss it; without a run, this lists every run with some still waiting |
+| `loadout team follow-ups accept <run> <id>...` | Make follow-ups into tasks on the run's project, each with the run as its source. `task move` takes one elsewhere afterwards |
+| `loadout team follow-ups dismiss <run> <id>... [--why <text>]` | Decide against follow-ups, so they stop waiting and are never offered again |
 | `loadout team run <team> "<goal>" --follows <run>` | Carry on from a run that ended short: its lead is told how that one ended, what stopped it and what you said |
 | `loadout team runs close <run>` | End a run whose driver has died, so remove, prune and resume take it. Refused while anything is driving it; a run from an older build is asked about first, or takes `--yes` |
 | `loadout team bin` | What is in the bin: each run and team, when it was removed, how many days it has left and its size |
@@ -379,7 +384,12 @@ There are four ops. `add` names a new task from its title, `declare` says where
 one stands (and adds it if the id is new), `remove` forgets one and `move` sends
 one to another list. Each can also carry `title`, `note`, `detail`, `kind`,
 `type`, `project`, `by` and `doneWhen` (a list of conditions), and a title over 72 characters is shortened as `task declare`
-shortens it. A change that names no project is made on the list the command names, the
+shortens it. `add` and `declare` also take `source`, the run, idea or
+conversation that put the work off: `run:<run id>`, `idea:<idea id>` or
+`transcript:<session id>`. It's recorded once and `task show` lists it. A
+declare naming a different source for a task that already has one is refused,
+because where a piece of work came from doesn't change.
+A change that names no project is made on the list the command names, the
 same as every other `task` command, and `"project": "-"` is the workspace-wide
 list.
 
@@ -410,7 +420,7 @@ an agent or by a pull, reaches Studio within a second.
 `loadout idea apply` takes the same kind of array for ideas, with six ops.
 `capture` drops a new one in from its `text` (and an optional `title` or `id`).
 `answer` takes a `question` and an `answer`, `choose` a `layer` and an `option`,
-and `judge` a `piece`, a `verdict` (`keep`, `drop` or `improve`) and, for
+and `judge` a `piece`, a `verdict` (`keep`, `drop`, `later` or `improve`) and, for
 `improve`, a `request`. `dismiss` clears a failed round and `remove` forgets the
 idea.
 
@@ -796,7 +806,7 @@ Twenty-four tools, each making the same call its command makes:
 | `loadout_code_map` | The map of the code as it stands now, one line per directory |
 | `loadout_remember` | Record one durable fact about the project, with a description, screened for credentials |
 | `loadout_tasks` | What the project is working on, and what the repository does not back up, as `task list` says it |
-| `loadout_task_declare` | Record where a task stands, attributed and dated, as `task declare` does, with the same 72-character title and a `detail` for the rest |
+| `loadout_task_declare` | Record where a task stands, attributed and dated, as `task declare` does, with the same 72-character title and a `detail` for the rest. `source` says where the work was put off, and `this-conversation` names the conversation the agent is in without it knowing its id |
 | `loadout_task_show` | One task and the revision of its list, as `task show --json` gives it |
 | `loadout_task_apply` | Several task changes at once, each list all or nothing, as `task apply` makes them |
 | `loadout_task_move` | Move a task or idea from this project to the one it belongs on, as `task move` does |

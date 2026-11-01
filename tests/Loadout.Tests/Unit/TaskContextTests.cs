@@ -301,7 +301,7 @@ public sealed class TaskContextTests : IDisposable
             CancellationToken ct = default,
             TaskKind? kind = null,
             string? detail = null, IReadOnlyList<string>? doneWhen = null, string? reason = null,
-            TaskType? type = null, TaskTypeSource? typeBy = null) =>
+            TaskType? type = null, TaskTypeSource? typeBy = null, TaskSource? source = null) =>
             throw new NotSupportedException();
 
         public Task<OperationResult<IReadOnlyList<TaskShortened>>> ShortenTitlesAsync(

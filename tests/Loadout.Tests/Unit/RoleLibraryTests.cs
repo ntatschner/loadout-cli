@@ -41,7 +41,7 @@ public sealed class RoleLibraryTests
 
         member.Should().NotBeNull();
         member!.Kind.Should().Be(SpecialistKind.Role);
-        member.Body.Should().Contain("report/1");
+        member.Body.Should().Contain(Loadout.Models.Teams.Report.Version);
         member.Activation.Always.Should().BeFalse("a role is never foundation; it reaches a session by name only");
     }
 
@@ -57,7 +57,7 @@ public sealed class RoleLibraryTests
         reviewer.Role.Should().NotBeNull();
         reviewer.Role!.Mode.Should().Be("review");
         reviewer.Role.Deliverable.Should().Be("decision");
-        reviewer.Role.Contract.Should().Be("report/1");
+        reviewer.Role.Contract.Should().Be(Loadout.Models.Teams.Report.Version);
         reviewer.Role.AllowedTools.Should().Contain("Read");
         reviewer.Role.DeniedTools.Should().Contain("Edit");
 
@@ -81,7 +81,7 @@ public sealed class RoleLibraryTests
             role.Role.Should().NotBeNull(role.Id);
             role.Role!.Mode.Should().NotBeNullOrEmpty(role.Id);
             role.Role.Deliverable.Should().NotBeNullOrEmpty(role.Id);
-            role.Role.Contract.Should().Be("report/1", role.Id);
+            role.Role.Contract.Should().Be(Loadout.Models.Teams.Report.Version, role.Id);
             role.Role.DeniedTools.Should().Contain("Bash(git rebase:*)", role.Id);
             role.Role.AllowedTools.Should().NotContain("Bash(git push:*)", role.Id);
         }

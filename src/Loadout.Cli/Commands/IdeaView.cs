@@ -344,6 +344,7 @@ internal static class IdeaView
         IdeaVerdict.Keep => "[green]kept[/]",
         IdeaVerdict.Drop => "[red]dropped[/]",
         IdeaVerdict.Improve => $"[blue]to improve:[/] {Markup.Escape(request)}",
+        IdeaVerdict.Later => "[yellow]later[/] [dim](a task of its own when accepted)[/]",
         _ => string.Empty,
     };
 

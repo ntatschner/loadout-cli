@@ -33,7 +33,7 @@ public static class ReportSchema
     /// </remarks>
     public const int SummaryShown = 1500;
 
-    /// <summary>The schema for <see cref="Report.Version"/>.</summary>
+    /// <summary>The schema for <see cref="Report.Version"/>, report/2.</summary>
     /// <remarks>
     /// No <c>$schema</c> key. Claude Code's validator refuses one naming
     /// draft 2020-12 ("no schema with key or ref"), and the first real run
@@ -41,14 +41,14 @@ public static class ReportSchema
     /// is read as the validator's default draft, which supports everything
     /// used here.
     /// </remarks>
-    public const string Version1 = """
+    public const string Current = """
         {
-          "title": "report/1",
+          "title": "report/2",
           "type": "object",
           "additionalProperties": false,
           "required": ["contract", "node", "status", "summary", "deliverables", "evidence", "outward_taken"],
           "properties": {
-            "contract": { "const": "report/1" },
+            "contract": { "const": "report/2" },
             "node": { "type": "string" },
             "status": { "enum": ["done", "blocked", "failed", "needs-decision"] },
             "summary": { "type": "string" },
@@ -85,6 +85,9 @@ public static class ReportSchema
             "outward_requested": { "type": "array", "items": { "type": "string" } },
             "next": { "type": "string" },
             "proposed_done_when": { "type": "array", "items": { "type": "string" } },
+            "follow_ups": { "type": "array", "items": {
+              "type": "object", "additionalProperties": false, "required": ["title"],
+              "properties": { "title": { "type": "string" }, "why": { "type": "string" } } } },
             "goal_understood": { "type": "string" },
             "readings": { "type": "array", "items": {
               "type": "object", "additionalProperties": false, "required": ["criterion", "reading"],

@@ -66,12 +66,14 @@ public sealed class TeamContractTests
             Questions: [new ReportQuestion("Merge now?", ["yes", "no"], "yes")],
             Requests: [new ReportRequest("verifier", "Verify a4f21c9", DeliverableKind.Decision, ["report:reviewer"])],
             OutwardRequested: ["git push origin main"],
-            Next: "Merge on your say-so.");
+            Next: "Merge on your say-so.",
+            FollowUps: [new ReportFollowUp("Accept --since as a relative time", "Outside done_when."), new ReportFollowUp("Reflow the doc comment")]);
 
         var json = ReportReader.Write(report);
 
         // The words the roles name, spelled as the roles name them.
-        json.Should().Contain("\"contract\":\"report/1\"");
+        json.Should().Contain("\"contract\":\"report/2\"");
+        json.Should().Contain("\"follow_ups\":[{\"title\":\"Accept --since as a relative time\",\"why\":\"Outside done_when.\"}");
         json.Should().Contain("\"status\":\"needs-decision\"");
         json.Should().Contain("\"result\":\"n/a\"");
         json.Should().Contain("\"outward_taken\":[]");
@@ -113,7 +115,7 @@ public sealed class TeamContractTests
         read.Value.Should().BeEquivalentTo(report);
 
         // Every word the record writes is one the schema allows, and no more.
-        using var schema = JsonDocument.Parse(ReportSchema.Version1);
+        using var schema = JsonDocument.Parse(ReportSchema.Current);
 
         schema.RootElement.GetProperty("properties").GetProperty("readings").GetProperty("items")
             .GetProperty("properties").GetProperty("needs").GetProperty("enum").EnumerateArray()
@@ -140,7 +142,7 @@ public sealed class TeamContractTests
     {
         const string Example = """
             {
-              "contract": "report/1",
+              "contract": "report/2",
               "node": "implementer/1",
               "status": "done",
               "summary": "Added --since to loadout usage.",
@@ -151,7 +153,8 @@ public sealed class TeamContractTests
               ],
               "outward_taken": [],
               "outward_requested": [],
-              "next": "Reviewer can take a4f21c9."
+              "next": "Reviewer can take a4f21c9.",
+              "follow_ups": [ { "title": "Accept --since as a relative time, such as 7d", "why": "Outside done_when." } ]
             }
             """;
 
@@ -160,7 +163,35 @@ public sealed class TeamContractTests
         read.Succeeded.Should().BeTrue(read.Error);
         read.Value!.Status.Should().Be(ReportStatus.Done);
         read.Value.Evidence.Should().HaveCount(2);
+        read.Value.FollowUps.Should().ContainSingle().Which.Title.Should().Be("Accept --since as a relative time, such as 7d");
         ReportCheck.Check(read.Value, ImplementerBrief).Outcome.Should().Be(ReportOutcome.Accepted);
+    }
+
+    [Fact]
+    public void A_report_1_document_from_before_follow_ups_still_reads_as_it_was_written()
+    {
+        // Every run journalled before report/2 wrote these, and a run picked up
+        // again reads its old reports back.
+        const string Earlier = """
+            {
+              "contract": "report/1",
+              "node": "lead",
+              "status": "blocked",
+              "summary": "Got as far as the schema.",
+              "deliverables": [],
+              "evidence": [],
+              "outward_taken": [],
+              "blocker": { "what": "no test database", "unblocked_by": "a connection string" },
+              "next": "Follow-ups worth recording as tasks: (1) a test, (2) a seam."
+            }
+            """;
+
+        var read = ReportReader.Read(Earlier);
+
+        read.Succeeded.Should().BeTrue(read.Error);
+        read.Value!.Contract.Should().Be("report/1", "it is read as what it says it is, not rewritten");
+        read.Value.FollowUps.Should().BeNull("a report/1 document has none, and its prose is not parsed into any");
+        read.Value.Blocker!.UnblockedBy.Should().Be("a connection string");
     }
 
     [Theory]
@@ -170,7 +201,7 @@ public sealed class TeamContractTests
     [InlineData("[1,2]", "not a JSON object")]
     [InlineData("""{"node":"x"}""", "does not say which contract")]
     [InlineData("""{"contract":"report/9","node":"x"}""", "follows 'report/9'")]
-    [InlineData("""{"contract":"report/1","node":"x","status":"maybe"}""", "does not fit report/1")]
+    [InlineData("""{"contract":"report/2","node":"x","status":"maybe"}""", "does not fit report/2")]
     public void What_is_not_a_report_is_refused_with_a_sentence_that_says_why(string? json, string reason)
     {
         var read = ReportReader.Read(json);
@@ -182,7 +213,7 @@ public sealed class TeamContractTests
     [Fact]
     public void The_schema_is_valid_json_and_requires_what_the_record_requires()
     {
-        using var schema = JsonDocument.Parse(ReportSchema.Version1);
+        using var schema = JsonDocument.Parse(ReportSchema.Current);
 
         var required = schema.RootElement.GetProperty("required").EnumerateArray().Select(r => r.GetString()).ToList();
 
@@ -204,7 +235,7 @@ public sealed class TeamContractTests
     [Fact]
     public void The_schema_puts_no_length_rule_on_the_summary()
     {
-        using var schema = JsonDocument.Parse(ReportSchema.Version1);
+        using var schema = JsonDocument.Parse(ReportSchema.Current);
 
         var summary = schema.RootElement.GetProperty("properties").GetProperty("summary");
 

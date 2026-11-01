@@ -1467,7 +1467,7 @@ public sealed partial class TeamRunner : ITeamRunner
         // nothing here can reach it. Before the evidence rule, because the last
         // sentence a node reads is the contract and a test holds it there.
         text.AppendLine(
-            "Reply with one report/1 document as your structured output. Keep summary short: a "
+            "Reply with one report/2 document as your structured output. Keep summary short: a "
             + "few sentences, not a report of its own. Status done needs evidence.");
 
         return text.ToString();
@@ -1940,7 +1940,8 @@ public sealed partial class TeamRunner : ITeamRunner
 
         text.AppendLine(
             "Carry on from where it stopped rather than starting over. Decide what happens next: more "
-            + "requests, or finish. Reply with one report/1 document. Keep summary short. Status done "
+            + "requests, or finish. When you finish, list in follow_ups the work left for later. Reply with "
+            + "one report/2 document. Keep summary short. Status done "
             + "needs evidence cited from your nodes' reports.");
 
         return text.ToString();

@@ -787,4 +787,72 @@ public sealed class IdeaServiceTests : IDisposable
         (await _tasks.ListAsync(null)).Value!.Should().BeEmpty();
         File.Exists(Path.Combine(_workspace.LocalPath, "ideas", $"{idea.Id}.yaml")).Should().BeFalse();
     }
+
+    private static IdeaReply PlanWithFourAdditions()
+    {
+        var reply = Plan();
+        reply.Plan!.Additions =
+        [
+            new IdeaReply.ReplyAddition { Title = "Alerts", Why = "So you hear first." },
+            new IdeaReply.ReplyAddition { Title = "A weekly digest", Why = "Wanted, but not for the first version." },
+            new IdeaReply.ReplyAddition { Title = "Dark theme", Why = "Matches the rest." },
+            new IdeaReply.ReplyAddition { Title = "An uptime history", Why = "Needs storage the first version lacks." },
+        ];
+
+        return reply;
+    }
+
+    [Fact]
+    public async Task Accepting_makes_exactly_one_task_for_each_addition_left_for_later_and_none_for_a_dropped_one()
+    {
+        await ProjectAsync("homelab");
+        var idea = (await _ideas.CaptureAsync(null, "Status page", "me")).Value!;
+        var place = new IdeaPlace(null, idea.Id);
+        await _ideas.RecordReplyAsync(place, PlanWithFourAdditions());
+        await _ideas.JudgeAsync(place, "A1", IdeaVerdict.Keep);
+        (await _ideas.JudgeAsync(place, "A2", IdeaVerdict.Later)).Succeeded.Should().BeTrue();
+        await _ideas.JudgeAsync(place, "A3", IdeaVerdict.Drop);
+        (await _ideas.JudgeAsync(place, "A4", IdeaVerdict.Later)).Succeeded.Should().BeTrue();
+
+        var accepted = await _ideas.AcceptAsync(place, "homelab", "nigel");
+
+        accepted.Succeeded.Should().BeTrue(accepted.Error);
+        accepted.Value!.Later!.Select(one => one.Title).Should().Equal("A weekly digest", "An uptime history");
+
+        var tasks = (await _tasks.ListAsync("homelab")).Value!;
+        tasks.Should().HaveCount(3, "the idea's own task, and one for each addition left for later");
+        var later = tasks.Where(one => one.Id != idea.Id).ToList();
+        later.Should().OnlyContain(one => one.Source!.Kind == TaskSourceKind.Idea && one.Source.Id == idea.Id);
+        later.Should().OnlyContain(one => one.DeclaredBy == "nigel" && one.State == TaskState.Open);
+        later.Single(one => one.Title == "An uptime history").Detail.Should().Be("Needs storage the first version lacks.");
+        tasks.Should().NotContain(one => one.Title == "Dark theme", "a dropped addition makes nothing");
+
+        var document = await File.ReadAllTextAsync(Path.Combine(_workspace.LocalPath, "projects", "homelab", "ideas", $"{idea.Id}.md"));
+        var also = document[document.IndexOf("## Also included", StringComparison.Ordinal)..document.IndexOf("## Left for later", StringComparison.Ordinal)];
+        also.Should().Contain("**Alerts.**").And.NotContain("weekly digest", "left for later is not part of the plan");
+        document[document.IndexOf("## Left for later", StringComparison.Ordinal)..].Should().Contain("**A weekly digest.**").And.Contain("**An uptime history.**");
+    }
+
+    [Fact]
+    public async Task A_layer_cannot_be_left_for_later_because_it_is_part_of_the_design()
+    {
+        var idea = (await _ideas.CaptureAsync(null, "Status page", "me")).Value!;
+        var place = new IdeaPlace(null, idea.Id);
+        await _ideas.RecordReplyAsync(place, Plan());
+
+        var judged = await _ideas.JudgeAsync(place, "L1", IdeaVerdict.Later);
+
+        judged.Failed.Should().BeTrue();
+        judged.Error.Should().Contain("L1 is a layer of the design").And.Contain("later is for additions");
+        (await _ideas.ReadAsync(place)).Value!.Plan!.Layers[0].Verdict.Should().Be(IdeaVerdict.Undecided);
+    }
+
+    [Fact]
+    public void A_batch_judges_a_piece_later_by_name()
+    {
+        var read = IdeaOperations.Parse("""[{"op":"judge","id":"status","piece":"A2","verdict":"later"}]""", null, "studio");
+
+        read.Succeeded.Should().BeTrue(read.Error);
+        read.Value![0].Verdict.Should().Be(IdeaVerdict.Later);
+    }
 }

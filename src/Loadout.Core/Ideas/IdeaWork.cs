@@ -486,7 +486,7 @@ public static partial class IdeaWork
                 };
 
                 if (previous?.Additions.FirstOrDefault(old => SameName(old.Title, made.Title)) is { } before
-                    && before.Verdict is IdeaVerdict.Keep or IdeaVerdict.Drop)
+                    && before.Verdict is IdeaVerdict.Keep or IdeaVerdict.Drop or IdeaVerdict.Later)
                 {
                     made.Verdict = before.Verdict;
                 }
@@ -808,6 +808,7 @@ public static partial class IdeaWork
         IdeaVerdict.Keep => "keep",
         IdeaVerdict.Drop => "drop",
         IdeaVerdict.Improve => $"improve: {request}",
+        IdeaVerdict.Later => "later: not in this plan, made a task of its own when the idea is accepted",
         _ => "no decision yet",
     };
 
@@ -1006,6 +1007,25 @@ public static partial class IdeaWork
             text.AppendLine();
 
             foreach (var addition in kept)
+            {
+                text.AppendLine(CultureInfo.InvariantCulture, $"- **{addition.Title}.** {addition.Why}");
+            }
+
+            text.AppendLine();
+        }
+
+        // Named here as well as made into tasks, so whoever builds the plan
+        // knows these were left out on purpose rather than forgotten.
+        var later = plan.Additions.Where(a => a.Verdict == IdeaVerdict.Later).ToList();
+
+        if (later.Count > 0)
+        {
+            text.AppendLine("## Left for later");
+            text.AppendLine();
+            text.AppendLine("Not part of this plan. Each is a task of its own, made when the idea was accepted.");
+            text.AppendLine();
+
+            foreach (var addition in later)
             {
                 text.AppendLine(CultureInfo.InvariantCulture, $"- **{addition.Title}.** {addition.Why}");
             }

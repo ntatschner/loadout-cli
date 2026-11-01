@@ -229,7 +229,7 @@ public sealed class WaitingRoomTests
             string? projectSlug, string id, TaskState state, string declaredBy,
             string? title = null, string? note = null, CancellationToken ct = default, TaskKind? kind = null,
             string? detail = null, IReadOnlyList<string>? doneWhen = null, string? reason = null,
-            TaskType? type = null, TaskTypeSource? typeBy = null) =>
+            TaskType? type = null, TaskTypeSource? typeBy = null, TaskSource? source = null) =>
             throw new NotSupportedException("Nothing here writes.");
 
         public Task<OperationResult<IReadOnlyList<TaskShortened>>> ShortenTitlesAsync(

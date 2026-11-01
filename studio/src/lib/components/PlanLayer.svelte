@@ -31,7 +31,7 @@
     addition?: { id: string; title: string; why?: string; verdict?: string };
     /** Each resolves true once the change is recorded and read back, and false when it was not. */
     onchoose?: (option: string) => Promise<boolean>;
-    onverdict?: (verdict: 'Keep' | 'Drop') => Promise<boolean>;
+    onverdict?: (verdict: 'Keep' | 'Drop' | 'Later') => Promise<boolean>;
     onimprove?: (request: string) => Promise<boolean>;
     /** Told whether a rework request is written and not sent. */
     onrework?: (pending: boolean) => void;
@@ -44,7 +44,7 @@
   const name = $derived(layer ? layer.name : (addition?.title ?? ''));
   // Made here and not yet read back: shown in place of what the idea says until it is.
   let choosing = $state<string | null>(null);
-  let judging = $state<'Keep' | 'Drop' | 'Improve' | null>(null);
+  let judging = $state<'Keep' | 'Drop' | 'Later' | 'Improve' | null>(null);
   const chosen = $derived(choosing ?? layer?.chosen ?? null);
 
   // idea show writes the verdict in lower case; it is compared and shown capitalised.
@@ -82,7 +82,7 @@
     said = ok ? `✓ Chose ${option.id} for ${id}` : `✕ ${option.id} was not recorded for ${id}`;
   }
 
-  async function judge(to: 'Keep' | 'Drop' | 'Improve', send: () => Promise<boolean>, done: string) {
+  async function judge(to: 'Keep' | 'Drop' | 'Later' | 'Improve', send: () => Promise<boolean>, done: string) {
     if (judging) {
       return;
     }
@@ -145,6 +145,10 @@
     <div class="acts" data-next={`verdict:${id}`}>
       <HaloButton label="Keep it" size="small" glyph="✓" cmd={lineFor('idea keep', [idea, id, ...where])} {disabledReason} inactive={busy || verdict === 'Keep'} onpress={() => void judge('Keep', () => onverdict?.('Keep') ?? Promise.resolve(false), `Kept ${id}`)} />
       <HaloButton label="Drop it" size="small" glyph="✕" cmd={lineFor('idea drop', [idea, id, ...where])} {disabledReason} inactive={busy || verdict === 'Drop'} onpress={() => void judge('Drop', () => onverdict?.('Drop') ?? Promise.resolve(false), `Dropped ${id}`)} />
+      {#if addition}
+        <!-- Additions only: a layer is part of the design and cannot be built on its own later. -->
+        <HaloButton label="Later" size="small" glyph="⇥" cmd={lineFor('idea later', [idea, id, ...where])} {disabledReason} inactive={busy || verdict === 'Later'} onpress={() => void judge('Later', () => onverdict?.('Later') ?? Promise.resolve(false), `${id} becomes a task when you accept`)} />
+      {/if}
       <HaloButton label="Ask for it to be reworked" size="small" glyph="↻" cmd="says what should change, then sends it" {disabledReason} inactive={busy} onpress={() => (reworking = !reworking)} />
     </div>
     <div class={['rework', reworking ? 'on' : ''].filter(Boolean).join(' ')}>

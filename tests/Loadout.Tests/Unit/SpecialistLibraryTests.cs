@@ -127,6 +127,20 @@ public sealed class SpecialistLibraryTests
     }
 
     [Fact]
+    public async Task Every_session_is_told_to_record_work_it_leaves_for_later_as_a_task_with_a_source()
+    {
+        // Always applied, so an ordinary conversation, not only a team run,
+        // turns a deferral into a task the sweep can match by its source.
+        var core = (await BuiltInAsync()).Find("foundation.engineering-core")!;
+
+        core.Activation.Always.Should().BeTrue();
+        core.Body.Should().Contain("Record work you leave for later as a task")
+            .And.Contain("`loadout_task_declare`")
+            .And.Contain($"`{Loadout.Core.Tasks.TaskSources.ThisConversation}`")
+            .And.Contain("--source transcript:<session id>");
+    }
+
+    [Fact]
     public async Task Every_requirement_names_a_specialist_that_exists()
     {
         var catalogue = await BuiltInAsync();

@@ -3,7 +3,7 @@ id: role.docs-writer
 kind: role
 mode: implement
 deliverable: commit
-contract: report/1
+contract: report/2
 title: Documentation writer
 summary: Fixes documentation findings in the register the docs already use, and commits them.
 requires:

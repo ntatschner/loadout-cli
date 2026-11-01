@@ -809,7 +809,7 @@
             <h3 class="sub" data-anchor="zone:additions">Additions the agent proposes</h3>
             {#each idea.plan.additions as addition (addition.id)}
               <PlanLayer idea={idea.id} {where} {addition} accepted={!!idea.accepted} disabledReason={refused}
-                onverdict={(verdict) => record(verdict === 'Keep' ? 'idea keep' : 'idea drop', [idea!.id, addition.id, ...where], verdictUndone(addition, verdict))}
+                onverdict={(verdict) => record(verdict === 'Keep' ? 'idea keep' : verdict === 'Later' ? 'idea later' : 'idea drop', [idea!.id, addition.id, ...where], verdictUndone(addition, verdict))}
                 onimprove={(request) => record('idea improve', [idea!.id, addition.id, `--request=${request}`, ...where], verdictUndone(addition, 'Sending it back'))}
                 onrework={(pending) => untrack(() => (reworks = { ...reworks, [addition.id]: pending }))} />
             {/each}

@@ -4,7 +4,7 @@ namespace Loadout.Models.Teams;
 
 /// <summary>
 /// What a node hands back: the one document a run reads from it. Contract
-/// <c>report/1</c>.
+/// <c>report/2</c>, which is <c>report/1</c> with <see cref="FollowUps"/>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -61,6 +61,15 @@ namespace Loadout.Models.Teams;
 /// the verdicts, because a criterion read wrongly is cheap to correct before a
 /// worker starts and expensive after.
 /// </param>
+/// <param name="FollowUps">
+/// Work the node is leaving for later, one piece each, or null for none.
+/// <para>
+/// Apart from <paramref name="Next"/> because prose is where follow-ups got
+/// lost: reports kept saying "worth recording as tasks: (1) ..., (2) ..." and
+/// nothing turned the sentence into tasks. A list can be held on the run as
+/// proposals until a person accepts or dismisses each one.
+/// </para>
+/// </param>
 public sealed record Report(
     [property: JsonPropertyName("node")] string Node,
     [property: JsonPropertyName("status")] ReportStatus Status,
@@ -76,14 +85,22 @@ public sealed record Report(
     [property: JsonPropertyName("coverage")] IReadOnlyList<ReportCoverage>? Coverage = null,
     [property: JsonPropertyName("proposed_done_when")] IReadOnlyList<string>? ProposedDoneWhen = null,
     [property: JsonPropertyName("goal_understood")] string? GoalUnderstood = null,
-    [property: JsonPropertyName("readings")] IReadOnlyList<ReportReading>? Readings = null)
+    [property: JsonPropertyName("readings")] IReadOnlyList<ReportReading>? Readings = null,
+    [property: JsonPropertyName("follow_ups")] IReadOnlyList<ReportFollowUp>? FollowUps = null)
 {
     /// <summary>The version of this shape.</summary>
     [JsonPropertyName("contract")]
     public string Contract { get; init; } = Version;
 
     /// <summary>The contract this record implements.</summary>
-    public const string Version = "report/1";
+    public const string Version = "report/2";
+
+    /// <summary>
+    /// Contracts still read, newest first. A report/1 document is a report/2
+    /// one without follow-ups, so a run journalled before them reads back as
+    /// it was written.
+    /// </summary>
+    public static readonly IReadOnlyList<string> Earlier = ["report/1"];
 }
 
 /// <summary>How a node's work ended.</summary>
@@ -237,6 +254,13 @@ public enum EvidenceResult
     [JsonStringEnumMemberName("fail")] Fail,
     [JsonStringEnumMemberName("n/a")] NotApplicable,
 }
+
+/// <summary>A piece of work a node is leaving for later.</summary>
+/// <param name="Title">What the work is, in a line, as a task would be titled.</param>
+/// <param name="Why">Why it is worth doing and why not now, or null.</param>
+public sealed record ReportFollowUp(
+    [property: JsonPropertyName("title")] string Title,
+    [property: JsonPropertyName("why")] string? Why = null);
 
 /// <summary>What stopped the work, and what would let it continue.</summary>
 public sealed record ReportBlocker(

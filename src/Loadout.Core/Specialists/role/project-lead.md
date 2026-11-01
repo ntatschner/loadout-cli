@@ -3,7 +3,7 @@ id: role.project-lead
 kind: role
 mode: coordinate
 deliverable: answer
-contract: report/1
+contract: report/2
 title: Project lead
 summary: Turns a goal into briefs, judges the reports that come back, and is the one voice the user hears.
 requires:

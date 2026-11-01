@@ -820,6 +820,7 @@ public static class Program
             idea.AddCommand<IdeaChooseCommand>("choose");
             idea.AddCommand<IdeaKeepCommand>("keep");
             idea.AddCommand<IdeaDropCommand>("drop");
+            idea.AddCommand<IdeaLaterCommand>("later");
             idea.AddCommand<IdeaImproveCommand>("improve");
             idea.AddCommand<IdeaAcceptCommand>("accept");
             idea.AddCommand<IdeaDismissCommand>("dismiss");
@@ -952,6 +953,15 @@ public static class Program
                 blocked.AddCommand<TeamBlockedListCommand>("list");
                 blocked.AddCommand<TeamBlockedShowCommand>("show");
                 blocked.AddCommand<TeamBlockedResolveCommand>("resolve");
+            });
+
+            team.AddBranch("follow-ups", followUps =>
+            {
+                followUps.SetDescription("Work finished runs left for later: accept each as a task, or dismiss it.");
+                followUps.SetDefaultCommand<TeamFollowUpsListCommand>();
+                followUps.AddCommand<TeamFollowUpsListCommand>("list");
+                followUps.AddCommand<TeamFollowUpsAcceptCommand>("accept");
+                followUps.AddCommand<TeamFollowUpsDismissCommand>("dismiss");
             });
 
             team.AddBranch("queue", queue =>

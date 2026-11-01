@@ -3,7 +3,7 @@ id: role.tagger
 kind: role
 mode: implement
 deliverable: commit
-contract: report/1
+contract: report/2
 tools:
   allowed:
     - 'Bash(git tag:*)'

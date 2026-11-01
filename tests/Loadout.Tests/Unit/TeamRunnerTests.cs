@@ -203,7 +203,7 @@ public sealed partial class TeamRunnerTests : IDisposable
         // lead may not do it still may not: Edit is on its deny list.
         leadOptions.Permission.Should().Be(HeadlessPermission.Ask);
         leadOptions.DeniedTools.Should().Contain("Edit");
-        leadOptions.OutputSchemaJson.Should().Be(ReportSchema.Version1);
+        leadOptions.OutputSchemaJson.Should().Be(ReportSchema.Current);
         leadOptions.DisableHooks.Should().BeTrue();
         leadOptions.IsolateMcpServers.Should().BeTrue();
         leadOptions.MaxTurns.Should().Be(40, "the team's turns per node");
@@ -4161,7 +4161,7 @@ public sealed partial class TeamRunnerTests : IDisposable
             string? projectSlug, string id, TaskState state, string declaredBy,
             string? title = null, string? note = null, CancellationToken ct = default, TaskKind? kind = null,
             string? detail = null, IReadOnlyList<string>? doneWhen = null, string? reason = null,
-            TaskType? type = null, TaskTypeSource? typeBy = null)
+            TaskType? type = null, TaskTypeSource? typeBy = null, TaskSource? source = null)
         {
             Declared.Add((projectSlug, id, state, declaredBy, title, note));
 

@@ -168,12 +168,19 @@ internal sealed class DialogIdeaPrompts : IIdeaPrompts
 
     public IReadOnlyList<string>? Pieces(IdeaPlan plan, IdeaVerdict verdict)
     {
-        var pieces = plan.Layers.Select(l => (l.Id, Line: $"{l.Id}  {l.Name}"))
+        // Later is for additions only: a layer is part of the design, and
+        // cannot be built on its own afterwards.
+        var pieces = (verdict == IdeaVerdict.Later ? [] : plan.Layers.Select(l => (l.Id, Line: $"{l.Id}  {l.Name}")))
             .Concat(plan.Additions.Select(a => (a.Id, Line: $"{a.Id}  {a.Title}")))
             .ToList();
 
         using var dialog = new MarkedListDialog(
-            verdict == IdeaVerdict.Keep ? "Keep which pieces?" : "Drop which pieces?",
+            verdict switch
+            {
+                IdeaVerdict.Keep => "Keep which pieces?",
+                IdeaVerdict.Later => "Leave which additions for later? Each becomes a task when you accept.",
+                _ => "Drop which pieces?",
+            },
             "Space ticks and unticks.",
             pieces.Select(p => p.Line).ToList(),
             _application);

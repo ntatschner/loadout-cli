@@ -82,6 +82,23 @@ internal sealed class CloseRunStep
         await journal.WriteAsync(
             "run.finished", null, new { ended = run.Ended, outcome = TeamRunner.Filed(run.Ended), cost = run.Cost, rounds = run.Rounds, merged }, ct).ConfigureAwait(false);
 
+        // After the ending, so a follow-up is only ever offered for a run that
+        // is over: nothing is proposed for work that is still going on. Each is
+        // held until a person accepts it as a task or dismisses it.
+        var offered = 0;
+
+        foreach (var followUp in run.Final?.FollowUps ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(followUp.Title))
+            {
+                continue;
+            }
+
+            await journal.WriteAsync(
+                RunFollowUps.Proposed, null,
+                new { id = $"F{++offered}", title = followUp.Title.Trim(), why = followUp.Why?.Trim() }, ct).ConfigureAwait(false);
+        }
+
         await _declare.RunAsync(
             run, journal, slug, runId, forTask, team, TeamRunner.Landed(run.Ended), request.Goal,
             $"{run.Ended}; {run.Rounds} round(s), ${run.Cost:0.00}. loadout team status {runId}", ct)

@@ -3,7 +3,7 @@ id: role.notes-writer
 kind: role
 mode: advise
 deliverable: document
-contract: report/1
+contract: report/2
 title: Notes writer
 summary: Writes the release notes for somebody deciding whether to update, from the commits, in fifty words.
 requires:

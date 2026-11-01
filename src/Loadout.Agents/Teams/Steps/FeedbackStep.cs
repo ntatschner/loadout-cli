@@ -136,7 +136,8 @@ internal sealed class FeedbackStep
         }
 
         feedback.AppendLine(
-            "Decide what happens next: more requests, or finish. Reply with one report/1 "
+            "Decide what happens next: more requests, or finish. When you finish, list in follow_ups "
+            + "the work you or these reports left for later, so each can become a task. Reply with one report/2 "
             + "document. Keep summary short: a few sentences, not a report of its own. "
             + "Status done needs evidence cited from these reports.");
 

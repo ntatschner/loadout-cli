@@ -58,7 +58,8 @@ public sealed record IdeaSummary(
 /// <param name="Project">The project it is now on.</param>
 /// <param name="PlanPath">The plan, relative to the workspace.</param>
 /// <param name="From">The list it was on, a slug or null for the workspace-wide one.</param>
-public sealed record IdeaAccepted(TaskItem Task, string Project, string PlanPath, string? From = null)
+/// <param name="Later">A task for each addition marked for later, in the plan's order.</param>
+public sealed record IdeaAccepted(TaskItem Task, string Project, string PlanPath, string? From = null, IReadOnlyList<TaskItem>? Later = null)
 {
     /// <summary>Whether accepting it took it off the list it was on.</summary>
     public bool Moved => !string.Equals(From, Project, StringComparison.Ordinal);
@@ -675,6 +676,12 @@ internal sealed partial class IdeaService : IIdeaService
             if (record.Plan!.Layers.FirstOrDefault(l =>
                     string.Equals(l.Id, wanted, StringComparison.OrdinalIgnoreCase)) is { } layer)
             {
+                if (verdict == IdeaVerdict.Later)
+                {
+                    return $"{layer.Id} is a layer of the design, which cannot be built on its own later. "
+                        + "Keep it, drop it or ask to improve it; later is for additions.";
+                }
+
                 layer.Verdict = verdict;
                 layer.Request = verdict == IdeaVerdict.Improve ? said : string.Empty;
 
@@ -1121,6 +1128,40 @@ internal sealed partial class IdeaService : IIdeaService
             return OperationResult<IdeaAccepted>.Fail(declared.Error!, declared.ExitCode);
         }
 
+        // Each addition kept for later becomes its own task, on the same list,
+        // named as coming from the idea. One batch, so either every one is
+        // made or none is and accepting again makes them; a dropped addition
+        // makes nothing, because dropping it was the decision about it.
+        var later = record.Plan.Additions.Where(addition => addition.Verdict == IdeaVerdict.Later).ToList();
+        var laterTasks = new List<TaskItem>();
+
+        if (later.Count > 0)
+        {
+            var made = await _tasks.ApplyAsync(
+                [
+                    .. later.Select(addition => new TaskOperation(
+                        TaskOperation.Add,
+                        destination,
+                        Title: addition.Title,
+                        Note: $"Left for later when the idea {place.Id} was accepted.",
+                        Detail: addition.Why,
+                        By: by,
+                        Source: new TaskSource { Kind = TaskSourceKind.Idea, Id = place.Id })),
+                ],
+                ct).ConfigureAwait(false);
+
+            if (made.Failed || !made.Value!.Applied)
+            {
+                var why = made.Failed ? made.Error! : made.Value!.Outcomes.First(one => !one.Applied && !one.HeldBack).Error!;
+
+                return OperationResult<IdeaAccepted>.Fail(
+                    $"The additions left for later could not be made into tasks, so {place.Id} was not accepted: {why}",
+                    made.Failed ? made.ExitCode : ExitCode.InvalidArguments);
+            }
+
+            laterTasks.AddRange(made.Value.Outcomes.Select(one => one.Task!));
+        }
+
         record.Accepted = new IdeaAcceptance
         {
             AcceptedUtc = _time.GetUtcNow(),
@@ -1141,7 +1182,7 @@ internal sealed partial class IdeaService : IIdeaService
             TryDelete(RecordPath(place));
         }
 
-        return OperationResult<IdeaAccepted>.Ok(new IdeaAccepted(declared.Value!, destination, planPath, place.Project));
+        return OperationResult<IdeaAccepted>.Ok(new IdeaAccepted(declared.Value!, destination, planPath, place.Project, laterTasks));
     }
 
     /// <inheritdoc />

@@ -3,7 +3,7 @@ id: role.release-validator
 kind: role
 mode: review
 deliverable: decision
-contract: report/1
+contract: report/2
 title: Release validator
 summary: Says whether the tree at a commit is fit to release, from evidence gathered now, not remembered.
 requires:

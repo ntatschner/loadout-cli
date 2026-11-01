@@ -3,7 +3,7 @@ id: role.scheduler
 kind: role
 mode: implement
 deliverable: document
-contract: report/1
+contract: report/2
 tools:
   denied:
     - 'Edit'

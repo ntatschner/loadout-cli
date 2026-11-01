@@ -3,7 +3,7 @@ id: role.planner
 kind: role
 mode: advise
 deliverable: plan
-contract: report/1
+contract: report/2
 title: Planner
 summary: Breaks a goal into pieces that can each be done, reviewed and verified on their own.
 requires:

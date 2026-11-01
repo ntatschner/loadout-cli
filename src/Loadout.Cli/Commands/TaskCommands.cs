@@ -291,6 +291,7 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
                     type = item.Type is { } type ? TaskTypes.Name(type) : null,
                     typeBy = item.TypeBy is { } typeBy ? TaskTypes.Name(typeBy) : null,
                     labels = item.Labels,
+                    source = item.Source is { } source ? TaskSources.Name(source) : null,
                     project = where[item],
                     item.DeclaredBy,
                     declared = item.DeclaredUtc,
@@ -647,6 +648,12 @@ public sealed class TaskDeclareCommand : AsyncCommand<TaskDeclareCommand.Setting
             + "Your choice is kept until you change it. Left out, a new task's type is guessed from its words.")]
         public string? Type { get; init; }
 
+        [CommandOption("--source <SOURCE>")]
+        [Description(
+            "The run, idea or conversation that put this work off: run:<run id>, idea:<idea id> or "
+            + "transcript:<session id>. Recorded once; a different one for a task that has one is refused.")]
+        public string? Source { get; init; }
+
         /// <summary>The done-when to record: null to leave it, empty to clear it.</summary>
         internal IReadOnlyList<string>? DoneWhenGiven =>
             NoDoneWhen ? [] : DoneWhen.Length > 0 ? DoneWhen : null;
@@ -688,6 +695,18 @@ public sealed class TaskDeclareCommand : AsyncCommand<TaskDeclareCommand.Setting
             }
 
             type = parsed;
+        }
+
+        TaskSource? source = null;
+
+        if (settings.Source is { Length: > 0 } sourced)
+        {
+            if (TaskSources.Parse(sourced) is not ({ } read, null))
+            {
+                return output.Fail(TaskSources.Parse(sourced).Refusal, ExitCode.InvalidArguments);
+            }
+
+            source = read;
         }
 
         var resolution = await settings.ListAsync(_projects, cancellationToken).ConfigureAwait(false);
@@ -748,7 +767,8 @@ public sealed class TaskDeclareCommand : AsyncCommand<TaskDeclareCommand.Setting
             cancellationToken,
             detail: settings.Detail,
             doneWhen: settings.DoneWhenGiven,
-            type: type).ConfigureAwait(false);
+            type: type,
+            source: source).ConfigureAwait(false);
 
         if (declared.Failed)
         {
@@ -1262,6 +1282,7 @@ public sealed class TaskShowCommand : AsyncCommand<TaskShowCommand.Settings>
         }
 
         Section(output, "Labels", string.Join(", ", task.Labels));
+        Section(output, "Source", task.Source is { } source ? TaskSources.Name(source) : string.Empty);
         Section(output, "Requires", string.Join('\n', task.Requires.Select(link =>
             TaskRequires.Name(link, here) + (unmet.FirstOrDefault(one => TaskRequires.Same(one.Link, link)) is { } waits ? $" ({waits.Why})" : " (done)"))));
         Section(output, "Required by", string.Join('\n', requiredBy.Select(link => TaskRequires.Name(link, here))));

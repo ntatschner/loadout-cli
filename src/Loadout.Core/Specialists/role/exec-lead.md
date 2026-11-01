@@ -3,7 +3,7 @@ id: role.exec-lead
 kind: role
 mode: coordinate
 deliverable: answer
-contract: report/1
+contract: report/2
 title: Executive lead
 summary: Splits a company-level goal across department leads, reconciles what they report, and answers to the user.
 requires:

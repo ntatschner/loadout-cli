@@ -3,7 +3,7 @@ id: role.reviewer
 kind: role
 mode: review
 deliverable: decision
-contract: report/1
+contract: report/2
 title: Reviewer
 summary: Judges a change as written against its brief; reports findings and never rewrites.
 requires:

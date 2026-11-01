@@ -38,6 +38,7 @@ namespace Loadout.Core.Tasks;
 /// <param name="Unlabels">For label, the labels to take off.</param>
 /// <param name="Requires">For require, the tasks to wait for.</param>
 /// <param name="Unrequires">For require, the tasks to stop waiting for.</param>
+/// <param name="Source">The run, idea or conversation that deferred it. Recorded when the task has none; a different one is refused.</param>
 public sealed record TaskOperation(
     string Op,
     string? Project = null,
@@ -58,7 +59,8 @@ public sealed record TaskOperation(
     IReadOnlyList<string>? Labels = null,
     IReadOnlyList<string>? Unlabels = null,
     IReadOnlyList<TaskLink>? Requires = null,
-    IReadOnlyList<TaskLink>? Unrequires = null)
+    IReadOnlyList<TaskLink>? Unrequires = null,
+    TaskSource? Source = null)
 {
     public const string Add = "add";
     public const string Declare = "declare";
@@ -160,7 +162,7 @@ public static class TaskOperations
 
     /// <summary>
     /// Reads a JSON array of operations, each as
-    /// <c>{"op", "project", "id", "state", "title", "note", "detail", "kind", "type", "to", "revision"}</c>.
+    /// <c>{"op", "project", "id", "state", "title", "note", "detail", "kind", "type", "to", "revision", "source"}</c>.
     /// </summary>
     /// <param name="json">The array.</param>
     /// <param name="project">The list an operation naming none is made on, or null for the workspace-wide one.</param>
@@ -267,6 +269,7 @@ public static class TaskOperations
             typeBy = task.TypeBy is { } typeBy ? TaskTypes.Name(typeBy) : null,
             labels = task.Labels,
             requires = task.Requires.Select(TaskRequires.Name),
+            source = task.Source is { } source ? TaskSources.Name(source) : null,
             by = task.DeclaredBy,
             declared = task.DeclaredUtc,
             note = task.Note,
@@ -397,6 +400,22 @@ public static class TaskOperations
             type = parsed;
         }
 
+        TaskSource? source = null;
+
+        if (Text("source") is { Length: > 0 } sourced)
+        {
+            if (TaskSources.Parse(sourced) is not ({ } parsed, null) || op is not (TaskOperation.Add or TaskOperation.Declare))
+            {
+                return OperationResult<TaskOperation>.Fail(
+                    op is TaskOperation.Add or TaskOperation.Declare
+                        ? $"Operation {index} has {TaskSources.Parse(sourced).Refusal}"
+                        : $"Operation {index} gives a source to {op}, and only add and declare record one.",
+                    ExitCode.InvalidArguments);
+            }
+
+            source = parsed;
+        }
+
         if (op == TaskOperation.Move && !Has("to"))
         {
             return OperationResult<TaskOperation>.Fail(
@@ -417,10 +436,11 @@ public static class TaskOperations
             Text("revision") is { Length: > 0 } revision ? revision : null,
             Text("detail"),
             doneWhen,
-            Type: type));
+            Type: type,
+            Source: source));
     }
 
-    private static readonly string[] Known = ["op", "project", "id", "state", "title", "note", "detail", "doneWhen", "kind", "type", "by", "to", "revision"];
+    private static readonly string[] Known = ["op", "project", "id", "state", "title", "note", "detail", "doneWhen", "kind", "type", "by", "to", "revision", "source"];
 
     private static OperationResult<IReadOnlyList<TaskOperation>> Refused(string why) =>
         OperationResult<IReadOnlyList<TaskOperation>>.Fail(why, ExitCode.InvalidArguments);

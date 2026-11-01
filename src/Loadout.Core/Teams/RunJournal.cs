@@ -463,6 +463,12 @@ public sealed record RunSummary(
     public RunResolution? Resolved { get; init; }
 
     /// <summary>
+    /// The work the final report left for later, each with what became of it,
+    /// or empty for a run that named none - every run before follow-ups existed.
+    /// </summary>
+    public IReadOnlyList<RunFollowUp> FollowUps { get; init; } = [];
+
+    /// <summary>
     /// What the run handed to a person when nothing left was something it could
     /// do, with each criterion they have since checked, or null where it never
     /// handed anything over.
@@ -1490,6 +1496,7 @@ public sealed class RunJournal : IRunJournal
             Readings = readings,
             Follows = follows,
             Resolved = resolved,
+            FollowUps = RunFollowUps.Fold(events),
             Handover = handover is null
                 ? null
                 : handover with
@@ -1593,6 +1600,12 @@ public sealed class RunJournal : IRunJournal
                 + (entry.Text("next") is { Length: > 0 } next ? $", carried on as {next}" : string.Empty)
                 + (entry.Text("by") is { Length: > 0 } resolvedBy ? $" by {resolvedBy}" : string.Empty),
             "run.unresolved" => $"waiting on you again: {entry.Text("why")}",
+            RunFollowUps.Proposed => $"left for later, as {entry.Text("id")}: {entry.Text("title")}",
+            RunFollowUps.Accepted => $"follow-up {entry.Text("id")} accepted as the task {entry.Text("task")}"
+                + (entry.Text("by") is { Length: > 0 } acceptedBy ? $" by {acceptedBy}" : string.Empty),
+            RunFollowUps.Dismissed => $"follow-up {entry.Text("id")} dismissed"
+                + (entry.Text("by") is { Length: > 0 } dismissedBy ? $" by {dismissedBy}" : string.Empty)
+                + (entry.Text("why") is { Length: > 0 } dismissedWhy ? $": {dismissedWhy}" : string.Empty),
             "run.handover" => "handed over what only you can do: "
                 + string.Join("; ", entry.Handed().Select(one => $"{one.Criterion} ({CriterionTags.Spell(one.Needs)}) - {one.ToDo}")),
             "criterion.checked" => $"checked by hand by {entry.Text("by") ?? "somebody"}: {entry.Text("criterion")}",

@@ -120,6 +120,7 @@ internal sealed class IdeasWindow : Window
             ("c", "choose"),
             ("k", "keep"),
             ("d", "drop"),
+            ("l", "later"),
             ("i", "improve"),
             ("y", "accept"),
             ("x", "dismiss failure"),
@@ -151,6 +152,7 @@ internal sealed class IdeasWindow : Window
             list.OnKey(Key.C, Command.Save, () => Take(Choose()));
             list.OnKey(Key.K, Command.Copy, () => Take(Judge(IdeaVerdict.Keep)));
             list.OnKey(Key.D, Command.Cut, () => Take(Judge(IdeaVerdict.Drop)));
+            list.OnKey(Key.L, Command.CutToStartOfLine, () => Take(Judge(IdeaVerdict.Later)));
             list.OnKey(Key.I, Command.Paste, () => Take(Improve()));
             list.OnKey(Key.Y, Command.SaveAs, () => Take(Accept()));
             list.OnKey(Key.X, Command.Undo, () => Take(Dismiss()));

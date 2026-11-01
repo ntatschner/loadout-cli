@@ -3,7 +3,7 @@ id: role.regression-tester
 kind: role
 mode: investigate
 deliverable: decision
-contract: report/1
+contract: report/2
 tools:
   allowed:
     - 'Bash(git stash:*)'

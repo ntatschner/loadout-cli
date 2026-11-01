@@ -268,6 +268,17 @@ public enum IdeaVerdict
 
     /// <summary>To be reworked in the next round, as the request says.</summary>
     Improve,
+
+    /// <summary>
+    /// Out of this plan, but wanted: accepting the idea makes it a task of
+    /// its own. Additions only, because a layer is part of the design and
+    /// cannot be built on its own afterwards.
+    /// </summary>
+    /// <remarks>
+    /// After <see cref="Improve"/>, so every verdict already stored keeps
+    /// its meaning.
+    /// </remarks>
+    Later,
 }
 
 /// <summary>One layer of the design: storage, interface, deployment and so on.</summary>

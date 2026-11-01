@@ -1081,10 +1081,31 @@ public sealed class LoadoutTools
             + "Recorded as your guess, which never replaces a type a person chose. Leave out to keep what is there; "
             + "a new task's type is guessed from its words.")]
         string? type = null,
+        [Description(
+            "For work being left for later: where it was put off. 'this-conversation' for this conversation, "
+            + "or run:<run id>, idea:<idea id> or transcript:<session id>. Recorded once, and how a later sweep "
+            + "knows the deferral already has a task.")]
+        string? source = null,
         CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
         ArgumentException.ThrowIfNullOrWhiteSpace(state);
+
+        Models.Tasks.TaskSource? sourced = null;
+
+        if (source is { Length: > 0 })
+        {
+            // Claude Code hands every process it starts the id of the
+            // conversation, which is also its transcript's name.
+            var (read, refusal) = Core.Tasks.TaskSources.Parse(source, Environment.GetEnvironmentVariable("CLAUDE_CODE_SESSION_ID"));
+
+            if (read is null)
+            {
+                return refusal!;
+            }
+
+            sourced = read;
+        }
 
         if (!Enum.TryParse<Models.Tasks.TaskState>(state, ignoreCase: true, out var parsed))
         {
@@ -1113,7 +1134,7 @@ public sealed class LoadoutTools
         var declared = await _tasks
             .DeclareAsync(
                 slug, id, parsed, "agent", title, note, ct, detail: detail,
-                type: typed, typeBy: typed is null ? null : Models.Tasks.TaskTypeSource.Agent)
+                type: typed, typeBy: typed is null ? null : Models.Tasks.TaskTypeSource.Agent, source: sourced)
             .ConfigureAwait(false);
 
         if (declared.Failed)
@@ -1164,7 +1185,8 @@ public sealed class LoadoutTools
     [McpServerTool(Name = "loadout_task_apply")]
     [Description(
         "Make several task changes at once, the same JSON array 'loadout task apply' takes. Each is "
-        + "{\"op\":\"add|declare|remove|move\", \"id\", \"state\", \"title\", \"note\", \"kind\", \"project\", \"to\", \"revision\"}; "
+        + "{\"op\":\"add|declare|remove|move\", \"id\", \"state\", \"title\", \"note\", \"kind\", \"project\", \"to\", \"revision\", \"source\"}; "
+        + "source is the run, idea or conversation that put the work off, as run:<id>, idea:<id> or transcript:<session id>. "
         + "one naming no project is made on this project's list, and '-' is the workspace-wide list. "
         + "The changes to one list are made together or not at all, and every one gets a result saying "
         + "whether it was made and, if not, why. Only for what the person has asked for or agreed to.")]

@@ -3,7 +3,7 @@ id: role.tool-refiner
 kind: role
 mode: implement
 deliverable: file
-contract: report/1
+contract: report/2
 tools:
   defaults: false
   allowed:

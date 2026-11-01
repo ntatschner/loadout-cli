@@ -48,7 +48,7 @@ public sealed record LeftBehind(
 /// <remarks>
 /// <para>
 /// None of this is new bookkeeping. Every node hands back a report against
-/// <c>report/1</c> listing what it produced and what it showed for it, and the
+/// <c>report/2</c> listing what it produced and what it showed for it, and the
 /// journal records every gate and permission as it happens. Across the runs on
 /// the machine this was written against there were twenty-eight deliverables
 /// and a hundred and eight pieces of evidence sitting on disk, and nothing
