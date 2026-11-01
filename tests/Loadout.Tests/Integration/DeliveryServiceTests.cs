@@ -22,7 +22,7 @@ public sealed class DeliveryServiceTests : IDisposable
     private readonly TemporaryWorkspace _space = new();
     private readonly FakeGit _git;
     private readonly StubProcessLauncher _gh = new("https://github.com/o/website/pull/7\n");
-    private readonly FakePullRequests _pulls = new();
+    private string _state = "OPEN";
     private readonly Clock _clock = new(new DateTimeOffset(2026, 10, 28, 12, 0, 0, TimeSpan.Zero));
     private readonly LandingService _landings;
     private readonly DeliveryService _delivery;
@@ -33,13 +33,19 @@ public sealed class DeliveryServiceTests : IDisposable
 
         _git = new FakeGit(repository) { AllowPush = true };
         _landings = new LandingService(_space.Paths, _space.Yaml, _clock);
+        _gh.Answering = request => request.Arguments is ["pr", "view", ..]
+            ? new Loadout.Platform.Abstractions.ProcessOutcome(0, $"{{\"state\":\"{_state}\"}}", string.Empty)
+            : null;
         _delivery = With(new GhRepositoryHost(_gh, new StubResolver("gh")));
     }
 
     public void Dispose() => _space.Dispose();
 
     private DeliveryService With(IRepositoryHost host) =>
-        new(_landings, new FakeProjects("website", _space.Scratch("website")), _git, host, _pulls, _space.Tasks, _clock);
+        new(_landings, new FakeProjects("website", _space.Scratch("website")), _git, new FixedHosts(host),
+            new LocalSquash(new StubProcessLauncher(string.Empty), new StubResolver("git")), _space.Tasks, _clock);
+
+    private int StateReads => _gh.Requests.Count(one => one.Arguments is ["pr", "view", ..]);
 
     private async Task<LandingFound> WaitingAsync(LandingState state = LandingState.Pending, string pullRequest = "")
     {
@@ -66,6 +72,10 @@ public sealed class DeliveryServiceTests : IDisposable
 
         return found.Value!;
     }
+
+    /// <summary>The same landing, found through another service and so through its host.</summary>
+    private static async Task<LandingFound> ThroughAsync(DeliveryService delivery, LandingFound found) =>
+        (await delivery.FindAsync(found.Landing.Branch, null)).Value!;
 
     private async Task<BranchLanding> KeptAsync() =>
         (await _landings.LoadAsync("website")).Value!.Landings.Should().ContainSingle().Subject;
@@ -114,7 +124,7 @@ public sealed class DeliveryServiceTests : IDisposable
         var found = await WaitingAsync();
         var delivery = With(new GhRepositoryHost(_gh, new StubResolver(null)));
 
-        var opened = await delivery.OpenAsync(found, await delivery.OpeningAsync(found, false, null, null));
+        var opened = await delivery.OpenAsync(await ThroughAsync(delivery, found), await delivery.OpeningAsync(await ThroughAsync(delivery, found), false, null, null));
 
         opened.Failed.Should().BeTrue();
         _git.Pushed.Should().BeEmpty();
@@ -127,7 +137,7 @@ public sealed class DeliveryServiceTests : IDisposable
         var signedOut = new StubProcessLauncher(string.Empty, exitCode: 1);
         var delivery = With(new GhRepositoryHost(signedOut, new StubResolver("gh")));
 
-        var opened = await delivery.OpenAsync(found, await delivery.OpeningAsync(found, false, null, null));
+        var opened = await delivery.OpenAsync(await ThroughAsync(delivery, found), await delivery.OpeningAsync(await ThroughAsync(delivery, found), false, null, null));
 
         opened.Failed.Should().BeTrue();
         opened.Error.Should().Contain("gh auth login");
@@ -143,9 +153,11 @@ public sealed class DeliveryServiceTests : IDisposable
         var asked = (await _landings.LoadAsync("website")).Value!.Landings[0];
         asked.MergeRequestedUtc = _clock.Now;
         await _landings.RecordAsync("website", [asked]);
-        _pulls.ClosedUnmerged.Add(7);
+        _state = "CLOSED";
 
         (await _delivery.MergedAsync()).Should().Be((0, 1));
+        _gh.Requests.Where(one => one.Arguments is ["pr", "view", ..]).Should().ContainSingle()
+            .Which.Arguments.Should().Equal("pr", "view", "https://github.com/o/website/pull/7", "--json", "state");
 
         var kept = await KeptAsync();
         kept.State.Should().Be(LandingState.Pending);
@@ -155,14 +167,16 @@ public sealed class DeliveryServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task A_pull_request_seen_merged_is_not_taken_for_closed()
+    public async Task A_pull_request_the_host_cannot_read_is_left_and_looked_at_again_next_time()
     {
         await WaitingAsync(LandingState.Ready, "https://github.com/o/website/pull/7");
-        _pulls.Known[7] = new PullRequestText(7, "Fix the login", string.Empty);
-        _pulls.ClosedUnmerged.Add(7);
+        _state = "SOMETHING-NEW";
 
-        (await _delivery.MergedAsync()).Should().Be((1, 0));
-        (await KeptAsync()).State.Should().Be(LandingState.Merged);
+        (await _delivery.MergedAsync()).Should().Be((0, 0));
+
+        var kept = await KeptAsync();
+        kept.State.Should().Be(LandingState.Ready);
+        kept.MergeChecked.Should().BeNull("an answer it could not read is not a look");
     }
 
     [Fact]
@@ -197,7 +211,7 @@ public sealed class DeliveryServiceTests : IDisposable
         var delivery = With(new GhRepositoryHost(refusing, new StubResolver("gh")));
         var found = await WaitingAsync(LandingState.Ready, "https://github.com/o/website/pull/7");
 
-        var abandoned = await delivery.AbandonAsync(found);
+        var abandoned = await delivery.AbandonAsync(await ThroughAsync(delivery, found));
 
         abandoned.Failed.Should().BeTrue();
         abandoned.Error.Should().Contain("was not abandoned");
@@ -214,17 +228,6 @@ public sealed class DeliveryServiceTests : IDisposable
 
         abandoned.Error.Should().Contain("auto-merge");
         _gh.Requests.Should().BeEmpty();
-    }
-
-    [Fact]
-    public void Only_pull_requests_closed_rather_than_merged_are_read_as_closed()
-    {
-        using var list = System.Text.Json.JsonDocument.Parse(
-            """[{"number":9,"state":"MERGED"},{"number":8,"state":"CLOSED"},{"number":5,"state":"CLOSED"}]""");
-
-        GhPullRequestReader.ClosedUnmerged(list.RootElement).Should().Equal(8, 5);
-        GhPullRequestReader.ClosedArguments(50).Should().Equal(
-            "pr", "list", "--state", "closed", "--limit", "50", "--json", "number,state");
     }
 
     [Fact]
@@ -293,12 +296,10 @@ public sealed class DeliveryServiceTests : IDisposable
     public async Task A_merge_the_host_refuses_is_not_recorded_as_asked_for()
     {
         var refusing = new StubProcessLauncher(string.Empty, exitCode: 1);
-        var delivery = new DeliveryService(
-            _landings, new FakeProjects("website", _space.Scratch("website")), _git,
-            new GhRepositoryHost(refusing, new StubResolver("gh")), _pulls, _space.Tasks, _clock);
+        var delivery = With(new GhRepositoryHost(refusing, new StubResolver("gh")));
         var found = await WaitingAsync(LandingState.Ready, "https://github.com/o/website/pull/7");
 
-        (await delivery.MergeAsync(found, "Fix the login", string.Empty)).Failed.Should().BeTrue();
+        (await delivery.MergeAsync(await ThroughAsync(delivery, found), "Fix the login", string.Empty)).Failed.Should().BeTrue();
 
         (await KeptAsync()).MergeRequestedUtc.Should().BeNull();
     }
@@ -307,7 +308,7 @@ public sealed class DeliveryServiceTests : IDisposable
     public async Task A_pull_request_seen_merged_marks_its_landing_merged_and_is_not_asked_about_again_for_a_while()
     {
         await WaitingAsync(LandingState.Ready, "https://github.com/o/website/pull/7");
-        _pulls.Known[7] = new PullRequestText(7, "Fix the login", string.Empty);
+        _state = "MERGED";
 
         (await _delivery.MergedAsync()).Merged.Should().Be(1);
 
@@ -315,27 +316,25 @@ public sealed class DeliveryServiceTests : IDisposable
         kept.State.Should().Be(LandingState.Merged);
         kept.Why.Should().Contain("pull/7");
 
-        var reads = _pulls.Reads;
+        var reads = StateReads;
         (await _delivery.MergedAsync()).Merged.Should().Be(0);
-        _pulls.Reads.Should().Be(reads, "a merged landing is not waiting any more");
+        StateReads.Should().Be(reads, "a merged landing is not waiting any more");
     }
 
     [Fact]
     public async Task A_pull_request_not_merged_yet_is_looked_for_again_only_after_a_while()
     {
         await WaitingAsync(LandingState.Draft, "https://github.com/o/website/pull/7");
-        _pulls.Known[3] = new PullRequestText(3, "Something else", string.Empty);
-
         (await _delivery.MergedAsync()).Merged.Should().Be(0);
         (await KeptAsync()).State.Should().Be(LandingState.Draft);
 
-        var reads = _pulls.Reads;
+        var reads = StateReads;
         await _delivery.MergedAsync();
-        _pulls.Reads.Should().Be(reads, "it was looked for a moment ago");
+        StateReads.Should().Be(reads, "it was looked for a moment ago");
 
         _clock.Now += DeliveryService.MergeEvery;
         await _delivery.MergedAsync();
-        _pulls.Reads.Should().BeGreaterThan(reads, "a quarter of an hour has gone");
+        StateReads.Should().Be(reads + 1, "a quarter of an hour has gone");
     }
 
     [Fact]

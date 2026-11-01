@@ -182,9 +182,9 @@
 | `loadout team name` | Name a run's room, or clear the name to get the worked-out one back |
 | `loadout team pr` | Open a pull request for what one node of a run produced |
 | `loadout pr list` | The branches waiting to land: a queued run's own branch with its pull request, and each node branch its gate did not merge, pending. Says how long each has waited and which have gone from the repository; `--all` adds the merged and abandoned |
-| `loadout pr open` | Push a pending branch and open its pull request against the default branch, titled from its task; `--draft` opens it as a draft |
+| `loadout pr open` | Push a pending branch and open its pull request against the default branch, titled from its task; `--draft` opens it as a draft. Works on GitHub, GitLab and Azure DevOps through their own CLIs, and checks you are signed in before anything is pushed |
 | `loadout pr ready` | Mark a waiting branch's draft pull request ready for review |
-| `loadout pr merge` | Ask for a waiting branch's pull request to be squash-merged once its required checks pass, with the message you give: `--subject` is required and `--body` is the rest, empty when left out. The branch stays ready in `pr list` until the merge is seen |
+| `loadout pr merge` | Ask for a waiting branch's pull request to be squash-merged once its required checks pass, with the message you give: `--subject` is required and `--body` is the rest, empty when left out. The branch stays ready in `pr list` until the merge is seen. For a project that lands with local git it squash-merges into the default branch on this machine instead, `--into` for another, after showing what goes in and asking; `--yes` where nothing can ask |
 | `loadout pr abandon` | Stop waiting on a branch, closing its pull request unmerged if it has one. The branch is left where it is. Refuses a pull request with a merge already asked for, since the host may merge it at any moment |
 | `loadout team say` | Say something to one node while it is still working |
 | `loadout team attach set` | Set the passphrase that lets the dashboard type at a running node |

@@ -23,6 +23,12 @@ public sealed class StubProcessLauncher : IProcessLauncher
         _exitCode = exitCode;
     }
 
+    /// <summary>
+    /// When set, answers each run by what was asked, falling back to the
+    /// prepared output where it returns null.
+    /// </summary>
+    public Func<ProcessRequest, ProcessOutcome?>? Answering { get; set; }
+
     /// <summary>Every request the test made, so a caller can assert on it.</summary>
     public List<ProcessRequest> Requests { get; } = [];
 
@@ -35,7 +41,7 @@ public sealed class StubProcessLauncher : IProcessLauncher
         Requests.Add(request);
 
         return Task.FromResult(OperationResult<ProcessOutcome>.Ok(
-            new ProcessOutcome(_exitCode, _standardOutput, string.Empty)));
+            Answering?.Invoke(request) ?? new ProcessOutcome(_exitCode, _standardOutput, string.Empty)));
     }
 
     /// <summary>What was last run in the terminal, for a test to inspect.</summary>

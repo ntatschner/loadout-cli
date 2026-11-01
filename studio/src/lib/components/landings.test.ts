@@ -112,6 +112,17 @@ describe('Landings', () => {
     expect(screen.queryByRole('button', { name: 'Abandon…' })).toBeNull();
   });
 
+  it('offers a merge here, not a pull request, for a project that lands with local git', async () => {
+    const acted: [string, string[]][] = [];
+    render(Landings, { now, act: (path: string, words: string[]) => { acted.push([path, words]); }, landings: [one({ state: 'pending', provider: 'local' })] });
+
+    expect(screen.queryByRole('button', { name: 'Open for review' })).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Merge here…' }));
+    await fireEvent.input(screen.getByLabelText('Subject'), { target: { value: 'Fix the login' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Squash-merge here' }));
+    expect(acted).toEqual([['pr merge', ['queue/login', '--project', 'website', '--subject=Fix the login', '--yes']]]);
+  });
+
   it('keeps a body only when one was written, joined so a leading dash is still a value', () => {
     expect(mergeWords({ project: 'website', branch: 'b' }, '-x', '')).toEqual(['b', '--project', 'website', '--subject=-x']);
     expect(mergeWords({ project: 'website', branch: 'b' }, 'Fix', ' Why. ')).toEqual(['b', '--project', 'website', '--subject=Fix', '--body=Why.']);

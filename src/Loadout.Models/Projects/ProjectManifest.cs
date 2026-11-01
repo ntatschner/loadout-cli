@@ -93,6 +93,20 @@ public sealed class ProjectDelivery
     /// project failing to read.
     /// </remarks>
     public string PrMode { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The host its branches land through: <c>github</c>, <c>gitlab</c>,
+    /// <c>azure-devops</c>, <c>local</c> or <c>command</c>, or empty to work it
+    /// out from origin's address.
+    /// </summary>
+    /// <remarks>Kept as the word typed, for the reason <see cref="PrMode"/> is.</remarks>
+    public string Provider { get; set; } = string.Empty;
+
+    /// <summary>
+    /// For the <c>command</c> provider: the command run for each pull request
+    /// action, found on PATH or given as a path.
+    /// </summary>
+    public string Command { get; set; } = string.Empty;
 }
 
 /// <summary>
