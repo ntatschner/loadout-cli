@@ -69,7 +69,8 @@ public interface ITaskService
         IReadOnlyList<string>? doneWhen = null,
         string? reason = null,
         TaskType? type = null,
-        TaskTypeSource? typeBy = null);
+        TaskTypeSource? typeBy = null,
+        TaskSource? source = null);
 
     /// <summary>
     /// Shortens every title on a list that is longer than
@@ -430,9 +431,10 @@ internal sealed class TaskService : ITaskService
         IReadOnlyList<string>? doneWhen = null,
         string? reason = null,
         TaskType? type = null,
-        TaskTypeSource? typeBy = null) =>
+        TaskTypeSource? typeBy = null,
+        TaskSource? source = null) =>
         One(await ApplyCoreAsync(
-            [new TaskOperation(TaskOperation.Declare, projectSlug, id, state, title, note, kind, declaredBy, Detail: detail, DoneWhen: doneWhen, Reason: reason, Type: type, TypeBy: typeBy)],
+            [new TaskOperation(TaskOperation.Declare, projectSlug, id, state, title, note, kind, declaredBy, Detail: detail, DoneWhen: doneWhen, Reason: reason, Type: type, TypeBy: typeBy, Source: source)],
             false,
             ct).ConfigureAwait(false));
 

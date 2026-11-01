@@ -311,6 +311,31 @@ public sealed class TaskBatchTests : IDisposable
         System.Text.Json.JsonSerializer.Serialize(TaskOperations.Json(new TaskItem { Id = "t" })).Should().Contain("\"source\":null");
     }
 
+    [Fact]
+    public void An_agent_names_the_conversation_it_is_in_without_knowing_its_id()
+    {
+        TaskSources.Parse("this-conversation", "be33b382-bb18").Source
+            .Should().BeEquivalentTo(new TaskSource { Kind = TaskSourceKind.Transcript, Id = "be33b382-bb18" });
+        TaskSources.Parse("run:20261030-2227-8d16", "be33b382-bb18").Source!.Kind
+            .Should().Be(TaskSourceKind.Run, "anything else is read as written, whatever conversation it is");
+
+        var unknown = TaskSources.Parse("this-conversation", null);
+        unknown.Source.Should().BeNull();
+        unknown.Refusal.Should().Contain("needs to know which conversation this is").And.Contain("transcript:<session id>");
+    }
+
+    [Fact]
+    public async Task Declaring_a_task_with_a_source_records_it_and_keeps_it()
+    {
+        await _space.ProjectAsync("website");
+        var idea = new TaskSource { Kind = TaskSourceKind.Idea, Id = "status-page" };
+
+        (await _space.Tasks.DeclareAsync("website", "digest", TaskState.Open, "agent", "A weekly digest", source: idea)).Succeeded.Should().BeTrue();
+        (await _space.Tasks.DeclareAsync("website", "digest", TaskState.Doing, "agent")).Succeeded.Should().BeTrue();
+
+        (await _space.Tasks.ListAsync("website")).Value!.Single().Source.Should().BeEquivalentTo(idea);
+    }
+
     [Theory]
     [InlineData(nameof(ITaskService.ApplyAsync))]
     [InlineData(nameof(ITaskService.HoldProposalAsync))]

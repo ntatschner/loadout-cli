@@ -39,7 +39,29 @@ public static class TaskSources
             : (null, $"'{text}' is not a source. Name one as run:<run id>, idea:<idea id> or transcript:<session id>.");
     }
 
-    /// <summary>A source written out, as <see cref="Parse"/> reads it.</summary>
+    /// <summary>What an agent writes to name the conversation it is in, without knowing its id.</summary>
+    public const string ThisConversation = "this-conversation";
+
+    /// <summary>
+    /// A source as an agent gives it, where <see cref="ThisConversation"/> names
+    /// the conversation the tool is serving; or why it is not one.
+    /// </summary>
+    /// <param name="said">What the agent wrote.</param>
+    /// <param name="conversation">The session id of the conversation being served, or null when it is not known.</param>
+    public static (TaskSource? Source, string? Refusal) Parse(string? said, string? conversation)
+    {
+        if (!string.Equals(said?.Trim(), ThisConversation, StringComparison.OrdinalIgnoreCase))
+        {
+            return Parse(said);
+        }
+
+        return conversation is { Length: > 0 } id && !id.Any(char.IsWhiteSpace)
+            ? (new TaskSource { Kind = TaskSourceKind.Transcript, Id = id.Trim() }, null)
+            : (null, $"'{ThisConversation}' needs to know which conversation this is, and nothing here says. "
+                + "Name it as transcript:<session id>, or leave the source out.");
+    }
+
+    /// <summary>A source written out, as <see cref="Parse(string?)"/> reads it.</summary>
     public static string Name(TaskSource source)
     {
         ArgumentNullException.ThrowIfNull(source);

@@ -1081,10 +1081,31 @@ public sealed class LoadoutTools
             + "Recorded as your guess, which never replaces a type a person chose. Leave out to keep what is there; "
             + "a new task's type is guessed from its words.")]
         string? type = null,
+        [Description(
+            "For work being left for later: where it was put off. 'this-conversation' for this conversation, "
+            + "or run:<run id>, idea:<idea id> or transcript:<session id>. Recorded once, and how a later sweep "
+            + "knows the deferral already has a task.")]
+        string? source = null,
         CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
         ArgumentException.ThrowIfNullOrWhiteSpace(state);
+
+        Models.Tasks.TaskSource? sourced = null;
+
+        if (source is { Length: > 0 })
+        {
+            // Claude Code hands every process it starts the id of the
+            // conversation, which is also its transcript's name.
+            var (read, refusal) = Core.Tasks.TaskSources.Parse(source, Environment.GetEnvironmentVariable("CLAUDE_CODE_SESSION_ID"));
+
+            if (read is null)
+            {
+                return refusal!;
+            }
+
+            sourced = read;
+        }
 
         if (!Enum.TryParse<Models.Tasks.TaskState>(state, ignoreCase: true, out var parsed))
         {
@@ -1113,7 +1134,7 @@ public sealed class LoadoutTools
         var declared = await _tasks
             .DeclareAsync(
                 slug, id, parsed, "agent", title, note, ct, detail: detail,
-                type: typed, typeBy: typed is null ? null : Models.Tasks.TaskTypeSource.Agent)
+                type: typed, typeBy: typed is null ? null : Models.Tasks.TaskTypeSource.Agent, source: sourced)
             .ConfigureAwait(false);
 
         if (declared.Failed)

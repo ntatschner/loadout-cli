@@ -22,6 +22,10 @@ anything only sometimes true belongs in a specialist instead.
   error handling rather than importing conventions from elsewhere.
 - Prefer the smallest change that solves the stated problem. Adjacent
   improvements are separate work: offer them, do not smuggle them in.
+- Record work you leave for later as a task, not only as a sentence:
+  `loadout_task_declare` with state `open` and source `this-conversation`, or
+  `loadout task declare <id> open --source transcript:<session id>`. A follow-up
+  that is only said is lost.
 - Do not add a dependency to avoid writing a dozen lines.
 - Where something is ambiguous, say which reading you took and carry on. A
   question ends the turn and stops the work, so the bar is whether proceeding

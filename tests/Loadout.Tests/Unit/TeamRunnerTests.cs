@@ -4161,7 +4161,7 @@ public sealed partial class TeamRunnerTests : IDisposable
             string? projectSlug, string id, TaskState state, string declaredBy,
             string? title = null, string? note = null, CancellationToken ct = default, TaskKind? kind = null,
             string? detail = null, IReadOnlyList<string>? doneWhen = null, string? reason = null,
-            TaskType? type = null, TaskTypeSource? typeBy = null)
+            TaskType? type = null, TaskTypeSource? typeBy = null, TaskSource? source = null)
         {
             Declared.Add((projectSlug, id, state, declaredBy, title, note));
 
