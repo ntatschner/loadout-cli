@@ -104,6 +104,8 @@ public sealed class ReleaseServiceTests : IDisposable
         (await Git(origin, "for-each-ref", "refs/tags/v1.3.0", "--format=%(contents:body)")).Should().Be("Blue widgets.\n\nPull requests: #5");
         (await Git(origin, "log", "-1", "--format=%s", "main")).Should().Be("Release 1.3.0");
         (await Git(repository, "status", "--porcelain")).Should().BeEmpty();
+        ReleaseLog.Read(_space.Paths.Paths.State).Should().ContainSingle()
+            .Which.Should().Match<ReleaseRecord>(one => one.Tag == "v1.3.0" && one.Project == "widget" && one.Recipe == "tag-push");
     }
 
     [Fact]
@@ -127,6 +129,7 @@ public sealed class ReleaseServiceTests : IDisposable
         (await Git(repository, "tag", "--list", "v1.3.0")).Should().BeEmpty("the tag was taken back");
         (await Git(origin, "tag", "--list", "v1.3.0")).Should().BeEmpty("and never pushed");
         (await Git(origin, "log", "-1", "--format=%s", "main")).Should().Be("Add attributes");
+        ReleaseLog.Read(_space.Paths.Paths.State).Should().BeEmpty("nothing was released");
     }
 
     [Fact]
@@ -160,7 +163,9 @@ public sealed class ReleaseServiceTests : IDisposable
             new LocalSquash(git, resolver),
             new FixedHosts(new LocalRepositoryHost()),
             git,
-            resolver);
+            resolver,
+            _space.Paths,
+            TimeProvider.System);
     }
 
     private async Task SaveAsync(string repository, string recipe)
