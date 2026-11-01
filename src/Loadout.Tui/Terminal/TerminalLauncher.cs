@@ -818,7 +818,7 @@ public sealed class TerminalLauncher : ILauncherTui
                 return null;
 
             case LauncherAction.About:
-                return AfterAbout(await ShowAboutAsync(ct).ConfigureAwait(false));
+                return await ActOnAboutAsync(ShowAboutAsync, ct).ConfigureAwait(false);
 
             case LauncherAction.Drift:
                 await CheckDriftAsync(ct).ConfigureAwait(false);
@@ -1322,6 +1322,21 @@ public sealed class TerminalLauncher : ILauncherTui
     /// </remarks>
     internal static int? AfterAbout(bool updated) =>
         updated ? (int)ExitCode.Success : null;
+
+    /// <summary>
+    /// The launcher's About action: shows the window, then ends the session
+    /// or goes round again by what it reports.
+    /// </summary>
+    /// <remarks>
+    /// Kept apart from <see cref="ActOnAsync"/> so a test can hand in the
+    /// window's answer without building the whole launcher.
+    /// </remarks>
+    internal static async Task<int?> ActOnAboutAsync(Func<CancellationToken, Task<bool>> show, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(show);
+
+        return AfterAbout(await show(ct).ConfigureAwait(false));
+    }
 
     private async Task RefreshAboutAsync(AboutWindow window, IApplication application, CancellationToken ct)
     {

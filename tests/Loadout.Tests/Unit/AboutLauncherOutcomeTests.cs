@@ -23,4 +23,20 @@ public sealed class AboutLauncherOutcomeTests
     {
         TerminalLauncher.AfterAbout(updated: false).Should().BeNull();
     }
+
+    [Fact]
+    public async Task The_about_action_ends_the_session_when_the_window_reports_an_update()
+    {
+        var outcome = await TerminalLauncher.ActOnAboutAsync(_ => Task.FromResult(true), CancellationToken.None);
+
+        outcome.Should().Be((int)ExitCode.Success);
+    }
+
+    [Fact]
+    public async Task The_about_action_comes_back_when_the_window_reports_no_update()
+    {
+        var outcome = await TerminalLauncher.ActOnAboutAsync(_ => Task.FromResult(false), CancellationToken.None);
+
+        outcome.Should().BeNull();
+    }
 }

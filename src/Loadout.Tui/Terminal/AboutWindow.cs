@@ -85,6 +85,8 @@ internal sealed class AboutWindow : Window
         _updateNow.Accepting += (_, e) =>
         {
             e.Handled = true;
+
+            // Never cancelled: stopping the child mid-install could leave no working launcher.
             _ = UpdateAsync(CancellationToken.None);
         };
 
@@ -276,6 +278,7 @@ internal sealed class AboutWindow : Window
         _lines.Clear();
 
         var installing = false;
+        var handedToMainLoop = false;
         UpdateProgress? last = null;
 
         try
@@ -289,7 +292,15 @@ internal sealed class AboutWindow : Window
 
             if (installing && last is { Stage: UpdateStage.Done } done)
             {
-                OnMainLoop(() => ShowUpdated(UpdatedVersion(done, _model)));
+                // Updated is set on the main loop, so the update is only over
+                // once that has happened: cleared here instead, a close in
+                // between would leave with Updated still false.
+                handedToMainLoop = true;
+                OnMainLoop(() =>
+                {
+                    ShowUpdated(UpdatedVersion(done, _model));
+                    _updating = false;
+                });
             }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -303,7 +314,10 @@ internal sealed class AboutWindow : Window
         }
         finally
         {
-            _updating = false;
+            if (!handedToMainLoop)
+            {
+                _updating = false;
+            }
         }
     }
 

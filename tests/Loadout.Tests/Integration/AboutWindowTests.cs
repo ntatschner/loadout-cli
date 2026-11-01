@@ -212,6 +212,34 @@ public sealed class AboutWindowTests
     }
 
     [Fact]
+    public async Task Closing_after_the_update_ends_but_before_the_window_hears_is_refused()
+    {
+        static async IAsyncEnumerable<UpdateProgress> Installed([EnumeratorCancellation] CancellationToken ct = default)
+        {
+            await Task.Yield();
+            yield return new UpdateProgress(UpdateStage.Installing, null, null, "Putting the new version in place");
+            yield return new UpdateProgress(UpdateStage.Done, null, null, "Updated to 0.110.0");
+        }
+
+        using var session = About(Model(), out var window, Installed);
+
+        // The stream has ended and the work is queued for the main loop, but
+        // nothing has pumped it yet: the gap a close could fall into.
+        await window.UpdateAsync(CancellationToken.None);
+
+        window.StopRequested = false;
+        window.InvokeCommand(Command.Quit);
+
+        // Closing now would leave with Updated false and reopen the launcher
+        // on the bundle that was replaced.
+        window.StopRequested.Should().BeFalse();
+
+        session.Pump();
+
+        window.Updated.Should().BeTrue();
+    }
+
+    [Fact]
     public void Closing_with_no_update_running_closes()
     {
         using var session = About(Model(), out var window);
