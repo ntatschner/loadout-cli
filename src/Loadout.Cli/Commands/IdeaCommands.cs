@@ -1007,6 +1007,35 @@ public sealed class IdeaDropCommand : AsyncCommand<IdeaPiecesSettings>
     }
 }
 
+/// <summary>Keeps additions out of the plan but wanted, each to become a task when the idea is accepted.</summary>
+[Description("Leave additions out of an idea's plan for later: each becomes a task of its own, naming the idea, when the idea is accepted.")]
+[CommandMeta(CommandCategory.Workspace, Intent = "idea later defer addition follow-up task after accept", Mutates = true)]
+public sealed class IdeaLaterCommand : AsyncCommand<IdeaPiecesSettings>
+{
+    private readonly IIdeaService _ideas;
+    private readonly IProjectService _projects;
+    private readonly IAnsiConsole _console;
+
+    public IdeaLaterCommand(IIdeaService ideas, IProjectService projects, IAnsiConsole console)
+    {
+        _ideas = ideas;
+        _projects = projects;
+        _console = console;
+    }
+
+    /// <inheritdoc />
+    public override Task<int> ExecuteAsync(
+        CommandContext context,
+        IdeaPiecesSettings settings,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        return IdeaChange.JudgeAllAsync(
+            _console, settings, settings.DryRun, _ideas, _projects, IdeaVerdict.Later, cancellationToken);
+    }
+}
+
 /// <summary>Asks for a piece of the plan, or the whole of it, to be reworked.</summary>
 [Description("Ask for a layer, an addition or the whole plan to be reworked in the next round.")]
 [CommandMeta(CommandCategory.Workspace, Intent = "idea improve rework change revise request feedback", Mutates = true)]
@@ -1234,6 +1263,7 @@ public sealed class IdeaAcceptCommand : AsyncCommand<IdeaAcceptCommand.Settings>
                 title = accepted.Value.Task.Title,
                 from = accepted.Value.From,
                 doneWhen = accepted.Value.Task.DoneWhen,
+                later = (accepted.Value.Later ?? []).Select(one => new { id = one.Id, title = one.Title }),
             });
 
             return CommandOutput.Success();
@@ -1242,6 +1272,11 @@ public sealed class IdeaAcceptCommand : AsyncCommand<IdeaAcceptCommand.Settings>
         output.WriteLine(
             $"[green]+[/] {Markup.Escape(accepted.Value!.Task.Id)} is now a task on "
             + $"[bold]{Markup.Escape(accepted.Value.Project)}[/]. {Markup.Escape(reason)}");
+
+        foreach (var later in accepted.Value.Later ?? [])
+        {
+            output.WriteLine($"[green]+[/] {Markup.Escape(later.Id)}, left for later: {Markup.Escape(later.Title)}");
+        }
 
         if (accepted.Value.Moved)
         {

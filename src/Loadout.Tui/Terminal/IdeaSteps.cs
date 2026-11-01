@@ -75,7 +75,12 @@ internal static class IdeaSteps
         LauncherCommands.IdeaChoose, [place.Id, layer, option, .. List(place.Project)], Pause: false, place.Id);
 
     internal static IdeaStep Judge(IdeaPlace place, IdeaVerdict verdict, IReadOnlyList<string> pieces) => new(
-        verdict == IdeaVerdict.Keep ? LauncherCommands.IdeaKeep : LauncherCommands.IdeaDrop,
+        verdict switch
+        {
+            IdeaVerdict.Keep => LauncherCommands.IdeaKeep,
+            IdeaVerdict.Later => LauncherCommands.IdeaLater,
+            _ => LauncherCommands.IdeaDrop,
+        },
         [place.Id, .. pieces, .. List(place.Project)],
         Pause: false,
         place.Id);
@@ -328,6 +333,7 @@ internal static class IdeaSteps
         IdeaVerdict.Keep => "  [kept]",
         IdeaVerdict.Drop => "  [dropped]",
         IdeaVerdict.Improve => $"  [to improve: {request}]",
+        IdeaVerdict.Later => "  [later: a task of its own on accept]",
         _ => string.Empty,
     };
 

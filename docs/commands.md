@@ -119,7 +119,8 @@
 | `loadout idea dismiss <id>` | Clear the "last round failed" marker on an idea you have stopped refining, without paying for another round. Answers and the plan stay |
 | `loadout idea type <id> <type>` | Choose what an idea is about: `new-project`, `feature`, `bug-fix`, `ci-cd`, `release`, `docs` or `maintenance`. Until you do, each refine round may revise the type it was guessed as when you dropped it in; once you choose, no round changes it, though the agent can still say it disagrees. `agent` hands the choice back, and the guess stands until the next round |
 | `loadout idea answer\|choose\|keep\|drop\|improve` | Answer the agent's questions, pick an option for a layer, keep or drop a piece, or ask for one to be reworked. An answer or request that starts with a dash goes as `--answer=` or `--request=`. Each question says what it's about, such as `Relates to L2 Storage` with a line of context, so you can answer it days later without rereading the history. If that thing has since changed or gone, a note removed or a layer reworked in a later revision, the question is marked possibly outdated, with why, here, in Studio and in the accepted plan, and the next round is told the answer may need revisiting. Answering again, even with the same answer, clears the marker |
-| `loadout idea accept <id>` | Write the plan out and turn the idea into a task on its project, or on a new one with `--new-project` |
+| `loadout idea later <id> <addition>...` | Leave additions out of the plan but keep them wanted: accepting the idea makes each its own task on the same project, with the idea as its source. Additions only, since a layer is part of the design. Studio has a Later button on each addition, and the terminal Ideas window has `l` |
+| `loadout idea accept <id>` | Write the plan out and turn the idea into a task on its project, or on a new one with `--new-project`. Each addition marked later becomes a task beside it; a dropped one makes nothing |
 | `loadout idea accept <id> --done-when <condition>` | Accepting confirms the done-when the plan proposed, and the task carries them. Give `--done-when` (repeated) to replace them, or `--no-done-when` for none. A team queue takes only a task that has some |
 | `loadout idea dump add <file\|->` | Drop in notes kept elsewhere, from a file, standard input or `--text`, and have an agent split them into separate ideas and tasks, each carrying its own words from the notes |
 | `loadout idea dump list\|show\|split\|apply` | See the notes dropped in, split one again, and record the pieces you want, all or `--only 1,3` |
@@ -414,7 +415,7 @@ an agent or by a pull, reaches Studio within a second.
 `loadout idea apply` takes the same kind of array for ideas, with six ops.
 `capture` drops a new one in from its `text` (and an optional `title` or `id`).
 `answer` takes a `question` and an `answer`, `choose` a `layer` and an `option`,
-and `judge` a `piece`, a `verdict` (`keep`, `drop` or `improve`) and, for
+and `judge` a `piece`, a `verdict` (`keep`, `drop`, `later` or `improve`) and, for
 `improve`, a `request`. `dismiss` clears a failed round and `remove` forgets the
 idea.
 

@@ -96,6 +96,8 @@ internal static class LauncherCommands
 
     internal const string IdeaDrop = "idea drop";
 
+    internal const string IdeaLater = "idea later";
+
     internal const string IdeaImprove = "idea improve";
 
     internal const string IdeaAccept = "idea accept";
@@ -115,7 +117,7 @@ internal static class LauncherCommands
     [
         Editor, Resume, Launch, Clone, NewProject, Instructions, Usage, Launches, ProjectContext, Remove,
         DumpAdd, DumpApply, IdeaList, DumpList,
-        IdeaAdd, IdeaRefine, IdeaAnswer, IdeaChoose, IdeaKeep, IdeaDrop, IdeaImprove, IdeaAccept, IdeaRemove,
+        IdeaAdd, IdeaRefine, IdeaAnswer, IdeaChoose, IdeaKeep, IdeaDrop, IdeaLater, IdeaImprove, IdeaAccept, IdeaRemove,
         IdeaDismiss, IdeaMove, IdeaNoteRemove, IdeaType,
     ];
 }

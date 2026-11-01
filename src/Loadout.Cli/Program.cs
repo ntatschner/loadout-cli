@@ -820,6 +820,7 @@ public static class Program
             idea.AddCommand<IdeaChooseCommand>("choose");
             idea.AddCommand<IdeaKeepCommand>("keep");
             idea.AddCommand<IdeaDropCommand>("drop");
+            idea.AddCommand<IdeaLaterCommand>("later");
             idea.AddCommand<IdeaImproveCommand>("improve");
             idea.AddCommand<IdeaAcceptCommand>("accept");
             idea.AddCommand<IdeaDismissCommand>("dismiss");

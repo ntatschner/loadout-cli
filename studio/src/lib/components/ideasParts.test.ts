@@ -222,6 +222,24 @@ describe('PlanLayer', () => {
     await fireEvent.click(ready);
     expect(asked).toEqual(['Serve it from both']);
   });
+
+  it('offers Later on an addition, sending idea later, and never on a layer', async () => {
+    const judged: string[] = [];
+    render(PlanLayer, { idea: 'i', where: ['--global'], addition: { id: 'A2', title: 'A weekly digest', why: 'Nice to have.' }, onverdict: async (verdict: string) => (judged.push(verdict), true) });
+
+    const later = screen.getByRole('button', { name: 'Later' });
+    expect(said(later)).toBe('$ loadout idea later i A2 --global');
+    await fireEvent.click(later);
+    await settle();
+    expect(judged).toEqual(['Later']);
+  });
+
+  it('offers no Later on a layer, which is part of the design', () => {
+    render(PlanLayer, { idea: 'i', where: ['--global'], layer: LAYER });
+
+    expect(screen.queryByRole('button', { name: 'Later' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Drop it' })).toBeTruthy();
+  });
 });
 
 describe('PlanLayer, while a change is recorded', () => {

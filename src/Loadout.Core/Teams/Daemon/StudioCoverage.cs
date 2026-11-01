@@ -142,6 +142,7 @@ public static class StudioCoverage
         ["idea choose"] = new("ideas", StudioEffect.Changes),
         ["idea keep"] = new("ideas", StudioEffect.Changes),
         ["idea drop"] = new("ideas", StudioEffect.Changes),
+        ["idea later"] = new("ideas", StudioEffect.Changes),
         ["idea improve"] = new("ideas", StudioEffect.Changes),
         ["idea accept"] = new("ideas", StudioEffect.Changes),
         ["idea dismiss"] = new("ideas", StudioEffect.Changes),
