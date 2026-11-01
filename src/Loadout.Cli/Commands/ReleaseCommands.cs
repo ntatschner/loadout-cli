@@ -156,6 +156,10 @@ public sealed class ReleaseCutCommand : AsyncCommand<ReleaseCutCommand.Settings>
         [CommandOption("--yes")]
         [Description("Release without asking, having seen what it does. Needed where nothing can ask.")]
         public bool Yes { get; init; }
+
+        [CommandOption("--proposed")]
+        [Description("Use the version the plan proposes, and notes made from the commits since. For a trigger rule's release, which you approve first.")]
+        public bool Proposed { get; init; }
     }
 
     /// <inheritdoc />
@@ -173,12 +177,26 @@ public sealed class ReleaseCutCommand : AsyncCommand<ReleaseCutCommand.Settings>
 
         var p = plan.Value!;
 
-        if (_releases.CannotCut(p, settings.Version, settings.Notes) is { } refused)
+        if (settings.Proposed && (settings.Version is not null || settings.Notes is not null))
+        {
+            return output.Fail("Give --proposed, or --version and --notes, not both.", ExitCode.InvalidArguments);
+        }
+
+        var given = settings.Proposed ? p.Proposed : settings.Version;
+        var written = settings.Proposed ? ReleaseService.AutomaticNotes(p) : settings.Notes;
+
+        if (settings.Proposed && p.Proposed is null)
+        {
+            return output.Fail($"Nothing is proposed for {p.Project}: {p.Bump}.", ExitCode.InvalidArguments);
+        }
+
+        if (_releases.CannotCut(p, given, written) is { } refused)
         {
             return output.Fail(refused, ExitCode.InvalidArguments);
         }
 
-        var version = settings.Version!.Trim();
+        var version = given!.Trim();
+        var notes = written!.Trim();
         var tag = p.TagPrefix + version;
         var does = p.Recipe == ReleaseService.Workflow
             ? $"start {p.Project}'s release workflow on {p.Branch} for {version}"
@@ -189,13 +207,13 @@ public sealed class ReleaseCutCommand : AsyncCommand<ReleaseCutCommand.Settings>
         {
             if (output.IsJson)
             {
-                output.WriteJson(new { dryRun = true, project = p.Project, recipe = p.Recipe, tag, bump = p.FileVersion != version, notes = settings.Notes!.Trim() });
+                output.WriteJson(new { dryRun = true, project = p.Project, recipe = p.Recipe, tag, bump = p.FileVersion != version, notes = notes });
 
                 return CommandOutput.Success();
             }
 
             output.WriteLine($"[dim]Dry run: nothing was changed.[/] It would {Markup.Escape(does)}.");
-            output.WriteLine(Markup.Escape(settings.Notes!.Trim()));
+            output.WriteLine(Markup.Escape(notes));
 
             return CommandOutput.Success();
         }
@@ -210,7 +228,7 @@ public sealed class ReleaseCutCommand : AsyncCommand<ReleaseCutCommand.Settings>
             }
 
             output.WriteLine($"This will {Markup.Escape(does)}:");
-            output.WriteLine(Markup.Escape(settings.Notes!.Trim()));
+            output.WriteLine(Markup.Escape(notes));
 
             if (!_console.Confirm($"Release {Markup.Escape(tag)}?", defaultValue: false))
             {
@@ -220,7 +238,7 @@ public sealed class ReleaseCutCommand : AsyncCommand<ReleaseCutCommand.Settings>
             }
         }
 
-        var cut = await _releases.CutAsync(p, version, settings.Notes!, cancellationToken).ConfigureAwait(false);
+        var cut = await _releases.CutAsync(p, version, notes, cancellationToken).ConfigureAwait(false);
 
         if (cut.Failed)
         {

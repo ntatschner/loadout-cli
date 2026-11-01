@@ -224,6 +224,42 @@ public sealed partial class ReleaseService : IReleaseService
         return notes.ToString();
     }
 
+    /// <summary>
+    /// Notes for a release nobody wrote notes for, as one a trigger rule
+    /// starts: what was committed since the last release, and the pull
+    /// requests, on lines that start with words.
+    /// </summary>
+    /// <remarks>
+    /// The commit subjects are the only words there are when nobody is
+    /// writing, so they are listed as they were written. A person approved
+    /// the release, not these words, so they say what they are.
+    /// </remarks>
+    public static string AutomaticNotes(ReleasePlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        var notes = new StringBuilder($"Released by a trigger rule. Changes since {plan.LastTag ?? "the first commit"}:\n");
+
+        foreach (var subject in plan.Since.Take(30))
+        {
+            notes.Append("- ").Append(subject).Append('\n');
+        }
+
+        if (plan.Since.Count > 30)
+        {
+            notes.Append("- and ").Append(plan.Since.Count - 30).Append(" more\n");
+        }
+
+        var proposed = ProposeNotes(plan.Since).Split("\n\n");
+
+        if (proposed.Length > 1)
+        {
+            notes.Append('\n').Append(proposed[1]);
+        }
+
+        return notes.ToString().TrimEnd();
+    }
+
     /// <summary>The version a file's text holds, by the pattern given or the one its name implies.</summary>
     public static string? VersionIn(string file, string text, string? pattern)
     {

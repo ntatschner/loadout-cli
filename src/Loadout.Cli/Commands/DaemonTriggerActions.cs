@@ -36,7 +36,13 @@ namespace Loadout.Cli.Commands;
 internal sealed partial class DaemonTriggerActions : ITriggerActions
 {
     /// <summary>The built-in commands a rule may start, all of which only read and report.</summary>
-    internal static readonly IReadOnlyList<string> Builtins = ["docs audit", "memory audit"];
+    internal static readonly IReadOnlyList<string> Builtins = ["docs audit", "memory audit", ReleaseCut];
+
+    /// <summary>
+    /// The built-in that releases a project with the version and notes its plan
+    /// proposes. It pushes, so it always waits for a person's approval.
+    /// </summary>
+    internal const string ReleaseCut = "release cut";
 
     private readonly ICommandCatalogue _commands;
     private readonly IRunJournal _runs;
@@ -66,7 +72,7 @@ internal sealed partial class DaemonTriggerActions : ITriggerActions
         if (Is(action, TriggerActionKinds.Builtin))
         {
             return Builtins.Contains(action.Name, StringComparer.OrdinalIgnoreCase)
-                ? new ActionTraits(Writes: false)
+                ? new ActionTraits(Writes: string.Equals(action.Name, ReleaseCut, StringComparison.OrdinalIgnoreCase))
                 : new ActionTraits(
                     false, Problem: $"'{action.Name}' is not a built-in a rule can start. It can start: "
                         + $"{string.Join(", ", Builtins)}.");
@@ -108,9 +114,15 @@ internal sealed partial class DaemonTriggerActions : ITriggerActions
 
         if (Is(rule.Action, TriggerActionKinds.Builtin))
         {
-            var said = await _commands.RunAsync(rule.Action.Name.ToLowerInvariant(), [project], ct).ConfigureAwait(false);
+            var said = await _commands.RunAsync(rule.Action.Name.ToLowerInvariant(), BuiltinWords(rule.Action.Name, project), ct)
+                .ConfigureAwait(false);
 
             return new ActionOutcome(0m, Problem: said == 0 ? null : $"{rule.Action.Name} ended with exit code {said}");
+        }
+
+        if (rule.Action.Queue)
+        {
+            return await QueueAsync(rule, happened, project, ct).ConfigureAwait(false);
         }
 
         var origin = new RunOrigin(rule.Id, rule.Version, start.Reservation, happened.Origins);
@@ -138,6 +150,54 @@ internal sealed partial class DaemonTriggerActions : ITriggerActions
 
         return new ActionOutcome(
             run.CostUsd, run.RunId, code == 0 ? null : $"{rule.Action.Name} ended with exit code {code}");
+    }
+
+    /// <summary>
+    /// The words a built-in is run with: the project, and for a release the
+    /// say-so the approval already gave and the plan's proposal.
+    /// </summary>
+    internal static IReadOnlyList<string> BuiltinWords(string builtin, string project) =>
+        string.Equals(builtin, ReleaseCut, StringComparison.OrdinalIgnoreCase)
+            ? [project, "--proposed", "--yes", "--non-interactive"]
+            : [project];
+
+    /// <summary>The words that record a queued rule's task, and the words that queue it.</summary>
+    internal static (IReadOnlyList<string> Task, IReadOnlyList<string> Queue) QueueWords(
+        TriggerRule rule, TriggerEvent happened, string project, string task)
+    {
+        var goal = Fill(rule.Action.Goal, happened);
+        var title = goal.ReplaceLineEndings(" ");
+        title = title.Length > 72 ? title[..71].TrimEnd() + "…" : title;
+
+        return (
+            [task, "open", "--project", project, $"--title={title}", $"--note={goal}", $"--by=trigger {rule.Id}"],
+            [
+                rule.Action.Name, task, "--project", project, $"--by=trigger {rule.Id}",
+                .. rule.Action.PrMode.Length > 0 ? (string[])[$"--pr-mode={rule.Action.PrMode}"] : [],
+            ]);
+    }
+
+    /// <summary>
+    /// Records a task from the rule's goal and adds it to the team's queue,
+    /// where it runs in the next window and lands the way its pull request
+    /// mode says.
+    /// </summary>
+    private async Task<ActionOutcome> QueueAsync(TriggerRule rule, TriggerEvent happened, string project, CancellationToken ct)
+    {
+        var task = $"{rule.Id}-{happened.At.UtcDateTime:yyyyMMddHHmmss}".ToLowerInvariant();
+        var (taskWords, queueWords) = QueueWords(rule, happened, project, task);
+
+        var recorded = await _commands.RunAsync("task declare", taskWords, ct).ConfigureAwait(false);
+
+        if (recorded != 0)
+        {
+            return new ActionOutcome(0m, Problem: $"the task {task} could not be recorded: task declare ended with exit code {recorded}");
+        }
+
+        var queued = await _commands.RunAsync("team queue add", queueWords, ct).ConfigureAwait(false);
+
+        return new ActionOutcome(
+            0m, Problem: queued == 0 ? null : $"{task} is recorded but could not be queued: team queue add ended with exit code {queued}");
     }
 
     /// <inheritdoc />

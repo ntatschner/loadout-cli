@@ -2664,9 +2664,28 @@ through or with local git, and `released` fires when `release cut` succeeds.
 whether the CLI each waiting branch's host needs is there and signed in, so a
 lapsed `az login` turns up before a merge rather than halfway through one.
 
-**Not yet built:** release settings for a team or a trigger, and versioning
-set by rules so a release can go out unattended. The recipe is per project,
-and a person cuts every release.
+A trigger rule can do two things with this. With `--queue`, a rule that
+starts a team records a task from its goal and adds it to the team's queue
+instead of starting a run there and then, and `--pr-mode` says what that run
+does about a pull request, over the queue's and the project's:
+
+```sh
+loadout trigger add fix-failures run-finished --where outcome=failed \
+  --team fixers --goal "Find out why {team} failed in {run}" \
+  --queue --pr-mode draft --cap-usd 20
+```
+
+And the built-in `release cut` releases a project with the version its plan
+proposes and notes made from the commits since, which say a rule released it:
+
+```sh
+loadout trigger add release-on-land branch-landed --project widget --builtin "release cut"
+```
+
+A release pushes, so it never goes out unattended. Every one waits in
+`loadout trigger approvals` until you approve it, and only then runs
+`release cut <project> --proposed --yes`. A release with a version nobody
+looked at is the mistake this keeps out.
 
 **A run that fails** - blocked, over budget, stopped, or whose process died -
 leaves the task blocked with the run and the reason in its history, and is not
