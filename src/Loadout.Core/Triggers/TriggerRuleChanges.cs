@@ -59,7 +59,11 @@ public static class TriggerRuleChanges
             : string.Join(", ", values.OrderBy(one => one.Key, StringComparer.OrdinalIgnoreCase).Select(one => $"{one.Key}={one.Value}"));
 
     private static string Action(TriggerAction action) =>
-        action.Kind == TriggerActionKinds.Team ? $"team {action.Name}" : $"{action.Kind} {action.Name}";
+        action.Kind == TriggerActionKinds.Team
+            ? action.Queue
+                ? $"team {action.Name}, queued" + (action.PrMode.Length > 0 ? $" with pull request mode {action.PrMode}" : string.Empty)
+                : $"team {action.Name}"
+            : $"{action.Kind} {action.Name}";
 
     private static string Quoted(string text) => text.Length == 0 ? "(none)" : $"\"{text}\"";
 

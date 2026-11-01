@@ -110,6 +110,20 @@ public sealed class TriggerAction
 
     /// <summary>For a team: supervised or autonomous. Never manual, because nobody is watching.</summary>
     public string Autonomy { get; set; } = "autonomous";
+
+    /// <summary>
+    /// For a team: add a task to the team's queue rather than start a run
+    /// now. The task is recorded on the project's list from the goal, and runs
+    /// in the queue's next window, where a run that meets its done-when opens
+    /// a pull request as its pull request mode says.
+    /// </summary>
+    public bool Queue { get; set; }
+
+    /// <summary>
+    /// For a queued team task: <c>draft</c>, <c>ready</c> or <c>none</c>, over
+    /// the queue's and the project's, or empty to leave it to them.
+    /// </summary>
+    public string PrMode { get; set; } = string.Empty;
 }
 
 /// <summary>The kinds of thing a rule may start.</summary>
