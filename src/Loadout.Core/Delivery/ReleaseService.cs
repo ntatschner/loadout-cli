@@ -102,6 +102,8 @@ public sealed partial class ReleaseService : IReleaseService
     private readonly IRepositoryHosts _hosts;
     private readonly IProcessLauncher _processes;
     private readonly IExecutableResolver _resolver;
+    private readonly IPlatformPaths _paths;
+    private readonly TimeProvider _time;
 
     public ReleaseService(
         IProjectService projects,
@@ -109,8 +111,12 @@ public sealed partial class ReleaseService : IReleaseService
         ILocalSquash branches,
         IRepositoryHosts hosts,
         IProcessLauncher processes,
-        IExecutableResolver resolver)
+        IExecutableResolver resolver,
+        IPlatformPaths paths,
+        TimeProvider time)
     {
+        _paths = paths;
+        _time = time;
         _projects = projects;
         _workspace = workspace;
         _branches = branches;
@@ -423,9 +429,27 @@ public sealed partial class ReleaseService : IReleaseService
             return OperationResult<ReleaseOutcome>.Fail($"{tag} exists already.", ExitCode.InvalidArguments);
         }
 
-        return plan.Recipe == Workflow
+        var cut = plan.Recipe == Workflow
             ? await DispatchAsync(plan, version, tag, ct).ConfigureAwait(false)
             : await TagAsync(plan, version, notes, tag, ct).ConfigureAwait(false);
+
+        if (cut.Succeeded)
+        {
+            // Kept after the fact, so a log that can't be written never
+            // stops a release that has already gone out.
+            try
+            {
+                ReleaseLog.Append(
+                    _paths.Paths.State,
+                    new ReleaseRecord(plan.Project, cut.Value!.Tag, version, cut.Value.Commit, plan.Recipe, _time.GetUtcNow()));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // The release stands; only its line in the log is missing.
+            }
+        }
+
+        return cut;
     }
 
     private async Task<OperationResult<ReleaseOutcome>> TagAsync(ReleasePlan plan, string version, string notes, string tag, CancellationToken ct)

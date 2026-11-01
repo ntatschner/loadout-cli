@@ -90,10 +90,16 @@ public static class TriggerEventKinds
     /// <summary>Somebody commented on an issue or a pull request.</summary>
     public const string Comment = "comment";
 
+    /// <summary>A branch Loadout was waiting on was merged, on any host or with local git.</summary>
+    public const string BranchLanded = "branch-landed";
+
+    /// <summary>A project was released from this machine with <c>loadout release cut</c>.</summary>
+    public const string Released = "released";
+
     /// <summary>Every kind, in the order the commands list them.</summary>
     public static readonly IReadOnlyList<string> All =
     [
-        RunFinished, DocsDrift, Webhook, Clock,
+        RunFinished, DocsDrift, Webhook, Clock, BranchLanded, Released,
         PrOpened, PrUpdated, PrReady, PrDraft, PrRetargeted, PrClosed, PrMerged, PrReopened,
         CiFailed, IssueOpened, Comment,
     ];
@@ -129,6 +135,8 @@ public static class TriggerEventKinds
             [DocsDrift] = ["project", "path", "count"],
             [Webhook] = ["team", "project", "goal"],
             [Clock] = ["rule"],
+            [BranchLanded] = ["project", "branch", "team", "run", "task", "url"],
+            [Released] = ["project", "tag", "version", "commit", "recipe"],
             [PrOpened] = Pull,
             [PrUpdated] = Pull,
             [PrReady] = Pull,

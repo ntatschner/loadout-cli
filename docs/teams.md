@@ -2649,15 +2649,24 @@ leaves the machine: a tag without its bump is the mistake this is built to
 make impossible. It needs the checkout on the default branch, clean, and level
 with `origin` as of the last fetch. `workflow` starts the GitHub Actions
 workflow named by `workflow:` with the version as its `version` input, and is
-GitHub only. Either way it shows what it will do and asks first.
+GitHub only. Either way it shows what it will do and asks first. Studio's Teams page has a **Release** panel that reads the plan, fills in
+the proposed version and notes for you to edit, and says what it will push
+before a second press runs `release cut`.
 
 `loadout pr explain <project>` puts it all in one place: the pull request mode
 on the project and on each team's queue, the host and how it was worked out,
 and the release recipe.
 
-**Not yet built:** release settings for a team or a trigger, versioning set by
-rules so a release can go out unattended, and a release from Studio. The
-recipe is per project, and a person cuts every release.
+Trigger rules can answer both ends of this. `branch-landed` fires when a
+branch Loadout was waiting on is marked merged, whichever host it went
+through or with local git, and `released` fires when `release cut` succeeds.
+`loadout trigger events` lists the fields each carries. `loadout doctor` says
+whether the CLI each waiting branch's host needs is there and signed in, so a
+lapsed `az login` turns up before a merge rather than halfway through one.
+
+**Not yet built:** release settings for a team or a trigger, and versioning
+set by rules so a release can go out unattended. The recipe is per project,
+and a person cuts every release.
 
 **A run that fails** - blocked, over budget, stopped, or whose process died -
 leaves the task blocked with the run and the reason in its history, and is not

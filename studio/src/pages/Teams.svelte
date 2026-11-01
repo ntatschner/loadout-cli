@@ -12,6 +12,7 @@
   import Dialog from '../lib/components/Dialog.svelte';
   import HaloButton from '../lib/components/HaloButton.svelte';
   import Landings, { type LandingRead } from '../lib/components/Landings.svelte';
+  import Release, { type ReleasePlanRead } from '../lib/components/Release.svelte';
   import ListToolbar from '../lib/components/ListToolbar.svelte';
   import NeedsYou from '../lib/components/NeedsYou.svelte';
   import QueuePanel, { type DoneWhenProposed, type QueuePlan, type QueueRead, type QueueTask } from '../lib/components/QueuePanel.svelte';
@@ -691,6 +692,11 @@
       {:else}
         <p class="calm" role="status">Reading…</p>
       {/if}
+    </section>
+
+    <section class="tblock" aria-labelledby="tm-release">
+      <h2 class="ls-zone" id="tm-release">Release</h2>
+      <Release projects={[...new Set((landings ?? []).map((one) => one.project))]} read={(project) => readJson<ReleasePlanRead>('release plan', [project])} act={landingAct} disabledReason={watch} />
     </section>
   {:else if place === 'remedies'}
     <h2 class="topicname">Remedies</h2>

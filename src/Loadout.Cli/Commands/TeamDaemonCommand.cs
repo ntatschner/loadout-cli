@@ -1634,6 +1634,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             new DaemonTriggerActions(_commands, _journal, _teams, _library, _workspace),
             _time);
         var finished = new Loadout.Core.Triggers.RunFinishedSource(state, _journal);
+        var landed = new Loadout.Core.Triggers.LandingSource(state, new Loadout.Core.Delivery.LandingService(_paths, yaml, _time));
         var rules = new Loadout.Core.Triggers.TriggerRules(state, yaml);
         var drift = new Loadout.Core.Triggers.DocsDriftSource(state, _projects, _git, DocsPolicyAsync);
         var clock = new Loadout.Core.Triggers.ClockSource(state);
@@ -1659,6 +1660,17 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
                     async () =>
                     {
                         foreach (var one in finished.Look())
+                        {
+                            await spine.PostAsync(one, ct).ConfigureAwait(false);
+                        }
+                    },
+                    output).ConfigureAwait(false);
+
+                await LookedAsync(
+                    "landed branches and releases could not be read for triggers",
+                    async () =>
+                    {
+                        foreach (var one in await landed.LookAsync(ct).ConfigureAwait(false))
                         {
                             await spine.PostAsync(one, ct).ConfigureAwait(false);
                         }
