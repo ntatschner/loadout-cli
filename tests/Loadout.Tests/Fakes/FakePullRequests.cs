@@ -43,17 +43,4 @@ public sealed class FakePullRequests : IPullRequestReader
             ? OperationResult<IReadOnlyList<PullRequestText>>.Fail(Unavailable, ExitCode.AgentUnavailable)
             : OperationResult<IReadOnlyList<PullRequestText>>.Ok(Known.Values.OrderByDescending(p => p.Number).Take(limit).ToList()));
     }
-
-    /// <summary>The pull requests closed without being merged, by number.</summary>
-    public HashSet<int> ClosedUnmerged { get; } = [];
-
-    /// <inheritdoc />
-    public Task<OperationResult<IReadOnlyList<int>>> ClosedUnmergedAsync(string repository, int limit, CancellationToken ct = default)
-    {
-        Reads++;
-
-        return Task.FromResult(Unavailable is not null
-            ? OperationResult<IReadOnlyList<int>>.Fail(Unavailable, ExitCode.AgentUnavailable)
-            : OperationResult<IReadOnlyList<int>>.Ok(ClosedUnmerged.OrderDescending().Take(limit).ToList()));
-    }
 }

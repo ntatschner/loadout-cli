@@ -118,6 +118,11 @@ your report. `delivery.pr_mode` decides whether a queued run that meets its
 done-when pushes its branch and opens a pull request (`draft`, `ready` or
 `none`). That reaches outside this machine, so if the repository's habits
 suggest one, say so in your report and leave it to the person to set.
+`delivery.provider` names the host branches land through (`github`, `gitlab`,
+`azure-devops`, `local` or `command`) when origin's address doesn't say, and
+`delivery.command` names the program the `command` provider runs. Both decide
+where work is pushed, so don't propose them: if origin names no host Loadout
+knows, say so in your report.
 
 Give the reason beside every change. A setting nobody can account for gets
 removed by the next person to read the file.

@@ -33,7 +33,7 @@ public sealed class TeamQueueDriverTests : IDisposable
     private readonly FakeGit _git;
     private readonly StubProcessLauncher _launcher = new("https://github.com/o/website/pull/42\n");
     private readonly FakeProcessInspector _processes = new();
-    private readonly FakePullRequests _pulls = new();
+    private string _state = "OPEN";
     private readonly Clock _clock = new(Local(0, 23));
     private readonly LandingService _landings;
     private readonly TeamQueueDriver _driver;
@@ -50,9 +50,12 @@ public sealed class TeamQueueDriverTests : IDisposable
         _git.Commits["refs/remotes/origin/HEAD"] = "abc123";
         _landings = new LandingService(_space.Paths, _space.Yaml, _clock);
 
+        _launcher.Answering = request => request.Arguments is ["pr", "view", ..]
+            ? new Loadout.Platform.Abstractions.ProcessOutcome(0, $"{{\"state\":\"{_state}\"}}", string.Empty)
+            : null;
         _driver = new TeamQueueDriver(
             _queues, _schedules, _space.Tasks, _journal, new FakeProjects("website", repository), _git,
-            _launcher, _processes, new GhRepositoryHost(_launcher, new StubResolver("gh")), _pulls, _landings,
+            _launcher, _processes, new FixedHosts(new GhRepositoryHost(_launcher, new StubResolver("gh"))), _landings,
             Delivery(new GhRepositoryHost(_launcher, new StubResolver("gh"))), _space.Workspace,
             _space.Paths, _clock);
     }
@@ -60,7 +63,10 @@ public sealed class TeamQueueDriverTests : IDisposable
     public void Dispose() => _space.Dispose();
 
     private DeliveryService Delivery(IRepositoryHost host) =>
-        new(_landings, new FakeProjects("website", _space.Scratch("website")), _git, host, _pulls, _space.Tasks, _clock);
+        new(_landings, new FakeProjects("website", _space.Scratch("website")), _git, new FixedHosts(host),
+            new LocalSquash(new StubProcessLauncher(string.Empty), new StubResolver("git")), _space.Tasks, _clock);
+
+    private int StateReads => _launcher.Requests.Count(one => one.Arguments is ["pr", "view", ..]);
 
     private static DateTimeOffset Local(int day, int hour)
     {
@@ -237,7 +243,7 @@ public sealed class TeamQueueDriverTests : IDisposable
 
         _git.Pushed.Should().Equal(run.Branch);
 
-        var gh = _launcher.Requests.Single(one => one.Executable == "gh" && one.Arguments[0] == "pr");
+        var gh = _launcher.Requests.Single(one => one.Executable == "gh" && one.Arguments is ["pr", "create", ..]);
         gh.Arguments.Should().ContainInOrder("pr", "create", "--draft", "--head", run.Branch);
         gh.Arguments.Should().Contain(one => one.Contains("- the suite passes", StringComparison.Ordinal));
 
@@ -281,7 +287,7 @@ public sealed class TeamQueueDriverTests : IDisposable
 
         _git.Pushed.Should().Equal(run.Branch);
 
-        var gh = _launcher.Requests.Single(one => one.Executable == "gh" && one.Arguments[0] == "pr");
+        var gh = _launcher.Requests.Single(one => one.Executable == "gh" && one.Arguments is ["pr", "create", ..]);
         gh.Arguments.Should().ContainInOrder("pr", "create", "--head", run.Branch);
         gh.Arguments.Should().NotContain("--draft");
 
@@ -311,7 +317,7 @@ public sealed class TeamQueueDriverTests : IDisposable
         await PassAsync();
 
         _git.Pushed.Should().Equal(run.Branch);
-        _launcher.Requests.Where(one => one.Executable == "gh" && one.Arguments[0] == "pr").Should().ContainSingle()
+        _launcher.Requests.Where(one => one.Executable == "gh" && one.Arguments is ["pr", "create", ..]).Should().ContainSingle()
             .Which.Arguments.Should().ContainInOrder("pr", "create", "--head", run.Branch);
 
         var landings = (await _landings.LoadAsync("website")).Value!.Landings;
@@ -347,7 +353,7 @@ public sealed class TeamQueueDriverTests : IDisposable
     {
         var driver = new TeamQueueDriver(
             _queues, _schedules, _space.Tasks, _journal, new FakeProjects("website", _space.Scratch("website")), _git,
-            _launcher, _processes, new GhRepositoryHost(_launcher, new StubResolver(null)), _pulls, _landings,
+            _launcher, _processes, new FixedHosts(new GhRepositoryHost(_launcher, new StubResolver(null))), _landings,
             Delivery(new GhRepositoryHost(_launcher, new StubResolver(null))), _space.Workspace,
             _space.Paths, _clock);
 
@@ -358,7 +364,7 @@ public sealed class TeamQueueDriverTests : IDisposable
         await driver.PassAsync(true, _said.Add, (_, _) => Task.CompletedTask, CancellationToken.None);
 
         _git.Pushed.Should().BeEmpty();
-        (await TaskAsync()).History.Last().Reason.Should().Contain("the GitHub CLI is not on PATH");
+        (await TaskAsync()).History.Last().Reason.Should().Contain("(gh) is not on PATH");
     }
 
     [Fact]
@@ -387,7 +393,7 @@ public sealed class TeamQueueDriverTests : IDisposable
 
         await PassAsync();
 
-        _launcher.Requests.Single(one => one.Executable == "gh" && one.Arguments[0] == "pr").Arguments.Should().NotContain("--draft");
+        _launcher.Requests.Single(one => one.Executable == "gh" && one.Arguments is ["pr", "create", ..]).Arguments.Should().NotContain("--draft");
     }
 
     [Fact]
@@ -432,7 +438,7 @@ public sealed class TeamQueueDriverTests : IDisposable
 
         (await TaskAsync()).State.Should().Be(TaskState.Blocked);
 
-        _pulls.Known[42] = new PullRequestText(42, "Fix the login", "body");
+        _state = "MERGED";
         _clock.Now += TeamQueueDriver.MergeEvery;
 
         await PassAsync();
@@ -452,11 +458,11 @@ public sealed class TeamQueueDriverTests : IDisposable
         await PassAsync();
         await PassAsync();
 
-        var asked = _pulls.Reads;
+        var asked = StateReads;
         _clock.Now += TimeSpan.FromMinutes(5);
         await PassAsync();
 
-        _pulls.Reads.Should().Be(asked);
+        StateReads.Should().Be(asked);
     }
 
     [Fact]

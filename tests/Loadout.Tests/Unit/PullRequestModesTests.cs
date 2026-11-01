@@ -3,6 +3,7 @@ using Loadout.Core.Delivery;
 using Loadout.Core.Git;
 using Loadout.Models.Projects;
 using Loadout.Models.Teams;
+using Loadout.Tests.Fakes;
 using Xunit;
 
 namespace Loadout.Tests.Unit;
@@ -93,14 +94,14 @@ public sealed class PullRequestModesTests
     [Fact]
     public void Gh_is_asked_for_a_draft_with_exactly_these_arguments()
     {
-        GhRepositoryHost.CreateArguments(new PullRequestOpening("queue/login-1", "Fix the login", "body", Draft: true))
+        new GhRepositoryHost(new StubProcessLauncher(string.Empty), new StubResolver("gh")).Opens(new PullRequestOpening("queue/login-1", "Fix the login", "body", Draft: true))
             .Should().Equal("pr", "create", "--draft", "--head", "queue/login-1", "--title", "Fix the login", "--body", "body");
     }
 
     [Fact]
     public void Gh_is_asked_for_a_ready_pull_request_with_exactly_these_arguments()
     {
-        GhRepositoryHost.CreateArguments(new PullRequestOpening("queue/login-1", "Fix the login", "body", Draft: false))
+        new GhRepositoryHost(new StubProcessLauncher(string.Empty), new StubResolver("gh")).Opens(new PullRequestOpening("queue/login-1", "Fix the login", "body", Draft: false))
             .Should().Equal("pr", "create", "--head", "queue/login-1", "--title", "Fix the login", "--body", "body");
     }
 }

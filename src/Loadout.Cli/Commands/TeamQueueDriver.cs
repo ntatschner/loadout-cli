@@ -47,8 +47,7 @@ public sealed class TeamQueueDriver
     private readonly IGitManager _git;
     private readonly IProcessLauncher _launcher;
     private readonly IProcessInspector _processes;
-    private readonly IRepositoryHost _host;
-    private readonly IPullRequestReader _pulls;
+    private readonly IRepositoryHosts _hosts;
     private readonly ILandingService _landings;
     private readonly IDeliveryService _delivery;
     private readonly IWorkspaceManager _workspace;
@@ -64,8 +63,7 @@ public sealed class TeamQueueDriver
         IGitManager git,
         IProcessLauncher launcher,
         IProcessInspector processes,
-        IRepositoryHost host,
-        IPullRequestReader pulls,
+        IRepositoryHosts hosts,
         ILandingService landings,
         IDeliveryService delivery,
         IWorkspaceManager workspace,
@@ -82,8 +80,7 @@ public sealed class TeamQueueDriver
         _git = git;
         _launcher = launcher;
         _processes = processes;
-        _host = host;
-        _pulls = pulls;
+        _hosts = hosts;
         _landings = landings;
         _delivery = delivery;
         _workspace = workspace;
@@ -567,7 +564,25 @@ public sealed class TeamQueueDriver
             return null;
         }
 
-        if (await _host.UnavailableAsync(place, ct).ConfigureAwait(false) is { } cannot)
+        var chosen = await _hosts.ForAsync(run.Project, place, ct).ConfigureAwait(false);
+
+        if (chosen.Failed)
+        {
+            run.Reason = chosen.Error!;
+
+            return null;
+        }
+
+        var host = chosen.Value!.Host;
+
+        if (!host.OpensPullRequests)
+        {
+            run.Reason = $"{run.Project} lands with local git, which has no pull requests. Merge it with: loadout pr merge {run.Branch}";
+
+            return null;
+        }
+
+        if (await host.UnavailableAsync(place, ct).ConfigureAwait(false) is { } cannot)
         {
             run.Reason = cannot;
 
@@ -596,7 +611,7 @@ public sealed class TeamQueueDriver
 
         var title = task.Title.Trim().Length > 0 ? task.Title.Trim() : task.Id;
 
-        var opened = await _host.OpenAsync(
+        var opened = await host.OpenAsync(
             place,
             new PullRequestOpening(run.Branch, title, QueueSettling.Body(task, summary, team), draft),
             ct).ConfigureAwait(false);
@@ -615,9 +630,8 @@ public sealed class TeamQueueDriver
     /// Marks done the tasks whose draft pull request has been merged.
     /// </summary>
     /// <remarks>
-    /// Read through gh's list of recently merged pull requests, a project at a
-    /// time and no more often than <see cref="MergeEvery"/>, so a queue of
-    /// open pull requests costs one call a quarter of an hour.
+    /// Each pull request is asked about through the host its project lands
+    /// through, no more often than <see cref="MergeEvery"/>.
     /// </remarks>
     public async Task<int> MergedAsync(string team, CancellationToken ct)
     {
@@ -643,9 +657,9 @@ public sealed class TeamQueueDriver
                 continue;
             }
 
-            var merged = await _pulls.MergedAsync(repository, 50, ct).ConfigureAwait(false);
+            var host = await _hosts.ForAsync(group.Key, repository, ct).ConfigureAwait(false);
 
-            if (merged.Failed)
+            if (host.Failed || !host.Value!.Host.OpensPullRequests)
             {
                 continue;
             }
@@ -654,10 +668,15 @@ public sealed class TeamQueueDriver
 
             foreach (var run in group)
             {
-                var number = Number(run.PullRequest);
                 var task = tasks.Succeeded ? TaskRuns.Find(run.Task, tasks.Value!) : null;
+                var state = await host.Value.Host.StateAsync(repository, run.PullRequest, ct).ConfigureAwait(false);
 
-                var isMerged = number is { } n && merged.Value!.Any(one => one.Number == n);
+                if (state.Failed)
+                {
+                    continue;
+                }
+
+                var isMerged = state.Value == PullRequestState.Merged;
 
                 if (isMerged)
                 {

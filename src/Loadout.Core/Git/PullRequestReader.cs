@@ -27,12 +27,6 @@ public interface IPullRequestReader
 
     /// <summary>The most recently merged pull requests, newest first.</summary>
     Task<OperationResult<IReadOnlyList<PullRequestText>>> MergedAsync(string repository, int limit, CancellationToken ct = default);
-
-    /// <summary>
-    /// The numbers of the most recently closed pull requests that were closed
-    /// without being merged, newest first.
-    /// </summary>
-    Task<OperationResult<IReadOnlyList<int>>> ClosedUnmergedAsync(string repository, int limit, CancellationToken ct = default);
 }
 
 /// <summary>Reads pull requests through the GitHub CLI.</summary>
@@ -104,43 +98,6 @@ internal sealed class GhPullRequestReader : IPullRequestReader
         catch (Exception e) when (e is JsonException or InvalidOperationException or KeyNotFoundException or FormatException)
         {
             return OperationResult<IReadOnlyList<PullRequestText>>.Fail(
-                $"gh answered in a shape Loadout does not read: {e.Message}", ExitCode.GeneralFailure);
-        }
-    }
-
-    /// <summary>The arguments gh is given to list the most recently closed pull requests.</summary>
-    /// <remarks>
-    /// gh's closed list holds the merged as well, so the state is asked for
-    /// and the merged are left out by <see cref="ClosedUnmerged"/>.
-    /// </remarks>
-    internal static IReadOnlyList<string> ClosedArguments(int limit) =>
-        ["pr", "list", "--state", "closed", "--limit", limit.ToString(CultureInfo.InvariantCulture), "--json", "number,state"];
-
-    /// <summary>The numbers in gh's closed list that were closed rather than merged.</summary>
-    internal static IReadOnlyList<int> ClosedUnmerged(JsonElement list) =>
-        [.. list.EnumerateArray()
-            .Where(one => string.Equals(one.GetProperty("state").GetString(), "CLOSED", StringComparison.OrdinalIgnoreCase))
-            .Select(one => one.GetProperty("number").GetInt32())];
-
-    /// <inheritdoc />
-    public async Task<OperationResult<IReadOnlyList<int>>> ClosedUnmergedAsync(string repository, int limit, CancellationToken ct = default)
-    {
-        var ran = await RunAsync(repository, ClosedArguments(limit), ct).ConfigureAwait(false);
-
-        if (ran.Failed)
-        {
-            return OperationResult<IReadOnlyList<int>>.Fail(ran.Error!, ran.ExitCode);
-        }
-
-        try
-        {
-            using var document = JsonDocument.Parse(ran.Value!);
-
-            return OperationResult<IReadOnlyList<int>>.Ok(ClosedUnmerged(document.RootElement));
-        }
-        catch (Exception e) when (e is JsonException or InvalidOperationException or KeyNotFoundException or FormatException)
-        {
-            return OperationResult<IReadOnlyList<int>>.Fail(
                 $"gh answered in a shape Loadout does not read: {e.Message}", ExitCode.GeneralFailure);
         }
     }

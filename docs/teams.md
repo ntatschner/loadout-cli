@@ -2568,6 +2568,58 @@ where the work is: done is for when it is merged. When a pull request the queue
 opened is merged, the daemon notices within a quarter of an hour and marks the
 task done. Merging, and every other outward action, is still yours.
 
+### Branches waiting to land
+
+Every branch a queued run leaves behind waits in `loadout pr list`: the run's
+own branch with its pull request, and any node branch its gate didn't merge,
+pending. From there `pr open` pushes a pending one and opens its pull
+request, `pr ready` takes a draft out of draft, `pr merge` asks for a
+squash-merge with a message you write, and `pr abandon` stops waiting on one,
+closing its pull request if it has one. Studio's **Waiting to land** list has
+the same buttons, each running the command written under it.
+
+Merging is always yours. `pr merge` asks the host to merge once the required
+checks pass, so nothing goes in that the checks would have stopped. The
+daemon looks every quarter of an hour and marks the branch merged once the
+host says so. A pull request somebody closed without merging puts its branch
+back to pending, where it can be opened again or abandoned.
+
+**Where it lands** is worked out from the checkout's `origin`: GitHub through
+`gh`, GitLab through `glab`, Azure DevOps through `az repos`. Each runs under
+your own sign-in, and Loadout checks you are signed in before it pushes
+anything, so a branch never reaches the remote for a pull request that was
+never going to open. An `origin` that names none of those is refused rather
+than guessed at. A self-hosted GitLab whose address doesn't say so, or a
+host of your own, is set in the project's `project.yaml`:
+
+```yaml
+delivery:
+  provider: gitlab        # github, gitlab, azure-devops, local or command
+```
+
+`command` runs a program of yours for each action: `<command> open --head B
+--title T --body X [--draft]` printing the address as its last line, then
+`ready`, `close` and `state` (printing `open`, `merged` or `closed`) with the
+address, `merge <address> --subject S --body X`, and `check`, which succeeds
+when it can reach its host. Name the program with `command:` under `delivery`.
+
+**A project with no `origin`** lands with local git. There are no pull
+requests, so `pr merge` squash-merges the branch into the default branch on
+this machine as one commit with your message, and pushes nothing. It shows
+the message and what changes first, then asks; saying no leaves both
+branches as they were. Where nothing can ask, as from a script, it refuses
+unless you pass `--yes` having looked with `--dry-run`. The merge is worked
+out without touching any working tree, so one with conflicts is refused
+before anything is written. If the default branch is checked out somewhere,
+that checkout has to be clean, and it moves along with the branch. It needs
+git 2.38 or later.
+
+**Tried with tests only.** The exact arguments each CLI is given are pinned by
+tests, and local git's merge is tested against real repositories. None of
+`gh`, `glab` or `az` has been driven against a real host from here, and their
+flags change between versions, so the first real use of GitLab or Azure
+DevOps is worth watching.
+
 **A run that fails** - blocked, over budget, stopped, or whose process died -
 leaves the task blocked with the run and the reason in its history, and is not
 tried again: a spec that failed once usually needs a person to rewrite it.
