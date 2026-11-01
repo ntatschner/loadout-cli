@@ -47,6 +47,9 @@
   // Kept here rather than on the row, so a refresh of the list every few
   // seconds does not throw away a message half written.
   let merging = $state<string | null>(null);
+  // The branch whose abandoning is waiting for a second press, since it can
+  // close a pull request on the host.
+  let abandoning = $state<string | null>(null);
   let subject = $state('');
   let body = $state('');
 
@@ -79,6 +82,15 @@
     }
   }
 
+  async function abandon(one: LandingRead) {
+    if ((await act?.('pr abandon', at(one), `${one.branch} is abandoned`)) !== false) {
+      abandoning = null;
+    }
+  }
+
+  const canAbandon = (one: LandingRead) =>
+    (one.state === 'pending' || one.state === 'draft' || one.state === 'ready') && !one.mergeRequested;
+
   const subjectReason = () =>
     !subject.trim() ? 'Write the squash commit’s subject' : subject.includes('\n') ? 'The subject is one line' : undefined;
 </script>
@@ -103,7 +115,16 @@
             {:else if one.state === 'ready' && one.pullRequest && !one.mergeRequested}
               <HaloButton label={merging === keyOf(one) ? 'Not now' : 'Merge…'} size="small" cmd={merging === keyOf(one) ? undefined : `opens the squash message for ${one.branch}`} {disabledReason} onpress={() => (merging === keyOf(one) ? (merging = null) : startMerge(one))} />
             {/if}
+            {#if canAbandon(one)}
+              <HaloButton label={abandoning === keyOf(one) ? 'Keep it' : 'Abandon…'} size="small" cmd={abandoning === keyOf(one) ? undefined : `asks before it abandons ${one.branch}`} {disabledReason} onpress={() => (abandoning = abandoning === keyOf(one) ? null : keyOf(one))} />
+            {/if}
           </div>
+          {#if abandoning === keyOf(one) && canAbandon(one)}
+            <div class="lmerge" role="group" aria-label={`Abandon ${one.branch}`}>
+              <p class="small">{one.pullRequest ? `Closes ${one.pullRequest} without merging it, and stops waiting on ${one.branch}.` : `Stops waiting on ${one.branch}.`} The branch is left where it is.</p>
+              <HaloButton label="Abandon" kind="danger" cmd={`$ loadout pr abandon ${one.branch}`} {disabledReason} onpress={() => void abandon(one)} />
+            </div>
+          {/if}
           {#if merging === keyOf(one) && one.state === 'ready'}
             <form class="lmerge" aria-label={`Squash-merge ${one.branch}`} onsubmit={(event) => { event.preventDefault(); void merge(one); }}>
               <div class="ls-field">

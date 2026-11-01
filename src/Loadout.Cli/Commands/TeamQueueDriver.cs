@@ -567,7 +567,7 @@ public sealed class TeamQueueDriver
             return null;
         }
 
-        if (_host.Unavailable() is { } cannot)
+        if (await _host.UnavailableAsync(place, ct).ConfigureAwait(false) is { } cannot)
         {
             run.Reason = cannot;
 
@@ -739,9 +739,16 @@ public sealed class TeamQueueDriver
 
         // Every landing with a pull request, not only a queued run's own: a
         // node branch opened from the waiting list has no queue run to check.
-        if (await _delivery.MergedAsync(ct).ConfigureAwait(false) is > 0 and var landed)
+        var (landed, reopened) = await _delivery.MergedAsync(ct).ConfigureAwait(false);
+
+        if (landed > 0)
         {
             say($"{landed} waiting branch(es) merged");
+        }
+
+        if (reopened > 0)
+        {
+            say($"{reopened} waiting branch(es) back to pending, their pull requests closed unmerged");
         }
     }
 

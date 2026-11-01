@@ -4,7 +4,7 @@ using Xunit;
 namespace Loadout.Tests.Contract;
 
 /// <summary>
-/// 'pr open', 'pr ready' and 'pr merge' from the built command line, through
+/// 'pr open', 'pr ready', 'pr merge' and 'pr abandon' from the built command line, through
 /// their dry runs: what each would do, what each refuses, and that a dry run
 /// leaves the landings as they were. Nothing here reaches gh.
 /// </summary>
@@ -57,6 +57,10 @@ public sealed class PrActionsContractTests
         open.ExitCode.Should().Be(0, open.StandardError);
         open.Json().GetProperty("draft").GetBoolean().Should().BeTrue();
         open.Json().GetProperty("title").GetString().Should().Be("teams/r1/implementer-2", "it was made for no task");
+
+        var abandon = await loadout.RunAsync("pr", "abandon", "queue/login-20261028", "--dry-run");
+        abandon.ExitCode.Should().Be(0, abandon.StandardError);
+        abandon.StandardOutput.Should().Contain("Dry run").And.Contain("pull/42").And.Contain("left where it is");
 
         (await File.ReadAllTextAsync(file)).Should().Be(Landings, "a dry run writes nothing");
     }

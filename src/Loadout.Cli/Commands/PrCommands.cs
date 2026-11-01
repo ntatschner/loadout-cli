@@ -502,3 +502,88 @@ public sealed class PrMergeCommand : AsyncCommand<PrMergeCommand.Settings>
         return CommandOutput.Success();
     }
 }
+
+/// <summary>Gives up on a branch waiting to land, closing its pull request when it has one.</summary>
+/// <remarks>
+/// <para>
+/// The branch itself is left where it is, in the repository and on the
+/// remote: abandoning is about Loadout no longer waiting on it, not about
+/// throwing the work away. It shows in <c>pr list --all</c> as abandoned.
+/// </para>
+/// <para>
+/// A pull request with a merge already asked for is refused, because the host
+/// may merge it while it is being closed.
+/// </para>
+/// </remarks>
+[Description("Give up on a branch waiting to land, closing its pull request if it has one.")]
+[CommandMeta(CommandCategory.Start, Intent = "pr abandon close give up drop pending branch pull request", Mutates = true)]
+public sealed class PrAbandonCommand : AsyncCommand<PrAbandonCommand.Settings>
+{
+    private readonly IDeliveryService _delivery;
+    private readonly IAnsiConsole _console;
+
+    public PrAbandonCommand(IDeliveryService delivery, IAnsiConsole console)
+    {
+        _delivery = delivery;
+        _console = console;
+    }
+
+    public sealed class Settings : PrBranchSettings
+    {
+    }
+
+    /// <inheritdoc />
+    public override async Task<int> ExecuteAsync(
+        CommandContext context,
+        Settings settings,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var output = new CommandOutput(_console, settings);
+        var found = await _delivery.FindAsync(settings.Branch, settings.Project, cancellationToken).ConfigureAwait(false);
+
+        if (found.Failed)
+        {
+            return output.Fail(found);
+        }
+
+        var landing = found.Value!.Landing;
+
+        if (DeliveryService.CannotAbandon(landing) is { } refused)
+        {
+            return output.Fail(refused, ExitCode.InvalidArguments);
+        }
+
+        if (settings.DryRun)
+        {
+            output.WriteLine(
+                "[dim]Dry run: nothing was changed.[/] It would "
+                + (landing.PullRequest.Length > 0 ? $"close {Shown.Safely(landing.PullRequest)} unmerged and " : string.Empty)
+                + $"stop waiting on [bold]{Markup.Escape(landing.Branch)}[/]. The branch would be left where it is.");
+
+            return CommandOutput.Success();
+        }
+
+        var abandoned = await _delivery.AbandonAsync(found.Value, cancellationToken).ConfigureAwait(false);
+
+        if (abandoned.Failed)
+        {
+            return output.Fail(abandoned);
+        }
+
+        if (output.IsJson)
+        {
+            output.WriteJson(new { branch = abandoned.Value!.Branch, state = LandingMoves.Word(abandoned.Value.State), pullRequest = abandoned.Value.PullRequest });
+
+            return CommandOutput.Success();
+        }
+
+        output.WriteLine(
+            $"[green]+[/] {Markup.Escape(landing.Branch)} is abandoned"
+            + (landing.PullRequest.Length > 0 ? $", and {Shown.Safely(landing.PullRequest)} is closed." : ".")
+            + " The branch is left where it is.");
+
+        return CommandOutput.Success();
+    }
+}
