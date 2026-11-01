@@ -217,6 +217,7 @@ public static class StudioCoverage
         ["pr open"] = new("teams", StudioEffect.Changes),
         ["pr ready"] = new("teams", StudioEffect.Changes),
         ["pr merge"] = new("teams", StudioEffect.Changes),
+        ["pr abandon"] = new("teams", StudioEffect.Changes),
         ["team say"] = new("teams", StudioEffect.Changes),
         ["team attach set"] = Terminal("sets the passphrase this page must be given separately, so it cannot be set from the page it guards"),
         ["team attach clear"] = Terminal("removes the passphrase this page must be given separately, so it cannot be cleared from the page it guards"),

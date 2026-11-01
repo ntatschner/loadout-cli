@@ -83,7 +83,9 @@ public sealed class DeliveryServiceTests : IDisposable
 
         opened.Succeeded.Should().BeTrue(opened.Error);
         _git.Pushed.Should().Equal("teams-r1-implementer-2");
-        _gh.Requests.Should().ContainSingle().Which.Arguments.Should().StartWith(["pr", "create", "--draft"]);
+        _gh.Requests.Select(one => one.Arguments[0]).Should().Equal(["auth", "pr"], "the sign-in is asked about before anything is pushed");
+        _gh.Requests[0].Arguments.Should().Equal("auth", "status", "--active");
+        _gh.Requests[1].Arguments.Should().StartWith(["pr", "create", "--draft"]);
 
         var kept = await KeptAsync();
         kept.State.Should().Be(LandingState.Draft);
@@ -102,7 +104,7 @@ public sealed class DeliveryServiceTests : IDisposable
         opened.Failed.Should().BeTrue();
         opened.Error.Should().Contain("has gone");
         _git.Pushed.Should().BeEmpty();
-        _gh.Requests.Should().BeEmpty();
+        _gh.Requests.Should().NotContain(one => one.Arguments[0] == "pr");
         (await KeptAsync()).State.Should().Be(LandingState.Pending);
     }
 
@@ -116,6 +118,113 @@ public sealed class DeliveryServiceTests : IDisposable
 
         opened.Failed.Should().BeTrue();
         _git.Pushed.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task With_gh_signed_out_the_branch_is_never_pushed_and_it_says_how_to_sign_in()
+    {
+        var found = await WaitingAsync();
+        var signedOut = new StubProcessLauncher(string.Empty, exitCode: 1);
+        var delivery = With(new GhRepositoryHost(signedOut, new StubResolver("gh")));
+
+        var opened = await delivery.OpenAsync(found, await delivery.OpeningAsync(found, false, null, null));
+
+        opened.Failed.Should().BeTrue();
+        opened.Error.Should().Contain("gh auth login");
+        _git.Pushed.Should().BeEmpty();
+        signedOut.Requests.Should().ContainSingle().Which.Arguments.Should().Equal("auth", "status", "--active");
+        (await KeptAsync()).State.Should().Be(LandingState.Pending);
+    }
+
+    [Fact]
+    public async Task A_pull_request_closed_unmerged_leaves_its_branch_pending_with_nothing_of_it_kept()
+    {
+        await WaitingAsync(LandingState.Ready, "https://github.com/o/website/pull/7");
+        var asked = (await _landings.LoadAsync("website")).Value!.Landings[0];
+        asked.MergeRequestedUtc = _clock.Now;
+        await _landings.RecordAsync("website", [asked]);
+        _pulls.ClosedUnmerged.Add(7);
+
+        (await _delivery.MergedAsync()).Should().Be((0, 1));
+
+        var kept = await KeptAsync();
+        kept.State.Should().Be(LandingState.Pending);
+        kept.PullRequest.Should().BeEmpty("it can be opened afresh");
+        kept.MergeRequestedUtc.Should().BeNull();
+        kept.Why.Should().Contain("closed without being merged").And.Contain("pull/7");
+    }
+
+    [Fact]
+    public async Task A_pull_request_seen_merged_is_not_taken_for_closed()
+    {
+        await WaitingAsync(LandingState.Ready, "https://github.com/o/website/pull/7");
+        _pulls.Known[7] = new PullRequestText(7, "Fix the login", string.Empty);
+        _pulls.ClosedUnmerged.Add(7);
+
+        (await _delivery.MergedAsync()).Should().Be((1, 0));
+        (await KeptAsync()).State.Should().Be(LandingState.Merged);
+    }
+
+    [Fact]
+    public async Task Abandoning_a_pending_branch_asks_nothing_of_gh()
+    {
+        var found = await WaitingAsync();
+
+        var abandoned = await _delivery.AbandonAsync(found);
+
+        abandoned.Succeeded.Should().BeTrue(abandoned.Error);
+        _gh.Requests.Should().BeEmpty();
+        (await KeptAsync()).State.Should().Be(LandingState.Abandoned);
+    }
+
+    [Fact]
+    public async Task Abandoning_a_branch_with_a_pull_request_closes_it_first()
+    {
+        var found = await WaitingAsync(LandingState.Draft, "https://github.com/o/website/pull/7");
+
+        (await _delivery.AbandonAsync(found)).Succeeded.Should().BeTrue();
+
+        _gh.Requests.Should().ContainSingle().Which.Arguments.Should().Equal("pr", "close", "https://github.com/o/website/pull/7");
+        var kept = await KeptAsync();
+        kept.State.Should().Be(LandingState.Abandoned);
+        kept.Why.Should().Contain("closed");
+    }
+
+    [Fact]
+    public async Task A_pull_request_that_will_not_close_leaves_the_branch_waiting()
+    {
+        var refusing = new StubProcessLauncher(string.Empty, exitCode: 1);
+        var delivery = With(new GhRepositoryHost(refusing, new StubResolver("gh")));
+        var found = await WaitingAsync(LandingState.Ready, "https://github.com/o/website/pull/7");
+
+        var abandoned = await delivery.AbandonAsync(found);
+
+        abandoned.Failed.Should().BeTrue();
+        abandoned.Error.Should().Contain("was not abandoned");
+        (await KeptAsync()).State.Should().Be(LandingState.Ready);
+    }
+
+    [Fact]
+    public async Task A_branch_with_a_merge_asked_for_is_not_abandoned()
+    {
+        var found = await WaitingAsync(LandingState.Ready, "https://github.com/o/website/pull/7");
+        found.Landing.MergeRequestedUtc = _clock.Now;
+
+        var abandoned = await _delivery.AbandonAsync(found);
+
+        abandoned.Error.Should().Contain("auto-merge");
+        _gh.Requests.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Only_pull_requests_closed_rather_than_merged_are_read_as_closed()
+    {
+        using var list = System.Text.Json.JsonDocument.Parse(
+            """[{"number":9,"state":"MERGED"},{"number":8,"state":"CLOSED"},{"number":5,"state":"CLOSED"}]""");
+
+        GhPullRequestReader.ClosedUnmerged(list.RootElement).Should().Equal(8, 5);
+        GhPullRequestReader.ClosedArguments(50).Should().Equal(
+            "pr", "list", "--state", "closed", "--limit", "50", "--json", "number,state");
     }
 
     [Fact]
@@ -200,14 +309,14 @@ public sealed class DeliveryServiceTests : IDisposable
         await WaitingAsync(LandingState.Ready, "https://github.com/o/website/pull/7");
         _pulls.Known[7] = new PullRequestText(7, "Fix the login", string.Empty);
 
-        (await _delivery.MergedAsync()).Should().Be(1);
+        (await _delivery.MergedAsync()).Merged.Should().Be(1);
 
         var kept = await KeptAsync();
         kept.State.Should().Be(LandingState.Merged);
         kept.Why.Should().Contain("pull/7");
 
         var reads = _pulls.Reads;
-        (await _delivery.MergedAsync()).Should().Be(0);
+        (await _delivery.MergedAsync()).Merged.Should().Be(0);
         _pulls.Reads.Should().Be(reads, "a merged landing is not waiting any more");
     }
 
@@ -217,7 +326,7 @@ public sealed class DeliveryServiceTests : IDisposable
         await WaitingAsync(LandingState.Draft, "https://github.com/o/website/pull/7");
         _pulls.Known[3] = new PullRequestText(3, "Something else", string.Empty);
 
-        (await _delivery.MergedAsync()).Should().Be(0);
+        (await _delivery.MergedAsync()).Merged.Should().Be(0);
         (await KeptAsync()).State.Should().Be(LandingState.Draft);
 
         var reads = _pulls.Reads;
@@ -226,7 +335,7 @@ public sealed class DeliveryServiceTests : IDisposable
 
         _clock.Now += DeliveryService.MergeEvery;
         await _delivery.MergedAsync();
-        _pulls.Reads.Should().Be(reads + 1);
+        _pulls.Reads.Should().BeGreaterThan(reads, "a quarter of an hour has gone");
     }
 
     [Fact]

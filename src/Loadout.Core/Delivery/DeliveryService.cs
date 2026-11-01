@@ -54,12 +54,16 @@ public interface IDeliveryService
         string body,
         CancellationToken ct = default);
 
+    /// <summary>Gives up on a waiting branch, closing its pull request first when it has one.</summary>
+    Task<OperationResult<BranchLanding>> AbandonAsync(LandingFound found, CancellationToken ct = default);
+
     /// <summary>
     /// Marks merged the landings whose pull request the host now lists as
-    /// merged, looking no more often than <see cref="DeliveryService.MergeEvery"/>.
+    /// merged, and pending again those whose pull request was closed unmerged,
+    /// looking no more often than <see cref="DeliveryService.MergeEvery"/>.
     /// </summary>
-    /// <returns>How many were marked merged.</returns>
-    Task<int> MergedAsync(CancellationToken ct = default);
+    /// <returns>How many were marked merged and how many went back to pending.</returns>
+    Task<(int Merged, int Reopened)> MergedAsync(CancellationToken ct = default);
 }
 
 /// <inheritdoc />
@@ -134,6 +138,26 @@ public sealed class DeliveryService : IDeliveryService
             LandingState.Draft => $"{landing.Branch}'s pull request is a draft. Mark it ready first: loadout pr ready {landing.Branch}",
             LandingState.Pending => $"{landing.Branch} has no pull request yet. Open one with: loadout pr open {landing.Branch}",
             _ => $"{landing.Branch} is {LandingMoves.Word(landing.State)}, so there is nothing to merge.",
+        };
+    }
+
+    /// <summary>Why this landing can't be abandoned, or null when it can.</summary>
+    /// <remarks>
+    /// A merge already asked for is refused: the host may merge it at any
+    /// moment, so closing it now races the merge, and either outcome would be
+    /// a surprise. Turn auto-merge off on the host first.
+    /// </remarks>
+    public static string? CannotAbandon(BranchLanding landing)
+    {
+        ArgumentNullException.ThrowIfNull(landing);
+
+        return landing.State switch
+        {
+            LandingState.Ready when landing.MergeRequestedUtc is not null =>
+                $"{landing.Branch} has a merge asked for, which the host may finish at any moment. "
+                + $"Turn auto-merge off on {landing.PullRequest} first.",
+            LandingState.Pending or LandingState.Draft or LandingState.Ready => null,
+            _ => $"{landing.Branch} is {LandingMoves.Word(landing.State)} already.",
         };
     }
 
@@ -317,7 +341,7 @@ public sealed class DeliveryService : IDeliveryService
 
         // Asked before the push, so a branch never reaches the remote for a
         // pull request that was never going to open.
-        if (_host.Unavailable() is { } cannot)
+        if (await _host.UnavailableAsync(found.Repository, ct).ConfigureAwait(false) is { } cannot)
         {
             return OperationResult<BranchLanding>.Fail(
                 $"No pull request can be opened from here: {cannot}.", ExitCode.AgentUnavailable);
@@ -414,10 +438,44 @@ public sealed class DeliveryService : IDeliveryService
     }
 
     /// <inheritdoc />
-    public async Task<int> MergedAsync(CancellationToken ct = default)
+    public async Task<OperationResult<BranchLanding>> AbandonAsync(LandingFound found, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(found);
+
+        var landing = found.Landing;
+
+        if (CannotAbandon(landing) is { } refused)
+        {
+            return OperationResult<BranchLanding>.Fail(refused, ExitCode.InvalidArguments);
+        }
+
+        // Closed first, so a pull request is never left open on the host for a
+        // branch Loadout has stopped watching.
+        if (landing.PullRequest.Length > 0)
+        {
+            var closed = await _host.CloseAsync(found.Repository, landing.PullRequest, ct).ConfigureAwait(false);
+
+            if (closed.Failed)
+            {
+                return OperationResult<BranchLanding>.Fail(
+                    $"{landing.Branch} was not abandoned, because its pull request did not close: {closed.Error}", closed.ExitCode);
+            }
+        }
+
+        landing.State = LandingState.Abandoned;
+        landing.Why = landing.PullRequest.Length > 0
+            ? $"Abandoned, and its pull request closed: {landing.PullRequest}"
+            : "Abandoned. The branch is left where it is.";
+
+        return await KeepAsync(found.Project, landing, ct).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<(int Merged, int Reopened)> MergedAsync(CancellationToken ct = default)
     {
         var now = _time.GetUtcNow();
         var marked = 0;
+        var reopened = 0;
 
         foreach (var project in _landings.Projects())
         {
@@ -455,22 +513,42 @@ public sealed class DeliveryService : IDeliveryService
 
             var numbers = merged.Value!.Select(one => one.Number).ToHashSet();
 
+            // Asked only when something is left unmerged, and a failure only
+            // means a closed one is noticed on a later look.
+            var closed = due.Any(one => !numbers.Contains(Number(one.PullRequest)!.Value))
+                && await _pulls.ClosedUnmergedAsync(repository, 50, ct).ConfigureAwait(false) is { Succeeded: true } read
+                    ? read.Value!.ToHashSet()
+                    : [];
+
             foreach (var landing in due)
             {
                 landing.MergeChecked = now;
 
-                if (numbers.Contains(Number(landing.PullRequest)!.Value))
+                var number = Number(landing.PullRequest)!.Value;
+
+                if (numbers.Contains(number))
                 {
                     landing.State = LandingState.Merged;
                     landing.Why = $"Its pull request was merged: {landing.PullRequest}";
                     marked++;
+                }
+                else if (closed.Contains(number))
+                {
+                    // Pending again, with nothing of the closed pull request
+                    // left on it, so it can be opened afresh or abandoned.
+                    landing.Why = $"Its pull request was closed without being merged: {landing.PullRequest}";
+                    landing.State = LandingState.Pending;
+                    landing.PullRequest = string.Empty;
+                    landing.MergeRequestedUtc = null;
+                    landing.MergeChecked = null;
+                    reopened++;
                 }
             }
 
             await _landings.RecordAsync(project, due, ct).ConfigureAwait(false);
         }
 
-        return marked;
+        return (marked, reopened);
     }
 
     private async Task<OperationResult<BranchLanding>> KeepAsync(string project, BranchLanding landing, CancellationToken ct)

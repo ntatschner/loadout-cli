@@ -21,11 +21,20 @@ public sealed record PullRequestOpening(string Head, string Title, string Body, 
 public interface IRepositoryHost
 {
     /// <summary>
-    /// Why nothing can be opened on this machine, or null when it can - asked
-    /// before a branch is pushed, so a branch never reaches the remote for a
-    /// pull request that was never going to open.
+    /// Why nothing can be opened from this checkout, or null when it can -
+    /// asked before a branch is pushed, so a branch never reaches the remote
+    /// for a pull request that was never going to open. A host's CLI that is
+    /// missing or signed out is the usual reason.
     /// </summary>
-    string? Unavailable();
+    /// <param name="repository">A checkout of the repository, where the host's CLI is run.</param>
+    /// <param name="ct">Cancels the call.</param>
+    Task<string?> UnavailableAsync(string repository, CancellationToken ct = default);
+
+    /// <summary>Closes a pull request without merging it.</summary>
+    /// <param name="repository">A checkout of the repository, where the host's CLI is run.</param>
+    /// <param name="pullRequest">The pull request's address.</param>
+    /// <param name="ct">Cancels the call.</param>
+    Task<OperationResult> CloseAsync(string repository, string pullRequest, CancellationToken ct = default);
 
     /// <summary>Opens a pull request, returning its address.</summary>
     /// <param name="repository">A checkout of the repository, where the host's CLI is run.</param>
@@ -105,8 +114,45 @@ internal sealed class GhRepositoryHost : IRepositoryHost
     internal static IReadOnlyList<string> MergeArguments(string pullRequest, string subject, string body) =>
         ["pr", "merge", pullRequest, "--squash", "--auto", "--subject", subject, "--body", body];
 
+    /// <summary>The arguments gh is given to say whether its active account is signed in.</summary>
+    /// <remarks>
+    /// <c>--active</c> so an account signed out on some other host does not
+    /// count against this one. What gh prints is never passed on: it names the
+    /// account and the token's start, and only whether it succeeded is needed.
+    /// </remarks>
+    internal static IReadOnlyList<string> SignedInArguments() => ["auth", "status", "--active"];
+
+    /// <summary>The arguments gh is given to close <paramref name="pullRequest"/> unmerged.</summary>
+    internal static IReadOnlyList<string> CloseArguments(string pullRequest) => ["pr", "close", pullRequest];
+
     /// <inheritdoc />
-    public string? Unavailable() => _resolver.Resolve("gh") is null ? "the GitHub CLI is not on PATH" : null;
+    public async Task<string?> UnavailableAsync(string repository, CancellationToken ct = default)
+    {
+        if (_resolver.Resolve("gh") is not { } gh)
+        {
+            return "the GitHub CLI is not on PATH";
+        }
+
+        var ran = await _processes.RunAsync(new ProcessRequest(gh, SignedInArguments(), repository), Timeout, ct)
+            .ConfigureAwait(false);
+
+        return ran.Failed || ran.Value?.Succeeded != true
+            ? "the GitHub CLI is not signed in. Sign in with: gh auth login"
+            : null;
+    }
+
+    /// <inheritdoc />
+    public async Task<OperationResult> CloseAsync(string repository, string pullRequest, CancellationToken ct = default)
+    {
+        if (_resolver.Resolve("gh") is not { } gh)
+        {
+            return OperationResult.Fail("the GitHub CLI is not on PATH", ExitCode.AgentUnavailable);
+        }
+
+        var ran = await RunAsync(gh, repository, CloseArguments(pullRequest), "close it", ct).ConfigureAwait(false);
+
+        return ran.Failed ? OperationResult.Fail(ran.Error!, ran.ExitCode) : OperationResult.Ok();
+    }
 
     /// <inheritdoc />
     public async Task<OperationResult<string>> OpenAsync(string repository, PullRequestOpening opening, CancellationToken ct = default)

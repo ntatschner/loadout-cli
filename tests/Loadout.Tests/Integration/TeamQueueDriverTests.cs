@@ -237,7 +237,7 @@ public sealed class TeamQueueDriverTests : IDisposable
 
         _git.Pushed.Should().Equal(run.Branch);
 
-        var gh = _launcher.Requests.Single(one => one.Executable == "gh");
+        var gh = _launcher.Requests.Single(one => one.Executable == "gh" && one.Arguments[0] == "pr");
         gh.Arguments.Should().ContainInOrder("pr", "create", "--draft", "--head", run.Branch);
         gh.Arguments.Should().Contain(one => one.Contains("- the suite passes", StringComparison.Ordinal));
 
@@ -281,7 +281,7 @@ public sealed class TeamQueueDriverTests : IDisposable
 
         _git.Pushed.Should().Equal(run.Branch);
 
-        var gh = _launcher.Requests.Single(one => one.Executable == "gh");
+        var gh = _launcher.Requests.Single(one => one.Executable == "gh" && one.Arguments[0] == "pr");
         gh.Arguments.Should().ContainInOrder("pr", "create", "--head", run.Branch);
         gh.Arguments.Should().NotContain("--draft");
 
@@ -311,7 +311,7 @@ public sealed class TeamQueueDriverTests : IDisposable
         await PassAsync();
 
         _git.Pushed.Should().Equal(run.Branch);
-        _launcher.Requests.Where(one => one.Executable == "gh").Should().ContainSingle()
+        _launcher.Requests.Where(one => one.Executable == "gh" && one.Arguments[0] == "pr").Should().ContainSingle()
             .Which.Arguments.Should().ContainInOrder("pr", "create", "--head", run.Branch);
 
         var landings = (await _landings.LoadAsync("website")).Value!.Landings;
@@ -387,7 +387,7 @@ public sealed class TeamQueueDriverTests : IDisposable
 
         await PassAsync();
 
-        _launcher.Requests.Single(one => one.Executable == "gh").Arguments.Should().NotContain("--draft");
+        _launcher.Requests.Single(one => one.Executable == "gh" && one.Arguments[0] == "pr").Arguments.Should().NotContain("--draft");
     }
 
     [Fact]

@@ -185,6 +185,7 @@
 | `loadout pr open` | Push a pending branch and open its pull request against the default branch, titled from its task; `--draft` opens it as a draft |
 | `loadout pr ready` | Mark a waiting branch's draft pull request ready for review |
 | `loadout pr merge` | Ask for a waiting branch's pull request to be squash-merged once its required checks pass, with the message you give: `--subject` is required and `--body` is the rest, empty when left out. The branch stays ready in `pr list` until the merge is seen |
+| `loadout pr abandon` | Stop waiting on a branch, closing its pull request unmerged if it has one. The branch is left where it is. Refuses a pull request with a merge already asked for, since the host may merge it at any moment |
 | `loadout team say` | Say something to one node while it is still working |
 | `loadout team attach set` | Set the passphrase that lets the dashboard type at a running node |
 | `loadout team attach show` | Say whether one is set, never what it is |

@@ -1031,6 +1031,7 @@ public static class Program
             pr.AddCommand<PrOpenCommand>("open");
             pr.AddCommand<PrReadyCommand>("ready");
             pr.AddCommand<PrMergeCommand>("merge");
+            pr.AddCommand<PrAbandonCommand>("abandon");
         });
 
         TopBranch(config, "checkpoint", checkpoint =>
