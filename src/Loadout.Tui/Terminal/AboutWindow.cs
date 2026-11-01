@@ -298,8 +298,16 @@ internal sealed class AboutWindow : Window
                 handedToMainLoop = true;
                 OnMainLoop(() =>
                 {
-                    ShowUpdated(UpdatedVersion(done, _model));
-                    _updating = false;
+                    // Cleared whatever happens, or a window that failed to say
+                    // it was updated would refuse every close from then on.
+                    try
+                    {
+                        ShowUpdated(UpdatedVersion(done, _model));
+                    }
+                    finally
+                    {
+                        _updating = false;
+                    }
                 });
             }
         }

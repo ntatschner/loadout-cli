@@ -214,18 +214,28 @@ public sealed class AboutWindowTests
     [Fact]
     public async Task Closing_after_the_update_ends_but_before_the_window_hears_is_refused()
     {
+        // Completes synchronously, so the whole update runs on whichever thread
+        // starts it. No await in here can resume somewhere else.
+#pragma warning disable CS1998 // An async iterator with nothing to await.
         static async IAsyncEnumerable<UpdateProgress> Installed([EnumeratorCancellation] CancellationToken ct = default)
+#pragma warning restore CS1998
         {
-            await Task.Yield();
             yield return new UpdateProgress(UpdateStage.Installing, null, null, "Putting the new version in place");
             yield return new UpdateProgress(UpdateStage.Done, null, null, "Updated to 0.110.0");
         }
 
         using var session = About(Model(), out var window, Installed);
 
+        // Started on a pool thread, which is never the main loop's, so Invoke
+        // queues the end of the update instead of running it inline. Awaited
+        // here, a Task.Yield could resume on the test runner's thread that the
+        // application counts as its main one, and the work then ran before
+        // Quit, which failed this test one run in two.
+        await Task.Run(() => window.UpdateAsync(CancellationToken.None));
+
         // The stream has ended and the work is queued for the main loop, but
         // nothing has pumped it yet: the gap a close could fall into.
-        await window.UpdateAsync(CancellationToken.None);
+        window.Updated.Should().BeFalse("the end of the update should still be waiting on the main loop");
 
         window.StopRequested = false;
         window.InvokeCommand(Command.Quit);
