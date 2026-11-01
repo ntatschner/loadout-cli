@@ -124,7 +124,7 @@ public sealed class ProjectRelease
 {
     /// <summary>
     /// <c>tag-push</c> (bump the version file, commit, push an annotated tag),
-    /// <c>workflow</c> (start a GitHub Actions workflow), or <c>none</c>. Empty
+    /// <c>workflow</c> (start the host's release pipeline), or <c>none</c>. Empty
     /// is none, so nothing is released that nobody set up.
     /// </summary>
     public string Recipe { get; set; } = string.Empty;
@@ -145,7 +145,11 @@ public sealed class ProjectRelease
     /// <summary>What a release's tag starts with. Empty is <c>v</c>.</summary>
     public string TagPrefix { get; set; } = string.Empty;
 
-    /// <summary>For the <c>workflow</c> recipe: the workflow's file name or name, given the version as its <c>version</c> input.</summary>
+    /// <summary>
+    /// For the <c>workflow</c> recipe: the GitHub workflow's file name or name,
+    /// or the Azure DevOps pipeline's name, given the version as its
+    /// <c>version</c> input. Not used on GitLab, which runs the project's pipeline.
+    /// </summary>
     public string Workflow { get; set; } = string.Empty;
 }
 

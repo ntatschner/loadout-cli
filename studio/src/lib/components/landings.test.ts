@@ -3,7 +3,7 @@
 // said so, and the command it is read from shown either way.
 import { describe, expect, it } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
-import Landings, { mergeWords, type LandingRead } from './Landings.svelte';
+import Landings, { mergeWords, standing, type LandingRead } from './Landings.svelte';
 
 const now = new Date('2026-10-28T09:00:00Z');
 
@@ -121,6 +121,13 @@ describe('Landings', () => {
     await fireEvent.input(screen.getByLabelText('Subject'), { target: { value: 'Fix the login' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Squash-merge here' }));
     expect(acted).toEqual([['pr merge', ['queue/login', '--project', 'website', '--subject=Fix the login', '--yes']]]);
+  });
+
+  it('says how a branch stands against its target, and nothing when it is level', () => {
+    expect(standing({ target: 'main', behind: 0, contained: false })).toBe('');
+    expect(standing({ target: 'main', behind: 3, contained: false })).toBe('3 behind main');
+    expect(standing({ target: 'main', behind: 3, contained: true })).toBe('already in main');
+    expect(standing({ target: null, behind: null })).toBe('');
   });
 
   it('keeps a body only when one was written, joined so a leading dash is still a value', () => {

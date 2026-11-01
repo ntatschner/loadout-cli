@@ -75,9 +75,19 @@ public sealed class ReleaseServiceTests : IDisposable
     }
 
     [Fact]
-    public void A_workflow_is_started_with_exactly_these_arguments() =>
-        ReleaseService.DispatchArguments("release.yml", "main", "1.3.0").Should().Equal(
-            "workflow", "run", "release.yml", "--ref", "main", "-f", "version=1.3.0");
+    public void A_release_is_started_on_each_host_with_exactly_these_arguments()
+    {
+        var github = ReleaseService.Dispatch("github", "release.yml", "main", "1.3.0")!.Value;
+        github.Executable.Should().Be("gh");
+        github.Arguments.Should().Equal("workflow", "run", "release.yml", "--ref", "main", "-f", "version=1.3.0");
+        ReleaseService.Dispatch("gitlab", string.Empty, "main", "1.3.0")!.Value.Executable.Should().Be("glab");
+        ReleaseService.Dispatch("azure-devops", "Release", "main", "1.3.0")!.Value.Executable.Should().Be("az");
+        ReleaseService.Dispatch("gitlab", string.Empty, "main", "1.3.0")!.Value.Arguments.Should().Equal(
+            "ci", "run", "--branch", "main", "--variables", "VERSION:1.3.0");
+        ReleaseService.Dispatch("azure-devops", "Release", "main", "1.3.0")!.Value.Arguments.Should().Equal(
+            "pipelines", "run", "--name", "Release", "--branch", "main", "--parameters", "version=1.3.0", "--output", "none");
+        ReleaseService.Dispatch("local", "x", "main", "1.3.0").Should().BeNull("local git has nothing to start");
+    }
 
     [Fact]
     public async Task Tag_push_proposes_the_next_version_then_bumps_tags_with_the_notes_and_pushes()

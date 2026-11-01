@@ -23,6 +23,12 @@ public sealed record LocalSquashPlan(
     string DiffStat,
     string? CheckedOutAt);
 
+/// <summary>How a waiting branch stands against the branch it would land in.</summary>
+/// <param name="Target">The branch it would land in.</param>
+/// <param name="Behind">How many commits the target has that the branch does not.</param>
+/// <param name="Contained">Whether everything on the branch is in the target already.</param>
+public sealed record BranchStanding(string Target, int Behind, bool Contained);
+
 /// <summary>
 /// Squash-merges a branch into another on this machine, for a project whose
 /// branches land with local git rather than through a host.
@@ -45,6 +51,17 @@ public interface ILocalSquash
 {
     /// <summary>The branch a project's work lands in when none is named: origin's default, else main, else master.</summary>
     Task<OperationResult<string>> TargetAsync(string repository, CancellationToken ct = default);
+
+    /// <summary>
+    /// How a branch stands against a target: how far behind, and whether its
+    /// work is in the target already. Null when either cannot be read.
+    /// </summary>
+    /// <remarks>
+    /// Contained is only ever true for a branch merged as it was, or fast-
+    /// forwarded: a squash-merge makes a new commit, so git can't see that a
+    /// squashed branch went in.
+    /// </remarks>
+    Task<BranchStanding?> StandingAsync(string repository, string branch, string target, CancellationToken ct = default);
 
     /// <summary>Works out a squash-merge without changing anything.</summary>
     Task<OperationResult<LocalSquashPlan>> PlanAsync(string repository, string branch, string target, CancellationToken ct = default);
@@ -93,6 +110,28 @@ internal sealed class LocalSquash : ILocalSquash
 
         return OperationResult<string>.Fail(
             "There is no main or master branch to merge into. Name one with --into.", ExitCode.InvalidArguments);
+    }
+
+    /// <inheritdoc />
+    public async Task<BranchStanding?> StandingAsync(string repository, string branch, string target, CancellationToken ct = default)
+    {
+        if (await CommitAsync(repository, branch, ct).ConfigureAwait(false) is not { } branchCommit
+            || await CommitAsync(repository, target, ct).ConfigureAwait(false) is not { } targetCommit)
+        {
+            return null;
+        }
+
+        var behind = await GitAsync(repository, ["rev-list", "--count", $"{branchCommit}..{targetCommit}"], ct).ConfigureAwait(false);
+
+        if (behind.Failed || behind.Value!.Code != 0
+            || !int.TryParse(behind.Value.Output.Trim(), System.Globalization.CultureInfo.InvariantCulture, out var count))
+        {
+            return null;
+        }
+
+        var contained = await GitAsync(repository, ["merge-base", "--is-ancestor", branchCommit, targetCommit], ct).ConfigureAwait(false);
+
+        return new BranchStanding(target, count, contained.Succeeded && contained.Value!.Code == 0);
     }
 
     /// <inheritdoc />

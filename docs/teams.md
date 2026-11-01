@@ -2675,9 +2675,12 @@ message, then checks that the version file on the tagged commit says 1.3.0
 before anything is pushed. If it doesn't, the tag is taken back and nothing
 leaves the machine: a tag without its bump is the mistake this is built to
 make impossible. It needs the checkout on the default branch, clean, and level
-with `origin` as of the last fetch. `workflow` starts the GitHub Actions
-workflow named by `workflow:` with the version as its `version` input, and is
-GitHub only. Either way it shows what it will do and asks first. Studio's Teams page has a **Release** panel that reads the plan, fills in
+with `origin` as of the last fetch. `workflow` starts the release on the
+project's host: the GitHub Actions workflow or Azure DevOps pipeline named by
+`workflow:`, given the version as its `version` input, or on GitLab the
+project's pipeline on the branch with a `VERSION` variable. Either way it
+shows what it will do and asks first. Studio's Teams page has a **Release**
+panel that reads the plan, fills in
 the proposed version and notes for you to edit, and says what it will push
 before a second press runs `release cut`.
 
