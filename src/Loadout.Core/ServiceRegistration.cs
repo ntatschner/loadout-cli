@@ -32,6 +32,7 @@ public static class ServiceRegistration
         services.AddSingleton<ILocalSquash, LocalSquash>();
         services.AddSingleton<Delivery.ILandingService, Delivery.LandingService>();
         services.AddSingleton<Delivery.IDeliveryService, Delivery.DeliveryService>();
+        services.AddSingleton<Delivery.IReleaseService, Delivery.ReleaseService>();
         services.AddSingleton<IWorkspaceManager, WorkspaceManager>();
         services.AddSingleton<IProjectCheckouts, ProjectCheckouts>();
         services.AddSingleton<IProjectService, ProjectService>();
