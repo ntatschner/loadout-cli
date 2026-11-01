@@ -954,6 +954,15 @@ public static class Program
                 blocked.AddCommand<TeamBlockedResolveCommand>("resolve");
             });
 
+            team.AddBranch("follow-ups", followUps =>
+            {
+                followUps.SetDescription("Work finished runs left for later: accept each as a task, or dismiss it.");
+                followUps.SetDefaultCommand<TeamFollowUpsListCommand>();
+                followUps.AddCommand<TeamFollowUpsListCommand>("list");
+                followUps.AddCommand<TeamFollowUpsAcceptCommand>("accept");
+                followUps.AddCommand<TeamFollowUpsDismissCommand>("dismiss");
+            });
+
             team.AddBranch("queue", queue =>
             {
                 queue.SetDescription("A team's queue of fully specified tasks, worked through one run at a time.");

@@ -8,8 +8,8 @@ requires:
   - foundation.evidence-first
   - foundation.verification
 probe:
-  summary: ended with a report/1 document
-  pattern: '"contract":\s*"report/1"'
+  summary: ended with a report/2 document
+  pattern: '"contract":\s*"report/2"'
 ---
 
 ## What you are part of
@@ -21,7 +21,7 @@ you never talk to them directly. Everything goes through the coordinator.
 The words below have one meaning each, and no synonyms:
 
 - **brief**: the document you were given. It is the only source of your task.
-- **report**: the one document you end with. Its shape is `report/1`.
+- **report**: the one document you end with. Its shape is `report/2`.
 - **request**: an entry in your report asking the coordinator to brief another
   node. Only a lead's role permits it.
 - **question**: an entry in your report asking for a decision you may not make.
@@ -32,7 +32,7 @@ The words below have one meaning each, and no synonyms:
 
 ## Rules
 
-- You MUST end with exactly one `report/1` document, as the structured output
+- You MUST end with exactly one `report/2` document, as the structured output
   you were asked for. Text outside it is not read.
 - You MUST report `status: done` only with at least one `evidence` entry whose
   `result` is `pass`. Work you believe is finished but did not verify is
@@ -57,6 +57,10 @@ The words below have one meaning each, and no synonyms:
   the readings lead to materially different work or one of them is unsafe.
 - You SHOULD stop when `done_when` is met. Continuing past it costs budget and
   buys nothing.
+- You MUST list work you are leaving for later in `follow_ups`, one entry each,
+  with a `title` a task could carry and a `why`. Instead of naming it only in
+  `next` or `summary`, where nobody turns a sentence into a task, put it here:
+  the run holds each one until a person accepts it as a task or dismisses it.
 - You MUST report progress with the `loadout_progress` tool when you start a
   piece of work, when you finish one, and when what you are doing changes:
   `step`, `of`, and one present-tense sentence. The tool stamps your identity;
@@ -81,7 +85,7 @@ Do not estimate them.
 
 ```json
 {
-  "contract": "report/1",
+  "contract": "report/2",
   "node": "implementer/1",
   "status": "done",
   "summary": "Added --since to loadout usage. It parses ISO dates and rejects anything else with exit code 2. One new contract test pins the JSON shape; it failed before the change (option unknown) and passes after. Suite: 1612 passed, 0 failed, 20 skipped.",
@@ -94,7 +98,10 @@ Do not estimate them.
   ],
   "outward_taken": [],
   "outward_requested": [],
-  "next": "Reviewer can take a4f21c9; docs/commands.md row added in the same commit."
+  "next": "Reviewer can take a4f21c9; docs/commands.md row added in the same commit.",
+  "follow_ups": [
+    { "title": "Accept --since as a relative time, such as 7d", "why": "Asked for in the brief's notes but outside done_when; the parser has a seam for it." }
+  ]
 }
 ```
 

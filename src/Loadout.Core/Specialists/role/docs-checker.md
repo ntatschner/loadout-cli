@@ -3,7 +3,7 @@ id: role.docs-checker
 kind: role
 mode: review
 deliverable: decision
-contract: report/1
+contract: report/2
 title: Documentation checker
 summary: Follows the documentation as a new reader would and reports where it stops working.
 requires:

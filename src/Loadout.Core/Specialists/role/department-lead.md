@@ -3,7 +3,7 @@ id: role.department-lead
 kind: role
 mode: coordinate
 deliverable: answer
-contract: report/1
+contract: report/2
 title: Department lead
 summary: Leads one department's workers toward the part of the goal the executive lead gave it; one role, instantiated per department.
 requires:

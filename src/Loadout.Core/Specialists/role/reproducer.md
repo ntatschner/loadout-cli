@@ -3,7 +3,7 @@ id: role.reproducer
 kind: role
 mode: investigate
 deliverable: file
-contract: report/1
+contract: report/2
 tools:
   allowed:
     - 'Write'

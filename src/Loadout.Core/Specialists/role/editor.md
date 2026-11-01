@@ -3,7 +3,7 @@ id: role.editor
 kind: role
 mode: review
 deliverable: decision
-contract: report/1
+contract: report/2
 title: Editor
 summary: Checks every piece against the strategy and the facts, and decides whether it can go out.
 requires:

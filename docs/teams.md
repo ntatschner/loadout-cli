@@ -1339,6 +1339,34 @@ Only commits are resolved against git. A decision is not a thing with files in
 it, and asking git for one would report every run that made a decision as having
 lost it - those still show in `team status`, under *delivered*.
 
+### What a run left for later
+
+A lead that finishes with work still worth doing lists it in its report's
+`follow_ups`, a title and a why for each. It used to say so in a sentence, such
+as "follow-ups worth recording as tasks: (1) a call-site test, (2) a seam", and a
+sentence is where follow-ups got lost, because nothing turned one into a task.
+
+When the run ends, each follow-up is held on it as F1, F2 and so on. Nothing
+reaches your task list until you say so:
+
+```
+loadout team follow-ups                                  # every run with some still waiting
+loadout team follow-ups 20261030-2227-8d16               # one run's, decided or not
+loadout team follow-ups accept 20261030-2227-8d16 F1 F2
+loadout team follow-ups dismiss 20261030-2227-8d16 F3 --why "the refactor covers it"
+```
+
+Accepting one makes it a task on the run's project, with the run as its source,
+so `task show` says where it came from; `task move` takes it to another list.
+Dismissing one makes no task and is kept on the run, so it is never offered
+again. A run stops being listed once every follow-up it named is one or the
+other.
+
+Two limits. Only the lead's final report is read, so a worker's follow-up
+counts once the lead carries it into its own; the lead is told to. And Studio
+does not show follow-ups yet: for now they are read and decided at a terminal.
+Reports written before follow-ups existed (`report/1`) still read, with none.
+
 ### Two dashboards
 
 The dashboard was built plain from its first commit, because the semantics had

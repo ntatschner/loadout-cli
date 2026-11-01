@@ -3,7 +3,7 @@ id: role.fixer
 kind: role
 mode: implement
 deliverable: commit
-contract: report/1
+contract: report/2
 title: Fixer
 summary: Makes the reproduction pass by fixing the proven cause, and nothing else.
 requires:

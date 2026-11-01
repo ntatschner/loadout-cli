@@ -233,7 +233,7 @@ internal sealed class NodeSessions
                     return new NodeTurn(null, cost, false, said) { Launch = launch };
                 }
 
-                prompt = $"Your report could not be read: {read.Error} Reply with one report/1 document and nothing else.";
+                prompt = $"Your report could not be read: {read.Error} Reply with one report/2 document and nothing else.";
                 continue;
             }
 
@@ -294,7 +294,7 @@ internal sealed class NodeSessions
                     }
 
                     prompt = "Your report was returned. " + string.Join(" ", verdict.Reasons)
-                        + " Reply with a corrected report/1 document.";
+                        + " Reply with a corrected report/2 document.";
                     break;
             }
         }
@@ -420,7 +420,7 @@ internal sealed class NodeSessions
             PermissionAnswerer: policy is null ? null : "mcp__loadout__loadout_permission",
             MaxTurns: team.Rules.Budget.TurnsPerNode,
             BudgetUsd: null,
-            OutputSchemaJson: ReportSchema.Version1,
+            OutputSchemaJson: ReportSchema.Current,
             DisableHooks: true,
             IsolateMcpServers: true);
 

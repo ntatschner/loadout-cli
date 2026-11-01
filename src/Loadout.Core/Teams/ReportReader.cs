@@ -29,7 +29,7 @@ public static class ReportReader
         if (string.IsNullOrWhiteSpace(json))
         {
             return OperationResult<Report>.Fail(
-                "The node ended its turn without a report. A node's final answer is a report/1 "
+                "The node ended its turn without a report. A node's final answer is a report/2 "
                 + "document; text outside it is not read.");
         }
 
@@ -60,7 +60,8 @@ public static class ReportReader
                 + $"\"contract\": \"{Report.Version}\".");
         }
 
-        if (!string.Equals(contract, Report.Version, StringComparison.Ordinal))
+        if (!string.Equals(contract, Report.Version, StringComparison.Ordinal)
+            && !Report.Earlier.Contains(contract, StringComparer.Ordinal))
         {
             return OperationResult<Report>.Fail(
                 $"The node's report follows '{contract}', which this launcher does not read. "

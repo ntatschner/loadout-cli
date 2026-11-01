@@ -203,7 +203,7 @@ public sealed partial class TeamRunnerTests : IDisposable
         // lead may not do it still may not: Edit is on its deny list.
         leadOptions.Permission.Should().Be(HeadlessPermission.Ask);
         leadOptions.DeniedTools.Should().Contain("Edit");
-        leadOptions.OutputSchemaJson.Should().Be(ReportSchema.Version1);
+        leadOptions.OutputSchemaJson.Should().Be(ReportSchema.Current);
         leadOptions.DisableHooks.Should().BeTrue();
         leadOptions.IsolateMcpServers.Should().BeTrue();
         leadOptions.MaxTurns.Should().Be(40, "the team's turns per node");

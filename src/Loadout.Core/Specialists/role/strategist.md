@@ -3,7 +3,7 @@ id: role.strategist
 kind: role
 mode: advise
 deliverable: document
-contract: report/1
+contract: report/2
 title: Strategist
 summary: ''
 requires:

@@ -3,7 +3,7 @@ id: role.remediator
 kind: role
 mode: implement
 deliverable: answer
-contract: report/1
+contract: report/2
 tools:
   defaults: false
   allowed:

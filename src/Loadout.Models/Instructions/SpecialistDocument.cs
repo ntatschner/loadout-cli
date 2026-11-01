@@ -193,7 +193,7 @@ public sealed record SpecialistActivation(
 /// </summary>
 /// <param name="Mode">The posture the node is launched in: advise, investigate, implement, review or coordinate.</param>
 /// <param name="Deliverable">What kind of thing the node's report must carry, in the report contract's spelling.</param>
-/// <param name="Contract">The report contract the node writes to, such as <c>report/1</c>.</param>
+/// <param name="Contract">The report contract the node writes to, such as <c>report/2</c>.</param>
 /// <param name="AllowedTools">Tools and command patterns the node may use without asking, in the agent's spelling.</param>
 /// <param name="DeniedTools">Tools and command patterns the node may never use. Deny wins over allow.</param>
 public sealed record RoleDefinition(

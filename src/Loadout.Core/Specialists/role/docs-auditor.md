@@ -3,7 +3,7 @@ id: role.docs-auditor
 kind: role
 mode: investigate
 deliverable: document
-contract: report/1
+contract: report/2
 tools:
   allowed:
     - 'Write'
