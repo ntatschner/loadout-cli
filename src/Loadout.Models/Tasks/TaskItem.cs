@@ -212,6 +212,38 @@ public sealed class TaskItem
     /// old list shows is worked out from this, and lasts as long as the task.
     /// </remarks>
     public TaskMove? Moved { get; set; }
+
+    /// <summary>The run, idea or conversation that deferred this work, or null when nothing did.</summary>
+    /// <remarks>
+    /// Typed rather than written into <see cref="Note"/>, so that whatever asks
+    /// "does this deferral have a task yet?" compares ids rather than wording:
+    /// the same follow-up described two ways is still one task. Recorded once,
+    /// and never replaced, because where a piece of work came from does not
+    /// change when somebody declares where it stands.
+    /// </remarks>
+    public TaskSource? Source { get; set; }
+}
+
+/// <summary>What sort of thing deferred a task.</summary>
+public enum TaskSourceKind
+{
+    /// <summary>A team run, named by its run id.</summary>
+    Run,
+
+    /// <summary>An idea, named by its id.</summary>
+    Idea,
+
+    /// <summary>A conversation with an agent, named by its transcript's session id.</summary>
+    Transcript,
+}
+
+/// <summary>Where a task came from: the run, idea or conversation that put it off.</summary>
+public sealed class TaskSource
+{
+    public TaskSourceKind Kind { get; set; }
+
+    /// <summary>The run id, idea id or session id.</summary>
+    public string Id { get; set; } = string.Empty;
 }
 
 /// <summary>One dated, attributed claim about where a task stood.</summary>

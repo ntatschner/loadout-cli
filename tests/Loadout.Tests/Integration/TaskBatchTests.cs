@@ -251,6 +251,7 @@ public sealed class TaskBatchTests : IDisposable
                 var type when type == typeof(List<string>) => new List<string> { "set-" + property.Name },
                 var type when type == typeof(List<TaskLink>) => new List<TaskLink> { new() { Project = "elsewhere", Id = "set-" + property.Name } },
                 var type when type == typeof(List<TaskEvent>) => new List<TaskEvent> { new() { State = TaskState.Doing, By = "someone", Utc = DateTimeOffset.UnixEpoch, Reason = "why" } },
+                var type when type == typeof(TaskSource) => new TaskSource { Kind = TaskSourceKind.Idea, Id = "set-" + property.Name },
                 var type when type == typeof(TaskProposal) => new TaskProposal { DoneWhen = ["it works"], Why = "why", Utc = DateTimeOffset.UnixEpoch, Error = "it failed" },
                 var type => throw new InvalidOperationException($"TaskItem.{property.Name} is a {type.Name}, which this test does not know how to set."),
             });
@@ -265,6 +266,49 @@ public sealed class TaskBatchTests : IDisposable
         copy.DoneWhen.Should().NotBeSameAs(item.DoneWhen);
         copy.Proposal.Should().NotBeSameAs(item.Proposal);
         copy.Proposal!.DoneWhen.Should().NotBeSameAs(item.Proposal!.DoneWhen);
+        copy.Source.Should().NotBeSameAs(item.Source);
+    }
+
+    [Fact]
+    public async Task A_source_is_recorded_once_kept_through_later_declares_and_never_replaced()
+    {
+        await _space.ProjectAsync("website");
+        var run = new TaskSource { Kind = TaskSourceKind.Run, Id = "20261023-1740-2677" };
+
+        var added = await ApplyAsync(new TaskOperation(TaskOperation.Add, "website", "notes", Title: "Write the notes", By: "nigel", Source: run));
+        added.Applied.Should().BeTrue();
+
+        var restated = await ApplyAsync(new TaskOperation(TaskOperation.Declare, "website", "notes", TaskState.Doing, By: "nigel"));
+        restated.Outcomes[0].Task!.Source.Should().BeEquivalentTo(run, "declaring a state without a source says nothing about where it came from");
+
+        var same = await ApplyAsync(new TaskOperation(TaskOperation.Declare, "website", "notes", TaskState.Doing, By: "nigel", Source: run));
+        same.Applied.Should().BeTrue("naming the source it already has is no change");
+
+        var before = await File.ReadAllBytesAsync(ListPath("website"));
+        var other = await ApplyAsync(new TaskOperation(
+            TaskOperation.Declare, "website", "notes", TaskState.Done, By: "nigel",
+            Source: new TaskSource { Kind = TaskSourceKind.Idea, Id = "status-page" }));
+
+        other.Applied.Should().BeFalse();
+        other.Outcomes[0].Error.Should().Contain("already came from run:20261023-1740-2677").And.Contain("idea:status-page");
+        (await File.ReadAllBytesAsync(ListPath("website"))).Should().Equal(before);
+
+        var read = (await _space.Tasks.ReadAsync("website")).Value!.Items.Single();
+        read.Source.Should().BeEquivalentTo(run, "it is written to the list, not just kept in memory");
+        read.State.Should().Be(TaskState.Doing);
+    }
+
+    [Fact]
+    public void A_source_is_read_from_a_batch_and_written_back_the_same_way()
+    {
+        var read = TaskOperations.Parse("""[{"op":"add","title":"T","source":"transcript:3f2a-91"}]""", null, "agent");
+
+        read.Succeeded.Should().BeTrue(read.Error);
+        read.Value![0].Source.Should().BeEquivalentTo(new TaskSource { Kind = TaskSourceKind.Transcript, Id = "3f2a-91" });
+
+        var written = System.Text.Json.JsonSerializer.Serialize(TaskOperations.Json(new TaskItem { Id = "t", Source = read.Value[0].Source }));
+        written.Should().Contain("\"source\":\"transcript:3f2a-91\"");
+        System.Text.Json.JsonSerializer.Serialize(TaskOperations.Json(new TaskItem { Id = "t" })).Should().Contain("\"source\":null");
     }
 
     [Theory]
@@ -366,6 +410,10 @@ public sealed class TaskBatchTests : IDisposable
     [InlineData("""[{"op":"move","id":"a"}]""", "without saying where to")]
     [InlineData("""[{"op":"declare","id":"a","state":"open","colour":"red"}]""", "'colour'")]
     [InlineData("""[{"op":"declare","id":"a","state":"open","title":3}]""", "'title' as something other than text")]
+    [InlineData("""[{"op":"add","title":"T","source":"pr:12"}]""", "'pr:12' is not a source")]
+    [InlineData("""[{"op":"add","title":"T","source":"run:"}]""", "'run:' is not a source")]
+    [InlineData("""[{"op":"add","title":"T","source":"idea:two words"}]""", "is not a source")]
+    [InlineData("""[{"op":"move","id":"a","to":"-","source":"run:x"}]""", "only add and declare record one")]
     [InlineData("""not json""", "not JSON")]
     public void A_request_that_is_not_a_batch_is_refused_with_what_is_wrong(string json, string said)
     {

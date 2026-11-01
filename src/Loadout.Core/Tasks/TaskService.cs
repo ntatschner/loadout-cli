@@ -1158,6 +1158,16 @@ internal sealed class TaskService : ITaskService
             }
 
             case TaskOperation.Declare:
+                if (operation.Source is { } source
+                    && list.Items.FirstOrDefault(item => Same(item.Id, operation.Id!.Trim())) is { Source: { } had }
+                    && !TaskSources.Same(had, source))
+                {
+                    return OperationResult<TaskItem>.Fail(
+                        $"'{operation.Id!.Trim()}' already came from {TaskSources.Name(had)}, so it cannot have come from "
+                        + $"{TaskSources.Name(source)} as well. Where a task came from is recorded once.",
+                        ExitCode.InvalidArguments);
+                }
+
                 groups[0].Changed = true;
 
                 return OperationResult<TaskItem>.Ok(Declare(list, operation, now));
@@ -1411,6 +1421,13 @@ internal sealed class TaskService : ITaskService
             existing.Note = note.Trim();
         }
 
+        // Only ever filled: a different source has already been refused, and
+        // declaring a state without one says nothing about where it came from.
+        if (operation.Source is { } source && existing.Source is null)
+        {
+            existing.Source = new TaskSource { Kind = source.Kind, Id = source.Id };
+        }
+
         if (operation.Type is { } type)
         {
             var typeBy = operation.TypeBy ?? TaskTypeSource.Person;
@@ -1660,6 +1677,7 @@ internal sealed class TaskService : ITaskService
             : null,
         History = [.. item.History.Select(one => new TaskEvent { State = one.State, By = one.By, Utc = one.Utc, Reason = one.Reason })],
         Moved = item.Moved is { } moved ? new TaskMove { From = moved.From, Utc = moved.Utc } : null,
+        Source = item.Source is { } source ? new TaskSource { Kind = source.Kind, Id = source.Id } : null,
     };
 
     /// <summary>One operation's outcome, as the single-entry methods have always answered.</summary>

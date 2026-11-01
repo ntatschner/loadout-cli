@@ -1164,7 +1164,8 @@ public sealed class LoadoutTools
     [McpServerTool(Name = "loadout_task_apply")]
     [Description(
         "Make several task changes at once, the same JSON array 'loadout task apply' takes. Each is "
-        + "{\"op\":\"add|declare|remove|move\", \"id\", \"state\", \"title\", \"note\", \"kind\", \"project\", \"to\", \"revision\"}; "
+        + "{\"op\":\"add|declare|remove|move\", \"id\", \"state\", \"title\", \"note\", \"kind\", \"project\", \"to\", \"revision\", \"source\"}; "
+        + "source is the run, idea or conversation that put the work off, as run:<id>, idea:<id> or transcript:<session id>. "
         + "one naming no project is made on this project's list, and '-' is the workspace-wide list. "
         + "The changes to one list are made together or not at all, and every one gets a result saying "
         + "whether it was made and, if not, why. Only for what the person has asked for or agreed to.")]

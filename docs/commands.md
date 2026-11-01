@@ -375,7 +375,12 @@ There are four ops. `add` names a new task from its title, `declare` says where
 one stands (and adds it if the id is new), `remove` forgets one and `move` sends
 one to another list. Each can also carry `title`, `note`, `detail`, `kind`,
 `type`, `project`, `by` and `doneWhen` (a list of conditions), and a title over 72 characters is shortened as `task declare`
-shortens it. A change that names no project is made on the list the command names, the
+shortens it. `add` and `declare` also take `source`, the run, idea or
+conversation that put the work off: `run:<run id>`, `idea:<idea id>` or
+`transcript:<session id>`. It's recorded once and `task show` lists it. A
+declare naming a different source for a task that already has one is refused,
+because where a piece of work came from doesn't change.
+A change that names no project is made on the list the command names, the
 same as every other `task` command, and `"project": "-"` is the workspace-wide
 list.
 

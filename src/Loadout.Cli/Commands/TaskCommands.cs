@@ -291,6 +291,7 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
                     type = item.Type is { } type ? TaskTypes.Name(type) : null,
                     typeBy = item.TypeBy is { } typeBy ? TaskTypes.Name(typeBy) : null,
                     labels = item.Labels,
+                    source = item.Source is { } source ? TaskSources.Name(source) : null,
                     project = where[item],
                     item.DeclaredBy,
                     declared = item.DeclaredUtc,
@@ -1262,6 +1263,7 @@ public sealed class TaskShowCommand : AsyncCommand<TaskShowCommand.Settings>
         }
 
         Section(output, "Labels", string.Join(", ", task.Labels));
+        Section(output, "Source", task.Source is { } source ? TaskSources.Name(source) : string.Empty);
         Section(output, "Requires", string.Join('\n', task.Requires.Select(link =>
             TaskRequires.Name(link, here) + (unmet.FirstOrDefault(one => TaskRequires.Same(one.Link, link)) is { } waits ? $" ({waits.Why})" : " (done)"))));
         Section(output, "Required by", string.Join('\n', requiredBy.Select(link => TaskRequires.Name(link, here))));
