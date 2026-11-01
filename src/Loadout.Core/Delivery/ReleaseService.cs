@@ -381,9 +381,10 @@ public sealed partial class ReleaseService : IReleaseService
                 : $"{file} holds no version Loadout can read. Set delivery.release.version_pattern.");
         }
 
-        if (recipe.Value == Workflow && release.Workflow.Trim().Length == 0)
+        if (recipe.Value == Workflow && release.Workflow.Trim().Length == 0
+            && await _hosts.ForAsync(slug, repository, ct).ConfigureAwait(false) is not { Succeeded: true, Value.Host.Provider: RepositoryHosts.GitLab })
         {
-            problems.Add("The workflow recipe needs delivery.release.workflow: the workflow to start.");
+            problems.Add("The workflow recipe needs delivery.release.workflow: the GitHub workflow or Azure DevOps pipeline to start.");
         }
 
         var state = await GitAsync(repository, ["status", "--porcelain", "--untracked-files=no"], ct).ConfigureAwait(false);
@@ -580,10 +581,20 @@ public sealed partial class ReleaseService : IReleaseService
     {
         var host = await _hosts.ForAsync(plan.Project, plan.Repository, ct).ConfigureAwait(false);
 
-        if (host.Failed || host.Value!.Host.Provider != RepositoryHosts.GitHub)
+        if (host.Failed)
+        {
+            return OperationResult<ReleaseOutcome>.Fail(host.Error!, host.ExitCode);
+        }
+
+        var manifest = await _workspace.ReadProjectAsync(plan.Project, ct).ConfigureAwait(false);
+        var workflow = manifest.Succeeded ? manifest.Value!.Delivery.Release.Workflow.Trim() : string.Empty;
+        var provider = host.Value!.Host.Provider;
+
+        if (Dispatch(provider, workflow, plan.Branch, version) is not { } dispatch)
         {
             return OperationResult<ReleaseOutcome>.Fail(
-                "The workflow recipe starts GitHub Actions workflows only; this project does not land through GitHub.",
+                $"The workflow recipe starts a GitHub Actions workflow, a GitLab pipeline or an Azure DevOps pipeline; "
+                + $"{plan.Project} lands through {provider}.",
                 ExitCode.InvalidArguments);
         }
 
@@ -592,27 +603,42 @@ public sealed partial class ReleaseService : IReleaseService
             return OperationResult<ReleaseOutcome>.Fail(cannot, ExitCode.AgentUnavailable);
         }
 
-        var manifest = await _workspace.ReadProjectAsync(plan.Project, ct).ConfigureAwait(false);
-        var workflow = manifest.Succeeded ? manifest.Value!.Delivery.Release.Workflow.Trim() : string.Empty;
-
-        if (_resolver.Resolve("gh") is not { } gh)
+        if (_resolver.Resolve(dispatch.Executable) is not { } command)
         {
-            return OperationResult<ReleaseOutcome>.Fail("the GitHub CLI (gh) is not on PATH", ExitCode.AgentUnavailable);
+            return OperationResult<ReleaseOutcome>.Fail($"{dispatch.Executable} is not on PATH", ExitCode.AgentUnavailable);
         }
 
         var ran = await _processes.RunAsync(
-            new ProcessRequest(gh, DispatchArguments(workflow, plan.Branch, version), plan.Repository), Timeout, ct).ConfigureAwait(false);
+            new ProcessRequest(command, dispatch.Arguments, plan.Repository), Timeout, ct).ConfigureAwait(false);
 
         return ran.Failed || ran.Value?.Succeeded != true
             ? OperationResult<ReleaseOutcome>.Fail(
-                "gh could not start the workflow: " + (ran.Value?.StandardError.Trim() is { Length: > 0 } said ? said : ran.Error),
+                $"{dispatch.Executable} could not start the release: "
+                + (ran.Value?.StandardError.Trim() is { Length: > 0 } said ? said : ran.Error),
                 ExitCode.GeneralFailure)
             : OperationResult<ReleaseOutcome>.Ok(new ReleaseOutcome(tag, plan.Head, false, ran.Value.StandardOutput.Trim()));
     }
 
-    /// <summary>The arguments gh is given to start a release workflow.</summary>
-    internal static IReadOnlyList<string> DispatchArguments(string workflow, string branch, string version) =>
-        ["workflow", "run", workflow, "--ref", branch, "-f", $"version={version}"];
+    /// <summary>
+    /// The command that starts a release on a host, with the version passed
+    /// in, or null for a host that has nothing to start.
+    /// </summary>
+    /// <remarks>
+    /// The version is named the same way everywhere it can be: an input called
+    /// <c>version</c> on GitHub and Azure DevOps, and a <c>VERSION</c> variable
+    /// on GitLab, whose pipelines take variables rather than inputs.
+    /// <c>workflow</c> names the GitHub workflow or the Azure DevOps pipeline;
+    /// GitLab runs the project's one pipeline on the branch, so it is not used.
+    /// </remarks>
+    internal static (string Executable, IReadOnlyList<string> Arguments)? Dispatch(
+        string provider, string workflow, string branch, string version) => provider switch
+    {
+        RepositoryHosts.GitHub => ("gh", ["workflow", "run", workflow, "--ref", branch, "-f", $"version={version}"]),
+        RepositoryHosts.GitLab => ("glab", ["ci", "run", "--branch", branch, "--variables", $"VERSION:{version}"]),
+        RepositoryHosts.AzureDevOps => ("az",
+            ["pipelines", "run", "--name", workflow, "--branch", branch, "--parameters", $"version={version}", "--output", "none"]),
+        _ => null,
+    };
 
     private async Task<string> FindVersionFileAsync(string repository, string head, CancellationToken ct)
     {

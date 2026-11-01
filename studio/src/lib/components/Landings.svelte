@@ -16,6 +16,23 @@
     gone: boolean;
     /** The host its project lands through: github, gitlab, azure-devops, local or command; empty when unknown. */
     provider?: string;
+    /** The branch it would land in, and how it stands against it, when that could be read. */
+    target?: string | null;
+    behind?: number | null;
+    contained?: boolean;
+  }
+
+  /** How a waiting branch stands against its target, in a few words, or nothing worth saying. */
+  export function standing(one: Pick<LandingRead, 'target' | 'behind' | 'contained'>): string {
+    if (!one.target) {
+      return '';
+    }
+
+    if (one.contained) {
+      return `already in ${one.target}`;
+    }
+
+    return one.behind ? `${one.behind} behind ${one.target}` : '';
   }
 
   /** The words for 'loadout pr merge', leaving out a body nobody wrote. */
@@ -111,6 +128,7 @@
         <span class="lstate ls-chip">{one.state}</span>
         <code class="lbranch">{one.branch}</code>
         {#if one.gone}<span class="lgone">gone from the repository</span>{/if}
+        {#if standing(one)}<span class:lgone={one.contained || (one.behind ?? 0) >= 20} class="lstand">{standing(one)}</span>{/if}
         <p class="calm small">{one.project}, {from(one)}{one.task ? `, task ${one.task}` : ''}, waiting {waited(one.created)}</p>
         {#if one.pullRequest}<p class="small"><a href={one.pullRequest} target="_blank" rel="noreferrer">{one.pullRequest}</a></p>{/if}
         {#if one.mergeRequested}<p class="calm small">Merges once its required checks pass.</p>{/if}
@@ -177,6 +195,10 @@
   }
 
   .lbranch {
+    margin-inline-start: 6px;
+  }
+
+  .lstand {
     margin-inline-start: 6px;
   }
 

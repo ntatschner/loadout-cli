@@ -35,6 +35,7 @@ public sealed class PrListCommand : AsyncCommand<PrListCommand.Settings>
     private readonly IProjectService _projects;
     private readonly IGitManager _git;
     private readonly IRepositoryHosts _hosts;
+    private readonly ILocalSquash _branches;
     private readonly IAnsiConsole _console;
 
     public PrListCommand(
@@ -42,12 +43,14 @@ public sealed class PrListCommand : AsyncCommand<PrListCommand.Settings>
         IProjectService projects,
         IGitManager git,
         IRepositoryHosts hosts,
+        ILocalSquash branches,
         IAnsiConsole console)
     {
         _landings = landings;
         _projects = projects;
         _git = git;
         _hosts = hosts;
+        _branches = branches;
         _console = console;
     }
 
@@ -91,7 +94,7 @@ public sealed class PrListCommand : AsyncCommand<PrListCommand.Settings>
             slugs = _landings.Projects();
         }
 
-        var rows = new List<(string Project, BranchLanding Landing, bool Gone, string Provider)>();
+        var rows = new List<(string Project, BranchLanding Landing, bool Gone, string Provider, BranchStanding? Standing)>();
 
         foreach (var slug in slugs)
         {
@@ -123,9 +126,22 @@ public sealed class PrListCommand : AsyncCommand<PrListCommand.Settings>
                     ? host.Value!.Host.Provider
                     : string.Empty;
 
+            // Against the branch it would land in, as this machine last saw it:
+            // nothing is fetched to make a list.
+            var target = repository is null
+                ? null
+                : await _branches.TargetAsync(repository, cancellationToken).ConfigureAwait(false) is { Succeeded: true } found
+                    ? found.Value
+                    : null;
+
             foreach (var landing in shown)
             {
-                rows.Add((slug, landing, await GoneAsync(repository, landing, cancellationToken).ConfigureAwait(false), provider));
+                var gone = await GoneAsync(repository, landing, cancellationToken).ConfigureAwait(false);
+                var standing = repository is null || target is null || gone || landing.State is LandingState.Merged or LandingState.Abandoned
+                    ? null
+                    : await _branches.StandingAsync(repository, landing.Branch, target, cancellationToken).ConfigureAwait(false);
+
+                rows.Add((slug, landing, gone, provider, standing));
             }
         }
 
@@ -147,6 +163,9 @@ public sealed class PrListCommand : AsyncCommand<PrListCommand.Settings>
                 updated = row.Landing.UpdatedUtc,
                 gone = row.Gone,
                 provider = row.Provider,
+                target = row.Standing?.Target,
+                behind = row.Standing?.Behind,
+                contained = row.Standing?.Contained ?? false,
             }));
 
             return CommandOutput.Success();
@@ -161,7 +180,7 @@ public sealed class PrListCommand : AsyncCommand<PrListCommand.Settings>
             return CommandOutput.Success();
         }
 
-        foreach (var (project, landing, gone, provider) in rows)
+        foreach (var (project, landing, gone, provider, standing) in rows)
         {
             var from = landing.Node.Length > 0
                 ? $"{landing.Node} in run {landing.RunId}"
@@ -170,7 +189,8 @@ public sealed class PrListCommand : AsyncCommand<PrListCommand.Settings>
             output.WriteLine(
                 $"[bold]{Markup.Escape(LandingMoves.Word(landing.State)),-8}[/] "
                 + $"{Markup.Escape(landing.Branch)}"
-                + (gone ? " [yellow](gone)[/]" : string.Empty));
+                + (gone ? " [yellow](gone)[/]" : string.Empty)
+                + Standing(standing));
             output.WriteLine(
                 $"         [dim]{Markup.Escape(project)}, {Markup.Escape(from)}"
                 + (landing.Task.Length > 0 ? $", task {Markup.Escape(landing.Task)}" : string.Empty)
@@ -185,6 +205,19 @@ public sealed class PrListCommand : AsyncCommand<PrListCommand.Settings>
 
         return CommandOutput.Success();
     }
+
+    /// <summary>How a waiting branch stands against its target, in a few words, or nothing worth saying.</summary>
+    internal static string Standing(BranchStanding? standing) => standing switch
+    {
+        null => string.Empty,
+        { Contained: true } => $" [yellow](already in {Markup.Escape(standing.Target)})[/]",
+        { Behind: >= StaleBehind } => $" [yellow]({standing.Behind} behind {Markup.Escape(standing.Target)})[/]",
+        { Behind: > 0 } => $" [dim]({standing.Behind} behind {Markup.Escape(standing.Target)})[/]",
+        _ => string.Empty,
+    };
+
+    /// <summary>How far behind its target a branch is before it is called out as going stale.</summary>
+    internal const int StaleBehind = 20;
 
     /// <summary>How long a landing has waited, in the roughest useful unit, counted in days however long.</summary>
     internal static string Waited(TimeSpan waited) => waited switch

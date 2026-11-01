@@ -279,6 +279,35 @@ public sealed class RepositoryHostsTests : IDisposable
         (await _space.Workspace.WriteProjectAsync(manifest)).Succeeded.Should().BeTrue();
     }
 
+    [Fact]
+    public async Task A_branch_says_how_far_behind_its_target_it_is_and_whether_it_is_in_it_already()
+    {
+        var repository = await RepositoryAsync();
+        var squash = LocalSquash();
+
+        (await squash.StandingAsync(repository, "feature", "main")).Should().Be(new BranchStanding("main", 0, false));
+
+        await Git(repository, "checkout", "-q", "main");
+        await File.WriteAllTextAsync(Path.Combine(repository, "other.txt"), "x\n");
+        await Git(repository, "add", "-A");
+        await Git(repository, "commit", "-q", "-m", "elsewhere");
+
+        (await squash.StandingAsync(repository, "feature", "main")).Should().Be(new BranchStanding("main", 1, false));
+
+        await Git(repository, "merge", "-q", "--no-edit", "feature");
+
+        (await squash.StandingAsync(repository, "feature", "main"))!.Contained.Should().BeTrue("it was merged as it was");
+        (await squash.StandingAsync(repository, "gone", "main")).Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(0, false, "")]
+    [InlineData(3, false, "[dim](3 behind main)[/]")]
+    [InlineData(25, false, "[yellow](25 behind main)[/]")]
+    [InlineData(4, true, "[yellow](already in main)[/]")]
+    public void The_list_says_a_branch_is_behind_and_calls_it_out_once_it_is_well_behind(int behind, bool contained, string said) =>
+        Loadout.Cli.Commands.PrListCommand.Standing(new BranchStanding("main", behind, contained)).Trim().Should().Be(said);
+
     private CliRepositoryHost Host(string name) => name switch
     {
         "gh" => Gh,
