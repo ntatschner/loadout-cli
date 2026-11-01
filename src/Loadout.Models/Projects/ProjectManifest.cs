@@ -107,6 +107,46 @@ public sealed class ProjectDelivery
     /// action, found on PATH or given as a path.
     /// </summary>
     public string Command { get; set; } = string.Empty;
+
+    /// <summary>How the project is released once its work has landed.</summary>
+    public ProjectRelease Release { get; set; } = new();
+}
+
+/// <summary>
+/// How a project is released: what a release does, and where its version is kept.
+/// </summary>
+/// <remarks>
+/// Every value is kept as the word typed, for the reason
+/// <see cref="ProjectDelivery.PrMode"/> is, and refused by name when it is
+/// read. Empty means the default each one names.
+/// </remarks>
+public sealed class ProjectRelease
+{
+    /// <summary>
+    /// <c>tag-push</c> (bump the version file, commit, push an annotated tag),
+    /// <c>workflow</c> (start a GitHub Actions workflow), or <c>none</c>. Empty
+    /// is none, so nothing is released that nobody set up.
+    /// </summary>
+    public string Recipe { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The file holding the version, relative to the repository's root. Empty
+    /// finds <c>Directory.Build.props</c> or <c>package.json</c>.
+    /// </summary>
+    public string VersionFile { get; set; } = string.Empty;
+
+    /// <summary>
+    /// A regular expression whose first group is the version in
+    /// <see cref="VersionFile"/>. Empty reads <c>&lt;Version&gt;</c> in an MSBuild
+    /// file and <c>"version"</c> in a package.json.
+    /// </summary>
+    public string VersionPattern { get; set; } = string.Empty;
+
+    /// <summary>What a release's tag starts with. Empty is <c>v</c>.</summary>
+    public string TagPrefix { get; set; } = string.Empty;
+
+    /// <summary>For the <c>workflow</c> recipe: the workflow's file name or name, given the version as its <c>version</c> input.</summary>
+    public string Workflow { get; set; } = string.Empty;
 }
 
 /// <summary>

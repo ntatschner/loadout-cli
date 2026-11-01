@@ -2620,6 +2620,45 @@ tests, and local git's merge is tested against real repositories. None of
 flags change between versions, so the first real use of GitLab or Azure
 DevOps is worth watching.
 
+### Releasing
+
+Once work has landed, `loadout release plan <project>` says what a release
+would be: the commits since the last release tag, a proposed version, notes to
+start from, and anything that would stop it now. The proposal is patch when
+every commit since is a repair (fix, repair, correct, revert or bump, after an
+optional `Area: ` prefix), major when one says it breaks something, and minor
+otherwise. It's a starting point and nothing more: `loadout release cut
+<project> --version 1.3.0 --notes "..."` uses only what you give it, because
+both are public the moment the tag is pushed.
+
+What a release does is set in `project.yaml`, and nothing is released until
+it is:
+
+```yaml
+delivery:
+  release:
+    recipe: tag-push          # tag-push, workflow or none
+    version_file: Directory.Build.props   # found on its own when it's this or package.json
+```
+
+`tag-push` bumps the version file if it doesn't already say the version and
+commits that as "Release 1.3.0", tags `v1.3.0` with your notes in the tag's
+message, then checks that the version file on the tagged commit says 1.3.0
+before anything is pushed. If it doesn't, the tag is taken back and nothing
+leaves the machine: a tag without its bump is the mistake this is built to
+make impossible. It needs the checkout on the default branch, clean, and level
+with `origin` as of the last fetch. `workflow` starts the GitHub Actions
+workflow named by `workflow:` with the version as its `version` input, and is
+GitHub only. Either way it shows what it will do and asks first.
+
+`loadout pr explain <project>` puts it all in one place: the pull request mode
+on the project and on each team's queue, the host and how it was worked out,
+and the release recipe.
+
+**Not yet built:** release settings for a team or a trigger, versioning set by
+rules so a release can go out unattended, and a release from Studio. The
+recipe is per project, and a person cuts every release.
+
 **A run that fails** - blocked, over budget, stopped, or whose process died -
 leaves the task blocked with the run and the reason in its history, and is not
 tried again: a spec that failed once usually needs a person to rewrite it.

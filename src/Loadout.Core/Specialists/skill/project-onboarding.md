@@ -123,6 +123,10 @@ suggest one, say so in your report and leave it to the person to set.
 `delivery.command` names the program the `command` provider runs. Both decide
 where work is pushed, so don't propose them: if origin names no host Loadout
 knows, say so in your report.
+`delivery.release` says how the project is released (`recipe`, `version_file`,
+`version_pattern`, `tag_prefix`, `workflow`). A release pushes a tag, so don't
+propose one either; if the repository releases by tag or workflow, say how in
+your report.
 
 Give the reason beside every change. A setting nobody can account for gets
 removed by the next person to read the file.
