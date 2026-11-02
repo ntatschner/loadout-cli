@@ -406,8 +406,9 @@ internal sealed class ContextCompiler : IContextCompiler
         // is how the memory tool this is modelled on gets called at all.
         builder.AppendLine(
             "Durable facts recorded from earlier sessions of this project: past failures, "
-            + "environment quirks, and decisions with the reasons behind them. Below are "
-            + $"titles only; each is a file under `{relative}/`.");
+            + "environment quirks, and decisions with the reasons behind them. Below is the "
+            + $"index; each topic is a file under `{relative}/`. The most recently written say "
+            + "what they hold, and the rest are named only, to keep this short.");
         builder.AppendLine();
         builder.AppendLine(
             "**Check this before you investigate.** Call `loadout_recall`, or read the file, "
