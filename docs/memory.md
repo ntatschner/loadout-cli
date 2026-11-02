@@ -47,6 +47,31 @@ guessing goes.
 The repository stays authoritative. Where memory and the code disagree, the
 code is right and the memory needs correcting.
 
+## Keeping the index small
+
+The index is paid for on every launch, so a session is given at most 24KB of
+it, about 6,000 tokens. Every topic is still listed. The most recently written
+keep their description, and once the next one wouldn't fit, the rest are
+listed by name on one line, with `loadout_recall` and `loadout memory show` to
+read them on request.
+
+Every topic stays named because a session won't search for something it
+doesn't know is there. Across 281 sessions of real work, about one in five
+looked anything up even with the whole index in front of it.
+
+The budget applies to what a session is given, not to `MEMORY.md`. The file
+keeps every description, because the workspace syncs between machines and each
+machine has its own file times. An index cut to a budget on disk would be cut
+differently on each one and rewritten back and forth. `loadout memory audit`
+says how many topics a session only sees by name. It warns only when the names
+alone no longer fit, which is the point to merge or retire topics. A shorter
+description lets more of them fit.
+
+"Recently written" is the topic file's last-write time on this machine. A fresh
+clone writes every file within moments of the others, so until topics are
+written again the choice is close to the order Git checked them out, not their
+age.
+
 ## Finding the one that answers a question
 
 ```bash

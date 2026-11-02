@@ -255,9 +255,6 @@ internal sealed partial class MemoryService : IMemoryService
         "The repository is authoritative. If one of these disagrees with the code, "
         + "the code wins and this file is what needs correcting.";
 
-    /// <summary>An index should stay an index. Past this it has become content.</summary>
-    private const long MaximumIndexBytes = 8 * 1024;
-
     /// <summary>A topic past this size is doing too many jobs and should be split.</summary>
     private const long MaximumTopicBytes = 16 * 1024;
 
@@ -558,12 +555,44 @@ internal sealed partial class MemoryService : IMemoryService
 
             AuditIndex(findings, [.. scoped], index, File.Exists(index));
         }
+
+        // Measured as a session is given it rather than as MEMORY.md stands on
+        // disk: the file keeps every description and is never loaded whole, so
+        // its size says nothing about what a launch pays.
+        var fitted = await FitIndexAsync(workspaceRoot, slug, ct).ConfigureAwait(false);
+
+        if (fitted.Succeeded && fitted.Value is { } given)
+        {
+            AuditBudget(findings, given);
+        }
+
         AuditTopics(findings, topics, staleMonths);
         AuditDuplicates(findings, topics);
         AuditLinks(findings, topics);
 
         return OperationResult<MemoryAudit>.Ok(
             new MemoryAudit(slug, topics, findings, indexPath, hasIndex));
+    }
+
+    private static void AuditBudget(List<MemoryFinding> findings, MemoryIndexBudget.Fitted given)
+    {
+        const int budget = MemoryIndexBudget.DefaultBytes;
+
+        if (given.Bytes > budget)
+        {
+            findings.Add(new MemoryFinding(null, MemoryFindingSeverity.Warning, "index-oversized",
+                $"Even with every topic listed by name only, the index a session is given is "
+                + $"{given.Bytes / 1024}KB, over its {budget / 1024}KB budget. Merge or delete "
+                + "topics that no longer earn their place."));
+        }
+        else if (given.NamedOnly > 0)
+        {
+            findings.Add(new MemoryFinding(null, MemoryFindingSeverity.Info, "index-budgeted",
+                $"{given.NamedOnly} of {given.Total} topic(s) are listed by name only in a session's "
+                + $"context, to keep the index within {budget / 1024}KB; the newest keep their "
+                + "description. loadout_recall still finds every one, and shorter descriptions let "
+                + "more of them fit."));
+        }
     }
 
     private static void AuditIndex(
@@ -582,14 +611,6 @@ internal sealed partial class MemoryService : IMemoryService
             }
 
             return;
-        }
-
-        var size = new FileInfo(indexPath).Length;
-
-        if (size > MaximumIndexBytes)
-        {
-            findings.Add(new MemoryFinding(null, MemoryFindingSeverity.Warning, "index-oversized",
-                $"MEMORY.md is {size / 1024}KB. It should be a short index; content belongs in a topic."));
         }
 
         string text;
@@ -1485,11 +1506,27 @@ internal sealed partial class MemoryService : IMemoryService
         string slug,
         CancellationToken ct = default)
     {
+        var fitted = await FitIndexAsync(workspaceRoot, slug, ct).ConfigureAwait(false);
+
+        return fitted.Failed
+            ? OperationResult<string?>.Fail(fitted.Error!, fitted.ExitCode)
+            : OperationResult<string?>.Ok(fitted.Value?.Text);
+    }
+
+    /// <summary>
+    /// The index a session is given: every scope's, fitted into
+    /// <see cref="MemoryIndexBudget.DefaultBytes"/>. Null when there is no memory.
+    /// </summary>
+    private async Task<OperationResult<MemoryIndexBudget.Fitted?>> FitIndexAsync(
+        string workspaceRoot,
+        string slug,
+        CancellationToken ct)
+    {
         // All three indexes, one after another, because a session working on
         // this project is subject to all three. Given only the project's, it
         // would go on rediscovering what this person and this machine already
         // know — which is the whole reason the other two scopes exist.
-        var parts = new List<string>();
+        var parts = new List<MemoryIndexBudget.Section>();
 
         foreach (var scope in Enum.GetValues<MemoryScope>())
         {
@@ -1505,20 +1542,29 @@ internal sealed partial class MemoryService : IMemoryService
 
                 if (!string.IsNullOrWhiteSpace(text))
                 {
-                    parts.Add(scope == MemoryScope.Project
-                        ? text.TrimEnd()
-                        : $"{Heading(scope)}{Environment.NewLine}{Environment.NewLine}{text.TrimEnd()}");
+                    var directory = Path.GetDirectoryName(path)!;
+
+                    // A missing topic file reads as the oldest possible time,
+                    // so a stale index line is the first to lose its description.
+                    parts.Add(new MemoryIndexBudget.Section(
+                        scope == MemoryScope.Project
+                            ? text.TrimEnd()
+                            : $"{Heading(scope)}{Environment.NewLine}{Environment.NewLine}{text.TrimEnd()}",
+                        file => File.GetLastWriteTimeUtc(Path.Combine(directory, file))));
                 }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                return OperationResult<string?>.Fail($"Could not read '{path}': {ex.Message}");
+                return OperationResult<MemoryIndexBudget.Fitted?>.Fail($"Could not read '{path}': {ex.Message}");
             }
         }
 
-        return OperationResult<string?>.Ok(parts.Count == 0
+        return OperationResult<MemoryIndexBudget.Fitted?>.Ok(parts.Count == 0
             ? null
-            : string.Join(Environment.NewLine + Environment.NewLine, parts));
+            : MemoryIndexBudget.Fit(
+                parts,
+                MemoryIndexBudget.DefaultBytes,
+                Environment.NewLine + Environment.NewLine));
     }
 
     /// <summary>
