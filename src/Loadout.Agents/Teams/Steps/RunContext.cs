@@ -144,6 +144,9 @@ internal sealed class RunContext
     /// <summary>The project's slug, once resolved.</summary>
     public string Slug { get; set; } = string.Empty;
 
+    /// <summary>What the project had as the run started, for saying what its time took away. Null when unknown.</summary>
+    public Loadout.Models.Capabilities.CapabilityProfile? CapabilitiesAtStart { get; set; }
+
     /// <summary>The task the run was started for, if any.</summary>
     public string? ForTask { get; set; }
 

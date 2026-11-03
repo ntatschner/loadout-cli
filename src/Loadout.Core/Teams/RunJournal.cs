@@ -1653,6 +1653,7 @@ public sealed class RunJournal : IRunJournal
             "node.stuck" => "went silent again and was given up on"
                 + (entry.Text("error") is { Length: > 0 } error ? $": {error}" : string.Empty),
             "run.stalled" => "stalled: the lead went silent twice",
+            "run.note" => entry.Text("text") ?? string.Empty,
             "request.refused" => $"asked for a node it may not: {entry.Text("reason")}",
             "gate.reminded" => "told it finished without the merge gate"
                 + (entry.Words("pending") is { Count: > 0 } waiting

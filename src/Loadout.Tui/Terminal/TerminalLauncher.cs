@@ -88,6 +88,8 @@ public sealed class TerminalLauncher : ILauncherTui
 
     private readonly ReadingProfile _reading;
 
+    private readonly Loadout.Core.Capabilities.ICapabilityOffers? _offers;
+
     public TerminalLauncher(
         IAnsiConsole console,
         IProjectService projects,
@@ -117,11 +119,13 @@ public sealed class TerminalLauncher : ILauncherTui
         ReadingProfile reading,
         Loadout.Core.Ideas.IIdeaDumps dumps,
         Loadout.Core.Ideas.IIdeaService ideas,
-        Loadout.Core.Tasks.ITaskActivityReader activity)
+        Loadout.Core.Tasks.ITaskActivityReader activity,
+        Loadout.Core.Capabilities.ICapabilityOffers? offers = null)
     {
         _activity = activity;
         _dumps = dumps;
         _ideas = ideas;
+        _offers = offers;
         _reading = reading;
         _instructions = instructions;
         _runs = runs;
@@ -604,11 +608,25 @@ public sealed class TerminalLauncher : ILauncherTui
                 return;
             }
 
+            // One look per project, however many ideas are on it.
+            var sheets = new Dictionary<string, IReadOnlyDictionary<string, Loadout.Core.Capabilities.OfferSheet>>(StringComparer.OrdinalIgnoreCase);
+
             foreach (var summary in listed.Value!)
             {
                 var read = await _ideas.ReadAsync(summary.Place, ct).ConfigureAwait(false);
+                Loadout.Core.Capabilities.OfferSheet? sheet = null;
 
-                entries.Add(new IdeaEntry(summary, read.Succeeded ? read.Value : null));
+                if (_offers is not null && summary.Place.Project is { } slug)
+                {
+                    if (!sheets.TryGetValue(slug, out var onList))
+                    {
+                        sheets[slug] = onList = await _offers.SheetsAsync(slug, ct).ConfigureAwait(false);
+                    }
+
+                    onList.TryGetValue(summary.Place.Id, out sheet);
+                }
+
+                entries.Add(new IdeaEntry(summary, read.Succeeded ? read.Value : null, sheet));
             }
 
             var projects = await _projects.ListAsync(ct).ConfigureAwait(false);

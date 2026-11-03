@@ -253,6 +253,16 @@ public sealed class TaskBatchTests : IDisposable
                 var type when type == typeof(List<TaskEvent>) => new List<TaskEvent> { new() { State = TaskState.Doing, By = "someone", Utc = DateTimeOffset.UnixEpoch, Reason = "why" } },
                 var type when type == typeof(TaskSource) => new TaskSource { Kind = TaskSourceKind.Idea, Id = "set-" + property.Name },
                 var type when type == typeof(TaskProposal) => new TaskProposal { DoneWhen = ["it works"], Why = "why", Utc = DateTimeOffset.UnixEpoch, Error = "it failed" },
+                var type when type == typeof(TaskPrerequisite) => new TaskPrerequisite
+                {
+                    Check = "ci",
+                    TemplateVersion = 7,
+                    Stacks = ["dotnet"],
+                    Detected = ["dotnet", "node"],
+                    Environments = ["dev"],
+                    PersonStepBy = "someone",
+                    PersonStepUtc = DateTimeOffset.UnixEpoch,
+                },
                 var type => throw new InvalidOperationException($"TaskItem.{property.Name} is a {type.Name}, which this test does not know how to set."),
             });
         }
@@ -267,6 +277,8 @@ public sealed class TaskBatchTests : IDisposable
         copy.Proposal.Should().NotBeSameAs(item.Proposal);
         copy.Proposal!.DoneWhen.Should().NotBeSameAs(item.Proposal!.DoneWhen);
         copy.Source.Should().NotBeSameAs(item.Source);
+        copy.Prerequisite.Should().NotBeSameAs(item.Prerequisite);
+        copy.Prerequisite!.Stacks.Should().NotBeSameAs(item.Prerequisite!.Stacks);
     }
 
     [Fact]

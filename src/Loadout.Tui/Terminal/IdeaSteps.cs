@@ -65,6 +65,62 @@ internal static class IdeaSteps
     internal static IdeaStep RemoveNote(IdeaPlace place, string note) => new(
         LauncherCommands.IdeaNoteRemove, [place.Id, note, .. List(place.Project)], Pause: false, place.Id);
 
+    /// <summary>Takes up an offer, naming the stack only when it is not the default.</summary>
+    internal static IdeaStep TakeOffer(IdeaPlace place, Loadout.Core.Capabilities.CapabilityOffer offer, string? stack) => new(
+        LauncherCommands.TaskOffers,
+        [
+            place.Id,
+            .. List(place.Project),
+            $"--accept={offer.Check}",
+            .. stack is { Length: > 0 } && stack != offer.Stacks.FirstOrDefault() ? (string[])[$"--stack={stack}"] : [],
+        ],
+        Pause: false,
+        place.Id);
+
+    /// <summary>Says the project will do without a check.</summary>
+    internal static IdeaStep NotNeeded(IdeaPlace place, string project, string check) => new(
+        LauncherCommands.ProjectCapabilities, [project, $"--not-needed={check}"], Pause: true, place.Id);
+
+    /// <summary>What the project lacks before an idea, for the top of its detail. Empty when nothing is.</summary>
+    internal static IReadOnlyList<string> BeforeThis(
+        Loadout.Core.Capabilities.OfferSheet sheet,
+        Func<Loadout.Core.Capabilities.CapabilityOffer, string?> stackOf,
+        int width)
+    {
+        if (sheet.Offers.Count == 0 && sheet.Unseen.Count == 0)
+        {
+            return [];
+        }
+
+        var lines = new List<string> { "Before this" };
+
+        void Say(string text)
+        {
+            foreach (var line in Wrap(text, Math.Max(20, width - 2)))
+            {
+                lines.Add("  " + line);
+            }
+        }
+
+        foreach (var offer in sheet.Offers)
+        {
+            Say(offer.Linked
+                ? $"{offer.Check}: waits for {offer.Prerequisite}."
+                : offer.CanOffer
+                    ? $"{offer.Check}: {offer.Evidence}" + (stackOf(offer) is { Length: > 0 } stack ? $" For {stack}." : string.Empty)
+                    : $"{offer.Check}: {offer.Evidence} No offer.");
+        }
+
+        foreach (var unseen in sheet.Unseen)
+        {
+            Say($"{unseen.Check} could not be looked at, so it holds nothing. {unseen.Hint}");
+        }
+
+        lines.Add(string.Empty);
+
+        return lines;
+    }
+
     internal static IdeaStep Refine(IdeaPlace place) => new(
         LauncherCommands.IdeaRefine, [place.Id, .. List(place.Project)], Pause: true, place.Id);
 

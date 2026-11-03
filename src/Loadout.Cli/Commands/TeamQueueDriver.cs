@@ -54,6 +54,12 @@ public sealed class TeamQueueDriver
     private readonly IPlatformPaths _paths;
     private readonly TimeProvider _time;
 
+    private readonly Core.Capabilities.ICapabilityOffers? _offers;
+    private readonly Dictionary<string, DateTimeOffset> _settled = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>How long one look at a project's capabilities serves a queue pass.</summary>
+    private static readonly TimeSpan SettleEvery = TimeSpan.FromMinutes(5);
+
     public TeamQueueDriver(
         IQueueService queues,
         IScheduleService schedules,
@@ -69,9 +75,11 @@ public sealed class TeamQueueDriver
         IWorkspaceManager workspace,
         IPlatformPaths paths,
         TimeProvider time,
-        Core.Configuration.IConfigurationService? configuration = null)
+        Core.Configuration.IConfigurationService? configuration = null,
+        Core.Capabilities.ICapabilityOffers? offers = null)
     {
         _configuration = configuration;
+        _offers = offers;
         _queues = queues;
         _schedules = schedules;
         _tasks = tasks;
@@ -158,6 +166,42 @@ public sealed class TeamQueueDriver
     }
 
     /// <summary>
+    /// Closes prerequisites whose capability is now there, before the queue
+    /// decides what may start.
+    /// </summary>
+    /// <remarks>
+    /// Once per project in a pass, because a pass can start many runs and each
+    /// rebuild asks GitHub. A failure holds what it held, which is the safe way
+    /// round: a slow network never releases work and never blocks more of it.
+    /// </remarks>
+    private async Task SettleAsync(TeamQueue queue, string by, CancellationToken ct)
+    {
+        if (_offers is null)
+        {
+            return;
+        }
+
+        var now = _time.GetUtcNow();
+
+        foreach (var slug in queue.Items.Select(item => item.Project).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (_settled.TryGetValue(slug, out var last) && now - last < SettleEvery)
+            {
+                continue;
+            }
+
+            _settled[slug] = now;
+
+            var project = await _projects.ResolveAsync(slug, ct).ConfigureAwait(false);
+
+            if (project.Succeeded)
+            {
+                await _offers.SettleAsync(project.Value!, by, ct).ConfigureAwait(false);
+            }
+        }
+    }
+
+    /// <summary>
     /// Takes the next item off a team's queue, under its lock, and prepares it, recording the run as started.
     /// </summary>
     /// <returns>The item and its run record, or the decision when nothing starts.</returns>
@@ -173,6 +217,8 @@ public sealed class TeamQueueDriver
         {
             return (null, null, null, loaded.Error);
         }
+
+        await SettleAsync(loaded.Value!, by, ct).ConfigureAwait(false);
 
         var lists = await TeamQueueing.ListsAsync(_tasks, loaded.Value!, ct).ConfigureAwait(false);
 

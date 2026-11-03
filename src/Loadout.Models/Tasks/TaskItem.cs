@@ -222,6 +222,38 @@ public sealed class TaskItem
     /// change when somebody declares where it stands.
     /// </remarks>
     public TaskSource? Source { get; set; }
+
+    /// <summary>The template this task was made from when a capability offer was accepted, or null.</summary>
+    /// <remarks>
+    /// What makes a link to this task a capability link: a fresh profile that
+    /// sees the capability closes the task, which a hand-made link never does.
+    /// </remarks>
+    public TaskPrerequisite? Prerequisite { get; set; }
+}
+
+/// <summary>Which template a prerequisite task was made from, frozen at the moment it was accepted.</summary>
+public sealed class TaskPrerequisite
+{
+    /// <summary>The capability check it exists to fix, such as <c>ci</c>.</summary>
+    public string Check { get; set; } = string.Empty;
+
+    /// <summary>The template's version when the task was made or last renewed.</summary>
+    public int TemplateVersion { get; set; }
+
+    /// <summary>The stacks its text was written for. Empty means the generic text.</summary>
+    public List<string> Stacks { get; set; } = [];
+
+    /// <summary>The stacks the profile saw at that moment, to tell later that they have changed.</summary>
+    public List<string> Detected { get; set; } = [];
+
+    /// <summary>The environments it names, for the environments template.</summary>
+    public List<string> Environments { get; set; } = [];
+
+    /// <summary>Who ticked the step only a person can do, or empty while nobody has.</summary>
+    public string PersonStepBy { get; set; } = string.Empty;
+
+    /// <summary>When they ticked it.</summary>
+    public DateTimeOffset? PersonStepUtc { get; set; }
 }
 
 /// <summary>What sort of thing deferred a task.</summary>

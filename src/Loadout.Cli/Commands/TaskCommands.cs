@@ -580,14 +580,17 @@ public sealed class TaskDeclareCommand : AsyncCommand<TaskDeclareCommand.Setting
     private readonly ITaskService _tasks;
     private readonly IProjectService _projects;
     private readonly Core.Workspace.IWorkspaceManager _workspace;
+    private readonly Core.Capabilities.ICapabilityOffers? _offers;
     private readonly IAnsiConsole _console;
 
     public TaskDeclareCommand(
         ITaskService tasks,
         IProjectService projects,
         Core.Workspace.IWorkspaceManager workspace,
-        IAnsiConsole console)
+        IAnsiConsole console,
+        Core.Capabilities.ICapabilityOffers? offers = null)
     {
+        _offers = offers;
         _tasks = tasks;
         _projects = projects;
         _workspace = workspace;
@@ -817,9 +820,37 @@ public sealed class TaskDeclareCommand : AsyncCommand<TaskDeclareCommand.Setting
         if (slug is not null)
         {
             await SayIfNobodyWillSeeItAsync(output, slug, cancellationToken).ConfigureAwait(false);
+            await SayWhatItLacksAsync(output, slug, settings.Id, declared.Value.State, cancellationToken).ConfigureAwait(false);
         }
 
         return CommandOutput.Success();
+    }
+
+    /// <summary>
+    /// Prints the gaps that matter to this work and the command for each, and
+    /// creates nothing: declare stays scriptable, and a link is only ever made
+    /// by somebody choosing to.
+    /// </summary>
+    private async Task SayWhatItLacksAsync(CommandOutput output, string slug, string id, TaskState state, CancellationToken ct)
+    {
+        if (_offers is null || state is TaskState.Done or TaskState.Dropped)
+        {
+            return;
+        }
+
+        var sheet = await _offers.ReadAsync(slug, id, ct).ConfigureAwait(false);
+
+        foreach (var offer in sheet.Value?.Offers.Where(one => one.CanOffer && !one.Linked) ?? [])
+        {
+            output.WriteLine($"[yellow]![/] {Markup.Escape(offer.Evidence)}");
+            output.WriteLine($"[dim]  Make it a prerequisite: loadout task offers {Markup.Escape(id)} --project {Markup.Escape(slug)} --accept {Markup.Escape(offer.Check)}[/]");
+        }
+
+        foreach (var link in sheet.Value?.Links?.Where(one => one.Outgrown) ?? [])
+        {
+            output.WriteLine($"[yellow]![/] It still waits for {Markup.Escape(link.Prerequisite)}, which its type no longer depends on.");
+            output.WriteLine($"[dim]  Stop: loadout task requires {Markup.Escape(id)} {Markup.Escape(link.Prerequisite)} --project {Markup.Escape(slug)} --remove[/]");
+        }
     }
 
     /// <summary>
@@ -1601,7 +1632,7 @@ public sealed class TaskClassifyCommand : AsyncCommand<TaskClassifyCommand.Setti
 
         IReadOnlyList<string> GapsOf(string? list, TaskClassified task) =>
             list is { } slug && gaps.TryGetValue(slug, out var seen)
-                ? [.. Core.Capabilities.CapabilityChecks.For(task.Type).Select(check => check.Id).Where(seen.Contains)]
+                ? [.. seen.Where(check => Core.Capabilities.CapabilityChecks.Matters(check, task.Type)).Select(check => check.Id)]
                 : [];
 
         if (output.IsJson)
@@ -1660,9 +1691,9 @@ public sealed class TaskClassifyCommand : AsyncCommand<TaskClassifyCommand.Setti
     /// repository's files: never from GitHub, and nothing is kept, since this
     /// only reports.
     /// </summary>
-    private async Task<Dictionary<string, HashSet<string>>> GapsAsync(IEnumerable<string?> lists, CancellationToken ct)
+    private async Task<Dictionary<string, List<Loadout.Models.Capabilities.CapabilityResult>>> GapsAsync(IEnumerable<string?> lists, CancellationToken ct)
     {
-        var gaps = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        var gaps = new Dictionary<string, List<Loadout.Models.Capabilities.CapabilityResult>>(StringComparer.Ordinal);
 
         foreach (var slug in lists.OfType<string>())
         {
@@ -1674,8 +1705,7 @@ public sealed class TaskClassifyCommand : AsyncCommand<TaskClassifyCommand.Setti
             }
 
             gaps[slug] = [.. (profile?.Checks ?? [])
-                .Where(check => check.State == Loadout.Models.Capabilities.CapabilityState.Gap)
-                .Select(check => check.Id)];
+                .Where(check => check.State == Loadout.Models.Capabilities.CapabilityState.Gap)];
         }
 
         return gaps;

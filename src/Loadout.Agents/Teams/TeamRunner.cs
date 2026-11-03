@@ -589,6 +589,7 @@ public sealed partial class TeamRunner : ITeamRunner
     private readonly FeedbackStep _feedback;
     private readonly CloseRunStep _close;
     private readonly Core.Teams.IRunOwnership? _ownership;
+    private readonly Core.Capabilities.ICapabilityOffers? _offers;
 
     /// <summary>
     /// The project service and the git manager are optional so a caller that
@@ -610,8 +611,10 @@ public sealed partial class TeamRunner : ITeamRunner
         Core.Tasks.ITaskService? tasks = null,
         Core.Tools.IToolRegistry? tools = null,
         Core.Teams.IRunOwnership? ownership = null,
-        TimeProvider? timers = null)
+        TimeProvider? timers = null,
+        Core.Capabilities.ICapabilityOffers? offers = null)
     {
+        _offers = offers;
         _paths = paths;
         _time = time;
         _ownership = ownership;
@@ -630,7 +633,7 @@ public sealed partial class TeamRunner : ITeamRunner
         _leadReport = new LeadReportStep(sessions, new IntegrateStep(projects, git, paths));
         _briefRequests = new BriefRequestsStep(new DecideStep(time));
         _feedback = new FeedbackStep();
-        _close = new CloseRunStep(fold, new MergeStep(projects, git, paths, new TidyStep(git), _workers), declare);
+        _close = new CloseRunStep(fold, new MergeStep(projects, git, paths, new TidyStep(git), _workers), declare, offers);
     }
 
     /// <inheritdoc />
@@ -766,6 +769,11 @@ public sealed partial class TeamRunner : ITeamRunner
         if (await _open.RunAsync(run, journal, fromTeam, ct).ConfigureAwait(false) is { } ended)
         {
             return ended;
+        }
+
+        if (_offers is not null && run.Slug.Length > 0)
+        {
+            run.CapabilitiesAtStart = await _offers.LookAsync(run.Slug, ct).ConfigureAwait(false);
         }
 
         var lead = run.Lead!;

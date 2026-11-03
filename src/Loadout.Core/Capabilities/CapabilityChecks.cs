@@ -43,6 +43,26 @@ public static class CapabilityChecks
     public static CapabilityCheck? Find(string id) =>
         BuiltIn.FirstOrDefault(check => string.Equals(check.Id, id, StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>
+    /// Whether a check in a profile matters to a type of work: by what the
+    /// profile recorded, so a specialist's check or override counts, and by the
+    /// catalogue for a profile kept before it recorded that.
+    /// </summary>
+    public static bool Matters(Loadout.Models.Capabilities.CapabilityResult check, TaskType type)
+    {
+        ArgumentNullException.ThrowIfNull(check);
+
+        return TypesOf(check).Contains(type);
+    }
+
+    /// <summary>The types a check in a profile matters to.</summary>
+    public static IReadOnlyList<TaskType> TypesOf(Loadout.Models.Capabilities.CapabilityResult check)
+    {
+        ArgumentNullException.ThrowIfNull(check);
+
+        return check.Types.Count > 0 ? check.Types : Find(check.Id)?.Types ?? [];
+    }
+
     /// <summary>The checks that matter to a type of work.</summary>
     public static IReadOnlyList<CapabilityCheck> For(TaskType type) => [.. BuiltIn.Where(check => check.Types.Contains(type))];
 }

@@ -120,6 +120,90 @@ public sealed class IdeasWindowTests
         }
     }
 
+    private static IdeaEntry WithOffers(params Loadout.Core.Capabilities.CapabilityOffer[] offers) =>
+        Entry("asking", "website", Questions()) with
+        {
+            Sheet = new Loadout.Core.Capabilities.OfferSheet("website", "asking", Now, "not asked", offers, [], [], []),
+        };
+
+    private static Loadout.Core.Capabilities.CapabilityOffer Ci(bool linked = false) => new(
+        "ci", "CI", Loadout.Models.Capabilities.CapabilityState.Gap, "No workflow runs.", true, ["all", "dotnet", "generic"], [], linked ? "add-ci" : null, linked);
+
+    [Fact]
+    public void One_key_takes_the_first_offer_by_the_command_a_person_would_type()
+    {
+        var (window, app) = Open(new Scripted(), select: "asking", ideas: [WithOffers(Ci())]);
+
+        using (app)
+        using (window)
+        {
+            Text(Detail(window)).Should().Contain("Before this").And.Contain("No workflow runs.").And.Contain("For all.");
+
+            var step = Press(window, Key.O);
+
+            step!.Command.Should().Be(LauncherCommands.TaskOffers);
+            step.Arguments.Should().Equal("asking", "--project", "website", "--accept=ci");
+            step.Select.Should().Be("asking");
+        }
+    }
+
+    [Fact]
+    public void The_stack_key_stays_on_the_screen_and_the_offer_then_names_what_it_reached()
+    {
+        var (window, app) = Open(new Scripted(), select: "asking", ideas: [WithOffers(Ci())]);
+
+        using (app)
+        using (window)
+        {
+            Press(window, Key.S).Should().BeNull("changing the stack runs nothing");
+            Text(Detail(window)).Should().Contain("For dotnet.");
+
+            Press(window, Key.O)!.Arguments.Should().Equal("asking", "--project", "website", "--accept=ci", "--stack=dotnet");
+        }
+    }
+
+    [Fact]
+    public void Not_needed_runs_the_capabilities_command_for_the_first_gap()
+    {
+        var (window, app) = Open(new Scripted(), select: "asking", ideas: [WithOffers(Ci())]);
+
+        using (app)
+        using (window)
+        {
+            var step = Press(window, Key.W);
+
+            step!.Command.Should().Be(LauncherCommands.ProjectCapabilities);
+            step.Arguments.Should().Equal("website", "--not-needed=ci");
+        }
+    }
+
+    [Fact]
+    public void An_offer_already_linked_is_said_and_no_key_takes_it_again()
+    {
+        var (window, app) = Open(new Scripted(), select: "asking", ideas: [WithOffers(Ci(linked: true))]);
+
+        using (app)
+        using (window)
+        {
+            Text(Detail(window)).Should().Contain("waits for add-ci");
+            Press(window, Key.O).Should().BeNull();
+            Press(window, Key.W).Should().BeNull();
+        }
+    }
+
+    [Fact]
+    public void With_no_sheet_the_offer_keys_do_nothing()
+    {
+        var (window, app) = Open(new Scripted(), select: "asking");
+
+        using (app)
+        using (window)
+        {
+            Press(window, Key.O).Should().BeNull();
+            Text(Detail(window)).Should().NotContain("Before this");
+        }
+    }
+
     [Fact]
     public void Choosing_no_type_builds_nothing()
     {

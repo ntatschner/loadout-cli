@@ -794,6 +794,7 @@ public static class Program
             task.AddCommand<TaskClassifyCommand>("classify");
             task.AddCommand<TaskLabelCommand>("label");
             task.AddCommand<TaskRequiresCommand>("requires");
+            task.AddCommand<TaskOffersCommand>("offers");
             task.AddBranch("labels", labels =>
             {
                 labels.SetDescription("Your own labels on tasks and ideas, kept for the whole workspace.");

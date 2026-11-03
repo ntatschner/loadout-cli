@@ -145,6 +145,45 @@ public sealed class TeamQueueDriverTests : IDisposable
     }
 
     [Fact]
+    public async Task A_prerequisite_whose_capability_is_now_there_closes_and_what_waited_starts_in_the_same_pass()
+    {
+        var repository = _space.Scratch("website");
+        var projects = new FakeProjects("website", repository);
+        var profiles = new Loadout.Core.Capabilities.CapabilityProfiles(
+            _space.Workspace,
+            _space.Yaml,
+            new NoGitHub(),
+            _ => Task.FromResult(Loadout.Core.Triggers.TriggerCredential.Missing),
+            _clock);
+        var offers = new Loadout.Core.Capabilities.CapabilityOffers(profiles, projects, _space.Tasks, _journal, _space.Workspace, _space.Yaml, _clock);
+        var driver = new TeamQueueDriver(
+            _queues, _schedules, _space.Tasks, _journal, projects, _git,
+            _launcher, _processes, new FixedHosts(new GhRepositoryHost(_launcher, new StubResolver("gh"))), _landings,
+            Delivery(new GhRepositoryHost(_launcher, new StubResolver("gh"))), _space.Workspace,
+            _space.Paths, _clock, offers: offers);
+
+        await ReadyAsync();
+
+        var accepted = await offers.AcceptAsync(projects.Resolution, "login", Loadout.Core.Capabilities.CapabilityChecks.Ci, null, null, "nigel");
+
+        accepted.Succeeded.Should().BeTrue(accepted.Error);
+
+        Directory.CreateDirectory(Path.Combine(repository, ".github", "workflows"));
+        await File.WriteAllTextAsync(Path.Combine(repository, ".github", "workflows", "ci.yml"), "on: pull_request\njobs:\n  b:\n    steps: []\n");
+
+        await driver.PassAsync(true, _said.Add, (_, _) => Task.CompletedTask, CancellationToken.None);
+
+        _launcher.Background.Should().NotBeNull("what it waited for is there now");
+        (await _space.Tasks.ListAsync("website")).Value!.Single(task => task.Id == accepted.Value!.Prerequisite.Id).State.Should().Be(TaskState.Done);
+    }
+
+    private sealed class NoGitHub : Loadout.Core.Triggers.IGitHubReads
+    {
+        public Task<Loadout.Core.Triggers.GitHubReply> GetAsync(Loadout.Core.Triggers.TriggerCredential credential, string path, string? etag, CancellationToken ct) =>
+            throw new InvalidOperationException("No token, so GitHub is never asked.");
+    }
+
+    [Fact]
     public async Task A_task_whose_requirement_is_not_done_is_not_started_and_says_what_it_waits_for()
     {
         await ReadyAsync();

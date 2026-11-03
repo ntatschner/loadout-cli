@@ -39,6 +39,7 @@ namespace Loadout.Core.Tasks;
 /// <param name="Requires">For require, the tasks to wait for.</param>
 /// <param name="Unrequires">For require, the tasks to stop waiting for.</param>
 /// <param name="Source">The run, idea or conversation that deferred it. Recorded when the task has none; a different one is refused.</param>
+/// <param name="Prerequisite">The template it was made from. Only capability offers set this; a batch from outside cannot.</param>
 public sealed record TaskOperation(
     string Op,
     string? Project = null,
@@ -60,7 +61,8 @@ public sealed record TaskOperation(
     IReadOnlyList<string>? Unlabels = null,
     IReadOnlyList<TaskLink>? Requires = null,
     IReadOnlyList<TaskLink>? Unrequires = null,
-    TaskSource? Source = null)
+    TaskSource? Source = null,
+    TaskPrerequisite? Prerequisite = null)
 {
     public const string Add = "add";
     public const string Declare = "declare";

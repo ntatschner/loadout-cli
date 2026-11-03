@@ -2517,6 +2517,11 @@ its done-when, so the pieces of a split plan run in order. A loop of afters, or
 an after naming a dropped task, is refused when it is added, because either
 would stall the queue without a word.
 
+**A task can be offered what it lacks.** A release task on a project with no
+CI is offered a prerequisite for it, and a queue holds the task on that like any
+other link. A fresh profile closes the prerequisite once it sees the capability.
+[Capabilities and offers](capabilities.md) has the reasoning.
+
 **A task can require another, on any list.** `task declare <id> <state> --requires
 <task>`, or `task requires <id> <task>`, says this task must wait until that one
 is done, where `after` only orders items in one queue. A queue passes over a task

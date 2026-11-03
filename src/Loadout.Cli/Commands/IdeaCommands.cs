@@ -459,9 +459,16 @@ public sealed class IdeaListCommand : AsyncCommand<IdeaListCommand.Settings>
     private readonly IAnsiConsole _console;
     private readonly TimeProvider _time;
     private readonly Core.Configuration.IConfigurationService _configuration;
+    private readonly Core.Capabilities.ICapabilityOffers? _offers;
 
-    public IdeaListCommand(IIdeaService ideas, IAnsiConsole console, TimeProvider time, Core.Configuration.IConfigurationService configuration)
+    public IdeaListCommand(
+        IIdeaService ideas,
+        IAnsiConsole console,
+        TimeProvider time,
+        Core.Configuration.IConfigurationService configuration,
+        Core.Capabilities.ICapabilityOffers? offers = null)
     {
+        _offers = offers;
         _ideas = ideas;
         _console = console;
         _time = time;
@@ -558,10 +565,25 @@ public sealed class IdeaListCommand : AsyncCommand<IdeaListCommand.Settings>
 
         if (output.IsJson)
         {
+            // From each project's kept profile, so reading the list stays cheap
+            // and reaches no network.
+            var gaps = new Dictionary<string, IReadOnlyDictionary<string, Core.Capabilities.GapCount>>(StringComparer.OrdinalIgnoreCase);
+
+            if (_offers is not null)
+            {
+                foreach (var slug in shown.Select(idea => idea.Place.Project).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase))
+                {
+                    gaps[slug] = await _offers.GapCountsAsync(slug, cancellationToken).ConfigureAwait(false);
+                }
+            }
+
             output.WriteJson(new
             {
                 ideas = shown.Select(idea => new
                 {
+                    gaps = idea.Place.Project is { } onList && gaps.TryGetValue(onList, out var counts) && counts.TryGetValue(idea.Place.Id, out var count)
+                        ? new { seen = count.Seen, noOffer = count.NoOffer, unseen = count.Unseen }
+                        : null,
                     id = idea.Place.Id,
                     project = idea.Place.Project,
                     idea.Title,
@@ -1097,14 +1119,17 @@ public sealed class IdeaAcceptCommand : AsyncCommand<IdeaAcceptCommand.Settings>
     private readonly IIdeaService _ideas;
     private readonly IProjectService _projects;
     private readonly IProjectTemplateService _templates;
+    private readonly Core.Capabilities.ICapabilityOffers? _offers;
     private readonly IAnsiConsole _console;
 
     public IdeaAcceptCommand(
         IIdeaService ideas,
         IProjectService projects,
         IProjectTemplateService templates,
-        IAnsiConsole console)
+        IAnsiConsole console,
+        Core.Capabilities.ICapabilityOffers? offers = null)
     {
+        _offers = offers;
         _ideas = ideas;
         _projects = projects;
         _templates = templates;
@@ -1124,6 +1149,10 @@ public sealed class IdeaAcceptCommand : AsyncCommand<IdeaAcceptCommand.Settings>
         [CommandOption("--path <PATH>")]
         [Description("Where to make the new project. Defaults to the clone root.")]
         public string? Path { get; init; }
+
+        [CommandOption("--skip-setup <CHECK>")]
+        [Description("With --new-project on a new-project idea: leave out this setup (ci, release or environments) and remember it as not needed. Repeat it for more than one.")]
+        public string[] SkipSetup { get; init; } = [];
 
         [CommandOption("--by <WHO>")]
         [Description("Who is accepting it. Defaults to this machine's user.")]
@@ -1253,11 +1282,33 @@ public sealed class IdeaAcceptCommand : AsyncCommand<IdeaAcceptCommand.Settings>
             return output.Fail(accepted);
         }
 
+        // A new project is missing everything by definition, and has no
+        // repository to look at, so its setups come from a list and not a profile.
+        IReadOnlyList<Loadout.Models.Tasks.TaskItem> setups = [];
+
+        if (_offers is not null && settings.NewProject is { Length: > 0 } && accepted.Value!.Task.Type == Loadout.Models.Tasks.TaskType.NewProject)
+        {
+            var setUp = await _offers.SetUpNewProjectAsync(
+                accepted.Value.Project,
+                accepted.Value.Task.Id,
+                settings.SkipSetup,
+                settings.By is { Length: > 0 } setter ? setter : Environment.UserName,
+                cancellationToken).ConfigureAwait(false);
+
+            if (setUp.Failed)
+            {
+                return output.Fail(setUp);
+            }
+
+            setups = setUp.Value!;
+        }
+
         if (output.IsJson)
         {
             output.WriteJson(new
             {
                 id = accepted.Value!.Task.Id,
+                setups = setups.Select(one => one.Id),
                 project = accepted.Value.Project,
                 plan = accepted.Value.PlanPath,
                 title = accepted.Value.Task.Title,
@@ -1285,6 +1336,11 @@ public sealed class IdeaAcceptCommand : AsyncCommand<IdeaAcceptCommand.Settings>
             output.WriteLine(
                 $"[dim]  It moved from {Markup.Escape(left)} to {Markup.Escape(accepted.Value.Project)}, "
                 + $"and {Markup.Escape(left)} still shows where it went.[/]");
+        }
+
+        foreach (var setup in setups)
+        {
+            output.WriteLine($"[green]+[/] {Markup.Escape(setup.Id)}, which it now requires: {Markup.Escape(setup.Title)}");
         }
 
         output.WriteLine($"[dim]  The plan is at {Markup.Escape(accepted.Value.PlanPath)} in the workspace.[/]");
@@ -1418,10 +1474,12 @@ public sealed class IdeaTypeCommand : AsyncCommand<IdeaTypeCommand.Settings>
 
     private readonly IIdeaService _ideas;
     private readonly IProjectService _projects;
+    private readonly Core.Capabilities.ICapabilityOffers? _offers;
     private readonly IAnsiConsole _console;
 
-    public IdeaTypeCommand(IIdeaService ideas, IProjectService projects, IAnsiConsole console)
+    public IdeaTypeCommand(IIdeaService ideas, IProjectService projects, IAnsiConsole console, Core.Capabilities.ICapabilityOffers? offers = null)
     {
+        _offers = offers;
         _ideas = ideas;
         _projects = projects;
         _console = console;
@@ -1436,6 +1494,10 @@ public sealed class IdeaTypeCommand : AsyncCommand<IdeaTypeCommand.Settings>
         [CommandOption("--by <WHO>")]
         [Description("Who is choosing. Defaults to this machine's user.")]
         public string? By { get; init; }
+
+        [CommandOption("--release-links")]
+        [Description("Also stop waiting for prerequisites the old type asked for and the new one does not need.")]
+        public bool ReleaseLinks { get; init; }
     }
 
     /// <inheritdoc />
@@ -1483,9 +1545,33 @@ public sealed class IdeaTypeCommand : AsyncCommand<IdeaTypeCommand.Settings>
             return output.Fail(retyped);
         }
 
+        // Asked in the same breath as the change, because that is when somebody
+        // knows why the link was there. Left alone unless they say so: releasing
+        // work quietly is what the link exists to prevent.
+        IReadOnlyList<string> released = [];
+        IReadOnlyList<Core.Capabilities.CapabilityLink> outgrown =
+            _offers is not null && place.Value.Project is { } slug
+                ? await _offers.OutgrownAsync(slug, place.Value.Id, cancellationToken).ConfigureAwait(false)
+                : [];
+
+        if (outgrown.Count > 0 && (settings.ReleaseLinks
+            || (settings.AllowsPrompting && !output.IsJson && _console.Confirm(
+                $"{id} waits for {Markup.Escape(string.Join(", ", outgrown.Select(link => link.Prerequisite)))}, which this type does not need. Stop waiting?",
+                defaultValue: false))))
+        {
+            var off = await _offers!.ReleaseOutgrownAsync(place.Value.Project!, place.Value.Id, cancellationToken).ConfigureAwait(false);
+
+            if (off.Failed)
+            {
+                return output.Fail(off);
+            }
+
+            released = off.Value!;
+        }
+
         if (output.IsJson)
         {
-            output.WriteJson(new { project = place.Value.Project, task = TaskOperations.Json(retyped.Value!) });
+            output.WriteJson(new { project = place.Value.Project, task = TaskOperations.Json(retyped.Value!), released, stillWaiting = outgrown.Select(link => link.Prerequisite).Except(released) });
 
             return CommandOutput.Success();
         }
@@ -1495,6 +1581,16 @@ public sealed class IdeaTypeCommand : AsyncCommand<IdeaTypeCommand.Settings>
         output.WriteLine(handBack
             ? $"[green]+[/] {id}'s type is the agent's to decide. Until its next round it is guessed as {Markup.Escape(now)}."
             : $"[green]+[/] {id} is a {Markup.Escape(now)}, and stays one until you choose again.");
+
+        foreach (var gone in released)
+        {
+            output.WriteLine($"  It no longer waits for {Markup.Escape(gone)}.");
+        }
+
+        foreach (var link in outgrown.Where(link => !released.Contains(link.Prerequisite)))
+        {
+            output.WriteLine($"[yellow]![/] It still waits for {Markup.Escape(link.Prerequisite)}, which this type does not need. --release-links takes that off.");
+        }
 
         return CommandOutput.Success();
     }
