@@ -261,7 +261,8 @@ public static class ServiceRegistration
             provider.GetRequiredService<Platform.Abstractions.IExecutableResolver>(),
             provider.GetRequiredService<Platform.Abstractions.IProcessLauncher>(),
             provider.GetRequiredService<Platform.Abstractions.IEnvironmentProvider>(),
-            provider.GetRequiredService<TimeProvider>()));
+            provider.GetRequiredService<TimeProvider>(),
+            provider.GetRequiredService<Instructions.ISpecialistLibrary>()));
 
         // In front of the service, for the launcher's corner: cached for a day
         // and never an error, where the service is fresh every time and says

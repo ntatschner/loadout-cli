@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Loadout.Core.Configuration;
+using Loadout.Core.Instructions;
 using Loadout.Core.Triggers;
 using Loadout.Core.Workspace;
 using Loadout.Models.Capabilities;
@@ -63,6 +64,7 @@ public sealed class CapabilityProfiles : ICapabilityProfiles
     private readonly IGitHubReads _reads;
     private readonly Func<CancellationToken, Task<TriggerCredential>> _credential;
     private readonly TimeProvider _time;
+    private readonly ISpecialistLibrary? _specialists;
 
     public CapabilityProfiles(
         IWorkspaceManager workspace,
@@ -71,24 +73,27 @@ public sealed class CapabilityProfiles : ICapabilityProfiles
         IExecutableResolver resolver,
         IProcessLauncher processes,
         IEnvironmentProvider environment,
-        TimeProvider time)
-        : this(workspace, yaml, new GitHubApi(client), ct => CredentialAsync(resolver, processes, environment, ct), time)
+        TimeProvider time,
+        ISpecialistLibrary specialists)
+        : this(workspace, yaml, new GitHubApi(client), ct => CredentialAsync(resolver, processes, environment, ct), time, specialists)
     {
     }
 
-    /// <summary>For tests: GitHub's reads and the token are given rather than found.</summary>
+    /// <summary>For tests: GitHub's reads and the token are given rather than found, and without a library only the built-in checks run.</summary>
     internal CapabilityProfiles(
         IWorkspaceManager workspace,
         YamlStore yaml,
         IGitHubReads reads,
         Func<CancellationToken, Task<TriggerCredential>> credential,
-        TimeProvider time)
+        TimeProvider time,
+        ISpecialistLibrary? specialists = null)
     {
         _workspace = workspace;
         _yaml = yaml;
         _reads = reads;
         _credential = credential;
         _time = time;
+        _specialists = specialists;
     }
 
     /// <summary>Where a project's profile is kept.</summary>
@@ -164,6 +169,8 @@ public sealed class CapabilityProfiles : ICapabilityProfiles
             Named(CapabilityChecks.Environments, github.Environments),
             Named(CapabilityChecks.BranchProtection, github.Protection),
         ];
+
+        await AddDeclaredAsync(profile, local, github, ct).ConfigureAwait(false);
 
         foreach (var stack in LocalProbes.Unbuilt(stacks, workflows))
         {
@@ -271,10 +278,115 @@ public sealed class CapabilityProfiles : ICapabilityProfiles
 
     private static CapabilityResult Named(string id, Finding finding) => Result(id, finding);
 
-    private static CapabilityResult Result(string id, Finding finding) =>
-        new() { Id = id, State = finding.State, Evidence = finding.Evidence, Scope = finding.Scope };
+    private static CapabilityResult Result(string id, Finding finding) => new()
+    {
+        Id = id,
+        State = finding.State,
+        Evidence = finding.Evidence,
+        Scope = finding.Scope,
+        Name = CapabilityChecks.Find(id)?.Name ?? string.Empty,
+        Types = [.. CapabilityChecks.Find(id)?.Types ?? []],
+    };
 
     private static Finding Unknown(string why) => new(CapabilityState.Unknown, why);
+
+    /// <summary>
+    /// Runs the checks specialists declare: each replaces a built-in with its
+    /// id in place, and the rest follow the built-ins, so the order stays stable.
+    /// </summary>
+    private async Task AddDeclaredAsync(CapabilityProfile profile, string? local, GitHubFacts github, CancellationToken ct)
+    {
+        if (_specialists is null)
+        {
+            return;
+        }
+
+        var catalogue = await _specialists.LoadAsync(_workspace.LocalPath, profile.Project, ct).ConfigureAwait(false);
+        var declared = DeclaredChecks.Resolve(catalogue.All);
+        (IReadOnlyList<string> Files, bool Complete)? walked = null;
+
+        foreach (var check in declared)
+        {
+            var at = profile.Checks.FindIndex(one => string.Equals(one.Id, check.Id, StringComparison.OrdinalIgnoreCase));
+            var replaced = at >= 0 ? profile.Checks[at] : null;
+            Finding finding;
+
+            if (check.Clash is { } clash)
+            {
+                finding = Unknown(clash);
+            }
+            else if (check.Files.Count > 0)
+            {
+                if (local is not null)
+                {
+                    walked ??= LocalProbes.Files(local);
+                }
+
+                finding = FromFiles(check, walked);
+            }
+            else if (check.GitHub.Length > 0)
+            {
+                finding = check.GitHub switch
+                {
+                    DeclaredChecks.Environments => github.Environments,
+                    DeclaredChecks.BranchProtection => github.Protection,
+                    _ => github.Releases,
+                };
+            }
+            else
+            {
+                // Overrides only which work a built-in matters to; how it
+                // decides stays. DeclaredChecks refuses this on any other check.
+                finding = new Finding(replaced!.State, replaced.Evidence, replaced.Scope);
+            }
+
+            var result = new CapabilityResult
+            {
+                Id = replaced?.Id ?? check.Id,
+                State = finding.State,
+                Evidence = finding.Evidence,
+                Scope = finding.Scope,
+                Name = check.Name.Length > 0 ? check.Name : replaced?.Name ?? check.Id,
+                Types = [.. check.Types.Count > 0 ? check.Types : replaced?.Types ?? []],
+                Declared = true,
+            };
+
+            if (at >= 0)
+            {
+                profile.Checks[at] = result;
+            }
+            else
+            {
+                profile.Checks.Add(result);
+            }
+        }
+    }
+
+    /// <summary>
+    /// A file-matching check's state. Only a walk that saw every file can call
+    /// a missing one a gap; anything less is unknown.
+    /// </summary>
+    internal static Finding FromFiles(DeclaredCheck check, (IReadOnlyList<string> Files, bool Complete)? walked)
+    {
+        if (walked is not { } seen)
+        {
+            return Unknown("The project is not on this machine, so its files could not be read.");
+        }
+
+        foreach (var glob in check.Files)
+        {
+            if (seen.Files.FirstOrDefault(file => DeclaredChecks.Matches(glob, file)) is { } found)
+            {
+                return new Finding(CapabilityState.Present, $"{found} matches {glob}.");
+            }
+        }
+
+        var globs = string.Join(", ", check.Files);
+
+        return seen.Complete
+            ? new Finding(CapabilityState.Gap, $"No file matches {globs}.")
+            : Unknown($"No file seen matches {globs}, but not every file could be read.");
+    }
 
     /// <summary>What GitHub says, asked one call at a time, each within <see cref="Patience"/>.</summary>
     private async Task<GitHubFacts> AskAsync(TriggerCredential credential, string repo, CancellationToken ct)
@@ -401,7 +513,7 @@ public sealed class CapabilityProfiles : ICapabilityProfiles
     }
 
     /// <summary>One check's state, its evidence, and for a refusal the permission wanted.</summary>
-    private sealed record Finding(CapabilityState State, string Evidence, string Scope = "");
+    internal sealed record Finding(CapabilityState State, string Evidence, string Scope = "");
 
     /// <summary>What GitHub said for each of the checks only it can answer.</summary>
     private sealed record GitHubFacts(Finding Environments, Finding Protection, Finding Releases)

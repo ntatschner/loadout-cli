@@ -1,3 +1,5 @@
+using Loadout.Models.Tasks;
+
 namespace Loadout.Models.Capabilities;
 
 /// <summary>What one check found.</summary>
@@ -41,6 +43,19 @@ public sealed class CapabilityResult
 
     /// <summary>For <see cref="CapabilityState.NoPermission"/>, the permission GitHub wanted. Empty otherwise.</summary>
     public string Scope { get; set; } = string.Empty;
+
+    /// <summary>What the check is, in a few words.</summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>The types of work it matters to; a gap is shown against these and no others.</summary>
+    public List<TaskType> Types { get; set; } = [];
+
+    /// <summary>
+    /// Whether a specialist declared it, or overrode a built-in check with it.
+    /// A declared check can report a gap, but only a template Loadout ships can
+    /// offer to fill one.
+    /// </summary>
+    public bool Declared { get; set; }
 }
 
 /// <summary>
