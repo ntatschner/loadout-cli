@@ -88,6 +88,7 @@ export function summaryOf(run: Run): RunSummary {
     uncapped: run.budget.uncapped,
     projected: run.numbers?.money.projected ?? null,
     rate: run.numbers?.money.rate ?? null,
+    followUps: run.followUpsWaiting || undefined,
   };
 }
 

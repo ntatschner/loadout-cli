@@ -454,6 +454,19 @@ export interface RunNumbers {
   trouble: { denials: number; rejected: number; retried: number; quietRounds: number; conflicts: number; any: boolean };
 }
 
+/** A piece of work a run left for later (RunFollowUp), and what became of it. */
+export interface RunFollowUp {
+  id: string;
+  title: string;
+  why: string | null;
+  state: 'proposed' | 'accepted' | 'dismissed';
+  /** For an accepted one, the task it became. */
+  task: string | null;
+  by: string | null;
+  /** Why it was dismissed, when somebody said. */
+  reason: string | null;
+}
+
 export interface Run {
   id: string;
   team: string;
@@ -482,6 +495,10 @@ export interface Run {
   handover?: { items: { criterion: string; needs: string; todo: string; checkedBy: string | null }[]; branches: string[] } | null;
   goalUnderstood?: string | null;
   merged?: string[];
+  /** What its final report left for later, each waiting, accepted as a task, or dismissed. */
+  followUps?: RunFollowUp[];
+  /** How many of those nobody has accepted or dismissed yet. */
+  followUpsWaiting?: number;
   atMostRemainingSeconds?: number | null;
   numbers?: RunNumbers;
   turns?: { at: string; node: string; round: number; attempt: number; exchanges: number; cost: number; denials: number; completed: boolean; status: string | null; outcome: string | null }[];

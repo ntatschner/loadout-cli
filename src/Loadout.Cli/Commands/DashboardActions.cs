@@ -150,7 +150,7 @@ internal static partial class DashboardActions
     internal static readonly string[] Verbs =
     [
         "gate", "gates", "message", "stop", "forget", "close", "pause", "resume", "name", "pr", "say", "budget", "pickup",
-        "check", "restore", "purge", "restore-team", "purge-team",
+        "check", "followup-accept", "followup-dismiss", "restore", "purge", "restore-team", "purge-team",
         "daemon-pause", "daemon-resume", "daemon-restart",
     ];
 
@@ -187,6 +187,17 @@ internal static partial class DashboardActions
             // machine is the person looking at it, and that is whose name the
             // review evidence should carry.
             "check" => ("team handover", [action.Run, .. (action.Checks ?? []).Select(one => Joined("--check", one))]),
+
+            // Deciding about what a run left for later. No --by, for the same
+            // reason as a tick: the command takes whoever is signed in. A
+            // dismissal's reason goes joined, because it is prose and may
+            // start with a dash.
+            "followup-accept" => ("team follow-ups accept", [action.Run, .. action.FollowUps ?? []]),
+            "followup-dismiss" => ("team follow-ups dismiss", [
+                action.Run,
+                .. action.FollowUps ?? [],
+                .. action.Reason is { Length: > 0 } why ? (string[])[Joined("--why", why)] : [],
+            ]),
 
             // No --yes: naming a run is agreeing to it, so the command does not
             // ask and does not take the option. The page asks, by name, before
@@ -406,6 +417,13 @@ internal static partial class DashboardActions
             return OperationResult.Fail("Say which to tick off.", ExitCode.InvalidArguments);
         }
 
+        // Without one the command's own parser refuses the line, and the page
+        // would be told something vaguer than this.
+        if (action.Verb is "followup-accept" or "followup-dismiss" && action.FollowUps is not { Count: > 0 })
+        {
+            return OperationResult.Fail("Say which follow-up.", ExitCode.InvalidArguments);
+        }
+
         // Said where whoever started the server can see it. A page that can
         // stop a run should not be able to stop one silently.
         output.WriteLine(
@@ -462,6 +480,9 @@ internal static partial class DashboardActions
                 ExitCode.InvalidArguments when action.Verb == "check" =>
                     "That is not one it handed over, or the run is not waiting on a check any more. "
                     + "The terminal serving this page says which.",
+                ExitCode.InvalidArguments when action.Verb is "followup-accept" or "followup-dismiss" =>
+                    "That follow-up has already been accepted or dismissed, or the run has no follow-up "
+                    + "by that name. The terminal serving this page says which.",
                 ExitCode.InvalidArguments when action.Verb == "pickup" =>
                     "That run cannot be picked up as it is: it has not ended, it would stop again at "
                     + "once, or the answers do not match its questions. Give it more money in the budget "

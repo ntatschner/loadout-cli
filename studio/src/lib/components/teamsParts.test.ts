@@ -8,7 +8,9 @@ import Bin from './Bin.svelte';
 import BlockedRuns from './BlockedRuns.svelte';
 import type { BlockedRead } from '../blocked';
 import Gate from './Gate.svelte';
+import FollowUps from './FollowUps.svelte';
 import Handover from './Handover.svelte';
+import RunCard from './RunCard.svelte';
 import Outbox from './Outbox.svelte';
 import RunDepths from './RunDepths.svelte';
 
@@ -260,6 +262,61 @@ describe('Handover', () => {
     render(Handover, { run: 'r1', items });
 
     expect(screen.getByText('$ loadout team handover r1 --check 2 · the last one, so it is judged again')).toBeTruthy();
+  });
+});
+
+describe('FollowUps', () => {
+  const items = [
+    { id: 'F1', title: 'Document --since', why: 'Nobody will find it otherwise', state: 'proposed' as const, task: null, by: null, reason: null },
+    { id: 'F2', title: 'Colour the output', why: null, state: 'dismissed' as const, task: null, by: 'nigel', reason: 'not wanted' },
+    { id: 'F3', title: 'Pin the clock', why: null, state: 'accepted' as const, task: 'pin-the-clock', by: 'nigel', reason: null },
+  ];
+
+  it('offers a decision only on what still waits, and says what became of the rest', async () => {
+    const onaccept = vi.fn(() => true);
+    render(FollowUps, { run: 'r1', items, onaccept });
+
+    expect(screen.getByText('left for later · 1 of 3 waiting')).toBeTruthy();
+    expect(screen.getByText('dismissed by nigel: not wanted')).toBeTruthy();
+    expect(screen.getByText('✓ made the task pin-the-clock by nigel')).toBeTruthy();
+
+    const accepts = screen.getAllByRole('button', { name: /Make it a task/ });
+    expect(accepts).toHaveLength(1);
+    expect(screen.getByText('$ loadout team follow-ups accept r1 F1')).toBeTruthy();
+
+    await fireEvent.click(accepts[0]);
+
+    expect(onaccept).toHaveBeenCalledWith('F1');
+  });
+
+  it('asks why before dismissing, and sends the reason given', async () => {
+    const ondismiss = vi.fn(() => true);
+    render(FollowUps, { run: 'r1', items, ondismiss });
+
+    await fireEvent.click(screen.getByRole('button', { name: /Dismiss…/ }));
+    expect(ondismiss).not.toHaveBeenCalled();
+
+    await fireEvent.input(screen.getByRole('textbox', { name: /Why not/ }), { target: { value: 'done elsewhere' } });
+    expect(screen.getByText('$ loadout team follow-ups dismiss r1 F1 --why "done elsewhere"')).toBeTruthy();
+
+    await fireEvent.click(screen.getByRole('button', { name: /Dismiss it/ }));
+
+    expect(ondismiss).toHaveBeenCalledWith('F1', 'done elsewhere');
+  });
+});
+
+describe('RunCard', () => {
+  it('counts the follow-ups still waiting, linked to the run', () => {
+    render(RunCard, { run: { id: 'r1', goal: 'Add --since', team: 'iterating-project', word: 'done', followUps: 2 }, href: '#teams/r1' });
+
+    const chip = screen.getByRole('link', { name: '2 follow-ups waiting' });
+    expect(chip.getAttribute('href')).toBe('#teams/r1');
+  });
+
+  it('says nothing about follow-ups when none wait', () => {
+    render(RunCard, { run: { id: 'r1', goal: 'Add --since', team: 'iterating-project', word: 'done' }, href: '#teams/r1' });
+
+    expect(screen.queryByText(/follow-up/)).toBeNull();
   });
 });
 

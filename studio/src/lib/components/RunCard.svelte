@@ -35,6 +35,13 @@
     {#if badge}<span class="ls-liveness" role="status">{badge}</span>{/if}
   </div>
   <span class="facts">{facts}</span>
+  {#if run.followUps}
+    {#if href}
+      <a class="ls-chip followups" {href}>{run.followUps} follow-up{run.followUps === 1 ? '' : 's'} waiting</a>
+    {:else}
+      <span class="ls-chip followups">{run.followUps} follow-up{run.followUps === 1 ? '' : 's'} waiting</span>
+    {/if}
+  {/if}
   {#if run.spent !== undefined}
     <Spend spent={run.spent} cap={run.cap} uncapped={run.uncapped} projected={run.projected} rate={run.rate} />
   {/if}
