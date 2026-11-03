@@ -502,8 +502,17 @@ internal sealed partial class SpecialistLibrary : ISpecialistLibrary
 
             // Only a role carries these; on anything else they are ignored
             // the way every unknown frontmatter key is.
-            kind == SpecialistKind.Role ? Role(front) : null));
+            kind == SpecialistKind.Role ? Role(front) : null,
+            front.Checks.Count > 0 ? [.. front.Checks.Select(Check)] : null));
     }
+
+    /// <summary>A declared check as written, trimmed; whether it can be used is the validator's to say.</summary>
+    private static SpecialistCheck Check(CheckFront check) => new(
+        check.Id.Trim(),
+        check.Name.Trim(),
+        [.. check.Types.Select(type => type.Trim()).Where(type => type.Length > 0)],
+        [.. check.Files.Select(file => file.Trim()).Where(file => file.Length > 0)],
+        check.GitHub.Trim());
 
     /// <summary>
     /// A role's frontmatter as the coordinator reads it, with its posture's
@@ -567,6 +576,9 @@ internal sealed partial class SpecialistLibrary : ISpecialistLibrary
 
         public ProbeFront? Probe { get; set; }
 
+        /// <summary>What it adds to a project's capability profile.</summary>
+        public List<CheckFront> Checks { get; set; } = [];
+
         /// <summary>The posture a role's node is launched in. Roles only.</summary>
         public string? Mode { get; set; }
 
@@ -592,6 +604,22 @@ internal sealed partial class SpecialistLibrary : ISpecialistLibrary
         /// False for a role whose lists are the whole of what it may do.
         /// </summary>
         public bool Defaults { get; set; } = true;
+    }
+
+    /// <summary>A capability check as written, before it is checked.</summary>
+    internal sealed class CheckFront
+    {
+        public string Id { get; set; } = string.Empty;
+
+        public string Name { get; set; } = string.Empty;
+
+        public List<string> Types { get; set; } = [];
+
+        public List<string> Files { get; set; } = [];
+
+        /// <remarks>Named here because the convention would spell it git_hub.</remarks>
+        [YamlMember(Alias = "github")]
+        public string GitHub { get; set; } = string.Empty;
     }
 
     /// <summary>A probe as written, before it is checked.</summary>

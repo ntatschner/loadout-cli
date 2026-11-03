@@ -256,6 +256,26 @@ public sealed record SpecialistProbe(
     bool Absent = false);
 
 /// <summary>
+/// One thing a project can have or lack, as a specialist declares it.
+/// </summary>
+/// <remarks>
+/// Kept as written, so a check that cannot be used can be reported rather than
+/// lost as the file is read. It has no field for a command or a template: what
+/// it may do is limited by what can be said here.
+/// </remarks>
+/// <param name="Id">How it is named. A built-in check's id overrides that check.</param>
+/// <param name="Name">What it is, in a few words.</param>
+/// <param name="Types">The types of work it matters to, as task types are spelt.</param>
+/// <param name="Files">Globs from the repository's root, of which any match means it is present.</param>
+/// <param name="GitHub">A GitHub setting to read instead of files, or empty.</param>
+public sealed record SpecialistCheck(
+    string Id,
+    string Name,
+    IReadOnlyList<string> Types,
+    IReadOnlyList<string> Files,
+    string GitHub);
+
+/// <summary>
 /// One specialist: a body of guidance plus the evidence that makes it relevant.
 /// </summary>
 /// <remarks>
@@ -292,6 +312,10 @@ public sealed record SpecialistProbe(
 /// What a coordinator reads off a role: its posture, its deliverable, its
 /// contract and its tool policy. Null on every other kind.
 /// </param>
+/// <param name="Checks">
+/// What it adds to a project's capability profile, or null when it adds
+/// nothing. Most add nothing.
+/// </param>
 public sealed record SpecialistDocument(
     string Id,
     SpecialistKind Kind,
@@ -303,8 +327,12 @@ public sealed record SpecialistDocument(
     SpecialistOrigin Origin = SpecialistOrigin.BuiltIn,
     string Path = "",
     SpecialistProbe? Probe = null,
-    RoleDefinition? Role = null)
+    RoleDefinition? Role = null,
+    IReadOnlyList<SpecialistCheck>? Checks = null)
 {
+    /// <summary>Its declared checks, as a list that is never null.</summary>
+    public IReadOnlyList<SpecialistCheck> CheckList => Checks ?? [];
+
     /// <summary>
     /// A rough token count for the body.
     /// </summary>

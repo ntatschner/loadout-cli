@@ -30,11 +30,41 @@ internal static class SpecialistValidator
             CheckCapabilities(specialist, findings);
             CheckAccompanies(specialist, specialists, findings);
             CheckStyle(specialist, findings);
+            CheckDeclaredChecks(specialist, findings);
         }
 
         findings.AddRange(FindCycles(specialists));
 
         return findings;
+    }
+
+    /// <summary>A declared capability check has to be one a profile can run.</summary>
+    /// <remarks>
+    /// A warning, because the rest of the specialist is still good guidance and
+    /// a bad check is simply left out of the profile. Left out holds nothing,
+    /// and saying so here is how its author finds out.
+    /// </remarks>
+    private static void CheckDeclaredChecks(SpecialistDocument specialist, List<RuleFinding> findings)
+    {
+        foreach (var check in specialist.CheckList)
+        {
+            if (Capabilities.DeclaredChecks.Problem(check) is { } problem)
+            {
+                findings.Add(new RuleFinding(
+                    specialist.Id, RuleFindingSeverity.Warning, "specialist-check",
+                    $"A check in '{specialist.Id}' {problem}. It is left out of every project's profile."));
+            }
+        }
+
+        foreach (var repeated in specialist.CheckList
+                     .Where(check => check.Id.Length > 0)
+                     .GroupBy(check => check.Id, StringComparer.OrdinalIgnoreCase)
+                     .Where(group => group.Count() > 1))
+        {
+            findings.Add(new RuleFinding(
+                specialist.Id, RuleFindingSeverity.Warning, "specialist-check",
+                $"'{specialist.Id}' declares the check '{repeated.Key}' {repeated.Count()} times. Only the first is used."));
+        }
     }
 
     /// <summary>

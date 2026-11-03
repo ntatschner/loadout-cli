@@ -34,6 +34,15 @@ public static class LocalProbes
         ".git", "node_modules", "bin", "obj", "dist", "build", "out", "vendor", ".venv", "venv", "packages", "target",
     };
 
+    /// <summary>How many files a walk for declared checks looks at before giving up on saying a file is missing.</summary>
+    private const int MostFiles = 200_000;
+
+    /// <summary>Folders of machinery and build output, which no declared check is looking for.</summary>
+    private static readonly HashSet<string> NeverDeclared = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".git", "node_modules", "bin", "obj",
+    };
+
     /// <summary>The words in a workflow that say it builds a stack. A guess, so only ever a note.</summary>
     private static readonly Dictionary<string, string[]> BuildWords = new(StringComparer.Ordinal)
     {
@@ -201,6 +210,55 @@ public static class LocalProbes
                 .Where(stack => !building.Any(workflow =>
                     BuildWords[stack].Any(word => workflow.Text.Contains(word, StringComparison.OrdinalIgnoreCase)))),
         ];
+    }
+
+    /// <summary>
+    /// The repository's files, relative to its root with forward slashes, and
+    /// whether that is all of them.
+    /// </summary>
+    /// <remarks>
+    /// Skips far less than <see cref="Stacks"/>, because a declared check may
+    /// look in a folder such as <c>build</c>. A folder it could not read, or a
+    /// walk stopped at <see cref="MostFiles"/>, comes back as not complete, so
+    /// the caller can say unknown rather than claim a gap it has not seen.
+    /// </remarks>
+    public static (IReadOnlyList<string> Files, bool Complete) Files(string root, int most = MostFiles)
+    {
+        var found = new List<string>();
+        var complete = true;
+        var folders = new Stack<string>();
+
+        folders.Push(root);
+
+        while (folders.TryPop(out var folder))
+        {
+            try
+            {
+                foreach (var file in Directory.EnumerateFiles(folder))
+                {
+                    if (found.Count >= most)
+                    {
+                        return (found, false);
+                    }
+
+                    found.Add(Path.GetRelativePath(root, file).Replace('\\', '/'));
+                }
+
+                foreach (var child in Directory.EnumerateDirectories(folder))
+                {
+                    if (!NeverDeclared.Contains(Path.GetFileName(child)))
+                    {
+                        folders.Push(child);
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+            {
+                complete = false;
+            }
+        }
+
+        return (found, complete);
     }
 
     /// <summary>The stack a file is the manifest of, or null.</summary>
