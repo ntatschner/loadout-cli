@@ -1991,6 +1991,30 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// What a run left for later reaches the page with where each stands, and
+    /// how many still wait, which is what the run list counts.
+    /// </summary>
+    [Fact]
+    public async Task A_run_s_follow_ups_and_how_many_wait_reach_the_page()
+    {
+        var run = JsonDocument.Parse(await (await GetAsync("/api/runs")).Content.ReadAsStringAsync())
+            .RootElement.GetProperty("runs")[0];
+
+        run.GetProperty("followUpsWaiting").GetInt32().Should().Be(1);
+
+        var followUps = run.GetProperty("followUps");
+
+        followUps.GetArrayLength().Should().Be(2);
+        followUps[0].GetProperty("id").GetString().Should().Be("F1");
+        followUps[0].GetProperty("title").GetString().Should().Be("Document --since");
+        followUps[0].GetProperty("why").GetString().Should().Be("Nobody will find it otherwise");
+        followUps[0].GetProperty("state").GetString().Should().Be("proposed");
+        followUps[1].GetProperty("state").GetString().Should().Be("dismissed");
+        followUps[1].GetProperty("by").GetString().Should().Be("nigel");
+        followUps[1].GetProperty("reason").GetString().Should().Be("not wanted");
+    }
+
+    /// <summary>
     /// The page shows those readings, offers the timed recommendation on the
     /// start form and sends it, and says what the team is judged on by default.
     /// </summary>
@@ -3456,6 +3480,9 @@ public sealed class DashboardServerTests : IAsyncLifetime
             """{"at":"2026-09-16T12:00:10+00:00","run":"r","node":"lead","kind":"report.checked","data":{"status":"working","outcome":"accepted","goalUnderstood":"a --since option on loadout usage","coverage":[{"criterion":"a test covers it","verdict":"notattempted","because":"not reached yet","understood":"a test that fails without --since"}]}}""",
             """{"at":"2026-09-16T12:00:15+00:00","run":"r","node":"lead","kind":"node.turn","data":{"round":1,"turns":0,"cost":0,"session":"5d1c9a20-lead"}}""",
             """{"at":"2026-09-16T12:00:20+00:00","run":"r","node":"lead","kind":"node.doing","data":{"doing":"Read docs/commands.md"}}""",
+            """{"at":"2026-09-16T12:00:30+00:00","run":"r","node":null,"kind":"followup.proposed","data":{"id":"F1","title":"Document --since","why":"Nobody will find it otherwise"}}""",
+            """{"at":"2026-09-16T12:00:31+00:00","run":"r","node":null,"kind":"followup.proposed","data":{"id":"F2","title":"Colour the output"}}""",
+            """{"at":"2026-09-16T12:00:40+00:00","run":"r","node":null,"kind":"followup.dismissed","data":{"id":"F2","by":"nigel","why":"not wanted"}}""",
         ];
 
         public IReadOnlyList<string> List(int limit = 20) => ["20260916-1200-aaaa"];

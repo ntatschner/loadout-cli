@@ -1363,9 +1363,14 @@ again. A run stops being listed once every follow-up it named is one or the
 other.
 
 Two limits. Only the lead's final report is read, so a worker's follow-up
-counts once the lead carries it into its own; the lead is told to. And Studio
-does not show follow-ups yet: for now they are read and decided at a terminal.
-Reports written before follow-ups existed (`report/1`) still read, with none.
+counts once the lead carries it into its own; the lead is told to. And the
+classic dashboard does not show them; Studio does. Reports written before
+follow-ups existed (`report/1`) still read, with none.
+
+In Studio, a run with follow-ups still waiting says how many on its card in the
+Teams list, and its page lists every one with *Make it a task* and *Dismiss…*
+beside it. Dismissing asks why first, and the box can be left empty. Each
+button shows the command it runs, which is the same one you would type above.
 
 ### Two dashboards
 

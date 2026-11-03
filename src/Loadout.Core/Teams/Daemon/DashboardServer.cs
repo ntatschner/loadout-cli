@@ -814,7 +814,8 @@ public sealed class DashboardServer : IDisposable
         Flag(asked, "confirmed"),
         Texts(asked, "answers"),
         Flag(asked, "withoutAnswers"),
-        Texts(asked, "checks"));
+        Texts(asked, "checks"),
+        Texts(asked, "followUps"));
 
     /// <summary>A list of strings out of a request body, in order, or null where it sent none.</summary>
     private static IReadOnlyList<string>? Texts(JsonElement? body, string name) =>
@@ -3402,6 +3403,21 @@ public sealed class DashboardServer : IDisposable
         elapsedSeconds = (int)run.Elapsed.TotalSeconds,
         atMostRemainingSeconds = run.AtMostRemaining is { } left ? (int)left.TotalSeconds : (int?)null,
         merged = run.Merged,
+
+        // What its final report left for later, each held until somebody
+        // accepts it as a task or dismisses it, and how many still wait.
+        // Empty for a run that left nothing, which is most of them.
+        followUps = run.FollowUps.Select(one => new
+        {
+            id = one.Id,
+            title = one.Title,
+            why = one.Why,
+            state = one.State.ToString().ToLowerInvariant(),
+            task = one.Task,
+            by = one.By,
+            reason = one.Reason,
+        }),
+        followUpsWaiting = RunFollowUps.Waiting(run),
         // Everything the run has stopped and asked, so a page can offer to
         // answer it. Empty on a run that is working, which is most of them.
         gates = run.Waiting.Select(gate => new

@@ -29,7 +29,7 @@ vi.mock('./state.svelte', () => ({
   },
 }));
 
-const { answerGate, checkOff, pickUp } = await import('./teamsAct');
+const { acceptFollowUp, answerGate, checkOff, dismissFollowUp, pickUp } = await import('./teamsAct');
 
 describe('answerGate', () => {
   it('sends an answer with its reason, and shows the same command', async () => {
@@ -95,5 +95,34 @@ describe('checkOff', () => {
 
     expect(sent).toEqual([{ run: 'r1', verb: 'check', body: { checks: ['2'] } }]);
     expect(said).toEqual(['$ loadout team handover r1 --check 2']);
+  });
+});
+
+describe('follow-ups', () => {
+  it('sends the id accepted as followUps, and shows the accept command', async () => {
+    sent.length = 0;
+    said.length = 0;
+    await acceptFollowUp('r1', 'F2');
+
+    expect(sent).toEqual([{ run: 'r1', verb: 'followup-accept', body: { followUps: ['F2'] } }]);
+    expect(said).toEqual(['$ loadout team follow-ups accept r1 F2']);
+  });
+
+  it('sends a dismissal with its reason, quoted in the command', async () => {
+    sent.length = 0;
+    said.length = 0;
+    await dismissFollowUp('r1', 'F1', 'done elsewhere');
+
+    expect(sent).toEqual([{ run: 'r1', verb: 'followup-dismiss', body: { followUps: ['F1'], reason: 'done elsewhere' } }]);
+    expect(said).toEqual(['$ loadout team follow-ups dismiss r1 F1 --why "done elsewhere"']);
+  });
+
+  it('sends no reason when none was given', async () => {
+    sent.length = 0;
+    said.length = 0;
+    await dismissFollowUp('r1', 'F1');
+
+    expect(sent).toEqual([{ run: 'r1', verb: 'followup-dismiss', body: { followUps: ['F1'] } }]);
+    expect(said).toEqual(['$ loadout team follow-ups dismiss r1 F1']);
   });
 });

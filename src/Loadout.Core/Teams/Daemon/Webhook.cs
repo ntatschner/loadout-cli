@@ -288,6 +288,10 @@ public sealed record ChoosableDoneWhen(string Text, IReadOnlyList<string> Teams)
 /// For a run that handed criteria over: which to tick off as done, by number,
 /// which is <c>team handover --check</c> for each.
 /// </param>
+/// <param name="FollowUps">
+/// For a run that left work for later: which follow-ups to accept or dismiss,
+/// such as F1, which is <c>team follow-ups accept</c> or <c>dismiss</c>.
+/// </param>
 /// <remarks>
 /// One shape for all five because they all end the same way: the daemon runs
 /// the command somebody would have typed. Nothing here decides what any of
@@ -308,7 +312,8 @@ public sealed record RunAction(
     bool Confirmed = false,
     IReadOnlyList<string>? Answers = null,
     bool WithoutAnswers = false,
-    IReadOnlyList<string>? Checks = null);
+    IReadOnlyList<string>? Checks = null,
+    IReadOnlyList<string>? FollowUps = null);
 
 /// <summary>
 /// Letting something outside this machine start a run.

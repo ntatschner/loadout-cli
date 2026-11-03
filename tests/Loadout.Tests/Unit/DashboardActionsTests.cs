@@ -130,6 +130,65 @@ public sealed class DashboardActionsTests
     }
 
     [Fact]
+    public void Accepting_follow_ups_names_each_and_no_name()
+    {
+        Typed(new RunAction(Run, "followup-accept", FollowUps: ["F1", "F3"]))
+            .Should().Be($"team follow-ups accept {Run} F1 F3");
+    }
+
+    [Fact]
+    public void Dismissing_a_follow_up_passes_the_reason_joined()
+    {
+        Typed(new RunAction(Run, "followup-dismiss", Reason: "- not needed", FollowUps: ["F2"]))
+            .Should().Be($"team follow-ups dismiss {Run} F2 --why=- not needed");
+    }
+
+    [Fact]
+    public void Dismissing_without_a_reason_passes_no_why()
+    {
+        Typed(new RunAction(Run, "followup-dismiss", FollowUps: ["F2"]))
+            .Should().Be($"team follow-ups dismiss {Run} F2");
+    }
+
+    [Fact]
+    public void The_page_s_follow_ups_and_reason_are_read_by_name()
+    {
+        using var body = System.Text.Json.JsonDocument.Parse("""{"followUps":["F1","F2"],"reason":"done elsewhere"}""");
+
+        var action = DashboardServer.ActionFrom(Run, "followup-dismiss", body.RootElement);
+
+        action.FollowUps.Should().Equal("F1", "F2");
+        action.Reason.Should().Be("done elsewhere");
+    }
+
+    [Theory]
+    [InlineData("followup-accept")]
+    [InlineData("followup-dismiss")]
+    public async Task A_follow_up_decision_naming_none_is_refused_before_anything_runs(string verb)
+    {
+        var commands = new Refusing(ExitCode.Success);
+
+        var refused = await DashboardActions.RanAsync(
+            commands, TimeProvider.System, new RunAction(Run, verb, FollowUps: []), Quiet(), CancellationToken.None);
+
+        refused.Failed.Should().BeTrue();
+        refused.Error.Should().Be("Say which follow-up.");
+        commands.Ran.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("followup-accept")]
+    [InlineData("followup-dismiss")]
+    public async Task A_refused_follow_up_decision_says_it_was_decided_or_is_not_one(string verb)
+    {
+        var refused = await DashboardActions.RanAsync(
+            new Refusing(ExitCode.InvalidArguments), TimeProvider.System, new RunAction(Run, verb, FollowUps: ["F9"]), Quiet(), CancellationToken.None);
+
+        refused.Failed.Should().BeTrue();
+        refused.Error.Should().Contain("already been accepted or dismissed");
+    }
+
+    [Fact]
     public async Task A_tick_with_nothing_named_is_refused_before_anything_runs()
     {
         var commands = new Refusing(ExitCode.Success);

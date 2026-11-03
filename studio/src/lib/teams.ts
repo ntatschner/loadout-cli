@@ -276,6 +276,8 @@ export interface RunSummary {
   uncapped?: boolean;
   projected?: number | null;
   rate?: string | null;
+  /** How many follow-ups it left for later still wait on somebody. */
+  followUps?: number;
 }
 
 /** One reason a run wants you, as Needs you lists it. */

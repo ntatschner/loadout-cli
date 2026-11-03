@@ -71,7 +71,8 @@ public sealed class DashboardVerbContractTests
         Instead: "- do the other thing",
         Budget: "40",
         Answers: ["- merge them by hand", "yes"],
-        Checks: ["1", "- End run checked by hand"]);
+        Checks: ["1", "- End run checked by hand"],
+        FollowUps: ["F1", "F2"]);
 
     [BuiltCliTheory]
     [MemberData(nameof(Verbs))]

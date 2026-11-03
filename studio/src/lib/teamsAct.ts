@@ -43,6 +43,8 @@ export const runLines = {
   close: (run: string) => `$ loadout team runs close ${run}`,
   pr: (run: string, node: string) => `$ loadout team pr ${run} --node ${node} --draft`,
   check: (run: string, number: number) => `$ loadout team handover ${run} --check ${number}`,
+  accept: (run: string, id: string) => `$ loadout team follow-ups accept ${run} ${id}`,
+  dismiss: (run: string, id: string, why = '') => `$ loadout team follow-ups dismiss ${run} ${id}${why ? ` --why ${quoted(why)}` : ''}`,
 };
 
 export const hold = (run: string) => studio.perform(() => api.runs.act(run, 'pause'), 'It holds after this round', runLines.hold(run));
@@ -61,6 +63,16 @@ export const pickUp = (run: string, answers: string[] = [], without = false) =>
 // judges the run again, which the daemon starts and does not wait out.
 export const checkOff = (run: string, number: number) =>
   studio.perform(() => api.runs.act(run, 'check', { checks: [String(number)] }), `Ticked off: number ${number}`, runLines.check(run, number));
+// What a run left for later: made a task on the run's project, or dropped
+// so it is not offered again, each by its id such as F1.
+export const acceptFollowUp = (run: string, id: string) =>
+  studio.perform(() => api.runs.act(run, 'followup-accept', { followUps: [id] }), `Made ${id} a task`, runLines.accept(run, id));
+export const dismissFollowUp = (run: string, id: string, why = '') =>
+  studio.perform(
+    () => api.runs.act(run, 'followup-dismiss', why ? { followUps: [id], reason: why } : { followUps: [id] }),
+    `Dismissed ${id}`,
+    runLines.dismiss(run, id, why),
+  );
 export const forget = (run: string) => studio.perform(() => api.runs.act(run, 'forget'), 'Forgotten, to the bin', runLines.forget(run));
 export const close = (run: string, confirmed: boolean) =>
   studio.perform(() => api.runs.act(run, 'close', { confirmed }), 'Ended: nothing was driving it', runLines.close(run) + (confirmed ? ' --yes' : ''));

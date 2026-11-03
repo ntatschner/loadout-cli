@@ -8,6 +8,7 @@
   import Dialog from '../lib/components/Dialog.svelte';
   import DoneWhen from '../lib/components/DoneWhen.svelte';
   import Gate from '../lib/components/Gate.svelte';
+  import FollowUps from '../lib/components/FollowUps.svelte';
   import Handover from '../lib/components/Handover.svelte';
   import HaloButton from '../lib/components/HaloButton.svelte';
   import Journal from '../lib/components/Journal.svelte';
@@ -24,7 +25,7 @@
   import { runJob } from '../lib/jobs';
   import { router } from '../lib/router.svelte';
   import { studio } from '../lib/state.svelte';
-  import { answerGate, carryOn, checkOff, close, forget, hold, pickUp, runLines, setBudget, stop, tellLead } from '../lib/teamsAct';
+  import { acceptFollowUp, answerGate, carryOn, checkOff, close, dismissFollowUp, forget, hold, pickUp, runLines, setBudget, stop, tellLead } from '../lib/teamsAct';
   import { criteriaOf, crewOf, duration, gateOf, livenessOf, runWord, shapeOf, summaryOf, unowned } from '../lib/teamsData';
   import { money, type JournalLine } from '../lib/teams';
 
@@ -356,6 +357,16 @@
 
     {#if run.handover?.items.length && !run.running}
       <Handover run={run.id} items={run.handover.items} branches={run.handover.branches} disabledReason={watch} oncheck={(number) => checkOff(run.id, number)} />
+    {/if}
+
+    {#if run.followUps?.length}
+      <FollowUps
+        run={run.id}
+        items={run.followUps}
+        disabledReason={watch}
+        onaccept={(id) => acceptFollowUp(run.id, id)}
+        ondismiss={(id, why) => dismissFollowUp(run.id, id, why)}
+      />
     {/if}
 
     {#each run.attention.filter((one) => one.kind !== 'asking') as one, index (index)}
