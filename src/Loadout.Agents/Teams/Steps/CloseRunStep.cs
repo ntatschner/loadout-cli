@@ -13,9 +13,11 @@ internal sealed class CloseRunStep
     private readonly FoldStep _fold;
     private readonly MergeStep _merge;
     private readonly DeclareStep _declare;
+    private readonly Core.Capabilities.ICapabilityOffers? _offers;
 
-    public CloseRunStep(FoldStep fold, MergeStep merge, DeclareStep declare)
+    public CloseRunStep(FoldStep fold, MergeStep merge, DeclareStep declare, Core.Capabilities.ICapabilityOffers? offers = null)
     {
+        _offers = offers;
         _fold = fold;
         _merge = merge;
         _declare = declare;
@@ -69,6 +71,18 @@ internal sealed class CloseRunStep
             .ConfigureAwait(false);
 
         run.Cost += afterwards.Sum();
+
+        // After the merge, so what the run itself took away is seen too.
+        if (_offers is not null && run.CapabilitiesAtStart is not null)
+        {
+            var now = await _offers.LookAsync(slug, ct).ConfigureAwait(false);
+
+            foreach (var note in Core.Capabilities.CapabilityOffers.Appeared(run.CapabilitiesAtStart, now))
+            {
+                run.Warnings.Add(note);
+                await journal.WriteAsync("run.note", null, new { text = note }, ct).ConfigureAwait(false);
+            }
+        }
 
         // The watch stops before the ending is written, so its last look -
         // an answer given just before the end - goes down ahead of it, where

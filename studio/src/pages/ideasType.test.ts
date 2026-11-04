@@ -7,6 +7,7 @@ import type { Job } from '../lib/api';
 
 let type: string | null = 'feature';
 let typeBy: string | null = 'rule';
+let links: { check: string; prerequisite: string; outgrown: boolean }[] = [];
 const ran: [string, string[]][] = [];
 const job = (id: string): Job => ({ id, path: '', line: '', state: 'done', exitCode: 0, startedAt: '', endedAt: null, truncated: false, output: '', error: '' });
 
@@ -22,6 +23,10 @@ vi.mock('../lib/api', async (original) => {
 
       if (path === 'idea show') {
         return { id: 'i1', project: 'p', stage: 'captured', ask: 'Ask', questions: [], plan: null, accepted: null, type, typeBy };
+      }
+
+      if (path === 'task offers') {
+        return { project: 'p', task: 'i1', built: '', github: 'not asked', offers: [], unseen: [], notNeeded: [], notes: [], links };
       }
 
       return new Promise(() => undefined);
@@ -59,6 +64,7 @@ describe('the type picker', () => {
   beforeEach(() => {
     type = 'feature';
     typeBy = 'rule';
+    links = [];
     ran.length = 0;
   });
 
@@ -86,6 +92,34 @@ describe('the type picker', () => {
     await settle();
 
     expect(ran).toContainEqual(['idea type', ['i1', 'release', '--project', 'p']]);
+  });
+
+  it('offers nothing about links on an idea that has none', async () => {
+    await picker();
+    await settle();
+
+    expect(screen.queryByLabelText(/stop waiting for what the new type does not need/)).toBeNull();
+  });
+
+  it('takes a link off in the same change of type, unless the box is unticked', async () => {
+    links = [{ check: 'ci', prerequisite: 'add-ci', outgrown: false }];
+
+    const select = await picker();
+    const box = (await screen.findByLabelText(/stop waiting for what the new type does not need/)) as HTMLInputElement;
+
+    expect(box.checked).toBe(true);
+
+    await fireEvent.change(select, { target: { value: 'docs' } });
+    await settle();
+
+    expect(ran).toContainEqual(['idea type', ['i1', 'docs', '--project', 'p', '--release-links']]);
+
+    ran.length = 0;
+    await fireEvent.click(box);
+    await fireEvent.change(select, { target: { value: 'bug-fix' } });
+    await settle();
+
+    expect(ran).toContainEqual(['idea type', ['i1', 'bug-fix', '--project', 'p']]);
   });
 
   it('hands a chosen type back to the agent', async () => {

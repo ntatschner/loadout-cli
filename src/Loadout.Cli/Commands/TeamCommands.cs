@@ -1452,6 +1452,7 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
     private readonly IWorkspaceManager _workspace;
     private readonly IProjectService _projects;
     private readonly IAnsiConsole _console;
+    private readonly Loadout.Core.Capabilities.ICapabilityOffers? _offers;
     private readonly Loadout.Core.Tasks.ITaskService _tasks;
 
     private readonly ReadingProfile _reading;
@@ -1471,7 +1472,8 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         IAnsiConsole console,
         ReadingProfile reading,
         Loadout.Core.Tasks.ITaskService tasks,
-        IProjectCheckouts? checkouts = null)
+        IProjectCheckouts? checkouts = null,
+        Loadout.Core.Capabilities.ICapabilityOffers? offers = null)
     {
         _checkouts = checkouts;
         _runner = runner;
@@ -1486,6 +1488,7 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         _console = console;
         _reading = reading;
         _tasks = tasks;
+        _offers = offers;
     }
 
     public sealed class Settings : TeamSettings
@@ -1928,6 +1931,13 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
 
         if (settings.Task is { Length: > 0 } forTask)
         {
+            // A run starting is a moment that decides something, so a
+            // prerequisite whose capability is now there closes first.
+            if (_offers is not null && !settings.DryRun)
+            {
+                await _offers.SettleAsync(project, Environment.UserName, cancellationToken).ConfigureAwait(false);
+            }
+
             var listed = await _tasks.ListAsync(project.Entry.Slug, cancellationToken).ConfigureAwait(false);
 
             if (listed.Failed)

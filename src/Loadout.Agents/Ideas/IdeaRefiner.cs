@@ -76,13 +76,17 @@ internal sealed class IdeaRefiner : IIdeaRefiner
     private readonly IPlatformPaths _paths;
     private readonly IIdeaLocks _locks;
 
+    private readonly Core.Capabilities.ICapabilityOffers? _offers;
+
     public IdeaRefiner(
         IIdeaService ideas,
         IProjectService projects,
         IDetachedLauncher launcher,
         IPlatformPaths paths,
-        IIdeaLocks locks)
+        IIdeaLocks locks,
+        Core.Capabilities.ICapabilityOffers? offers = null)
     {
+        _offers = offers;
         _ideas = ideas;
         _projects = projects;
         _launcher = launcher;
@@ -165,7 +169,14 @@ internal sealed class IdeaRefiner : IIdeaRefiner
             Allowed,
             IdeaSchema.Version3,
             IdeaSchema.Version,
-            IdeaWork.Prompt(record, hints, target, await _ideas.TaskOfAsync(request.Place, ct).ConfigureAwait(false)),
+            IdeaWork.Prompt(
+                record,
+                hints,
+                target,
+                await _ideas.TaskOfAsync(request.Place, ct).ConfigureAwait(false),
+                _offers is not null && request.Place.Project is { Length: > 0 } onProject
+                    ? (await _offers.ReadAsync(onProject, request.Place.Id, ct).ConfigureAwait(false)).Value
+                    : null),
             IdeaReply.Read,
             request.Watching,
             ct).ConfigureAwait(false);

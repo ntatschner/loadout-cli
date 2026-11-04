@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+using Loadout.Core.Capabilities;
 using Loadout.Core.Ideas;
 using Loadout.Models.Ideas;
 using Terminal.Gui.App;
@@ -12,7 +13,8 @@ namespace Loadout.Tui.Terminal;
 /// <summary>One idea, as the screen was given it.</summary>
 /// <param name="Summary">Where it is and where it stands.</param>
 /// <param name="Record">Its working record, or null when there is none to read.</param>
-internal sealed record IdeaEntry(IdeaSummary Summary, IdeaRecord? Record);
+/// <param name="Sheet">What its project lacks before it, or null where that does not apply.</param>
+internal sealed record IdeaEntry(IdeaSummary Summary, IdeaRecord? Record, OfferSheet? Sheet = null);
 
 /// <summary>
 /// Every idea, and one of them in full, with a key for each thing that can be
@@ -43,6 +45,7 @@ internal sealed class IdeasWindow : Window
     private readonly IApplication _application;
     private readonly KeyedListView _rows;
     private readonly KeyedListView _detail;
+    private readonly Dictionary<string, string> _stacks = new(StringComparer.Ordinal);
 
     /// <summary>What to run once the screen has closed, or null when nothing was asked for.</summary>
     internal IdeaStep? Chosen { get; private set; }
@@ -125,6 +128,9 @@ internal sealed class IdeasWindow : Window
             ("y", "accept"),
             ("x", "dismiss failure"),
             ("p", "type"),
+            ("o", "take offer"),
+            ("s", "offer's stack"),
+            ("w", "not needed"),
             ("m", "move"),
             ("Del", "remove"),
             ("Esc", "close"),
@@ -158,6 +164,9 @@ internal sealed class IdeasWindow : Window
             list.OnKey(Key.X, Command.Undo, () => Take(Dismiss()));
             list.OnKey(Key.P, Command.CutToEndOfLine, () => Take(Retype()));
             list.OnKey(Key.M, Command.Redo, () => Take(Move()));
+            list.OnKey(Key.O, Command.Refresh, () => Take(TakeOffer()));
+            list.OnKey(Key.S, Command.Expand, CycleStack);
+            list.OnKey(Key.W, Command.DeleteAll, () => Take(NotNeeded()));
             list.OnKey(Key.Delete, Command.DeleteCharRight, () => Take(Remove()));
         }
 
@@ -251,6 +260,41 @@ internal sealed class IdeasWindow : Window
             ? IdeaSteps.Accept(idea.Summary.Place, target)
             : null;
 
+    /// <summary>The first gap on the selected idea that still wants an answer.</summary>
+    /// <remarks>Not once it is accepted: it is work by then, and task offers takes it from there.</remarks>
+    private CapabilityOffer? Open(bool withTemplate) =>
+        Selected is { Record.Accepted: null, Sheet: { } sheet }
+            ? sheet.Offers.FirstOrDefault(offer => !offer.Linked && (offer.CanOffer || !withTemplate))
+            : null;
+
+    private IdeaStep? TakeOffer() =>
+        Open(withTemplate: true) is { } offer && Selected is { } idea
+            ? IdeaSteps.TakeOffer(idea.Summary.Place, offer, StackOf(offer))
+            : null;
+
+    private IdeaStep? NotNeeded() =>
+        Open(withTemplate: false) is { } offer && Selected is { Summary.Place.Project: { } slug } idea
+            ? IdeaSteps.NotNeeded(idea.Summary.Place, slug, offer.Check)
+            : null;
+
+    /// <summary>What the stack key has reached for an offer, or its default.</summary>
+    private string? StackOf(CapabilityOffer offer) =>
+        _stacks.TryGetValue(offer.Check, out var chosen) ? chosen : offer.Stacks.FirstOrDefault();
+
+    /// <remarks>Changes only what the screen will ask for, so it stays open.</remarks>
+    private bool CycleStack()
+    {
+        if (Open(withTemplate: true) is { Stacks.Count: > 1 } offer)
+        {
+            var at = offer.Stacks.ToList().IndexOf(StackOf(offer) ?? string.Empty);
+
+            _stacks[offer.Check] = offer.Stacks[(at + 1) % offer.Stacks.Count];
+            ShowDetail();
+        }
+
+        return true;
+    }
+
     /// <remarks>Only when there is a failed round to clear, and none running.</remarks>
     /// <remarks>Not once it is accepted: its type is then its task's, which task declare changes.</remarks>
     private IdeaStep? Retype() =>
@@ -288,7 +332,12 @@ internal sealed class IdeasWindow : Window
         var width = _detail.Viewport.Width > 20 ? _detail.Viewport.Width - 1 : 100;
 
         var lines = Selected is { } idea
-            ? IdeaSteps.Detail(idea.Summary.Place, idea.Record, width, idea.Summary.Moved)
+            ? [
+                .. idea.Record is { Accepted: null } && idea.Sheet is { } sheet
+                    ? IdeaSteps.BeforeThis(sheet, StackOf, width)
+                    : [],
+                .. IdeaSteps.Detail(idea.Summary.Place, idea.Record, width, idea.Summary.Moved),
+            ]
             : MovedOnSelected is { } gone
                 ? IdeaSteps.MovedOn(gone, width)
                 : ["Drop an idea in with n, or from the Ideas menu dump notes kept elsewhere."];

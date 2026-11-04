@@ -565,11 +565,13 @@ public static partial class IdeaWork
     /// <param name="projects">The projects the person has, for placing it.</param>
     /// <param name="targetDescription">Where the agent was started, and what it may read there.</param>
     /// <param name="task">The idea's task, for its type, or null when it could not be read.</param>
+    /// <param name="gaps">What its project lacks, or null where that does not apply.</param>
     public static string Prompt(
         IdeaRecord record,
         IReadOnlyList<IdeaProjectHint> projects,
         string? targetDescription,
-        TaskItem? task = null)
+        TaskItem? task = null,
+        Capabilities.OfferSheet? gaps = null)
     {
         ArgumentNullException.ThrowIfNull(record);
         ArgumentNullException.ThrowIfNull(projects);
@@ -616,6 +618,7 @@ public static partial class IdeaWork
         text.AppendLine();
 
         AppendType(text, task);
+        AppendGaps(text, gaps);
         AppendHistory(text, record);
 
         text.AppendLine("## This round");
@@ -652,6 +655,40 @@ public static partial class IdeaWork
     /// What the idea is typed as and who said so, and whether the agent may
     /// change it: a guess is its to revise, a person's choice is not.
     /// </summary>
+    /// <summary>
+    /// What the project lacks, worked out by code. The agent judges whether it
+    /// matters to the plan, and never decides a gap exists: a check nobody could
+    /// look at is not one, so all it may do about those is say what to grant.
+    /// </summary>
+    private static void AppendGaps(StringBuilder text, Capabilities.OfferSheet? gaps)
+    {
+        if (gaps is null || (gaps.Offers.Count == 0 && gaps.Unseen.Count == 0))
+        {
+            return;
+        }
+
+        text.AppendLine("## What the project lacks");
+        text.AppendLine();
+
+        foreach (var offer in gaps.Offers)
+        {
+            text.AppendLine($"- {offer.Check}: {offer.Evidence}");
+        }
+
+        foreach (var unseen in gaps.Unseen)
+        {
+            text.AppendLine($"- {unseen.Check} could not be looked at: {unseen.Hint}");
+        }
+
+        text.AppendLine();
+        text.AppendLine(
+            "Those are facts from Loadout's own checks, and the person is offered a prerequisite for each gap "
+            + "separately, so do not plan work to fill one unless they asked for it. Say in understanding if a gap "
+            + "changes the plan. Do not claim anything else is missing: about a check that could not be looked at, "
+            + "you may only suggest granting what it needs.");
+        text.AppendLine();
+    }
+
     private static void AppendType(StringBuilder text, TaskItem? task)
     {
         var names = string.Join(", ", TaskTypes.Names);

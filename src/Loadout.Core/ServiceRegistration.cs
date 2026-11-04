@@ -263,6 +263,14 @@ public static class ServiceRegistration
             provider.GetRequiredService<Platform.Abstractions.IEnvironmentProvider>(),
             provider.GetRequiredService<TimeProvider>(),
             provider.GetRequiredService<Instructions.ISpecialistLibrary>()));
+        services.AddSingleton<Capabilities.ICapabilityOffers>(provider => new Capabilities.CapabilityOffers(
+            provider.GetRequiredService<Capabilities.ICapabilityProfiles>(),
+            provider.GetRequiredService<Projects.IProjectService>(),
+            provider.GetRequiredService<Tasks.ITaskService>(),
+            provider.GetRequiredService<Teams.IRunJournal>(),
+            provider.GetRequiredService<IWorkspaceManager>(),
+            provider.GetRequiredService<YamlStore>(),
+            provider.GetRequiredService<TimeProvider>()));
 
         // In front of the service, for the launcher's corner: cached for a day
         // and never an error, where the service is fresh every time and says

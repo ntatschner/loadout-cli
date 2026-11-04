@@ -21,6 +21,8 @@
   import QuestionSet from '../lib/components/QuestionSet.svelte';
   import Signal from '../lib/components/Signal.svelte';
   import { commands, ideas as ideaRoutes, listOf, memory, readJson, SignedOut } from '../lib/api';
+  import { gapWord, type GapCount } from '../lib/offers';
+  import BeforeThis from '../lib/components/BeforeThis.svelte';
   import ListToolbar from '../lib/components/ListToolbar.svelte';
   import { CommandList } from '../lib/commandList.svelte';
   import { lineFor } from '../lib/commandLine';
@@ -53,6 +55,7 @@
     mark?: string | null;
     /** What it is about, such as 'bug-fix'; absent for an idea recorded before there were types. */
     type?: string | null;
+    gaps?: GapCount | null;
   }
 
   /** An idea that is a task on another list now, shown so it is not simply gone. */
@@ -171,13 +174,19 @@
   const typeChosen = $derived(idea?.typeBy === 'person' && idea.type ? idea.type : TYPE_AGENT);
   const typeHint = $derived(typeSaid(idea?.type, idea?.typeBy));
 
+  // Whether changing the type also stops it waiting for what the new type does
+  // not need: one choice, made beside the picker, so one keystroke does both.
+  let linkCount = $state(0);
+  let releaseLinks = $state(true);
+  const typeRelease = $derived(linkCount && releaseLinks ? ['--release-links'] : []);
+
   /** Chooses the idea's type, or hands it back to the agent, and reads the idea again. */
   function retype(value: string) {
     if (!idea || value === typeChosen) {
       return;
     }
 
-    void record('idea type', [idea.id, value, ...where], 'The type was not changed.');
+    void record('idea type', [idea.id, value, ...where, ...typeRelease], 'The type was not changed.');
   }
 
   function fail(error: unknown) {
@@ -516,7 +525,17 @@
   const doneWhenCount = $derived(doneWhenLines(doneWhenText).length);
 
   const undecided = $derived(idea?.plan?.layers.filter(needsChoice).length ?? 0);
-  const acceptLine = $derived(idea ? acceptWords(idea.id, where, goes === 'project' ? { project: onto || '<slug>' } : { newProject: named.trim() || '<name>' }, doneWhenWords(doneWhenText, proposedDoneWhen)) : []);
+  // A new project is missing everything by definition, so all three start
+  // ticked, and one left unticked is remembered as not needed.
+  const SETUPS = [
+    { check: 'ci', word: 'CI on push and pull request' },
+    { check: 'release', word: 'A release workflow' },
+    { check: 'environments', word: 'Deployment environments' },
+  ];
+  let skipped = $state<string[]>([]);
+  const toggleSetup = (check: string) => (skipped = skipped.includes(check) ? skipped.filter((one) => one !== check) : [...skipped, check]);
+  const skipWords = $derived(goes === 'new' && idea?.type === 'new-project' ? skipped.map((check) => `--skip-setup=${check}`) : []);
+  const acceptLine = $derived(idea ? [...acceptWords(idea.id, where, goes === 'project' ? { project: onto || '<slug>' } : { newProject: named.trim() || '<name>' }, doneWhenWords(doneWhenText, proposedDoneWhen)), ...skipWords] : []);
   const acceptReason = $derived(refused ?? (goes === 'project' ? (onto ? undefined : 'choose the project it goes on') : named.trim() ? undefined : 'name the new project'));
 
   // Next: the next thing on the open idea that needs you, then the button that saves what is typed.
@@ -699,6 +718,8 @@
               <Signal word={stateWord(one)} />
               {#if markWord(one.mark)}<span class="ls-tag needs">{markWord(one.mark)}</span>{/if}
               {#if typeWord(one.type)}<span class="ls-tag type">{typeWord(one.type)}</span>{/if}
+              {#if gapWord(one.gaps)}<span class="ls-tag needs">{gapWord(one.gaps)}</span>{/if}
+              {#if one.gaps?.unseen}<span class="ls-tag" title="Some checks could not be looked at, so they count for nothing. Signing in to GitHub lets them be.">{one.gaps.unseen} not seen</span>{/if}
               <span class="x">{one.failure ? 'last round failed' : one.unanswered ? `${one.unanswered} question${one.unanswered === 1 ? '' : 's'} for you` : one.stage}</span>
             </a>
           </li>
@@ -762,13 +783,19 @@
       {#if !idea.accepted}
         <div class="itype">
           <label for="idea-type">Type</label>
-          <select id="idea-type" class="ls-text" value={typeChosen} disabled={!!refused} title={lineFor('idea type', [idea.id, typeChosen, ...where])}
+          <select id="idea-type" class="ls-text" value={typeChosen} disabled={!!refused} title={lineFor('idea type', [idea.id, typeChosen, ...where, ...typeRelease])}
             onchange={(event) => retype((event.currentTarget as HTMLSelectElement).value)}>
             {#each TYPES as one (one)}<option value={one}>{typeWord(one)}</option>{/each}
             <option value={TYPE_AGENT}>let the agent decide</option>
           </select>
           <span class="x">{typeHint}</span>
+          {#if linkCount}
+            <label class="x"><input type="checkbox" name="type-release-links" bind:checked={releaseLinks} /> and stop waiting for what the new type does not need</label>
+          {/if}
         </div>
+      {/if}
+      {#if !idea.accepted && idea.project}
+        <BeforeThis id={idea.id} project={idea.project} revision={`${idea.type}:${idea.plan?.revision ?? 0}:${idea.stage}`} disabledReason={refused} run={record} onlinks={(count) => (linkCount = count)} />
       {/if}
       {#if idea.plan?.understanding}<p class="understand">{idea.plan.understanding}</p>{/if}
       <details class="asked"><summary>What was asked</summary><p>{idea.ask}</p></details>
@@ -844,6 +871,14 @@
           </label>
           {#if idea.plan?.gapFilled?.length}<p role="note"><span class="ls-tag needs">gap-filled</span> The {idea.plan.gapFilled.map(fieldWord).join(', ')} here {idea.plan.gapFilled.length === 1 ? 'was' : 'were'} written in by a backfill pass, not proposed with the rest of the plan. Read {idea.plan.gapFilled.length === 1 ? 'it' : 'them'} before accepting; accepting confirms {idea.plan.gapFilled.length === 1 ? 'it' : 'them'}.</p>{/if}
           {#if idea.mark === 'missing' && idea.gapFillFailure}<p role="note"><span class="ls-tag needs">missing</span> The last backfill pass could not fill it: {idea.gapFillFailure.error}</p>{/if}
+          {#if goes === 'new' && idea.type === 'new-project'}
+            <fieldset>
+              <legend>Set up as it starts</legend>
+              {#each SETUPS as setup (setup.check)}
+                <label class="opt"><input type="checkbox" checked={!skipped.includes(setup.check)} onchange={() => toggleSetup(setup.check)} /> {setup.word}</label>
+              {/each}
+            </fieldset>
+          {/if}
           {#if !doneWhenCount}<p><span class="ls-tag needs">no done-when</span> It can still be accepted, but a team queue will refuse the task until it has some.</p>{/if}
           {#if undecided}<p><span class="ls-tag needs">{undecided} layer{undecided === 1 ? ' has' : 's have'} no option chosen</span> It can still be accepted; the plan says so where it is written.</p>{/if}
           <div class="ls-answers flush">

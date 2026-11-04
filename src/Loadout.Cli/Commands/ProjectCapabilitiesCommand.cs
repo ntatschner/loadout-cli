@@ -7,6 +7,7 @@ using Loadout.Core.Tasks;
 using Loadout.Core.Teams;
 using Loadout.Models;
 using Loadout.Models.Capabilities;
+using Loadout.Models.Projects;
 using Loadout.Models.Tasks;
 using Loadout.Models.Teams;
 using Loadout.Tui;
@@ -37,17 +38,20 @@ public sealed class ProjectCapabilitiesCommand : AsyncCommand<ProjectCapabilitie
     private readonly IProjectService _projects;
     private readonly ICapabilityProfiles _profiles;
     private readonly ITaskService _tasks;
+    private readonly ICapabilityOffers _offers;
     private readonly IAnsiConsole _console;
 
     public ProjectCapabilitiesCommand(
         IProjectService projects,
         ICapabilityProfiles profiles,
         ITaskService tasks,
+        ICapabilityOffers offers,
         IAnsiConsole console)
     {
         _projects = projects;
         _profiles = profiles;
         _tasks = tasks;
+        _offers = offers;
         _console = console;
     }
 
@@ -60,6 +64,26 @@ public sealed class ProjectCapabilitiesCommand : AsyncCommand<ProjectCapabilitie
         [CommandOption("--refresh")]
         [Description("Build it again from the repository and GitHub, and keep it. Without this, GitHub is not asked.")]
         public bool Refresh { get; init; }
+
+        [CommandOption("--not-needed <CHECK>")]
+        [Description("Say this project will do without a check, so it stops being offered. Undone with --needed.")]
+        public string? NotNeeded { get; init; }
+
+        [CommandOption("--release-links")]
+        [Description("With --not-needed: also take off the links holding work on its open prerequisite, and drop that task.")]
+        public bool ReleaseLinks { get; init; }
+
+        [CommandOption("--needed <CHECK>")]
+        [Description("Undo a 'Not needed' answer, and list the open work the gap now touches.")]
+        public string? Needed { get; init; }
+
+        [CommandOption("--tick <TASK>")]
+        [Description("Tick the step only a person can do on a prerequisite, such as setting a release secret.")]
+        public string? Tick { get; init; }
+
+        [CommandOption("--renew <TASK>")]
+        [Description("Rewrite an open prerequisite to the current template and stacks. Refused while a run owns it.")]
+        public string? Renew { get; init; }
     }
 
     /// <inheritdoc />
@@ -76,9 +100,16 @@ public sealed class ProjectCapabilitiesCommand : AsyncCommand<ProjectCapabilitie
         }
 
         var project = resolved.Value!;
+
+        if (await ChangeAsync(output, settings, project, cancellationToken).ConfigureAwait(false) is { } exit)
+        {
+            return exit;
+        }
+
         var cached = settings.Refresh ? null : await _profiles.CachedAsync(project.Entry.Slug, cancellationToken).ConfigureAwait(false);
         var profile = cached ?? await _profiles.BuildAsync(project, askGitHub: settings.Refresh, cancellationToken).ConfigureAwait(false);
         var kept = cached is not null;
+        IReadOnlyList<PrerequisiteSettled> closed = [];
 
         if (settings.Refresh && !settings.DryRun)
         {
@@ -90,9 +121,20 @@ public sealed class ProjectCapabilitiesCommand : AsyncCommand<ProjectCapabilitie
             }
 
             kept = true;
+
+            var settled = await _offers.SettleAsync(project, Environment.UserName, cancellationToken).ConfigureAwait(false);
+
+            if (settled.Failed)
+            {
+                return output.Fail(settled);
+            }
+
+            closed = settled.Value!;
         }
 
         var waiting = await WaitingOnCiAsync(project.Entry.Slug, profile, cancellationToken).ConfigureAwait(false);
+        var answers = await _offers.AnswersAsync(project.Entry.Slug, cancellationToken).ConfigureAwait(false);
+        var stale = await _offers.StaleAsync(project.Entry.Slug, profile, cancellationToken).ConfigureAwait(false);
 
         if (output.IsJson)
         {
@@ -109,10 +151,14 @@ public sealed class ProjectCapabilitiesCommand : AsyncCommand<ProjectCapabilitie
                     state = Name(check.State),
                     evidence = check.Evidence,
                     scope = check.Scope.Length > 0 ? check.Scope : null,
-                    types = CapabilityChecks.Find(check.Id)?.Types.Select(TaskTypes.Name) ?? [],
+                    types = CapabilityChecks.TypesOf(check).Select(TaskTypes.Name),
+                    declared = check.Declared,
                 }),
                 notes = profile.Notes,
                 needsCi = waiting.Select(one => new { id = one.Task, criterion = one.Criterion }),
+                notNeeded = answers.NotNeeded.Select(answer => new { check = answer.Check, by = answer.By, utc = answer.Utc }),
+                stale = stale.Select(one => new { task = one.Task, check = one.Check, why = one.Why }),
+                settled = closed.Select(one => new { task = one.Task, closed = one.Closed, reason = one.Reason, released = one.Released.Select(TaskRequires.Name) }),
             });
 
             return CommandOutput.Success();
@@ -160,6 +206,31 @@ public sealed class ProjectCapabilitiesCommand : AsyncCommand<ProjectCapabilitie
             }
         }
 
+        if (answers.NotNeeded.Count > 0)
+        {
+            output.WriteBlankLine();
+
+            foreach (var answer in answers.NotNeeded)
+            {
+                output.WriteLine(
+                    $"Not needed: [bold]{Markup.Escape(answer.Check)}[/], said by {Markup.Escape(answer.By)}. "
+                    + $"[dim]Undo with --needed {Markup.Escape(answer.Check)}.[/]");
+            }
+        }
+
+        foreach (var one in stale)
+        {
+            output.WriteLine($"[yellow]{Markup.Escape(one.Task)}[/] was {Markup.Escape(one.Why)}. [dim]Rewrite it with --renew {Markup.Escape(one.Task)}.[/]");
+        }
+
+        foreach (var one in closed)
+        {
+            output.WriteLine(
+                one.Closed
+                    ? $"[green]Closed[/] {Markup.Escape(one.Task)}: {Markup.Escape(one.Reason)}"
+                    : $"[green]Released[/] what waited on {Markup.Escape(one.Task)}, which a run still owns: {Markup.Escape(one.Reason)}");
+        }
+
         if (cached is null && !settings.Refresh)
         {
             output.WriteBlankLine();
@@ -169,6 +240,106 @@ public sealed class ProjectCapabilitiesCommand : AsyncCommand<ProjectCapabilitie
         {
             output.WriteBlankLine();
             output.WriteLine("[dim]Nothing was kept.[/]");
+        }
+
+        return CommandOutput.Success();
+    }
+
+    /// <summary>Carries out whichever change was asked for. Null when none was, so the list is shown.</summary>
+    private async Task<int?> ChangeAsync(CommandOutput output, Settings settings, ProjectResolution project, CancellationToken ct)
+    {
+        var asked = new[] { settings.NotNeeded, settings.Needed, settings.Tick, settings.Renew }.Count(one => one is { Length: > 0 });
+
+        if (asked == 0)
+        {
+            return settings.ReleaseLinks ? output.Fail("--release-links goes with --not-needed.", ExitCode.InvalidArguments) : null;
+        }
+
+        if (asked > 1 || settings.Refresh)
+        {
+            return output.Fail("Ask for one change at a time, and not with --refresh.", ExitCode.InvalidArguments);
+        }
+
+        var slug = project.Entry.Slug;
+        var by = Environment.UserName;
+
+        if (settings.DryRun)
+        {
+            output.WriteLine("Would make that change. Nothing was written.");
+
+            return CommandOutput.Success();
+        }
+
+        if (settings.Tick is { Length: > 0 } tick)
+        {
+            var ticked = await _offers.TickAsync(slug, tick, by, ct).ConfigureAwait(false);
+
+            return ticked.Failed ? output.Fail(ticked) : Said(output, new { task = ticked.Value!.Id, ticked = true }, $"Ticked the person's step on {ticked.Value.Id}.");
+        }
+
+        if (settings.Renew is { Length: > 0 } renew)
+        {
+            var renewed = await _offers.RenewAsync(project, renew, by, ct).ConfigureAwait(false);
+
+            return renewed.Failed ? output.Fail(renewed) : Said(output, new { task = renewed.Value!.Id, renewed = true }, $"Rewrote {renewed.Value.Id} to the current template. A ticked secrets step is cleared if its stack changed.");
+        }
+
+        if (settings.Needed is { Length: > 0 } needed)
+        {
+            var touched = await _offers.NeededAsync(project, needed, ct).ConfigureAwait(false);
+
+            if (touched.Failed)
+            {
+                return output.Fail(touched);
+            }
+
+            return Said(
+                output,
+                new { check = needed, touches = touched.Value },
+                touched.Value!.Count > 0
+                    ? $"{needed} is offered again. It touches: {string.Join(", ", touched.Value)}. Each can take it with: loadout task offers <id> --project {slug} --accept {needed}"
+                    : $"{needed} is offered again. No open work is touched by it.");
+        }
+
+        var outcome = await _offers.NotNeededAsync(project, settings.NotNeeded!, settings.ReleaseLinks, by, ct).ConfigureAwait(false);
+
+        if (outcome.Failed)
+        {
+            return output.Fail(outcome);
+        }
+
+        // The answer is kept either way. A link is only taken off when somebody
+        // confirms it, because releasing work quietly is what the link prevents.
+        if (outcome.Value is { Prerequisite: { } open, Released: false, Waiting.Count: > 0 } && settings.AllowsPrompting
+            && _console.Confirm($"{Markup.Escape(open)} is holding {Markup.Escape(string.Join(", ", outcome.Value.Waiting.Select(TaskRequires.Name)))}. Take those links off and drop it?", defaultValue: false))
+        {
+            outcome = await _offers.NotNeededAsync(project, settings.NotNeeded!, true, by, ct).ConfigureAwait(false);
+
+            if (outcome.Failed)
+            {
+                return output.Fail(outcome);
+            }
+        }
+
+        var held = outcome.Value!;
+
+        return Said(
+            output,
+            new { check = settings.NotNeeded, prerequisite = held.Prerequisite, waiting = held.Waiting.Select(TaskRequires.Name), released = held.Released },
+            held is { Prerequisite: { } still, Released: false, Waiting.Count: > 0 }
+                ? $"{settings.NotNeeded} is marked not needed, and {still} still holds {string.Join(", ", held.Waiting.Select(TaskRequires.Name))}. --release-links takes those links off."
+                : $"{settings.NotNeeded} is marked not needed.");
+    }
+
+    private static int Said(CommandOutput output, object json, string line)
+    {
+        if (output.IsJson)
+        {
+            output.WriteJson(json);
+        }
+        else
+        {
+            output.WriteLine(Markup.Escape(line));
         }
 
         return CommandOutput.Success();

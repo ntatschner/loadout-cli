@@ -44,7 +44,8 @@ public static class ServiceRegistration
             provider.GetRequiredService<IChildLifetime>(),
             provider.GetRequiredService<Core.Tasks.ITaskService>(),
             provider.GetRequiredService<Core.Tools.IToolRegistry>(),
-            provider.GetRequiredService<Core.Teams.IRunOwnership>()));
+            provider.GetRequiredService<Core.Teams.IRunOwnership>(),
+            offers: provider.GetRequiredService<Core.Capabilities.ICapabilityOffers>()));
         services.AddSingleton<Ideas.IDetachedLauncher, Ideas.DetachedLauncher>();
         services.AddSingleton<Ideas.IIdeaRefiner, Ideas.IdeaRefiner>();
         services.AddSingleton<Ideas.IDumpSplitter, Ideas.DumpSplitter>();

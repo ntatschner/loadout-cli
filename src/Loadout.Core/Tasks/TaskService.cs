@@ -1430,6 +1430,11 @@ internal sealed class TaskService : ITaskService
             existing.Source = new TaskSource { Kind = source.Kind, Id = source.Id };
         }
 
+        if (operation.Prerequisite is { } prerequisite)
+        {
+            existing.Prerequisite = Copy(prerequisite);
+        }
+
         if (operation.Type is { } type)
         {
             var typeBy = operation.TypeBy ?? TaskTypeSource.Person;
@@ -1680,6 +1685,18 @@ internal sealed class TaskService : ITaskService
         History = [.. item.History.Select(one => new TaskEvent { State = one.State, By = one.By, Utc = one.Utc, Reason = one.Reason })],
         Moved = item.Moved is { } moved ? new TaskMove { From = moved.From, Utc = moved.Utc } : null,
         Source = item.Source is { } source ? new TaskSource { Kind = source.Kind, Id = source.Id } : null,
+        Prerequisite = item.Prerequisite is { } prerequisite ? Copy(prerequisite) : null,
+    };
+
+    private static TaskPrerequisite Copy(TaskPrerequisite prerequisite) => new()
+    {
+        Check = prerequisite.Check,
+        TemplateVersion = prerequisite.TemplateVersion,
+        Stacks = [.. prerequisite.Stacks],
+        Detected = [.. prerequisite.Detected],
+        Environments = [.. prerequisite.Environments],
+        PersonStepBy = prerequisite.PersonStepBy,
+        PersonStepUtc = prerequisite.PersonStepUtc,
     };
 
     /// <summary>One operation's outcome, as the single-entry methods have always answered.</summary>

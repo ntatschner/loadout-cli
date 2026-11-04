@@ -51,6 +51,7 @@ step, and every term explained the first time it appears.
 - [The context budget](context-budget.md) — what loads when, and what each layer costs you
 - [Context and instruction files](context.md) — project manifests, profiles, path-scoped rules
 - [Specialists and skills](specialists.md) — how an instruction set gets composed for a task
+- [Capabilities and offers](capabilities.md) — what a project lacks, the prerequisite Loadout offers for it, and when that closes by itself
 - [Memory](memory.md) — recording, compressing and auditing the durable facts
 
 ### Watching the cost
