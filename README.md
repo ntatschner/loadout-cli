@@ -46,7 +46,7 @@ commands.
 ### Specialists: the right instructions, with the cost shown
 
 Loadout doesn't hand your agent one enormous prompt that's mostly irrelevant.
-There are 105 specialists compiled in, including 17 skills, and it works out
+There are 106 specialists compiled in, including 18 skills, and it works out
 which ones apply from what your repository is made of and the sentence you
 typed. It tells you why it picked each one.
 
