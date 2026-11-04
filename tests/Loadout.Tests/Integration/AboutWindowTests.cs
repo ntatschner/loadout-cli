@@ -212,7 +212,7 @@ public sealed class AboutWindowTests
     }
 
     [Fact]
-    public async Task Closing_after_the_update_ends_but_before_the_window_hears_is_refused()
+    public void Closing_after_the_update_ends_but_before_the_window_hears_is_refused()
     {
         // Completes synchronously, so the whole update runs on whichever thread
         // starts it. No await in here can resume somewhere else.
@@ -226,12 +226,18 @@ public sealed class AboutWindowTests
 
         using var session = About(Model(), out var window, Installed);
 
-        // Started on a pool thread, which is never the main loop's, so Invoke
-        // queues the end of the update instead of running it inline. Awaited
-        // here, a Task.Yield could resume on the test runner's thread that the
-        // application counts as its main one, and the work then ran before
-        // Quit, which failed this test one run in two.
-        await Task.Run(() => window.UpdateAsync(CancellationToken.None));
+        // On a thread of its own, so Invoke queues the end of the update instead
+        // of running it inline. Invoke decides by thread id, and this test may
+        // itself be running on a pool thread: Task.Run could land on that same
+        // thread, which the application counts as its main one, and a probe saw
+        // it do so in 387 rounds of 400. A live thread's id is never shared.
+        var updating = new Thread(() => window.UpdateAsync(CancellationToken.None).GetAwaiter().GetResult())
+        {
+            IsBackground = true,
+        };
+
+        updating.Start();
+        updating.Join();
 
         // The stream has ended and the work is queued for the main loop, but
         // nothing has pumped it yet: the gap a close could fall into.
