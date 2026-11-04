@@ -32,3 +32,26 @@ export interface Orbiter {
   word: string;
   onpick?: () => void;
 }
+
+/**
+ * The About Loadout model, as 'loadout about --json' prints it and the daemon
+ * serves it at /api/v1/about/loadout. Not the page's About, which says where
+ * Studio is served from.
+ */
+export interface AboutLoadout {
+  version: string;
+  devBuild: boolean;
+  available: string | null;
+  updateAvailable: boolean;
+  features: { id: string; name: string; since: string; status: string; guide: string; installed: boolean }[];
+  guides: { key: string; title: string; url: string }[];
+  timeline: {
+    releases: { version: string; name: string; published: string | null; notes: string; url: string; installed: boolean; kind: string }[];
+    /** Why there are no releases, when there are none: Off, Offline, NotGitHub, RateLimitedNoCache or Unreachable. */
+    empty: string | null;
+    /** The sentence every surface shows for that reason, written by the daemon. */
+    emptyText?: string;
+    fetchedAt: string | null;
+    stale: boolean;
+  };
+}

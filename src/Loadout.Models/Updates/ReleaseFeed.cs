@@ -103,9 +103,11 @@ public static class ReleaseSource
     /// this URL does not need updating when one is cut.
     /// </para>
     /// <para>
-    /// Nothing reads this on its own account: the only caller is
-    /// <c>loadout update</c>, so the network is touched when somebody asks and
-    /// at no other time.
+    /// Two things read it: <c>loadout update</c> fetches the feed, and the About
+    /// page asks GitHub for the release list of the repository it names (see
+    /// <see cref="GitHubRepository"/>). Both honour <c>updates-source</c>, so
+    /// switching it off stops both, and a source that is not GitHub stops the
+    /// second.
     /// </para>
     /// </remarks>
     public const string Default =
@@ -133,4 +135,26 @@ public static class ReleaseSource
     /// </summary>
     public static string Resolve(string? source) =>
         string.IsNullOrWhiteSpace(source) ? Default : source.Trim();
+
+    /// <summary>
+    /// The GitHub repository a configured value publishes from, or null when it
+    /// is switched off or is not a <c>github.com/{owner}/{repo}/releases/</c>
+    /// URL: a mirror or a share has no release list to ask for.
+    /// </summary>
+    public static (string Owner, string Repo)? GitHubRepository(string? configured)
+    {
+        if (IsDisabled(configured)
+            || !Uri.TryCreate(Resolve(configured), UriKind.Absolute, out var uri)
+            || uri.Scheme != Uri.UriSchemeHttps
+            || !string.Equals(uri.Host, "github.com", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+        return segments.Length >= 3 && segments[2] == "releases"
+            ? (segments[0], segments[1])
+            : null;
+    }
 }

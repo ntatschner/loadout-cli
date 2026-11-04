@@ -108,6 +108,7 @@ public static class StudioCoverage
         // Without --yes it can only report: a job cannot be asked to confirm,
         // so the command refuses to install unasked.
         ["update"] = new("settings", StudioEffect.Changes, ChangesOnlyWith: ["--yes"]),
+        ["about"] = new("about", StudioEffect.Reads),
         ["migrate"] = new("settings", StudioEffect.Changes),
         ["backup list"] = new("settings", StudioEffect.Reads),
         ["backup restore"] = new("settings", StudioEffect.Changes, ChangesOnlyWith: ["--apply"]),

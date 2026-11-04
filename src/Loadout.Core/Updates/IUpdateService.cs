@@ -23,9 +23,11 @@ public interface IUpdateService
     /// The running executable is moved aside rather than overwritten: Windows
     /// will not let a running image be replaced, but it will let it be renamed.
     /// </para>
+    /// <para>A progress reporter, when given, is told each step as it starts and decides nothing.</para>
     /// </summary>
     /// <returns>The path the previous executable was kept at.</returns>
-    Task<OperationResult<string>> ApplyAsync(UpdateCheck check, CancellationToken ct = default);
+    Task<OperationResult<string>> ApplyAsync(
+        UpdateCheck check, IProgress<UpdateProgress>? progress = null, CancellationToken ct = default);
 
     /// <summary>The running executable, which is what an update replaces.</summary>
     string Executable { get; }
@@ -35,8 +37,9 @@ public interface IUpdateService
 
     /// <summary>
     /// Downloads and verifies an update without installing it, for the helper
-    /// to install once the daemon has gone.
+    /// to install once the daemon has gone, telling a progress reporter each step when given one.
     /// </summary>
     /// <returns>The verified binary for an archive install, or the verified MSI.</returns>
-    Task<OperationResult<string>> StageAsync(UpdateCheck check, InstallChannel channel, CancellationToken ct = default);
+    Task<OperationResult<string>> StageAsync(
+        UpdateCheck check, InstallChannel channel, IProgress<UpdateProgress>? progress = null, CancellationToken ct = default);
 }

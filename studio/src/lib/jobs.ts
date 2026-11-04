@@ -9,15 +9,18 @@ const settled = (job: Job) => job.state !== 'running';
 /**
  * Runs `loadout <path> <words>` and waits for it to end. Throws with what the
  * command said where it did not succeed, so a refusal reads as the command's
- * own sentence.
+ * own sentence. Each read of the job, from the one that started it on, is
+ * handed to `seen`, for a page that shows the command's output as it arrives.
  */
-export async function runJob(path: string, words: string[], patience = 120_000): Promise<Job> {
+export async function runJob(path: string, words: string[], patience = 120_000, seen?: (job: Job) => void): Promise<Job> {
   let job = await commands.run(path, words);
   const until = Date.now() + patience;
+  seen?.(job);
 
   while (!settled(job) && Date.now() < until) {
     await new Promise((resolve) => setTimeout(resolve, 400));
     job = await commands.job(job.id);
+    seen?.(job);
   }
 
   if (!settled(job)) {

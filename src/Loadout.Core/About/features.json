@@ -1,0 +1,15 @@
+[
+  { "id": "instructions", "name": "Instructions picked for the job", "since": "0.15.0", "status": "stable", "guide": "specialists" },
+  { "id": "memory", "name": "Memory that doesn't grow forever", "since": "0.15.0", "status": "stable", "guide": "memory" },
+  { "id": "launcher", "name": "A launcher as well as a command line", "since": "0.41.1", "status": "stable", "guide": "launcher" },
+  { "id": "teams", "name": "Several agents on one goal", "since": "0.34.0", "status": "stable", "guide": "teams" },
+  { "id": "triggers", "name": "When something happens", "since": "0.92.0", "status": "preview", "guide": "teams" },
+  { "id": "first-project", "name": "A first project from nothing", "since": "0.61.0", "status": "stable", "guide": "first-run" },
+  { "id": "ask-back", "name": "The agent can ask back", "since": "0.15.0", "status": "stable", "guide": "features" },
+  { "id": "clean-repos", "name": "Repos that stay clean", "since": "0.15.0", "status": "stable", "guide": "repository-cleanliness" },
+  { "id": "not-a-repository", "name": "Code that isn't a repository yet", "since": "0.22.0", "status": "stable", "guide": "adding-a-project" },
+  { "id": "undo", "name": "Undo", "since": "0.15.0", "status": "stable", "guide": "commands" },
+  { "id": "usage", "name": "Where the tokens went", "since": "0.15.0", "status": "stable", "guide": "usage" },
+  { "id": "dashboard", "name": "A dashboard for the runs", "since": "0.41.1", "status": "stable", "guide": "dashboard" },
+  { "id": "accessibility", "name": "Told once how you read", "since": "0.41.1", "status": "stable", "guide": "accessibility" }
+]

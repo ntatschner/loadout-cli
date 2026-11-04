@@ -364,4 +364,21 @@ public sealed class LauncherLookTests
         session.Screen.Should().NotContain("available");
         session.Screen.Should().Contain(LauncherWindow.RunningVersion(), "the version itself stays");
     }
+
+    [Fact]
+    public void Version_corner_opens_about()
+    {
+        using var session = Launcher([Project("alpha", "Alpha")], out var window);
+
+        window.ShowUpdate("0.99.0");
+        session.Pump();
+
+        // Clicked, as a person would: the corner has no key of its own.
+        var corner = window.SubViews.Single(view => view.Id == "launcher-build");
+
+        corner.NewMouseEvent(new Mouse { Flags = MouseFlags.LeftButtonClicked, Position = new System.Drawing.Point(1, 0) });
+
+        window.Intent.Should().NotBeNull("clicking the version is how About is reached from the corner");
+        window.Intent!.Action.Should().Be(LauncherAction.About);
+    }
 }

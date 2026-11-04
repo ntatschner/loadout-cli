@@ -71,6 +71,7 @@ public sealed class TerminalLauncher : ILauncherTui
     private readonly IInstructionService _instructions;
     private readonly IGitManager _git;
     private readonly IUpdateNotice _updates;
+    private readonly Loadout.Core.About.IAboutService _about;
 
     /// <summary>
     /// Whether a newer launcher exists, asked once per session in the
@@ -120,8 +121,10 @@ public sealed class TerminalLauncher : ILauncherTui
         Loadout.Core.Ideas.IIdeaDumps dumps,
         Loadout.Core.Ideas.IIdeaService ideas,
         Loadout.Core.Tasks.ITaskActivityReader activity,
+        Loadout.Core.About.IAboutService about,
         Loadout.Core.Capabilities.ICapabilityOffers? offers = null)
     {
+        _about = about;
         _activity = activity;
         _dumps = dumps;
         _ideas = ideas;
@@ -814,6 +817,9 @@ public sealed class TerminalLauncher : ILauncherTui
                 await ShowSettingsAsync(ct).ConfigureAwait(false);
                 return null;
 
+            case LauncherAction.About:
+                return await ActOnAboutAsync(ShowAboutAsync, ct).ConfigureAwait(false);
+
             case LauncherAction.Drift:
                 await CheckDriftAsync(ct).ConfigureAwait(false);
                 return null;
@@ -1262,6 +1268,99 @@ public sealed class TerminalLauncher : ILauncherTui
         if (edit is not null)
         {
             await ApplySettingsAsync(config, machine, edit, ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// About Loadout: the version with Update now, the features, the guides
+    /// and the releases.
+    /// </summary>
+    /// <remarks>
+    /// The model is read once before the window opens, which serves the kept
+    /// release list while it is fresh, and then asked for again in the
+    /// background with a refresh. The second answer crosses to the main loop
+    /// the way the update notice does, and is dropped if the window has gone.
+    /// </remarks>
+    /// <returns>Whether an update replaced this launcher's binary.</returns>
+    private async Task<bool> ShowAboutAsync(CancellationToken ct)
+    {
+        var loaded = await _about.GetAsync(ct: ct).ConfigureAwait(false);
+
+        if (loaded.Failed)
+        {
+            _console.MarkupLine($"[red]{Shown.Safely(loaded.Error!)}[/]");
+            Pause();
+            return false;
+        }
+
+        var runner = new AboutUpdateRunner(_processes);
+
+        using IApplication application = Application.Create();
+
+        application.InitLegibly(_reading.Profile);
+
+        using var window = new AboutWindow(loaded.Value!, runner.RunAsync, _opener, application);
+
+        using var closed = CancellationTokenSource.CreateLinkedTokenSource(ct);
+
+        _ = RefreshAboutAsync(window, application, closed.Token);
+
+        await application.RunAsync(window, ct).ConfigureAwait(false);
+
+        await closed.CancelAsync().ConfigureAwait(false);
+
+        return window.Updated;
+    }
+
+    /// <summary>
+    /// What the launcher does once the About window has closed: ends the
+    /// session after an update, and goes round again otherwise.
+    /// </summary>
+    /// <remarks>
+    /// After an update this process is still running from the bundle that was
+    /// replaced, so going round again would load from files that are gone.
+    /// </remarks>
+    internal static int? AfterAbout(bool updated) =>
+        updated ? (int)ExitCode.Success : null;
+
+    /// <summary>
+    /// The launcher's About action: shows the window, then ends the session
+    /// or goes round again by what it reports.
+    /// </summary>
+    /// <remarks>
+    /// Kept apart from <see cref="ActOnAsync"/> so a test can hand in the
+    /// window's answer without building the whole launcher.
+    /// </remarks>
+    internal static async Task<int?> ActOnAboutAsync(Func<CancellationToken, Task<bool>> show, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(show);
+
+        return AfterAbout(await show(ct).ConfigureAwait(false));
+    }
+
+    private async Task RefreshAboutAsync(AboutWindow window, IApplication application, CancellationToken ct)
+    {
+        try
+        {
+            var fresh = await _about.GetAsync(refresh: true, ct).ConfigureAwait(false);
+
+            if (fresh.Failed || ct.IsCancellationRequested)
+            {
+                return;
+            }
+
+            application.Invoke(() =>
+            {
+                if (window.IsInitialized)
+                {
+                    window.Show(fresh.Value!);
+                }
+            });
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException or InvalidOperationException)
+        {
+            // The window closed before the refresh came back. Nothing to show
+            // it to.
         }
     }
 

@@ -11,6 +11,7 @@
   import Signal from '../lib/components/Signal.svelte';
   import Switch from '../lib/components/Switch.svelte';
   import TerminalOnly from '../lib/components/TerminalOnly.svelte';
+  import UpdateSheet from '../lib/components/UpdateSheet.svelte';
   import Appearance from './Appearance.svelte';
   import SettingsLoadout from './SettingsLoadout.svelte';
   import { commands, readJson, signOut, SignedOut, teamApi } from '../lib/api';
@@ -158,12 +159,6 @@
           ? (autostart.enabled ? 'starts when you log in' : 'does not start at log-in')
           : sub;
   const upd = $derived(studio.update);
-  const plural = (count: number, one: string) => `${count} ${one}${count === 1 ? '' : 's'}`;
-  /** What a restart straight away ends, in words, or empty when it ends nothing. */
-  const cutOff = $derived(
-    upd ? [upd.runs ? `the ${plural(upd.runs, 'run')} it started` : '', upd.hosted ? `the ${plural(upd.hosted, 'session')} it hosts` : ''].filter(Boolean).join(' and ') : '',
-  );
-  const updateWords = $derived(updating === 'roll-back' ? ['--roll-back', '--restart-daemon', '--yes'] : ['--restart-daemon', '--yes']);
   const linkish = (text: string) => /^https?:\/\/\S+$/.test(text.trim());
   const held = $derived(daemon?.paused ?? null);
   const checks = $derived((doctor?.checks ?? []).map((one) => ({ name: one.name, severity: one.severity, detail: one.detail, fixable: one.fixable })));
@@ -398,6 +393,7 @@
         {:else}
           <p class="calm">This server does not look for updates. In a terminal: <code>loadout update</code></p>
         {/if}
+        <p class="ls-from">What this version can do, where it is explained, and every release: <a href="#about">About Loadout</a>.</p>
       </section>
     {:else if section === 'machine'}
       <section class="pblock" aria-labelledby="z-doc">
@@ -434,21 +430,7 @@
 {/if}
 
 {#if updating && upd}
-  <Dialog
-    title={updating === 'install' ? `Install ${upd.available} and restart the daemon?` : 'Roll back and restart the daemon?'}
-    why={(updating === 'install'
-      ? `The daemon restarts on ${upd.available}${upd.channel === 'installer' ? ', running the MSI while it is down' : ', and if that version does not start, the one before is put back'}.`
-      : 'The daemon restarts on the version before this one.')
-      + (cutOff
-        ? ` Waiting lets ${cutOff} carry on until the runs have finished, and nothing new starts meanwhile; restarting now ends ${cutOff} at once.`
-        : ' Nothing is running that a restart would end.')
-      + ' This page comes back when the daemon does.'}
-    actions={[
-      { label: 'Restart when its runs finish', cmd: lineFor('update', updateWords), onpress: () => void upgrade(updateWords) },
-      { label: 'Restart now', kind: 'danger', cmd: lineFor('update', [...updateWords, '--now']), onpress: () => void upgrade([...updateWords, '--now']) },
-    ]}
-    onclose={() => (updating = null)}
-  />
+  <UpdateSheet {updating} {upd} onchoose={(words) => void upgrade(words)} onclose={() => (updating = null)} />
 {/if}
 
 {#if signingOut}

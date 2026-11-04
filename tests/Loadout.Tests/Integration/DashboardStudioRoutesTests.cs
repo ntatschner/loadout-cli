@@ -128,6 +128,37 @@ public sealed class DashboardStudioRoutesTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task About_loadout_serves_the_model_with_the_daemons_update_overlaid()
+    {
+        _server.AboutLoadout = new FixedAbout(new Loadout.Core.About.AboutModel(
+            "1.2.3", false, null, false,
+            [new Loadout.Core.About.AboutFeature("teams", "Teams", "0.30.0", "stable", "teams", true)],
+            [new Loadout.Core.About.AboutGuide("teams", "Teams", "https://github.com/ntatschner/loadout-cli/blob/main/docs/teams.md")],
+            new Loadout.Core.About.AboutTimeline([], Loadout.Core.About.TimelineEmpty.Off, null, false)));
+        _server.Update = (_, _) => Task.FromResult<object>(new { available = "1.3.0", isNewer = true });
+
+        var about = await ReadAsync(Signed(HttpMethod.Get, "/api/v1/about/loadout"));
+
+        about.Status.Should().Be(HttpStatusCode.OK);
+        about.Json.GetProperty("version").GetString().Should().Be("1.2.3");
+        about.Json.GetProperty("features").GetArrayLength().Should().Be(1);
+        about.Json.GetProperty("guides").GetArrayLength().Should().Be(1);
+        about.Json.GetProperty("timeline").GetProperty("empty").GetString().Should().Be("Off");
+        about.Json.GetProperty("timeline").GetProperty("emptyText").GetString().Should().Contain("switched off");
+        about.Json.GetProperty("available").GetString().Should().Be("1.3.0", "the page agrees with Settings about what is offered");
+        about.Json.GetProperty("updateAvailable").GetBoolean().Should().BeTrue();
+    }
+
+    private sealed class FixedAbout(Loadout.Core.About.AboutModel model) : Loadout.Core.About.IAboutService
+    {
+        public Task<OperationResult<Loadout.Core.About.AboutModel>> GetAsync(bool refresh = false, CancellationToken ct = default) =>
+            Task.FromResult(OperationResult<Loadout.Core.About.AboutModel>.Ok(model));
+
+        public Task<OperationResult<Loadout.Core.About.AboutModel>> GetAsync(bool refresh, bool offline, CancellationToken ct = default) =>
+            GetAsync(refresh, ct);
+    }
+
+    [Fact]
     public async Task About_says_when_the_daemon_runs_triggers_so_the_approvals_inbox_is_shown()
     {
         _server.Triggers = true;

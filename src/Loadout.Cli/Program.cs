@@ -744,6 +744,7 @@ public static class Program
         Top<ProtectCommand>(config, "protect");
         Top<DesktopCommand>(config, "desktop");
         Top<UpdateCommand>(config, "update");
+        Top<AboutCommand>(config, "about");
         Top<MigrateCommand>(config, "migrate");
         Top<EventsCommand>(config, "events");
 

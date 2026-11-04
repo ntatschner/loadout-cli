@@ -25,6 +25,7 @@
 | `loadout workspace status\|sync\|save\|open` | Manage the central workspace clone |
 | `loadout desktop` | Install the Start Menu or `.desktop` entry |
 | `loadout update` | Check the release source and install a newer build |
+| `loadout about [--json] [--refresh]` | Show the installed version, what it can do, where each part is explained, and the releases around it |
 | `loadout secret set\|test\|remove` | Manage credentials in the OS keystore |
 | `loadout mcp list\|add\|remove` | Manage the MCP servers a project loads, and see what clashes |
 | `loadout mcp serve` | Serve the launcher's own tools to an agent. Started by the agent, not by you. `--read-only` serves only the tools that read, which is all the Ask agent is given |

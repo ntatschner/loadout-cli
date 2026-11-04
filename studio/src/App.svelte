@@ -26,6 +26,7 @@
   import Appearance from './pages/Appearance.svelte';
   import Memory from './pages/Memory.svelte';
   import Commands from './pages/Commands.svelte';
+  import About from './pages/About.svelte';
   import Projects from './pages/Projects.svelte';
   import Ideas from './pages/Ideas.svelte';
   import Teams from './pages/Teams.svelte';
@@ -99,6 +100,7 @@
     { key: 'projects', name: 'Projects', fact: '' },
     { key: 'commands', name: 'Commands', fact: studio.jobs.some((job) => job.state === 'running') ? `${studio.jobs.filter((job) => job.state === 'running').length} running` : 'everything else' },
     { key: 'settings', name: 'Settings', fact: studio.update?.pending ? 'update pending' : studio.update?.isNewer ? `${studio.update.available} available` : '' },
+    { key: 'about', name: 'About', fact: studio.about?.version ?? '' },
   ]);
 
   const current = $derived(router.route.page === 'session' ? 'sessions' : router.route.page);
@@ -427,6 +429,8 @@
       <Events query={router.route.query ?? ''} />
     {:else if router.route.page === 'commands'}
       <Commands rest={router.route.rest} onlaunch={() => openLaunch()} />
+    {:else if router.route.page === 'about'}
+      <About />
     {:else}
       <Elsewhere />
     {/if}

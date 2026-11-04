@@ -1,0 +1,17 @@
+{
+  "features": { "title": "What it does", "url": "https://github.com/ntatschner/loadout-cli/blob/main/docs/features.md" },
+  "installing": { "title": "Installing", "url": "https://github.com/ntatschner/loadout-cli/blob/main/docs/guides/installing.md" },
+  "first-run": { "title": "First run", "url": "https://github.com/ntatschner/loadout-cli/blob/main/docs/guides/first-run.md" },
+  "adding-a-project": { "title": "Adding a project", "url": "https://github.com/ntatschner/loadout-cli/blob/main/docs/guides/adding-a-project.md" },
+  "launching": { "title": "Launching", "url": "https://github.com/ntatschner/loadout-cli/blob/main/docs/guides/launching.md" },
+  "launcher": { "title": "The launcher", "url": "https://github.com/ntatschner/loadout-cli/blob/main/docs/launcher.md" },
+  "specialists": { "title": "Specialists", "url": "https://github.com/ntatschner/loadout-cli/blob/main/docs/specialists.md" },
+  "memory": { "title": "Memory", "url": "https://github.com/ntatschner/loadout-cli/blob/main/docs/memory.md" },
+  "teams": { "title": "Teams", "url": "https://github.com/ntatschner/loadout-cli/blob/main/docs/teams.md" },
+  "dashboard": { "title": "The dashboard", "url": "https://github.com/ntatschner/loadout-cli/blob/main/docs/guides/dashboard.md" },
+  "studio": { "title": "Studio", "url": "https://github.com/ntatschner/loadout-cli/blob/main/docs/guides/studio.md" },
+  "accessibility": { "title": "Accessibility", "url": "https://github.com/ntatschner/loadout-cli/blob/main/docs/accessibility.md" },
+  "usage": { "title": "Token usage", "url": "https://github.com/ntatschner/loadout-cli/blob/main/docs/usage.md" },
+  "repository-cleanliness": { "title": "Repository cleanliness", "url": "https://github.com/ntatschner/loadout-cli/blob/main/docs/repository-cleanliness.md" },
+  "commands": { "title": "Commands", "url": "https://github.com/ntatschner/loadout-cli/blob/main/docs/commands.md" }
+}
