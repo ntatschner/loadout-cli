@@ -250,6 +250,54 @@ public sealed class AboutWindowTests
     }
 
     [Fact]
+    public async Task Pressing_update_again_while_one_runs_starts_no_second()
+    {
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var started = 0;
+
+        async IAsyncEnumerable<UpdateProgress> Held([EnumeratorCancellation] CancellationToken ct = default)
+        {
+            started++;
+            yield return new UpdateProgress(UpdateStage.Downloading, 1, 10, "Downloading");
+            await gate.Task;
+        }
+
+        using var session = About(Model(), out var window, Held);
+
+        var running = window.UpdateAsync(CancellationToken.None);
+
+        // Not awaited until the gate opens: were the guard gone, this would wait
+        // on it for ever, and the test should fail rather than hang.
+        var second = window.UpdateAsync(CancellationToken.None);
+
+        var seen = started;
+
+        gate.SetResult();
+        await Task.WhenAll(running, second);
+
+        seen.Should().Be(1, "two updates replacing one binary is what the guard is for");
+    }
+
+    [Fact]
+    public async Task An_update_that_installed_nothing_does_not_end_the_session()
+    {
+        static async IAsyncEnumerable<UpdateProgress> UpToDate([EnumeratorCancellation] CancellationToken ct = default)
+        {
+            await Task.Yield();
+            yield return new UpdateProgress(UpdateStage.Checking, null, null, "Checking the release source");
+            yield return new UpdateProgress(UpdateStage.Done, null, null, "Already up to date at 0.109.5.");
+        }
+
+        using var session = About(Model(), out var window, UpToDate);
+
+        await window.UpdateAsync(CancellationToken.None);
+        session.Pump();
+
+        window.Updated.Should().BeFalse("nothing was replaced, so there is nothing to restart for");
+        Find<Label>(window, "about-version").Text.ToString().Should().NotContain("Restart");
+    }
+
+    [Fact]
     public void Closing_with_no_update_running_closes()
     {
         using var session = About(Model(), out var window);
