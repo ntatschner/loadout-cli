@@ -224,7 +224,7 @@ Keep single-letter shortcuts and Ambient fullscreen in the browser, as the desig
 
 Follow `CONTRIBUTING.md` and `.editorconfig`:
 
-- .NET SDK 10.0.402 exactly.
+- .NET SDK 10.0.403 exactly.
 - `dotnet restore --locked-mode`, then `dotnet build Loadout.slnx`, then `dotnet test tests/Loadout.Tests/Loadout.Tests.csproj`.
 - Warnings are errors.
 - No OS-suffixed target framework, no platform code reached from shared code, and no feature that quietly works on one platform only.
