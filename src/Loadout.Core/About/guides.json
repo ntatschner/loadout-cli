@@ -13,5 +13,6 @@
   "accessibility": { "title": "Accessibility", "url": "https://github.com/ntatschner/loadout-cli/blob/main/docs/accessibility.md" },
   "usage": { "title": "Token usage", "url": "https://github.com/ntatschner/loadout-cli/blob/main/docs/usage.md" },
   "repository-cleanliness": { "title": "Repository cleanliness", "url": "https://github.com/ntatschner/loadout-cli/blob/main/docs/repository-cleanliness.md" },
+  "capabilities": { "title": "Capabilities and offers", "url": "https://github.com/ntatschner/loadout-cli/blob/main/docs/capabilities.md" },
   "commands": { "title": "Commands", "url": "https://github.com/ntatschner/loadout-cli/blob/main/docs/commands.md" }
 }

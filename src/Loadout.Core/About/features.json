@@ -7,6 +7,7 @@
   { "id": "first-project", "name": "A first project from nothing", "since": "0.61.0", "status": "stable", "guide": "first-run" },
   { "id": "ask-back", "name": "The agent can ask back", "since": "0.15.0", "status": "stable", "guide": "features" },
   { "id": "clean-repos", "name": "Repos that stay clean", "since": "0.15.0", "status": "stable", "guide": "repository-cleanliness" },
+  { "id": "offers", "name": "Told what's missing before you start", "since": "0.116.0", "status": "stable", "guide": "capabilities" },
   { "id": "not-a-repository", "name": "Code that isn't a repository yet", "since": "0.22.0", "status": "stable", "guide": "adding-a-project" },
   { "id": "undo", "name": "Undo", "since": "0.15.0", "status": "stable", "guide": "commands" },
   { "id": "usage", "name": "Where the tokens went", "since": "0.15.0", "status": "stable", "guide": "usage" },
