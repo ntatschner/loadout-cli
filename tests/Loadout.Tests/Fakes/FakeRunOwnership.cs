@@ -48,10 +48,17 @@ public sealed class FakeRunOwnership : IRunOwnership
         return this;
     }
 
+    /// <summary>
+    /// Runs as a take starts, before it is granted, so a test can change the
+    /// run between a caller's first reading and the lock.
+    /// </summary>
+    public Action<string>? Taking { get; set; }
+
     /// <inheritdoc />
     public OperationResult<IDisposable> Take(string runDirectory)
     {
         Taken.Add(runDirectory);
+        Taking?.Invoke(runDirectory);
 
         if (Failing.TryGetValue(runDirectory, out var failing))
         {

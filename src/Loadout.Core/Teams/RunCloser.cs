@@ -203,7 +203,7 @@ public sealed class RunCloser
     private static OperationResult<RunClosed> Finished(RunSummary run) =>
         OperationResult<RunClosed>.Fail(
             $"Run {run.RunId} has already finished ({run.Ended}). There is nothing to close.",
-            ExitCode.InvalidArguments);
+            ExitCode.AlreadyDone);
 
     private static RunClosed Closing(RunSummary run, Liveness liveness, string reason) =>
         new(

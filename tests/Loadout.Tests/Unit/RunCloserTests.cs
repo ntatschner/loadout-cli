@@ -194,17 +194,46 @@ public sealed class RunCloserTests : IDisposable
         RunOutcomes.Of(Runs().Summarise(RunId).Value!).Should().Be(RunOutcome.Abandoned);
     }
 
-    [Fact]
-    public void Close_of_a_finished_run_is_refused()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Close_of_a_finished_run_is_refused_as_already_done(bool confirmed)
     {
         var directory = Write(Started, Lead, Finished);
         var before = File.ReadAllText(Journal(directory));
 
-        var refused = Closer().Close(RunId, confirmed: true, "test");
+        var refused = Closer().Close(RunId, confirmed, "test");
 
         refused.Failed.Should().BeTrue();
-        refused.ExitCode.Should().Be(ExitCode.InvalidArguments);
+
+        // Not the missing-confirmation code, whether or not it was confirmed:
+        // a caller reading that code would ask to confirm closing a run that
+        // has nothing left to close.
+        refused.ExitCode.Should().Be(ExitCode.AlreadyDone);
+        refused.Error.Should().Contain("already finished");
         File.ReadAllText(Journal(directory)).Should().Be(before);
+    }
+
+    [Fact]
+    public void Close_of_a_run_that_finishes_before_the_lock_is_refused_as_already_done()
+    {
+        var directory = Write(Started, Lead, Worker, WorkerTurn);
+        _owners.Script(directory, new OwnerReading.Free(_owners.Owner));
+        _owners.Taking = taken => File.AppendAllText(Journal(taken), Finished + "\n");
+
+        var refused = Closer().Close(RunId, confirmed: false, "test");
+
+        refused.Failed.Should().BeTrue();
+        refused.ExitCode.Should().Be(ExitCode.AlreadyDone);
+        Runs().Summarise(RunId).Value!.Ended.Should().Be("done", "its own finish stands, and no second one is written");
+    }
+
+    [Fact]
+    public void Preview_of_a_finished_run_is_refused_as_already_done()
+    {
+        Write(Started, Lead, Finished);
+
+        Closer().Preview(RunId, confirmed: true, "test").ExitCode.Should().Be(ExitCode.AlreadyDone);
     }
 
     [Fact]
