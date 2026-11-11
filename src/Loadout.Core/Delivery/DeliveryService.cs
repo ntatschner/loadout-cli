@@ -88,8 +88,10 @@ public interface IDeliveryService
 
     /// <summary>
     /// Marks merged the landings whose pull request the host now lists as
-    /// merged, and pending again those whose pull request was closed unmerged,
-    /// looking no more often than <see cref="DeliveryService.MergeEvery"/>.
+    /// merged, and pending again those whose pull request was closed unmerged;
+    /// and marks merged the pending branches whose work is in the branch they
+    /// would land in already. Each is looked at no more often than
+    /// <see cref="DeliveryService.MergeEvery"/>.
     /// </summary>
     /// <returns>How many were marked merged and how many went back to pending.</returns>
     Task<(int Merged, int Reopened)> MergedAsync(CancellationToken ct = default);
@@ -635,10 +637,18 @@ public sealed class DeliveryService : IDeliveryService
 
     /// <inheritdoc />
     /// <remarks>
+    /// <para>
     /// Each pull request is asked about on its own, through the host its
     /// project lands through, so a project on GitLab or Azure DevOps is
     /// noticed the same way as one on GitHub. A host that cannot be asked, or
     /// a pull request it cannot read, is passed over until the next look.
+    /// </para>
+    /// <para>
+    /// A pending branch, which has no pull request to ask about, is looked
+    /// for in the branch it would land in instead, as this machine has it:
+    /// one merged or squash-merged by hand, here or on the host and then
+    /// pulled, is marked merged. Nothing is fetched to find out.
+    /// </para>
     /// </remarks>
     public async Task<(int Merged, int Reopened)> MergedAsync(CancellationToken ct = default)
     {
@@ -656,8 +666,9 @@ public sealed class DeliveryService : IDeliveryService
             }
 
             var due = loaded.Value!.Landings
-                .Where(one => one.State is LandingState.Draft or LandingState.Ready
-                    && one.PullRequest.Length > 0
+                .Where(one => (one.PullRequest.Length > 0
+                        ? one.State is LandingState.Draft or LandingState.Ready
+                        : one.State is LandingState.Pending)
                     && (one.MergeChecked is not { } checkedAt || now - checkedAt >= MergeEvery))
                 .ToList();
 
@@ -673,43 +684,67 @@ public sealed class DeliveryService : IDeliveryService
                 continue;
             }
 
-            var host = await _hosts.ForAsync(project, repository, ct).ConfigureAwait(false);
+            var looked = new List<BranchLanding>();
+            var waiting = due.Where(one => one.PullRequest.Length == 0).ToList();
 
-            if (host.Failed || !host.Value!.Host.OpensPullRequests)
+            if (waiting.Count > 0 && await _squash.TargetAsync(repository, ct).ConfigureAwait(false) is { Succeeded: true } target)
             {
-                continue;
+                foreach (var landing in waiting)
+                {
+                    // Null when the branch has gone or git could not say:
+                    // left to be looked at again rather than counted a look.
+                    if (await _squash.StandingAsync(repository, landing.Branch, target.Value!, ct).ConfigureAwait(false) is not { } standing)
+                    {
+                        continue;
+                    }
+
+                    landing.MergeChecked = now;
+                    looked.Add(landing);
+
+                    if (standing.Contained)
+                    {
+                        landing.State = LandingState.Merged;
+                        landing.Why = $"Everything on it is in {standing.Target} already, merged without Loadout.";
+                        marked++;
+                    }
+                }
             }
 
-            var looked = new List<BranchLanding>();
+            var opened = due.Where(one => one.PullRequest.Length > 0).ToList();
 
-            foreach (var landing in due)
+            if (opened.Count > 0
+                && await _hosts.ForAsync(project, repository, ct).ConfigureAwait(false) is { Succeeded: true } choice
+                && choice.Value!.Host is { OpensPullRequests: true } host)
             {
-                var state = await host.Value.Host.StateAsync(repository, landing.PullRequest, ct).ConfigureAwait(false);
-
-                if (state.Failed)
+                foreach (var landing in opened)
                 {
-                    continue;
-                }
+                    var state = await host.StateAsync(repository, landing.PullRequest, ct).ConfigureAwait(false);
 
-                landing.MergeChecked = now;
-                looked.Add(landing);
+                    if (state.Failed)
+                    {
+                        continue;
+                    }
 
-                if (state.Value == PullRequestState.Merged)
-                {
-                    landing.State = LandingState.Merged;
-                    landing.Why = $"Its pull request was merged: {landing.PullRequest}";
-                    marked++;
-                }
-                else if (state.Value == PullRequestState.Closed)
-                {
-                    // Pending again, with nothing of the closed pull request
-                    // left on it, so it can be opened afresh or abandoned.
-                    landing.Why = $"Its pull request was closed without being merged: {landing.PullRequest}";
-                    landing.State = LandingState.Pending;
-                    landing.PullRequest = string.Empty;
-                    landing.MergeRequestedUtc = null;
-                    landing.MergeChecked = null;
-                    reopened++;
+                    landing.MergeChecked = now;
+                    looked.Add(landing);
+
+                    if (state.Value == PullRequestState.Merged)
+                    {
+                        landing.State = LandingState.Merged;
+                        landing.Why = $"Its pull request was merged: {landing.PullRequest}";
+                        marked++;
+                    }
+                    else if (state.Value == PullRequestState.Closed)
+                    {
+                        // Pending again, with nothing of the closed pull request
+                        // left on it, so it can be opened afresh or abandoned.
+                        landing.Why = $"Its pull request was closed without being merged: {landing.PullRequest}";
+                        landing.State = LandingState.Pending;
+                        landing.PullRequest = string.Empty;
+                        landing.MergeRequestedUtc = null;
+                        landing.MergeChecked = null;
+                        reopened++;
+                    }
                 }
             }
 

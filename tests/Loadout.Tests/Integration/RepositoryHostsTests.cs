@@ -300,6 +300,47 @@ public sealed class RepositoryHostsTests : IDisposable
         (await squash.StandingAsync(repository, "gone", "main")).Should().BeNull();
     }
 
+    [Fact]
+    public async Task A_branch_squash_merged_by_hand_is_in_its_target_even_after_the_target_moves_on()
+    {
+        var repository = await RepositoryAsync();
+        var squash = LocalSquash();
+
+        await Git(repository, "checkout", "-q", "main");
+        await Git(repository, "merge", "-q", "--squash", "feature");
+        await Git(repository, "commit", "-q", "-m", "Add the feature");
+
+        (await squash.StandingAsync(repository, "feature", "main"))!.Contained.Should().BeTrue("its changes are all in main");
+        (await squash.PlanAsync(repository, "feature", "main")).Error.Should().Contain("in main already", "there is nothing left to merge");
+
+        await File.WriteAllTextAsync(Path.Combine(repository, "other.txt"), "x\n");
+        await Git(repository, "add", "-A");
+        await Git(repository, "commit", "-q", "-m", "elsewhere");
+
+        (await squash.StandingAsync(repository, "feature", "main"))!.Contained.Should().BeTrue("main moving on elsewhere changes nothing");
+    }
+
+    [Fact]
+    public async Task A_branch_whose_changes_main_has_only_part_of_is_not_in_it()
+    {
+        var repository = await RepositoryAsync();
+        var squash = LocalSquash();
+
+        await Git(repository, "checkout", "-q", "main");
+        await File.WriteAllTextAsync(Path.Combine(repository, "feature.txt"), "one\n");
+        await Git(repository, "add", "-A");
+        await Git(repository, "commit", "-q", "-m", "half of it");
+
+        (await squash.StandingAsync(repository, "feature", "main"))!.Contained.Should().BeFalse("main has the first line and not the second");
+
+        await Git(repository, "revert", "--no-edit", "HEAD");
+        await Git(repository, "merge", "-q", "--squash", "feature");
+        await Git(repository, "commit", "-q", "-m", "Add the feature");
+        await Git(repository, "revert", "--no-edit", "HEAD");
+
+        (await squash.StandingAsync(repository, "feature", "main"))!.Contained.Should().BeFalse("it went in and was taken out again");
+    }
+
     [Theory]
     [InlineData(0, false, "")]
     [InlineData(3, false, "[dim](3 behind main)[/]")]

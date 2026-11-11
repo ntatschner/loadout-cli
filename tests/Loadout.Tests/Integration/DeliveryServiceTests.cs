@@ -2,6 +2,7 @@ using FluentAssertions;
 using Loadout.Core.Delivery;
 using Loadout.Core.Git;
 using Loadout.Models.Delivery;
+using Loadout.Models.Results;
 using Loadout.Models.Tasks;
 using Loadout.Tests.Fakes;
 using Xunit;
@@ -41,9 +42,11 @@ public sealed class DeliveryServiceTests : IDisposable
 
     public void Dispose() => _space.Dispose();
 
+    private readonly Squash _squash = new();
+
     private DeliveryService With(IRepositoryHost host) =>
         new(_landings, new FakeProjects("website", _space.Scratch("website")), _git, new FixedHosts(host),
-            new LocalSquash(new StubProcessLauncher(string.Empty), new StubResolver("git")), _space.Tasks, _clock);
+            _squash, _space.Tasks, _clock);
 
     private int StateReads => _gh.Requests.Count(one => one.Arguments is ["pr", "view", ..]);
 
@@ -343,6 +346,68 @@ public sealed class DeliveryServiceTests : IDisposable
         var found = await _delivery.FindAsync("nothing-here", null);
 
         found.Error.Should().Contain("loadout pr list");
+    }
+
+    [Fact]
+    public async Task A_pending_branch_whose_work_is_in_main_already_is_marked_merged_without_asking_the_host()
+    {
+        await WaitingAsync();
+
+        (await _delivery.MergedAsync()).Should().Be((0, 0));
+        (await KeptAsync()).State.Should().Be(LandingState.Pending, "main does not have its work yet");
+        _squash.Asked.Should().Equal("teams-r1-implementer-2 into main");
+
+        _squash.Contained = true;
+        await _delivery.MergedAsync();
+        _squash.Asked.Should().HaveCount(1, "it was looked at a moment ago");
+
+        _clock.Now += DeliveryService.MergeEvery;
+        (await _delivery.MergedAsync()).Should().Be((1, 0));
+
+        var kept = await KeptAsync();
+        kept.State.Should().Be(LandingState.Merged);
+        kept.Why.Should().Contain("in main already");
+        _gh.Requests.Should().BeEmpty("a branch with no pull request is nothing to ask the host about");
+    }
+
+    [Fact]
+    public async Task A_pending_branch_that_has_gone_or_cannot_be_read_stays_pending()
+    {
+        await WaitingAsync();
+        _squash.Readable = false;
+
+        (await _delivery.MergedAsync()).Should().Be((0, 0));
+
+        var kept = await KeptAsync();
+        kept.State.Should().Be(LandingState.Pending);
+        kept.MergeChecked.Should().BeNull("a look that could not read the branch is not a look");
+    }
+
+    /// <summary>A squash that answers how a branch stands as told, and refuses everything else.</summary>
+    private sealed class Squash : ILocalSquash
+    {
+        public bool Contained { get; set; }
+
+        public bool Readable { get; set; } = true;
+
+        public List<string> Asked { get; } = [];
+
+        public Task<OperationResult<string>> TargetAsync(string repository, CancellationToken ct = default) =>
+            Task.FromResult(OperationResult<string>.Ok("main"));
+
+        public Task<BranchStanding?> StandingAsync(string repository, string branch, string target, CancellationToken ct = default)
+        {
+            Asked.Add($"{branch} into {target}");
+
+            return Task.FromResult(Readable ? new BranchStanding(target, 0, Contained) : null);
+        }
+
+        public Task<OperationResult<LocalSquashPlan>> PlanAsync(string repository, string branch, string target, CancellationToken ct = default) =>
+            Task.FromResult(OperationResult<LocalSquashPlan>.Fail("not here", Loadout.Models.ExitCode.GeneralFailure));
+
+        public Task<OperationResult<string>> ApplyAsync(
+            string repository, LocalSquashPlan plan, string subject, string body, CancellationToken ct = default) =>
+            Task.FromResult(OperationResult<string>.Fail("not here", Loadout.Models.ExitCode.GeneralFailure));
     }
 
     private sealed class Clock(DateTimeOffset now) : TimeProvider

@@ -57,9 +57,12 @@ public interface ILocalSquash
     /// work is in the target already. Null when either cannot be read.
     /// </summary>
     /// <remarks>
-    /// Contained is only ever true for a branch merged as it was, or fast-
-    /// forwarded: a squash-merge makes a new commit, so git can't see that a
-    /// squashed branch went in.
+    /// Contained is true for a branch merged as it was or fast-forwarded, and
+    /// for one squash-merged, by anyone, anywhere: a squash makes a new
+    /// commit, so its history says nothing, but merging the branch again
+    /// would then change nothing in the target. A target that has since
+    /// changed the same lines again makes that merge conflict, and the branch
+    /// reads as not contained, which errs towards leaving it waiting.
     /// </remarks>
     Task<BranchStanding?> StandingAsync(string repository, string branch, string target, CancellationToken ct = default);
 
@@ -129,9 +132,36 @@ internal sealed class LocalSquash : ILocalSquash
             return null;
         }
 
-        var contained = await GitAsync(repository, ["merge-base", "--is-ancestor", branchCommit, targetCommit], ct).ConfigureAwait(false);
+        return new BranchStanding(target, count, await ContainedAsync(repository, branchCommit, targetCommit, ct).ConfigureAwait(false));
+    }
 
-        return new BranchStanding(target, count, contained.Succeeded && contained.Value!.Code == 0);
+    /// <summary>
+    /// Whether everything a branch changes is in the target: it is an
+    /// ancestor, or merging it would leave the target's tree as it is.
+    /// </summary>
+    private async Task<bool> ContainedAsync(string repository, string branchCommit, string targetCommit, CancellationToken ct)
+    {
+        var ancestor = await GitAsync(repository, ["merge-base", "--is-ancestor", branchCommit, targetCommit], ct).ConfigureAwait(false);
+
+        if (ancestor.Succeeded && ancestor.Value!.Code == 0)
+        {
+            return true;
+        }
+
+        // Exit 1 is a conflict, anything else git could not do: neither is a
+        // sign the work went in.
+        var merged = await GitAsync(repository, ["merge-tree", "--write-tree", targetCommit, branchCommit], ct).ConfigureAwait(false);
+
+        if (merged.Failed || merged.Value!.Code != 0)
+        {
+            return false;
+        }
+
+        var tree = await GitAsync(repository, ["rev-parse", "--verify", "--quiet", targetCommit + "^{tree}"], ct).ConfigureAwait(false);
+        var mergedTree = merged.Value.Output.Split('\n', StringSplitOptions.TrimEntries)[0];
+
+        return tree.Succeeded && tree.Value!.Code == 0 && mergedTree.Length > 0
+            && string.Equals(tree.Value.Output.Trim(), mergedTree, StringComparison.Ordinal);
     }
 
     /// <inheritdoc />
@@ -156,9 +186,7 @@ internal sealed class LocalSquash : ILocalSquash
             return OperationResult<LocalSquashPlan>.Fail($"{branch} can't be merged into itself.", ExitCode.InvalidArguments);
         }
 
-        var contained = await GitAsync(repository, ["merge-base", "--is-ancestor", branchCommit, targetCommit], ct).ConfigureAwait(false);
-
-        if (contained.Succeeded && contained.Value!.Code == 0)
+        if (await ContainedAsync(repository, branchCommit, targetCommit, ct).ConfigureAwait(false))
         {
             return OperationResult<LocalSquashPlan>.Fail($"Everything on {branch} is in {target} already.", ExitCode.InvalidArguments);
         }

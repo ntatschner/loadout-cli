@@ -63,7 +63,10 @@ public sealed class BranchLanding
     /// </summary>
     public DateTimeOffset? MergeRequestedUtc { get; set; }
 
-    /// <summary>When its pull request was last looked for among the merged, or null when it never has been.</summary>
+    /// <summary>
+    /// When it was last looked for among the merged, or null when it never has
+    /// been: its pull request, or for a pending branch, the branch it would land in.
+    /// </summary>
     public DateTimeOffset? MergeChecked { get; set; }
 
     public DateTimeOffset CreatedUtc { get; set; }
