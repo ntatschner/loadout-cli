@@ -2622,6 +2622,11 @@ daemon looks every quarter of an hour and marks the branch merged once the
 host says so. A pull request somebody closed without merging puts its branch
 back to pending, where it can be opened again or abandoned.
 
+A pending branch merged some other way, such as a squash merge you did by hand
+or a pull request you opened yourself, is marked merged once its changes are in
+the default branch on this machine. Nothing is fetched to find out, so a merge
+done on the host shows after you pull.
+
 **Where it lands** is worked out from the checkout's `origin`: GitHub through
 `gh`, GitLab through `glab`, Azure DevOps through `az repos`. Each runs under
 your own sign-in, and Loadout checks you are signed in before it pushes
