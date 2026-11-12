@@ -56,6 +56,24 @@ public enum ExitCode
     ChangedSinceRead = 12,
 
     /// <summary>
+    /// What was asked for has already happened, so nothing was changed: a
+    /// run asked to close that had already finished.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Not <see cref="InvalidArguments"/>, which is what this used to return.
+    /// The arguments were fine, and that code is also what a close returns when
+    /// it wants a confirmation, so a caller reading the code asked somebody to
+    /// confirm closing a run that had nothing left to close.
+    /// </para>
+    /// <para>
+    /// Not <see cref="ChangedSinceRead"/> either: a run typed by hand on the
+    /// command line was never read first, so nothing changed under anybody.
+    /// </para>
+    /// </remarks>
+    AlreadyDone = 13,
+
+    /// <summary>
     /// Stopped at the keyboard. 128 plus SIGINT, which is what a shell reports
     /// for an interrupted program and what scripts already test for — a value
     /// of our own here would be a second convention for something that has one.

@@ -55,16 +55,28 @@ public sealed class DashboardActionsTests
     }
 
     [Fact]
-    public async Task Confirmed_close_refused_as_invalid_says_the_run_has_ended_or_is_not_one()
+    public async Task Confirmed_close_refused_as_invalid_says_it_is_not_a_run()
     {
         var refused = await DashboardActions.RanAsync(
             new Refusing(ExitCode.InvalidArguments), TimeProvider.System, new RunAction(Run, "close", Confirmed: true), Quiet(), CancellationToken.None);
 
         refused.Failed.Should().BeTrue();
-        refused.Error.Should().Contain("already ended")
-            .And.Contain("not a run")
+        refused.Error.Should().Contain("not a run")
             .And.Contain("terminal serving this page")
             .And.NotContain("Confirm", "it was confirmed, and asking again would loop");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Close_of_a_finished_run_says_it_has_ended_and_never_asks_to_confirm(bool confirmed)
+    {
+        var refused = await DashboardActions.RanAsync(
+            new Refusing(ExitCode.AlreadyDone), TimeProvider.System, new RunAction(Run, "close", Confirmed: confirmed), Quiet(), CancellationToken.None);
+
+        refused.Failed.Should().BeTrue();
+        refused.ExitCode.Should().Be(ExitCode.AlreadyDone);
+        refused.Error.Should().Be("That run has already ended, so there was nothing to close.");
     }
 
     [Theory]

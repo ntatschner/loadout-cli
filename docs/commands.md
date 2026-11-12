@@ -149,7 +149,7 @@
 | `loadout team follow-ups accept <run> <id>...` | Make follow-ups into tasks on the run's project, each with the run as its source. `task move` takes one elsewhere afterwards |
 | `loadout team follow-ups dismiss <run> <id>... [--why <text>]` | Decide against follow-ups, so they stop waiting and are never offered again |
 | `loadout team run <team> "<goal>" --follows <run>` | Carry on from a run that ended short: its lead is told how that one ended, what stopped it and what you said |
-| `loadout team runs close <run>` | End a run whose driver has died, so remove, prune and resume take it. Refused while anything is driving it; a run from an older build is asked about first, or takes `--yes` |
+| `loadout team runs close <run>` | End a run whose driver has died, so remove, prune and resume take it. Refused while anything is driving it; a run from an older build is asked about first, or takes `--yes`. A run that has already finished is refused with exit code 13, and never asked about |
 | `loadout team bin` | What is in the bin: each run and team, when it was removed, how many days it has left and its size |
 | `loadout team bin empty [--older-than <age>]` | Delete what is in the bin for good, all of it or only what is older than the age. Asks first, and needs `--yes` where nobody can be asked |
 | `loadout team outbox` | The files a run delivered, resolved from the commits its nodes reported |
