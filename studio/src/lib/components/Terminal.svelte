@@ -15,6 +15,7 @@
   import Signal from './Signal.svelte';
   import { TERMINAL_STATES, largestFitting, resumeCommand, type TerminalState } from '../terminal';
   import { SPLIT_SETTLED } from '../splits';
+  import { LEVELS } from '../toasts.svelte';
 
   /** How long a new size waits for the next before the session is told. */
   const RESIZE_HOLD = 200;
@@ -41,6 +42,8 @@
     ondrawn?: (renderer: string) => void;
     /** A row on the terminal's foot, under the screen: the session's status. */
     foot?: Snippet;
+    /** A Needs you or Problem about this session that is still open, for the mark on the bar. */
+    mark?: { level: 'needs' | 'problem'; count: number } | null;
   }
 
   let {
@@ -58,6 +61,7 @@
     onretry = undefined,
     ondrawn = undefined,
     foot = undefined,
+    mark = null,
   }: Props = $props();
 
   const shown = $derived(TERMINAL_STATES[status]);
@@ -451,6 +455,9 @@
 <section class="ls-term" class:fit class:off={!shown.typing} aria-label="Live terminal">
   <div class="tbar">
     <Signal word={shown.word} />
+    {#if mark}
+      <span class={`ls-panemark ${mark.level}`} data-mark={mark.level}><span class="gl" aria-hidden="true">{LEVELS[mark.level][0]}</span>{LEVELS[mark.level][1]}{mark.count > 1 ? ` · ${mark.count}` : ''}</span>
+    {/if}
     <span>{[project, agent].filter(Boolean).join(' · ')}</span>
     <span class="size">{columns} × {rows}</span>
     <span class="keyhint">Ctrl+] leaves the terminal</span>

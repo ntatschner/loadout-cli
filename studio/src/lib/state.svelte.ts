@@ -6,7 +6,7 @@ import { command } from './commands';
 import { clockOf, linesOf, type Work } from './lines';
 import type { SignalFamily } from './signals';
 import { setAccent, setBackdrop, setDensity, setMotion, setTheme, preferredTheme } from './studio';
-import { toasts } from './toasts.svelte';
+import { toasts, type ToastSubject } from './toasts.svelte';
 import { isMode, morph, nextMode, type StudioMode } from './modes';
 import { resumeConversation, type ResumeAsk, type ResumeOutcome } from './resume';
 import { reloadsFor, type Reload } from './reloads';
@@ -25,6 +25,15 @@ const LOCAL_FULLSCREEN = 'studio-ambient-fullscreen';
 const LOCAL_MODE = 'studio-mode';
 
 /** A string this browser keeps, or the fallback where none is kept or storage is refused. */
+/** The session or run a toast about this line is about, so its pane or card can be marked. */
+export function subjectOf(line: Work): ToastSubject | undefined {
+  if (line.kind === 'session') {
+    return { kind: 'session', ref: line.ref };
+  }
+
+  return line.kind === 'team run' ? { kind: 'run', ref: line.ref } : undefined;
+}
+
 function readText(key: string, fallback: string): string {
   try {
     return localStorage.getItem(key) ?? fallback;
@@ -314,7 +323,7 @@ export class Studio {
         this.#ask(line);
       } else if (is === 'ended' && was) {
         this.#log(`${line.title} ended`, line.failed ? 'bad' : 'good', line.failed ? '✕' : '✓');
-        toasts.add({ level: line.failed ? 'problem' : 'done', text: `${line.title} ended${line.failed ? `: ${line.failed}` : ''}` });
+        toasts.add({ level: line.failed ? 'problem' : 'done', text: `${line.title} ended${line.failed ? `: ${line.failed}` : ''}`, subject: subjectOf(line) });
       } else if (!was) {
         this.#log(`Started: ${line.title}`, 'moving', '▶');
       }
@@ -338,6 +347,7 @@ export class Studio {
     if (line.kind === 'session') {
       this.#asked.set(line.id, toasts.add({
         level: 'needs',
+        subject: subjectOf(line),
         text: `${line.title} ${line.approval ? 'needs approval' : 'is waiting for you'}`,
         actions: [{ label: 'Go to the question', cmd: 'opens its terminal · changes nothing', onpress: () => reveal({ kind: 'session', id: line.ref }) }],
       }));
@@ -354,6 +364,7 @@ export class Studio {
     if (['brief', 'done-when', 'readings', 'budget'].includes(gate.kind)) {
       this.#asked.set(line.id, toasts.add({
         level: 'needs',
+        subject: subjectOf(line),
         text: `${line.where} asks: ${gate.brief ?? gate.question}`,
         actions: [{ label: 'Go to the question', cmd: 'opens the run · changes nothing', onpress: () => reveal({ kind: 'run', id: line.ref }) }],
       }));
@@ -365,6 +376,7 @@ export class Studio {
 
     this.#asked.set(line.id, toasts.add({
       level: 'needs',
+      subject: subjectOf(line),
       // The words without the command, and the command on its own line below
       // them, so a toast that can say yes still shows what yes runs.
       text: `${line.where} asks: ${gate.brief ?? gate.question}`,

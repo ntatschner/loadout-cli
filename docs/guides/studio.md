@@ -119,6 +119,28 @@ loadout team gate <run> --gate <gate> --answer Approve --by dashboard
 
 From the keyboard: **Ctrl K**, type a word from the answer, **Enter**.
 
+### Notifications where you have a terminal open
+
+On a page with a terminal or a split in it, notifications never sit on top of
+it. That means the Terminals deck, a page open beside the deck or the board,
+a session's own page, the Teams board and Pure Focus. There they get a strip
+of their own under the mode bar. The strip is always the same height, empty or
+not, so a notification arriving never resizes your terminals.
+
+The strip counts what's there by level: **!** for Needs you, **✕** for a
+Problem, then For your information and Done. Next to the counts is the newest
+one, as a chip, and **Earlier** for what has already gone. Nothing opens as a
+card by itself here, not even a question. Press a count to open that level's
+cards below the strip, where you can answer or dismiss them. **Esc** or **Ctrl
+Shift X** closes them again. Leave for a page without a terminal and anything
+still waiting on you opens as a card in the usual place. A screen reader still
+hears each one as it arrives, and a Problem straight away.
+
+When a question or a problem is about one session, its pane gets a mark too:
+**Needs you** or **Problem** in the bar along the top of its terminal. The mark
+stays until the question is answered, and the notification is in the strip as
+well.
+
 ### Look back at what needed you
 
 **Events** keeps the last month of what needed you: each question a run asked
@@ -319,6 +341,13 @@ own. Where the map shows, the rail and the mode bar get an embossed edge, and
 the rail turns solid again when it widens, so its labels never sit over page
 text.
 
+**Notifications over terminals** decides how notifications show on pages with a
+terminal or a split. **In a strip of their own** is the default and is
+described under [Notifications where you have a terminal
+open](#notifications-where-you-have-a-terminal-open). **Floating chips** puts
+them back over the top right of the page, every one folded to a chip. **Counts
+only** keeps the strip but shows only the counts, with no newest chip.
+
 They're kept in Loadout's config, not the browser:
 
 ```sh
@@ -327,6 +356,7 @@ loadout config set studio-accent violet
 loadout config set studio-density roomy
 loadout config set studio-motion reduced
 loadout config set studio-backdrop map-animated
+loadout config set studio-notices-working chips
 loadout config set studio-halo gyroscope
 loadout config set studio-map-kinds "runs, sessions"
 loadout config set studio-map-states "waiting, running, failed"

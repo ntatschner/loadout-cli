@@ -236,6 +236,28 @@
 .ls-toast-history .ls-cmd { grid-column: 2; font-size: 11px; }
 .ls-toast-history .clear { margin-top: 8px; padding: 0; border: 0; background: none; color: var(--muted); font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; }
 .ls-toast-history .clear:hover, .ls-toast-history .clear:focus-visible { color: var(--ink-strong); outline: 2px solid var(--focus); outline-offset: 2px; }
+/* The lane: notifications in a working view, in a row of their own under the mode bar, so none of them covers a pane. Its height never changes, so a toast never refits a terminal. */
+.ls-lane { position: fixed; top: var(--ls-focus-top); left: var(--rail-width); right: 0; z-index: var(--z-modebar); height: var(--ls-lane-h); box-sizing: border-box; display: flex; align-items: center; gap: 10px; padding: 0 max(14px, env(safe-area-inset-right, 0px)) 0 14px; background: var(--ground); box-shadow: inset 0 -1px 0 var(--rule); font-family: var(--font-sans); transition: left var(--dur-travel) var(--ease-travel); }
+.ls-lane .badges { display: flex; align-items: center; gap: 6px; flex: none; }
+.ls-lane .none { font-size: 12px; color: var(--muted); }
+.ls-lane .newest { min-width: 0; flex: 0 1 auto; display: flex; }
+.ls-lane .newest .ls-toast-chip { min-height: 26px; box-shadow: 0 0 0 1px var(--c); }
+.ls-lane .newest .ls-toast-chip span:not(.gl) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ls-lane .grow { flex: 1 1 auto; }
+.ls-lane .ls-toast-past { min-height: 26px; box-shadow: 0 0 0 1px var(--rule); }
+.ls-lane-badge { --c: var(--moving); display: inline-flex; align-items: center; gap: 6px; min-height: 26px; padding: 0 10px 0 3px; border: 0; border-radius: var(--radius-pill); background: var(--surface); color: var(--ink-strong); font: inherit; font-size: 12.5px; font-variant-numeric: tabular-nums; cursor: pointer; box-shadow: 0 0 0 1px var(--c); }
+.ls-lane-badge.done { --c: var(--good); } .ls-lane-badge.needs { --c: var(--needs); } .ls-lane-badge.problem { --c: var(--bad); }
+.ls-lane-badge .gl { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; font-size: 11px; font-weight: 600; color: var(--on-signal); background: var(--c); }
+.ls-lane-badge[aria-expanded="true"] { background: color-mix(in srgb, var(--c) 22%, var(--surface)); }
+.ls-lane-badge:hover, .ls-lane-badge:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* One pulse for a new arrival, never a loop: the eye is on the terminal. */
+.ls-lane-badge.anim { animation: lsPulse 1.5s ease-out 1; }
+.ls-lane.calm .ls-lane-badge { animation: none; }
+/* What a press opens, below the lane and only then. */
+.ls-lane-drop, .ls-lane .ls-toast-history { position: absolute; top: calc(100% + 6px); right: max(14px, env(safe-area-inset-right, 0px)); width: min(390px, calc(100% - 28px)); max-height: calc(100vh - var(--ls-focus-top) - var(--ls-lane-h) - 24px); overflow: auto; }
+.ls-lane-drop { display: grid; gap: 8px; }
+[data-mode="minimal"] .ls-lane { left: 0; }
+@media (max-width: 599px) { .ls-lane { left: 0; padding-left: 52px; padding-right: 12px; } .ls-lane .newest { display: none; } }
 .ls-toast { --c: var(--moving); position: relative; width: 100%; padding: 12px 14px 12px 18px; background: var(--surface); box-shadow: inset 3px 0 0 var(--c), 0 0 0 1px var(--rule), 0 16px 36px -18px var(--cgf), var(--shadow-float); }
 .ls-toast.done { --c: var(--good); } .ls-toast.info { --c: var(--moving); }
 .ls-toast.needs { --c: var(--needs); background: var(--needs-wash); box-shadow: inset 4px 0 0 var(--c), 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent), 0 0 40px -12px var(--cgf), var(--shadow-float); }
@@ -464,6 +486,10 @@
 .ls-term .tbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; min-height: 40px; padding: 4px 8px 4px 12px; box-shadow: inset 0 -1px 0 var(--rule); font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
 .ls-term .tbar .grow { flex: 1 1 auto; }
 .ls-term .tbar .size { font-variant-numeric: tabular-nums; }
+/* A Needs you or Problem about this pane's session: marked here as well as counted in the notifications. */
+.ls-panemark { --c: var(--needs); display: inline-flex; align-items: center; gap: 6px; padding: 1px 8px 1px 2px; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--c) 18%, transparent); box-shadow: 0 0 0 1px var(--c); font-family: var(--font-sans); font-size: 11px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--needs-text); }
+.ls-panemark.problem { --c: var(--bad); color: var(--bad-text); }
+.ls-panemark .gl { display: grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; font-size: 10px; font-weight: 600; letter-spacing: 0; color: var(--on-signal); background: var(--c); }
 .ls-term .tbtn { display: inline-grid; place-items: center; min-width: 32px; min-height: 32px; padding: 0 8px; border: 0; background: none; color: var(--ink-soft); font: inherit; font-family: var(--font-mono); font-size: 12px; cursor: pointer; box-shadow: inset 0 0 0 1px var(--control-edge); }
 .ls-term .tbtn:hover { color: var(--ink-strong); background: var(--tint-hover-c); }
 .ls-term .tbtn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }

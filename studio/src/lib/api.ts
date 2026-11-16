@@ -153,6 +153,8 @@ export interface Preferences {
   motion: string;
   /** plain, map or map-animated: what is behind every page. */
   backdrop: string;
+  /** strip, chips or off: how notifications show in a view with a terminal or a split. Missing from an older daemon, which reads as strip. */
+  noticesWorking?: string;
   idleAfter: number;
   layoutLens: string | null;
   layoutMap: string | null;

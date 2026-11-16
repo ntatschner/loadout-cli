@@ -1,9 +1,10 @@
 <script lang="ts">
-  // Theme, accent, density, motion, the background and the Lens halo. Kept in Loadout's
+  // Theme, accent, density, motion, the background, notifications over terminals and the Lens halo. Kept in Loadout's
   // config, so every browser on this machine shows Studio the same way; no
   // theme set follows the system, and the system's reduced motion always wins.
   import { command } from '../lib/commands';
   import { studio } from '../lib/state.svelte';
+  import { noticesWorking } from '../lib/toasts.svelte';
 
   type Option = [string, string];
 
@@ -18,6 +19,13 @@
       options: [['plain', 'Plain'], ['map', 'Field map, still'], ['map-animated', 'Field map, animated']],
       value: () => studio.prefs?.backdrop ?? 'plain',
       note: 'The animated map moves only under full motion and pauses while anything waits for you. Pure Focus, Ambient and high contrast keep the plain ground.',
+    },
+    {
+      key: 'studio-notices-working',
+      legend: 'Notifications over terminals',
+      options: [['strip', 'In a strip of their own'], ['chips', 'Floating chips'], ['off', 'Counts only']],
+      value: () => noticesWorking(studio.prefs?.noticesWorking),
+      note: 'Where a page has a terminal or a split in it. The strip sits under the mode bar and covers nothing; a Needs you or Problem shows as a count there until you open it. Floating chips sit over the top right of the page. Counts only keeps the strip with its counts and nothing else.',
     },
     { key: 'studio-halo', legend: 'Lens halo', options: [['orbit', 'Orbit'], ['gyroscope', 'Gyroscope']], value: () => studio.prefs?.halo ?? 'orbit' },
   ];

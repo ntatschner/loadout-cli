@@ -53,9 +53,10 @@
   import QuietMemory from './pages/quiet/QuietMemory.svelte';
   import QuietSpend from './pages/quiet/QuietSpend.svelte';
   import { besideReturn, isModeKey, isSixPage, motionNow, PAGE_TITLES, type SixPage, type Waiting } from './lib/modes';
-  import { besideOf } from './lib/reveal';
+  import { besideOf, isWorkingView } from './lib/reveal';
   import { reveal, revealParts } from './lib/reveal.svelte';
   import { readSplit, SPLIT_KEYS } from './lib/splits';
+  import { noticesWorking } from './lib/toasts.svelte';
 
   let palette = $state(false);
   let appearance = $state(false);
@@ -222,6 +223,11 @@
   // In Pure Focus each of the six pages is a desk; its places (+add and the rest) stay pages, in the flat look.
   const pureDesk = $derived(studio.mode === 'pure' && six && !router.route.rest[0]?.startsWith('+'));
   const boardHost = $derived(board || (studio.mode === 'teams' && !!besideRoute));
+  // A working view: one with a terminal or a split in it, where a
+  // notification over the page would cover a pane, so they take a lane of
+  // their own. One rule, in reveal.ts, which the tests check view by view.
+  const working = $derived(isWorkingView(studio.mode, router.route));
+  const notices = $derived(noticesWorking(studio.prefs?.noticesWorking));
   const besideTitle = $derived(
     !besideRoute ? '' : isSixPage(besideRoute.page) ? PAGE_TITLES[besideRoute.page] : besideRoute.page === 'session' ? 'Session' : besideRoute.rest[0] === '+team' ? 'Team' : 'Run',
   );
@@ -473,7 +479,7 @@
     {/if}
   {/snippet}
 
-  <Toasts place={pure ? 'pure' : pureDesk ? 'desk' : page === 'session' ? 'session' : null} />
+  <Toasts place={working ? 'working' : null} {notices} />
 
   {#if ambient}
     <Ambient onleave={() => (ambient = false)} onlaunch={() => openLaunch()} />

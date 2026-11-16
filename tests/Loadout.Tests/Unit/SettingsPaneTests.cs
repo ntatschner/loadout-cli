@@ -64,6 +64,7 @@ public sealed class SettingsPaneTests
     [Theory]
     [InlineData("studio-motion", "reduced")]
     [InlineData("studio-backdrop", "map-animated")]
+    [InlineData("studio-notices-working", "off")]
     public void Studios_own_settings_type_config_set_under_their_own_names(string key, string value)
     {
         Line(new SettingsChange(key, value)).Should().Be($"config set {key} {value}");

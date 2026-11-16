@@ -47,6 +47,14 @@ public sealed class StudioSettings
     public string? Backdrop { get; set; }
 
     /// <summary>
+    /// How notifications show in a view with a terminal or a split in it:
+    /// strip (a lane of their own under the mode bar), chips (the floating
+    /// stack, folded) or off (the lane's counts and nothing else). Null is
+    /// strip.
+    /// </summary>
+    public string? NoticesWorking { get; set; }
+
+    /// <summary>
     /// The kinds Studio's Map and Lens show, as <see cref="StudioMap.Kinds"/>
     /// names them, comma-separated. Null is In flight's: runs, sessions and
     /// tasks.
