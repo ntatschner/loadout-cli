@@ -12,6 +12,7 @@
   import Terminal from './Terminal.svelte';
   import { sessions as sessionsApi, terminalAddress, type Session } from '../api';
   import { studio } from '../state.svelte';
+  import { toasts } from '../toasts.svelte';
   import { terminalState, type TerminalState } from '../terminal';
   import type { PaneHandle } from '../modes';
 
@@ -32,6 +33,8 @@
   let { id, leaveTo = undefined, onstatus = undefined, onoutput = undefined, ontyped = undefined, onready = undefined }: Props = $props();
 
   const line = $derived(studio.lines.find((one) => one.kind === 'session' && one.ref === id));
+  /** A Needs you or Problem about this session, still open: marked on the pane as well as counted in the notifications. */
+  const mark = $derived(toasts.about('session', id));
   const session: Session | undefined = $derived(line?.session);
 
   let screen = $state<ReturnType<typeof Terminal> | undefined>();
@@ -257,6 +260,7 @@
   onretry={() => void reconnect()}
   ondrawn={(drawn) => (renderer = drawn)}
   foot={session?.status && !session.ended ? statusFoot : undefined}
+  {mark}
 />
 
 {#snippet statusFoot()}

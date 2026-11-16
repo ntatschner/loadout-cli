@@ -715,6 +715,15 @@ public static class ConfigKeys
             Group: Groups.Studio,
             WhenUnset: "plain, today's ground"),
 
+        new("studio-notices-working",
+            "How Studio shows notifications where a page has a terminal or a split: strip (a row of their own that covers nothing), chips (floating over the page) or off (counts only)",
+            (c, _) => c.Studio.NoticesWorking ?? string.Empty,
+            (c, _, v) => c.Studio.NoticesWorking = Optional(v, "strip", "chips", "off"),
+            false,
+            Sample: "chips",
+            Group: Groups.Studio,
+            WhenUnset: "strip: a Needs you or Problem shows as a count there until you open it"),
+
         new("studio-idle-after",
             "Minutes a working session is quiet before Studio reads it as idle",
             (c, _) => c.Studio.IdleAfter is { } minutes

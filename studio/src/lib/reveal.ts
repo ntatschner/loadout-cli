@@ -78,6 +78,30 @@ export function besideOf(mode: StudioMode, route: Route): { page: string; rest: 
   return null;
 }
 
+/**
+ * Whether a route draws a working view in a mode: one with a terminal or a
+ * split in it, where a notification over the page would cover a pane. The
+ * deck and anything open beside it in Terminals, the board and anything
+ * beside it in Teams, Pure Focus's desks, and a session's page in any mode.
+ * The shell draws these as App.svelte does; the notifications take their
+ * lane from this.
+ */
+export function isWorkingView(mode: StudioMode, route: Route): boolean {
+  const page = route.page;
+  const place = route.rest[0]?.startsWith('+') ?? false;
+
+  switch (mode) {
+    case 'pure':
+      return page === 'home' || page === 'sessions' || page === 'session' || ((page === 'teams' || isSixPage(page)) && !place);
+    case 'terminals':
+      return page === 'home' || page === 'sessions' || page === 'session' || !!besideOf(mode, route);
+    case 'teams':
+      return page === 'home' || page === 'session' || !!besideOf(mode, route);
+    default:
+      return page === 'session';
+  }
+}
+
 const to = (parts: string[], query = ''): Jump => ({ parts, query, focusing: null });
 
 export function placement(mode: StudioMode, target: Target, route: Route): Jump {

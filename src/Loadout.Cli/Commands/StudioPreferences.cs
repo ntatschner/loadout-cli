@@ -21,6 +21,7 @@ internal static class StudioPreferences
         density = studio?.Density ?? "comfortable",
         motion = studio?.Motion ?? "full",
         backdrop = studio?.Backdrop ?? "plain",
+        noticesWorking = studio?.NoticesWorking ?? "strip",
         idleAfter = studio?.IdleAfter ?? 10,
         layoutLens = studio?.LayoutLens,
         layoutMap = studio?.LayoutMap,

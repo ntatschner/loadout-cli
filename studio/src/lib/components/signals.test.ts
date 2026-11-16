@@ -158,7 +158,7 @@ describe('Toasts', () => {
     expect(stack.history[0].count).toBe(3);
   });
 
-  it('shows everything as a chip in a named place, and opens a waiting question again on leaving it', async () => {
+  it('shows everything as a chip over a working view, and opens a waiting question again on leaving it', async () => {
     const stack = new ToastStack();
     const { container, rerender } = render(Toasts, { stack, clock: false, place: null });
 
@@ -166,7 +166,7 @@ describe('Toasts', () => {
     stack.add({ level: 'done', text: 'Saved' });
     await tick();
 
-    await rerender({ stack, clock: false, place: 'pure' });
+    await rerender({ stack, clock: false, place: 'working', notices: 'chips' });
     expect(stack.list.every((one) => one.folded)).toBe(true);
     expect(container.querySelectorAll('.ls-toast')).toHaveLength(0);
 
@@ -181,9 +181,9 @@ describe('Toasts', () => {
     expect(stack.list.map((one) => one.text)).toEqual(['arrived here', 'Saved', 'writer/2 asks: delete the branch?']);
   });
 
-  it('lets Done and notice chips give way in a named place, and never a waiting question', async () => {
+  it('lets Done and notice chips give way over a working view, and never a waiting question', async () => {
     const stack = new ToastStack();
-    const { container } = render(Toasts, { stack, clock: false, place: 'session' });
+    const { container } = render(Toasts, { stack, clock: false, place: 'working', notices: 'chips' });
 
     stack.add({ level: 'done', text: 'Saved' });
     stack.add({ level: 'problem', text: 'round 3 failed' });
@@ -196,7 +196,7 @@ describe('Toasts', () => {
 
   it('gives way only while the pointer is near', async () => {
     const stack = new ToastStack();
-    const { container } = render(Toasts, { stack, clock: false, place: 'desk' });
+    const { container } = render(Toasts, { stack, clock: false, place: 'working', notices: 'chips' });
 
     stack.add({ level: 'done', text: 'Saved' });
     await tick();
