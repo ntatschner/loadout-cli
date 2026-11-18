@@ -385,6 +385,40 @@ public sealed class SessionHistoryTests : IDisposable
     }
 
     [Fact]
+    public async Task A_codex_subagent_rollout_is_not_a_second_copy_of_its_parent()
+    {
+        const string parent = "01a1892c-fb22-7612-a4cb-9edd621c8e6a";
+        const string child = "01a18948-f23b-74f3-a2e3-19159c730789";
+        var directory = Path.Combine(_root, "code", "alpha");
+
+        WriteCodexSession(parent, directory, "Check app template generation");
+
+        // Codex gives each subagent a rollout of its own, opening with its
+        // own id but its parent's session_id, so read naively it is the
+        // parent again. Studio keys its history by agent and id, and a
+        // repeated key stopped the whole list drawing.
+        File.WriteAllLines(
+            Path.Combine(_root, ".codex", "sessions", "2026", "08", "20", $"rollout-2026-08-20T10-05-00-{child}.jsonl"),
+            [Json(new
+            {
+                timestamp = "2026-08-20T10:05:00.000Z",
+                type = "session_meta",
+                payload = new
+                {
+                    id = child,
+                    session_id = parent,
+                    forked_from_id = parent,
+                    cwd = directory,
+                    source = new { subagent = new { thread_spawn = new { parent_thread_id = parent, depth = 1 } } },
+                },
+            })]);
+
+        var sessions = await new CodexSessionHistory(_environment).ListAsync(10);
+
+        sessions.Value.Should().ContainSingle().Which.SessionId.Should().Be(parent);
+    }
+
+    [Fact]
     public async Task A_codex_session_with_no_name_falls_back_to_its_folder()
     {
         WriteCodexSession(

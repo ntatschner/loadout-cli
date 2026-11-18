@@ -236,6 +236,17 @@ internal sealed class CodexSessionHistory : ISessionHistory
             return null;
         }
 
+        // A subagent's rollout opens with its parent's session_id, so read as
+        // a session it is the parent again: one conversation listed once per
+        // subagent, and a repeated key that stops Studio's history drawing.
+        // Its own id cannot be resumed either, so it is no session at all.
+        if (payload.TryGetProperty("source", out var source)
+            && source.ValueKind == JsonValueKind.Object
+            && source.TryGetProperty("subagent", out _))
+        {
+            return null;
+        }
+
         if (!payload.TryGetProperty("session_id", out var id)
             || id.ValueKind != JsonValueKind.String
             || id.GetString() is not { Length: > 0 } sessionId)
