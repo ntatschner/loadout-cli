@@ -6,6 +6,7 @@
   import Signal from './Signal.svelte';
   import Spend from './Spend.svelte';
   import { signalOf } from '../signals';
+  import { LEVELS, toasts } from '../toasts.svelte';
   import type { Act, GateShown, RunSummary } from '../teams';
 
   interface Props {
@@ -21,6 +22,8 @@
   let { run, href = undefined, gate = null, reasons = [], actions = [], badge = null }: Props = $props();
 
   const family = $derived(signalOf(run.word).family);
+  /** A Needs you or Problem about this run, still open: marked on the card as well as counted in the notifications. */
+  const mark = $derived(toasts.about('run', run.id));
   const facts = $derived(
     [run.team, run.project, run.posture, run.round ? `round ${run.round}${run.rounds ? ` of ${run.rounds}` : ''}` : null, run.elapsed, run.id]
       .filter(Boolean)
@@ -32,6 +35,9 @@
   <div class="top">
     {#if href}<a class="goal" {href}>{run.goal}</a>{:else}<span class="goal">{run.goal}</span>{/if}
     <Signal word={run.word} />
+    {#if mark}
+      <span class={`ls-panemark ${mark.level}`} data-mark={mark.level}><span class="gl" aria-hidden="true">{LEVELS[mark.level][0]}</span>{LEVELS[mark.level][1]}{mark.count > 1 ? ` · ${mark.count}` : ''}</span>
+    {/if}
     {#if badge}<span class="ls-liveness" role="status">{badge}</span>{/if}
   </div>
   <span class="facts">{facts}</span>
