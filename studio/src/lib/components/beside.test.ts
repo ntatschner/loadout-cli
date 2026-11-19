@@ -2,6 +2,7 @@
 // field, a terminal or a dialog; closing goes back to the last route that
 // was not one of the six pages; and the watched side is the same element,
 // never made again, whether a page is beside it or not.
+import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { createRawSnippet } from 'svelte';
@@ -93,6 +94,24 @@ describe('BesideGrid', () => {
 
     expect(made).toBe(1);
     expect(shown.container.querySelector('.deck')).toBe(deck);
+  });
+
+  // Studio's tests load no CSS, so the rule itself is what is checked. On a
+  // narrow window the page beside takes the width and what you watch makes
+  // way for it; with no page beside, there is nothing to make way for, and
+  // hiding it left the Terminals deck and the Team Focus board blank.
+  it('hides what you watch on a narrow window only to make room for a page beside it', () => {
+    const css = readFileSync('src/styles/components.css', 'utf-8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const hiding = [...css.matchAll(/([^{}@]+)\{([^{}]*)\}/g)]
+      .filter(([, , body]) => /(?:^|;)\s*display\s*:\s*none/.test(body))
+      .flatMap(([, selector]) => selector.split(',').map((one) => one.trim()))
+      .filter((selector) => selector.includes('.focusarea'));
+
+    expect(hiding.length).toBeGreaterThan(0);
+
+    for (const selector of hiding) {
+      expect(selector).toContain(':not(.solo)');
+    }
   });
 });
 

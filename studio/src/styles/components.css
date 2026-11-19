@@ -1789,7 +1789,8 @@ a.ls-ptile:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px;
 .ls-beside > .body { min-height: 0; overflow: auto; padding: 14px 18px 28px; container-type: inline-size; container-name: page; }
 @media (max-width: 1099px) {
   .ls-besidegrid { grid-template-columns: minmax(0, 1fr); }
-  .ls-besidegrid > .focusarea, .ls-besidegrid > .ls-split { display: none; }
+  /* Only to make room for a page beside: with none, the deck or the board is all there is. */
+  .ls-besidegrid:not(.solo) > .focusarea, .ls-besidegrid > .ls-split { display: none; }
   .ls-beside { position: static; max-height: none; box-shadow: inset 0 0 0 1px var(--rule); }
   .ls-beside > .body { overflow: visible; }
 }
