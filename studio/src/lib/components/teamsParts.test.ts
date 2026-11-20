@@ -318,6 +318,30 @@ describe('RunCard', () => {
 
     expect(screen.queryByText(/follow-up/)).toBeNull();
   });
+
+  it('marks the card while a notification about its run is open, a Problem first, and drops the mark once answered', async () => {
+    const { toasts } = await import('../toasts.svelte');
+    const asked = toasts.add({ level: 'needs', text: 'r1 is waiting for you', subject: { kind: 'run', ref: 'r1' } });
+    toasts.add({ level: 'needs', text: 'a session also named r1', subject: { kind: 'session', ref: 'r1' } });
+    toasts.add({ level: 'problem', text: 'r2 failed', subject: { kind: 'run', ref: 'r2' } });
+    const { container } = render(RunCard, { run: { id: 'r1', goal: 'Add --since', team: 'iterating-project', word: 'waiting' }, href: '#teams/r1' });
+    await tick();
+
+    const mark = () => container.querySelector('.ls-run .top [data-mark]');
+    expect(mark()?.getAttribute('data-mark')).toBe('needs');
+    expect(mark()?.textContent).toBe('!Needs you');
+
+    const failed = toasts.add({ level: 'problem', text: 'r1 round 3 failed', subject: { kind: 'run', ref: 'r1' } });
+    await tick();
+    expect(mark()?.getAttribute('data-mark')).toBe('problem');
+    expect(mark()?.textContent).toBe('✕Problem · 2');
+
+    toasts.settle(asked, 'Answered.');
+    toasts.settle(failed, 'Seen.');
+    await tick();
+    expect(mark()).toBeNull();
+    toasts.list = [];
+  });
 });
 
 describe('BlockedRuns', () => {
