@@ -160,6 +160,32 @@ jobs:
           Invoke-WebRequest -Uri https://aka.ms/wingetcreate/latest `
             -OutFile wingetcreate.exe
 
+      # wingetcreate submits from the token owner's fork of winget-pkgs and
+      # tries to sync it first, but gives up once the fork is far enough
+      # behind: 'The forked repository could not be synced with the upstream
+      # commits.' The fork only moves when a submission succeeds, so after a
+      # quiet spell every daily run failed that way until it was synced by
+      # hand, twice. Syncing it here first ends that. The fork holds nothing
+      # of its own, so this only ever fast-forwards it; if it ever has
+      # commits of its own, the sync refuses and the run says so.
+      - name: Bring the fork up to date
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          owner=$(gh api user --jq '.login')
+
+          # No fork yet: wingetcreate makes one on its first submission.
+          if ! gh api "repos/$owner/winget-pkgs" --jq '.fork' > /dev/null 2>&1; then
+            echo "::notice::$owner has no fork of winget-pkgs yet; wingetcreate will make one."
+            exit 0
+          fi
+
+          gh repo sync "$owner/winget-pkgs" --branch master
+          echo "synced $owner/winget-pkgs with microsoft/winget-pkgs"
+
       - name: Submit it
         shell: pwsh
         env:
