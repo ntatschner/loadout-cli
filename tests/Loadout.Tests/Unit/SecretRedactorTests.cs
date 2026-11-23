@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Loadout.Core.Security;
 using FluentAssertions;
 using Xunit;
@@ -10,62 +11,76 @@ namespace Loadout.Tests.Unit;
 /// but git and agent subprocesses echo their own input back, and that text is
 /// not under the launcher's control.
 /// </summary>
+/// <remarks>
+/// Every case lives in <c>tests/shared/redaction-cases.json</c>, as an input
+/// and its exact output. Studio's port of the redactor reads the same file, so
+/// the two cannot drift apart without one suite failing.
+/// </remarks>
 public sealed class SecretRedactorTests
 {
-    [Fact]
-    public void Credentials_embedded_in_a_remote_url_are_removed()
+    private static readonly Lazy<IReadOnlyDictionary<string, SharedCase>> Cases = new(Load);
+
+    public static TheoryData<string> CaseNames()
     {
-        // The most realistic leak: git repeats the remote in its errors.
-        var text = "fatal: could not read from https://user:ghp_abcdefghijklmnop@github.com/org/repo.git";
+        var names = new TheoryData<string>();
 
-        var redacted = SecretRedactor.Redact(text);
+        foreach (var name in Cases.Value.Keys)
+        {
+            names.Add(name);
+        }
 
-        redacted.Should().NotContain("ghp_abcdefghijklmnop");
-        redacted.Should().NotContain("user:");
-        redacted.Should().Contain("github.com/org/repo.git");
+        return names;
     }
 
     [Theory]
-    [InlineData("ANTHROPIC_API_KEY=sk-ant-secret-value")]
-    [InlineData("OPENAI_API_KEY: sk-secretvalue123456")]
-    [InlineData("DB_PASSWORD=hunter2hunter2")]
-    [InlineData("github_token = ghp_abcdefghijklmnop")]
-    public void Assignments_that_name_a_credential_are_redacted(string text)
+    [MemberData(nameof(CaseNames))]
+    public void Each_shared_case_gives_its_exact_output(string name)
     {
-        var redacted = SecretRedactor.Redact(text);
+        var shared = Cases.Value[name];
 
-        redacted.Should().Contain("[redacted]");
-        redacted.Should().NotContain("hunter2hunter2");
-        redacted.Should().NotContain("sk-ant-secret-value");
+        SecretRedactor.Redact(shared.Input).Should().Be(shared.Expected, shared.Note ?? name);
     }
 
     [Fact]
-    public void Authorization_headers_are_redacted()
+    public void The_shared_file_has_cases_and_no_duplicate_names() =>
+        // Load throws on a duplicate name; this keeps an empty or unreadable
+        // file from passing as a theory with nothing in it.
+        Cases.Value.Should().HaveCountGreaterThan(40);
+
+    private static IReadOnlyDictionary<string, SharedCase> Load()
     {
-        SecretRedactor.Redact("Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.payload.signature")
-            .Should().NotContain("eyJhbGciOiJIUzI1NiJ9");
+        var path = Path.Combine(RepositoryRoot(), "tests", "shared", "redaction-cases.json");
+        using var document = JsonDocument.Parse(File.ReadAllText(path));
+        var cases = new Dictionary<string, SharedCase>(StringComparer.Ordinal);
+
+        foreach (var item in document.RootElement.GetProperty("cases").EnumerateArray())
+        {
+            var name = item.GetProperty("name").GetString()!;
+            var input = item.GetProperty("input");
+            var note = item.TryGetProperty("note", out var given) ? given.GetString() : null;
+
+            cases.Add(name, new SharedCase(
+                input.ValueKind == JsonValueKind.Null ? null : input.GetString(),
+                item.GetProperty("expected").GetString()!,
+                note));
+        }
+
+        return cases;
     }
 
-    [Fact]
-    public void Json_credential_fields_are_redacted()
+    private static string RepositoryRoot()
     {
-        SecretRedactor.Redact("""{"apiKey": "sk-ant-value", "model": "opus"}""")
-            .Should().NotContain("sk-ant-value")
-            .And.Contain("opus");
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+
+        // A directory in an ordinary checkout, a file in a git worktree.
+        while (directory is not null && !Path.Exists(Path.Combine(directory.FullName, ".git")))
+        {
+            directory = directory.Parent;
+        }
+
+        return directory?.FullName ?? throw new DirectoryNotFoundException(
+            "The repository root could not be found from the test output directory.");
     }
 
-    [Fact]
-    public void Ordinary_diagnostic_text_survives_intact()
-    {
-        // Over-redaction is its own failure: doctor is what people run when
-        // something is already wrong, and a report full of [redacted] is
-        // useless.
-        const string Text = "git version 2.54.0; workspace synced; 12 projects registered";
-
-        SecretRedactor.Redact(Text).Should().Be(Text);
-    }
-
-    [Fact]
-    public void Null_and_empty_input_produce_empty_output() =>
-        SecretRedactor.Redact(null).Should().BeEmpty();
+    private sealed record SharedCase(string? Input, string Expected, string? Note);
 }

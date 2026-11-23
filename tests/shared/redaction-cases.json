@@ -1,0 +1,267 @@
+{
+  "about": "Exact-output cases for the secret redactor. The launcher's SecretRedactor (src/Loadout.Core/Security/SecretRedactor.cs) and Studio's port of it are both held to this file, so a case added here has to pass on both sides. An input of null stands for no text at all.",
+  "cases": [
+    {
+      "name": "credentials in a remote url",
+      "note": "The most realistic leak: git repeats the remote in its errors.",
+      "input": "fatal: could not read from https://user:ghp_abcdefghijklmnop@github.com/org/repo.git",
+      "expected": "fatal: could not read from https://[redacted]@github.com/org/repo.git"
+    },
+    {
+      "name": "prefixed assignment with =",
+      "input": "ANTHROPIC_API_KEY=sk-ant-secret-value",
+      "expected": "ANTHROPIC_API_KEY=[redacted]"
+    },
+    {
+      "name": "prefixed assignment with :",
+      "input": "OPENAI_API_KEY: sk-secretvalue123456",
+      "expected": "OPENAI_API_KEY: [redacted]"
+    },
+    {
+      "name": "prefixed password assignment",
+      "input": "DB_PASSWORD=hunter2hunter2",
+      "expected": "DB_PASSWORD=[redacted]"
+    },
+    {
+      "name": "prefixed assignment in lower case with spaces",
+      "input": "github_token = ghp_abcdefghijklmnop",
+      "expected": "github_token = [redacted]"
+    },
+    {
+      "name": "authorization header",
+      "input": "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.payload.signature",
+      "expected": "Authorization: Bearer [redacted]"
+    },
+    {
+      "name": "json credential field",
+      "input": "{\"apiKey\": \"sk-ant-value\", \"model\": \"opus\"}",
+      "expected": "{\"apiKey\": \"[redacted]\", \"model\": \"opus\"}"
+    },
+    {
+      "name": "known token shape on its own",
+      "input": "remote said sk-ant-api03-abcdefghijkl and stopped",
+      "expected": "remote said [redacted] and stopped"
+    },
+    {
+      "name": "ordinary diagnostic text",
+      "note": "Over-redaction is its own failure: a doctor report full of [redacted] is useless.",
+      "input": "git version 2.54.0; workspace synced; 12 projects registered",
+      "expected": "git version 2.54.0; workspace synced; 12 projects registered"
+    },
+    {
+      "name": "ordinary flags",
+      "input": "loadout team run --project loadout-cli --json",
+      "expected": "loadout team run --project loadout-cli --json"
+    },
+    {
+      "name": "no text",
+      "input": null,
+      "expected": ""
+    },
+    {
+      "name": "empty text",
+      "input": "",
+      "expected": ""
+    },
+
+    {
+      "name": "bare capitals keyword",
+      "note": "An environment dump writes TOKEN= with nothing before it.",
+      "input": "TOKEN=abc123",
+      "expected": "TOKEN=[redacted]"
+    },
+    {
+      "name": "bare capitals keyword among other variables",
+      "input": "PASSWORD=hunter2 USER=sam",
+      "expected": "PASSWORD=[redacted] USER=sam"
+    },
+    {
+      "name": "bare capitals keyword with a capitals suffix",
+      "input": "TOKEN_FILE=/run/secrets/token SECRET_NAME=prod",
+      "expected": "TOKEN_FILE=[redacted] SECRET_NAME=[redacted]"
+    },
+    {
+      "name": "bare keyword after a PowerShell env drive",
+      "input": "$env:PASSWORD=abc123",
+      "expected": "$env:PASSWORD=[redacted]"
+    },
+    {
+      "name": "bare keyword in lower case is left alone",
+      "note": "Lower-case token= and token: are far more often error wording than a secret.",
+      "input": "token=abc; token: missing from the request",
+      "expected": "token=abc; token: missing from the request"
+    },
+    {
+      "name": "bare keyword with a colon is left alone",
+      "note": "The bare rule takes = only, so an error saying TOKEN: missing survives.",
+      "input": "TOKEN: missing",
+      "expected": "TOKEN: missing"
+    },
+    {
+      "name": "bare KEY is left alone",
+      "input": "KEY=abc",
+      "expected": "KEY=abc"
+    },
+    {
+      "name": "bare keyword with a lower-case suffix is left alone",
+      "note": "The bare rule's suffix is capitals only, like the environment dumps it exists for.",
+      "input": "TOKEN_file=abc",
+      "expected": "TOKEN_file=abc"
+    },
+
+    {
+      "name": "flag with a space",
+      "input": "loadout login --token abc123 --verbose",
+      "expected": "loadout login --token [redacted] --verbose"
+    },
+    {
+      "name": "flag with =",
+      "input": "tool --api-key=abc123 run",
+      "expected": "tool --api-key=[redacted] run"
+    },
+    {
+      "name": "flag with key after an underscore",
+      "input": "tool --ssh_key abc run",
+      "expected": "tool --ssh_key [redacted] run"
+    },
+    {
+      "name": "flag with key as a separate word mid-name",
+      "input": "tool --api-key-file ~/.keys/api run",
+      "expected": "tool --api-key-file [redacted] run"
+    },
+    {
+      "name": "flag with key as the last word of any name",
+      "note": "KEY after - or _ counts wherever it is, so --sort-key is redacted too; a flag is never ordinary error wording, so this costs little.",
+      "input": "tool --sort-key name",
+      "expected": "tool --sort-key [redacted]"
+    },
+    {
+      "name": "flag with a long keyword anywhere, any case",
+      "input": "tool --Password Hunter2 --github-tokenfile ~/.tok",
+      "expected": "tool --Password [redacted] --github-tokenfile [redacted]"
+    },
+    {
+      "name": "bare --key is left alone",
+      "input": "tool --key abc --key=abc",
+      "expected": "tool --key abc --key=abc"
+    },
+    {
+      "name": "key inside a word is left alone",
+      "input": "tool --keyring default --monkey abc",
+      "expected": "tool --keyring default --monkey abc"
+    },
+    {
+      "name": "--monkey= stays redacted while --monkey with a space does not",
+      "note": "Deliberate. The older prefixed rule accepts KEY after any letter, so --monkey=abc is redacted by it; the flag rule takes KEY only as a separate word, so --monkey abc is not. Narrowing the old rule would loosen redaction everywhere.",
+      "input": "tool --monkey=abc --monkey abc",
+      "expected": "tool --monkey=[redacted] --monkey abc"
+    },
+    {
+      "name": "flag followed by another flag is left alone",
+      "input": "tool --token --verbose",
+      "expected": "tool --token --verbose"
+    },
+    {
+      "name": "single-dash flag is left alone",
+      "input": "tool -password abc",
+      "expected": "tool -password abc"
+    },
+    {
+      "name": "flag value on the next line is left alone",
+      "input": "tool --token\nnext line",
+      "expected": "tool --token\nnext line"
+    },
+
+    {
+      "name": "flag with a double-quoted value",
+      "input": "tool --password \"two words\" --verbose",
+      "expected": "tool --password [redacted] --verbose"
+    },
+    {
+      "name": "flag with a single-quoted value",
+      "input": "tool --password 'two words' --verbose",
+      "expected": "tool --password [redacted] --verbose"
+    },
+    {
+      "name": "flag with = and a quoted value",
+      "input": "tool --db_password=\"two words\" next",
+      "expected": "tool --db_password=[redacted] next"
+    },
+    {
+      "name": "prefixed assignment with a double-quoted value",
+      "input": "DB_PASSWORD=\"two words\" next",
+      "expected": "DB_PASSWORD=[redacted] next"
+    },
+    {
+      "name": "prefixed assignment with a single-quoted value",
+      "input": "db_password: 'two words' next",
+      "expected": "db_password: [redacted] next"
+    },
+    {
+      "name": "bare assignment with a quoted value",
+      "input": "PASSWORD=\"two words\" next",
+      "expected": "PASSWORD=[redacted] next"
+    },
+    {
+      "name": "unclosed double quote runs to the end of its line",
+      "input": "tool --password \"abc def\nnext line",
+      "expected": "tool --password [redacted]\nnext line"
+    },
+    {
+      "name": "unclosed single quote runs to the end of its line",
+      "input": "PASSWORD='abc def\nTOKEN=x",
+      "expected": "PASSWORD=[redacted]\nTOKEN=[redacted]"
+    },
+    {
+      "name": "unclosed quote stops before a carriage return",
+      "input": "DB_PASSWORD=\"abc def\r\nNEXT=1",
+      "expected": "DB_PASSWORD=[redacted]\r\nNEXT=1"
+    },
+    {
+      "name": "unclosed quote at the end of the text",
+      "input": "tool --token 'abc def",
+      "expected": "tool --token [redacted]"
+    },
+    {
+      "name": "backslash-escaped double quote stays inside the value",
+      "input": "tool --password \"a\\\"b c\" next",
+      "expected": "tool --password [redacted] next"
+    },
+    {
+      "name": "backtick-escaped double quote stays inside the value",
+      "input": "tool --password \"a`\"b c\" next",
+      "expected": "tool --password [redacted] next"
+    },
+    {
+      "name": "doubled double quote stays inside the value",
+      "input": "tool --password \"a\"\"b c\" next",
+      "expected": "tool --password [redacted] next"
+    },
+    {
+      "name": "backslash-escaped single quote stays inside the value",
+      "input": "tool --password 'a\\'b c' next",
+      "expected": "tool --password [redacted] next"
+    },
+    {
+      "name": "backtick-escaped single quote stays inside the value",
+      "input": "tool --password 'a`'b c' next",
+      "expected": "tool --password [redacted] next"
+    },
+    {
+      "name": "doubled single quote stays inside the value",
+      "input": "tool --password 'a''b c' next",
+      "expected": "tool --password [redacted] next"
+    },
+    {
+      "name": "escapes apply in assignments too",
+      "input": "DB_PASSWORD=\"a`\"b c\" TOKEN='x''y z' next",
+      "expected": "DB_PASSWORD=[redacted] TOKEN=[redacted] next"
+    },
+    {
+      "name": "an empty quoted value",
+      "note": "A doubled quote is an escape only inside a value, so an empty pair closes at once.",
+      "input": "tool --password \"\" --verbose",
+      "expected": "tool --password [redacted] --verbose"
+    }
+  ]
+}
