@@ -485,6 +485,8 @@ export interface Run {
   ended: string | null;
   outcome: string | null;
   project: string | null;
+  /** The task on the project's list it works, when it was started for one. Absent otherwise. */
+  task?: string | null;
   started: string;
   finished: string | null;
   rounds: number;

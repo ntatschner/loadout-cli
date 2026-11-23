@@ -71,11 +71,26 @@ describe('the desks', () => {
     expect(lines(ideaActions(ideas[1], { slug: 'p', isNew: false, name: 'P' }, ctx))).toEqual([
       ['Try the round again', '$ loadout idea refine b --project p'],
       ['Clear the marker', '$ loadout idea dismiss b --project p'],
-      ['Accept it onto p', '$ loadout idea accept b --project p --to p'],
+      ['Accept it onto p', 'shows the plan first · $ loadout idea plan b --project p'],
       ['Forget this idea', '$ loadout idea remove b --project p'],
       ['Drop a new idea in', 'opens the box · records nothing yet'],
     ]);
     expect(lines(ideaActions(ideas[0], null, ctx)).map((one) => one[0])).toEqual(['Take it one round further', 'Accept it', 'Forget this idea', 'Drop a new idea in']);
+  });
+
+  it("Ideas: the desk's Accept opens the plan to confirm and accepts nothing itself", async () => {
+    const act = vi.fn(async () => 'ran');
+    const go = vi.fn();
+    const accept = ideaActions(
+      { id: 'b', title: 'Ready', project: null, stage: 'proposed', unanswered: 0, running: false },
+      { slug: 'p', isNew: false, name: 'P' },
+      { ...ctx, act, go },
+    ).find((one) => one.label === 'Accept it onto p')!;
+
+    await accept.run!();
+
+    expect(go).toHaveBeenCalledWith('ideas', '~', 'b', '+accept');
+    expect(act).not.toHaveBeenCalled();
   });
 
   it('Projects: on this machine first; its editor, folder, what can be put right, onboarding and Forget project', () => {

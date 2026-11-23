@@ -730,6 +730,112 @@ public sealed class IdeaShowCommand : AsyncCommand<IdeaShowCommand.Settings>
     }
 }
 
+/// <summary>Prints an idea's plan: what accepting would write, or what it wrote.</summary>
+/// <remarks>
+/// Plain Markdown on standard output, not drawn through the console, so it
+/// pipes into a pager or a file unwrapped. Anything said about it goes to
+/// standard error, so the document stays the whole of the output.
+/// </remarks>
+[Description("Print an idea's plan: before it is accepted, exactly what accepting would write; after, the file it wrote.")]
+[CommandMeta(CommandCategory.Workspace, Intent = "idea plan preview document read view markdown accept")]
+public sealed class IdeaPlanCommand : AsyncCommand<IdeaPlanCommand.Settings>
+{
+    public sealed class Settings : IdeaSettings
+    {
+        [CommandOption("--done-when <CONDITION>")]
+        [Description(
+            "For a preview: a done-when line, as 'idea accept' takes it. Repeat it for each; together they replace "
+            + "what the plan proposed. Ignored once the idea is accepted.")]
+        public string[] DoneWhen { get; init; } = [];
+
+        [CommandOption("--no-done-when")]
+        [Description("For a preview: show the plan as accepting with --no-done-when would write it.")]
+        public bool NoDoneWhen { get; init; }
+
+        internal IReadOnlyList<string>? DoneWhenGiven =>
+            NoDoneWhen ? [] : DoneWhen.Length > 0 ? DoneWhen : null;
+    }
+
+    private readonly IIdeaService _ideas;
+    private readonly IProjectService _projects;
+    private readonly IAnsiConsole _console;
+
+    public IdeaPlanCommand(IIdeaService ideas, IProjectService projects, IAnsiConsole console)
+    {
+        _ideas = ideas;
+        _projects = projects;
+        _console = console;
+    }
+
+    /// <inheritdoc />
+    public override async Task<int> ExecuteAsync(
+        CommandContext context,
+        Settings settings,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var output = new CommandOutput(_console, settings);
+
+        if (settings.NoDoneWhen && settings.DoneWhen.Length > 0)
+        {
+            return output.Fail("--done-when and --no-done-when say opposite things. Give one or the other.", ExitCode.InvalidArguments);
+        }
+
+        var place = await settings.PlaceAsync(_ideas, _projects, cancellationToken).ConfigureAwait(false);
+
+        if (place.Failed)
+        {
+            return output.Fail(place);
+        }
+
+        var plan = await _ideas.PlanAsync(place.Value!, settings.DoneWhenGiven, cancellationToken).ConfigureAwait(false);
+
+        if (plan.Failed)
+        {
+            return output.Fail(plan);
+        }
+
+        var view = plan.Value!;
+
+        // A missing file is an answer to the question, so JSON carries it as
+        // a state for a page to say so; read in a terminal, it is a failure.
+        if (output.IsJson)
+        {
+            output.WriteJson(new
+            {
+                id = place.Value!.Id,
+                project = place.Value.Project,
+                state = view.State.ToString().ToLowerInvariant(),
+                markdown = view.Markdown,
+                path = view.Path,
+                hash = view.Hash,
+                changed = view.Changed,
+                undecided = view.Undecided,
+                gapFilled = view.GapFilled,
+            });
+
+            return CommandOutput.Success();
+        }
+
+        if (view.State == IdeaPlanState.Missing)
+        {
+            return output.Fail(
+                $"{place.Value!.Id} was accepted, but its plan is not at {view.Path} any more.",
+                ExitCode.GeneralFailure);
+        }
+
+        if (view.Changed == true)
+        {
+            Console.Error.WriteLine($"{view.Path} has been edited since it was accepted; this is the file as it is now.");
+        }
+
+        Console.Out.Write(view.Markdown);
+
+        return CommandOutput.Success();
+    }
+}
+
 /// <summary>Runs the next round of fleshing an idea out.</summary>
 [Description("Have an agent take the idea one round further: ask its questions, propose a plan, or revise it.")]
 [CommandMeta(CommandCategory.Workspace, Intent = "idea refine flesh out plan design questions agent think")]
@@ -1173,6 +1279,10 @@ public sealed class IdeaAcceptCommand : AsyncCommand<IdeaAcceptCommand.Settings>
         [Description("Accept it with no done-when, leaving out what the plan proposed. A team queue will refuse the task until it has some.")]
         public bool NoDoneWhen { get; init; }
 
+        [CommandOption("--plan-hash <HASH>")]
+        [Description("The hash 'loadout idea plan --json' gave for the plan you read. Accepting is refused if the plan it would write is not that one.")]
+        public string? PlanHash { get; init; }
+
         /// <summary>The done-when to confirm: null to take the plan's, empty for none.</summary>
         internal IReadOnlyList<string>? DoneWhenGiven =>
             NoDoneWhen ? [] : DoneWhen.Length > 0 ? DoneWhen : null;
@@ -1275,7 +1385,8 @@ public sealed class IdeaAcceptCommand : AsyncCommand<IdeaAcceptCommand.Settings>
             destination!,
             settings.By is { Length: > 0 } who ? who : Environment.UserName,
             cancellationToken,
-            settings.DoneWhenGiven).ConfigureAwait(false);
+            settings.DoneWhenGiven,
+            settings.PlanHash).ConfigureAwait(false);
 
         if (accepted.Failed)
         {

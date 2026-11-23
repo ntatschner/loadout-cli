@@ -3383,6 +3383,10 @@ public sealed class DashboardServer : IDisposable
         }),
         run.Project,
 
+        // The task on the project's list this run works, when it was started
+        // for one, so the page can open that task's plan. Null otherwise.
+        run.Task,
+
         // What the goal was broken into and where each part got to. Empty for
         // a run given no criteria, which is every run written before they
         // existed - so a page drawing this has to treat empty as "this run
