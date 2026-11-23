@@ -362,6 +362,12 @@ public sealed class IdeaAcceptance
 
     /// <summary>The plan, relative to the workspace.</summary>
     public string PlanPath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// A hash of the plan as acceptance wrote it, so a file edited since can be
+    /// told apart from the original. Empty on ideas accepted before it was kept.
+    /// </summary>
+    public string PlanHash { get; set; } = string.Empty;
 }
 
 /// <summary>Where an idea stands, worked out from its record.</summary>

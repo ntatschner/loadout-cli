@@ -7,8 +7,10 @@
   import Dialog from './Dialog.svelte';
   import HaloButton from './HaloButton.svelte';
   import Markdown from './Markdown.svelte';
+  import PlanView from './PlanView.svelte';
   import Signal from './Signal.svelte';
   import { readJson, SignedOut } from '../api';
+  import { listWords } from '../plans';
   import { lineFor } from '../commandLine';
   import { studio } from '../state.svelte';
   import { fromShow, ideaHref, showWords, whereSaid, type Task, type TaskShowRead, type TaskShown } from '../tasks';
@@ -23,6 +25,7 @@
 
   let full = $state<TaskShown | null>(null);
   let problem = $state<string | null>(null);
+  let planShown = $state(false);
 
   const words = $derived(showWords(task.id, task.project));
   const when = (at: string) => new Date(at).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -57,6 +60,16 @@
     {#if full.idea}
       <!-- Linked by the id the idea and its task share, as 'task show' works it out. -->
       <p class="from">From an idea accepted {when(full.idea.accepted)}: the plan is at <code>{full.idea.plan}</code>. <a href={ideaHref(task.project, task.id)} onclick={onclose}>Open the idea</a></p>
+      <!-- Inline rather than a second dialog over this one: read with 'idea plan', from the list the task and its idea are on. -->
+      <section aria-labelledby="td-plan">
+        <h3 id="td-plan">Plan</h3>
+        {#if planShown}
+          <PlanView id={task.id} where={listWords(task.project)} />
+          <HaloButton label="Fold the plan away" size="small" cmd="changes nothing" onpress={() => (planShown = false)} />
+        {:else}
+          <HaloButton label="View plan" size="small" glyph="▤" cmd={lineFor('idea plan', [task.id, ...listWords(task.project)])} onpress={() => (planShown = true)} />
+        {/if}
+      </section>
     {/if}
     {#if full.note}
       <section aria-labelledby="td-note">
