@@ -12,6 +12,7 @@
   import HaloButton from './HaloButton.svelte';
   import { LEVELS, shownLevel, toasts as shared, type NoticesWorking, type ToastLevel, type ToastPlace, type ToastStack, type Toast } from '../toasts.svelte';
   import { fullMotion } from '../studio';
+  import { detailsText, truncatedNote, type Failure } from '../failure';
 
   let {
     stack = shared,
@@ -161,7 +162,67 @@
       stack.focused = null;
     }
   }
+
+  /** Which failures have Details open, by toast id; the Earlier list's are kept apart so one never opens the other. */
+  let open = $state<Record<string, boolean>>({});
+  /** What the last copy from each toast said, by toast id. */
+  let copied = $state<Record<number, string>>({});
+
+  async function copy(id: number, text: string, said: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      copied = { ...copied, [id]: said };
+    } catch {
+      copied = { ...copied, [id]: 'The browser refused the clipboard, so nothing was copied.' };
+    }
+  }
+
+  function copyCommand(id: number, failure: Failure | undefined) {
+    if (!failure) {
+      return;
+    }
+
+    void copy(
+      id,
+      failure.command,
+      failure.commandRedacted ? 'Copied the command with its secret redacted: fill in [redacted] before you run it.' : 'Copied the command.',
+    );
+  }
+
+  function copyDetails(id: number, failure: Failure | undefined) {
+    if (failure) {
+      void copy(id, detailsText(failure), 'Copied the details, with any secrets redacted.');
+    }
+  }
 </script>
+
+{#snippet why(key: string | number, failure: Failure, attempts: number)}
+  {@const id = `why-${key}`}
+  {@const note = truncatedNote(failure)}
+  <button type="button" class="why-toggle" aria-expanded={!!open[id]} aria-controls={id} onclick={() => (open = { ...open, [id]: !open[id] })}>Details</button>
+  {#if open[id]}
+    <div class="why" {id}>
+      <dl>
+        {#if failure.exitCode !== null}<dt>Exit code</dt><dd>{failure.exitCode}</dd>{/if}
+        {#if failure.status !== null}<dt>HTTP status</dt><dd>{failure.status}</dd>{/if}
+        {#if failure.command}<dt>Command</dt><dd><code>{failure.command}</code></dd>{/if}
+        {#if attempts > 1}<dt>Attempts</dt><dd>{attempts}</dd>{/if}
+      </dl>
+      {#if failure.earlier.length}
+        <ol class="earlier" aria-label="Earlier attempts">
+          {#each failure.earlier as cause, index (index)}<li>Attempt {index + 1}: {cause}</li>{/each}
+        </ol>
+      {/if}
+      {#if note}<p class="note">{note}</p>{/if}
+      {#if failure.output}
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+        <pre class="out" tabindex="0" aria-label="Output">{failure.output}</pre>
+      {:else}
+        <p class="note">It wrote no output.</p>
+      {/if}
+    </div>
+  {/if}
+{/snippet}
 
 <svelte:window onkeydowncapture={sweepKey} />
 
@@ -200,6 +261,24 @@
     </div>
     <p>{toast.text}</p>
     {#if toast.cmd}<code class="ls-cmd">{toast.cmd}</code>{/if}
+    {#if toast.failure}
+      {@render why(toast.id, toast.failure, toast.attempts)}
+      <div class="acts">
+        {#if toast.retry && !toast.settled}
+          <HaloButton
+            label={toast.retrying ? 'Retrying…' : 'Retry'}
+            size="small"
+            disabledReason={toast.retrying ? 'An attempt is running.' : undefined}
+            onpress={() => stack.retry(toast.id)}
+          />
+        {/if}
+        {#if toast.failure.command}
+          <HaloButton label="Copy command" size="small" onpress={() => copyCommand(toast.id, toast.failure)} />
+        {/if}
+        <HaloButton label="Copy details" size="small" onpress={() => copyDetails(toast.id, toast.failure)} />
+      </div>
+      {#if copied[toast.id]}<p class="copied" role="status">{copied[toast.id]}</p>{/if}
+    {/if}
     {#if toast.actions.length}
       <div class="acts">
         {#each toast.actions as action (action.label)}
@@ -221,8 +300,9 @@
           {#each stack.history as gone (gone.id)}
             <li class={gone.level}>
               <span class="gl" aria-hidden="true">{LEVELS[gone.level][0]}</span>
-              <span class="t"><b>{LEVELS[gone.level][1]}</b> {gone.text}{#if gone.count > 1}<i class="n"> ×{gone.count}</i>{/if}</span>
+              <span class="t"><b>{LEVELS[gone.level][1]}</b> {gone.text}{#if gone.count > 1}<i class="n"> ×{gone.count}</i>{/if}{#if gone.retrying}<i class="n"> retrying…</i>{:else if gone.level === 'done' && gone.attempts > 1}<i class="n"> after {gone.attempts} attempts</i>{/if}</span>
               {#if gone.cmd}<code class="ls-cmd">{gone.cmd}</code>{/if}
+              {#if gone.failure}<div class="past-why">{@render why(`past-${gone.id}`, gone.failure, gone.attempts)}</div>{/if}
             </li>
           {/each}
         </ul>

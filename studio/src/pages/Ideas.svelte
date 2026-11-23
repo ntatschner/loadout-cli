@@ -406,7 +406,7 @@
       if (error instanceof SignedOut) {
         studio.signedOut = true;
       } else {
-        toasts.add({ level: 'problem', text: `${undone} ${(error as Error).message}`, cmd: lineFor(path, words) });
+        toasts.fail(error, { cmd: lineFor(path, words), lead: undone });
       }
 
       return false;
@@ -666,7 +666,7 @@
       if (error instanceof SignedOut) {
         studio.signedOut = true;
       } else {
-        toasts.add({ level: 'problem', text: (error as Error).message, cmd });
+        toasts.fail(error, { cmd });
       }
     } finally {
       adding = false;
@@ -696,7 +696,7 @@
       if (error instanceof SignedOut) {
         studio.signedOut = true;
       } else {
-        toasts.add({ level: 'problem', text: (error as Error).message, cmd });
+        toasts.fail(error, { cmd });
       }
     }
 

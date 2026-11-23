@@ -2,7 +2,7 @@
 // as a child of the daemon's own launcher, exactly as the line shown beside
 // the button reads, and the page is told how it ended in that command's own
 // words.
-import { commands, type Job } from './api';
+import { commands, JobFailed, StillGoing, type Job } from './api';
 
 const settled = (job: Job) => job.state !== 'running';
 
@@ -24,11 +24,11 @@ export async function runJob(path: string, words: string[], patience = 120_000, 
   }
 
   if (!settled(job)) {
-    throw new Error(`'loadout ${path}' is still going. It carries on; the Jobs strip shows how it ends.`);
+    throw new StillGoing(`'loadout ${path}' is still going. It carries on; the Jobs strip shows how it ends.`);
   }
 
   if (job.state !== 'done') {
-    throw new Error((job.error ?? '').trim() || (job.output ?? '').trim() || `'loadout ${path}' ended with exit code ${job.exitCode}.`);
+    throw new JobFailed(job, (job.error ?? '').trim() || (job.output ?? '').trim() || `'loadout ${path}' ended with exit code ${job.exitCode}.`);
   }
 
   return job;

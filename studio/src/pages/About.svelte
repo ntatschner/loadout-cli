@@ -79,7 +79,7 @@
         // already come back and never heard of the job.
         await comeBack(words, from, to);
       } else {
-        toasts.add({ level: 'problem', text: (error as Error).message, cmd: lineFor('update', words) });
+        toasts.fail(error, { cmd: lineFor('update', words) });
       }
     } finally {
       running = false;

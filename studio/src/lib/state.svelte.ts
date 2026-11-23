@@ -68,6 +68,16 @@ function writeLocal(key: string, value: boolean): void {
   }
 }
 
+/**
+ * How an action reports itself. Quiet says nothing when it works. Repeatable
+ * says running it twice does no harm, as when it sets something to a value,
+ * and is what puts Retry on its Problem; without it there is none.
+ */
+export interface ActOptions {
+  quiet?: boolean;
+  repeatable?: boolean;
+}
+
 export class Studio {
   about = $state<api.About | null>(null);
   prefs = $state<api.Preferences | null>(null);
@@ -456,14 +466,36 @@ export class Studio {
     this.jobs = await api.commands.jobs();
 
     for (const job of this.jobs) {
-      if (was.get(job.id) === 'running' && job.state !== 'running') {
+      if (was.get(job.id) !== 'running' || job.state === 'running') {
+        continue;
+      }
+
+      if (job.state === 'failed') {
+        await this.#jobFailed(job);
+      } else {
         toasts.add({
-          level: job.state === 'done' ? 'done' : job.state === 'failed' ? 'problem' : 'info',
-          text: job.state === 'done' ? `Finished: ${job.path}` : job.state === 'failed' ? `Failed: ${job.path}` : `Cancelled: ${job.path}`,
+          level: job.state === 'done' ? 'done' : 'info',
+          text: job.state === 'done' ? `Finished: ${job.path}` : `Cancelled: ${job.path}`,
           cmd: `$ ${job.line}`,
         });
       }
     }
+  }
+
+  /**
+   * A job that failed after the page let go of it says why. The list leaves
+   * out what a job wrote, so the job is read once on its own for that.
+   */
+  async #jobFailed(job: api.Job): Promise<void> {
+    let read: api.Job = job;
+
+    try {
+      read = await api.commands.job(job.id);
+    } catch {
+      // Without its output, the exit code is still worth saying.
+    }
+
+    toasts.fail(new api.JobFailed(read, `Failed: ${job.path}`), { cmd: `$ ${job.line}`, lead: `Failed: ${job.path}.` });
   }
 
   /* ---------- settings ---------- */
@@ -480,7 +512,7 @@ export class Studio {
       `Saved ${key}`,
       command.setting(key, value),
       () => this.loadPrefs(),
-      { quiet: true },
+      { quiet: true, repeatable: true },
     );
   }
 
@@ -529,7 +561,7 @@ export class Studio {
     done: string,
     cmd: string,
     then?: () => Promise<unknown>,
-    options: { quiet?: boolean } = {},
+    options: ActOptions = {},
   ): Promise<boolean> {
     try {
       await work();
@@ -548,7 +580,17 @@ export class Studio {
         return false;
       }
 
-      toasts.add({ level: 'problem', text: (error as Error).message, cmd });
+      toasts.fail(error, {
+        cmd,
+        ...(options.repeatable
+          ? {
+              retry: async () => {
+                await work();
+                await then?.();
+              },
+            }
+          : {}),
+      });
 
       return false;
     }
@@ -558,14 +600,14 @@ export class Studio {
    * Runs one action from a page, says how it went in a toast with the command
    * it ran, and reads the runs again. Returns whether it worked.
    */
-  perform(work: () => Promise<unknown>, done: string, cmd: string, then: () => Promise<unknown> = () => this.loadRuns()): Promise<boolean> {
+  perform(work: () => Promise<unknown>, done: string, cmd: string, then: () => Promise<unknown> = () => this.loadRuns(), options: ActOptions = {}): Promise<boolean> {
     if (this.watchOnly) {
       toasts.add({ level: 'info', text: 'Studio is only watching, so nothing was changed.', cmd });
 
       return Promise.resolve(false);
     }
 
-    return this.#act(work, done, cmd, then);
+    return this.#act(work, done, cmd, then, options);
   }
 
   answerGate(line: Work, answer: string): Promise<boolean> {
@@ -581,11 +623,11 @@ export class Studio {
   }
 
   hold(line: Work): Promise<boolean> {
-    return this.#act(() => api.runs.act(line.ref, 'pause'), `${line.where} holds after this round`, command.pause(line.ref), () => this.loadRuns());
+    return this.#act(() => api.runs.act(line.ref, 'pause'), `${line.where} holds after this round`, command.pause(line.ref), () => this.loadRuns(), { repeatable: true });
   }
 
   carryOn(line: Work): Promise<boolean> {
-    return this.#act(() => api.runs.act(line.ref, 'resume'), `${line.where} carries on`, command.resume(line.ref), () => this.loadRuns());
+    return this.#act(() => api.runs.act(line.ref, 'resume'), `${line.where} carries on`, command.resume(line.ref), () => this.loadRuns(), { repeatable: true });
   }
 
   stopRun(line: Work): Promise<boolean> {
@@ -598,6 +640,7 @@ export class Studio {
       `${line.title}: ${state}`,
       command.task(line.ref, state, line.project),
       () => this.loadTasks(),
+      { repeatable: true },
     );
   }
 
@@ -621,7 +664,7 @@ export class Studio {
       if (error instanceof api.SignedOut) {
         this.signedOut = true;
       } else {
-        toasts.add({ level: 'problem', text: (error as Error).message, cmd: shown });
+        toasts.fail(error, { cmd: shown });
       }
 
       return null;
@@ -675,7 +718,7 @@ export class Studio {
       if (error instanceof api.SignedOut) {
         this.signedOut = true;
       } else {
-        toasts.add({ level: 'problem', text: (error as Error).message, cmd: resumeCommand(conversation.id, conversation.project) });
+        toasts.fail(error, { cmd: resumeCommand(conversation.id, conversation.project) });
       }
 
       return null;
@@ -699,7 +742,7 @@ export class Studio {
 
   /** Stops offering a session a restart ended, without resuming it. */
   forgetLost(lost: api.LostSession): Promise<boolean> {
-    return this.#act(() => api.conversations.forget(lost.id), 'No longer offered', resumeCommand(lost.agentSession, lost.conversation?.project ?? null), () => this.loadHistory());
+    return this.#act(() => api.conversations.forget(lost.id), 'No longer offered', resumeCommand(lost.agentSession, lost.conversation?.project ?? null), () => this.loadHistory(), { repeatable: true });
   }
 
   endSession(session: api.Session): Promise<boolean> {
@@ -722,6 +765,7 @@ export class Studio {
       name === null ? `Back to ${session.launchTitle ?? 'its launch name'}` : `Renamed to ${name}`,
       command.renameSession(session.id, name),
       () => this.loadSessions(),
+      { repeatable: true },
     );
   }
 }

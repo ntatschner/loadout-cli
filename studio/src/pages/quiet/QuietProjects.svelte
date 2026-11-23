@@ -68,10 +68,13 @@
 
     // Through the task route, which answers with the reason when it refuses.
     // The daemon says the list changed, and the page reads it again from that.
+    // Setting a state twice leaves it set, so a failure can be retried.
+    const change = () => api.tasks.change(api.listOf(whereOf(project)), task.id, { state }, null);
+
     try {
-      await api.tasks.change(api.listOf(whereOf(project)), task.id, { state }, null);
+      await change();
     } catch (error) {
-      toasts.add({ level: 'problem', text: error instanceof Error ? error.message : String(error), cmd: lineFor('task declare', words) });
+      toasts.fail(error, { cmd: lineFor('task declare', words), retry: change });
     }
   }
 </script>

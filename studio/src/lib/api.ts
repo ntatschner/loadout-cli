@@ -21,15 +21,33 @@ export class SignedOut extends Error {
   }
 }
 
-/** Thrown when the daemon refused, with its own words. */
+/** Thrown when the daemon refused, with its own words, and the body it answered for a failure's Details. */
 export class Refused extends Error {
   constructor(
     message: string,
     readonly status: number,
+    readonly body = '',
   ) {
     super(message);
   }
 }
+
+/**
+ * A command run from the page that ended without succeeding, carrying the
+ * job with everything it said. It is a refusal, as a failed read always was,
+ * so a caller that tells refusals apart still does.
+ */
+export class JobFailed extends Refused {
+  constructor(
+    readonly job: Job,
+    message: string,
+  ) {
+    super(message, 400);
+  }
+}
+
+/** A command that has not ended in the time a page waits for it. It carries on, so it is not a failure of the action. */
+export class StillGoing extends Error {}
 
 async function send(method: string, path: string, body?: unknown, extra: Record<string, string> = {}): Promise<Response> {
   const headers: Record<string, string> = { ...extra };
@@ -74,7 +92,9 @@ async function call<T>(method: string, path: string, body?: unknown, headers: Re
   const response = await send(method, path, body, headers);
 
   if (!response.ok) {
-    throw new Refused(reasonOf(await response.text()) || `${method} ${path} answered ${response.status}.`, response.status);
+    const text = await response.text();
+
+    throw new Refused(reasonOf(text) || `${method} ${path} answered ${response.status}.`, response.status, text);
   }
 
   if (response.status === 204) {
@@ -704,7 +724,7 @@ export async function readJson<T>(path: string, words: string[] = []): Promise<T
   const read = await commands.read(path, [...words, '--json']);
 
   if (read.state !== 'done') {
-    throw new Refused(read.error?.trim() || read.output?.trim() || `'loadout ${path}' ended with exit code ${read.exitCode}.`, 400);
+    throw new JobFailed(read, read.error?.trim() || read.output?.trim() || `'loadout ${path}' ended with exit code ${read.exitCode}.`);
   }
 
   return JSON.parse(read.output ?? 'null') as T;
