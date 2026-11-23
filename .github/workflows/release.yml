@@ -497,7 +497,7 @@ jobs:
 
       # Checkable by anyone with `gh attestation verify <file> --repo <repo>`:
       # each published file came from this workflow, this run and this commit.
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             downloaded/*.zip
