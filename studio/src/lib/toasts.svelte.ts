@@ -5,6 +5,8 @@
 // pointer or holding the keyboard stops while the rest go on. Whatever
 // leaves goes into the history, so a short life loses nothing.
 
+import { describe, StillGoing, type Failure } from './failure';
+
 export type ToastLevel = 'done' | 'info' | 'needs' | 'problem';
 
 /**
@@ -58,15 +60,42 @@ export interface Toast {
   count: number;
   /** The session or run it is about, if it is about one. */
   subject?: ToastSubject;
+  /** For a Problem: why, and everything behind Details, redacted. */
+  failure?: Failure;
+  /** For a Problem whose call site said the action is safe to repeat: runs it again. */
+  retry?: () => Promise<unknown>;
+  /** Words put before the cause, where the call site says what was not done. */
+  lead?: string;
+  /** How many times the action has been tried, the first included. */
+  attempts: number;
+  /** A Retry is running. */
+  retrying: boolean;
+  /** A Retry worked. */
+  fixed?: boolean;
 }
 
-/** One that has left the stack, for the session's history. */
+/** One that has left the stack, for the session's history. It keeps no closures, so nothing here can be run again. */
 export interface ToastGone {
   id: number;
   level: ToastLevel;
   text: string;
   cmd: string;
   count: number;
+  failure?: Failure;
+  attempts: number;
+  /** Closed while a Retry was running: the attempt's result replaces this record. */
+  retrying: boolean;
+}
+
+/** What a call site says about a failure it is reporting. */
+export interface FailOptions {
+  /** The command the button ran, as shown beside it. */
+  cmd?: string;
+  /** Words put before the cause, such as what was left undone. */
+  lead?: string;
+  /** Only where the action is safe to run twice. Without it there is no Retry. */
+  retry?: () => Promise<unknown>;
+  subject?: ToastSubject;
 }
 
 export const LEVELS: Record<ToastLevel, [string, string]> = {
@@ -108,7 +137,16 @@ export class ToastStack {
   #seq = 0;
 
   /** Adds one at the top of the stack, or counts one more of the same Done or notice. */
-  add(toast: { level: ToastLevel; text: string; cmd?: string; actions?: ToastAction[]; subject?: ToastSubject }): number {
+  add(toast: {
+    level: ToastLevel;
+    text: string;
+    cmd?: string;
+    actions?: ToastAction[];
+    subject?: ToastSubject;
+    failure?: Failure;
+    retry?: () => Promise<unknown>;
+    lead?: string;
+  }): number {
     const cmd = toast.cmd ?? '';
     const same = toast.level === 'done' || toast.level === 'info'
       ? this.list.find((one) => one.level === toast.level && !one.settled && one.text === toast.text && one.cmd === cmd)
@@ -132,7 +170,12 @@ export class ToastStack {
       settled: false,
       fresh: true,
       count: 1,
+      attempts: 1,
+      retrying: false,
       ...(toast.subject ? { subject: toast.subject } : {}),
+      ...(toast.failure ? { failure: toast.failure } : {}),
+      ...(toast.retry ? { retry: toast.retry } : {}),
+      ...(toast.lead ? { lead: toast.lead } : {}),
     };
 
     this.list = [added, ...this.list.map((one) => ({ ...one, fresh: false }))];
@@ -144,6 +187,85 @@ export class ToastStack {
     }
 
     return added.id;
+  }
+
+  /**
+   * Reports something that went wrong: a Problem with a one-line cause and
+   * everything behind Details, redacted. A command that is only still going
+   * is not a failure of the action, so it is a notice of its own with no
+   * Retry, since retrying it could start the work twice.
+   */
+  fail(error: unknown, options: FailOptions = {}): number {
+    if (error instanceof StillGoing) {
+      return this.add({ level: 'info', text: error.message, cmd: options.cmd, subject: options.subject });
+    }
+
+    const failure = describe(error, options.cmd);
+
+    return this.add({
+      level: 'problem',
+      text: worded(options.lead, failure.cause),
+      cmd: failure.command,
+      failure,
+      retry: options.retry,
+      lead: options.lead,
+      subject: options.subject,
+    });
+  }
+
+  /**
+   * Runs a Problem's action again. While it runs the button is held. If it
+   * fails again the same toast shows the new cause and counts the attempt;
+   * if it works the toast turns into a Done and leaves like one. A toast
+   * closed meanwhile is not brought back: the result only rewrites its
+   * record in the history.
+   */
+  async retry(id: number): Promise<void> {
+    const one = this.list.find((toast) => toast.id === id);
+
+    if (!one?.retry || one.retrying || !one.failure) {
+      return;
+    }
+
+    const run = one.retry;
+    const attempt = one.attempts + 1;
+    const before = one.failure;
+    this.#change(id, { retrying: true });
+    this.polite = `Retrying, attempt ${attempt}`;
+
+    try {
+      await run();
+    } catch (error) {
+      const failure = { ...describe(error, before.command), earlier: [...before.earlier, before.cause] };
+      const text = worded(one.lead, failure.cause);
+      this.#change(id, { retrying: false, attempts: attempt, failure, text, cmd: failure.command, fresh: false }, { failure, text, cmd: failure.command, level: 'problem' });
+      this.alert = `Problem, attempt ${attempt}: ${text}`;
+
+      return;
+    }
+
+    const words = `Worked on attempt ${attempt}`;
+    const failure = { ...before, earlier: [...before.earlier, before.cause] };
+    this.#change(id, { retrying: false, attempts: attempt, failure, settled: true, fixed: true, aged: 0, text: words, retry: undefined, fresh: false }, { failure, text: words, level: 'done' });
+    this.polite = `Done: ${words}`;
+
+    // The Retry button that had the keyboard has gone with the Problem.
+    if (this.focused === id) {
+      this.focused = null;
+    }
+  }
+
+  /** Changes one toast where it is, or, once it has left, its record in the history. */
+  #change(id: number, onToast: Partial<Toast>, onRecord?: Partial<ToastGone>): void {
+    if (this.list.some((one) => one.id === id)) {
+      this.list = this.list.map((one) => (one.id === id ? { ...one, ...onToast } : one));
+
+      return;
+    }
+
+    if (onRecord) {
+      this.history = this.history.map((gone) => (gone.id === id ? { ...gone, ...onRecord, attempts: onToast.attempts ?? gone.attempts, retrying: false } : gone));
+    }
   }
 
   /** Answered or acknowledged: it shows as done, with these words, and from now on follows Done's times. */
@@ -296,9 +418,31 @@ export class ToastStack {
       }
     }
 
-    const kept = leaving.map((one) => ({ id: one.id, level: shownLevel(one), text: one.text, cmd: one.cmd, count: one.count }));
+    const kept: ToastGone[] = leaving.map((one) => ({
+      id: one.id,
+      level: recordedLevel(one),
+      text: one.text,
+      cmd: one.cmd,
+      count: one.count,
+      attempts: one.attempts,
+      retrying: one.retrying,
+      ...(one.failure ? { failure: one.failure } : {}),
+    }));
     this.history = [...kept, ...this.history].slice(0, HISTORY_KEPT);
   }
+}
+
+/**
+ * The level the history keeps. A Problem acknowledged on the stack reads as
+ * Done there, but having pressed something on it is not the same as it having
+ * been fixed: only a Retry that worked makes it a Done in the history.
+ */
+function recordedLevel(toast: Toast): ToastLevel {
+  return toast.level === 'problem' && !toast.fixed ? 'problem' : shownLevel(toast);
+}
+
+function worded(lead: string | undefined, cause: string): string {
+  return lead ? `${lead} ${cause}` : cause;
 }
 
 /** The one stack the whole of Studio adds to. */

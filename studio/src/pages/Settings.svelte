@@ -111,7 +111,7 @@
       if (error instanceof SignedOut) {
         studio.signedOut = true;
       } else {
-        toasts.add({ level: 'problem', text: (error as Error).message, cmd: lineFor(path, words) });
+        toasts.fail(error, { cmd: lineFor(path, words) });
       }
     }
   }
@@ -123,7 +123,8 @@
     try {
       await studio.loadUpdate(true);
     } catch (error) {
-      toasts.add({ level: 'problem', text: (error as Error).message, cmd: lineFor('update', ['--check']) });
+      // Only reading the feed, so it is safe to ask again.
+      toasts.fail(error, { cmd: lineFor('update', ['--check']), retry: () => studio.loadUpdate(true) });
     } finally {
       checking = false;
     }
@@ -140,7 +141,7 @@
       await signOut();
       studio.signedOut = true;
     } catch (error) {
-      toasts.add({ level: 'problem', text: (error as Error).message, cmd: command.signOut() });
+      toasts.fail(error, { cmd: command.signOut() });
     }
   }
 

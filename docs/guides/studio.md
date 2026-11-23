@@ -141,6 +141,39 @@ When a question or a problem is about one session, its pane gets a mark too:
 stays until the question is answered, and the notification is in the strip as
 well.
 
+### When something fails
+
+When a button doesn't work, its **Problem** says why in one line. Where the
+command or the daemon said why itself, that's the line you see. Otherwise it's
+the line of the command's error output that reads most like the reason.
+
+**Details** opens the rest in place: the exit code or the HTTP status, the
+command that ran, and the end of what it wrote. Studio keeps the last 64 KiB of
+that output and says so when it had to cut. **Copy command** and **Copy
+details** put either on your clipboard, ready to paste into an issue.
+
+Some Problems also have **Retry**. It appears only on actions that are safe to
+run twice, such as saving a setting, holding a run or setting a task's state.
+Starting something, answering a gate or stopping a run never offers it,
+because a second press could do the work twice. While an attempt runs the
+button reads *Retrying…* and waits. If it fails again, the same notification
+shows the new reason and counts the attempts. If it works, it turns into a
+Done. A command that is only taking a long time isn't a failure: it carries
+on, and its notification says so without offering Retry.
+
+**Earlier** keeps each one as a record. You can open its Details, but nothing
+there can be run again. A failure that Retry fixed shows as a Done *after 3
+attempts*. Any other failure stays a Problem, whichever buttons you pressed on
+it.
+
+Everything shown or copied has secrets taken out first, by the same rules the
+launcher uses: tokens in a URL, credential headers, known token shapes, and the
+values of flags and variables named like a credential (`--token`, `--api-key`,
+`DB_PASSWORD=`, a bare `TOKEN=`). A copied command carries `[redacted]` where
+its secret was, and the confirmation tells you to fill it in. Redaction is a
+safety net rather than a guarantee: a secret with no recognisable name or
+shape can't be told apart from ordinary text.
+
 ### Look back at what needed you
 
 **Events** keeps the last month of what needed you: each question a run asked
