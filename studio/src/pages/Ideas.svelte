@@ -18,6 +18,7 @@
   import IdeaStages from '../lib/components/IdeaStages.svelte';
   import NoteDump from '../lib/components/NoteDump.svelte';
   import PlanLayer from '../lib/components/PlanLayer.svelte';
+  import PlanViewer from '../lib/components/PlanViewer.svelte';
   import QuestionSet from '../lib/components/QuestionSet.svelte';
   import Signal from '../lib/components/Signal.svelte';
   import { commands, ideas as ideaRoutes, listOf, memory, readJson, SignedOut } from '../lib/api';
@@ -538,6 +539,38 @@
   const acceptLine = $derived(idea ? [...acceptWords(idea.id, where, goes === 'project' ? { project: onto || '<slug>' } : { newProject: named.trim() || '<name>' }, doneWhenWords(doneWhenText, proposedDoneWhen)), ...skipWords] : []);
   const acceptReason = $derived(refused ?? (goes === 'project' ? (onto ? undefined : 'choose the project it goes on') : named.trim() ? undefined : 'name the new project'));
 
+  // Accept goes through the plan: pressing it opens a preview of exactly what
+  // accepting writes, and only Confirm there writes it. #ideas/<list>/<id>/+accept
+  // opens it on arrival, which is how a desk's Accept gets here. Opened once
+  // per arrival, so a poll that brings the idea back does not reopen it.
+  let planOpen = $state(false);
+  let planOpenedFor = '';
+  const planDoneWhen = $derived(doneWhenWords(doneWhenText, proposedDoneWhen));
+
+  // Another idea on the workbench closes the plan of the last one.
+  $effect(() => {
+    void id;
+    untrack(() => (planOpen = false));
+  });
+
+  $effect(() => {
+    const asked = rest[2] === '+accept' && idea && idea.id === id && idea.plan && !idea.accepted ? `${project ?? '~'}/${idea.id}` : '';
+
+    untrack(() => {
+      if (asked && asked !== planOpenedFor) {
+        planOpenedFor = asked;
+        planOpen = true;
+      } else if (!asked) {
+        planOpenedFor = '';
+      }
+    });
+  });
+
+  async function confirmAccept(hold: string[]) {
+    planOpen = false;
+    await act('idea accept', [...acceptLine, ...hold]);
+  }
+
   // Next: the next thing on the open idea that needs you, then the button that saves what is typed.
   const drafts = $derived({ answers: drafted, sent: sentAnswers, reworks: Object.keys(reworks).filter((piece) => reworks[piece]) });
   // Watching only, nothing typed can be sent, so the send stops are passed over.
@@ -802,6 +835,8 @@
 
       {#if idea.accepted}
         <p class="accepted">Accepted onto <strong>{idea.accepted.project}</strong> by {idea.accepted.by}. The plan is at <code>{idea.accepted.plan}</code>. <a href={listHref(idea.accepted.project)}>Its task is on {whereSaid(idea.accepted.project)}'s board</a>.</p>
+        <HaloButton label="Read the plan" size="small" glyph="▤" cmd={lineFor('idea plan', [idea.id, ...where])} onpress={() => (planOpen = true)} />
+        {#if planOpen}<PlanViewer id={idea.id} {where} onclose={() => (planOpen = false)} />{/if}
       {/if}
 
       {#if listed?.failure}
@@ -882,9 +917,18 @@
           {#if !doneWhenCount}<p><span class="ls-tag needs">no done-when</span> It can still be accepted, but a team queue will refuse the task until it has some.</p>{/if}
           {#if undecided}<p><span class="ls-tag needs">{undecided} layer{undecided === 1 ? ' has' : 's have'} no option chosen</span> It can still be accepted; the plan says so where it is written.</p>{/if}
           <div class="ls-answers flush">
-            <HaloButton label="Accept the plan" next="accept" solid={!acceptReason} glyph="✓" size="small" cmd={lineFor('idea accept', acceptLine)} disabledReason={acceptReason} onpress={() => void act('idea accept', acceptLine)} />
+            <HaloButton label="Accept the plan" next="accept" solid={!acceptReason} glyph="✓" size="small" cmd={`shows the plan first · ${lineFor('idea plan', [idea.id, ...where, ...planDoneWhen])}`} disabledReason={acceptReason} onpress={() => (planOpen = true)} />
           </div>
         </section>
+        {#if planOpen}
+          <PlanViewer
+            id={idea.id}
+            {where}
+            doneWhen={planDoneWhen}
+            confirm={{ cmd: lineFor('idea accept', acceptLine), disabledReason: acceptReason, onconfirm: (hold) => void confirmAccept(hold) }}
+            onclose={() => (planOpen = false)}
+          />
+        {/if}
       {/if}
 
       {#if idea.notes?.length}

@@ -138,6 +138,7 @@ public static class StudioCoverage
         ["idea add"] = new("ideas", StudioEffect.Changes),
         ["idea list"] = new("ideas", StudioEffect.Reads),
         ["idea show"] = new("ideas", StudioEffect.Reads),
+        ["idea plan"] = new("ideas", StudioEffect.Reads),
         ["idea refine"] = new("ideas", StudioEffect.Changes),
         ["backfill contract"] = new("ideas", StudioEffect.Changes),
         ["idea answer"] = new("ideas", StudioEffect.Changes),

@@ -817,6 +817,7 @@ public static class Program
             idea.AddCommand<IdeaAddCommand>("add");
             idea.AddCommand<IdeaListCommand>("list");
             idea.AddCommand<IdeaShowCommand>("show");
+            idea.AddCommand<IdeaPlanCommand>("plan");
             idea.AddCommand<IdeaRefineCommand>("refine");
             idea.AddCommand<IdeaAnswerCommand>("answer");
             idea.AddCommand<IdeaChooseCommand>("choose");

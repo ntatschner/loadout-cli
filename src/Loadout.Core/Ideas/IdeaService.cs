@@ -65,6 +65,40 @@ public sealed record IdeaAccepted(TaskItem Task, string Project, string PlanPath
     public bool Moved => !string.Equals(From, Project, StringComparison.Ordinal);
 }
 
+/// <summary>Which plan is being shown: what accepting would write, or what it did.</summary>
+public enum IdeaPlanState
+{
+    /// <summary>Not accepted yet: the document accepting would write now.</summary>
+    Preview,
+
+    /// <summary>Accepted, and the file it wrote is there.</summary>
+    Written,
+
+    /// <summary>Accepted, but the file it wrote is not there any more.</summary>
+    Missing,
+}
+
+/// <summary>An idea's plan, to read.</summary>
+/// <param name="State">Whether it is a preview, the written file, or a file that has gone.</param>
+/// <param name="Markdown">The document. Empty when the file is missing.</param>
+/// <param name="Path">Where the written plan is, relative to the workspace; null for a preview, which has no file yet.</param>
+/// <param name="Hash">A hash of the document, which accepting can be held to; null when the file is missing.</param>
+/// <param name="Changed">
+/// For a written plan, whether the file differs from what acceptance wrote;
+/// null when that cannot be told, for a preview or an idea accepted before the
+/// hash was kept.
+/// </param>
+/// <param name="Undecided">The layers going in with no option chosen.</param>
+/// <param name="GapFilled">The plan fields a backfill pass wrote, which accepting confirms.</param>
+public sealed record IdeaPlanView(
+    IdeaPlanState State,
+    string Markdown,
+    string? Path,
+    string? Hash,
+    bool? Changed,
+    IReadOnlyList<string> Undecided,
+    IReadOnlyList<string> GapFilled);
+
 /// <summary>An idea that became a task on another list, as the list it left shows it.</summary>
 /// <param name="Id">Its id, the same on both lists.</param>
 /// <param name="Title">Its task's title.</param>
@@ -263,12 +297,31 @@ public interface IIdeaService
     /// The done-when the person confirmed, replacing what the plan proposed, or
     /// null to confirm the plan's own by accepting it.
     /// </param>
+    /// <param name="previewed">
+    /// The hash of the plan the person read, from <see cref="PlanAsync"/>. When
+    /// given, accepting is refused if the document it would write is not that
+    /// one, so what was confirmed is what is written.
+    /// </param>
     Task<OperationResult<IdeaAccepted>> AcceptAsync(
         IdeaPlace place,
         string project,
         string by,
         CancellationToken ct = default,
-        IReadOnlyList<string>? doneWhen = null);
+        IReadOnlyList<string>? doneWhen = null,
+        string? previewed = null);
+
+    /// <summary>
+    /// The plan to read: before acceptance, exactly the document accepting
+    /// with <paramref name="doneWhen"/> would write; after it, the file it
+    /// wrote, as it is now.
+    /// </summary>
+    /// <param name="place">The idea.</param>
+    /// <param name="doneWhen">For a preview, the done-when as <see cref="AcceptAsync"/> would take it. Ignored once accepted.</param>
+    /// <param name="ct">Cancellation.</param>
+    Task<OperationResult<IdeaPlanView>> PlanAsync(
+        IdeaPlace place,
+        IReadOnlyList<string>? doneWhen = null,
+        CancellationToken ct = default);
 
     /// <summary>Forgets an idea: its task and its record.</summary>
     Task<OperationResult> RemoveAsync(IdeaPlace place, CancellationToken ct = default);
@@ -1016,13 +1069,107 @@ internal sealed partial class IdeaService : IIdeaService
             return null;
         });
 
+    /// <summary>
+    /// Puts into the record what accepting confirms, before the document is
+    /// made from it. The one place this happens, so the preview and the
+    /// written plan are made from the same record.
+    /// </summary>
+    private static void Confirm(IdeaRecord record, IReadOnlyList<string>? doneWhen)
+    {
+        // What was confirmed goes into the plan before it is written, so the
+        // document, the record and the task all say the same finish line.
+        if (doneWhen is not null)
+        {
+            record.Plan!.DoneWhen = [.. doneWhen.Select(one => one.Trim()).Where(one => one.Length > 0)];
+        }
+
+        // Accepting is where the person confirms what a pass filled in, so
+        // nothing in the plan is unseen any more.
+        record.Plan!.GapFilled = [];
+    }
+
+    /// <inheritdoc />
+    public async Task<OperationResult<IdeaPlanView>> PlanAsync(
+        IdeaPlace place,
+        IReadOnlyList<string>? doneWhen = null,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(place);
+
+        var read = await ReadAsync(place, ct).ConfigureAwait(false);
+
+        if (read.Failed)
+        {
+            return OperationResult<IdeaPlanView>.Fail(read.Error!, read.ExitCode);
+        }
+
+        var record = read.Value!;
+
+        // Once accepted, the plan is the file, wherever the idea has since
+        // been moved: the record's path follows it.
+        if (record.Accepted is { } accepted)
+        {
+            var file = Path.Combine(_workspace.LocalPath, accepted.PlanPath.Replace('/', Path.DirectorySeparatorChar));
+
+            if (accepted.PlanPath.Length == 0 || !File.Exists(file))
+            {
+                return OperationResult<IdeaPlanView>.Ok(
+                    new IdeaPlanView(IdeaPlanState.Missing, string.Empty, accepted.PlanPath, null, null, [], []));
+            }
+
+            string text;
+
+            try
+            {
+                text = await File.ReadAllTextAsync(file, ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return OperationResult<IdeaPlanView>.Fail($"The plan at {accepted.PlanPath} could not be read: {ex.Message}");
+            }
+
+            var now = IdeaWork.Hash(text);
+
+            return OperationResult<IdeaPlanView>.Ok(new IdeaPlanView(
+                IdeaPlanState.Written,
+                text,
+                accepted.PlanPath,
+                now,
+                accepted.PlanHash.Length > 0 ? !string.Equals(accepted.PlanHash, now, StringComparison.OrdinalIgnoreCase) : null,
+                [],
+                []));
+        }
+
+        if (record.Plan is not { } plan)
+        {
+            return OperationResult<IdeaPlanView>.Fail(
+                $"{place.Id} has no plan yet. Refine it to get one.", ExitCode.InvalidArguments);
+        }
+
+        // Read before Confirm empties it: these are the warnings for the
+        // moment of confirming.
+        var gapFilled = plan.GapFilled.ToList();
+        var undecided = plan.Layers
+            .Where(layer => layer.Verdict != IdeaVerdict.Drop && layer.Options.Count > 0 && !layer.Options.Any(option => option.Id == layer.Chosen))
+            .Select(layer => layer.Name)
+            .ToList();
+
+        Confirm(record, doneWhen);
+
+        var document = IdeaWork.Document(record);
+
+        return OperationResult<IdeaPlanView>.Ok(
+            new IdeaPlanView(IdeaPlanState.Preview, document, null, IdeaWork.Hash(document), null, undecided, gapFilled));
+    }
+
     /// <inheritdoc />
     public async Task<OperationResult<IdeaAccepted>> AcceptAsync(
         IdeaPlace place,
         string project,
         string by,
         CancellationToken ct = default,
-        IReadOnlyList<string>? doneWhen = null)
+        IReadOnlyList<string>? doneWhen = null,
+        string? previewed = null)
     {
         ArgumentNullException.ThrowIfNull(place);
 
@@ -1073,16 +1220,21 @@ internal sealed partial class IdeaService : IIdeaService
                 $"'{destination}' is not a project in this workspace.", ExitCode.ProjectNotFound);
         }
 
-        // What was confirmed goes into the plan before it is written, so the
-        // document, the record and the task all say the same finish line.
-        if (doneWhen is not null)
-        {
-            record.Plan!.DoneWhen = [.. doneWhen.Select(one => one.Trim()).Where(one => one.Length > 0)];
-        }
+        Confirm(record, doneWhen);
 
-        // Accepting is where the person confirms what a pass filled in, so
-        // nothing in the plan is unseen any more.
-        record.Plan!.GapFilled = [];
+        var written = IdeaWork.Document(record);
+        var hash = IdeaWork.Hash(written);
+
+        // Held to what the person read, when they read it first: a revision
+        // that landed or a choice changed while the plan was open would
+        // otherwise be written under a confirmation it never had.
+        if (previewed is { Length: > 0 } && !string.Equals(previewed.Trim(), hash, StringComparison.OrdinalIgnoreCase))
+        {
+            return OperationResult<IdeaAccepted>.Fail(
+                $"The plan for {place.Id} has changed since you read it, so it was not accepted. "
+                + "Look at it again and confirm what it says now.",
+                ExitCode.ChangedSinceRead);
+        }
 
         var landed = new IdeaPlace(destination, place.Id);
         var planFile = $"ideas/{place.Id}.md";
@@ -1097,7 +1249,7 @@ internal sealed partial class IdeaService : IIdeaService
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(document)!);
-            await File.WriteAllTextAsync(document, IdeaWork.Document(record), ct).ConfigureAwait(false);
+            await File.WriteAllTextAsync(document, written, ct).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -1168,6 +1320,7 @@ internal sealed partial class IdeaService : IIdeaService
             AcceptedBy = by,
             Project = destination,
             PlanPath = planPath,
+            PlanHash = hash,
         };
 
         var saved = await _yaml.SaveAsync(RecordPath(landed), record, true, ct).ConfigureAwait(false);

@@ -2,7 +2,7 @@
 // actions for the picked thing, each with the command it runs, built with
 // lineFor as every page builds them. The pages themselves are the views.
 import { lineFor } from './commandLine';
-import { acceptWords, stateWord } from './ideas';
+import { stateWord } from './ideas';
 import type { PureAction, PureGroup, PureItem } from './pure';
 
 /** What an action does, given by the desk: run a command as a job, read one, open a terminal for one, or go somewhere. */
@@ -66,9 +66,19 @@ export function ideaActions(one: DeskIdea, placement: { slug: string; isNew: boo
   }
 
   if (placement) {
-    const words = acceptWords(one.id, where, placement.isNew ? { newProject: placement.name } : { project: placement.slug });
+    // Accepting goes through the plan, as it does on the idea page: this opens
+    // the idea there with its plan shown, and only Confirm writes it.
+    out.push({
+      label: `Accept it onto ${placement.isNew ? `a new project, ${placement.name}` : placement.slug}`,
+      kind: 'needs',
+      cmd: `shows the plan first · ${lineFor('idea plan', refine)}`,
+      disabledReason: ctx.refused,
+      run: async () => {
+        ctx.go('ideas', one.project ?? '~', one.id, '+accept');
 
-    out.push({ label: `Accept it onto ${placement.isNew ? `a new project, ${placement.name}` : placement.slug}`, kind: 'needs', cmd: lineFor('idea accept', words), disabledReason: ctx.refused, run: () => ctx.act('idea accept', words) });
+        return 'The plan is open on the idea. Confirm there to accept it.';
+      },
+    });
   } else {
     out.push({ label: 'Accept it', disabledReason: 'there is no plan to accept yet' });
   }

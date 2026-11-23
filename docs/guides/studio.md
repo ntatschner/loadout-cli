@@ -649,6 +649,14 @@ back with a sentence saying what should change. **Accept the plan** puts it onto
 a project, or makes a new one for it, and says if any layer still has no option
 chosen.
 
+Pressing it writes nothing yet. It opens the plan exactly as accepting will write
+it, with the done-when in the box below and the warnings about layers with no
+option chosen or fields a backfill pass filled in. **Confirm and accept** writes
+it; **Back** leaves it as it was. If the plan changes while you're reading it,
+say a new revision lands, confirming is refused and asks you to look again, so
+what you confirmed is what gets written. `loadout idea plan <id>` prints the
+same document in a terminal.
+
 Above the button is **Done when**: what the agent proposes must be true for the
 work to be finished, one condition a line. Accepting confirms whatever the box
 holds, and the task carries those conditions, so a team run for it is held to
@@ -664,6 +672,12 @@ tasks elsewhere** with a link to it, so an accepted idea doesn't just vanish
 from the shelf. An accepted idea's workbench links to the board its task is on,
 and that task's **Details and history** links back to the idea, worked out
 from the id the two share.
+
+**Read the plan** on an accepted idea, **View plan** in its task's details, and
+**View plan** on a team run started for that task all show the plan file as it
+is now, wherever the idea has moved since. If the file has been edited since it
+was accepted, it says so, and if the file has gone, it says that rather than
+showing nothing.
 
 Dropped ideas fold away under a count at the foot of the shelf, as done and
 dropped tasks do on a board. The shelf reads up to 200 ideas, the newest

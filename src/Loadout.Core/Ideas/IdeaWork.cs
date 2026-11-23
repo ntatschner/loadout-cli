@@ -911,6 +911,19 @@ public static partial class IdeaWork
                 : "Neither you nor the agent has said which project it belongs to.");
     }
 
+    /// <summary>
+    /// A short fingerprint of a plan document, so a confirmation can be held
+    /// to the text that was read and an edited file told from the original.
+    /// </summary>
+    public static string Hash(string document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        var bytes = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(document));
+
+        return Convert.ToHexStringLower(bytes)[..16];
+    }
+
     /// <summary>The plan as it will be handed on: only what the person kept, in the choices they made.</summary>
     /// <remarks>
     /// A layer nobody decided about is in, with the option chosen for it,

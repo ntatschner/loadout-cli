@@ -14,6 +14,7 @@
   import Journal from '../lib/components/Journal.svelte';
   import Outbox from '../lib/components/Outbox.svelte';
   import Patch from '../lib/components/Patch.svelte';
+  import PlanViewer from '../lib/components/PlanViewer.svelte';
   import RunDepths from '../lib/components/RunDepths.svelte';
   import RunNumbers from '../lib/components/RunNumbers.svelte';
   import RunShape from '../lib/components/RunShape.svelte';
@@ -28,6 +29,8 @@
   import { acceptFollowUp, answerGate, carryOn, checkOff, close, dismissFollowUp, forget, hold, pickUp, runLines, setBudget, stop, tellLead } from '../lib/teamsAct';
   import { criteriaOf, crewOf, duration, gateOf, livenessOf, runWord, shapeOf, summaryOf, unowned } from '../lib/teamsData';
   import { money, type JournalLine } from '../lib/teams';
+  import { lineFor } from '../lib/commandLine';
+  import { listWords } from '../lib/plans';
 
   let { id, onagain = undefined }: { id: string; onagain?: (run: Run) => void } = $props();
 
@@ -43,6 +46,8 @@
   let budget = $state('');
   let changing = $state(false);
   let forgetting = $state(false);
+  // The plan of the task it works, open over the page.
+  let planOpen = $state(false);
 
   // Picking up a run that stopped on questions: one answer each, starting
   // from what the lead recommended, or a separate choice to carry on without.
@@ -347,7 +352,14 @@
       <a class="back" href="#teams"><span aria-hidden="true">←</span>Teams</a>
       <h1 class="topicname">{run.goal}</h1>
       <div class="jobhead"><Signal word={summary.word} /><span class="calm small">{[run.team, run.project, run.autonomy, `round ${run.rounds}${run.roundLimit ? ` of ${run.roundLimit}` : ''}`, duration(run.elapsedSeconds), run.id].filter(Boolean).join(' · ')}</span>{#if badge}<span class="ls-liveness" role="status">{badge}</span>{/if}</div>
+      {#if run.task}
+        <!-- The task it works, and that task's plan as it is now: read with 'idea plan', from the project the run is for. -->
+        <p class="calm small fortask">For the task <code>{run.task}</code>. <HaloButton label="View plan" size="small" glyph="▤" cmd={lineFor('idea plan', [run.task, ...listWords(run.project)])} onpress={() => (planOpen = true)} /></p>
+      {/if}
     </div>
+    {#if planOpen && run.task}
+      <PlanViewer id={run.task} where={listWords(run.project)} onclose={() => (planOpen = false)} />
+    {/if}
 
     {#if gate}
       {#key gate.id}
