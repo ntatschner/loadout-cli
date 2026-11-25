@@ -375,7 +375,7 @@ public sealed class CapabilityProfiles : ICapabilityProfiles
 
         foreach (var glob in check.Files)
         {
-            if (seen.Files.FirstOrDefault(file => DeclaredChecks.Matches(glob, file)) is { } found)
+            if (seen.Files.FirstOrDefault(file => RuleService.Matches(glob, file)) is { } found)
             {
                 return new Finding(CapabilityState.Present, $"{found} matches {glob}.");
             }

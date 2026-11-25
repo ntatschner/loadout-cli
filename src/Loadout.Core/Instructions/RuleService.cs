@@ -216,8 +216,16 @@ internal sealed partial class RuleService : IRuleService
             return false;
         }
 
-        var normalisedPath = path.Replace('\\', '/').TrimStart('.', '/');
-        var normalisedGlob = glob.Replace('\\', '/').Trim();
+        // Whole "./", "../" and "/" prefixes, never single dots: the dot in
+        // ".github" is part of the name, and stripping it from the path alone
+        // meant no glob naming a dotted folder at the root ever matched.
+        var normalisedPath = PathPrefix().Replace(path.Replace('\\', '/'), string.Empty);
+        var normalisedGlob = CurrentDirectory().Replace(glob.Trim().Replace('\\', '/'), string.Empty);
+
+        if (normalisedGlob.Length == 0)
+        {
+            return false;
+        }
 
         var pattern = new StringBuilder("^");
 
@@ -274,6 +282,14 @@ internal sealed partial class RuleService : IRuleService
             return false;
         }
     }
+
+    [GeneratedRegex(@"\A(?:\.{0,2}/)+", RegexOptions.None, 1000)]
+    private static partial Regex PathPrefix();
+
+    // A glob is only ever read from the repository's root, so "./" says nothing
+    // while "../" and "/" would be asking for something else.
+    [GeneratedRegex(@"\A(?:\./)+", RegexOptions.None, 1000)]
+    private static partial Regex CurrentDirectory();
 
     [GeneratedRegex(@"\A---\r?\n(?<front>.*?)\r?\n---[ \t]*\r?\n",
         RegexOptions.Singleline, 1000)]
