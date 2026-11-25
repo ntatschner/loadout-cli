@@ -22,7 +22,7 @@ public sealed record DeclaredCheck(
 
 /// <summary>
 /// The checks specialists declare in their frontmatter, as one list: what is
-/// valid, who wins, and how a declared glob reads a repository's files.
+/// valid and who wins.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -147,28 +147,6 @@ public static class DeclaredChecks
         }
 
         return settled;
-    }
-
-    /// <summary>Whether a declared glob matches a path relative to the repository's root.</summary>
-    /// <remarks>
-    /// Each side gets a leading folder because <see cref="RuleService.Matches"/>
-    /// strips leading dots from a path and not from a glob, so
-    /// <c>.github/CODEOWNERS</c> would never match the file it names. That file
-    /// is just what a check is likely to look for.
-    /// </remarks>
-    public static bool Matches(string glob, string path)
-    {
-        ArgumentNullException.ThrowIfNull(glob);
-        ArgumentNullException.ThrowIfNull(path);
-
-        var relative = glob.Trim().Replace('\\', '/');
-
-        if (relative.StartsWith("./", StringComparison.Ordinal))
-        {
-            relative = relative[2..];
-        }
-
-        return relative.Length > 0 && RuleService.Matches($"root/{relative}", $"root/{path}");
     }
 
     private static IReadOnlyList<TaskType> Types(SpecialistCheck check) =>

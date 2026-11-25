@@ -285,5 +285,5 @@ public sealed class DeclaredCheckProfileTests : IDisposable
     [InlineData("**/Dockerfile", "src/api/Dockerfile", true)]
     [InlineData("*.md", "docs/a.md", false)]
     public void Globs_read_from_the_repository_root(string glob, string path, bool matches) =>
-        DeclaredChecks.Matches(glob, path).Should().Be(matches);
+        RuleService.Matches(glob, path).Should().Be(matches);
 }
