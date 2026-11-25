@@ -357,6 +357,7 @@ public sealed class AgentLauncher : IAgentLauncher
             }
 
             RestoreTranscript(launch, request);
+            TrustWorkspace(launch, warnings);
 
             var startedAt = DateTimeOffset.UtcNow;
 
@@ -539,6 +540,59 @@ public sealed class AgentLauncher : IAgentLauncher
         {
             _transcripts?.Restore(launch.Adapter.Name, resuming);
         }
+    }
+
+    /// <summary>
+    /// Records the workspace as trusted in Claude Code, so a person's session
+    /// does not stop to ask about the project folder it was handed.
+    /// </summary>
+    /// <remarks>
+    /// Only when the session was actually given a folder inside the workspace,
+    /// and only for a person's session: a headless one is never asked. Said
+    /// once when it is written, since it changes a file that is not Loadout's,
+    /// and said when it could not be, so the question that follows is explained.
+    /// </remarks>
+    private void TrustWorkspace(Prepared launch, List<string> warnings)
+    {
+        if (_environment is null
+            || launch.Adapter.Name != "claude"
+            || launch.Context.WorkspacePath is not { Length: > 0 } workspace
+            || !AddsFolderInside(launch.Invocation.Arguments, workspace))
+        {
+            return;
+        }
+
+        switch (Core.Agents.ClaudeTrust.Ensure(_environment, workspace))
+        {
+            case Core.Agents.ClaudeTrustOutcome.Recorded:
+                warnings.Add(
+                    $"Recorded the Loadout workspace ({workspace}) as trusted in "
+                    + $"{Core.Agents.ClaudeTrust.ConfigFile(_environment)}, so Claude Code stops asking about it.");
+                break;
+
+            case Core.Agents.ClaudeTrustOutcome.NotRecorded:
+                warnings.Add(
+                    $"Could not record the Loadout workspace ({workspace}) as trusted in Claude Code, "
+                    + "so it will ask whether to add the project's workspace folder. Answer Yes, add it.");
+                break;
+        }
+    }
+
+    /// <summary>Whether the arguments add, with <c>--add-dir</c>, a folder inside <paramref name="workspace"/>.</summary>
+    internal static bool AddsFolderInside(IReadOnlyList<string> arguments, string workspace)
+    {
+        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(workspace)) + Path.DirectorySeparatorChar;
+
+        for (var i = 0; i < arguments.Count - 1; i++)
+        {
+            if (arguments[i] == "--add-dir"
+                && Path.GetFullPath(arguments[i + 1]).StartsWith(root, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
