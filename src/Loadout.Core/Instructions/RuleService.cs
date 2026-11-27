@@ -241,12 +241,23 @@ internal sealed partial class RuleService : IRuleService
                 // a scoped rule depends on.
                 if (i + 1 < normalisedGlob.Length && normalisedGlob[i + 1] == '*')
                 {
-                    pattern.Append(".*");
+                    var startsAName = i == 0 || normalisedGlob[i - 1] == '/';
                     i++;
 
                     if (i + 1 < normalisedGlob.Length && normalisedGlob[i + 1] == '/')
                     {
                         i++;
+
+                        // "**/" standing for whole folders: none, or any
+                        // number each ending in a slash, so what follows starts
+                        // a name. As ".*" it let "**/Dockerfile" match
+                        // "notDockerfile". Where it is not at a folder boundary,
+                        // or nothing follows it, it keeps meaning anything.
+                        pattern.Append(startsAName && i + 1 < normalisedGlob.Length ? "(?:.*/)?" : ".*");
+                    }
+                    else
+                    {
+                        pattern.Append(".*");
                     }
                 }
                 else
